@@ -5,9 +5,12 @@ import { TableCell, TableRow, type TableRowProps } from './Table';
 export const INLINE_DETAIL_TABLE_CELL_CLASS = 'p-0 border-b border-border bg-surface-alt';
 // overflow-x-clip keeps over-wide content from painting outside the row's
 // border below the lg breakpoint (issue #1622) without creating a scroll
-// container the way overflow-hidden would.
+// container the way overflow-hidden would. Below lg the sticky content is as
+// wide as the table's visible area: 100cqi resolves against the table scroll
+// shell (a size container), so a guess at the page chrome cannot leave an
+// empty strip beside the drawer or push it past the visible edge.
 export const INLINE_DETAIL_TABLE_CONTENT_CLASS =
-  'sticky left-0 min-w-0 max-w-[calc(100vw-3.5rem)] whitespace-normal overflow-x-clip px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none lg:overflow-x-visible';
+  'sticky left-0 min-w-0 max-w-[100cqi] whitespace-normal overflow-x-clip px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none lg:overflow-x-visible';
 
 export interface InlineDetailTableRowProps extends TableRowProps {
   cellId?: string;

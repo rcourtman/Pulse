@@ -3556,6 +3556,12 @@ query...`, and `Reading storage...` before streamed tool arguments are
    answer (nothing streaming, no error block, no pending approval or
    question, and a user prompt available to re-send) because the undo
    boundary only operates on the last durable turn.
+   Session mutations stay POST-only at the handler: abort, summarize, fork,
+   undo, redo, and steer refuse every other method with `405` and
+   `Allow: POST` before resolving the Assistant service. A `GET` or `HEAD`
+   that the demo-mode read-only guard or the CSRF check admits as a read
+   therefore cannot cancel a running turn, compact or rewind a transcript,
+   or persist a fork.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt
@@ -6723,6 +6729,11 @@ seed prompt correlations now flow through the shared AI intelligence facade
 first, so the detector remains an implementation detail behind one canonical
 correlation access path instead of being routed directly by handlers or prompt
 builders.
+The browser does not read the global learned-correlation list:
+`frontend-modern/src/api/ai.ts` carries no client for
+`/api/ai/intelligence/correlations`, and neither the shared AI intelligence
+store nor the Patrol page loads it, because no page renders it. The resource
+drawer reads per-resource correlations from the resource-intelligence payload.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly

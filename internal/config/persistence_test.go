@@ -514,7 +514,7 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 
 	raw := alerts.AlertConfig{
 		Enabled:                        false,
-		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
+		TimeThresholds:                 map[string]int{"guest": -1, "node": 0},
 		DockerIgnoredContainerPrefixes: []string{" Runner "},
 		SnapshotDefaults: alerts.SnapshotAlertConfig{
 			Enabled:         true,
@@ -549,10 +549,10 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	}
 
 	if got := loaded.TimeThresholds["guest"]; got != 5 {
-		t.Fatalf("expected guest threshold default 5, got %d", got)
+		t.Fatalf("expected unset guest threshold default 5, got %d", got)
 	}
-	if got := loaded.TimeThresholds["node"]; got != 5 {
-		t.Fatalf("expected node threshold default 5, got %d", got)
+	if got := loaded.TimeThresholds["node"]; got != 0 {
+		t.Fatalf("expected node threshold 0 (no delay) to be kept, got %d", got)
 	}
 	if loaded.NodeDefaults.Temperature == nil {
 		t.Fatalf("expected node temperature defaults to be set")

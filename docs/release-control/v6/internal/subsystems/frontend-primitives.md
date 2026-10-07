@@ -294,6 +294,14 @@ expose only a raw reason. A same-VM fresh observation withdraws the notice and
 updates values without remounting the row. Permission, disabled-agent and actual
 unavailable cases retain their own explanations.
 
+When a linked Pulse agent's filesystems fill in for a VM with no Proxmox guest
+filesystems (`disksFromAgent`), the reading follows that agent instead of the
+Proxmox reason: current while it reports, last known once it is stale, and
+unavailable once the guest is stopped. `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts` owns that rule for the workload row's disk cell,
+the guest drawer's filesystem rows and its History, so the three cannot
+disagree about one guest; `workloadGuestPresentation.test.ts` pins it.
+
 Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
 `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
 and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
@@ -2116,6 +2124,18 @@ the same record; the table renders defaults once, in both desktop table and
 narrow card layouts, and per-section metric columns must resolve to metric
 keys the shared column normalizer produces so the defaults editor reads and
 writes the same record keys the section persists.
+A global default that another setting decides while it is unset passes a
+`globalDefaultFallbacks` entry for that metric (label, title, whether the other
+setting is itself off, and the value switching on stages when it is). The
+TrueNAS Disks temperature uses it to read `By type`, following Disk
+temperature by type, with `features/alerts/thresholds/trueNASDiskTemperature.ts`
+giving each disk row its type's trigger from the unsaved editor state.
+`resolveAlertResourceGlobalDefaultCell` decides the cell for both layouts:
+unset follows the fallback, switching on from Off returns to unset unless the
+fallback is off, and an unset default with no fallback stays Off as the engine
+reads it. `ResourceTable.tsx` hands its props to the shared table state through
+getters, so the Custom badge and reset control follow defaults that load after
+the table mounts.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette
@@ -4498,12 +4518,12 @@ The recency line beside the header actions also renders coverage
 alongside time when the canonical `getPatrolRecencyPresentation` helper
 returns `resourcesCheckedLabel` from the latest completed run. Render code
 must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
-zero-coverage runs do not surface a misleading coverage phrase, failed or
-scoped runs use neutral checked wording, and only successful full patrols read
-as verified. Any Patrol assessment shell must pass the same run-history facts
-into `getPatrolAssessmentPresentation` so assessment coverage caveats do not
-contradict the header's verified full-run coverage state; the page renders no
-assessment shell today.
+zero-coverage runs do not surface a misleading coverage phrase. The label
+reads `checked N resources` for every completed run with a positive count
+(full, targeted, follow-up, or errored) and never says `verified`. The page
+renders no assessment shell today; if one returns, its coverage caveats must
+come from the same run-history facts so they do not contradict the coverage
+the header line shows.
 The same header row may surface `Trigger status` when
 `getPatrolTriggerStatusSummary` returns a runtime-relevant value from the
 Patrol status payload. That text is page-owned operational metadata inside the
@@ -4900,6 +4920,16 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
+`frontend-modern/scripts/canonical-platform-audit.mjs` carries no Patrol
+summary-card rule. Its `canonical-patrol/no-local-summary-card-presentation`
+regex matched only text shaped like the deleted summary card's tint ternaries
+on `summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The
+Patrol state hook's `summaryStats` accessor has had no reader since that card
+was deleted, so the accessor and the rule are both gone.
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` is off the audit
+allowlist too: it now holds only the recency and verification presenters,
+which no audit rule needs to exempt, so the audit scans it like any other
+module.
 The Patrol page renders no summary shell today. If one returns, the same
 hierarchy applies inside it: once its primary assessment strip states Patrol's
 current risk and verification basis,
@@ -4915,10 +4945,10 @@ That same summary shell should also keep the shared Pulse surface neutral:
 severity belongs in compact accents, inline readouts, and badges rather than
 turning the whole assessment into a tinted warning banner, nested card, or
 hero-style block that breaks the surrounding operator workflow.
-That same summary-shell rule also applies to timing metadata: if the header,
-verification card, or findings footer already presents the governed Patrol
-activity timestamp, the summary chip row must not add another recency badge
-that competes with those owned timing surfaces.
+That same summary-shell rule also applies to timing metadata: the header
+recency line already presents the governed Patrol activity timestamp, so a
+returning summary chip row must not add another recency badge that competes
+with it.
 The same default-readout rule applies to collapsed Patrol issue rows:
 `MetadataBadge` may carry severity, recurrence, and active decision/work states,
 but the default Patrol page must not render raw lifecycle or investigation
@@ -5118,10 +5148,10 @@ KPI, problem-resource, or card shells. Workload-table and guest-row fallback
 copy that lives under `frontend-modern/src/components/Workloads/` must keep
 using `frontend-modern/src/utils/workloadEmptyStatePresentation.ts` and
 `frontend-modern/src/utils/workloadGuestPresentation.ts`. New route-level empty
-states, tone mapping, or compact issue copy must extend the shared
-`emptyStatePresentation`, `semanticTonePresentation`, and
-`problemResourcePresentation` helpers instead of reviving deleted
-dashboard-only KPI, metric, storage, recovery, or trend presentation helpers.
+states or tone mapping must extend the shared `emptyStatePresentation` and
+`semanticTonePresentation` helpers instead of reviving deleted dashboard-only
+KPI, metric, storage, recovery, problem-resource, or trend presentation
+helpers.
 That shell must also stay passive with respect to data ownership: future
 overview trend cards may render summary-range controls and operator-facing
 empty or error copy only after they have a governed owner, and they must not
@@ -5245,7 +5275,19 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
-The rule has one deliberate exception. The age of a latest reading (last used,
+Future times have their own formatter. `formatRelativeTime` is past-only: it
+reads a time ahead of `now` as "just now" (compact) or "0s ago", which is right
+for clock skew on something already observed and wrong for an expiry, a
+reminder or a schedule.
+Those go through `formatTimeUntil` (`frontend-modern/src/utils/format.ts`),
+which counts down ("in 3h", "in 1d"), rounds to the nearest unit so a duration
+just chosen reads as chosen, and returns `dueText` (default "now") once the
+time arrives. A countdown target does not change while its surface stays open,
+so the countdown passes `now` from the shared clock, as the Patrol suppression
+expiry and the Patrol findings reminder and snooze lines do. The replication
+Next sync column and the Patrol header's next-check `CountdownTimer` keep their
+own minute- and second-precision countdowns.
+The relative-age rule has one deliberate exception. The age of a latest reading (last used,
 last seen, last success, last checked) on data the surface reads once and does
 not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
@@ -5268,8 +5310,8 @@ than hardcoded gray palettes; non-gray typed tones may retain their state color
 vocabulary so success, warning, danger, info, and platform-adjacent metadata do
 not collapse into visually identical chips.
 Patrol run-history labels follow this state-badge boundary:
-Patrol may derive the status label and typed variant in
-`patrolRunPresentation.ts` or `patrolSummaryPresentation.ts`, but
+Patrol derives the status label and typed variant in
+`patrolRunPresentation.ts`, but
 `RunHistoryEntry.tsx` must render visible state badges through
 `StatusIndicatorBadge` rather than `runStatus.badgeClass` or a local span.
 The shared segmented selector now follows that same owner split.
@@ -5760,7 +5802,15 @@ the surface-alt detail row shell locally. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
-desktop layout. Long operator-state copy must wrap inside the shared row border
+desktop layout. Below that breakpoint the default content shell is capped at
+the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
+is a size container), never a viewport estimate of the page chrome, so a phone
+drawer does not leave an empty strip beside its content (the retired
+`100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
+visible area. Callers that pass their own `contentClass` own their width.
+Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
+scrolling still moves the drawer with its cell.
+Long operator-state copy must wrap inside the shared row border
 instead of painting beneath adjacent controls or disappearing at the clip edge.
 When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
@@ -6400,20 +6450,6 @@ rollups, points, or facets payloads arrive, it must keep that selected
 platform present in the option set so the shared `LabeledFilterSelect` shows
 the owned value immediately instead of flashing back to `All Platforms` until
 recovery data warms.
-`frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
-that same dashboard overview boundary so the problem-resource severity contract
-stays shared with `ProblemResourcesTable.tsx` instead of floating as an
-unowned helper.
-Problem-resource table readability belongs to that same owner. Repeated rows
-may collapse only when they share the same governed display label, resource
-type, and problem signal; the header count and Pulse Brief counts must continue
-to represent the underlying affected resources, and grouped links must route to
-the broad owning surface rather than inventing a synthetic resource target.
-Problem Resources and Pulse Brief wording must not amplify generic
-status-shaped names such as `storage (offline)` into first-viewport prose or
-grouped-row sublabels; when the resource name is only a type plus status, the
-surface should summarize the type-level issue in operator language instead of
-repeating raw backend-shaped labels.
 The retired dashboard action queue must not be reintroduced as a compact
 Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
 governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their
@@ -6766,25 +6802,28 @@ same-day scoped follow-up work, that summary shell should also carry a compact
 activity-mix explanation rather than forcing operators to infer why Patrol
 looked busy from a second competing status band.
 That explanation belongs on the verification surface itself when operators are
-reconciling `Recently verified` copy against same-day scoped Patrol bursts; the
+reconciling `Recently checked` copy against same-day scoped Patrol bursts; the
 supporting activity context may complement the readout, but it is not
 sufficient as the only explanation path.
-That same shell rule also owns Patrol recency labels. Shared Patrol header and
-status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
-transport fact and use `Last activity` for scoped or verification work instead
-of collapsing both timestamps back into a generic `Last run` label. Coverage
-phrases on those recency surfaces must come from the Patrol recency presenter
-instead of hardcoding verified wording in the shell.
-That same run-history ownership applies to assessment caveats: Patrol summary
-shells should not present `Recent coverage is incomplete` when the shared
-recency/verification helpers already prove a successful full patrol with
-non-zero resource coverage.
+Patrol recency labels and coverage phrases come from the Patrol recency
+presenter (`getPatrolRecencyPresentation`), never from hardcoded shell copy.
+The header labels the latest completed run of any type `Last check`; without
+run history it uses `Last check` for the `last_patrol_at` full-sweep transport
+fact and `Last activity` when `last_activity_at` is newer, and it never
+collapses them into a generic `Last run` label. Its coverage phrase reads
+`checked N resources` and never says `verified`.
+If a summary shell returns, it should not present `Recent coverage is
+incomplete` when run history shows a successful full patrol with non-zero
+resource coverage.
 That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
 shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
+Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
+nor the Retry path's background supporting reads fetch the global
+learned-correlation list, which no Patrol surface shows.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should keep actionable scoped-trigger state legible without promoting

@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog"
 )
@@ -302,5 +304,82 @@ func waitForResolvedConcurrencyGroup(t *testing.T, wg *sync.WaitGroup) {
 	case <-done:
 	case <-time.After(30 * time.Second):
 		t.Fatal("resolved alert concurrency paths deadlocked")
+	}
+}
+
+// GetConfig snapshots are encoded, persisted and edited outside m.mu, and
+// UpdateConfig normalizes the maps it is handed in place. While a snapshot
+// shared the live config's maps, re-applying one rewrote the override map
+// that the GET /api/alerts/config handler was encoding from another snapshot,
+// and Go aborted the process with a concurrent map write. Run with -race.
+func TestConfigSnapshotsShareNothingWithTheLiveConfig(t *testing.T) {
+	originalLogLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	t.Cleanup(func() {
+		zerolog.SetGlobalLevel(originalLogLevel)
+	})
+
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
+
+	seed := m.GetConfig()
+	seed.Enabled = true
+	seed.ActivationState = ActivationActive
+	seed.Overrides = make(map[string]ThresholdConfig)
+	for i := 0; i < 64; i++ {
+		seed.Overrides[fmt.Sprintf("agent:snapshot-%d", i)] = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 95, Clear: 90},
+		}
+	}
+	m.UpdateConfig(seed)
+
+	snapshot := m.GetConfig()
+	snapshot.Overrides["agent:snapshot-0"].CPU.Trigger = 1
+	delete(snapshot.Overrides, "agent:snapshot-1")
+	snapshot.TimeThresholds["guest"] = 99
+	snapshot.AgentDefaults.CPU.Trigger = 1
+
+	live := m.GetConfig()
+	if got := live.Overrides["agent:snapshot-0"].CPU.Trigger; got != 95 {
+		t.Fatalf("editing a snapshot changed the live override trigger to %v", got)
+	}
+	if _, ok := live.Overrides["agent:snapshot-1"]; !ok {
+		t.Fatal("deleting from a snapshot removed the live override")
+	}
+	if live.TimeThresholds["guest"] == 99 {
+		t.Fatal("editing a snapshot changed the live guest delay")
+	}
+	if live.AgentDefaults.CPU.Trigger == 1 {
+		t.Fatal("editing a snapshot changed the live agent CPU trigger")
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			m.UpdateConfig(m.GetConfig())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			if _, err := json.Marshal(m.GetConfig()); err != nil {
+				t.Errorf("encode snapshot: %v", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			id := fmt.Sprintf("snapshot-%d", i%64)
+			m.CheckHost(models.Host{ID: id, Hostname: id, Status: "online", CPUUsage: 50})
+		}
+	}()
+	wg.Wait()
+
+	if got := len(m.GetConfig().Overrides); got != 64 {
+		t.Fatalf("live overrides = %d after re-applying snapshots, want 64", got)
 	}
 }

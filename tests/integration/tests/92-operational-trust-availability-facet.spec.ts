@@ -730,9 +730,6 @@ async function routePatrolSupport(
       },
     });
   });
-  await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-    await fulfillJSON(route, { correlations: [], count: 0 });
-  });
   await page.route("**/api/ai/circuit/status", async (route) => {
     await fulfillJSON(route, {
       state: "closed",

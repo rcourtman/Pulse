@@ -2971,8 +2971,25 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 	json.NewEncoder(w).Encode(messages)
 }
 
+// requireAssistantSessionMutationMethod admits only POST to an Assistant
+// session mutation (abort, summarize, fork, undo, redo, steer). The session
+// router dispatches these sub-resources by path alone, and GET/HEAD pass both
+// the demo-mode read-only guard and the CSRF check while SameSite=Lax cookies
+// ride cross-site top-level GET navigations, so each mutation owns its method.
+func requireAssistantSessionMutationMethod(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodPost {
+		return true
+	}
+	w.Header().Set("Allow", http.MethodPost)
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	return false
+}
+
 // HandleAbort handles POST /api/ai/sessions/{id}/abort
 func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !requireAssistantSessionMutationMethod(w, r) {
+		return
+	}
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -3187,6 +3204,9 @@ func (h *AIHandler) recordFirstPartyWorkflowPromptActivity(ctx context.Context, 
 // HandleSummarize handles POST /api/ai/sessions/{id}/summarize
 // Compresses context when nearing model limits
 func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !requireAssistantSessionMutationMethod(w, r) {
+		return
+	}
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -3218,6 +3238,9 @@ func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID
 // HandleFork handles POST /api/ai/sessions/{id}/fork
 // Creates a branch point in the conversation
 func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !requireAssistantSessionMutationMethod(w, r) {
+		return
+	}
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -3244,6 +3267,9 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 // The body is optional; retry/regenerate sends SessionTurnUndoOptions with the
 // prompt being re-run so a stale retry can never remove a different turn.
 func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !requireAssistantSessionMutationMethod(w, r) {
+		return
+	}
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -3276,6 +3302,9 @@ func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, s
 
 // HandleRedoLastTurn handles POST /api/ai/sessions/{id}/redo.
 func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if !requireAssistantSessionMutationMethod(w, r) {
+		return
+	}
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -3303,8 +3332,7 @@ func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, s
 // loop; accepted=false with a reason is a normal outcome and the client
 // falls back to the ordinary follow-up queue.
 func (h *AIHandler) HandleSteerSession(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if !requireAssistantSessionMutationMethod(w, r) {
 		return
 	}
 	ctx := r.Context()

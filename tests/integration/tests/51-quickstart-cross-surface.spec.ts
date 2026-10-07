@@ -249,14 +249,6 @@ async function mockRetiredQuickstartSurface(
     });
   });
 
-  await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ correlations: [], count: 0 }),
-    });
-  });
-
   await page.route("**/api/ai/intelligence", async (route) => {
     await route.fulfill({
       status: 200,

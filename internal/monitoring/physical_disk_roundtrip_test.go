@@ -1121,3 +1121,96 @@ func TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey(t *t
 		t.Fatalf("canonical TrueNAS disks = %d, want %d (one per appliance and device)", disks, diskCount)
 	}
 }
+
+// The agent SMART merge marks each Proxmox disk a reporting linked agent
+// lists, so the disk's temperature alert is left to the agent's CheckHost.
+// Disks the agent does not list, disks on nodes without an agent, and disks
+// of an agent whose lease lapsed stay unmarked. Disks the poller builds from
+// the agent's SMART report when the Proxmox query fails go through the same
+// merge.
+func TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports(t *testing.T) {
+	disks := []models.PhysicalDisk{
+		{Instance: "pve1", Node: "node1", DevPath: "/dev/sda"},
+		{Instance: "pve1", Node: "node1", DevPath: "/dev/sdb"},
+		{Instance: "pve1", Node: "node2", DevPath: "/dev/sda"},
+		{Instance: "pve1", Node: "node3", DevPath: "/dev/sda"},
+	}
+	nodes := []models.Node{
+		{Name: "node1", LinkedAgentID: "host-node1"},
+		{Name: "node2"},
+		{Name: "node3", LinkedAgentID: "host-node3"},
+	}
+	smart := []models.HostDiskSMART{{Device: "sda", Serial: "SER-SDA", Type: "sata", Temperature: 40}}
+	hosts := []models.Host{
+		{ID: "host-node1", Status: "online", Sensors: models.HostSensorSummary{SMART: smart}},
+		{ID: "host-node3", Status: "offline", Sensors: models.HostSensorSummary{SMART: smart}},
+	}
+
+	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	for i, want := range []bool{true, false, false, false} {
+		if merged[i].AgentSMARTReported != want {
+			t.Fatalf("%s/%s AgentSMARTReported = %v, want %v", merged[i].Node, merged[i].DevPath, merged[i].AgentSMARTReported, want)
+		}
+	}
+	if disks[0].AgentSMARTReported {
+		t.Fatalf("merge modified the input slice")
+	}
+	if merged[3].Serial != "SER-SDA" {
+		t.Fatalf("a silent agent's retained row no longer enriches the disk: %+v", merged[3])
+	}
+
+	fallback := mergeHostAgentSMARTIntoDisks(physicalDisksFromHostAgentSMART("pve1", "node1", smart), nodes, hosts)
+	if len(fallback) != 1 || !fallback[0].AgentSMARTReported {
+		t.Fatalf("a disk built from a reporting agent's SMART report is not the agent's: %+v", fallback)
+	}
+}
+
+// checkPhysicalDiskAlerts raises a Proxmox disk's temperature alert from a
+// reading collected this poll, under the disk temperature policy, and leaves
+// alone a retained reading, a disk the linked agent reports and an excluded
+// device.
+func TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	m := &Monitor{alertManager: manager}
+	const instance, node = "pve1", "node1"
+	alertID := func(devPath string) string {
+		return unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, devPath) + "::metric-threshold:diskTemperature"
+	}
+	active := func(devPath string) bool {
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.ID == alertID(devPath) {
+				return true
+			}
+		}
+		return false
+	}
+	// 70C is critical for SATA (trigger 55, critical 65), which fires without
+	// the stability delay a warning waits out.
+	sata := func(devPath string) models.PhysicalDisk {
+		return models.PhysicalDisk{Instance: instance, Node: node, DevPath: devPath, Model: "Test SATA", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 70}
+	}
+
+	m.checkPhysicalDiskAlerts(instance, sata("/dev/sda"), nil)
+	if !active("/dev/sda") {
+		t.Fatalf("a SATA disk at 70C raised no temperature alert: %+v", manager.GetActiveAlerts())
+	}
+
+	retained := sata("/dev/sdb")
+	retained.Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("proxmox_node_smart", "disk is in standby")}
+	m.checkPhysicalDiskAlerts(instance, retained, nil)
+	if active("/dev/sdb") {
+		t.Fatalf("a retained 70C reading raised a temperature alert")
+	}
+
+	agentOwned := sata("/dev/sdc")
+	agentOwned.AgentSMARTReported = true
+	m.checkPhysicalDiskAlerts(instance, agentOwned, nil)
+	if active("/dev/sdc") {
+		t.Fatalf("a disk the linked agent reports raised a second temperature alert")
+	}
+
+	m.checkPhysicalDiskAlerts(instance, sata("/dev/sdd"), []string{"sdd"})
+	if active("/dev/sdd") {
+		t.Fatalf("an excluded device raised a temperature alert")
+	}
+}

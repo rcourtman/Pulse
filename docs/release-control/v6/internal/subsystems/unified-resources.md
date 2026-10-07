@@ -2303,6 +2303,16 @@ evidence of what the array was doing when the agent went quiet, but without
 live status colour. Where a retained rebuild percentage is shown, it reads
 "Rebuild was at N%" with no speed or progress bar, and a member that was not
 healthy names its state in its badge.
+A Pulse agent manually linked into a guest carries the same signal there.
+`AgentData.Stale` is always on the wire, because browsers merge agent facets
+field by field (`resourceStateAdapters.ts`) and would keep a resumed agent's
+omitted false as true; `TestAgentDataAlwaysSendsStale` pins it. That always
+present `stale` also marks a native agent facet, so one without `disks` has
+withdrawn them, and a native Proxmox VM facet's new guest-read outcome likewise
+drops `disks` it no longer reports; either way the other source's filesystems
+take over without a reload (`resourceStateAdapters.test.ts`). `VMView.DiskFromLinkedAgent` names the agent
+as the owner of a guest's selected disk metric, which the monitoring poller
+reads before it carries a Proxmox disk reading forward.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
@@ -4614,26 +4624,29 @@ reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency relationships without rebuilding correlation
-reasoning from raw events. The Patrol intelligence page now also renders that
-correlation evidence through the shared
+reasoning from raw events. The drawer renders that correlation evidence
+through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the same learned-edge list stays governed by one frontend surface
-instead of separate page-local implementations. That shared card also owns
+card, and is that card's only caller today; the Patrol page renders no learned
+correlations and the frontend does not load the global correlation list. Any later surface
+that shows learned edges must reuse that card instead of a page-local
+implementation. That shared card also owns
 the first-class relationship-map surface for canonical `resource.relationships`,
 the correlation ordering, and the truncation rule, so callers pass raw
 relationships and correlation lists instead of encoding their own sort or
 top-N behavior.
 Canonical parent edges now also originate in this subsystem: `ParentID` is
 folded into the facet relationship set through
-`ResourceRelationshipsWithCanonicalParent` before any drawer or Patrol
-consumer renders a relationship map, so pages do not rederive parent topology
+`ResourceRelationshipsWithCanonicalParent` before any consumer renders a
+relationship map, so pages do not rederive parent topology
 from raw resource fields or invent relationship-map fallbacks locally.
-The same surfaces now also render recent changes through the shared
+The drawer renders recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops. Callers may suppress
-resource-change metadata badges only for compact operator-context surfaces such
-as Patrol's supporting context; the shared card still owns headline/reason
+resource-change metadata badges only for compact operator-context surfaces;
+no caller does today, and the Patrol page renders no recent changes. The
+shared card still owns headline/reason
 dedupe so prefixed backend reasons do not render as duplicated visible copy.
 Assistant finding handoffs are part of that same timeline contract: when the AI
 runtime needs recent changes for product-originated handoff resources, it should
@@ -5577,12 +5590,14 @@ wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
 Platform tables supply the resource-label resolver to the resource drawer
 through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
 in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
@@ -6073,7 +6088,12 @@ the reference and is never retried. An owned row records its alert's
 reference as `alert_resource_id`. A read by the reference returns the rows
 journaled under it plus the rows owned away from it, matched through the
 indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
-recorded reference, and every count uses the same predicate. The Alerts
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
 history Resource action therefore still lists every occurrence raised under
 the path, across the disks that held it, and alert-centric reads keep their
 occurrences (see the AI runtime contract's incident-history queries). Rows
@@ -6229,6 +6249,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
+The TrueNAS physical-disk drawer judges a current temperature reading by the
+disk temperature policy, like the TrueNAS storage table:
+`useResourceDetailDrawerDerivedState.ts` passes the alerts store's
+`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
+Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
+says the reading reached its disk type's alert trigger. A retained reading
+keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must
 keep canonical sources such as `truenas` and `availability` present in their

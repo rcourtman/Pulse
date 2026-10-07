@@ -2090,6 +2090,20 @@ payload shape change when the portal presents compact client rows.
     index; clients must treat the endpoint's `accepted:true` as inbox
     receipt, not delivery. Browser clients must use the shared
     `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
+    Every Assistant session mutation sub-resource under
+    `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
+    `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
+    handler returns `405` with `Allow: POST` through
+    `requireAssistantSessionMutationMethod` in `internal/api/ai_handler.go`,
+    before the session service is resolved (earlier layers still answer
+    first: `Router.ServeHTTP` returns `200` for `OPTIONS` preflight, and
+    auth, scope, CSRF, and demo-mode guards keep their own refusals). The
+    session router dispatches these sub-resources by path alone, and the
+    demo-mode read-only guard and the CSRF check both treat `GET` and `HEAD`
+    as reads, so the method contract belongs to the mutating handler rather
+    than to its callers. `GET /api/ai/sessions/{id}/messages` stays the read
+    path, and the unsupported `/diff`, `/revert`, and `/unrevert` handlers
+    keep answering `501` for every method that reaches them.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed
@@ -3192,7 +3206,7 @@ a new API state machine, queue contract, or verification-accounting field.
    regressions keep the current findings empty state out of green all-clear copy
    even when the active finding count is zero and the latest summary score is
    otherwise healthy
-   and the Patrol Current work assessment behavior, so the same governed AI summary contract decides whether the workspace leads with verified health, issues detected, coverage incomplete, or another attention state instead of letting count-only page fragments emit a stale `No issues found` conclusion
+   and the Patrol Current work empty-state behavior, so once runtime state (running, blocked, disabled, unavailable) and stale coverage have taken precedence, the governed AI summary's overall health, together with run history, decides whether the current-findings empty state reads `No current issues`, `Check needed`, or `Patrol needs review` instead of letting count-only page fragments emit a stale `No issues found` conclusion
    and the Patrol Current work copy boundary, so the API-owned health,
    finding, run, and control facts remain semantic inputs while browser-visible
    empty and descriptive text stays operator-facing: what will appear there,
@@ -3250,8 +3264,8 @@ a new API state machine, queue contract, or verification-accounting field.
 	   without adding a new API payload or page-level proof surface; those process details
 	   remain available in expanded context, selected run records, Assistant
 	   handoff context, or API diagnostics when they are actually needed
-	   and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
-   and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
+	   and the Patrol verification posture derived from run history (`getPatrolVerificationPresentation`), which today only withholds the current-findings empty state's all-clear when the latest completed full patrol ended with errors or only targeted or follow-up runs completed; the page shows no aggregate verification-posture summary (expanded run-history entries still show each run's own scope and coverage), and any surface that adds one must take it from that run-history posture rather than page-local heuristics
+   and the same-day activity-mix label that posture computes from the same governed run history, which no surface renders today; one that does must explain a recent full patrol followed by alert-triggered or anomaly-triggered scoped work from that label instead of reconstructing the mix from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
    and the monitor-context Patrol coverage posture boundary, so Proxmox
    overview and other monitor-first launch pages must not consume API-owned
@@ -3304,7 +3318,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the `/api/ai/intelligence/changes` route plus `internal/api/contract_test.go`, so the canonical recent-changes endpoint stays on the same intelligence facade and contract snapshot instead of bypassing the shared timeline source
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the resource-detail surface stays on one canonical intelligence contract instead of introducing a separate detail endpoint
-   and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
+   and the global learned-correlation route `/api/ai/intelligence/correlations`, which has no frontend client today: no page renders that list, so the shared AI intelligence store neither loads nor holds it and the resource drawer reads per-resource correlations from the resource-intelligence payload; a surface that later renders the global list must add one store-owned load instead of a page-local fetch
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
@@ -3325,6 +3339,7 @@ a new API state machine, queue contract, or verification-accounting field.
    action artifact so the Assistant runtime can refresh finding and action posture
    from IDs and safe summaries instead of relying on pasted chat text
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
+   and the Patrol findings list the state hook reads from `aiIntelligenceStore.patrolFindings`, so `usePatrolIntelligenceState.ts` does not re-derive page-level severity tallies from it: the hook's unread `summaryStats` tally has been removed, the hook derives no client-side severity tally from that list today (the backend's per-severity `findings_count` reaches it only inside the AI summary payload it passes through), and the Activity tab's `This week` card takes its open-by-severity counts from `GET /api/ai/patrol/digest` instead of recounting that list
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' optional `buildResourceHref` input, so a surface that needs resource-filter links passes them into the shared card instead of rebuilding infrastructure URLs inline; the cards carry no link default since the cross-resource drilldown links were retired, and render resource labels as plain text
@@ -3458,9 +3473,9 @@ a new API state machine, queue contract, or verification-accounting field.
 17. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary assessment strip.
     That same transport split supports Patrol assessment and action metadata
     for any consumer without adding another API field (the Patrol page renders
-    no assessment strip today): the frontend summary
-    contract derives compact state from existing overall-health, run-history,
-    active finding, runtime, and pending-approval facts, so the API remains the
+    no assessment strip today): a consumer that needs compact state derives
+    it from existing overall-health, run-history, active finding, runtime, and
+    pending-approval facts (no shared frontend presenter does so today), so the API remains the
     source of facts while the configured LLM owns next-step reasoning. Those
     action references map back to existing API-backed Patrol controls and
     approval/finding filters; summary transport must not become a new execution
@@ -4172,17 +4187,19 @@ the authoritative analysis outcome.
    plumbing.
    The same page-header recency line also reads
    `PatrolRecencyPresentation.resourcesCheckedLabel` — derived by
-   `getPatrolRecencyPresentation` from
-   `PatrolRunRecord.resources_checked` and the latest completed run outcome —
+   `getPatrolRecencyPresentation` from the latest completed run's
+   `PatrolRunRecord.resources_checked` —
    so the operator sees coverage alongside recency without needing a
-   new API surface. The label stays optional when coverage is zero, says
-   verified only for successful full patrols, and uses neutral checked wording
-   for errored full patrols or scoped activity.
-   The Patrol Current work empty-state copy uses that same run-history-backed
-   coverage truth when reconciling AI summary coverage factors: a successful
-   full run with non-zero `resources_checked` suppresses stale
-   coverage-incomplete wording, while scoped, missing, zero-coverage, or errored
-   runs still allow the coverage caveat to surface.
+   new API surface. The label stays optional when coverage is zero and reads
+   `checked N resources` for any completed run, whatever its type or outcome;
+   it never says verified.
+   The Patrol current-findings empty state does not reconcile AI summary
+   coverage factors against run history: outside runtime and stale-coverage
+   states, any `coverage` factor in `overall_health` withholds the all-clear,
+   even after a successful full run
+   with non-zero `resources_checked`, and run history adds its own caveat when
+   the latest completed full run ended with errors or only targeted or
+   follow-up runs completed.
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw action commands must stay
@@ -4308,10 +4325,10 @@ the authoritative analysis outcome.
     control level and paid Patrol settings currently allowed by runtime
     entitlements.
 11. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
-12. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
-13. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside any primary summary card
+12. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not add a second assessment verdict derived from runtime state alone
+13. Treat Patrol recency as a singular transport-driven fact: the page-header recency line presents the governed Patrol timing context, so frontend summary consumers must not derive an extra timing pill from the same payloads inside any primary summary card that returns
 14. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
-15. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
+15. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the page header
 16. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
 17. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
 18. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
@@ -4846,6 +4863,10 @@ transition and evidence times) from the frontend-primitives shared
 relative-time clock. That is presentation over the same `GET
 /api/ai/patrol/status`, run history and `GET /api/ai/patrol/attention/{id}`
 payloads: no field, request or polling cadence changes.
+The attention detail's suppression `expiresAt` and a finding's `remind_at` and
+`snoozed_until` from `GET /api/ai/patrol/findings` are future times, so the
+page presents them as countdowns from the same clock ("in 1d") instead of
+ages. That is presentation only: no field, request or polling cadence changes.
 
 ### Resource-list facets preserve scoped navigation evidence
 
@@ -7270,12 +7291,14 @@ introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
 unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
-That same `/api/ai/chat` payload boundary owns per-request execution-mode
-overrides. Dashboard Pulse Brief and other scoped handoffs may include
-`autonomous_mode:false` on the chat request to force approval-required command
-execution for that exchange, but the transport must treat the field as a
-request override only and must not mutate the user's persistent AI control
-setting.
+That same `/api/ai/chat` payload boundary owns request-local execution mode,
+and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
+`autonomous_mode` field, so the `autonomous_mode:false` that scoped handoffs
+such as an explain-this-issue request still send is dropped at decode, and the
+handler passes approval-required mode into the chat service for every
+exchange; an Autonomous control level runs as Controlled for that request.
+That clamp is request-local and must not mutate the user's persistent AI
+control setting.
 That same chat transport boundary owns new-session anchoring. When the request
 omits `session_id`, the handler may generate and stream a session ID
 immediately so the browser can anchor the visible turn, but that generated ID is
@@ -7329,7 +7352,7 @@ not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads, and it must not preserve Patrol-authored next-step
 recommendation fields from legacy handoffs.
-Patrol finding handoffs are stricter than ordinary chat requests: when a request
+Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
 request-local autonomous mode to false even if the caller supplied
@@ -7449,11 +7472,13 @@ The same AI resource-intelligence payload now also carries dependency and
 dependent correlation arrays plus correlation evidence, so the drawer can render
 canonical correlation context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
-The same AI frontend client now also loads `/api/ai/intelligence/correlations`
-through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
-the Patrol intelligence page and the AI summary page, so the
-learned-correlation list is governed by the same API contract that backs the
-resource drawer's correlation evidence instead of being fetched as page-local state.
+The frontend does not load `/api/ai/intelligence/correlations`. No page renders
+the global learned-correlation list, so `frontend-modern/src/api/ai.ts` carries
+no client for it, and neither the dashboard load bundle in
+`frontend-modern/src/stores/aiIntelligence.ts` nor the Patrol refresh path
+fetches it. The resource drawer's correlation evidence comes from the
+resource-intelligence payload above. The route stays an API surface behind the
+`ai:execute` scope.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation
@@ -7784,6 +7809,23 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+The same policy hides the Go runtime profiling family for every method: on a
+`DEMO_MODE` instance the demo guard answers `/debug/pprof`, `/debug/pprof/`
+and every path below it with `404`, ahead of route authentication.
+`registerDebugRoutes` gates those handlers on `RequireAdmin` plus a
+`settings:read` scope that session logins skip, so a demo that signs visitors
+in as the configured admin would otherwise hand every visitor goroutine and
+heap dumps, the process command line, and CPU profiles, execution traces and
+forced garbage collection that cost the whole process. `PULSE_PPROF_DISABLED`
+still removes the routes on any instance.
+`TestPublicDemoAdminOperationsPolicyHidesEveryDebugRoute` fails when a literal
+route the parsed router files register under `/debug/`, with or without a
+method prefix, escapes that policy for any common method.
+`TestContract_DemoModeHidesPprofFromDemoAdminSession` in
+`internal/api/contract_test.go` signs in as that admin through the full
+router, proves the same session still reads `/debug/pprof/cmdline` below the
+demo guard, and gets `404` through it for eight pprof paths with `GET`,
+`HEAD`, `OPTIONS` and `POST`.
 That generic write block keys on the request method alone. The demo
 middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
 execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
@@ -10423,6 +10465,22 @@ the transport, persistence-error, canonical-key, reload, and restart
 boundaries. Alert evaluation after that save remains alerts-owned and must use
 the persisted trigger/recovery pair plus a valid derived critical threshold;
 the API must not invent a TrueNAS-specific threshold sidecar.
+
+`PUT /api/alerts/config` replaces only the top-level keys the body carries
+and keeps the stored value of every key it leaves out, so a client that does
+not know a setting cannot turn it off by leaving it out: the thresholds page
+has no flapping-detection or alert-TTL controls, and an older browser bundle
+or API script predates later fields. A sent key replaces its stored value
+whole, so `"overrides": {}` removes every override rather than merging, and
+the merged config then goes through the same normalization as any update (for
+example, activation state is never cleared). The read, merge and apply run
+under the alert manager's lock, so two concurrent partial saves cannot revert
+each other in memory; the handler runs one save at a time and persists a
+snapshot of the applied config, so successful saves through this endpoint
+reach `alerts.json` in the order they were applied. A body that is not a JSON object, `null` included, is a 400 and changes
+nothing. `TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys`
+and `TestUpdateAlertConfig_RejectsNonObjectBody` in
+`internal/api/alerting/alerts_test.go` prove the transport.
 
 ### Alert intent and UDP availability transport
 

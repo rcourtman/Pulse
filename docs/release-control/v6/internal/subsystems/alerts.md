@@ -1114,6 +1114,43 @@ history and affirmative recovery. This is source-fixture lifecycle proof, not
 an installed registry/destination result or a diagnosis of a reporter's daily
 resolve/reopen cycle.
 
+### A settings save keeps the alert settings it did not send
+
+`PUT /api/alerts/config` applies the body to the stored configuration through
+`Manager.ApplyConfigUpdate` and `ApplyAlertConfigUpdate` in
+`internal/alerts/config/update.go`: a top-level key the client sent replaces
+that setting whole, a key it left out keeps the stored value, and the result
+is normalized as any update is. The thresholds page has no control for
+flapping detection (`flappingEnabled` and its window, threshold and cooldown),
+alert TTL cleanup (`maxAlertAgeDays`, `maxAcknowledgedAgeDays`,
+`autoAcknowledgeAfterHours`) or `customRules`, so it never sends them. The
+handler used to decode the body into a zero `AlertConfig`, so every thresholds
+save turned flapping detection and TTL cleanup off, reset the flapping tuning
+to its defaults, dropped custom rules, and persisted that. The page's
+`flapping`, `aggregation` and `ioNormalization` payload objects are not
+`AlertConfig` fields and never enabled anything. A stored config keeps what it
+holds, including values an earlier save zeroed; nothing rewrites them.
+
+The body is decoded on its own, so sent keys mean exactly what the decoder
+makes of them, duplicates and case-folded keys included. Unsent fields are
+copied from a JSON round trip of the stored config, so the result shares no
+maps or slices with it. `ApplyConfigUpdate` reads, merges and applies under
+the manager lock, so two concurrent partial saves cannot revert each other in
+memory, and returns a JSON-cloned snapshot so that persistence, which
+normalizes the config it is handed in place, never writes into the live
+config's maps.
+
+`internal/alerts/config/update_test.go` covers unsent, explicit-off,
+case-folded, duplicate-key, malformed and full-body updates, a sent object
+replacing its stored value whole (a sent `truenasDiskDefaults: {}` does not
+inherit the stored temperature) and the no-sharing rule.
+`TestUpdateConfigKeepsSettingsAThresholdsSaveDidNotSend` and
+`TestApplyConfigUpdateKeepsConcurrentPartialUpdates` in
+`config_validation_test.go` run saves through the manager, and
+`TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys` in
+`internal/api/alerting/alerts_test.go` drives the handler against a real
+manager.
+
 ### Confirmed empty storage is recovery evidence
 
 Static storage capacity evaluation must admit a zero usage observation when
@@ -1473,7 +1510,8 @@ That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
 guest snapshot and route threshold resolution through the shared
-guest-defaults → filter-driven custom rules → guest-override chain.
+guest-defaults → filter-driven custom rules → guest-override → `pulse-relaxed`
+chain.
 That canonical guest context must preserve the live guest name and tags for
 snapshot and backup posture evaluation. Ignored prefixes, `pulse-no-alerts`,
 configured ignored tags, and required-tag filtering must resolve through the
@@ -1483,6 +1521,27 @@ operator's suppression policy.
 Passing `nil` guest context or resolving only overrides/defaults is forbidden
 because it silently bypasses custom guest rules and makes guest lifecycle
 alerting diverge from running-guest metric truth.
+The `pulse-relaxed` step lives in `effectiveAlertPolicyNoLock`, not in
+`CheckGuest`, so polling and config-save reevaluation judge a relaxed guest's
+alert by one threshold. Reevaluation rebuilds the guest from alert metadata,
+so `guestSnapshotFromAlert` reads back the `tags` the evaluator recorded
+(`[]string` live, `[]interface{}` after a restart). Without them a save judged
+the alert by unrelaxed thresholds, resolved one raised under an unset
+threshold's relaxed floor with a recovery notification, and the next poll
+raised it again. Those tags must stay current: `metricOptionsWithTags` drops
+the key from an open alert once its resource has no tags, or a removed
+`pulse-relaxed` would keep judging the alert by the relaxed trigger. The tag
+lifts CPU, memory and disk triggers to a 95/92/95 floor and gives an unset
+threshold that floor, but an Off threshold (trigger <= 0) stays Off: relaxing
+a guest must never raise an alert its config turned off. A filesystem's own
+override still replaces the relaxed guest disk threshold for that filesystem,
+on save as while polling. Proof:
+`TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds`,
+`TestConfigSaveKeepsRelaxedGuestFilesystemOverride`,
+`TestPulseRelaxedKeepsOffGuestThresholdOff` and the Off case of
+`TestApplyRelaxedGuestThresholds` in `internal/alerts/alerts_test.go`, and
+`TestCheckGuestDropsRemovedTagsFromOpenAlerts` in
+`internal/alerts/unified_eval_test.go`.
 That same guest-alert owner also has to retire per-disk guest alerts when the
 guest stops, disk alerting is disabled, or the reported disk set changes.
 Canonical guest disk identity is only valid while the guest still exposes that
@@ -1851,13 +1910,83 @@ A disk is hot from its trigger. Alerts and Patrol findings stay open until the
 reading falls to the clear value, or under the trigger when there is no band
 below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
 current reading against the trigger. PDF reports colour disk temperatures by
-the same thresholds. Judges that still differ: TrueNAS disk temperature alerts
-use `TrueNASDiskDefaults.Temperature` (a flat 55/50), and the TrueNAS disk
-drawer tones the reading from a fixed 55C.
+the same thresholds.
 `TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
 `internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
 NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
 the nil manager.
+
+TrueNAS disk temperature alerts follow the policy too:
+`trueNASDiskTemperatureDefaultNoLock`
+(`internal/alerts/truenas_disk_temperature.go`) is the type-default tier of
+`effectiveAlertPolicyNoLock` for `truenas-disk`, so an unset
+`TrueNASDiskDefaults.Temperature` resolves per disk type (the
+`alertPolicyQuery.DiskType` the unified input carries from
+`PhysicalDisk.DiskType`). A TrueNAS-wide value the user saved under TrueNAS
+Disks replaces it for every TrueNAS disk, as a host Disk Temp override does for
+an agent's disks, 0 meaning off, and a per-disk override beats both. The alert
+records `diskType` so a config save re-judges it per type; one without it is
+held to the lowest per-type trigger. A retained reading
+(`diskinventory.TemperatureCollected` false) is no evidence and raises nothing.
+The factory value is unset. `normalizeTrueNASDiskTemperature` drops a stored
+55/50 only from a config without `TrueNASDiskTemperatureByType`, because the
+thresholds page wrote that flat factory value back on every save; the page
+writes the marker, so a 55 typed later is kept. Every config `GetConfig`
+returns carries the marker, so a client that reads and writes back keeps it.
+Without the marker (an old saved file, or a page loaded before the upgrade)
+55/50 is read as that unchosen factory value; a client building a config from
+scratch with an explicit TrueNAS-wide 55 has to send the marker. The TrueNAS
+Disks Global Defaults cell reads `By type` while unset
+(`globalDefaultFallbacks` on `ResourceTable`,
+`resolveAlertResourceGlobalDefaultCell`), or Off when the agent Disk Temp
+default switches the policy off, and switching it on then stages an explicit
+TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
+trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
+The TrueNAS disk drawer tones a current reading from the same per-type trigger
+(`getDiskTemperatureThresholds` passed into `buildTrueNASDetailSections`), so it
+no longer judges heat from a fixed 55C. Judges that still differ: the TrueNAS
+storage table and drawer do not apply a TrueNAS-wide value or per-disk
+override.
+`TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
+`TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
+`internal/alerts/unified_eval_test.go` pin the tiers and retained readings;
+`TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger` in
+`internal/alerts/alerts_test.go` pin re-judging on a config save;
+`TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
+saved-config migration.
+
+Proxmox physical disks alert on temperature under the same policy.
+`CheckProxmoxDiskTemperature` (`internal/alerts/proxmox_disk_temperature.go`)
+raises a `diskTemperature` metric alert under the disk's PVE alert reference
+(`ProxmoxPhysicalDiskAlertResourceID`, resource type `proxmox-disk`), judged by
+`proxmoxDiskTemperatureThresholdNoLock`: the disk type's `DiskTempByType` entry
+under the agent Disk Temp default, which switches it off for every type. It
+carries the disk's serial, WWN and `diskType` like the health and wearout
+alerts, so `ProxmoxPhysicalDiskAlertIdentifiers` lists its
+`<reference>::metric-threshold:diskTemperature` identifier for history
+ownership, and `reevaluateActiveAlertsLocked` re-judges it per disk type (the
+lowest per-type trigger when the type was never recorded) instead of falling
+through to guest thresholds that have no disk temperature. A disk a
+still-reporting linked agent lists in its SMART report is the agent's: its
+alert closes with the `moved_to_agent` resolution and `CheckHost` raises the
+agent's own. The handover happens on the next disk poll, so for that one
+interval an agent newly linked to a disk with an open PVE alert can hold its
+own alert beside it. A lapsed agent owns nothing, so the node's own readings
+keep alerting while its agent is silent. An
+excluded disk, or a policy switched off, closes the alert; a poll without a
+current reading holds it. Like the health and wearout alerts, a disk that
+leaves the inventory keeps its alert until the 24-hour stale sweep. The
+`proxmox-disk` alert delay defaults to the factory 5 seconds, so a warning
+waits out the same 300-second noisy-gauge stability window agent and TrueNAS
+disk temperature warnings do, and a critical reading bypasses it.
+`TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy`,
+`TestProxmoxDiskTemperatureAlertOwnershipAndHolds`,
+`TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow`,
+`TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pin the policy, ownership, holds, re-judging
+and identifiers.
 
 ### Agent disk temperature alerts clear when their disk leaves the report
 
@@ -3179,6 +3308,76 @@ whose marker is newer than the running binary is never rewritten. Regression
 ownership is `internal/alerts/alert_identity_migration_test.go`,
 `internal/monitoring/monitor_alert_override_migration_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
+
+### Alert config snapshots are owned copies
+
+`Manager.GetConfig()` returns `AlertConfig.Clone()`, a typed deep copy that
+shares no map, slice or pointer with the live config (custom rule filter
+values are copied as decoded JSON values). Callers encode, persist
+and edit that snapshot outside `m.mu`: the GET config handler, alert
+activation, the identity migration, backup evaluation and diagnostics. It used
+to be a shallow copy, so `SaveAlertConfig` normalizing it in place, or
+`UpdateConfig` re-normalizing the overrides of a re-applied snapshot, wrote the
+live maps while evaluation or another encoder read them, and Go aborted Pulse
+with a concurrent map write. `SaveAlertConfig` also clones before normalizing,
+because a config just handed to `UpdateConfig` is the live config. Persistence
+keeps an explicit `0` type-level delay as no delay on save and load, matching
+`NormalizeTimeThresholds`. It used to store and load it as the 5-second factory
+delay, which the noisy-gauge rule stretches to 300 seconds for memory and
+temperature, and the shared map write was what made the running manager agree.
+Pulse saves never wrote a `0`, so only a newly sent or hand-edited `0` changes
+meaning. `internal/alerts/config/clone_test.go`
+fills every field and fails when a new reference field is not copied.
+Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
+`internal/config/persistence_alert_ownership_test.go`.
+
+### Alert evaluation owns the thresholds it normalizes
+
+Host, guest and Docker container evaluation copy what they read from
+`m.config` while holding `m.mu`, and only then fill in defaults.
+`CheckHost` and `CheckGuest` clone a per-disk
+override's `Disk` threshold before `ensureHysteresisThreshold` sets a missing
+`Clear` to the trigger minus 5. They used to normalize the live override's
+pointer after unlocking, so a `GetConfig()` clone under the read lock raced
+the write, and the saved override changed to whatever the last poll filled in.
+The live override now keeps the clear it was saved with, and the config API
+returns that value. Docker container evaluation resolves its thresholds from
+cloned `DockerDefaults` plus the override under the same lock, and reads the
+restart-loop and memory-limit settings under the lock. It used to point into
+`m.config.DockerDefaults` with no lock while `UpdateConfig` replaced
+`m.config`. The test-only `getThresholdForMetricFromConfig`, which normalized
+in place, is gone. `internal/alerts/alerts_test.go`
+`TestAlertEvaluationLeavesTheLiveConfigToTheLock` runs host, guest and Docker
+evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
+`-race`.
+
+### Config-save reevaluation judges a filesystem alert by its own threshold
+
+`UpdateConfig` re-judges every active alert, and a filesystem usage alert's
+threshold resolves through the same per-filesystem helper its evaluator uses.
+`hostDiskUsageThresholdNoLock` resolves an agent filesystem
+(`agent:<host>/disk:<label>`): its own override, then the `DiskFillByType`
+threshold for a hardware type inferred from the device while the host's disk
+alerting is on, then the host's disk threshold. `guestDiskUsageThresholdNoLock`
+resolves a guest filesystem (`<guestID>-disk-<key>`): its `guest-disk:`
+override, then the guest's disk threshold. `CheckHost` and `CheckGuest` call
+them under the read lock, and `resolveHostAlertThresholdsNoLock` and
+`resolveGuestAlertThresholdsNoLock` call them for reevaluation. Both return an
+override or per-type threshold as an owned copy. A guest filesystem alert
+resolves its guest's threshold, override and identity-based custom rules by the
+canonical `instance:node:vmid` guest ID that `parseGuestAlertIdentity` reads
+from its resource ID. Custom rules that filter on live metrics still see no
+readings there, as for every reevaluated guest alert. Reevaluation used to
+judge agent filesystems by the host threshold, and guest filesystems without
+their `guest-disk:` override or the guest's own override, because the
+filesystem's resource ID names no guest. Any settings save resolved an alert a
+per-disk threshold of 70 raised at 80 under a default of 90, notifying
+recovery, and the next poll raised it again as a new alert.
+`internal/alerts/threshold_resolution_shared_test.go`
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` covers an agent
+filesystem override, an NVMe fill threshold, a guest filesystem override and a
+guest override: an unchanged save must keep the alert, and a save lifting the
+trigger above the reading must resolve it.
 
 ### Versioned alert-intent policy
 

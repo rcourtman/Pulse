@@ -1413,6 +1413,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+The POST-only guard on Assistant session mutations (`/abort`,
+`/summarize`, `/fork`, `/undo`, `/redo`, `/steer`; `405` with `Allow: POST`
+for any other method that reaches the handler) is transport hardening in
+`internal/api/ai_handler.go`.
+It opens no storage, backup, or recovery read or write path, and a rejected
+request never reaches session state.
 Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
 is also adjacent API/AI action plumbing for storage/recovery consumers.
 `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already
@@ -3001,6 +3007,15 @@ Expiry-index pruning forgets only suppression state, never audit rows or
 recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
+
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
 
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
@@ -6905,6 +6920,15 @@ expires after ten minutes. Nothing is persisted, so a restart during the IdP
 round trip refuses the returning Response and the user signs in again. No
 storage, retention, backup, migration or recovery path is added or moved.
 
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
@@ -6915,3 +6939,11 @@ allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
 includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
 are `GET` requests and still connect. No storage, retention, backup, migration
 or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.

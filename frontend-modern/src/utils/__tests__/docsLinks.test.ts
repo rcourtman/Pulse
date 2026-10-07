@@ -175,6 +175,17 @@ describe('docsLinks', () => {
     expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
   });
 
+  it('documents alert configuration saves as replacing only the keys they send', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`PUT /api/alerts/config` — replaces only the top-level keys the body');
+    expect(api).toContain('a key left out keeps its stored value');
+    const handler = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'alerting', 'alerts.go'),
+      'utf8',
+    );
+    expect(handler).toContain('GetAlertManager().ApplyConfigUpdate(body)');
+  });
+
   it('separates server removal from persistent-data erasure', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const removal = installation.split('## 🗑️ Uninstall')[1];

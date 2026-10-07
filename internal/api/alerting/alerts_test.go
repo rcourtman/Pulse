@@ -74,6 +74,11 @@ func (m *MockAlertManager) UpdateConfig(cfg alerts.AlertConfig) {
 	m.Called(cfg)
 }
 
+func (m *MockAlertManager) ApplyConfigUpdate(update []byte) (alerts.AlertConfig, error) {
+	args := m.Called(update)
+	return args.Get(0).(alerts.AlertConfig), args.Error(1)
+}
+
 func (m *MockAlertManager) GetActiveAlerts() []alerts.Alert {
 	args := m.Called()
 	return args.Get(0).([]alerts.Alert)
@@ -238,7 +243,7 @@ func TestUpdateAlertConfig(t *testing.T) {
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	cfg := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
-	mockManager.On("UpdateConfig", testifymock.Anything).Return()
+	mockManager.On("ApplyConfigUpdate", testifymock.Anything).Return(cfg, nil)
 	mockManager.On("GetConfig").Return(cfg)
 	mockPersist.On("SaveAlertConfig", testifymock.Anything).Return(nil)
 
@@ -250,6 +255,88 @@ func TestUpdateAlertConfig(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	assert.False(t, notificationMgr.IsEnabled())
+}
+
+// The Thresholds page has no control for flapping detection or alert TTL
+// cleanup and never sends those keys; decoding its body into a zero config
+// turned both off on every save.
+func TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
+	stored := manager.GetConfig()
+	stored.MaxAlertAgeDays = 7
+	stored.MaxAcknowledgedAgeDays = 1
+	stored.AutoAcknowledgeAfterHours = 24
+	stored.FlappingEnabled = true
+	manager.UpdateConfig(stored)
+
+	mockMonitor := new(MockAlertMonitor)
+	mockPersist := new(MockConfigPersistence)
+	notificationMgr := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
+	defer notificationMgr.Stop()
+	mockMonitor.On("GetAlertManager").Return(manager)
+	mockMonitor.On("GetConfigPersistence").Return(mockPersist)
+	mockMonitor.On("GetNotificationManager").Return(notificationMgr)
+	var persisted alerts.AlertConfig
+	mockPersist.On("SaveAlertConfig", testifymock.Anything).Run(func(args testifymock.Arguments) {
+		persisted = args.Get(0).(alerts.AlertConfig)
+	}).Return(nil)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	body := `{"enabled":true,"guestDefaults":{"cpu":{"trigger":90,"clear":85}},"overrides":{},` +
+		`"flapping":{"enabled":true,"threshold":5,"window":10,"suppressionTime":30,"minStability":0.8}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/alerts/config", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.UpdateAlertConfig(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	// Persistence normalizes the config it is handed in place, so it must get
+	// a snapshot rather than the live config's maps.
+	persisted.TimeThresholds["guest"] = 999
+	if manager.GetConfig().TimeThresholds["guest"] == 999 {
+		t.Fatal("the persisted config shares its maps with the live alert config")
+	}
+	persisted.TimeThresholds["guest"] = manager.GetConfig().TimeThresholds["guest"]
+	for name, cfg := range map[string]alerts.AlertConfig{"live": manager.GetConfig(), "persisted": persisted} {
+		if cfg.GuestDefaults.CPU == nil || cfg.GuestDefaults.CPU.Trigger != 90 {
+			t.Fatalf("%s guest CPU default = %+v, want the sent trigger 90", name, cfg.GuestDefaults.CPU)
+		}
+		if !cfg.FlappingEnabled {
+			t.Fatalf("thresholds save turned %s flapping detection off", name)
+		}
+		if cfg.MaxAlertAgeDays != 7 || cfg.MaxAcknowledgedAgeDays != 1 || cfg.AutoAcknowledgeAfterHours != 24 {
+			t.Fatalf("%s TTL cleanup = %d/%d/%d after a thresholds save, want 7/1/24",
+				name, cfg.MaxAlertAgeDays, cfg.MaxAcknowledgedAgeDays, cfg.AutoAcknowledgeAfterHours)
+		}
+	}
+}
+
+func TestUpdateAlertConfig_RejectsNonObjectBody(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
+	before := manager.GetConfig()
+
+	mockMonitor := new(MockAlertMonitor)
+	mockMonitor.On("GetAlertManager").Return(manager)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	for _, body := range []string{`null`, `[]`, `"config"`} {
+		req := httptest.NewRequest(http.MethodPut, "/api/alerts/config", strings.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.UpdateAlertConfig(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d for body %s, want 400", w.Code, body)
+		}
+	}
+	if after := manager.GetConfig(); after.Enabled != before.Enabled || after.ActivationState != before.ActivationState {
+		t.Fatalf("a rejected body changed the config: %+v", after)
+	}
 }
 
 // Regression for #1341: persistence failures used to be silently swallowed
@@ -271,7 +358,7 @@ func TestUpdateAlertConfig_PersistenceFailureSurfacesAsError(t *testing.T) {
 	h := NewAlertHandlers(nil, mockMonitor, nil)
 
 	cfg := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationPending}
-	mockManager.On("UpdateConfig", testifymock.Anything).Return()
+	mockManager.On("ApplyConfigUpdate", testifymock.Anything).Return(cfg, nil)
 	mockManager.On("GetConfig").Return(cfg)
 	mockPersist.On("SaveAlertConfig", testifymock.Anything).Return(errors.New("permission denied"))
 

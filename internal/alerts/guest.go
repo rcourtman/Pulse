@@ -141,8 +141,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		return
 	}
 
-	settings := policy.TagSettings
-	monitorOnly := settings.MonitorOnly
+	monitorOnly := policy.TagSettings.MonitorOnly
 	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
 		log.Debug().
 			Str("guest", name).
@@ -215,18 +214,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	// If guest is running, clear any powered-off alert
 	m.clearGuestPoweredOffAlert(guestID, name)
 
-	// Get thresholds (check custom rules, then overrides, then defaults)
+	// Get thresholds (defaults, custom rules, overrides, then the
+	// pulse-relaxed floor)
 	m.mu.RLock()
 	thresholds := m.getGuestThresholds(guest, guestID)
 	m.mu.RUnlock()
-
-	if settings.Relaxed {
-		thresholds = applyRelaxedGuestThresholds(thresholds)
-		log.Info().
-			Str("guest", name).
-			Float64("trigger", thresholds.CPU.Trigger).
-			Msg("Applied relaxed thresholds for pulse-relaxed tag")
-	}
 
 	// If alerts are disabled for this guest, clear any existing alerts and return
 	if thresholds.Disabled {
@@ -327,18 +319,12 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			seenDiskResources[perDiskResourceID] = struct{}{}
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
 
-			effectiveDiskThreshold := thresholds.Disk
 			m.mu.RLock()
-			diskOverride, hasDiskOverride := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, keySource)
+			effectiveDiskThreshold, diskDisabled := m.guestDiskUsageThresholdNoLock(guest, guestID, keySource, thresholds.Disk)
 			m.mu.RUnlock()
-			if hasDiskOverride {
-				if diskOverride.Disabled {
-					m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
-					continue
-				}
-				if diskOverride.Disk != nil {
-					effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
-				}
+			if diskDisabled {
+				m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
+				continue
 			}
 			if snapshot.DiskUnavailable {
 				if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
@@ -421,6 +407,45 @@ func guestDiskIdentity(disk models.Disk, idx int) (label, keySource, sanitizedKe
 		sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
 	}
 	return label, keySource, sanitizedKey
+}
+
+// guestDiskUsageThresholdNoLock resolves the usage threshold one guest
+// filesystem is judged by: the filesystem's own override, else the guest's disk
+// threshold. disabled reports an override that switches the filesystem's
+// alerts off, and then the threshold is nil. CheckGuest and config-save
+// reevaluation both resolve through it. An override threshold is returned as
+// an owned copy, so normalizing it never writes into the live config. Callers
+// must hold m.mu.
+func (m *Manager) guestDiskUsageThresholdNoLock(guest any, guestID, diskKey string, guestDisk *HysteresisThreshold) (threshold *HysteresisThreshold, disabled bool) {
+	if override, ok := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, diskKey); ok {
+		if override.Disabled {
+			return nil, true
+		}
+		if override.Disk != nil {
+			return ensureHysteresisThreshold(cloneThreshold(override.Disk)), false
+		}
+	}
+	return guestDisk, false
+}
+
+// resolveGuestAlertThresholdsNoLock resolves thresholds for a persisted guest
+// alert. A filesystem alert ("<guestID>-disk-<key>") resolves its guest's
+// thresholds by the guest ID, and its Disk by the filesystem's own override, as
+// CheckGuest does. Resolved by the filesystem's resource ID, which names no
+// guest, it missed both overrides, and a config save resolved an alert the next
+// poll raised again. Callers must hold m.mu.
+func (m *Manager) resolveGuestAlertThresholdsNoLock(alert *Alert, resourceID string) ThresholdConfig {
+	resourceID = strings.TrimSpace(resourceID)
+	if identity, ok := parseGuestAlertIdentity(resourceID); ok {
+		if diskKey, isFilesystem := strings.CutPrefix(identity.resourceSuffix, "-disk-"); isFilesystem {
+			guestID := strings.TrimSuffix(resourceID, identity.resourceSuffix)
+			guest := guestSnapshotFromAlert(alert, guestID)
+			thresholds := m.getGuestThresholds(guest, guestID)
+			thresholds.Disk, _ = m.guestDiskUsageThresholdNoLock(guest, guestID, diskKey, thresholds.Disk)
+			return thresholds
+		}
+	}
+	return m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
 }
 
 func guestIORateMetrics(snapshot guestSnapshot) (diskRead, diskWrite, networkIn, networkOut *UnifiedResourceMetric) {
@@ -655,12 +680,19 @@ func parsePulseTags(tags []string) pulseTagSettings {
 	return settings
 }
 
+// applyRelaxedGuestThresholds lifts a pulse-relaxed guest's CPU, memory and
+// disk triggers to a 95/92/95 floor. An unset threshold gets the floor; one
+// switched Off (trigger <= 0) stays Off, since relaxing a guest must never
+// raise an alert its config turned off.
 func applyRelaxedGuestThresholds(cfg ThresholdConfig) ThresholdConfig {
 	relaxed := cloneThresholdConfig(cfg)
 
 	adjust := func(th **HysteresisThreshold, minTrigger float64) {
 		if *th == nil {
 			*th = &HysteresisThreshold{Trigger: minTrigger, Clear: minTrigger - 5}
+			return
+		}
+		if (*th).Trigger <= 0 {
 			return
 		}
 		ensureHysteresisThreshold(*th)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQLiteResourceStoreDoesNotPersistRawOperationReceiptProtocolOrReplayAuthority(t *testing.T) {
@@ -3327,4 +3328,33 @@ func TestSuccessionMergesGuestChangeJournalEras(t *testing.T) {
 	if !found {
 		t.Fatalf("legacy-era journal row missing from new-ID read: %+v", changes)
 	}
+}
+
+// A PVE disk temperature alert row is owned by the hardware identity it
+// records, like the health and wearout rows, and a read by the path reference
+// still finds it through ProxmoxPhysicalDiskAlertIdentifiers.
+func TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.PhysicalDisks = []models.PhysicalDisk{pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZA1A2B3C", "", now)}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	diskID, ok := adapter.currentRegistry().ResolveReferenceID(ref)
+	require.True(t, ok)
+
+	change := BuildAlertTimelineChange(ref, ChangeAlertFired, now, "", AlertTimelineChange{
+		AlertIdentifier: ref + "::metric-threshold:diskTemperature", AlertStartedAt: now, AlertType: "diskTemperature",
+		AlertMetadata: map[string]any{"disk_path": "/dev/sda", MetadataDiskSerial: "ZA1A2B3C", MetadataDiskWWN: ""},
+	})
+	change.ID = "temperature"
+	require.NoError(t, adapter.RecordChange(*change))
+
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskID)))
+	byRef := pveDiskHistoryRows(t, store, ref)
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(byRef))
+	require.Equal(t, ref, OwnedAlertReference(byRef["temperature"]))
 }
