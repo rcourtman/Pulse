@@ -47,14 +47,25 @@ it as Proxmox storage.
 
 ## ⚙️ Requirements
 
-The Pulse user needs `Sys.Audit` permission on `/nodes/{node}/disks` (included in the standard Pulse role).
+Pool health and device status come from the Proxmox API and need `Sys.Audit`
+on the affected node's disk scope. Use the **user, realm and token ID actually
+configured for that Pulse connection**, not an example account. With privilege
+separation enabled, effective access is the **intersection of user and token
+permissions**; a working administrator session or a user-only permission
+listing does not test Pulse's token.
 
-Pool health and device status come from the Proxmox API. Dataset inventory additionally requires a Unified Agent on the Proxmox node with read access to the local `zfs` command. If the command is unavailable, Pulse falls back to the mounted ZFS datasets visible to the agent.
+If an existing API denial identifies missing access, have the Proxmox
+administrator inspect both scoped ACLs and inherited permissions. Follow
+[Check permissions](TROUBLESHOOTING.md#check-permissions-proxmox) for a necessary
+access repair in a maintenance window. Do not grant a role across all nodes,
+disable privilege separation, substitute an administrator token or rerun setup
+just to diagnose absent ZFS data. A missing unregistered-pool row is not a
+permission failure.
 
-```bash
-# Grant permission manually if needed
-pveum acl modify /nodes -user pulse-monitor@pve -role PVEAuditor
-```
+Dataset inventory additionally requires a Unified Agent on the Proxmox node
+with read access to the local `zfs` command. If the command is unavailable,
+Pulse falls back to the mounted ZFS datasets visible to the agent. Agent
+capacity or dataset readings do not prove the API token can read pool health.
 
 ## 🔧 Configuration
 
@@ -74,12 +85,39 @@ PULSE_DISABLE_ZFS_MONITORING=true
 
 ## 🔍 Troubleshooting
 
-**No ZFS Data?**
-1.  Check whether the pool backs configured Proxmox storage: `pvesm status`.
-    If it is intentionally unregistered, use the capacity and health paths above.
-2.  Verify pools exist: `zpool list`.
-3.  For a missing configured storage row, check permissions:
-    `pveum user permissions pulse-monitor@pve`.
-4.  Check logs: `journalctl -u pulse -n 200 | grep -i zfs`.
-    A missing unregistered-pool row alone is not evidence that more API
-    permissions are needed.
+Start with the same **Proxmox installation, node, configured storage and
+backing pool** in Pulse and Proxmox. Repeated storage or pool names on different
+nodes are not one identity. Use the existing configuration and observations;
+do not register a pool, rename storage or recreate a connection to make them
+match.
+
+- **No storage row:** check whether the pool backs configured Proxmox storage,
+  using the existing **Datacenter → Storage** configuration and the affected
+  node's storage view. An intentionally unregistered pool has no separate row;
+  use [the capacity and separate health paths above](#unregistered-and-data-only-pools).
+  A pool's existence alone does not establish that Pulse should list it.
+- **Storage row present, pool health absent:** capacity/usage is a separate
+  reading. Inspect the original collection error and time, if available.
+  Only an actual access denial supports the [scoped permissions check above](#-requirements);
+  a green connection badge or an administrator's successful native view does
+  not establish that Pulse's token read the pool.
+- **Pool health disagrees:** compare the same pool's native health and device
+  errors with Pulse's reading and last successful collection time. A retained
+  value is not proof of a fresh read; missing health is **unknown**, not
+  `ONLINE`. Keep established native ZFS health checks meanwhile. Do not scrub,
+  export/import, clear errors or replace a device just to investigate a display.
+
+If server logs are needed, use the
+[bounded Pulse log reader](TROUBLESHOOTING.md#inspect-notification-logs) for your
+actual deployment and original time window. For a Pulse LXC, read inside that
+container, not the Proxmox host; for Docker, use the container reader. Do not
+pipe a journal read into `grep zfs`: a matching partial line can mask a failed
+read, and an empty search does not prove collection succeeded. Do not restart
+Pulse, enable Debug or run diagnostics merely to collect evidence.
+
+For a report, retain the failing surface (row, capacity, pool health or dataset
+inventory), time, collection path (API or agent), and relevant redacted error.
+Use consistent aliases for private installation, node, storage, pool and device
+names. Keep token secrets, full permission listings, raw logs and screenshots
+with private paths or serial numbers out of the public thread. A working
+capacity view does not resolve a pool-health failure.

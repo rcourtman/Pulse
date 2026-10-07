@@ -140,5 +140,83 @@ class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
         self.assertIn("Pulse monitoring and alerts are unavailable", safety)
 
 
+ZFS_DOC = ROOT / "docs/ZFS_MONITORING.md"
+
+
+class ZFSMonitoringDocsTest(unittest.TestCase):
+    """Keep the existing pool guide passive and scoped, not a native ZFS proof."""
+
+    def text(self):
+        return " ".join(ZFS_DOC.read_text(encoding="utf-8").split())
+
+    def test_shipped_zfs_guide_matches_source(self):
+        self.assertEqual(ZFS_DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/ZFS_MONITORING.md").read_bytes())
+
+    def test_zfs_permissions_use_the_configured_privilege_separated_token(self):
+        text = self.text()
+        for distinction in ("user, realm and token ID actually configured",
+                            "intersection of user and token permissions",
+                            "user-only permission listing does not test Pulse's token",
+                            "both scoped ACLs and inherited permissions",
+                            "TROUBLESHOOTING.md#check-permissions-proxmox"):
+            self.assertIn(distinction, text)
+        for boundary in ("Do not grant a role across all nodes",
+                         "disable privilege separation", "administrator token",
+                         "rerun setup", "maintenance window"):
+            self.assertIn(boundary, text)
+
+    def test_zfs_guide_has_no_permission_or_recovery_mutation_recipe(self):
+        commands = "\n".join(re.findall(r"`([^`]+)`", ZFS_DOC.read_text()))
+        self.assertNotRegex(commands, r"\bpveum\b|aclmod|--privsep|\bsudo\b|"
+                                      r"systemctl\s+(?:restart|stop)|"
+                                      r"zpool\s+(?:scrub|clear|export|import|replace)")
+
+    def test_zfs_help_keeps_row_capacity_health_and_inventory_distinct(self):
+        text = self.text()
+        for distinction in ("No storage row", "Storage row present, pool health absent",
+                            "Pool health disagrees", "capacity/usage is a separate reading",
+                            "missing health is **unknown**, not `ONLINE`",
+                            "capacity view does not resolve a pool-health failure",
+                            "Agent capacity or dataset readings do not prove the API token",
+                            "Datacenter → Storage", "intentionally unregistered pool"):
+            self.assertIn(distinction, text)
+        # These are inspected collection paths, not permission or appliance acceptance.
+        client = (ROOT / "pkg/proxmox/client.go").read_text()
+        for endpoint in ('"/nodes/%s/disks/zfs"', '"/nodes/%s/disks/zfs/%s"'):
+            self.assertIn(endpoint, client)
+
+    def test_zfs_comparison_keeps_source_identity_and_freshness(self):
+        text = self.text()
+        for distinction in ("Proxmox installation, node, configured storage and backing pool",
+                            "Repeated storage or pool names on different nodes are not one identity",
+                            "Use the existing configuration and observations",
+                            "last successful collection time",
+                            "retained value is not proof of a fresh read",
+                            "Keep established native ZFS health checks meanwhile"):
+            self.assertIn(distinction, text)
+
+    def test_zfs_logs_reuse_containing_reader_on_the_actual_pulse_host(self):
+        text = self.text()
+        self.assertNotRegex(ZFS_DOC.read_text(), r"journalctl[^\n]*\|")
+        for distinction in ("TROUBLESHOOTING.md#inspect-notification-logs",
+                            "original time window", "read inside that container, not the Proxmox host",
+                            "For Docker, use the container reader",
+                            "matching partial line can mask a failed read",
+                            "empty search does not prove collection succeeded",
+                            "Do not restart Pulse, enable Debug or run diagnostics"):
+            self.assertIn(distinction, text)
+
+    def test_zfs_report_preserves_private_evidence_and_existing_setup(self):
+        text = self.text()
+        for boundary in ("do not register a pool, rename storage or recreate a connection",
+                         "Do not scrub, export/import, clear errors or replace a device",
+                         "failing surface (row, capacity, pool health or dataset inventory)",
+                         "collection path (API or agent)", "consistent aliases",
+                         "token secrets, full permission listings, raw logs",
+                         "private paths or serial numbers out of the public thread"):
+            self.assertIn(boundary, text)
+
+
 if __name__ == "__main__":
     unittest.main()
