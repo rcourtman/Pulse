@@ -77,6 +77,10 @@ describe('quiet-hours setup help', () => {
   });
 
   it('connects troubleshooting and setup through real shipped section links', () => {
+    const guides: Record<string, HTMLElement> = {
+      CONFIGURATION: article('CONFIGURATION'),
+      TROUBLESHOOTING: article('TROUBLESHOOTING'),
+    };
     for (const [from, to, fragment, label] of [
       [
         'TROUBLESHOOTING',
@@ -91,10 +95,10 @@ describe('quiet-hours setup help', () => {
         'Recent delivery activity',
       ],
     ]) {
-      const link = article(from).querySelector(`a[href="/docs/${to}#${fragment}"]`);
+      const link = guides[from].querySelector(`a[href="/docs/${to}#${fragment}"]`);
       expect(link?.textContent).toBe(label);
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
-      expect(article(to).querySelector(`[id="${fragment}"]`)).not.toBeNull();
+      expect(guides[to].querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
   });
 });

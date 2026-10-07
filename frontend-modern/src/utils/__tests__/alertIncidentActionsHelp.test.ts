@@ -86,6 +86,11 @@ describe('existing alert incident actions help', () => {
     for (const name of ['CONFIGURATION', 'TROUBLESHOOTING']) {
       expect(read(`frontend-modern/public/docs/${name}.md`)).toBe(read(`docs/${name}.md`));
     }
+    // Render each immutable guide once instead of reparsing it for every link.
+    const guides: Record<string, HTMLElement> = {
+      CONFIGURATION: article('CONFIGURATION'),
+      TROUBLESHOOTING: article('TROUBLESHOOTING'),
+    };
     for (const [from, to, fragment, label] of [
       [
         'TROUBLESHOOTING',
@@ -100,14 +105,14 @@ describe('existing alert incident actions help', () => {
         'Recent delivery activity',
       ],
     ]) {
-      const link = article(from).querySelector(`a[href="/docs/${to}#${fragment}"]`);
+      const link = guides[from].querySelector(`a[href="/docs/${to}#${fragment}"]`);
       expect(link?.textContent).toBe(label);
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
-      expect(article(to).querySelector(`[id="${fragment}"]`)).not.toBeNull();
+      expect(guides[to].querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
     expect(actions().querySelector('a[href="#quiet-hours-and-notification-holds"]')).not.toBeNull();
     expect(
-      article('CONFIGURATION').querySelector('#quiet-hours-and-notification-holds'),
+      guides.CONFIGURATION.querySelector('#quiet-hours-and-notification-holds'),
     ).not.toBeNull();
   });
 });
