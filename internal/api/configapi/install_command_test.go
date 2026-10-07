@@ -27,10 +27,11 @@ if history:
     env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
 program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
 child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
-if history: os.write(master, (p["command"] + "\n").encode())
 os.close(slave)
 output = b""
 sent = False
+command_sent = False
+exit_sent = False
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
@@ -41,6 +42,15 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
+        if history and output.endswith(b"PULSE_TEST$ "):
+            if not command_sent:
+                os.write(master, (p["command"] + "\n").encode())
+                command_sent = True
+            elif not exit_sent:
+                # Do not queue shell input while the bootstrap/installer still
+                # owns the terminal or may be restoring its input mode.
+                os.write(master, b"exit\n")
+                exit_sent = True
         # The interactive shell also echoes the copied command, which contains
         # this prompt literal. A PTY read may end there before the command has
         # even run. Never deliver a credential while terminal echo is enabled:
@@ -49,7 +59,6 @@ while time.monotonic() < deadline:
         if output.endswith(b"(paste at this prompt, not in the command): ") and silent and not sent:
             os.write(master, (p["input"] + "\n").encode())
             sent = True
-            if history: os.write(master, b"exit\n")
     if child.poll() is not None and not ready: break
 else:
     os.killpg(child.pid, signal.SIGKILL)
@@ -423,6 +432,38 @@ func TestPrivateBootstrapPTYWaitsForSilentPrompt(t *testing.T) {
 	captured, err := os.ReadFile(filepath.Join(root, "captured-token"))
 	if err != nil || string(captured) != token {
 		t.Fatal("private prompt did not receive the complete credential")
+	}
+	assertContainerBootstrapCleanup(t, root)
+}
+
+func TestPrivateBootstrapPTYWaitsForCallerBeforeExit(t *testing.T) {
+	installer := strings.Replace(recordingInstaller, `exit "${FAKE_INSTALL_EXIT:-0}"`, `
+if IFS= read -r -t 0.2 </dev/tty; then
+    echo "PTY fixture queued shell input while installer owns terminal" >&2
+    exit 55
+fi
+exit "${FAKE_INSTALL_EXIT:-0}"`, 1)
+	root, env := bootstrapFixture(t, installer)
+	token := strings.Repeat("h", 32)
+	command := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pve", IncludeInstallType: true})
+	history := filepath.Join(root, "shell-history")
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-c", bootstrapPTYRunner)
+	cmd.Stdin = strings.NewReader(string(payload))
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("caller hand-off bootstrap: %v\n%s", err, out)
+	}
+	hist, err := os.ReadFile(history)
+	if err != nil || !strings.Contains(string(hist), command) || !strings.HasSuffix(string(hist), "exit\n") {
+		t.Fatal("calling shell did not receive the command and subsequent exit")
+	}
+	if strings.Contains(string(out), token) || strings.Contains(string(hist), token) {
+		t.Fatal("private input reached terminal output or history")
 	}
 	assertContainerBootstrapCleanup(t, root)
 }
