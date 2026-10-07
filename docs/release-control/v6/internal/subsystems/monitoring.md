@@ -30,13 +30,16 @@ are not hardware identity, guest identity or History keys.
 
 `guest_filesystem_identity_test.go` checks separate equal-size volumes, alias
 mounts, missing GUIDs, Linux bind/device peers and overflow. Its synthetic
-QGA-only polling lifecycle carries complete capacity, volume removal and
-explicit zero through the native VM builder, canonical read state and both
-in-memory/persistent History. It establishes source acceptance, not native
-Windows/PVE recovery or a diagnosis of issue #2619. The optional-read lifecycle fixture also carries the same captured mock-mode
-scope through poll publication and broadcast after the mode-fence API change,
-rather than recapturing an epoch for stale state. Guest commands, operation
-locks, shared admission, retries, timeout and backup policy are unchanged.
+QGA-only polling lifecycle is intended to check complete capacity, volume removal
+and explicit zero through the VM builder, canonical read state and both
+in-memory/persistent History. Executing that lifecycle is separate from the
+non-listening capacity checks: fixture presence or compilation alone does not
+establish polling/History acceptance, native Windows/PVE recovery or a diagnosis
+of issue #2619. The optional-read lifecycle fixture also carries the same
+captured mock-mode scope through poll publication and broadcast after the
+mode-fence API change, rather than recapturing an epoch for stale state. Guest
+commands, operation locks, shared admission, retries, timeout and backup policy
+are unchanged.
 
 ### Sustained poll failures preserve the capped retry fence
 
