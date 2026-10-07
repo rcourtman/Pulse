@@ -100,7 +100,35 @@ severity and other delivery policies still apply.
 
 **Resource tag routing.** Email and each alert webhook can be limited to resources with selected tags in **Alerts → Notifications**. An empty filter receives every alert. With multiple tags, choose **Match all tags** or **Match any tag**. Matching ignores case. Proxmox tags are matched as shown; Docker container and service labels are exposed as `key:value` tags (or `key` when the label value is empty). Recovery notifications follow the destinations that received the firing alert, even if a resource's tags change before recovery.
 
-**Retries.** Failed deliveries retry with exponential backoff. The persistent notification queue makes up to 3 delivery attempts per notification; webhooks configured with transport-level retry add up to 3 more HTTP retries per attempt (1s doubling to a 30s cap, honoring `Retry-After` on HTTP 429). A receiver may therefore see the same logical event more than once.
+**Retries and retained failures.**
+
+Normal queued firing and recovery webhooks have a budget of **up to three
+queue delivery attempts, including the initial attempt**. This is a ceiling,
+not a promise to retry every failure or a guarantee of delivery. The normal
+queued webhook sender has no extra transport retry loop; do not assume three
+extra HTTP retries or a provider's `Retry-After` wait on this path.
+
+| Observed failure | Automatic queue behaviour |
+| --- | --- |
+| Authentication, configuration or rejected request (most HTTP 4xx, including 400, 401 and 403) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. |
+| HTTP 408, 421, 423, 425 or 429; HTTP 5xx; connectivity or unknown failure | Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure. |
+| TLS failure | Can retry within the saved budget, but retrying does not repair certificate trust, expiry or hostname errors. Do not disable verification. |
+
+A terminal failure means **no further automatic retry**, not that the delivery
+was successful or its history was deleted. In **Alerts → Notifications**, use
+**Recent delivery activity** to check the destination, timestamp, failure class
+and HTTP status. A pending or held delivery is not a terminal failure; quiet
+hours and other delivery policies can postpone it. There is no fixed delivery
+deadline promised by the attempt count.
+
+Before choosing **Retry retained deliveries**, follow
+[retained-failure recovery](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+It acts on all retained terminal failures, not just one webhook, and keeps their
+original destination settings. A successful **Test** uses current settings and
+does not validate or resend those saved deliveries. Do not repeat tests or
+batch retries to diagnose rate limiting. A receiver can see a duplicate if an
+earlier request was accepted but Pulse did not receive its response; preserve
+[receiver deduplication](#receiver-correlation-and-deduplication).
 
 **Correlation header.** Alert webhooks carry `X-Pulse-Event-ID` in the form
 `<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). Retries retain it,

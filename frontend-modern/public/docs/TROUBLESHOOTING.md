@@ -614,9 +614,15 @@ alert was generated, routed or delivered to the intended recipient.
 #### Recover retained delivery failures
 
 Pulse shows a delivery warning for failed or dead-lettered notifications in its
-persistent queue, not for every recoverable retry. **Recent delivery activity**
-includes safely redacted provider errors; completed attempts remain for 7 days
-and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+persistent queue, not for every recoverable retry. Authentication,
+configuration and rejected failures stop automatic retries as soon as they are
+classified, even with attempts left. A terminal failure can therefore appear
+without exhausting the retry budget; waiting alone will not resend it. See
+[webhook retry behaviour](WEBHOOKS.md#-delivery-contract) for HTTP exceptions,
+transient failures and the normal queued attempt limit.
+
+**Recent delivery activity** includes safely redacted provider errors;
+completed attempts remain for 7 days and dead-letter attempts for 30 days. Start with the failure class and timestamp:
 
 | Failure | Check before retrying |
 | --- | --- |
