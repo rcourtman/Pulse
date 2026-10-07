@@ -582,11 +582,15 @@ Apply and verify the change:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl restart pulse-agent
-sudo journalctl -u pulse-agent --since "5 minutes ago"
 ```
 
-Set the value to `debug` temporarily when collecting diagnostics, then restore
-`info` or `warn`. For a container agent, set `LOG_LEVEL=warn` in the container
+These are configuration changes, not evidence-collection steps: apply them in
+a suitable maintenance window, not just to file a report. Inspect the existing
+journal with the [bounded agent log reader](#collect-agent-logs-safely).
+Start with the current log level; changing it to `debug` can expose more private
+details and a restart changes the run being investigated. Do not enable debug
+logging or restart the agent merely to manufacture a missing diagnostic entry.
+For a container agent, set `LOG_LEVEL=warn` in the container
 environment and recreate the container. Pro installations can also manage
 `log_level` with an [agent configuration profile](CENTRALIZED_MANAGEMENT.md).
 
@@ -921,6 +925,54 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics 
 
 ## Troubleshooting
 
+### Collect agent logs safely
+
+Prefer existing observations from the original failure. On a **Linux systemd
+agent host**, use this bounded Bash reader with an account already authorised
+to read that journal. Run it on the affected agent host, not the Pulse server
+or a different Proxmox node; use the actual service name and original time
+window if they differ from the example. This reads logs only: it does not
+contact Pulse, a container runtime or a guest agent.
+
+```bash
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Agent log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if agent_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse-agent.service --since '15 minutes ago' --lines 200 --no-pager --output=cat 2>&1); then
+  if [ -n "$agent_logs" ]; then
+    printf '%s\n' "$agent_logs"
+  fi
+else
+  agent_log_status=$?
+  printf 'Agent log read unavailable (exit %s); no partial excerpt shown.\n' "$agent_log_status" >&2
+  exit "$agent_log_status"
+fi
+)
+```
+
+This requires **GNU `timeout`**, reads at most 200 records from the default
+15-minute window, and allows eight seconds plus a one-second termination grace.
+A failed or timed-out read is unavailable, not an empty search; partial output
+is withheld. Stop if the utility, service journal or existing access is
+unavailable; do not follow the journal indefinitely, remove the deadline or
+broaden permissions to collect it. A successful empty read is inconclusive:
+the event may be outside the window or absent at the configured log level.
+Do not restart, re-enrol or enable debug logging just to obtain an entry.
+
+The excerpt is **not sanitised**. Review it locally before searching for the
+relevant error or sharing a manually redacted timestamp and failure stage.
+Tokens, cookies, URLs, private names or addresses can appear in errors; do not
+post the full excerpt, service environment, connection files or saved identity.
+A log message does not prove fresh readings, successful updates or delivery.
+
+For a container agent or a non-systemd host, use the existing deployment's log
+source instead; this journal recipe does not apply. Keep its read bounded and
+private, and report evidence as unavailable if safe collection is not possible.
+QNAP and Unraid log locations are described in the
+[space troubleshooting section](#installer-fails-with-not-enough-free-disk-space).
+
 ### pfSense service disabled after a major upgrade
 
 Pulse installs two service files on pfSense: the FreeBSD rc.d service at
@@ -1002,7 +1054,8 @@ space problem is resolved; verify fresh reporting, free space and log growth
 after any planned repair. Keep log contents, connection files and tokens private.
 
 ### Agent Not Updating
-- Check logs: `journalctl -u pulse-agent -f`
+- Inspect existing errors with the [bounded agent log reader](#collect-agent-logs-safely);
+  a missing update entry is not proof that an update succeeded.
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
 - Confirm the agent can authenticate and that its saved connection state still
@@ -1147,11 +1200,8 @@ monitoring report or **Automatic updates ready** also does not prove that this
 separate WebSocket channel is working. Changing Proxmox API permissions cannot
 repair a Pulse command-channel connection.
 
-For a systemd agent, inspect the recent journal **locally on the affected node**:
-
-```bash
-sudo journalctl -u pulse-agent.service --since '15 minutes ago' -n 200 --no-pager --output=cat
-```
+For a systemd agent, inspect the recent journal **locally on the affected node**
+with the [bounded agent log reader](#collect-agent-logs-safely).
 
 Look for **Connected and registered with Pulse command server**, or
 **WebSocket connection failed repeatedly, reconnecting** and its error. A
@@ -1182,10 +1232,10 @@ launchctl list | grep pulse
 
 If your Docker Swarm cluster isn't being detected:
 
-1. **Check runtime detection**: Pulse disables Swarm for Podman. Look for "Podman runtime detected" in logs:
-   ```bash
-   journalctl -u pulse-agent | grep -i podman
-   ```
+1. **Check runtime detection**: Pulse disables Swarm for Podman. Look locally
+   for "Podman runtime detected" in the existing excerpt from the
+   [bounded agent log reader](#collect-agent-logs-safely). An empty search does
+   not establish that Docker was detected or that Swarm collection succeeded.
 
 2. **Force Docker runtime**: If auto-detection is incorrect:
    ```bash
@@ -1205,12 +1255,11 @@ If your Docker Swarm cluster isn't being detected:
    typed-helper summary does not include Swarm inventory; granting broader
    socket access is a security decision, not a routine permission repair.
 
-5. **Enable debug logging**: For more detail:
-   ```bash
-   # Set the service to debug as described under "Agent log level", restart it,
-   # then follow the service journal.
-   journalctl -u pulse-agent -f
-   ```
+5. **Keep the original failure evidence**: retain the failure stage and a
+   reviewed, redacted error, or say that no relevant entry is available. Do
+   not enable debug logging, restart the agent or change its runtime merely
+   to obtain a log entry. Use the existing observations before deciding that
+   any configuration repair is needed.
 
 ### PVE Backups Not Showing (Recovery)
 
