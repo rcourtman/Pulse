@@ -5791,7 +5791,15 @@ the surface-alt detail row shell locally. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
-desktop layout. Long operator-state copy must wrap inside the shared row border
+desktop layout. Below that breakpoint the default content shell is capped at
+the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
+is a size container), never a viewport estimate of the page chrome, so a phone
+drawer does not leave an empty strip beside its content (the retired
+`100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
+visible area. Callers that pass their own `contentClass` own their width.
+Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
+scrolling still moves the drawer with its cell.
+Long operator-state copy must wrap inside the shared row border
 instead of painting beneath adjacent controls or disappearing at the clip edge.
 When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
