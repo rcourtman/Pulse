@@ -5836,6 +5836,7 @@
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
             ]
           },

@@ -6664,6 +6664,16 @@ notice renders on. `collectOutdatedSensorSetupNodes` lists the PVE nodes that
 carry the registry's `proxmox.sensorSetupOutdated` verdict and takes no disk
 rows, because only the Proxmox Storage tab loads them; a predicate over them
 left the notice silent on Overview.
+A notice names each affected resource by the label its page's table shows for
+the row. The sensor-setup notice leads with the node's trimmed resource name
+(the operator-set display name when one exists, else the Proxmox node name),
+falling back to the id as the nodes table does, and adds the Proxmox node name
+in parentheses unless the label already contains it as a whole word, ignoring
+ASCII case, or as the host part of a domain name, as in
+`West Production C (pve3)`. Both names are needed: the nodes table switches to
+the Proxmox node name in its narrowest layout, and the setup script is re-run
+on that Proxmox node, so the rule is stricter than `hasAlternateDisplayName` in
+the guest table's node group header and keeps `pve-3` beside a `PVE3` label.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in
