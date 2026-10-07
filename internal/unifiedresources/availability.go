@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 // AvailabilityChecksForResource returns the complete canonical availability
@@ -26,6 +29,25 @@ func AvailabilityCheckByTargetID(resource Resource, targetID string) *Availabili
 		}
 	}
 	return nil
+}
+
+// availabilityChecksProveOnline reports whether any availability check
+// projected onto a monitored resource proves, at now, that the resource
+// answers. Only a passing check with current evidence does. Each check is
+// judged by its own evidence window (two poll intervals for a local check,
+// the report window for a remote probe), so one check's recent run cannot
+// vouch for another check's old pass, and a local check that missed its
+// cadence keeps Available but proves nothing. A failing check proves only
+// that one port or service does not answer, so it never decides the
+// resource's status at all: not online, offline or warning, current or quiet.
+func availabilityChecksProveOnline(checks []AvailabilityData, now time.Time) bool {
+	for _, check := range checks {
+		if check.Enabled && check.Available && check.Evidence != nil &&
+			check.Evidence.FreshnessAt(now) == operationaltrust.EvidenceFresh {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeResourceAvailability(resource *Resource) {

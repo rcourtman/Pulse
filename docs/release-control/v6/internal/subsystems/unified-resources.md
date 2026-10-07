@@ -6192,9 +6192,20 @@ pass and manual links both apply that function:
   the best of equal ones. A quiet source drops out of that decision.
 - Once every source is quiet, an `offline` verdict survives and any other
   verdict reads `warning`. The best of those wins.
-- A current facet sighting carries no verdict (the PBS host-agent association,
-  an availability check projected onto its target). It counts as `online` only
-  when no current source has a verdict, and reads `warning` once quiet.
+- A current facet sighting carries no verdict (the PBS host-agent association).
+  It counts as `online` only when no current source has a verdict, and reads
+  `warning` once quiet.
+- Availability checks projected onto a monitored resource rank like that facet,
+  but their shared sighting is not their verdict. `availabilityChecksProveOnline`
+  judges each check at the pass's `now` by its own evidence window
+  (`Evidence.ValidUntil`: two poll intervals for a single local check, the
+  probe report window for a remote or multi-location one). An enabled,
+  passing check with current evidence proves the resource answers and reads
+  `online` once one of the resource's own sources has gone quiet and none that
+  is current has a verdict. Every other check abstains, current or quiet: a
+  failing check proves only that one port or service does not answer, and a
+  pass whose evidence lapsed proves nothing now. A check's own row keeps the ordinary
+  rules.
 
 The stale pass used to read delivery as the verdict. A Proxmox node the cluster
 reported offline on a live poll came back `online` once its linked agent fell
@@ -6218,24 +6229,52 @@ online stays `online` when its linked agent stops reporting. A live agent keeps
 a node `online` when the Proxmox poll reports it offline, which the Proxmox
 nodes table reads with `connectionHealth: error` as a stale provider. When a
 guest's or container's only source goes quiet, a running one stays `warning`
-and a stopped one stays `offline`.
+and a stopped one stays `offline`. In each quiet case a projected availability
+check with current evidence lifts the resource to `online`, as described
+below.
 
 The sighting still reads `stale`, so health keeps its `telemetry_stale` reason
 and monitored-system reasons are unchanged. In-memory clones keep the verdicts,
 including a facet's missing one. A serialized copy carries none, so
 `IngestResources` gives each sighting of a copy that lost them all the stored
 resource status; a merged row's separate source verdicts do not survive that
-round trip. A manual link that joins two resources reported by one source keeps
+round trip, and a copy whose status a passing check supplied gives that status
+to every source. A manual link that joins two resources reported by one source keeps
 the fresher sighting. `registry_merge_policy_test.go` pins the node,
 poller-expired, guest, round-trip, copy, agent, Docker, Kubernetes,
 mixed-source and manual-link cases, and the aggregation table.
 
-Availability checks still count by delivery. With every source that has a
-verdict quiet, a current check keeps its target `online` even when the check
-fails, as it did before. Several checks share one sighting whose freshness
-comes from whichever check was projected last, so an availability verdict
-needs each check's own freshness, including local checks that miss their
-cadence, and has to survive manual links. That is left to a follow-up.
+Availability checks used to count by delivery too. With every source that
+has a verdict quiet, a current failing check kept a node `preserveOrExpireNodes`
+expired `online`, and a quiet one lifted it to `warning`. Several checks share
+one sighting whose freshness comes from whichever check was projected last, so
+a failing check that just ran could also vouch for another check's old pass.
+Each check is now judged by its own evidence. A failing probe no longer holds
+an expired node `online`, and it never makes a guest read stopped to the
+consumers that count `offline` as stopped (the workloads summary, the Proxmox
+page counts). The failure stays on the check's own row, which raises an
+outage incident once the check confirms one (past its failure threshold, from
+every location). A check observed from several locations relies on the poller
+ageing out a location that stopped running and lasting an available check's
+evidence only as long as its newest reachable path (monitoring.md), so one
+location's fresh failure cannot lend its freshness to another location's old
+pass.
+
+The verdict is read from the checks on the resource when status is
+aggregated. Projecting, re-running or retargeting a check also re-applies the
+stale pass's rule to every target it touches whose status that pass owns,
+because a check is not a delivery from the target's own sources and the
+resources API replays checks after its stale pass. The pass owns a status only
+through the target's own sightings: the checks' sighting going quiet neither
+hands it the target nor, once removed, takes the target away, so a target
+whose own sources have not gone quiet keeps the status they gave it. A check
+retargeted away therefore takes its verdict with it at once. A
+manual link keeps only the primary's own checks, so the merged resource is
+judged by the checks it shows and never by the linked resource's fresher
+sighting. `registry_test.go` pins the expired-node and quiet-guest cases, both
+projection orders, re-judging on check changes, ownership through the
+target's own sightings and the manual link; the aggregation table pins the
+check rules.
 
 ### Canonical object drawer hierarchy
 

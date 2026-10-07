@@ -23,6 +23,10 @@ const availabilityProbeStaleFloor = 5 * time.Minute
 // assigned agent stops reporting.
 const availabilityProbeStaleError = "no recent report from probe agent"
 
+// availabilityLocalCheckStaleError explains a local observation that stopped
+// running while the check's other locations kept reporting.
+const availabilityLocalCheckStaleError = "no recent local check"
+
 // ProbeAvailabilityResult is one availability observation reported by a remote
 // host agent that owns the target's execution.
 type ProbeAvailabilityResult struct {
@@ -316,9 +320,34 @@ func (m *Monitor) availabilityProbeAssignmentReference(targetID, locationID stri
 	return now
 }
 
+// deriveLocalAvailabilityObservationStaleness ages out a local observation
+// that stopped running when the check also has other locations. Alone, a
+// local observation's check time is the check's freshness, so its evidence
+// lapses with it. Beside other locations the check takes the newest
+// location's freshness, so a local pass that stopped would otherwise keep the
+// check available on the strength of a failing remote report.
+func deriveLocalAvailabilityObservationStaleness(
+	target config.AvailabilityTarget,
+	status AvailabilityProbeStatus,
+	now time.Time,
+) AvailabilityProbeStatus {
+	if status.LastChecked.IsZero() || !availabilityProbeReportIsStale(target, status.LastChecked, now) {
+		return status
+	}
+	status.Outcome = string(AvailabilityProbeIndeterminate)
+	status.Available = false
+	status.LastError = availabilityLocalCheckStaleError
+	status.LatencyMillis = 0
+	return status
+}
+
 func availabilityProbeStatusIsStale(status AvailabilityProbeStatus) bool {
-	return status.Outcome == string(AvailabilityProbeIndeterminate) &&
-		strings.EqualFold(strings.TrimSpace(status.LastError), availabilityProbeStaleError)
+	if status.Outcome != string(AvailabilityProbeIndeterminate) {
+		return false
+	}
+	lastError := strings.TrimSpace(status.LastError)
+	return strings.EqualFold(lastError, availabilityProbeStaleError) ||
+		strings.EqualFold(lastError, availabilityLocalCheckStaleError)
 }
 
 func availabilityProbeReportIsStale(target config.AvailabilityTarget, lastChecked time.Time, now time.Time) bool {

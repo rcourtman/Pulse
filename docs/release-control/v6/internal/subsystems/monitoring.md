@@ -3028,7 +3028,20 @@ Monitoring retains one current status per target and location, using server
 receipt time for remote freshness while keeping the agent-authored observation
 time as evidence metadata. A stale or disconnected agent path derives as
 indeterminate at read time; slow or fast agent clocks cannot manufacture or
-conceal a disconnect. Aggregation is conservative: all reachable paths are
+conceal a disconnect. A local path beside other locations that has not run
+within the same window derives as indeterminate too ("no recent local check").
+The target takes its freshness from its newest location, so otherwise a
+failing remote report kept an old local pass counted as reachable and the
+check read available with current evidence. For the same reason an available
+check's evidence lasts only as long as its newest reachable path, not a
+fresher path that failed. When the external-probe entitlement lapses, a
+single remote result stands in for the local location until the local poller
+runs, with the earlier of its agent check time and the server's receipt time
+as its check time, so a fast agent clock cannot keep it current. An aggregate
+over several locations never stands in: a target without a retained local
+observation reads as never checked, and not connected, until the local poller
+runs.
+Aggregation is conservative: all reachable paths are
 healthy, mixed reachable and failed/unknown paths are degraded, all current
 paths unreachable are unavailable, and no reachable path with incomplete or
 indeterminate coverage is unknown. Only aggregate unavailability advances the
