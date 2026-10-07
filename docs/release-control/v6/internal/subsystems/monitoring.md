@@ -1494,6 +1494,31 @@ later coarse healthy value and lets explicit SMART endurance replace
 contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
+Retaining evidence a disk poll could not collect follows the same identity
+rule. `previousPhysicalDiskEvidence` looks up the earlier record by serial, then
+by WWN, each compared through `diskinventory.HardwareIdentityMatch` against
+both fields of the earlier record. `HardwareIdentityMatch`, which the
+registry's linked-disk join also uses, may additionally re-pad a WWN field
+written in the host agent's unpadded NAA 5 `naa-oui-id` spelling
+(`5-c50-a1b2c3d4`, from smartctl's WWN fields) to the 16-digit form udev and
+Proxmox report; serials are never re-padded. The registry's merged disk view
+keeps the agent's WWN spelling, so without it one disk seen by both reporters
+would read as two. The Proxmox source ID and the device token
+name a slot, not a disk, so a slot match is refused when both records carry a
+serial or WWN and no value is shared between them. Missing identity is not
+conflicting identity: Proxmox's literal `unknown` and other placeholders count
+as unreported, and a record whose serial arrives empty keeps the slot's last
+known serial, still marked `missing`. Before this rule, a replacement in the
+same slot took the previous occupant's retained temperature, controller, pool
+and I/O, and a replacement record with an empty serial also took the old
+serial, which keyed it to the old disk's canonical resource and SMART metric
+series, so every later poll carried the borrowed serial forward
+(`TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial`,
+`TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity`).
+This lookup is the only place the rule applies: a replacement that reports no
+usable serial or WWN cannot be told apart from the same disk and still
+inherits, and the linked agent's SMART merge, which runs first, can still fill
+or promote a serial from a stale SMART row it matched by device path.
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
