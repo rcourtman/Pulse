@@ -4332,8 +4332,7 @@ the `ResourceChangeSummary` badge reads `Alert moved` in the neutral blue of
 the alert history's "moved to agent" badge (`Alert closed` for a reason code
 the build does not know), and
 `formatResourceChangeHeadline` uses the summary as the whole headline instead
-of prefixing `Alert resolved:`; Patrol's assessment context reuses that
-headline. A node's own drawer does not list the move yet: node and guest
+of prefixing `Alert resolved:`. A node's own drawer does not list the move yet: node and guest
 alert changes are still recorded under their legacy alert resource IDs
 (`MonitorAdapter.RecordChange` maps only Docker IDs), and Proxmox platform
 rows open the drawer in the `table-row` presentation, which fetches no
@@ -4615,26 +4614,29 @@ reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency relationships without rebuilding correlation
-reasoning from raw events. The Patrol intelligence page now also renders that
-correlation evidence through the shared
+reasoning from raw events. The drawer renders that correlation evidence
+through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the same learned-edge list stays governed by one frontend surface
-instead of separate page-local implementations. That shared card also owns
+card, and is that card's only caller today; the Patrol page renders no learned
+correlations and the frontend does not load the global correlation list. Any later surface
+that shows learned edges must reuse that card instead of a page-local
+implementation. That shared card also owns
 the first-class relationship-map surface for canonical `resource.relationships`,
 the correlation ordering, and the truncation rule, so callers pass raw
 relationships and correlation lists instead of encoding their own sort or
 top-N behavior.
 Canonical parent edges now also originate in this subsystem: `ParentID` is
 folded into the facet relationship set through
-`ResourceRelationshipsWithCanonicalParent` before any drawer or Patrol
-consumer renders a relationship map, so pages do not rederive parent topology
+`ResourceRelationshipsWithCanonicalParent` before any consumer renders a
+relationship map, so pages do not rederive parent topology
 from raw resource fields or invent relationship-map fallbacks locally.
-The same surfaces now also render recent changes through the shared
+The drawer renders recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops. Callers may suppress
-resource-change metadata badges only for compact operator-context surfaces such
-as Patrol's supporting context; the shared card still owns headline/reason
+resource-change metadata badges only for compact operator-context surfaces;
+no caller does today, and the Patrol page renders no recent changes. The
+shared card still owns headline/reason
 dedupe so prefixed backend reasons do not render as duplicated visible copy.
 Assistant finding handoffs are part of that same timeline contract: when the AI
 runtime needs recent changes for product-originated handoff resources, it should
@@ -5591,8 +5593,11 @@ should extend these unified-resource owners instead of rebuilding status or
 badge logic inside PMG, recovery, dashboard, or infrastructure-local views.
 The shared resource-runtime adapter boundary is also owned here now.
 `frontend-modern/src/utils/agentResources.ts` owns canonical actionable
-resource identities, agent-facet detection, cluster-name fallbacks, and
-resource-derived chart-key candidates. `frontend-modern/src/utils/resourcePlatformData.ts`
+resource identities, agent-facet detection, and cluster-name fallbacks. It no
+longer carries a resource-wide chart-key candidate list: workload table
+sparklines match chart series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
+`frontend-modern/src/utils/resourcePlatformData.ts`
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.

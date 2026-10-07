@@ -1915,10 +1915,10 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     Session-load and new-conversation transitions must be success-bound: if the
     underlying session operation fails, the shared drawer store must not clear or
     replace the current scoped handoff context.
-    Live Patrol assessment drawer opens must use that same
+    Restored Patrol assessment sessions use that same
     `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
-    retired dashboard target, so first-open and restored-session chrome remain
-    source-named.
+    retired dashboard target, so restored-session chrome remains source-named;
+    Patrol no longer opens live assessment handoffs.
     The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
     primitive must keep model route presentation delegated to the AI runtime
     label helpers. Pulse-owned local Assistant routes such as
@@ -2140,17 +2140,17 @@ render it only when more than one vCenter is connected: the page passes
 cell drop together, and the inline detail row's column span follows. A table
 must not hide a column by filtered rows, because a search that narrows to one
 vCenter would otherwise make the column vanish.
-Patrol's primary assessment strip is descriptive only; it must not render a
-Patrol-authored recommended next step, suggested prompt chips, or a secondary
-action band inside the assessment shell. If the same assessment opens
-Assistant, the Patrol-to-Assistant handoff must carry only bounded evidence,
+Patrol renders no primary assessment strip today. If one returns it is
+descriptive only; it must not render a Patrol-authored recommended next step,
+suggested prompt chips, or a secondary action band inside the assessment shell.
+Patrol-to-Assistant handoffs must carry only bounded evidence,
 resource references, and factual governed approval/action metadata as model-only
 context. Feature-owned Assistant handoffs may provide source context and safe
 metadata, but the shared drawer boundary must not turn those handoffs into
 frontend-authored prompts, tool routes, or remediation plans; the configured
 model owns tool choice and diagnostic reasoning after the request reaches the
 AI runtime.
-The compact Patrol assessment strip may include factual recent activity mix and
+Such a compact Patrol assessment strip may include factual recent activity mix and
 trigger-mode labels when those values are derived from the Patrol run-history
 and status payloads. Those labels are summary context inside the same strip,
 not a replacement status card, CTA band, or page-local nested card.
@@ -3011,9 +3011,9 @@ Agent`), with the plain-language source phrase available through accessible
    than receiving an unfiltered copy of the estate. Opaque unified-resource ids
    are not part of that visible search vocabulary and must not retain a node
    when the normalized guest table has no corresponding match.
-8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
-9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
-10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
+8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today; one that returns must consume that same resolved scope, and the chart under the pointer must promote its series into the shared active entity through the bridge's `setChartHoverSync` input instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
+9. Keep any page summary page-scoped when table rows enter contextual focus. No infrastructure, workloads, or storage summary cards render today. If one returns, route-backed row selection may add a focused label and shared series emphasis, but the summary must continue to render the page-level series set instead of collapsing down to the selected row or replacing the global trend view with row-local empty states.
+10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
 11. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
 12. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
@@ -3163,15 +3163,16 @@ Agent`), with the plain-language source phrase available through accessible
     that model instead of visually falling back to the default selection.
     Successful provider-model saves that return a not-ready Patrol
     readiness snapshot must use that same inline surface with `needs attention`
-    wording, while Assistant receives a saved configuration issue rather than a
-    failed-save handoff. When governed fixes are locked, the same Patrol state
+    wording, and any Assistant handoff from that state describes a saved
+    configuration issue rather than a failed save. When governed fixes are locked, the same Patrol state
     owner must clear stale full-mode unlock state before persisting the
     monitor-only autonomy payload, so disabled paid controls cannot leak stale
     permission into a save. If that inline state opens Assistant, the Patrol
     feature must hand off
     a source-named, model-only briefing and close the popover so the shared
-    Assistant drawer is not visually hidden behind feature chrome. When a Patrol
-    assessment handoff is attached, the shared Assistant drawer empty state must
+    Assistant drawer is not visually hidden behind feature chrome. When a
+    restored Patrol assessment session is attached, the shared Assistant drawer
+    empty state must
     stay aligned with that source-named briefing and must not render generic
     cluster/system starter prompts below the Patrol-owned context. The Patrol
     feature shell must also consume the Patrol-owned findings source for its
@@ -3726,30 +3727,25 @@ production table, router and styles; it does not qualify full-app scrolling.
     `Rollback not specified` lines into the model-only Patrol finding
     prompt context so the operator-visible gap is surfaced to Assistant
     rather than hidden, and shared chat primitives stay free of that
-    placeholder logic. Patrol assessment-level handoffs must use
-    that same feature helper to attach bounded model-only assessment,
-    verification, latest-run, supporting-context evidence, active-finding, and
-    resource reference context while forcing request-local approval-required
-    mode. Patrol run-history handoffs must also use that feature helper rather
+    placeholder logic. Patrol run-history handoffs must also use that feature helper rather
     than a row-local Assistant prompt, so the shared drawer receives only a
-    generic visible briefing plus bounded model-only run context, scoped
-    resource references, runtime failure summary/detail, and
-    `autonomousMode:false` while the Patrol feature remains the source of run
-    copy and retry/configuration guidance. Active-finding entries in that
-    assessment handoff may add live pending
-    approval posture only as safe structured metadata: approval ID, pending
-    status, risk, target, requested/expiry timestamps, action plan identity,
-    requester identity, approval policy, plan expiry, dry-run posture, and
-    command count. Those entries may be passed through shared chat transport as
-    `handoff_actions` for
-    model-only refresh, but the shared drawer stays a generic shell rather than
-    a Patrol summary prompt builder. The Patrol helper may turn those same safe
-    references into visible action labels and safety notes for assessment and
-    finding-level handoffs, but it must not produce Patrol-authored suggested
-    prompt chips, recommendation titles, recommendation reasons, or route-owned
-    next-step actions. Assessment-level Patrol prompts, action labels, and
-    safety notes must describe active findings, pending approvals, governed
-    action references, and coverage caveats as evidence for the configured
+    generic visible briefing, safe run identity metadata, and
+    `autonomousMode:false`; the backend rebuilds the bounded model-only run
+    context, scoped resource references, and runtime failure detail from the
+    run ID, while the Patrol feature remains the source of run copy and
+    retry/configuration guidance. Finding handoff action references
+    may add live pending approval posture only as safe structured metadata:
+    approval ID, pending status, risk, target, requested/expiry timestamps,
+    action plan identity, requester identity, approval policy, plan expiry, and
+    dry-run posture. Those references may be passed through shared chat
+    transport as `handoff_actions` for model-only refresh, but the shared drawer
+    stays a generic shell rather than a Patrol summary prompt builder. The
+    Patrol helper may turn those same safe references into visible action
+    labels and safety notes for finding-level handoffs, but it must not produce
+    Patrol-authored suggested prompt chips, recommendation titles,
+    recommendation reasons, or route-owned next-step actions. Patrol finding
+    prompts, action labels, and safety notes must describe findings, pending
+    approvals, and governed action references as evidence for the configured
     model, not as a frontend-authored decision tree.
     Finding-level drawer opens may also pass one bounded
     model-only finding context, one target resource reference, and one
@@ -3870,15 +3866,12 @@ production table, router and styles; it does not qualify full-app scrolling.
     UI surfaces must not duplicate the `patrolControlStarter` query string or
     write Patrol control or legacy entry-point starter telemetry from local
     click handlers.
-19. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
-20. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
 21. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
     normal v6 GA runtime. Shared shells and helper-driven badges may continue to
     parse legacy payload fields, but ordinary self-hosted Assistant, Patrol, and
     settings flows must present provider setup as BYOK/local/self-managed and
     must not surface hosted-model credits, in-app trial starts, or generic
     managed-model claims.
-22. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell. The hover tooltip must stay side-offset from the active scrub cursor and flip to the available side near viewport edges so it does not cover the highlighted guide or graph point.
 23. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 24. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
@@ -3908,12 +3901,14 @@ production table, router and styles; it does not qualify full-app scrolling.
 26. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
-    owner for interactive-series filtering, focused-label lookup, active-series
-    resolution, and nearest-scrollable-ancestor preservation across page-scoped
-    summary surfaces. Dashboard row focus, infrastructure summary emphasis,
-    storage summary emphasis, and workloads summary emphasis must all route through
-    that helper instead of maintaining page-local copies of the same hover/focus
-    rules.
+    owner for nearest-scrollable-ancestor preservation, off-screen element
+    reveal, and inline-detail lookup and reveal, while page/group/entity scope
+    resolution belongs to
+    `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind
+    `frontend-modern/src/components/shared/summaryTableFocus.ts`. Workloads and
+    Storage row focus and the Proxmox page's node-to-guests reveal must route
+    through those helpers instead of maintaining page-local copies of the same
+    hover/focus rules.
     `frontend-modern/src/App.tsx` must land authenticated `/` and `/login`
     handoffs through this subsystem's provider-first platform landing contract:
     the first visible provider/runtime platform wins, and the Machines surface
@@ -4494,23 +4489,21 @@ than carrying an inline copy, so hover and inline never drift apart on
 what Patrol actually owns: watching infrastructure, detecting issues,
 recording findings, and escalating into governed investigation/action
 only when the selected Patrol mode allows it.
-The same `PatrolIntelligenceHeader.tsx` shell also renders a compact
-trust-at-a-glance summary directly under the page title (a
-render-only consumer of `state.patrolStatus()?.trust`), gated on at
-least one non-zero trust signal so fresh installs render no header
-strip. The detailed breakdown stays in
-`PatrolIntelligenceWorkspace.tsx` for the canonical view; the header
-line is the entry-point summary so operators see active, regressed,
-and verified-fix counts before scrolling into the workspace tabs.
+The same `PatrolIntelligenceHeader.tsx` shell renders no
+trust-at-a-glance summary under the page title (Patrol's contract forbids a
+second header trust line), and no page renders a trust counter row:
+`state.patrolStatus()?.trust` only feeds the state hook's derived counts
+(historical regressions and prior Patrol work).
 The recency line beside the header actions also renders coverage
 alongside time when the canonical `getPatrolRecencyPresentation` helper
 returns `resourcesCheckedLabel` from the latest completed run. Render code
 must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
 zero-coverage runs do not surface a misleading coverage phrase, failed or
 scoped runs use neutral checked wording, and only successful full patrols read
-as verified. The primary Patrol assessment shell must pass the same run-history
-facts into `getPatrolAssessmentPresentation` so assessment coverage caveats do
-not contradict the header's verified full-run coverage state.
+as verified. Any Patrol assessment shell must pass the same run-history facts
+into `getPatrolAssessmentPresentation` so assessment coverage caveats do not
+contradict the header's verified full-run coverage state; the page renders no
+assessment shell today.
 The same header row may surface `Trigger status` when
 `getPatrolTriggerStatusSummary` returns a runtime-relevant value from the
 Patrol status payload. That text is page-owned operational metadata inside the
@@ -4907,11 +4900,12 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
-The same hierarchy also applies inside the Patrol summary shell: once the
-primary assessment strip states Patrol's current risk and verification basis,
+The Patrol page renders no summary shell today. If one returns, the same
+hierarchy applies inside it: once its primary assessment strip states Patrol's
+current risk and verification basis,
 supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
-The collapsed Patrol assessment strip itself must remain a compact readout
+Its collapsed assessment strip must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
 recommendation copy belongs in the owning Findings, Runs, or Assistant chat
 surfaces rather than a normal-path summary details expansion.
@@ -5113,28 +5107,12 @@ Enter/Space work through the native button, and lifecycle actions do not bubble
 into collapse. Generic `Ask Assistant` and `Copy context` actions do not belong
 in object drawer headers: Assistant remains available through the global shell,
 and raw context export must not compete with the operational reading path.
-The shared interactive sparkline now follows that same split.
-`frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
-render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`
-owns hover state, RAF throttling, canvas draw scheduling, and resize lifecycle,
-and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
-sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
-policy. Future sparkline work should extend those owners instead of pushing
-canvas scheduling or chart-shape math back into the shared component shell.
-That same sparkline boundary now also owns floating tooltip shell routing:
-local hover tooltips must derive viewport anchor coordinates from the shared
-runtime/model path, keep the tooltip beside rather than on top of the scrub
-cursor, and render through
-`frontend-modern/src/components/shared/TooltipPortal.tsx`, not as HTML
-`foreignObject` shells inside the `preserveAspectRatio="none"` chart SVG where
-cross-browser scaling can stretch the tooltip surface or drop its semantic
-shell styling.
-That same shared sparkline boundary now also owns active-series isolation
-metadata. The shell may expose `data-active-series-display` and
-`data-rendered-series-count` for proof and inspection, but only the shared
-runtime/model owners may decide whether a hovered or focused series is merely
-emphasized or fully isolated; feature shells must not fork their own row-hover
-line filtering.
+`frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx` and
+`frontend-modern/src/features/proxmox/BackupActivityChart.tsx` render their
+hover tooltips through `frontend-modern/src/components/shared/TooltipPortal.tsx`
+rather than as HTML `foreignObject` shells inside the chart SVG; the mini
+sparkline's SVG uses `preserveAspectRatio="none"`, where cross-browser scaling
+can stretch an embedded tooltip surface or drop its semantic shell styling.
 The retired dashboard overview route must not regain feature-local trend,
 KPI, problem-resource, or card shells. Workload-table and guest-row fallback
 copy that lives under `frontend-modern/src/components/Workloads/` must keep
@@ -5150,15 +5128,6 @@ empty or error copy only after they have a governed owner, and they must not
 reintroduce route-local metrics-history fetch loops for CPU and memory
 sparklines; the infrastructure and workloads summary chart routes already own
 that chart contract.
-The shared density map now follows that same owner split.
-`frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
-`frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
-signals, canvas draw lifecycle, and resize handling, and
-`frontend-modern/src/components/shared/densityMapModel.ts` owns bucket/window
-math, hover target selection, focused-series tooltip detail, and density-cell
-opacity rules. Future density-map work should extend those owners instead of
-pushing canvas lifecycle, tooltip shaping, or chart math back into the shared
-shell.
 The shared trial banner is retired for self-hosted v6 GA. Future commercial
 notification work must start from the explicit Plans, hosted, activation,
 recovery, or support surfaces rather than reviving a global authenticated-shell
@@ -6176,14 +6145,6 @@ when local login is hidden behind SSO, and the `/docs/...` public-route contract
 keeps that destination readable without an authenticated session. The login
 surface must remain guidance-only: it may not expose secrets, imply an email
 reset flow, or create a browser-side authentication bypass.
-The shared summary strip primitives now follow that same owner split.
-`frontend-modern/src/components/shared/SummaryPanel.tsx` and
-`frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render
-shells for summary-frame spacing and card density, while monitoring surfaces
-such as recovery, infrastructure, workloads, and storage only choose from the
-owned shared density modes instead of forking summary spacing with feature-
-local padding hacks. Future summary-density work should extend those shared
-primitives rather than hard-coding compact card chrome inside one surface.
 The shared tooltip now follows that same owner split.
 `frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
 singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`
@@ -6382,11 +6343,6 @@ That same shared table boundary now owns CSP-safe fill rendering for metric
 bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
 width through DOM attributes rather than inline width styles that break the
 public demo CSP.
-That same shared-boundary rule applies to summary density. The shared compact
-mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
-dense monitoring surfaces, but pages that are trying to align with the normal
-Pulse monitoring scan path should stay on the default shared density instead of
-using page-local compact overrides by habit.
 That same recovery shell boundary now also owns one canonical top-level filter
 controller in
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`. Route-backed
@@ -6784,12 +6740,9 @@ feature shell, reads its active workspace view from the route through
 `patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure Patrol-to-Assistant handoff and operator briefing derivation,
-including the rule that active findings, pending
-approvals, and governed action references outrank secondary coverage caveats
-when building the Assistant prompt, action label, and safety note,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
 summary normalization at the shared store boundary, and the Patrol-owned
-header/banner/summary/workspace section files under
+header, banner, attention workbench, workspace, and panel section files under
 `frontend-modern/src/features/patrol/` own the heavy render surfaces. Shared
 shell governance should reinforce that pattern instead of letting feature render
 surfaces re-accumulate API and timer orchestration inline.
@@ -6801,7 +6754,10 @@ That same rule also applies to compact Patrol summary fragments inside the
 feature surface: count-only strips or metric cards must not emit `No issues
 found` or other reassuring copy when the owning overall-health summary is
 degraded or not fully verified.
-That same summary shell should also surface verification scope from the
+Patrol renders no summary shell today; the header recency line shows the
+latest check or activity time, how many resources that check covered, and the
+next scheduled check.
+If a summary shell returns, it should also surface verification scope from the
 owning run-history contract. Operators should be able to see, inside the same
 summary surface, whether Patrol recently completed a full verification pass or
 whether recent activity was limited to scoped/erroring patrol runs.
@@ -6829,6 +6785,9 @@ operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
 shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
+Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
+nor the Retry path's background supporting reads fetch the global
+learned-correlation list, which no Patrol surface shows.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should keep actionable scoped-trigger state legible without promoting
@@ -7221,9 +7180,9 @@ wording.
 Resource-change readers follow the same split: `getResourceChangePresentation`
 and `formatResourceChangeHeadline` in `utils/resourceChangePresentation.ts`
 own the `Alert moved` label, its neutral-blue tone and the summary headline
-for an `alert_resolved` change with `alert_resolution` metadata, and the
-Patrol assessment handoff consumes that headline instead of composing its own
-kind prefix.
+for an `alert_resolved` change with `alert_resolution` metadata, and
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+consumes that headline instead of composing its own kind prefix.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it

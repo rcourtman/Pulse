@@ -1348,10 +1348,6 @@ describe('shared primitive guardrails', () => {
     );
     expect(contextualFocusSource).toContain('export const findInlineDetailElement');
     expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
-    expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
-    expect(contextualFocusSource).toContain('chartHoveredSeriesId');
-    expect(contextualFocusSource).toContain('hoveredGroupScope');
-    expect(contextualFocusSource).toContain('filterSeriesForActiveScope');
     expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
     expect(contextualFocusSource).toContain('data-inline-detail-for');
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');

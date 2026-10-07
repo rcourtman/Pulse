@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "d67bef7519cd1206f4f5b61f9aa4a25bb5348cda",
+  "verified_at": "2026-10-07T14:18:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "537a76c9a3beda65a52b92c4a2298111cf747511f154a2d9fc983b4601a37336"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Tree = PR 2674 head d67bef7519 plus this change; production vite build embedded in a go build binary, private DEMO_MODE mock stack on :7686 (demo/demo, PULSE_TELEMETRY=false, fresh data dir), driven by Playwright",
+    "Runtime-neutral proof: production builds of the parent tree and of this tree are byte-identical (all 187 dist files equal by shasum), so both removed builders and their helpers were already tree-shaken; check-bundle-size.mjs passes; the bundle holds neither 'Discuss Patrol assessment' nor 'Patrol mode save failure attached', and still holds the restore-path title 'Patrol mode save failure'",
+    "Assistant drawer after the Inbox decision's 'Explain with Assistant' shows the Pulse Patrol attention briefing ('critical \u00b7 open', the selected decision's resource, 'Approval required before any action.') from buildPatrolAttentionAssistantHandoff; the demo instance refuses the reply itself ('Demo mode enabled'), which is expected read-only behaviour",
+    "Assistant drawer after the selected run's 'Discuss' shows the 'Patrol run attached' briefing with the run id, timing, outcomes and the operator-controlled safety note from buildPatrolRunAssistantHandoff",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded /patrol, opened the first row of 'Patrol attention items' and clicked 'Explain with Assistant', then closed the drawer",
+    "Loaded /patrol, switched to Activity, expanded 'Finding options and history', clicked History, opened the newest run (check details), returned to History and clicked the selected run's 'Discuss'",
+    "Repeated every step at 1440x900 and 390x844 (phone context with touch)"
+  ]
+}

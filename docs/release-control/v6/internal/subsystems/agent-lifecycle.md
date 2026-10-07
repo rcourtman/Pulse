@@ -4912,8 +4912,9 @@ secondary model context after backend-refreshed finding context; those merged
 references still must not become agent enrollment, install, readiness, or
 fleet-command authority.
 Scoped Assistant handoffs from alert or incident surfaces may also send
-bounded `handoff_context`, `handoff_resources`, and Patrol assessment
-`handoff_actions` through `/api/ai/chat` without a `finding_id`;
+bounded `handoff_context` and `handoff_resources`, and Patrol attention
+handoffs may add `handoff_actions`, through `/api/ai/chat` without a
+`finding_id`;
 lifecycle-adjacent surfaces may treat those references as AI/runtime
 explanation context only, and must not reinterpret them as agent readiness,
 install status, command reachability, enrollment health, fleet execution

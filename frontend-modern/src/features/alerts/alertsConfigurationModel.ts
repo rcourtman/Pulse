@@ -174,8 +174,11 @@ const cloneBackupDefaults = (backupDefaults: BackupAlertConfig): BackupAlertConf
   ignoreVMIDs: [...(backupDefaults.ignoreVMIDs ?? [])],
 });
 
+// Off is written as 0. The editors stage -1 for Off, but the backend reads a
+// negative default trigger as unset and restores the factory threshold, so a
+// saved -1 came back On.
 const createHysteresisThreshold = (trigger: number | undefined, clearMargin = 5) => {
-  const normalized = typeof trigger === 'number' ? trigger : 0;
+  const normalized = typeof trigger === 'number' && trigger > 0 ? trigger : 0;
   return {
     trigger: normalized,
     clear: Math.max(0, normalized - clearMargin),

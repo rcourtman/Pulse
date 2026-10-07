@@ -101,7 +101,7 @@ export function hasCustomAlertResourceGlobalDefaults(
   return Object.keys(factoryDefaults).some((key) => {
     const current = globalDefaults[key];
     const factory = factoryDefaults[key];
-    return current !== undefined && current !== factory;
+    return current !== undefined && !alertResourceThresholdsEquivalent(current, factory);
   });
 }
 
@@ -208,10 +208,24 @@ export const ALERT_RESOURCE_METRIC_OFF_VALUE = -1;
  * The alert engine disables a metric whenever its trigger is `<= 0`
  * (`internal/alerts/canonical_metric.go`), so every editor surface has to read
  * `0` as Off too: older builds advertised `0` as the disable value and those
- * overrides are still on disk. New writes always use the canonical `-1`.
+ * overrides are still on disk. Editors always stage the canonical `-1`; the
+ * save payload writes an Off global default as `0`, because the backend reads
+ * a negative default as unset.
  */
 export function isAlertResourceMetricOff(value: number | undefined | null): boolean {
   return typeof value === 'number' && Number.isFinite(value) && value <= 0;
+}
+
+/**
+ * Whether two thresholds alert the same way. Every value `<= 0` is Off, and a
+ * global default saves Off as `0` while the editors and factory defaults use
+ * `-1`, so the two compare equal.
+ */
+export function alertResourceThresholdsEquivalent(
+  left: number | undefined,
+  right: number | undefined,
+): boolean {
+  return left === right || (isAlertResourceMetricOff(left) && isAlertResourceMetricOff(right));
 }
 
 /**
