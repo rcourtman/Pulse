@@ -1,17 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { RemediationPlan } from '@/api/ai';
+import type { InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
 
 import {
-  buildPatrolAssessmentAssistantHandoff,
   buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantFindingBriefing,
   buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantFindingHandoffActions,
   buildPatrolAssistantProposedFixBriefingInput,
-  buildPatrolConfigurationFailureHandoff,
   buildPatrolRunAssistantHandoff,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
@@ -20,565 +18,6 @@ import {
 } from '../patrolInvestigationContextModel';
 
 describe('patrolInvestigationContextModel', () => {
-  it('keeps same-state recent changes out of Patrol Assistant no-op wording', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Patrol runtime issue',
-        description: 'Coverage is incomplete.',
-      },
-      investigationContext: {
-        recentChangeCount: 1,
-        correlationCount: 0,
-        governedResourceCount: 0,
-        hasContext: true,
-        summaryText: '1 recent change',
-      },
-      supportingEvidence: {
-        recentChanges: [
-          {
-            id: 'change-1',
-            observedAt: '2026-05-06T12:08:00Z',
-            resourceId: 'app-container-1',
-            kind: 'state_transition',
-            from: 'online',
-            to: 'online',
-            sourceType: 'pulse_diff',
-            sourceAdapter: 'docker_adapter',
-            confidence: 'high',
-            reason: 'resource state changed',
-            metadata: {
-              changedFields: ['docker.command'],
-            },
-          },
-        ],
-      },
-      activeFindings: [],
-    });
-
-    expect(handoff.context.handoffContext).toContain('Docker command changed while online');
-    expect(handoff.context.handoffContext).not.toContain('online to online');
-  });
-
-  it("tells a moved alert close in the alert engine's words, not as a recovery", () => {
-    const summary =
-      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: { title: 'Issues detected' },
-      supportingEvidence: {
-        recentChanges: [
-          {
-            id: 'change-moved',
-            observedAt: '2026-10-06T15:00:00Z',
-            resourceId: 'node:pve1',
-            kind: 'alert_resolved',
-            sourceType: 'heuristic',
-            confidence: 'high',
-            reason: summary,
-            metadata: { alert_resolution: 'moved_to_agent', alert_type: 'memory' },
-          },
-        ],
-      },
-      activeFindings: [],
-    });
-
-    expect(handoff.context.handoffContext).toContain(summary);
-    expect(handoff.context.handoffContext).not.toContain('Alert resolved');
-    expect(handoff.context.briefing?.evidence?.join('\n')).toContain(summary);
-  });
-
-  it('includes bounded related-resource context in assessment handoff evidence', () => {
-    const longRelatedResource =
-      'storage-pool-with-a-very-long-description-that-keeps-going-beyond-the-handoff-limit-for-operators';
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Issues detected',
-      },
-      supportingEvidence: {
-        recentChanges: [
-          {
-            id: 'change-related',
-            observedAt: '2026-05-06T12:08:00Z',
-            resourceId: 'vm-100',
-            kind: 'metric_anomaly',
-            sourceType: 'heuristic',
-            sourceAdapter: 'proxmox_adapter',
-            confidence: 'high',
-            reason: 'CPU pressure increased after storage activity',
-            relatedResources: [
-              'backup-job',
-              'cache-node',
-              longRelatedResource,
-              'db-primary',
-              'db-replica',
-            ],
-          },
-        ],
-      },
-      activeFindings: [],
-    });
-
-    const relatedEvidence = handoff.context.briefing?.evidence?.find((line) =>
-      line.includes('related resources'),
-    );
-
-    expect(relatedEvidence).toContain('related resources backup-job');
-    expect(relatedEvidence).toContain('and 1 more');
-    expect(relatedEvidence).not.toContain(longRelatedResource);
-    expect(relatedEvidence).not.toContain('db-replica');
-    expect(handoff.context.handoffContext).toContain('related resources backup-job');
-    expect(handoff.context.handoffContext).toContain('and 1 more');
-    expect(handoff.context.handoffContext).not.toContain(longRelatedResource);
-    expect(handoff.context.handoffContext).not.toContain('db-replica');
-  });
-
-  it('builds a model-only Assistant handoff for the current Patrol assessment', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Issues detected',
-        description:
-          'Patrol surfaced one active critical finding and recent coverage is incomplete.',
-        eyebrow: 'Current assessment',
-      },
-      overallHealth: { grade: 'B', score: 84 },
-      scoreChipLabel: 'Health',
-      metricState: {
-        primaryLabel: 'Infrastructure findings',
-        primaryValue: 1,
-        secondaryLabel: 'Runtime issues',
-        secondaryValue: 1,
-        fixedLabel: 'Fixed',
-        fixedValue: 2,
-      },
-      verification: {
-        title: 'Recently checked',
-        description: 'Latest full run completed with findings.',
-        lastFullRunAt: '2026-05-06T12:00:00Z',
-        activityMixLabel: '1 full check · 2 targeted checks',
-      },
-      recency: {
-        label: 'Last patrol',
-        timestamp: '2026-05-06T12:10:00Z',
-      },
-      latestRun: {
-        kindLabel: 'Patrol check',
-        status: { label: 'issues found' },
-        timestamp: '2026-05-06T12:10:00Z',
-        coverageSummary: '12 resources checked',
-        findingsSnapshotAvailable: true,
-      },
-      investigationContext: {
-        recentChangeCount: 2,
-        correlationCount: 2,
-        governedResourceCount: 4,
-        hasContext: true,
-        summaryText: '2 recent changes · 2 correlations · 4 policy-covered resources',
-      },
-      supportingEvidence: {
-        recentChanges: [
-          {
-            id: 'change-1',
-            observedAt: '2026-05-06T12:08:00Z',
-            occurredAt: '2026-05-06T12:07:30Z',
-            resourceId: 'vm-100',
-            kind: 'metric_anomaly',
-            sourceType: 'heuristic',
-            sourceAdapter: 'proxmox_adapter',
-            confidence: 'high',
-            actor: 'Pulse Patrol',
-            relatedResources: ['backup-job'],
-            reason: 'CPU spike after backup job',
-          },
-          {
-            id: 'change-2',
-            observedAt: '2026-05-06T12:07:00Z',
-            resourceId: 'vm-100',
-            kind: 'command_executed',
-            sourceType: 'agent_action',
-            sourceAdapter: 'agent:ops-helper',
-            confidence: 'medium',
-            reason: 'systemctl restart workload.service',
-            metadata: {
-              command: 'systemctl restart workload.service',
-            },
-          },
-        ],
-        correlations: [
-          {
-            source_id: 'backup-job',
-            source_name: 'Nightly backup job',
-            source_type: 'job',
-            target_id: 'vm-100',
-            target_name: 'web-server',
-            target_type: 'vm',
-            event_pattern: 'backup_started -> cpu_spike',
-            occurrences: 4,
-            avg_delay: 120000000000,
-            confidence: 0.92,
-            last_seen: '2026-05-06T12:08:00Z',
-            description: 'CPU pressure usually follows this backup job.',
-          },
-        ],
-      },
-      activeFindings: [
-        {
-          id: 'finding-1',
-          title: 'High CPU usage',
-          description: 'CPU stayed above 95% during backup.',
-          severity: 'critical',
-          status: 'active',
-          resourceId: 'vm-100',
-          resourceName: 'web-server',
-          resourceType: 'vm',
-          detectedAt: '2026-05-06T12:00:00Z',
-          lastSeenAt: '2026-05-06T12:10:00Z',
-          investigationStatus: 'completed',
-          investigationOutcome: 'fix_queued',
-          loopState: 'awaiting_approval',
-          timesRaised: 3,
-          regressionCount: 1,
-          lastRegressionAt: '2026-05-06T12:06:00Z',
-          investigationRecord: {
-            id: 'record-1',
-            finding_id: 'finding-1',
-            subject: {
-              resource_id: 'vm-100',
-              resource_name: 'web-server',
-              resource_type: 'vm',
-              node: 'pve-1',
-            },
-            trigger: { detected_at: '2026-05-06T12:00:00Z' },
-            status: 'completed',
-            outcome: 'fix_queued',
-            confidence: 'high',
-            conclusion: 'Backup job saturated CPU.',
-            recommended_action: 'Approve a controlled restart after the backup completes.',
-            evidence: [{ kind: 'metrics', summary: 'CPU stayed above 95% for 10 minutes' }],
-            proposed_fix: {
-              id: 'fix-1',
-              description: 'Restart the workload service',
-              commands: ['systemctl restart workload.service'],
-              risk_level: 'medium',
-              destructive: false,
-            },
-            verification: ['CPU returned below 50%'],
-            rollback: [],
-            tools_used: ['ssh.exec'],
-            started_at: '2026-05-06T12:00:00Z',
-          },
-        },
-        {
-          id: 'finding-2',
-          title: 'Patrol provider warning',
-          severity: 'warning',
-          status: 'active',
-          resourceId: 'vm-100',
-          resourceName: 'web-server',
-          resourceType: 'vm',
-        },
-      ],
-    });
-
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.autonomousMode).toBe(false);
-    expect(handoff.context.handoffContext).toContain('[Patrol Assessment Context]');
-    expect(handoff.context.handoffContext).toContain('Source: Pulse Patrol current assessment');
-    expect(handoff.context.handoffContext).toContain('Health: Health B 84/100');
-    expect(handoff.context.handoffContext).toContain(
-      'Supporting Context: 2 recent changes · 2 correlations · 4 policy-covered resources',
-    );
-    expect(handoff.context.handoffContext).toContain(
-      'Recent Change 1: Metric anomaly: CPU spike after backup job',
-    );
-    expect(handoff.context.handoffContext).toContain('related resources backup-job');
-    expect(handoff.context.briefing?.evidence).toEqual(
-      expect.arrayContaining([expect.stringContaining('related resources backup-job')]),
-    );
-    expect(handoff.context.handoffContext).toContain(
-      'Recent Change 2: Command executed: execution event recorded',
-    );
-    expect(handoff.context.handoffContext).toContain('Correlation 1: Nightly backup job');
-    expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
-    expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
-    expect(handoff.context.handoffResources).toEqual([
-      { id: 'vm-100', name: 'web-server', type: 'vm', node: 'pve-1' },
-      { id: 'backup-job', name: 'Nightly backup job', type: 'job', node: undefined },
-    ]);
-    expect(handoff.context.handoffMetadata).toEqual({
-      kind: 'patrol_assessment',
-    });
-    expect(handoff.context.briefing).toMatchObject({
-      sourceLabel: 'Pulse Patrol',
-      title: 'Patrol assessment attached',
-      subject: 'Issues detected',
-      actionLabel: '1 governed action reference attached',
-      safetyNote:
-        'Review action posture in the governed flow · raw command payloads stay out of Assistant.',
-    });
-    expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
-  });
-
-  it('uses operator-facing finding-record wording for legacy latest-run context', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Patrol reviewed recent activity',
-      },
-      latestRun: {
-        kindLabel: 'Patrol check',
-        status: { label: 'completed' },
-        timestamp: '2026-05-06T12:10:00Z',
-        coverageSummary: '67 resources checked',
-        findingsSnapshotAvailable: false,
-      },
-      activeFindings: [],
-    });
-
-    expect(handoff.context.handoffContext).toContain('finding record unavailable');
-    expect(handoff.context.handoffContext).not.toContain('findings snapshot unavailable');
-  });
-
-  it('frames coverage-incomplete assessment handoffs as evidence-only context', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Coverage incomplete',
-        description:
-          'Recent Patrol activity only covered targeted checks. Run Patrol to check everything.',
-        eyebrow: 'Patrol assessment',
-      },
-      overallHealth: {
-        grade: 'C',
-        score: 65,
-        prediction: 'Patrol coverage is incomplete.',
-        factors: [{ category: 'coverage' }],
-      },
-      scoreChipLabel: 'Assessment',
-      metricState: {
-        primaryLabel: 'Active findings',
-        primaryValue: 0,
-        secondaryLabel: 'Warnings',
-        secondaryValue: 0,
-        fixedLabel: 'Fixed',
-        fixedValue: 0,
-      },
-      verification: {
-        title: 'Recently checked',
-        description: 'The most recent Patrol check completed successfully.',
-        lastFullRunAt: '2026-05-04T21:38:51Z',
-        activityMixLabel: '8 full checks, 3 alert-triggered checks',
-      },
-      latestRun: {
-        kindLabel: 'Targeted check',
-        status: { label: 'issues found' },
-        timestamp: '2026-05-07T21:39:18Z',
-        coverageSummary: 'Checked 1 of 2 scoped resources',
-        findingsSnapshotAvailable: true,
-      },
-      investigationContext: {
-        recentChangeCount: 100,
-        correlationCount: 29,
-        governedResourceCount: 116,
-        hasContext: true,
-        summaryText: '100 recent changes · 29 correlations · 116 policy-covered resources',
-      },
-      activeFindings: [],
-    });
-
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Discuss Patrol coverage',
-      safetyNote:
-        'Assistant can review the coverage evidence. Patrol runs, diagnostics, and remediation remain governed controls.',
-    });
-    expect(handoff.context.briefing?.actionHref).toBeUndefined();
-    expect(handoff.context.handoffContext).toContain('Assessment: Coverage incomplete');
-    expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
-    expect(handoff.context.handoffContext).toContain(
-      'Supporting Context: 100 recent changes · 29 correlations · 116 policy-covered resources',
-    );
-    expect(handoff.context).toMatchObject({
-      targetType: 'patrol-assessment',
-      targetId: 'pulse-patrol-assessment',
-      autonomousMode: false,
-    });
-    expect(handoff.context.context).not.toHaveProperty('recommendedNextStepTitle');
-    expect(handoff.context.context).not.toHaveProperty('recommendedNextStepActionKind');
-    expect(handoff.context.handoffMetadata).toEqual({
-      kind: 'patrol_assessment',
-    });
-  });
-
-  it('surfaces active findings as facts rather than Patrol recommendations', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Issues detected',
-        description:
-          'Patrol surfaced one active warning finding in your infrastructure. Review the active findings for more detail.',
-        eyebrow: 'Patrol assessment',
-      },
-      overallHealth: {
-        grade: 'B',
-        score: 85,
-        prediction: 'Coverage is incomplete for secondary activity.',
-        factors: [{ category: 'coverage' }],
-      },
-      verification: {
-        title: 'Recently checked',
-        description:
-          'The most recent Patrol check completed successfully and covered 58 resources.',
-        lastFullRunAt: '2026-05-12T21:22:35Z',
-        activityMixLabel: '8 full checks, 3 alert-cleared checks',
-      },
-      latestRun: {
-        kindLabel: 'Patrol check',
-        status: { label: 'issues found' },
-        timestamp: '2026-05-12T21:22:35Z',
-        coverageSummary: 'Checked 58 resources',
-        findingsSnapshotAvailable: true,
-      },
-      investigationContext: {
-        recentChangeCount: 3,
-        correlationCount: 70,
-        governedResourceCount: 55,
-        hasContext: true,
-        summaryText: '3 recent changes · 70 correlations · 55 policy-covered resources',
-      },
-      activeFindings: [
-        {
-          id: 'finding-backup',
-          title: 'Backup failed',
-          severity: 'warning',
-          status: 'active',
-          resourceId: 'backup-delly',
-          resourceName: 'delly',
-          resourceType: 'backup',
-        },
-      ],
-    });
-
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.briefing).toMatchObject({
-      actionLabel: 'Discuss Patrol assessment',
-      safetyNote: 'Use diagnostic tools within current permissions. New actions remain governed.',
-    });
-    expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
-  });
-
-  it('carries live governed approval posture into assessment finding handoffs', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: {
-        title: 'Issues detected',
-      },
-      activeFindings: [
-        {
-          id: 'finding-1',
-          title: 'High CPU usage',
-          severity: 'critical',
-          status: 'active',
-          resourceId: 'vm-100',
-          resourceName: 'web-server',
-          resourceType: 'vm',
-          pendingApproval: {
-            id: 'approval-1',
-            status: 'pending',
-            riskLevel: 'high',
-            requestedAt: '2026-05-06T12:00:00Z',
-            expiresAt: '2026-05-06T12:10:00Z',
-            targetName: 'web-server',
-            actionId: 'action-1',
-            actionApprovalPolicy: 'admin',
-            actionPlanExpiresAt: '2026-05-06T12:10:00Z',
-            actionPlanMessage: 'Restart after the backup window clears.',
-            actionPreflight: 'Restart workload service',
-            actionDryRunSummary: 'No provider-supported dry run is available for this action.',
-            actionRequestedBy: 'pulse_patrol',
-          },
-          proposedFix: {
-            description: 'Restart the workload service',
-            riskLevel: 'high',
-            targetHost: 'web-server',
-            commandCount: 1,
-            destructive: true,
-          },
-        },
-      ],
-    });
-
-    expect(handoff.context.autonomousMode).toBe(false);
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.handoffContext).toContain('Finding 1: High CPU usage');
-    expect(handoff.context.handoffContext).toContain('approval approval-1');
-    expect(handoff.context.handoffContext).toContain('live approval pending');
-    expect(handoff.context.handoffContext).toContain('high risk');
-    expect(handoff.context.handoffContext).toContain('approval target web-server');
-    expect(handoff.context.handoffContext).toContain('expires 2026-05-06T12:10:00Z');
-    expect(handoff.context.handoffContext).toContain('requested by pulse_patrol');
-    expect(handoff.context.handoffContext).toContain('1 command recorded for approval context');
-    expect(handoff.context.handoffContext).toContain('destructive action artifact');
-    expect(handoff.context.handoffActions).toHaveLength(1);
-    expect(handoff.context.handoffActions?.[0]).toMatchObject({
-      findingId: 'finding-1',
-      approvalId: 'approval-1',
-      approvalStatus: 'pending',
-      approvalRequestedAt: '2026-05-06T12:00:00Z',
-      approvalExpiresAt: '2026-05-06T12:10:00Z',
-      actionId: 'action-1',
-      actionRequestedBy: 'pulse_patrol',
-      actionApprovalPolicy: 'admin',
-      actionRequiresApproval: true,
-      actionPlanExpiresAt: '2026-05-06T12:10:00Z',
-      actionPlanMessage: 'Restart after the backup window clears.',
-      actionPreflight: 'Restart workload service',
-      actionDryRunSummary: 'No provider-supported dry run is available for this action.',
-      description: 'Restart the workload service',
-      riskLevel: 'high',
-      destructive: true,
-      targetHost: 'web-server',
-      targetResourceId: 'vm-100',
-      targetResourceName: 'web-server',
-      targetResourceType: 'vm',
-    });
-    expect(handoff.context.context).toMatchObject({
-      pendingApprovalCount: 1,
-    });
-    expect(handoff.context.briefing).toMatchObject({
-      actionLabel: '1 pending governed approval attached',
-      safetyNote:
-        'Review approvals in the governed flow · approval policy is attached · dry-run posture is attached · destructive actions remain approval-bound · raw command payloads stay out of Assistant.',
-    });
-    expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
-  });
-
-  it('keeps a typed pending action approval-bound without a legacy approval id', () => {
-    const handoff = buildPatrolAssessmentAssistantHandoff({
-      assessment: { title: 'Issues detected' },
-      activeFindings: [
-        {
-          id: 'finding-typed-action',
-          title: 'Unhealthy workload',
-          severity: 'warning',
-          status: 'active',
-          resourceId: 'docker:container:web',
-          pendingApproval: {
-            id: '',
-            status: 'pending_approval',
-            riskLevel: 'governed',
-            requestedAt: '2026-07-10T18:00:00Z',
-            actionId: 'action-typed-1',
-            actionApprovalPolicy: 'admin',
-            actionRequestedBy: 'pulse_patrol',
-          },
-        },
-      ],
-    });
-
-    expect(handoff.context.handoffActions?.[0]).toMatchObject({
-      findingId: 'finding-typed-action',
-      actionId: 'action-typed-1',
-      actionApprovalPolicy: 'admin',
-      actionRequiresApproval: true,
-    });
-    expect(handoff.context.handoffActions?.[0].approvalId).toBeUndefined();
-  });
-
   it('builds a model-only Assistant handoff for a Patrol run runtime failure', () => {
     const run: PatrolRunRecord = {
       id: 'run-runtime-error',
@@ -654,72 +93,6 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('provider trace');
     expect(JSON.stringify(handoff)).not.toContain('tool_choice');
     expect(JSON.stringify(handoff)).not.toContain('No endpoints found');
-  });
-
-  it('builds a model-only Assistant handoff for a Patrol mode save failure', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      message: 'The selected Patrol model is a reasoning-only model family.',
-      code: 'patrol_readiness_not_ready',
-      status: 400,
-      details: {
-        cause: 'model_unsupported_tools',
-        provider: 'ollama',
-        command: 'systemctl restart pulse.service',
-      },
-      autonomyLevel: 'approval',
-      fullModeUnlocked: false,
-      investigationBudget: 10,
-      investigationTimeoutSec: 120,
-      readiness: {
-        status: 'not_ready',
-        cause: 'model_unsupported_tools',
-        summary: 'The selected Patrol model is a reasoning-only model family.',
-        provider: 'ollama',
-        model: 'ollama:deepseek-r1:7b',
-      },
-      runtimeState: 'active',
-    });
-
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.autonomousMode).toBe(false);
-    expect(handoff.context.handoffMetadata).toMatchObject({
-      kind: 'patrol_configuration_failure',
-      runtimeFailure: true,
-    });
-    expect(handoff.context.handoffContext).toContain('[Patrol Control Save Failure Context]');
-    expect(handoff.context.handoffContext).toContain('Server Code: patrol_readiness_not_ready');
-    expect(handoff.context.handoffContext).toContain('Provider: ollama');
-    expect(handoff.context.handoffContext).toContain('Model: ollama:deepseek-r1:7b');
-    expect(handoff.context.handoffContext).toContain(
-      'Command: sensitive or command detail withheld',
-    );
-    expect(handoff.context.briefing).toMatchObject({
-      sourceLabel: 'Pulse Patrol',
-      title: 'Patrol mode save failure attached',
-      actionLabel: 'Review Patrol mode save failure',
-    });
-    expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
-  });
-
-  it('labels saved Patrol mode readiness issues separately from save failures', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      saved: true,
-      message: 'Patrol was saved, but the selected model cannot run Patrol tools yet.',
-      code: 'patrol_readiness_not_ready',
-      readiness: {
-        status: 'not_ready',
-        cause: 'model_unsupported_tools',
-        summary: 'The selected Patrol model cannot run tools.',
-        provider: 'ollama',
-        model: 'ollama:deepseek-r1:7b',
-      },
-    });
-
-    expect(handoff).not.toHaveProperty('prompt');
-    expect(handoff.context.briefing).toMatchObject({
-      title: 'Patrol mode issue attached',
-      actionLabel: 'Review Patrol mode issue',
-    });
   });
 
   it('builds operator-facing Patrol record presentation without exposing raw commands', () => {
@@ -978,6 +351,33 @@ describe('patrolInvestigationContextModel', () => {
     ).toEqual([]);
   });
 
+  it('keeps a typed pending action approval-bound without a legacy approval id', () => {
+    const [action] = buildPatrolAssistantFindingHandoffActions({
+      id: 'finding-typed-action',
+      title: 'Unhealthy workload',
+      severity: 'warning',
+      status: 'active',
+      resourceId: 'docker:container:web',
+      pendingApproval: {
+        id: '',
+        status: 'pending_approval',
+        riskLevel: 'governed',
+        requestedAt: '2026-07-10T18:00:00Z',
+        actionId: 'action-typed-1',
+        actionApprovalPolicy: 'admin',
+        actionRequestedBy: 'pulse_patrol',
+      },
+    });
+
+    expect(action).toMatchObject({
+      findingId: 'finding-typed-action',
+      actionId: 'action-typed-1',
+      actionApprovalPolicy: 'admin',
+      actionRequiresApproval: true,
+    });
+    expect(action.approvalId).toBeUndefined();
+  });
+
   it('builds finding-level Assistant handoff context, resources, and actions together', () => {
     const handoff = buildPatrolAssistantFindingHandoff({
       id: 'finding-1',
@@ -1048,6 +448,34 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(handoff.context.handoffActions).toHaveLength(1);
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart nginx');
+  });
+
+  it('qualifies the finding resource with its record node and bounds long context lines', () => {
+    const description = 'Disk latency spiked during the backup window. '.repeat(20).trim();
+    const handoff = buildPatrolAssistantFindingHandoff({
+      id: 'finding-node',
+      title: 'Disk latency',
+      subject: 'web-server',
+      description,
+      investigationRecord: {
+        id: 'record-node',
+        finding_id: 'finding-node',
+        subject: {
+          resource_id: 'vm-100',
+          resource_name: 'web-server',
+          resource_type: 'vm',
+          node: 'pve1',
+        },
+        status: 'completed',
+      } as unknown as InvestigationRecord,
+    });
+
+    const lines = handoff.context.handoffContext?.split('\n') ?? [];
+    expect(lines).toContain('Resource: web-server (vm vm-100 node pve1)');
+    const descriptionLine = lines.find((line) => line.startsWith('Description: '));
+    expect(description.length).toBeGreaterThan(500);
+    expect(descriptionLine?.endsWith('...')).toBe(true);
+    expect(descriptionLine?.slice('Description: '.length).length).toBeLessThanOrEqual(500);
   });
 
   it('builds a drawer briefing for Assistant handoff without exposing raw commands', () => {

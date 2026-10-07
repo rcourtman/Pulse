@@ -4314,8 +4314,7 @@ the `ResourceChangeSummary` badge reads `Alert moved` in the neutral blue of
 the alert history's "moved to agent" badge (`Alert closed` for a reason code
 the build does not know), and
 `formatResourceChangeHeadline` uses the summary as the whole headline instead
-of prefixing `Alert resolved:`; Patrol's assessment context reuses that
-headline. A node's own drawer does not list the move yet: node and guest
+of prefixing `Alert resolved:`. A node's own drawer does not list the move yet: node and guest
 alert changes are still recorded under their legacy alert resource IDs
 (`MonitorAdapter.RecordChange` maps only Docker IDs), and Proxmox platform
 rows open the drawer in the `table-row` presentation, which fetches no

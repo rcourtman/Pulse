@@ -1970,7 +1970,7 @@ recovery scope, or a storage/recovery-owned secret source.
     details attached to that briefing are review context only and must not
     become backup freshness evidence, restore eligibility, storage health truth,
     or recovery execution authority.
-    Alert, incident, and Patrol assessment Assistant handoffs that send bounded
+    Alert, incident, and Patrol attention Assistant handoffs that send bounded
     model-only `handoff_context`, `handoff_resources`, or `handoff_actions`
     through `/api/ai/chat` without a `finding_id` stay on that same adjacent
     AI/runtime boundary. Storage and recovery surfaces may consume the

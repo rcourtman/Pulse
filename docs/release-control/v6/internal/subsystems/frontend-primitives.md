@@ -1915,10 +1915,10 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     Session-load and new-conversation transitions must be success-bound: if the
     underlying session operation fails, the shared drawer store must not clear or
     replace the current scoped handoff context.
-    Live Patrol assessment drawer opens must use that same
+    Restored Patrol assessment sessions use that same
     `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
-    retired dashboard target, so first-open and restored-session chrome remain
-    source-named.
+    retired dashboard target, so restored-session chrome remains source-named;
+    Patrol no longer opens live assessment handoffs.
     The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
     primitive must keep model route presentation delegated to the AI runtime
     label helpers. Pulse-owned local Assistant routes such as
@@ -2140,17 +2140,17 @@ render it only when more than one vCenter is connected: the page passes
 cell drop together, and the inline detail row's column span follows. A table
 must not hide a column by filtered rows, because a search that narrows to one
 vCenter would otherwise make the column vanish.
-Patrol's primary assessment strip is descriptive only; it must not render a
-Patrol-authored recommended next step, suggested prompt chips, or a secondary
-action band inside the assessment shell. If the same assessment opens
-Assistant, the Patrol-to-Assistant handoff must carry only bounded evidence,
+Patrol renders no primary assessment strip today. If one returns it is
+descriptive only; it must not render a Patrol-authored recommended next step,
+suggested prompt chips, or a secondary action band inside the assessment shell.
+Patrol-to-Assistant handoffs must carry only bounded evidence,
 resource references, and factual governed approval/action metadata as model-only
 context. Feature-owned Assistant handoffs may provide source context and safe
 metadata, but the shared drawer boundary must not turn those handoffs into
 frontend-authored prompts, tool routes, or remediation plans; the configured
 model owns tool choice and diagnostic reasoning after the request reaches the
 AI runtime.
-The compact Patrol assessment strip may include factual recent activity mix and
+Such a compact Patrol assessment strip may include factual recent activity mix and
 trigger-mode labels when those values are derived from the Patrol run-history
 and status payloads. Those labels are summary context inside the same strip,
 not a replacement status card, CTA band, or page-local nested card.
@@ -3163,15 +3163,16 @@ Agent`), with the plain-language source phrase available through accessible
     that model instead of visually falling back to the default selection.
     Successful provider-model saves that return a not-ready Patrol
     readiness snapshot must use that same inline surface with `needs attention`
-    wording, while Assistant receives a saved configuration issue rather than a
-    failed-save handoff. When governed fixes are locked, the same Patrol state
+    wording, and any Assistant handoff from that state describes a saved
+    configuration issue rather than a failed save. When governed fixes are locked, the same Patrol state
     owner must clear stale full-mode unlock state before persisting the
     monitor-only autonomy payload, so disabled paid controls cannot leak stale
     permission into a save. If that inline state opens Assistant, the Patrol
     feature must hand off
     a source-named, model-only briefing and close the popover so the shared
-    Assistant drawer is not visually hidden behind feature chrome. When a Patrol
-    assessment handoff is attached, the shared Assistant drawer empty state must
+    Assistant drawer is not visually hidden behind feature chrome. When a
+    restored Patrol assessment session is attached, the shared Assistant drawer
+    empty state must
     stay aligned with that source-named briefing and must not render generic
     cluster/system starter prompts below the Patrol-owned context. The Patrol
     feature shell must also consume the Patrol-owned findings source for its
@@ -3726,30 +3727,25 @@ production table, router and styles; it does not qualify full-app scrolling.
     `Rollback not specified` lines into the model-only Patrol finding
     prompt context so the operator-visible gap is surfaced to Assistant
     rather than hidden, and shared chat primitives stay free of that
-    placeholder logic. Patrol assessment-level handoffs must use
-    that same feature helper to attach bounded model-only assessment,
-    verification, latest-run, supporting-context evidence, active-finding, and
-    resource reference context while forcing request-local approval-required
-    mode. Patrol run-history handoffs must also use that feature helper rather
+    placeholder logic. Patrol run-history handoffs must also use that feature helper rather
     than a row-local Assistant prompt, so the shared drawer receives only a
-    generic visible briefing plus bounded model-only run context, scoped
-    resource references, runtime failure summary/detail, and
-    `autonomousMode:false` while the Patrol feature remains the source of run
-    copy and retry/configuration guidance. Active-finding entries in that
-    assessment handoff may add live pending
-    approval posture only as safe structured metadata: approval ID, pending
-    status, risk, target, requested/expiry timestamps, action plan identity,
-    requester identity, approval policy, plan expiry, dry-run posture, and
-    command count. Those entries may be passed through shared chat transport as
-    `handoff_actions` for
-    model-only refresh, but the shared drawer stays a generic shell rather than
-    a Patrol summary prompt builder. The Patrol helper may turn those same safe
-    references into visible action labels and safety notes for assessment and
-    finding-level handoffs, but it must not produce Patrol-authored suggested
-    prompt chips, recommendation titles, recommendation reasons, or route-owned
-    next-step actions. Assessment-level Patrol prompts, action labels, and
-    safety notes must describe active findings, pending approvals, governed
-    action references, and coverage caveats as evidence for the configured
+    generic visible briefing, safe run identity metadata, and
+    `autonomousMode:false`; the backend rebuilds the bounded model-only run
+    context, scoped resource references, and runtime failure detail from the
+    run ID, while the Patrol feature remains the source of run copy and
+    retry/configuration guidance. Finding handoff action references
+    may add live pending approval posture only as safe structured metadata:
+    approval ID, pending status, risk, target, requested/expiry timestamps,
+    action plan identity, requester identity, approval policy, plan expiry, and
+    dry-run posture. Those references may be passed through shared chat
+    transport as `handoff_actions` for model-only refresh, but the shared drawer
+    stays a generic shell rather than a Patrol summary prompt builder. The
+    Patrol helper may turn those same safe references into visible action
+    labels and safety notes for finding-level handoffs, but it must not produce
+    Patrol-authored suggested prompt chips, recommendation titles,
+    recommendation reasons, or route-owned next-step actions. Patrol finding
+    prompts, action labels, and safety notes must describe findings, pending
+    approvals, and governed action references as evidence for the configured
     model, not as a frontend-authored decision tree.
     Finding-level drawer opens may also pass one bounded
     model-only finding context, one target resource reference, and one
@@ -4493,23 +4489,21 @@ than carrying an inline copy, so hover and inline never drift apart on
 what Patrol actually owns: watching infrastructure, detecting issues,
 recording findings, and escalating into governed investigation/action
 only when the selected Patrol mode allows it.
-The same `PatrolIntelligenceHeader.tsx` shell also renders a compact
-trust-at-a-glance summary directly under the page title (a
-render-only consumer of `state.patrolStatus()?.trust`), gated on at
-least one non-zero trust signal so fresh installs render no header
-strip. The detailed breakdown stays in
-`PatrolIntelligenceWorkspace.tsx` for the canonical view; the header
-line is the entry-point summary so operators see active, regressed,
-and verified-fix counts before scrolling into the workspace tabs.
+The same `PatrolIntelligenceHeader.tsx` shell renders no
+trust-at-a-glance summary under the page title (Patrol's contract forbids a
+second header trust line), and no page renders a trust counter row:
+`state.patrolStatus()?.trust` only feeds the state hook's derived counts
+(historical regressions and prior Patrol work).
 The recency line beside the header actions also renders coverage
 alongside time when the canonical `getPatrolRecencyPresentation` helper
 returns `resourcesCheckedLabel` from the latest completed run. Render code
 must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
 zero-coverage runs do not surface a misleading coverage phrase, failed or
 scoped runs use neutral checked wording, and only successful full patrols read
-as verified. The primary Patrol assessment shell must pass the same run-history
-facts into `getPatrolAssessmentPresentation` so assessment coverage caveats do
-not contradict the header's verified full-run coverage state.
+as verified. Any Patrol assessment shell must pass the same run-history facts
+into `getPatrolAssessmentPresentation` so assessment coverage caveats do not
+contradict the header's verified full-run coverage state; the page renders no
+assessment shell today.
 The same header row may surface `Trigger status` when
 `getPatrolTriggerStatusSummary` returns a runtime-relevant value from the
 Patrol status payload. That text is page-owned operational metadata inside the
@@ -4906,11 +4900,12 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
-The same hierarchy also applies inside the Patrol summary shell: once the
-primary assessment strip states Patrol's current risk and verification basis,
+The Patrol page renders no summary shell today. If one returns, the same
+hierarchy applies inside it: once its primary assessment strip states Patrol's
+current risk and verification basis,
 supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
-The collapsed Patrol assessment strip itself must remain a compact readout
+Its collapsed assessment strip must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
 recommendation copy belongs in the owning Findings, Runs, or Assistant chat
 surfaces rather than a normal-path summary details expansion.
@@ -6745,12 +6740,9 @@ feature shell, reads its active workspace view from the route through
 `patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure Patrol-to-Assistant handoff and operator briefing derivation,
-including the rule that active findings, pending
-approvals, and governed action references outrank secondary coverage caveats
-when building the Assistant prompt, action label, and safety note,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
 summary normalization at the shared store boundary, and the Patrol-owned
-header/banner/summary/workspace section files under
+header, banner, attention workbench, workspace, and panel section files under
 `frontend-modern/src/features/patrol/` own the heavy render surfaces. Shared
 shell governance should reinforce that pattern instead of letting feature render
 surfaces re-accumulate API and timer orchestration inline.
@@ -6762,7 +6754,10 @@ That same rule also applies to compact Patrol summary fragments inside the
 feature surface: count-only strips or metric cards must not emit `No issues
 found` or other reassuring copy when the owning overall-health summary is
 degraded or not fully verified.
-That same summary shell should also surface verification scope from the
+Patrol renders no summary shell today; the header recency line shows the
+latest check or activity time, how many resources that check covered, and the
+next scheduled check.
+If a summary shell returns, it should also surface verification scope from the
 owning run-history contract. Operators should be able to see, inside the same
 summary surface, whether Patrol recently completed a full verification pass or
 whether recent activity was limited to scoped/erroring patrol runs.
@@ -7182,9 +7177,9 @@ wording.
 Resource-change readers follow the same split: `getResourceChangePresentation`
 and `formatResourceChangeHeadline` in `utils/resourceChangePresentation.ts`
 own the `Alert moved` label, its neutral-blue tone and the summary headline
-for an `alert_resolved` change with `alert_resolution` metadata, and the
-Patrol assessment handoff consumes that headline instead of composing its own
-kind prefix.
+for an `alert_resolved` change with `alert_resolution` metadata, and
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+consumes that headline instead of composing its own kind prefix.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it

@@ -2014,8 +2014,10 @@ payload shape change when the portal presents compact client rows.
     descriptions. That safe projection owns Patrol handoff identity as data,
     not browser inference: `kind` may identify `patrol_assessment`,
     `patrol_configuration_failure`, `patrol_run`, `patrol_finding`, or generic
-    `scoped_context`; assessment and configuration-failure sessions must not be
-    collapsed into one finding because a safe action reference contains a
+    `scoped_context`; the frontend no longer produces `patrol_assessment` or
+    `patrol_configuration_failure`, so those kinds come from sessions saved by
+    earlier builds, and assessment and configuration-failure sessions must not
+    be collapsed into one finding because a safe action reference contains a
     finding ID. `patrol_configuration_failure` may carry only the
     runtime-failure boolean needed for drawer/session presentation, and
     run-specific fields remain reserved for `patrol_run`. Chat requests that
@@ -3197,7 +3199,7 @@ a new API state machine, queue contract, or verification-accounting field.
    what Patrol may do under the selected control level, and what to run or
    review next, not activation-loop proof, queue internals, or verification
    accounting
-   and the Patrol control dialog/cross-surface Assistant handoff copy, so API
+   and the Patrol control dialog plus restored Patrol mode Assistant session copy, so API
    compatibility identifiers such as `patrol_configuration_failure` may remain
    stable while user-facing and model-facing labels describe setting, saving,
    and reviewing Patrol control rather than a generic configuration/apply flow
@@ -3307,36 +3309,8 @@ a new API state machine, queue contract, or verification-accounting field.
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
    and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
-   and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so any Patrol recent-change, learned-correlation, or policy-coverage summary text is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today
+   and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so if Patrol recent-change, learned-correlation, or policy-coverage summary text returns, it is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today and the model carries no such derivation
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
-   and that same Patrol investigation-context owner, so the current Patrol
-   assessment summary may open Assistant with bounded model-only assessment,
-   verification, latest-run, supporting-context, active-finding, and
-   resource reference context while leaving prioritization and next-step
-   reasoning to the configured LLM; active
-   finding entries may carry live pending Patrol approval posture only as safe
-   structured handoff actions with approval ID/status/risk/target/request/expiry
-   metadata, action plan identity/policy/expiry, dry-run posture, and command
-   counts instead of pasting page-local UI text or raw command payloads into chat,
-   the drawer target must stay `patrol-assessment` rather than a retired
-   dashboard target,
-   and may derive model-only approval/action posture from that same safe
-   metadata, while visible drawer copy stays compact and does not expose
-   Patrol-authored recommendations, prompt chips, or action labels as the
-   answer,
-   and that same Patrol investigation-context owner, so coverage signals from
-   the canonical AI summary remain secondary caveats when the same assessment
-   carries active findings, pending approvals, or governed action references;
-   Assistant context, briefing action labels, and safety notes must
-   carry finding priority, affected resources, evidence, and governed approval
-   posture as context instead of recasting the whole handoff as a coverage gap
-   and that same Patrol investigation-context owner, so coverage-incomplete
-   assessments with no active infrastructure findings are serialized as a
-   verification-gap handoff: model-only context and visible briefing copy must explain what
-   scoped activity did and did not prove, keep latest-run and supporting-context
-   facts model-only, and leave next-step selection to the configured LLM
-   handoff-only metadata, and avoid introducing backend fields beyond the
-   existing Patrol status plus run-history contracts
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
@@ -3354,7 +3328,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' optional `buildResourceHref` input, so a surface that needs resource-filter links passes them into the shared card instead of rebuilding infrastructure URLs inline; the cards carry no link default since the cross-resource drilldown links were retired, and render resource labels as plain text
-   and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions, run-history runtime-failure actions, and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
+   and the Patrol runtime-remediation destination shared with the AI settings endpoint, so run-history runtime-failure actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
    and the Patrol mode selector boundary, so the default header and the
@@ -3482,8 +3456,9 @@ a new API state machine, queue contract, or verification-accounting field.
 15. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
 16. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
 17. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary assessment strip.
-    That same transport split now supports the visible Patrol assessment and
-    action metadata without adding another API field: the frontend summary
+    That same transport split supports Patrol assessment and action metadata
+    for any consumer without adding another API field (the Patrol page renders
+    no assessment strip today): the frontend summary
     contract derives compact state from existing overall-health, run-history,
     active finding, runtime, and pending-approval facts, so the API remains the
     source of facts while the configured LLM owns next-step reasoning. Those
@@ -3495,7 +3470,7 @@ a new API state machine, queue contract, or verification-accounting field.
     compact operator summary, but it must not imply a hero, card, duplicate
     verdict layout, or expanded assessment panel. Normal Patrol page consumers
     should keep explanatory assessment, verification, and activity context in
-    the owning Findings and Runs surfaces rather than re-expanding the primary
+    the owning Findings and Runs surfaces rather than reintroducing an expanded
     assessment strip.
 18. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 19. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
@@ -4327,7 +4302,7 @@ the authoritative analysis outcome.
     entitlements.
 11. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 12. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
-13. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
+13. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside any primary summary card
 14. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
 15. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
 16. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
@@ -7172,12 +7147,13 @@ boundary: unless the operator explicitly asks for discovery execution, live
 verification, or a read attempt, the runtime withholds tools and returns the
 attached context or an explicit missing-fact answer rather than treating the
 question as permission to call discovery/read tools. Frontend-visible Patrol
-assessment briefings must not render recommendation fields as separate title,
-reason, route-action facts, or prompt chips; the configured model owns those
-decisions from the structured handoff metadata and bounded chat context.
-Frontend handoff builders may send these fields for owned alert, incident,
-Patrol assessment, Patrol finding, or Patrol run-history context, but the
-backend must not persist them as user-authored message text, and the frontend
+briefings, including restored assessment sessions, must not render
+recommendation fields as separate title, reason, route-action facts, or prompt
+chips; the configured model owns those decisions from the structured handoff
+metadata and bounded chat context. Frontend handoff builders may send these
+fields for owned alert, incident, Patrol attention, or Patrol finding context
+(Patrol run-history handoffs send only safe run metadata: run ID, type,
+status, and a runtime-failure flag; the backend rebuilds their context), but the backend must not persist them as user-authored message text, and the frontend
 must not turn their evidence or proposed remedies into user-authored message
 text. Ordinary attachment is context only. A labelled Explain action may
 submit the shared user-selected explanation request over the existing chat
@@ -8707,7 +8683,7 @@ handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
 structured `handoff_actions`: approval ID, status, risk, request/expiry
 timestamps, target label, requester identity, action ID, approval policy,
-plan expiry, and dry-run summary are allowed. Assessment-level visible
+plan expiry, and dry-run summary are allowed. Finding-level visible
 briefings may reuse that same safe metadata for factual action labels and safety notes,
 while approval command text remains inside the governed approval/remediation
 surface.
