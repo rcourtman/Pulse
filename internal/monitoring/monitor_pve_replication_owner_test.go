@@ -165,3 +165,44 @@ func TestReplicationLifecycleReplacementRejectsLateCompletion(t *testing.T) {
 		})
 	}
 }
+
+func TestReplicationLifecycleDeadlineAndOrdinaryRecovery(t *testing.T) {
+	started := make(chan struct{})
+	c := &lifecycleReplicationClient{read: func(ctx context.Context) ([]proxmox.ReplicationJob, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	m := newReplicationLifecycleMonitor(t, c, true)
+	m.setRuntimeContext(context.Background(), nil)
+	before := replicationSeed(m)
+	runReplicationCycle(m)
+	waitReplication(t, started, "deadline-controlled read")
+	owner := replicationOwner(t, m)
+	select {
+	case <-owner.done:
+	case <-time.After(pveReplicationPollTimeout + 3*time.Second):
+		t.Fatal("bounded read failed to terminate")
+	}
+	if owner.ctx.Err() != context.DeadlineExceeded {
+		t.Fatalf("unexpected terminal context: %v", owner.ctx.Err())
+	}
+	if got := m.state.GetSnapshot().ReplicationJobs; !reflect.DeepEqual(got, before) {
+		t.Fatalf("timed-out read renewed inventory: %+v", got)
+	}
+	c.read = func(context.Context) ([]proxmox.ReplicationJob, error) {
+		return []proxmox.ReplicationJob{{ID: "100-0", GuestID: 100, LastSyncStatus: "ok"}}, nil
+	}
+	runReplicationCycle(m)
+	end := time.Now().Add(3 * time.Second)
+	for {
+		rows := m.state.GetSnapshot().ReplicationJobs
+		if len(rows) == 2 && rows[0].Instance == "site-a" && rows[0].LastSyncStatus == "ok" && rows[0].LastPolled.After(time.Unix(100, 0)) {
+			break
+		}
+		if time.Now().After(end) {
+			t.Fatalf("ordinary cycle did not recover after deadline: %+v", rows)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
