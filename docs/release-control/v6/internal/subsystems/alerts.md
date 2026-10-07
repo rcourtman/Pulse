@@ -834,6 +834,22 @@ payload that contradicts an unconfirmed local acknowledge or unacknowledge,
 and the confirming payload then replaces the optimistic copy. Because a
 replacement reconciles the stored alert in place, local optimistic updates are
 stored as copies, so it never rewrites a record a caller keeps for rollback.
+The store's `updateAlert` holds the only optimistic copy of an acknowledgement.
+`useAlertAcknowledgementState` writes through it and keeps no override of its
+own, so once the server confirms it, a later server change such as an
+unacknowledge from another session reaches the open tab. When no hold is
+pending and the stored alert already shows the local acknowledge or
+unacknowledge, the store sets no hold and keeps the server's `ackTime` and
+`ackUser`: the request's own broadcast can reach the socket before its HTTP
+response, and a hold would then wait for a second confirmation and skip the
+next real change. Every local acknowledgement write supersedes a REST recovery
+in flight: the store discards that response, which the server may have built
+before accepting the write, and fetches again once it settles. A hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active`, waiting for a
+recovery already in flight and fetching again if that one applies nothing,
+because the payloads the hold skipped may not be followed by another alert
+change. `websocket-unified.test.ts`, `useAlertAcknowledgementState.test.tsx`
+and `useAlertOverviewState.test.tsx` pin these paths.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.

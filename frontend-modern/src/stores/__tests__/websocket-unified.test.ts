@@ -1474,6 +1474,244 @@ describe('websocket store unified resource contract', () => {
       }
     });
 
+    it('lets a remote unacknowledge through when the acknowledge broadcast beat its response', async () => {
+      const { store, dispose } = await createStoreHarness();
+      const { notificationStore } = await import('@/stores/notifications');
+      const notifyError = vi.spyOn(notificationStore, 'error');
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        emitInitialAlerts([restoredTemperatureAlert()]);
+
+        // The acknowledge request's own broadcast lands before its response.
+        emitActiveAlerts(200, [
+          {
+            ...restoredTemperatureAlert(),
+            acknowledged: true,
+            ackTime: '2026-10-06T10:06:01Z',
+            ackUser: 'admin',
+          },
+        ]);
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:02Z',
+          ackUser: undefined,
+        });
+        expect(store.activeAlerts[id]).toMatchObject({
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:01Z',
+          ackUser: 'admin',
+        });
+
+        // Unacknowledged from another session before any further payload.
+        emitActiveAlerts(300, [restoredTemperatureAlert()]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+
+        vi.advanceTimersByTime(15_000);
+        expect(notifyError).not.toHaveBeenCalled();
+        expect(apiFetchJSONMock).not.toHaveBeenCalled();
+      } finally {
+        notifyError.mockRestore();
+        dispose();
+      }
+    });
+
+    it('fetches the current alerts when the server never confirms a local acknowledge', async () => {
+      const { store, dispose } = await createStoreHarness();
+      const { notificationStore } = await import('@/stores/notifications');
+      const notifyError = vi.spyOn(notificationStore, 'error');
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        emitInitialAlerts([restoredTemperatureAlert()]);
+
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:00Z',
+          ackUser: undefined,
+        });
+        // Unacknowledged elsewhere before this acknowledge was ever confirmed:
+        // indistinguishable from a stale payload, so the guard holds it back.
+        emitActiveAlerts(200, [restoredTemperatureAlert()]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(true);
+
+        apiFetchJSONMock.mockResolvedValueOnce([restoredTemperatureAlert()]);
+        vi.advanceTimersByTime(15_000);
+        await flushMicrotasks();
+        expect(notifyError).toHaveBeenCalledOnce();
+        expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+        expect(store.activeAlerts[id]).not.toHaveProperty('ackTime');
+      } finally {
+        notifyError.mockRestore();
+        dispose();
+      }
+    });
+
+    const cpuAlert = (): Record<string, unknown> => ({
+      ...restoredTemperatureAlert(),
+      id: 'pve2-cpu',
+      type: 'cpu',
+      message: 'Node CPU at 95%',
+    });
+
+    const deferRecovery = () => {
+      let resolve: (alerts: unknown[]) => void = () => {};
+      apiFetchJSONMock.mockReturnValueOnce(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      return (alerts: unknown[]) => resolve(alerts);
+    };
+
+    it('replaces a REST recovery in flight during a local acknowledge with a fresh one', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        // Acknowledged by another session, then restored there: REST captures
+        // the restore before this tab's acknowledge reaches the server.
+        emitInitialAlerts([
+          {
+            ...restoredTemperatureAlert(),
+            acknowledged: true,
+            ackTime: '2026-10-06T10:06:01Z',
+            ackUser: 'operator',
+          },
+          cpuAlert(),
+        ]);
+        const resolveStale = deferRecovery();
+        const stale = store.refreshActiveAlerts();
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:02Z',
+          ackUser: undefined,
+        });
+
+        const resolveFresh = deferRecovery();
+        resolveStale([restoredTemperatureAlert(), cpuAlert()]);
+        await expect(stale).resolves.toBe(false);
+        await flushMicrotasks();
+        expect(store.activeAlerts[id]?.acknowledged).toBe(true);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+
+        // The fresh request reports what happened after the acknowledge,
+        // here the alert resolving and the CPU alert being acknowledged.
+        resolveFresh([{ ...cpuAlert(), acknowledged: true, ackUser: 'operator' }]);
+        await flushMicrotasks();
+        expect(store.activeAlerts[id]).toBeUndefined();
+        expect(store.activeAlerts['pve2-cpu']).toMatchObject({
+          acknowledged: true,
+          ackUser: 'operator',
+        });
+      } finally {
+        dispose();
+      }
+    });
+
+    it('lets the give-up re-sync land when another alert is acknowledged meanwhile', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        const acknowledgedCpu = { ...cpuAlert(), acknowledged: true, ackUser: 'admin' };
+        emitInitialAlerts([restoredTemperatureAlert(), cpuAlert()]);
+
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:00Z',
+          ackUser: undefined,
+        });
+        // The CPU alert's acknowledge broadcast arrives before its response.
+        emitActiveAlerts(200, [restoredTemperatureAlert(), acknowledgedCpu]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(true);
+
+        const resolveResync = deferRecovery();
+        vi.advanceTimersByTime(15_000);
+        expect(apiFetchJSONMock).toHaveBeenCalledOnce();
+        store.updateAlert('pve2-cpu', {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:20:00Z',
+          ackUser: undefined,
+        });
+        apiFetchJSONMock.mockResolvedValueOnce([restoredTemperatureAlert(), acknowledgedCpu]);
+        resolveResync([restoredTemperatureAlert(), acknowledgedCpu]);
+        await flushMicrotasks(12);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+        expect(store.activeAlerts['pve2-cpu']).toMatchObject({
+          acknowledged: true,
+          ackUser: 'admin',
+        });
+      } finally {
+        dispose();
+      }
+    });
+
+    it('fetches again when the recovery in flight at the give-up is fenced out', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        emitInitialAlerts([restoredTemperatureAlert()]);
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:00Z',
+          ackUser: undefined,
+        });
+
+        // A recovery starts after the acknowledge, then an unacknowledge from
+        // another session lands over the socket and fences it out.
+        const resolveFenced = deferRecovery();
+        void store.refreshActiveAlerts();
+        emitActiveAlerts(200, [restoredTemperatureAlert()]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(true);
+
+        apiFetchJSONMock.mockResolvedValueOnce([restoredTemperatureAlert()]);
+        vi.advanceTimersByTime(15_000);
+        resolveFenced([{ ...restoredTemperatureAlert(), acknowledged: true, ackUser: 'admin' }]);
+        await flushMicrotasks(12);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('drops a recovery that predates a held acknowledge when the hold gives up', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        emitInitialAlerts([restoredTemperatureAlert()]);
+        const resolveStale = deferRecovery();
+        void store.refreshActiveAlerts();
+
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:00Z',
+          ackUser: undefined,
+        });
+        // No confirming payload arrives before the hold gives up.
+        apiFetchJSONMock.mockResolvedValueOnce([
+          {
+            ...restoredTemperatureAlert(),
+            acknowledged: true,
+            ackTime: '2026-10-06T10:06:01Z',
+            ackUser: 'admin',
+          },
+        ]);
+        vi.advanceTimersByTime(15_000);
+        resolveStale([restoredTemperatureAlert()]);
+        await flushMicrotasks(12);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(store.activeAlerts[id]).toMatchObject({ acknowledged: true, ackUser: 'admin' });
+      } finally {
+        dispose();
+      }
+    });
+
     it('keeps the record a local update replaced intact for rollback', async () => {
       const { store, dispose } = await createStoreHarness();
       try {

@@ -678,7 +678,12 @@ copy in the keyed active-alert store, so a reader of an unchanged alert there,
 or of an unchanged nested value such as its live `metricStatus` or `metadata`,
 is not notified although every commit carries freshly parsed objects; omitted
 fields are deleted rather than shallow-merged. The `state.activeAlerts` array
-is still replaced on every alert commit. These projection baselines are
+is still replaced on every alert commit. A pending acknowledgement hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active` (reusing a
+recovery already in flight, and fetching again if that one applies nothing)
+rather than waiting for an alert delta a quiet estate may never send. A local
+acknowledgement write that overlaps a recovery discards its response and
+fetches once more. These projection baselines are
 socket-owned: an oversized
 frame invalidates resources, connected infrastructure, and active alerts
 together, while REST recovery hydrates display state only. A later keyed delta
