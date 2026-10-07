@@ -83,22 +83,60 @@ The user will be assigned both `admin` and `operator` roles.
 
 > **Note**: Ensure your IdP includes the `groups` scope and that the groups claim is properly configured. Some providers use `groups`, others use `roles` or custom claims.
 
-### Long-Lived Sessions with `offline_access`
-For persistent sessions that don't require frequent re-authentication:
+### Sessions and `offline_access`
 
-1. **Add `offline_access` scope**: Include `offline_access` in your OIDC scopes (e.g., `openid profile email offline_access`).
-2. **Configure your IdP**: Ensure your identity provider issues refresh tokens when `offline_access` is requested.
+A Pulse browser session and the IdP's access and refresh tokens have different
+lifetimes. Requesting `offline_access` does not guarantee a 30- or 90-day Pulse
+login, and it is not an access-revocation mechanism.
 
-**How it works:**
-- When you login with `offline_access`, Pulse stores the refresh token alongside your session.
-- When your access token expires, Pulse automatically refreshes it using the stored refresh token.
-- Your session remains valid as long as the refresh token is valid (typically 30-90 days depending on your IdP).
-- If the IdP revokes access (user disabled, token revoked), Pulse detects this on the next refresh attempt and logs you out.
+- Request `offline_access` only when you need token refresh and your IdP
+  supports it. The IdP must actually issue a refresh token; the scope alone is
+  not enough. SSO can work without a refresh token.
+- Pulse creates the browser cookies with a **24-hour lifetime**. Valid requests
+  extend the server-side session's sliding expiry; this does not extend the
+  browser cookie's expiry. A successful token refresh also extends the
+  server-side session, not the browser cookie.
+- While a valid session is being used, Pulse can start a background refresh near
+  the access token's expiry. This is request-driven, not continuous polling of
+  the IdP, and the triggering request can finish before refresh completes.
+- A rejected or failed **token exchange** invalidates that Pulse session.
+  Failure to initialise the provider, or no matching enabled provider, instead
+  skips refresh. Do not assume that a discovery failure, disabled provider or
+  changed issuer/client ID has signed existing users out.
+- Refresh tokens are encrypted when persisted. Treat the Pulse data directory,
+  encryption key and backups as sensitive; never publish session files.
 
-**Security considerations:**
-- Refresh tokens are stored encrypted at rest.
-- If the IdP configuration changes, existing sessions with mismatched issuers are automatically invalidated.
-- Failed refresh attempts immediately invalidate the session.
+#### Changing or removing access
+
+**Allowed Groups**, **Allowed Domains** and **Allowed Emails** are checked at
+login; every non-empty restriction must pass. Group-role mappings are also
+applied at login. Refreshing a token does **not** re-evaluate those restrictions
+or group-role mappings. Removing someone from an IdP group therefore does not
+prove that their existing Pulse session or role assignments have been revoked.
+
+Disabling or deleting a provider, or changing its issuer/client ID, likewise
+must not be treated as revoking existing Pulse sessions. Keep a working,
+independent administrator login before changing SSO. For planned access removal:
+
+1. Block future sign-ins for the affected identity at the IdP or its application
+   assignment, without changing access for unrelated users.
+2. Where Pro RBAC user administration is available, use the documented
+   [Remove user access](RBAC.md#removing-user-access) operation for the exact
+   provider-scoped identity. It removes the role assignment and revokes that
+   identity's active Pulse sessions; it does not disable the IdP account, and a
+   later authorised SSO login can recreate the identity. Do not remove your own
+   current administrator identity.
+3. Check the result through the existing administrator session and, where
+   available, the affected user's ordinary browser session. A successful save,
+   hidden login button or blocked new login is not proof that an old session
+   lost access. Keep session cookies out of commands and reports.
+
+If targeted user removal is unavailable, do not assume there is a universal
+session-revocation control on your plan. For urgent containment, use your
+existing network or authenticated reverse-proxy access boundary, preserving an
+administrator recovery path; blocking only the IdP login is not enough. Do not
+disable Pulse authentication, delete session/configuration files or restart the
+service as a substitute for verified revocation.
 
 ## 📚 Provider Examples
 
@@ -146,15 +184,23 @@ Create the provider in Pulse first (**Settings → Security → Single Sign-On �
 
 | Issue | Solution |
 | :--- | :--- |
-| **`invalid_id_token`** | Issuer URL mismatch. Check logs (`LOG_LEVEL=debug`) to see the expected vs. received issuer. |
+| **`invalid_id_token`** | Compare the configured issuer with the IdP issuer locally; use the existing redacted error, not a token dump or newly enabled Debug logs. |
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
 | **Redirect Loop** | Check `X-Forwarded-Proto` header (must be `https`) and cookie settings. |
 | **Self-Signed Certs** | Set the **CA Bundle** field on the SSO provider to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). The field is stored on the provider record as `oidc.caBundle`; there is no `OIDC_CA_BUNDLE` env var. |
 
-### Debugging
-Enable debug logs to trace the OIDC flow:
-```bash
-export LOG_LEVEL=debug
-# Restart Pulse
-```
-Logs will show discovery, token exchange, and claim parsing details.
+### Safe diagnosis
+
+Start with the existing login error, its time, the provider type and whether the
+failure is at the IdP, callback, login restriction or Pulse permission check.
+Use the configured callback URL and claim names locally; do not paste a full
+IdP response or token to diagnose a missing group. A working login does not
+prove that the user has the intended Pulse role.
+
+Review existing server and IdP logs privately. Do not enable Debug or restart
+Pulse solely to fill in a report; debug logs can contain identity and claim
+details. Share only a locally reviewed, redacted error and the relevant claim
+names or consistent group aliases. Keep client secrets, authorization codes,
+ID/access/refresh tokens, cookies, email addresses, full callback query strings,
+HAR exports and “Copy as cURL” output private. Never disable TLS verification or
+access restrictions as a diagnostic shortcut.
