@@ -26,6 +26,8 @@ export interface Resource {
   disableConnectivity?: boolean;
   poweredOffSeverity?: 'warning' | 'critical';
   hasOverride?: boolean;
+  /** A Proxmox guest tagged pulse-relaxed; the alert engine raises its CPU/memory/disk triggers. */
+  pulseRelaxed?: boolean;
   status?: string;
   vmid?: number;
   cpu?: number;

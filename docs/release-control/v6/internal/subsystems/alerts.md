@@ -1609,6 +1609,34 @@ resolve overrides through the shared
 candidate set `buildProjectedOverrides` indexes platform alert rows under).
 Static metric-color defaults are only fallback presentation behavior for
 callers that do not have alert configuration in scope.
+Guest bars follow `pulse-relaxed` the same way. `resolveMetricDisplayThresholds`
+takes the tags the engine reads for a guest-scope resource and, when they
+include `pulse-relaxed`, applies the `applyRelaxedGuestThresholds` step to
+CPU, memory and disk before mapping to display thresholds: an unset threshold
+gets the 95/92/95 floor with a clear five below it, a lower trigger is raised
+to the floor and keeps its own clear point (a missing one filled five below,
+as `ensureHysteresisThreshold` does) unless the raised trigger reaches it, and
+an Off threshold stays Off. A relaxed guest's bar therefore turns critical
+where its alert fires; 88% memory reads warning, not critical, under the
+relaxed 92% trigger. The display resolver does not read filter-driven custom
+rules, which the engine folds in before the override, so a guest a custom
+rule matches can still colour by thresholds the engine does not use, relaxed
+or not. Only Proxmox VMs and LXCs carry their tags into alert
+policy, so `getWorkloadAlertPolicyTags` in
+`frontend-modern/src/components/Workloads/workloadTopology.ts` passes tags for
+those guests alone, and a vSphere VM or a container keeps its thresholds
+whatever it is tagged. The Alerts thresholds row for a relaxed Proxmox guest
+keeps showing the configured values its editor changes and adds one line
+naming the tag and the thresholds it raises
+(`getAlertResourceRelaxedTriggerSummary` in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, fed by
+`pulseRelaxed` from `useThresholdsGuestData`); before it, the tag overrode
+those settings with no visible sign in the UI (issue #863). Proof: the
+pulse-relaxed cases in `frontend-modern/src/utils/__tests__/metricThresholds.test.ts`,
+the alert policy tag cases in
+`frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`,
+and the pulse-relaxed guest cases in
+`frontend-modern/src/components/Alerts/ResourceTable.test.tsx`.
 
 Docker container image-update alerts are lifecycle-governed by the alerts
 runtime. Disabling Docker update alerts globally, disabling alerts for a

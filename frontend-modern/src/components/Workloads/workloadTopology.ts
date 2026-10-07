@@ -3,6 +3,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { guestOverrideIdCandidates } from '@/features/alerts/guestOverrideIdentity';
 import {
   getCanonicalWorkloadId,
+  getWorkloadPlatformScopes,
   resolveDiscoveryTargetForWorkload,
   resolveWorkloadType,
 } from '@/utils/workloads';
@@ -53,6 +54,24 @@ export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
 export const getWorkloadAlertThresholdScope = (guest: WorkloadGuest): AlertThresholdScope => {
   const type = resolveWorkloadType(guest);
   return type === 'app-container' ? 'docker' : 'guest';
+};
+
+/**
+ * Tags the alert engine reads for this workload's guest thresholds. It reads
+ * Pulse control tags such as pulse-relaxed only from Proxmox VMs and LXCs, so
+ * a vSphere VM or a container keeps its thresholds whatever it is tagged.
+ * Rows without platform scopes are the legacy Proxmox shape.
+ */
+export const getWorkloadAlertPolicyTags = (guest: WorkloadGuest): string[] => {
+  const type = resolveWorkloadType(guest);
+  if (type !== 'vm' && type !== 'system-container') return [];
+  const platformScopes = getWorkloadPlatformScopes(guest);
+  if (platformScopes.length > 0 && !platformScopes.includes('proxmox-pve')) return [];
+  const tags = guest.tags;
+  if (Array.isArray(tags)) return tags;
+  // Legacy rows carry the raw tag string: Proxmox separates with ';',
+  // older Pulse payloads with ','.
+  return typeof tags === 'string' ? tags.split(/[;,]/) : [];
 };
 
 export const getWorkloadAlertResourceIdCandidates = (guest: WorkloadGuest): string[] => {

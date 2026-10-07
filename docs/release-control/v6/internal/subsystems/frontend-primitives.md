@@ -5680,6 +5680,13 @@ identity candidates) and pass them into the shared metric bar primitives
 (`ResponsiveMetricCell`, `StackedMemoryBar`, `StackedDiskBar`); the static
 `METRIC_THRESHOLDS` display constants remain fallback-only presentation for
 callers without alert configuration in scope.
+Workload guest bars pass the guest's alert policy tags
+(`getWorkloadAlertPolicyTags`) through that same `getMetricThresholds` call,
+so a Proxmox guest tagged `pulse-relaxed` colours CPU, memory and disk by the
+relaxed floor the engine applies to its configured thresholds; bar
+primitives never read tags themselves. The Alerts thresholds table's shared row and mobile card render
+the relaxed-trigger line from `getAlertResourceRelaxedTriggerSummary`, not
+from per-section copy.
 The vSphere ESXi host table keeps power state distinct from aggregate resource
 health without spending a phone column on the repeated normal case. At phone
 widths the Power column is hidden and a shared `MetadataBadge` appears beside

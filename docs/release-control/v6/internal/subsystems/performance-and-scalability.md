@@ -1125,6 +1125,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Guest metric thresholds read the guest's alert policy tags through one
+    `getWorkloadAlertPolicyTags` memo per row and per drawer, beside the
+    existing scope and override-candidate memos, so `pulse-relaxed` bar
+    colouring adds no per-render tag parsing and no extra store reads.
     On coarse-pointer touch layouts, those cell details must not spawn floating
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability

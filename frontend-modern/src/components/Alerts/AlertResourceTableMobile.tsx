@@ -30,6 +30,7 @@ import {
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
   getAlertResourceMetricStep,
+  getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
@@ -37,6 +38,7 @@ import {
   resolveAlertResourceMetricEnableValue,
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
 import type { OfflineState, ResourceTableProps } from './ResourceTable';
 
 interface AlertResourceTableMobileProps {
@@ -368,6 +370,14 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
           const displayValue = (metric: string) => getDisplayValue(resource, metric, isEditing());
           const isOverridden = (metric: string) =>
             isAlertResourceMetricOverridden(resource, metric);
+          const relaxedTriggerSummary = () =>
+            props.table.globalDisableFlag?.()
+              ? null
+              : getAlertResourceRelaxedTriggerSummary(
+                  resource,
+                  props.table.editingThresholds(),
+                  isEditing(),
+                );
 
           return (
             <Card
@@ -476,6 +486,12 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   </Show>
                 </div>
               </div>
+
+              <Show when={relaxedTriggerSummary()}>
+                {(summary) => (
+                  <AlertResourceRelaxedTriggers summary={summary()} class="text-xs text-muted" />
+                )}
+              </Show>
 
               <Show when={isEditing()}>
                 <FormTextarea

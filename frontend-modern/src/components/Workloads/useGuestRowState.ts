@@ -23,6 +23,7 @@ import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePrese
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
+  getWorkloadAlertPolicyTags,
   getWorkloadAlertResourceIdCandidates,
   getWorkloadAlertThresholdScope,
   getWorkloadDockerHostId,
@@ -61,12 +62,14 @@ export function useGuestRowState(props: GuestRowProps) {
   const alertResourceIdCandidates = createMemo(() =>
     getWorkloadAlertResourceIdCandidates(props.guest),
   );
+  const alertPolicyTags = createMemo(() => getWorkloadAlertPolicyTags(props.guest));
   const metricThresholds = (metric: DisplayMetricType) =>
     createMemo(() =>
       alertsActivation.getMetricThresholds(
         alertThresholdScope(),
         metric,
         alertResourceIdCandidates(),
+        alertPolicyTags(),
       ),
     );
   const cpuThresholds = metricThresholds('cpu');

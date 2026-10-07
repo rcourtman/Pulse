@@ -1,6 +1,7 @@
 import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
+import { getPulseRelaxedGuestTrigger, type MetricType } from '@/utils/metricThresholds';
 
 const COLUMN_TOOLTIP_LOOKUP: Record<string, string> = {
   'cpu %': 'Percent CPU utilization allowed before an alert fires.',
@@ -428,6 +429,54 @@ export function getAlertResourceMetricDisplayValue(
 
   const fallback = extract(defaults);
   return fallback !== undefined ? fallback : 0;
+}
+
+const RELAXED_TRIGGER_METRIC_LABELS: Record<MetricType, string> = {
+  cpu: 'CPU',
+  memory: 'Memory',
+  disk: 'Disk',
+};
+
+export interface AlertResourceRelaxedTriggerSummary {
+  /** Raised thresholds in metric order, e.g. "CPU 95%". */
+  raised: string[];
+  title: string;
+}
+
+/**
+ * The alert thresholds a guest's pulse-relaxed tag raises above the values
+ * its row shows, as the alert engine applies them, or null when the tag
+ * raises none. Reads the values being edited, so the line follows an edit
+ * before it is saved.
+ */
+export function getAlertResourceRelaxedTriggerSummary(
+  resource: AlertResourceTableResourceLike,
+  editingThresholds?: AlertResourceThresholdMap,
+  isEditing = false,
+): AlertResourceRelaxedTriggerSummary | null {
+  if (resource.pulseRelaxed !== true || resource.disabled === true) {
+    return null;
+  }
+  const rowThresholds = isEditing ? editingThresholds : resource.thresholds;
+  const raised = (['cpu', 'memory', 'disk'] as const).flatMap((metric) => {
+    const configured =
+      parseAlertMetricNumber(rowThresholds?.[metric]) ??
+      parseAlertMetricNumber(resource.defaults?.[metric]);
+    const trigger = getPulseRelaxedGuestTrigger(metric, configured);
+    if (trigger === null || (configured !== undefined && trigger <= configured)) {
+      return [];
+    }
+    return [`${RELAXED_TRIGGER_METRIC_LABELS[metric]} ${trigger}%`];
+  });
+  if (raised.length === 0) {
+    return null;
+  }
+  return {
+    raised,
+    title:
+      'This guest is tagged pulse-relaxed in Proxmox, which raises these alert thresholds ' +
+      'above the values in this row. Remove the tag in Proxmox to alert at the row values.',
+  };
 }
 
 export function isAlertResourceMetricOverridden(

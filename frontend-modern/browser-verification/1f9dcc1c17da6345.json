@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "base_sha": "1a094646d7f21217eda051af6ba0252e208f283e",
+  "verified_at": "2026-10-07T22:33:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceRelaxedTriggers.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
+    "frontend-modern/src/stores/alertsActivation.ts",
+    "frontend-modern/src/utils/metricThresholds.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceRelaxedTriggers.tsx": "761c794a8a5a6ccaac10967e0d9dc54e5f1bc798c6915cd3d72b60abed22fe0b",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "7804d039237b8149aa3c1de49b2f28a1b7efd9d5c84efdf2b305cc67c5c2bc6f",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "2f1f42acaf25f25b754d07127e39d65dd9760f6be82216706a4d43f236867a9c",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "c36b7bede475ccb1b9fa9f8a293d9008f45cea103c5b9fe214cc0dee7bb55e70",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "80be72488a4828823b24013b960e081d92ced5ade3015084c933b10b7f133f6a",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "6816bb90d9abc48ddad0999aea0f471882f1640b63eb8ef7d9fae00a37d41904",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts": "2ad72c28b21d38f0bff17ddafb963627d42dd5199fff9fa354014adea9ddd3c0",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts": "bb6c362860337aa3162106226eeaeeca3404eb5936930af5701acf7969bbc9d6",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "cc8f8df70b75c6abe00af8938a826659b475be6e303d88fa233ede882add3ec1",
+    "frontend-modern/src/stores/alertsActivation.ts": "1a6b2fb1cf1afc3ed035c7f1801b5733250c6228e9f22d301839c24513830ceb",
+    "frontend-modern/src/utils/metricThresholds.ts": "38a1cd937b010afb9f42a801d89c04c281d5cb1d47c5dd9402cce9d1e882e40c"
+  },
+  "routes": [
+    "/proxmox",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 2560,
+      "height": 1100
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 780
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock-mode stack (backend :7867, Vite :5387) built from this branch with a dev-only -overlay tagging the ci-runner-01 and analytics-batch-01 demo profiles pulse-relaxed (68 relaxed Proxmox VMs); default guest thresholds CPU 80/75, memory 85/80, disk 90/85",
+    "Before the change on the same stack: relaxed ci-runner-117 at 88% memory drew a red (critical) memory bar while the engine raises no alert below 92%, and its Alerts thresholds row showed 80/85/90 with nothing naming the tag",
+    "Proxmox guests filtered by tags:pulse-relaxed: all 66 running relaxed rows coloured by the relaxed band (warning from 80%, critical from 92% memory); analytics-batch-70 at 87% memory reads warning (yellow) at 800px and at 375px",
+    "Control: untagged Proxmox guests in the same band stay critical (red): redis-cache-259 92%, redis-cache-379 91%, checkout-web-02 92%, postgres-primary-293 86%, at desktop and 375px",
+    "Alerts > Thresholds > Proxmox > VMs & Containers, analytics-batch-70: card layout (default page width, every viewport up to 2560px) and table layout (full-width mode at 2560px) both show \"Proxmox tag pulse-relaxed: alerts at CPU 95% \u00b7 Memory 92% \u00b7 Disk 95%\" under the name, with the explanatory title; the metric cells keep the configured 80% / 85% / 90%",
+    "At 375px the line sits at full card width under the card header in two lines; pulse-relaxed and each threshold stay unbroken (whitespace-nowrap spans); no horizontal page scroll (scrollWidth 375)",
+    "Untagged guest postgres-primary-293 on the thresholds page shows no relaxed line",
+    "No console errors from the final build; one transient ReferenceError came from an intermediate HMR state between two edits and did not recur after reload",
+    "After this pass the only change to these files was prettier wrapping the JSX attributes of AlertResourceRelaxedTriggers.tsx onto separate lines (no output change), plus a rebase onto main that touched none of the changed paths",
+    "After a review, relaxGuestThresholdValue now fills a legacy bare trigger number with the backend's fixed five-point clear instead of the configured hysteresis margin, matching ensureHysteresisThreshold. The current backend sends hysteresis objects, so this branch is not reachable from the stack exercised above; the rendered bars and lines checked here resolve through the unchanged object path, and the numeric branch is pinned by metricThresholds.test.ts at margins 5 and 10"
+  ],
+  "interactions": [
+    "Searched the Proxmox guest list by name and by tags:pulse-relaxed and read each memory bar segment fill against its percentage",
+    "Expanded VMs & Containers on Alerts > Thresholds > Proxmox and searched for the relaxed and an untagged guest",
+    "Opened the row editor on analytics-batch-70, set Memory to 96 without saving: the line updated to \"alerts at CPU 95% \u00b7 Disk 95%\"; cancelled and it returned to all three",
+    "Switched full-width mode on to reach the table layout at 2560px, then restored it",
+    "Repeated the thresholds and Proxmox passes at 375x812"
+  ]
+}

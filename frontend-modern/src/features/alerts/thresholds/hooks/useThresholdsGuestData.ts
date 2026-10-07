@@ -9,6 +9,8 @@ import {
 } from '@/features/alerts/guestOverrideIdentity';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 import type { Disk } from '@/types/api';
+import { hasPulseRelaxedGuestTag } from '@/utils/metricThresholds';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
@@ -46,6 +48,10 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
         Boolean(override?.disabled) ||
         Boolean(override?.disableConnectivity) ||
         overrideSeverity !== undefined;
+      // The alert engine reads pulse-relaxed only from Proxmox guests.
+      const platformType = resolveResourcePlatformType(guest);
+      const pulseRelaxed =
+        (!platformType || platformType === 'proxmox-pve') && hasPulseRelaxedGuestTag(guest.tags);
 
       return {
         id: guest.id,
@@ -66,6 +72,7 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
         backup: override?.backup || props.backupDefaults(),
         snapshot: override?.snapshot || props.snapshotDefaults(),
         poweredOffSeverity: overrideSeverity,
+        pulseRelaxed,
       };
     });
 

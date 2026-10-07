@@ -146,8 +146,9 @@ const getMetricThresholds = (
   scope: AlertThresholdScope,
   metric: DisplayMetricType,
   resourceIds?: string | string[],
+  guestTags?: readonly string[] | null,
 ) => {
-  return resolveMetricDisplayThresholds(config(), scope, metric, resourceIds);
+  return resolveMetricDisplayThresholds(config(), scope, metric, resourceIds, guestTags);
 };
 
 // Per-type disk SMART temperature thresholds (for display coloring).

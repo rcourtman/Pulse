@@ -7,6 +7,8 @@ import {
   getMetricTextColorClass,
   getDefaultDisplayMetricThresholds,
   getDefaultMetricDisplayThresholds,
+  getPulseRelaxedGuestTrigger,
+  hasPulseRelaxedGuestTag,
   resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
   METRIC_THRESHOLDS,
@@ -20,7 +22,7 @@ import {
   FACTORY_TRUENAS_DISK_DEFAULTS,
   FACTORY_VMWARE_DEFAULTS,
 } from '@/utils/alertThresholdDefaults';
-import type { AlertConfig } from '@/types/alerts';
+import type { AlertConfig, HysteresisThreshold } from '@/types/alerts';
 
 describe('metricThresholds', () => {
   describe('getMetricSeverity', () => {
@@ -305,6 +307,167 @@ describe('metricThresholds', () => {
         resolveMetricDisplayThresholds(config, 'guest', 'disk', 'guest:cluster-a:100'),
       ).toBeNull();
       expect(getMetricColorClass(99, 'disk', null)).toContain('bg-metric-critical-bg');
+    });
+
+    describe('pulse-relaxed guests', () => {
+      const relaxedConfig = (overrides: AlertConfig['overrides'] = {}) =>
+        ({
+          enabled: true,
+          guestDefaults: {
+            cpu: { trigger: 80, clear: 75 },
+            memory: { trigger: 85, clear: 80 },
+            disk: { trigger: 90, clear: 85 },
+          },
+          nodeDefaults: {},
+          storageDefault: { trigger: 85, clear: 80 },
+          overrides,
+        }) as AlertConfig;
+
+      it('turns critical where the relaxed alert fires, keeping the configured clear', () => {
+        const config = relaxedConfig();
+        const tags = ['batch', 'pulse-relaxed'];
+
+        // applyRelaxedGuestThresholds lifts the trigger and keeps a clear
+        // below it, so the warning band starts at the configured clear.
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', [], tags)).toEqual({
+          warning: 80,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'disk', [], tags)).toEqual({
+          warning: 85,
+          critical: 95,
+        });
+
+        // 88% memory raises no alert below the 92% relaxed trigger, so the
+        // bar must not read critical; untagged, the same reading does.
+        const relaxedMemory = resolveMetricDisplayThresholds(config, 'guest', 'memory', [], tags);
+        expect(getMetricSeverity(88, 'memory', relaxedMemory)).toBe('warning');
+        expect(getMetricSeverity(92, 'memory', relaxedMemory)).toBe('critical');
+        const plainMemory = resolveMetricDisplayThresholds(config, 'guest', 'memory', []);
+        expect(getMetricSeverity(88, 'memory', plainMemory)).toBe('critical');
+      });
+
+      it('matches the tag the way the backend parses it', () => {
+        const config = relaxedConfig();
+        expect(hasPulseRelaxedGuestTag([' Pulse-Relaxed '])).toBe(true);
+        expect(hasPulseRelaxedGuestTag(['pulse-relaxed-later', 'relaxed'])).toBe(false);
+        expect(hasPulseRelaxedGuestTag(null)).toBe(false);
+        expect(
+          resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], [' PULSE-RELAXED ']),
+        ).toEqual({ warning: 75, critical: 95 });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', [], ['relaxed'])).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+      });
+
+      it('keeps higher overrides and Off thresholds, and floors unset ones', () => {
+        const config = relaxedConfig({
+          'guest:cluster-a:100': {
+            cpu: { trigger: 97, clear: 90 },
+            memory: { trigger: -1, clear: 0 },
+          },
+        });
+        const ids = ['guest:cluster-a:100'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 90,
+          critical: 97,
+        });
+        // Relaxing never turns on an alert the config switched off.
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toBeNull();
+
+        const unset = { ...relaxedConfig(), guestDefaults: {} } as AlertConfig;
+        expect(resolveMetricDisplayThresholds(unset, 'guest', 'memory', [], tags)).toEqual({
+          warning: 87,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(null, 'guest', 'disk', [], tags)).toEqual({
+          warning: 90,
+          critical: 95,
+        });
+      });
+
+      it('fills a missing clear before lifting, and moves a clear the trigger passes', () => {
+        const config = relaxedConfig({
+          'guest:cluster-a:101': {
+            cpu: { trigger: 85 } as HysteresisThreshold,
+            // Legacy overrides stored a bare trigger number.
+            memory: 90 as unknown as HysteresisThreshold,
+            disk: { trigger: 93, clear: 96 },
+          },
+        });
+        const ids = ['guest:cluster-a:101'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 80,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toEqual({
+          warning: 85,
+          critical: 92,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'disk', ids, tags)).toEqual({
+          warning: 90,
+          critical: 95,
+        });
+      });
+
+      it('fills a missing clear five below the trigger whatever the hysteresis margin', () => {
+        // ensureHysteresisThreshold uses a fixed 5, not hysteresisMargin.
+        const config = {
+          ...relaxedConfig({
+            'guest:cluster-a:102': {
+              cpu: { trigger: 85 } as HysteresisThreshold,
+              memory: 90 as unknown as HysteresisThreshold,
+            },
+          }),
+          hysteresisMargin: 10,
+        } as AlertConfig;
+        const ids = ['guest:cluster-a:102'];
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu', ids, tags)).toEqual({
+          warning: 80,
+          critical: 95,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'guest', 'memory', ids, tags)).toEqual({
+          warning: 85,
+          critical: 92,
+        });
+      });
+
+      it('relaxes only guest CPU, memory and disk', () => {
+        const config = {
+          ...relaxedConfig(),
+          dockerDefaults: { cpu: { trigger: 80, clear: 75 } },
+        } as AlertConfig;
+        const tags = ['pulse-relaxed'];
+
+        expect(resolveMetricDisplayThresholds(config, 'docker', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+        expect(resolveMetricDisplayThresholds(config, 'node', 'cpu', [], tags)).toEqual({
+          warning: 75,
+          critical: 80,
+        });
+      });
+
+      it('derives the relaxed trigger from the configured one', () => {
+        expect(getPulseRelaxedGuestTrigger('cpu', 80)).toBe(95);
+        expect(getPulseRelaxedGuestTrigger('memory', 85)).toBe(92);
+        expect(getPulseRelaxedGuestTrigger('disk', 97)).toBe(97);
+        expect(getPulseRelaxedGuestTrigger('disk', undefined)).toBe(95);
+        expect(getPulseRelaxedGuestTrigger('cpu', 0)).toBeNull();
+        expect(getPulseRelaxedGuestTrigger('cpu', -1)).toBeNull();
+      });
     });
 
     it('honors disabled docker defaults and storage usage aliases', () => {
