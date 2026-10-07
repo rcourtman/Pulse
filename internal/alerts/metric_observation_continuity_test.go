@@ -259,13 +259,10 @@ func TestMetricObservationGapRestartsActivation(t *testing.T) {
 }
 
 func TestMetricObservationGapRestartsRecovery(t *testing.T) {
-	for _, route := range []string{"legacy", "canonical", "unified", "host", "storage", "guest-memory", "host-disk-temperature"} {
+	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "host-disk-temperature"} {
 		gaps := []string{"missing"}
 		if route == "legacy" || route == "canonical" {
 			gaps = []string{"NaN", "+Inf", "-Inf", "history-error", "history-empty", "history-gap", "history-NaN"}
-		}
-		if route == "storage" {
-			gaps = []string{"missing", "unconfirmed-zero", "negative", "offline", "unavailable"}
 		}
 		if route == "host-disk-temperature" {
 			gaps = []string{"empty", "omitted", "zero", "negative", "standby", "unavailable", "unsupported", "missing", "invalid-state", "expired", "legacy"}
@@ -274,20 +271,14 @@ func TestMetricObservationGapRestartsRecovery(t *testing.T) {
 			t.Run(route+"/"+gap, func(t *testing.T) {
 				m, elapsed := continuityManager(t, false)
 				id, metric, observe := continuityObserver(t, m, route, gap)
-				observe(95, false)
-				// Storage's usage rule retains its configured sustained-for delay.
-				// Establish a firing occurrence before testing recovery timing.
-				if route == "storage" {
-					elapsed.Store(int64(time.Minute))
-					observe(95, false)
-				}
+				observe(95, false) // Critical evidence retains its legacy immediate activation.
 				if len(m.GetActiveAlerts()) != 1 {
-					t.Fatal("breaching control did not establish a firing occurrence")
+					t.Fatal("critical control did not fire immediately")
 				}
 				if err := m.AcknowledgeAlert(m.GetActiveAlerts()[0].ID, "operator"); err != nil {
 					t.Fatal(err)
 				}
-				elapsed.Store(int64(70 * time.Second))
+				elapsed.Store(int64(10 * time.Second))
 				observe(10, false)
 				incident, _ := continuityIncident(m, id, metric)
 				if incident.RecoverySince.IsZero() {

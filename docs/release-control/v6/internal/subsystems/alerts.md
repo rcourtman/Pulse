@@ -3884,7 +3884,9 @@ recovery confirmations and pending offline intent grace without resolving an
 existing outage or changing its acknowledgement. Capacity is independently
 observable while connectivity is unknown. Missing/unconfirmed-zero capacity,
 negative usage and offline/unavailable storage interrupt capacity activation,
-intent grace and recovery timing; they do not supply healthy capacity evidence.
+and intent grace timing; they do not supply healthy capacity evidence.
+Capacity recovery retains its existing immediate measured-clear behaviour,
+not the recovery stability window used by memory and temperature gauges.
 A confirmed empty store still supplies a genuine zero-usage recovery reading.
 Fresh observations must satisfy the existing full confirmation/delay after a
 gap. Interruption is scoped to the storage's canonical identity and applied to
@@ -3894,9 +3896,9 @@ both live and shadow reducers; interrupted intent is checkpointed for restart.
 `TestStorageConnectivityGapRestartsIntentGrace` exercise the real storage
 entry point, acknowledged occurrence retention, neighbour isolation, fresh
 reconfirmation and empty intent checkpoint. Storage routes in
-`TestMetricObservationGapRestartsActivation` and
-`TestMetricObservationGapRestartsRecovery` cover capacity gaps and explicit
-intent grace. Existing restart, empty-capacity and predictive-capacity controls
+`TestMetricObservationGapRestartsActivation` covers capacity gaps and explicit
+intent grace; `TestStorageCapacityGapHoldsOccurrence` verifies retained,
+acknowledged capacity incidents and genuine immediate empty-store recovery. Existing restart, empty-capacity and predictive-capacity controls
 remain required. These source controls are not native storage recovery or
 installed destination-delivery evidence.
 

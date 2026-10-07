@@ -1820,3 +1820,41 @@ func TestStorageConnectivityGapRestartsIntentGrace(t *testing.T) {
 		t.Fatal("intent interruption diverged from shadow")
 	}
 }
+
+// Usage has delayed activation but immediate measured recovery. Do not invent
+// a recovery stability window to fit the memory/temperature timing fixtures.
+func TestStorageCapacityGapHoldsOccurrence(t *testing.T) {
+	for _, gap := range []string{"missing", "unconfirmed-zero", "negative", "offline", "unavailable"} {
+		t.Run(gap, func(t *testing.T) {
+			m, elapsed := continuityManager(t, false)
+			id, metric, observe := continuityObserver(t, m, "storage", gap)
+			alertID := canonicalMetricStateID(id, metric)
+			observe(95, false)
+			elapsed.Store(int64(time.Minute))
+			observe(95, false)
+			if err := m.AcknowledgeAlert(alertID, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			before := testRequireActiveAlert(t, m, alertID).Clone()
+			elapsed.Store(int64(2 * time.Minute))
+			observe(10, true)
+			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, alertID).Clone()) || m.GetResolvedAlert(alertID) != nil {
+				t.Fatal("missing capacity changed the acknowledged occurrence")
+			}
+			// A real, independently observed empty capacity can clear even
+			// while connectivity is unknown; neither channel stands in for the other.
+			empty := models.Storage{ID: id, Name: "backups", Status: "unknown", Total: 1000, Free: 1000}
+			m.CheckStorage(empty)
+			if testHasActiveAlert(t, m, alertID) {
+				t.Fatal("confirmed empty capacity did not recover immediately")
+			}
+			resolved := m.GetResolvedAlert(alertID)
+			if resolved == nil || !resolved.StartTime.Equal(before.StartTime) || resolved.Value != 0 {
+				t.Fatal("measured recovery lost the original occurrence or clearing value")
+			}
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("capacity interruption diverged from shadow")
+			}
+		})
+	}
+}
