@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "8e1a564d7e229bda51c021c7e6bde920e0ca0596",
+  "verified_at": "2026-10-07T15:30:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/stores/alertsActivation.ts",
+    "frontend-modern/src/utils/metricThresholds.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "031fcb046ec519e3877323c48051cc1055c0ab684e06710a6510ff37df5b56ac",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "94e4b364c744f204ff52e2d28cde6b80a5a66ac414c7ba702113e960a6a67e17",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "62f064405b0c8e947ef1127874d3d06f6e3330153594de11b3ff3b443d29444c",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "a6def9d4c3e5da5c61b863780ea206acfc663345a914f1c8d901b426ad5597b2",
+    "frontend-modern/src/stores/alertsActivation.ts": "e25685dfa5ff89cef905aff23af466f207ace648303d41e987b5890824c8fa60",
+    "frontend-modern/src/utils/metricThresholds.ts": "8b552ef3261691c76da8dbf992f786ee09690c0d3662b8c0ae8c1a63dfaf5c18"
+  },
+  "routes": [
+    "/truenas/storage?kind=disks",
+    "/alerts/thresholds/truenas"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private mock stack built from this branch (PR 2675 head plus this change) with a local-only platform_fixtures overlay pinning TrueNAS disks: nvme0n1 64C, nvme1n1 72C, sda 50C then 60C; factory per-type policy NVMe 70 / SAS 65 / SATA 55",
+    "Per-type only (no TrueNAS-wide value, no overrides): nvme1n1 Attention with 'at or above its 70C alert threshold' and amber drawer Temperature; nvme0n1 healthy",
+    "Per-disk override nvme1n1 75C saved from the Thresholds page (stored under physical_disk-0ccabe83b84a6c19, the disk's resource id): nvme1n1 healthy in the table, default drawer tone",
+    "TrueNAS-wide 62C saved from the TrueNAS Disks Global Defaults row: nvme0n1 Attention 'at or above its 62C alert threshold' and amber drawer tone, nvme1n1 still healthy under its own 75C, sda 60C healthy (62C replaces SATA 55C); backend raised nvme0n1 warning at trigger 62 after the 300s window and nothing for nvme1n1",
+    "nvme0n1 muted from its Thresholds row (override disabled): table healthy, drawer default tone, backend alert resolved",
+    "TrueNAS-wide Off from the Global Defaults row (trigger 0): no non-override disk hot",
+    "truenasDiskDefaults saved with disabled true through the API: no disk hot",
+    "Phone width 390: status dot/health and drawer tone follow the same tiers"
+  ],
+  "interactions": [
+    "Edited the nvme1n1 Temp cell on Alerts > Thresholds > TrueNAS > Disks, blurred to commit, Save Changes",
+    "Typed 62 into the Disks Global Defaults Temp cell, Save Changes; later switched it Off with its On control and saved",
+    "Switched nvme0n1's per-resource alerts toggle off and saved",
+    "Opened /truenas/storage?kind=disks, read each disk row's health attribute and the Attention filter count",
+    "Expanded nvme0n1 and nvme1n1 rows, opened Platform details > Show TrueNAS, read the Temperature row tone",
+    "Polled /api/alerts/active with a browser client connected to compare the TrueNAS disk temperature alerts"
+  ]
+}

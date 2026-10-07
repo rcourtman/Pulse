@@ -404,10 +404,12 @@ const diskTemperature = (disk: ResourcePhysicalDiskMeta) =>
 
 // A retained reading, such as a silent host agent's on a merged disk row, is
 // not current: it takes no heat tone and its title says why. A current reading
-// is hot from its disk type's alert trigger, the threshold the TrueNAS storage
-// table and the disk's temperature alert judge it by. Without a resolver, heat
-// is not judged.
+// is hot from the trigger the disk's temperature alert fires at (its own
+// override, the TrueNAS-wide value, then its type's policy), the threshold the
+// TrueNAS storage table judges it by too. Without a resolver, heat is not
+// judged.
 const diskTemperatureRow = (
+  resource: Resource,
   disk: ResourcePhysicalDiskMeta,
   resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASRow | null => {
@@ -419,7 +421,7 @@ const diskTemperatureRow = (
       tone: 'muted',
     });
   }
-  const thresholds = resolveDiskTemperatureThresholds?.(disk.diskType ?? '') ?? null;
+  const thresholds = resolveDiskTemperatureThresholds?.(resource) ?? null;
   const hot = isPhysicalDiskRunningHot(
     { temperature: disk.temperature ?? 0, collection: disk.collection },
     thresholds,
@@ -451,7 +453,7 @@ const buildTrueNASDiskSections = (
 
   const healthRows = compactRows([
     row('Health', normalizeDelimitedLabel(disk.health), { tone: diskStateTone(disk) }),
-    diskTemperatureRow(disk, resolveDiskTemperatureThresholds),
+    diskTemperatureRow(resource, disk, resolveDiskTemperatureThresholds),
     row(
       'Wearout',
       disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),

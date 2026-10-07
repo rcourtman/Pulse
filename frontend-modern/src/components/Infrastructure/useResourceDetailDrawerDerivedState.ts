@@ -382,9 +382,9 @@ export const useResourceDetailDrawerDerivedState = (
   const vmwareDetailsSummary = createMemo(() =>
     buildVMwareDetailsSummary(resource().type, vmwareData()),
   );
-  const { getDiskTemperatureThresholds } = useAlertsActivation();
+  const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
   const trueNASDetailSections = createMemo(() =>
-    buildTrueNASDetailSections(resource(), getDiskTemperatureThresholds),
+    buildTrueNASDetailSections(resource(), getTrueNASDiskTemperatureThresholds),
   );
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
   const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource()));

@@ -1111,11 +1111,13 @@ coloured by bucket, with a count for the rest and the full list in the title
 and screen-reader text. Phones keep the status dot and reach the reason through
 the row drawer. Health sorts by severity rank, not label text.
 Disk risk carries no heat, so the table judges it itself. A disk whose current
-reading has reached its type's alert disk temperature trigger is an Attention
+reading has reached the trigger its temperature alert fires at is an Attention
 row with the reason "Disk temperature is 57°C, at or above its 55°C alert
 threshold.". The trigger comes from the alerts store's
-`getDiskTemperatureThresholds`, which the table passes to the row build,
-filter, counts, sort and issue. `isPhysicalDiskRunningHot` in
+`getTrueNASDiskTemperatureThresholds(disk)`, which the table passes to the row
+build, filter, counts, sort and issue: the disk's own override, then a
+TrueNAS-wide value, then its type's policy, the tiers the alerts contract
+documents. `isPhysicalDiskRunningHot` in
 `features/storageBackups/diskTemperaturePresentation.ts` makes the same call
 for the Physical Disks verdict. The heat reason follows any native TrueNAS
 alert text, and a hot disk's status dot turns warning though its source state
@@ -6103,11 +6105,12 @@ placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
 The TrueNAS physical-disk drawer judges a current temperature reading by the
-disk temperature policy, like the TrueNAS storage table:
+trigger the disk's temperature alert fires at, like the TrueNAS storage table:
 `useResourceDetailDrawerDerivedState.ts` passes the alerts store's
-`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
-Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
-says the reading reached its disk type's alert trigger. A retained reading
+`getTrueNASDiskTemperatureThresholds` into `buildTrueNASDetailSections`, which
+hands it the disk resource, and the Temperature row takes a warning tone only
+when `isPhysicalDiskRunningHot` says the reading reached that trigger (the
+disk's own override, then a TrueNAS-wide value, then its type's policy). A retained reading
 keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must

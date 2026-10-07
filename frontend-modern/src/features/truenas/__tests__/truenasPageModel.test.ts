@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RecoveryPoint } from '@/types/recovery';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
-import { resolveDiskTemperatureDisplayThresholds } from '@/utils/metricThresholds';
+import { resolveTrueNASDiskTemperatureDisplayThresholds } from '@/utils/metricThresholds';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
@@ -20,6 +21,7 @@ import {
   filterTrueNASVMs,
   getTrueNASPageTabSpecs,
   getTrueNASResourceDisplayStatus,
+  getTrueNASStorageDotStatus,
   getTrueNASStorageIssue,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
@@ -634,8 +636,8 @@ describe('truenasPageModel', () => {
   it('flags a disk whose current reading reaches its alert trigger', () => {
     // Disk risk carries no heat, so a hot disk stays `online`; the page judges
     // it by the alert disk temperature thresholds, as Physical Disks does.
-    const resolveFactory = (diskType: string) =>
-      resolveDiskTemperatureDisplayThresholds(null, diskType);
+    const resolveFactory = (disk: Pick<Resource, 'id' | 'physicalDisk'>) =>
+      resolveTrueNASDiskTemperatureDisplayThresholds(null, disk.physicalDisk?.diskType, disk.id);
     const hotDisk = makeResource({
       id: 'disk-hot',
       type: 'physical_disk',
@@ -705,6 +707,65 @@ describe('truenasPageModel', () => {
       },
     });
     expect(mapTrueNASStorageStatus(retained, resolveFactory)).toBe('healthy');
+  });
+
+  it('judges disk heat by the override and TrueNAS-wide value its alert uses', () => {
+    const config = {
+      enabled: true,
+      guestDefaults: {},
+      nodeDefaults: {},
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { nvme: { trigger: 70, clear: 65 }, sata: { trigger: 55, clear: 50 } },
+      storageDefault: { trigger: 85, clear: 80 },
+      overrides: { 'disk-raised': { temperature: { trigger: 75, clear: 70 } } },
+    } as AlertConfig;
+    const resolveWith = (cfg: AlertConfig) => (disk: Pick<Resource, 'id' | 'physicalDisk'>) =>
+      resolveTrueNASDiskTemperatureDisplayThresholds(cfg, disk.physicalDisk?.diskType, disk.id);
+    const nvmeDisk = (id: string, temperature: number) =>
+      makeResource({
+        id,
+        type: 'physical_disk',
+        name: id,
+        status: 'online',
+        physicalDisk: {
+          devPath: `/dev/${id}`,
+          serial: `serial-${id}`,
+          diskType: 'nvme',
+          health: 'UNKNOWN',
+          temperature,
+        },
+      });
+
+    // At 72C an NVMe is past its 70C type trigger, but the disk whose own
+    // override raised its alert to 75C will not alert, so it is not heat.
+    const plain = nvmeDisk('disk-plain', 72);
+    const raised = nvmeDisk('disk-raised', 72);
+    expect(mapTrueNASStorageStatus(plain, resolveWith(config))).toBe('attention');
+    expect(mapTrueNASStorageStatus(raised, resolveWith(config))).toBe('healthy');
+    expect(getTrueNASStorageIssue(raised, resolveWith(config))).toBeNull();
+    expect(
+      getTrueNASStorageIssue(nvmeDisk('disk-raised', 76), resolveWith(config))?.reasons,
+    ).toEqual(['Disk temperature is 76°C, at or above its 75°C alert threshold.']);
+
+    // A TrueNAS-wide 62C applies to every disk without its own override.
+    const trueNASWide = {
+      ...config,
+      truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+    } as AlertConfig;
+    const warm = nvmeDisk('disk-warm', 64);
+    expect(mapTrueNASStorageStatus(warm, resolveWith(config))).toBe('healthy');
+    expect(getTrueNASStorageIssue(warm, resolveWith(trueNASWide))?.reasons).toEqual([
+      'Disk temperature is 64°C, at or above its 62°C alert threshold.',
+    ]);
+    expect(mapTrueNASStorageStatus(raised, resolveWith(trueNASWide))).toBe('healthy');
+    // Switched off TrueNAS-wide, no disk without an override is heat.
+    const trueNASOff = {
+      ...config,
+      truenasDiskDefaults: { temperature: { trigger: 0, clear: 0 } },
+    } as AlertConfig;
+    expect(mapTrueNASStorageStatus(plain, resolveWith(trueNASOff))).toBe('healthy');
+    expect(getTrueNASStorageDotStatus(plain, resolveWith(trueNASOff))).toBe('online');
+    expect(getTrueNASStorageDotStatus(plain, resolveWith(config))).toBe('warning');
   });
 
   it('renders expected receive-side replication readonly posture as healthy', () => {

@@ -441,6 +441,11 @@ red and starts at the disk's alert trigger, from the same thresholds object
 that colours its Temp cell (`getPhysicalDiskTemperatureThresholds`). Callers
 pass the override keys of the machine that reports the disk, so that machine's
 Disk Temp override sets those thresholds.
+A TrueNAS disk has no reporting machine. The TrueNAS storage table's Attention
+status and the TrueNAS disk drawer's Temperature tone take its thresholds from
+`getTrueNASDiskTemperatureThresholds(disk)`, which applies the disk's own
+override, then a TrueNAS-wide value, then its type's policy, so both start
+where the disk's temperature alert does.
 
 Controller expansions carry the supplied kind-specific targets, absolute times,
 duration and cluster/namespace when the phone row omits those columns. Proxmox

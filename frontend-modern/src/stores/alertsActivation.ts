@@ -2,6 +2,7 @@ import { createSignal } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
 import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { setGlobalAlertsDetectionEnabled } from '@/utils/alertsActivation';
 import { FACTORY_NODE_DEFAULTS } from '@/utils/alertThresholdDefaults';
 import { logger } from '@/utils/logger';
@@ -10,6 +11,7 @@ import {
   type DisplayMetricType,
   resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
+  resolveTrueNASDiskTemperatureDisplayThresholds,
 } from '@/utils/metricThresholds';
 import { eventBus } from './events';
 
@@ -158,6 +160,17 @@ const getDiskTemperatureThresholds = (
   return resolveDiskTemperatureDisplayThresholds(config(), diskType, resourceIds);
 };
 
+// A TrueNAS disk's temperature thresholds, resolved by the tiers its
+// temperature alert uses: its own override, the TrueNAS-wide value, then the
+// per-type policy.
+const getTrueNASDiskTemperatureThresholds = (disk: Pick<Resource, 'id' | 'physicalDisk'>) => {
+  return resolveTrueNASDiskTemperatureDisplayThresholds(
+    config(),
+    disk.physicalDisk?.diskType,
+    disk.id,
+  );
+};
+
 eventBus.on('org_switched', () => {
   setConfig(null);
   setGlobalAlertsDetectionEnabled(null);
@@ -184,6 +197,7 @@ export const useAlertsActivation = () => ({
   getTemperatureThreshold,
   getMetricThresholds,
   getDiskTemperatureThresholds,
+  getTrueNASDiskTemperatureThresholds,
 
   // Actions
   refreshConfig,

@@ -1862,11 +1862,31 @@ Disks Global Defaults cell reads `By type` while unset
 default switches the policy off, and switching it on then stages an explicit
 TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
 trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
-The TrueNAS disk drawer tones a current reading from the same per-type trigger
-(`getDiskTemperatureThresholds` passed into `buildTrueNASDetailSections`), so it
-no longer judges heat from a fixed 55C. Judges that still differ: the TrueNAS
-storage table and drawer do not apply a TrueNAS-wide value or per-disk
-override.
+The TrueNAS storage table (its Attention status, dot, filter and sort) and the
+TrueNAS disk drawer's Temperature tone judge a current reading by the same three
+tiers as the alert, through `resolveTrueNASDiskTemperatureDisplayThresholds`
+(`frontend-modern/src/utils/metricThresholds.ts`), which the alerts store
+exposes as `getTrueNASDiskTemperatureThresholds(disk)` and both views take as
+their `TrueNASDiskTemperatureThresholdResolver`: the temperature override stored
+under the disk's resource ID (the key the thresholds page saves and
+`thresholdOverrideForResourceNoLock` reads; a muted override or 0 is off), then
+the TrueNAS-wide value (0 is off), then the per-type policy, and TrueNAS Disks
+defaults saved with `disabled` switch every disk off. As in the backend,
+a switched-off agent alert default does not reach a TrueNAS disk; only the agent
+Disk Temp value does, through the per-type tier. The resolver takes the disk
+resource rather than a disk type, so the agent-disk
+`getDiskTemperatureThresholds` cannot be passed in its place. Judges that still
+differ: Disable all TrueNAS silences these alerts while the views keep judging
+heat, as the agent switches do for agent disks, and Patrol
+(`diskTemperatureLimitsFor`) judges a TrueNAS disk as a disk of its TrueNAS
+system, whose synthetic `AgentID` makes it a host to
+`HostDiskTemperatureThreshold`, so the agent alert default and a host override
+under that ID reach Patrol while the disk's own override and the TrueNAS-wide
+value do not.
+The `resolveTrueNASDiskTemperatureDisplayThresholds` cases in
+`utils/__tests__/metricThresholds.test.ts`, `truenasPageModel.test.ts`,
+`TrueNASStorageTopologyTable.test.tsx` and
+`resourceDetailDrawerTrueNASModel.coverage2.test.ts` pin the frontend tiers.
 `TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
 `TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
 `internal/alerts/unified_eval_test.go` pin the tiers and retained readings;

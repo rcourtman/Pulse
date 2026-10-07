@@ -9,6 +9,7 @@ import {
   getDefaultMetricDisplayThresholds,
   resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
+  resolveTrueNASDiskTemperatureDisplayThresholds,
   METRIC_THRESHOLDS,
   type MetricType,
 } from '@/utils/metricThresholds';
@@ -439,6 +440,122 @@ describe('metricThresholds', () => {
       expect(
         resolveDiskTemperatureDisplayThresholds(agentsOff, 'nvme', ['host-raised']),
       ).toBeNull();
+    });
+
+    it('judges a TrueNAS disk by the tiers its temperature alert resolves', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: {
+          nvme: { trigger: 70, clear: 65 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'disk-raised': { temperature: { trigger: 75, clear: 70 } },
+          'disk-off-value': { temperature: { trigger: 0, clear: 0 } },
+          'disk-minus-one': { temperature: { trigger: -1, clear: 0 } },
+          'disk-muted': { disabled: true },
+          'disk-note-only': { note: 'spare shelf' },
+          'disk-agent-key': { diskTemperature: { trigger: 80, clear: 75 } },
+        },
+      } as AlertConfig;
+      const resolve = (cfg: AlertConfig, diskType: string, id: string) =>
+        resolveTrueNASDiskTemperatureDisplayThresholds(cfg, diskType, id);
+
+      // Without a TrueNAS-wide value each disk follows its type's policy.
+      expect(resolve(config, 'nvme', 'disk-plain')).toEqual({ warning: 65, critical: 70 });
+      expect(resolve(config, 'SATA', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      // An empty or unknown type, or one with no entry, takes the Disk Temp
+      // default, as the backend's per-type lookup does.
+      expect(resolve(config, '', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      expect(resolve(config, 'scsi', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+      expect(resolve(config, 'sas', 'disk-plain')).toEqual({ warning: 50, critical: 55 });
+
+      // The disk's own temperature override beats the type, raising or
+      // switching it off; an override that mutes the disk's alerts is off too.
+      expect(resolve(config, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      expect(resolve(config, 'nvme', 'disk-off-value')).toBeNull();
+      expect(resolve(config, 'nvme', 'disk-minus-one')).toBeNull();
+      expect(resolve(config, 'nvme', 'disk-muted')).toBeNull();
+      // An override without a temperature, or with only the agent disk
+      // temperature metric, leaves the default tiers.
+      expect(resolve(config, 'nvme', 'disk-note-only')).toEqual({ warning: 65, critical: 70 });
+      expect(resolve(config, 'nvme', 'disk-agent-key')).toEqual({ warning: 65, critical: 70 });
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(config, 'nvme', null)).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+
+      // A TrueNAS-wide value replaces the type's policy for every disk, and a
+      // disk override still beats it. Zero switches it off.
+      const trueNASWide = {
+        ...config,
+        truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+      } as AlertConfig;
+      expect(resolve(trueNASWide, 'nvme', 'disk-plain')).toEqual({ warning: 57, critical: 62 });
+      expect(resolve(trueNASWide, 'sata', 'disk-plain')).toEqual({ warning: 57, critical: 62 });
+      expect(resolve(trueNASWide, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      const trueNASOff = {
+        ...config,
+        truenasDiskDefaults: { temperature: { trigger: 0, clear: 0 } },
+      } as AlertConfig;
+      expect(resolve(trueNASOff, 'nvme', 'disk-plain')).toBeNull();
+      expect(resolve(trueNASOff, 'nvme', 'disk-raised')).toEqual({ warning: 70, critical: 75 });
+      // An empty TrueNAS Disks entry is unset: the type's policy applies.
+      const trueNASUnset = { ...config, truenasDiskDefaults: {} } as AlertConfig;
+      expect(resolve(trueNASUnset, 'nvme', 'disk-plain')).toEqual({ warning: 65, critical: 70 });
+      // TrueNAS Disks defaults that switch alerts off skip every disk's
+      // evaluation, its own override included.
+      const trueNASMuted = {
+        ...config,
+        truenasDiskDefaults: { disabled: true, temperature: { trigger: 62, clear: 57 } },
+      } as AlertConfig;
+      expect(resolve(trueNASMuted, 'nvme', 'disk-plain')).toBeNull();
+      expect(resolve(trueNASMuted, 'nvme', 'disk-raised')).toBeNull();
+    });
+
+    it('reaches a TrueNAS disk only through the agent Disk Temp value', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {},
+      } as AlertConfig;
+      // No host agent reports a TrueNAS disk, so the agent default's alert
+      // switch leaves it judged.
+      const agentsMuted = {
+        ...config,
+        agentDefaults: { ...config.agentDefaults, disabled: true },
+      } as AlertConfig;
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(agentsMuted, 'nvme', 'd')).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+      // A switched-off Disk Temp default switches the per-type tier off, but a
+      // TrueNAS-wide value still applies.
+      const diskTempOff = {
+        ...config,
+        agentDefaults: { diskTemperature: { trigger: 0, clear: 0 } },
+      } as AlertConfig;
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(diskTempOff, 'nvme', 'd')).toBeNull();
+      expect(
+        resolveTrueNASDiskTemperatureDisplayThresholds(
+          { ...diskTempOff, truenasDiskDefaults: { temperature: { trigger: 60, clear: 55 } } },
+          'nvme',
+          'd',
+        ),
+      ).toEqual({ warning: 55, critical: 60 });
+      // Without config, the factory per-type triggers apply.
+      expect(resolveTrueNASDiskTemperatureDisplayThresholds(null, 'nvme', 'd')).toEqual({
+        warning: 65,
+        critical: 70,
+      });
     });
 
     it('falls back to seeded per-type disk temperature defaults without config', () => {

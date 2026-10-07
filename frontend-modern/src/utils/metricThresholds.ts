@@ -265,6 +265,34 @@ export const resolveMetricDisplayThresholds = (
   return resolveThreshold(overrideValue ?? baseValue, getFallbackCritical(scope, metric), margin);
 };
 
+// The disk temperature policy for a disk type, with no host override: the
+// type's diskTempByType entry, else the agent Disk Temp default. A switched-off
+// Disk Temp default switches every type off.
+const resolveDiskTemperatureTypePolicy = (
+  config: AlertConfig | null,
+  normalizedType: string,
+  margin: number,
+): MetricDisplayThresholds | null => {
+  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
+  if (baseValue !== undefined && resolveThreshold(baseValue, undefined, margin) === null) {
+    return null;
+  }
+
+  const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
+  if (normalizedType) {
+    const byType = config?.diskTempByType?.[normalizedType];
+    if (isHysteresisThreshold(byType)) {
+      return resolveThreshold(byType, byTypeFallback, margin);
+    }
+  }
+
+  return resolveThreshold(
+    baseValue,
+    byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,
+    margin,
+  );
+};
+
 /**
  * Resolve display thresholds for a physical disk's SMART temperature.
  * Mirrors the backend precedence: an explicit diskTemperature override on the
@@ -293,24 +321,42 @@ export const resolveDiskTemperatureDisplayThresholds = (
     return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
   }
 
-  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
-  if (baseValue !== undefined && resolveThreshold(baseValue, undefined, margin) === null) {
+  return resolveDiskTemperatureTypePolicy(config, normalizedType, margin);
+};
+
+/**
+ * Resolve display thresholds for a TrueNAS disk's temperature by the tiers its
+ * temperature alert resolves (backend `trueNASDiskTemperatureDefaultNoLock`
+ * under `effectiveAlertPolicyNoLock`): the disk's own temperature override,
+ * stored under its resource ID, then a TrueNAS-wide value saved under TrueNAS
+ * Disks, then the disk temperature policy for its type. An override or a
+ * TrueNAS Disks default that switches alerts off, or a value of 0 at either
+ * explicit tier, means off (null). No host agent reports a TrueNAS disk, so
+ * host overrides and the agent default's alert switch do not reach it; only
+ * the agent Disk Temp value does, through the per-type tier.
+ */
+export const resolveTrueNASDiskTemperatureDisplayThresholds = (
+  config: AlertConfig | null,
+  diskType: string | null | undefined,
+  resourceId: string | null | undefined,
+): MetricDisplayThresholds | null => {
+  const margin = normalizeMargin(config?.hysteresisMargin);
+
+  const override = findOverride(config?.overrides, resourceId ?? undefined);
+  if (override?.disabled || config?.truenasDiskDefaults?.disabled === true) {
     return null;
   }
-
-  const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
-  if (normalizedType) {
-    const byType = config?.diskTempByType?.[normalizedType];
-    if (isHysteresisThreshold(byType)) {
-      return resolveThreshold(byType, byTypeFallback, margin);
-    }
+  const overrideValue = getOverrideValue(override, 'temperature');
+  if (overrideValue !== undefined) {
+    return resolveThreshold(overrideValue, undefined, margin);
   }
 
-  return resolveThreshold(
-    baseValue,
-    byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,
-    margin,
-  );
+  const trueNASWideValue = getBaseThresholdValue(config?.truenasDiskDefaults, 'temperature');
+  if (trueNASWideValue !== undefined) {
+    return resolveThreshold(trueNASWideValue, undefined, margin);
+  }
+
+  return resolveDiskTemperatureTypePolicy(config, (diskType ?? '').trim().toLowerCase(), margin);
 };
 
 const getFallbackSeverityThresholds = (metric: DisplayMetricType): MetricDisplayThresholds => {

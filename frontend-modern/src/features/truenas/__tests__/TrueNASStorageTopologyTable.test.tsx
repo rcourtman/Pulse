@@ -381,4 +381,66 @@ describe('TrueNASStorageTopologyTable', () => {
       eventBus.emit('org_switched', 'default');
     }
   });
+  it("follows a disk's own override and the TrueNAS-wide value its alert uses", async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: {
+        nvme: { trigger: 70, clear: 65 },
+        sas: { trigger: 65, clear: 60 },
+        sata: { trigger: 55, clear: 50 },
+      },
+      truenasDiskDefaults: { temperature: { trigger: 62, clear: 57 } },
+      truenasDiskTemperatureByType: true,
+      overrides: { nvme1: { temperature: { trigger: 75, clear: 70 } } },
+    } as unknown as AlertConfig);
+    try {
+      const nvmeDisk = (id: string, temperature: number) =>
+        makeStorageResource({
+          id,
+          type: 'physical_disk',
+          name: id,
+          storage: undefined,
+          physicalDisk: {
+            devPath: `/dev/${id}`,
+            serial: `serial-${id}`,
+            diskType: 'nvme',
+            temperature,
+          },
+        });
+      const resources = [nvmeDisk('nvme0', 64), nvmeDisk('nvme1', 72)];
+      const { container } = render(() => (
+        <TrueNASStorageTopologyTable
+          resources={resources}
+          scope={resources}
+          emptyIcon={<span />}
+          emptyTitle="No storage"
+          emptyDescription="No storage"
+        />
+      ));
+      const health = (id: string) => {
+        const row = container.querySelector(`[data-truenas-storage-resource="${id}"]`);
+        if (!row) return 'missing';
+        return (
+          row
+            .querySelector('[data-truenas-storage-health]')
+            ?.getAttribute('data-truenas-storage-health') ?? 'healthy'
+        );
+      };
+      // Before the alert configuration loads, the factory NVMe trigger judges.
+      expect(health('nvme0')).toBe('healthy');
+      expect(health('nvme1')).toBe('attention');
+
+      await useAlertsActivation().refreshConfig();
+      // The TrueNAS-wide 62C now judges nvme0, and nvme1's own 75C override
+      // beats it, so the 72C disk that will never alert is not Attention.
+      await waitFor(() => expect(health('nvme0')).toBe('attention'));
+      expect(health('nvme1')).toBe('healthy');
+      expect(screen.getByRole('button', { name: /Attention/ })).toHaveTextContent('1');
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
+  });
 });
