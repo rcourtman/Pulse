@@ -44,9 +44,10 @@ RUN apk add --no-cache git openssh-client
 
 # Copy go mod files for better layer caching
 COPY go.mod go.sum ./
+COPY scripts/go-mod-download.sh /usr/local/bin/pulse-go-mod-download
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    go mod download
+    sh /usr/local/bin/pulse-go-mod-download
 
 # Copy only necessary source code
 COPY cmd/ ./cmd/

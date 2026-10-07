@@ -7013,3 +7013,23 @@ not gain a new full native matrix trigger.
 either omitted graph input or a later exclusion. Existing real-build ordering,
 Linux helper, Windows exit/service and installer checks remain unchanged. This
 is admission coverage, not a local Windows/macOS verdict or installed recovery.
+
+### Bounded Docker module-proxy recovery (7 October 2026)
+
+The Docker backend builder uses `scripts/go-mod-download.sh` with the same
+`go.mod`, `go.sum`, Go toolchain, proxy/sum database and module/build caches.
+Only a failed download whose every diagnostic matches the observed HTTPS
+HTTP/2 `stream error ... INTERNAL_ERROR; received from peer` may run again.
+There are at most three attempts, each terminated at 180 seconds with a
+five-second KILL backstop, with two- and four-second delays. Every failed attempt's output remains visible. Access
+refusals, checksum/integrity errors, unknown or mixed diagnostics, missing tools,
+timeouts and signals stop with the observed nonzero exit; an exhausted transport
+failure never becomes a success. No alternate endpoint or graph rewrite exists.
+
+`test_go_mod_download.py` executes the actual Docker RUN command and POSIX shell
+helper with controlled Go outcomes, including recovery, exhaustion and refusal
+precedence. Script smoke discovers it automatically. The existing Docker build
+contract checks the helper staging, unchanged cache/graph inputs and bounded
+command. These are offline command proofs, not a hosted Docker build, public
+proxy recovery, E2E acceptance or installed customer result. The hosted checks
+still have to build the image and execute the unchanged suites.
