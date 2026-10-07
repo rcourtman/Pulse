@@ -3553,19 +3553,49 @@ state the Proxmox row still carries from the same source
 past its reporting lease must not stay "collected" through the Proxmox row's
 copy of the agent's own state, including when its host is down and no disk
 poll refreshes that copy.
-Each merge step also stops the shown temperature borrowing another row's
-availability (`pairPhysicalDiskTemperatureState`). The value is still chosen
-by source preference and the states merged as above, so when the two rows of a
-step carry different temperatures the shown value could sit under the other
-row's `available` state, for example a silent agent's retained reading carried
-over a Proxmox row that collected its own reading now. When the merged state
-says collected but the row the shown value came from says it was not, the
-merged state becomes that row's own. The rule never changes a value and never
-grants availability; rows with the same value keep the merged state. It sees
-only the two rows of one step: the merged disk keeps one state per field, so
-with three or more rows for one disk a withdrawal an earlier step replaced is
-not visible to a later step, and the earlier step's merged state stands in for
-its row. Tracking each reading's own state across merges would close that.
+Each merge step then presents the shown temperature under a state that belongs
+to it (`pairPhysicalDiskTemperatureState`). The value is still chosen by source
+preference and the field states merged as above, so the shown value could
+otherwise sit under another row's state: a silent agent's retained reading
+under a Proxmox row's current `available`, or a legacy agent's stateless
+reading under a Proxmox inventory row's `unsupported`. One merged state per
+field cannot say whose reading is shown once a disk has three or more rows, so
+the registry keeps each row's own temperature reading and state on the merged
+disk (merge-time only, never serialized) and derives the state from the
+readings of the shown value. Each counts its own state, except that a state a
+non-agent row copied from an agent source gives way to an agent row's own
+withdrawal of that source (a legacy agent's sourceless withdrawal matches its
+`host_agent` copy through `diskinventory.LegacyHostAgentStatus`, the rule
+monitoring stamps the copy with); that withdrawal is the only state taken from
+a reading of another value, and it never grants `available`. A collected
+reading is presented over one that is not and an agent's own report over a
+copy, so while a current reading holds the shown value, the order in which
+different rows arrive does not change the state. A second agent reporting the
+same disk is not a copy: its withdrawal leaves another agent's own collected
+reading collected. A row that reports again replaces its reading. When source
+preference keeps showing a value no current reading holds (the row that
+reported it went into standby, or reported again without the SMART attributes
+that made its value preferred), the value keeps the state it was presented with
+and the row that state belonged to, under that row's later withdrawal, and the
+agent's withdrawal of its source still supersedes it; a row's earlier report
+never competes as current evidence. Such a kept state depends on the history of
+reports, as the kept value itself does, and stays `available` when its row now
+reports a different collected value. A disk that arrives without the record, or
+no longer presents the value and state it was built for (edited), stands as one
+reading of unknown rows: an incoming agent row's withdrawal of the source of
+its state supersedes it, and when the agent is among its sources its own
+withdrawal still supersedes an incoming copy. A disk entering the registry as a
+new row is that row alone. Two boundaries lose rows. JSON keeps only the
+presented state, so a withdrawal it does not show cannot supersede a copy
+merged after a round trip; the production rebuild ingests every row into a
+fresh registry and never merges across JSON. A manual link keeps the primary
+disk's readings and drops the other disk's, so rows merged after the link
+(supplemental records) meet only the primary's.
+`registry_merge_policy_test.go`
+(`TestPhysicalDiskMergePairsEveryShownTemperatureWithItsRowState`) checks every
+ingest order of a catalog of agent, Unraid, Proxmox and TrueNAS rows against
+this rule, and `TestPhysicalDiskMergeTemperatureReadingsAcrossIngestBoundaries`
+pins the boundaries.
 Unraid array-inventory rows carry no per-field provenance, so the adapter
 derives the state of a positive temperature taken from one (a row without a
 temperature claims no state): `unavailable` from `unraid`

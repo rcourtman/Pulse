@@ -3820,6 +3820,14 @@ values may remain visible as history, but their current collection state must
 remain explicit. In particular, members behind a shared controller must not
 inherit aggregate I/O counters, and a disk drawer must hide live-I/O charts
 when per-member collection is unavailable or unsupported.
+On a disk merged from several rows (Proxmox, host agent SMART, Unraid
+inventory, TrueNAS), the temperature state these surfaces read is the state of
+the reading the disk shows (`pairPhysicalDiskTemperatureState` in
+`internal/unifiedresources/registry.go`), so a retained value never arrives
+under another row's `available`. The merge keeps each row's reading in an
+unexported record on `PhysicalDiskMeta` (`internal/unifiedresources/types.go`)
+that is never serialized; storage surfaces read only the presented temperature
+and its state.
 
 A retained disk temperature reads as last known, never as a live reading. The
 Physical Disks table, the disk drawer and the pool drawer's linked-disk list

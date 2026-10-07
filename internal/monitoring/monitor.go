@@ -661,25 +661,19 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	return updated
 }
 
-// hostAgentLegacySource is the provenance recorded for a temperature from an
-// agent that predates collection provenance (before 6.2). Those agents only
-// send readings they collected.
-const hostAgentLegacySource = "host_agent"
-
 // hostAgentSMARTCollection returns the agent's collection state for one SMART
-// row, giving a provenance-less temperature the legacy agent source so that
-// history and later lease expiry treat it like any other agent reading.
+// row, giving a provenance-less temperature the legacy agent source
+// (diskinventory.LegacyHostAgentStatus) so that history and later lease expiry
+// treat it like any other agent reading.
 func hostAgentSMARTCollection(smart models.HostDiskSMART) *diskinventory.CollectionStatus {
 	collection := diskinventory.CloneStatus(smart.Collection)
 	if collection == nil {
 		collection = &diskinventory.CollectionStatus{}
 	}
-	switch {
-	case collection.Temperature.State == "" && smart.Temperature > 0 && !smart.Standby:
-		collection.Temperature = diskinventory.Available(hostAgentLegacySource)
-	case collection.Temperature.State != "" && strings.TrimSpace(collection.Temperature.Source) == "":
-		collection.Temperature.Source = hostAgentLegacySource
-	}
+	collection.Temperature = diskinventory.LegacyHostAgentStatus(
+		collection.Temperature,
+		smart.Temperature > 0 && !smart.Standby,
+	)
 	return collection
 }
 
