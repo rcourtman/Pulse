@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "1a48d27aa0ddfcbc4df0354a08c2312cc1849603",
+  "verified_at": "2026-10-07T23:28:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "9bdafb9fa51b259ddada914607c80265f43cb4055e1c56128648c6ed0135c1a4"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history)",
+    "/patrol (Pulse Assistant drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Follow-up receipt for the merge of origin/main (7f45148d15) into this branch: the hook's final content differs from both parents only by main's own removals of summaryStats (#2690) and the loadCorrelations supporting read (#2677).",
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of origin/main 7f45148d15 and of this merged tree (1a48d27aa0), run on pulse-dev because local memory pressure refused heavy work; each on a private DEMO_MODE mock stack with a fresh data dir; the same Playwright script ran against both at both widths.",
+    "Patrol load with one served active finding (page.route on /api/ai/patrol/findings and /api/ai/unified/findings), Activity > Finding options and history, Resolve or dismiss > Open in Assistant: the Pulse Assistant drawer opens with the finding attached on both builds; no console errors on either.",
+    "Tab hidden then shown (visibilitychange) and the stale-data banner forced by failing GET /api/settings/ai on reload: 'Patrol could not refresh' shows on both builds and Retry clears it on both, at both widths (state-based waits; a first run with fixed 5 s sleeps missed the banner on the loaded host for timing reasons).",
+    "Across the whole run both builds hit the same set of /api endpoints; per-endpoint counts differ by one to three only for timer-driven attention, pending-action and active-alert polls, which this change does not touch.",
+    "Dist proof on pulse-dev: 187 files each side; after normalising chunk hashes, SRI strings and short identifiers, only the removed hook code differs in AIIntelligence.js, the unused pulse_patrol constant drops out of aiChat.js, and index.js reorders the same preload list."
+  ],
+  "interactions": [
+    "Demo auto sign-in; on /patrol open the Activity tab and 'Finding options and history', expand the served finding, open 'Resolve or dismiss', click 'Open in Assistant', close the drawer.",
+    "Dispatch visibilitychange hidden then visible; reload with GET /api/settings/ai failing, wait for the banner, restore the route and click Retry, wait for the banner to clear.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the Patrol page, Finding options and history, the Assistant drawer and the stale-data banner inspected."
+  ]
+}
