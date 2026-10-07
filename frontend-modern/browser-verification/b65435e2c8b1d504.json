@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "916876bdf133c57c2a95fc32d5467098a13d80ff",
+  "verified_at": "2026-10-07T12:49:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "457487106442dc234fef0e997ecf91337eb007725d6184e2aee19b66845e8d50",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "6bcf8552e8424c6eb84c646c71c2b40444ccfa33481452526064270a1437600c"
+  },
+  "routes": [
+    "/standalone/availability?view=fleet",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined content after merging origin/main 83ec32ee71 (silent-agent RAID last-known state in the Machines RAID cell and the drawer RAID card) into this branch (shared relative-time clock for drawer change ages and the Machines stale fallback)",
+    "Private mock stack (backend :7741 rebuilt from this merged tree, Vite :5261 serving it) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled; ten one-minute steps per surface",
+    "Availability fleet drawer (first tile) with injected change history and resource intelligence: 'Alert moved' / 'State transition' at 5 mins / Occurred 7 mins / 9 mins ago, then 15 / 17 / 19 mins ago; Context card latest change 'Alert moved' 5m ago -> 15m ago, at 1440 and 390",
+    "Machines table (Apollo-114, Meridian-848, Spectrum-709) at 1440 and 390: dots emerald -> amber through the five-minute stale fallback, metrics kept, Last seen 'just now' -> '10m ago'; no mock agent is silent, so the RAID last-known presentation stayed current",
+    "No page errors at either viewport; Infrastructure, standalone, shared, Workloads and update-evidence suites (258 files) pass and tsc is clean"
+  ],
+  "interactions": [
+    "Opened the first availability fleet tile's drawer, expanded Platform details and Show context, held the stream and advanced the page clock",
+    "Loaded /standalone/machines, held the stream and advanced the page clock"
+  ]
+}
