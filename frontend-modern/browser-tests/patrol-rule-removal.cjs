@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
+const { createPublicationFixtureServer } = require('./publication-fixture-server.cjs');
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const files = [
   'src/api/patrol.ts',
@@ -35,16 +36,20 @@ assert.equal(
 );
 
 async function journey(
-  root, engine, width, parent = false, resume = false, visualOnly = false, compatibility = false,
+  root,
+  engine,
+  width,
+  parent = false,
+  resume = false,
+  visualOnly = false,
+  compatibility = false,
 ) {
-  process.chdir(root);
-  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({
+  const server = createPublicationFixtureServer(
     root,
-    configFile: path.join(root, 'vite.config.ts'),
-    cacheDir: path.join(output, `vite-${parent ? 'parent' : engine}-${width}`),
-    server: { host: '127.0.0.1', port: 5297, strictPort: true, watch: null },
-  });
+    5297,
+    'browser-tests/patrol-rule-removal.html',
+  );
+  report.compiled = server.binding;
   let browser;
   let page;
   const result = {
@@ -378,10 +383,14 @@ async function journey(
         }
         return observed;
       });
-      assert.deepEqual(result.abortCompatibility.map((x) => x.calls), [1, 0, 0]);
-      assert.deepEqual(result.abortCompatibility.map((x) => x.errorName), [
-        'AbortError', 'AbortError', 'AbortError',
-      ]);
+      assert.deepEqual(
+        result.abortCompatibility.map((x) => x.calls),
+        [1, 0, 0],
+      );
+      assert.deepEqual(
+        result.abortCompatibility.map((x) => x.errorName),
+        ['AbortError', 'AbortError', 'AbortError'],
+      );
       assert.equal(result.requests.filter((r) => r.path === '/api/aborted-confirmation').length, 0);
       result.checks.push(
         'Default pre-aborted API calls delegate once to native fetch; strict retry:false and expectedOrgID opt-ins stop before dispatch. All reject AbortError without a network request.',

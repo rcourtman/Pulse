@@ -1,4 +1,4 @@
-// Production component source in the existing offline Vite preview.
+// Precompiled production component source in the offline static preview.
 // No installation, full application build, guest operation or external service.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,12 +6,13 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { chromium, webkit } = require('playwright');
+const { createPublicationFixtureServer } = require('./publication-fixture-server.cjs');
 const root = '/workspace/frontend-modern';
 const output = '/workspace/tmp/guest-row-memory-browser';
 const origin = 'http://127.0.0.1:5332';
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const manifest = {
-  mode: 'source-dev-preview',
+  mode: 'precompiled-source-fixture',
   runtime: Object.fromEntries(
     [
       'frontend-modern/src/components/Workloads/GuestRow.tsx',
@@ -32,7 +33,7 @@ const result = {
   captures: [],
   cleanup: {},
   limits:
-    'Production GuestRow, StackedMemoryBar, MetricMiniSparkline, drawer and actual source CSS in a dev preview; synthetic selected memory/history only. This is not a production application build. No full App, native QGA, thaw, filesystem writes, reporter, installed/release or physical-device acceptance.',
+    'Production GuestRow, StackedMemoryBar, MetricMiniSparkline, drawer and actual source CSS in a precompiled fixture; synthetic selected memory/history only. This is not a production application build. No full App, native QGA, thaw, filesystem writes, reporter, installed/release or physical-device acceptance.',
 };
 assert.equal(
   result.playwright,
@@ -42,13 +43,12 @@ assert.equal(
 );
 (async () => {
   const started = Date.now();
-  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({
+  const server = createPublicationFixtureServer(
     root,
-    configFile: path.join(root, 'vite.config.ts'),
-    cacheDir: output + '/cache',
-    server: { host: '127.0.0.1', port: 5332, strictPort: true },
-  });
+    5332,
+    'browser-tests/guest-row-memory-provenance.html',
+  );
+  result.compiled = server.binding;
   await server.listen();
   let browser;
   try {
@@ -339,9 +339,7 @@ assert.equal(
     if (browser) await browser.close();
     result.cleanup.browser_closed = true;
     await server.close();
-    const esbuild = await import(path.join(root, 'node_modules/esbuild/lib/main.js'));
-    esbuild.stop();
-    result.cleanup.compiler_stop_requested = true;
+    result.cleanup.compiler_started = false;
     result.cleanup.server_closed = true;
     result.elapsed_ms = Date.now() - started;
     fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');

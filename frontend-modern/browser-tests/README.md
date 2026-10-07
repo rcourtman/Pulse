@@ -38,6 +38,7 @@ Three replacement `rawData` frames per view change rendered names, rather than
 merely waiting on a timer with unchanged content.
 
 Assertions cover:
+
 - Coverage: fewer rendered rows than the inventory (windowing enabled), non-zero
   scroll, expanded restore evidence, focused expansion button and route retained.
 - By date: changed workload name, non-zero scroll, focused navigation link and route
@@ -55,6 +56,30 @@ Narrow-width interaction is keyboard-driven, not touch or Brave qualification.
 The test does not cover Settings Manage editing, Authentication strategy selection,
 expansion padding, arbitrary inventory churn/reordering, or a deployed release.
 Passing is not grounds to close the mixed report #1869.
+
+## Final guest and Patrol presentation fixtures
+
+Prepare the existing guest filesystem, memory, reading-help and Patrol-rule
+fixtures once, before browser execution, from `frontend-modern`:
+
+```sh
+node browser-tests/build-publication-fixtures.mjs
+node --test browser-tests/publication-fixture-server.test.cjs
+```
+
+The four corresponding browser runners use the resulting static bundles in
+`tmp/publication-final-static` at the repository root. They no longer compile
+or start Vite inside the browser process tree. Rebuild after source changes:
+the server refuses altered imported sources, Tailwind scan inputs, the dependency
+lock, runner code, compiled assets or the shipped safety document before listening.
+Only bound assets and the explicit reading-help Docs route are served; missing
+JS, CSS and Markdown stay errors rather than receiving an HTML fallback.
+
+The builder's `prepared-not-browser-verified` result and the server tests are
+preparation evidence only. Desktop/phone interactions, inspected captures,
+own-parent and final-content receipts still require a real browser pass. No
+native guest-agent, thaw, filesystem-write, installed or publication acceptance
+is established by compiling these synthetic fixtures.
 
 ## CI and release evidence
 
