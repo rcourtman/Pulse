@@ -3,6 +3,7 @@ import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from
 import {
   ChartsAPI,
   type AllMetricsHistoryResponse,
+  type ChartData,
   type ResourceType,
   type SingleMetricHistoryResponse,
   type WorkloadChartsResponse,
@@ -12,13 +13,9 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
-import {
-  fetchInfrastructureSummaryAndCache,
-  type InfrastructureSummaryFetchResult,
-} from '@/utils/infrastructureSummaryCache';
-import { fetchWorkloadsSummaryAndCache } from '@/utils/workloadsSummaryCache';
 
 import {
+  buildInfrastructureHistoryChartMap,
   findChartDataForCandidates,
   getMetricSparklineSeriesFromChartData,
   getNodeChartKeyCandidates,
@@ -61,10 +58,7 @@ const EMPTY_WORKLOAD_CHARTS_RESPONSE: WorkloadChartsResponse = {
   stats: { oldestDataTimestamp: 0 },
 };
 
-const EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE: InfrastructureSummaryFetchResult = {
-  map: new Map(),
-  oldestDataTimestamp: null,
-};
+const EMPTY_INFRASTRUCTURE_CHART_MAP = new Map<string, ChartData>();
 
 const ROW_HISTORY_PREFETCH_CONCURRENCY = 4;
 const ROW_HISTORY_INITIAL_PREFETCH_COUNT = 6;
@@ -130,11 +124,9 @@ export function useWorkloadTableMetricHistory(
     source: workloadHistoryScope,
     fetcher: (scope, signal) => {
       const parsed = parseHistoryScope(scope);
-      return fetchWorkloadsSummaryAndCache(parsed.range, {
-        caller: 'WorkloadTableMetricHistory',
+      return ChartsAPI.getWorkloadCharts(parsed.range, signal, {
         maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
-        nodeId: parsed.nodeScope === '__all__' ? null : parsed.nodeScope,
-        signal,
+        nodeId: parsed.nodeScope === '__all__' ? undefined : parsed.nodeScope,
       });
     },
     initialValue: EMPTY_WORKLOAD_CHARTS_RESPONSE,
@@ -143,17 +135,15 @@ export function useWorkloadTableMetricHistory(
     retainPreviousValueOnSourceChange: false,
   });
 
-  const infrastructureHistory = createNonSuspendingQuery<InfrastructureSummaryFetchResult, string>({
+  const infrastructureHistory = createNonSuspendingQuery<Map<string, ChartData>, string>({
     source: infrastructureHistoryScope,
     fetcher: (scope, signal) => {
       const parsed = parseHistoryScope(scope);
-      return fetchInfrastructureSummaryAndCache(parsed.range, {
-        caller: 'WorkloadTableMetricHistory',
+      return ChartsAPI.getInfrastructureSummaryCharts(parsed.range, signal, {
         metrics: WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
-        signal,
-      });
+      }).then(buildInfrastructureHistoryChartMap);
     },
-    initialValue: EMPTY_INFRASTRUCTURE_CHARTS_RESPONSE,
+    initialValue: EMPTY_INFRASTRUCTURE_CHART_MAP,
     cacheKey: (scope) => `workload-table-infra-history:${scope}`,
     pollMs: WORKLOAD_TABLE_HISTORY_POLL_MS,
     retainPreviousValueOnSourceChange: false,
@@ -340,7 +330,7 @@ export function useWorkloadTableMetricHistory(
 
   const getNodeMetricSeries = (node: Node, metric: WorkloadTableMetric) => {
     const chartData = findChartDataForCandidates(getNodeChartKeyCandidates(node), [
-      infrastructureHistory.value().map,
+      infrastructureHistory.value(),
     ]);
     return getMetricSparklineSeriesFromChartData(chartData, metric);
   };

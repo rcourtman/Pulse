@@ -5019,28 +5019,14 @@ Realtime resource adapters must defensively coalesce split host identities by
 the same source-bridge rule as the API boundary so a transient backend rebuild
 cannot surface duplicate infrastructure rows while the next canonical REST
 snapshot is settling.
-Infrastructure summary and detail surfaces now also use the shared normalized
-identity lookup helper from `frontend-modern/src/utils/resourceIdentity.ts`
-so dotted hostnames and alias variants stay consistent between the shared
-table, drawer, and detail views instead of each component carrying its own
-identifier-variant logic.
-Those same surfaces also share the trimmed-string helper from
-`frontend-modern/src/utils/stringUtils.ts` so shared components do not keep
+Shared identity helpers in `frontend-modern/src/utils/resourceIdentity.ts`
+and `frontend-modern/src/utils/agentResources.ts` use the trimmed-string helper
+from `frontend-modern/src/utils/stringUtils.ts` so shared components do not keep
 their own copy of the same whitespace-trimming identity logic.
-The shared infrastructure summary table now also follows the same
-shell/runtime/model shape as the rest of the modernized primitives.
-`frontend-modern/src/components/shared/InfrastructureSummaryTable.tsx` stays
-the table shell, `frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts`
-owns alert wiring, sort state, breakpoint state, and expanded-row lifecycle,
-`frontend-modern/src/components/shared/infrastructureSummaryTableModel.ts`
-owns sorting, count, identity-alias, and linked-agent derivation, and
-`frontend-modern/src/components/shared/InfrastructureSummaryTableRow.tsx`
-owns the per-row render/runtime surface. Future work should extend those
-owners instead of pushing websocket, alert, or identity plumbing back into the
-shared table shell.
-The shared infrastructure summary row may consume alert-backed metric
-thresholds from the table state, but threshold selection itself remains
-alerts-owned through `frontend-modern/src/stores/alertsActivation.ts` and
+Shared metric cells such as
+`frontend-modern/src/components/shared/responsive/ResponsiveMetricCell.tsx`
+take resolved warning/critical thresholds from the table that renders them,
+but threshold selection itself remains alerts-owned through `frontend-modern/src/stores/alertsActivation.ts` and
 `frontend-modern/src/utils/metricThresholds.ts`; shared primitive cells and rows
 must only pass resolved warning/critical values into metric presentation.
 That alerts-owned boundary distinguishes detector state from external
@@ -5050,31 +5036,6 @@ applicable, but they must not derive visibility or threshold presentation from
 `activationState`. The activation control is presented as notification
 delivery only, and its localized paused copy must state that detection and
 in-product active-alert visibility continue.
-The shared infrastructure selector now follows that same owner split.
-`frontend-modern/src/components/shared/InfrastructureSelector.tsx` stays the
-render shell, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
-owns selected-node state, tab-reset and escape-key lifecycle, plus hook-backed
-resource and recovery composition, and
-`frontend-modern/src/components/shared/infrastructureSelectorModel.ts` owns
-resource-family counts, agent-backed node-summary projection, unified-node and
-PBS-instance projection, and recovery backup-count derivation. Future
-infrastructure-selector work should extend those owners instead of pushing
-resource aggregation or selection lifecycle back into the shared shell.
-That shared selector projection must also preserve canonical local operator
-identity for agent-backed infrastructure labels. Governed or AI-safe resource
-summaries may inform policy/detail surfaces, but the selector's summary and
-drawer-facing agent labels must continue to use the same local instance
-identity boundary as the operator-facing infrastructure tables so multiple PBS,
-PMG, or other governed resources remain distinguishable.
-The shared infrastructure details drawer now follows that same owner split.
-`frontend-modern/src/components/shared/InfrastructureDetailsDrawer.tsx` stays
-the render shell, `frontend-modern/src/components/shared/useInfrastructureDetailsDrawerState.ts`
-owns tab-selection runtime, and
-`frontend-modern/src/components/shared/infrastructureDetailsDrawerModel.ts`
-owns canonical metadata-id and discovery-hostname derivation. Future
-infrastructure-details-drawer work should extend those owners instead of
-pushing tab state or resource-identity normalization back into the shared
-shell.
 Object detail drawers follow one operator-first information hierarchy across
 platform implementations. Overview must begin with `DrawerAttentionSection`
 when active alert or health evidence exists and show the actual problem text,
@@ -5186,8 +5147,8 @@ That shell must also stay passive with respect to data ownership: future
 overview trend cards may render summary-range controls and operator-facing
 empty or error copy only after they have a governed owner, and they must not
 reintroduce route-local metrics-history fetch loops for CPU and memory
-sparklines when the canonical infrastructure summary surface already owns the
-chart contract.
+sparklines; the infrastructure and workloads summary chart routes already own
+that chart contract.
 The shared density map now follows that same owner split.
 `frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
@@ -7582,10 +7543,8 @@ storage-only live chart primitive for the same telemetry.
 The shared shell boundary now also includes
 `frontend-modern/src/contexts/appRuntime.ts` as the only neutral owner for
 app-level websocket and dark-mode consumption. Shared shells and primitives
-such as `frontend-modern/src/components/Settings/Settings.tsx`,
-`frontend-modern/src/components/shared/TagBadges.tsx`, and
-`frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts`
-may consume that module, but they must not import `@/App` or recreate shell
+such as `frontend-modern/src/components/Settings/Settings.tsx` and
+`frontend-modern/src/components/shared/TagBadges.tsx` may consume that module, but they must not import `@/App` or recreate shell
 providers. `frontend-modern/src/App.tsx` owns provider placement; primitives
 own reusable consumption only.
 That same shared settings-shell and banner boundary now also owns demo-mode

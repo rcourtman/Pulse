@@ -6,10 +6,11 @@ import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
 
 import { useWorkloadTableMetricHistory } from '../useWorkloadTableMetricHistory';
 import {
+  WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
+  WORKLOAD_TABLE_HISTORY_MAX_POINTS,
   WORKLOAD_TABLE_HISTORY_POLL_MS,
   type WorkloadTableMetricHistoryRange,
 } from '../workloadMetricHistoryModel';
@@ -87,7 +88,6 @@ function SeriesProbe(props: { series: 'guests' | 'nodes' }) {
 afterEach(() => {
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
-  __resetInfrastructureSummaryFetchesForTests();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -131,6 +131,49 @@ describe('useWorkloadTableMetricHistory', () => {
       expect(idleSpy).not.toHaveBeenCalled();
     },
   );
+
+  it('reads both estate summaries straight from the charts API without persisting them', async () => {
+    const workloadSpy = vi.spyOn(ChartsAPI, 'getWorkloadCharts').mockResolvedValue({
+      data: { [guest.id]: { cpu: point(11) } },
+      dockerData: {},
+      guestTypes: {},
+      timestamp: 2,
+      stats: { oldestDataTimestamp: 1 },
+    });
+    const infrastructureSpy = vi
+      .spyOn(ChartsAPI, 'getInfrastructureSummaryCharts')
+      .mockResolvedValue({
+        nodeData: {},
+        agentData: { [node.id]: { cpu: point(33) } },
+        timestamp: 2,
+        stats: { oldestDataTimestamp: 1 },
+      });
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+    render(() => (
+      <>
+        <SeriesProbe series="guests" />
+        <SeriesProbe series="nodes" />
+      </>
+    ));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('series-values').map((el) => el.textContent)).toEqual([
+        'guest=11 node=none',
+        'guest=none node=33',
+      ]);
+    });
+    expect(workloadSpy).toHaveBeenCalledWith('1h', expect.any(AbortSignal), {
+      maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
+      nodeId: undefined,
+    });
+    expect(infrastructureSpy).toHaveBeenCalledWith('1h', expect.any(AbortSignal), {
+      metrics: WORKLOAD_TABLE_HISTORY_INFRA_METRICS,
+    });
+    // The query layer retains each read across remounts; nothing reads a
+    // persisted copy, so the summaries must not be written to storage.
+    expect(setItemSpy).not.toHaveBeenCalled();
+  });
 
   it('bounds slow-estate warming and prioritizes a distant active guest', async () => {
     const guests = Array.from({ length: 500 }, (_, index) => ({

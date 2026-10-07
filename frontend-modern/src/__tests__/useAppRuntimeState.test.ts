@@ -1052,8 +1052,8 @@ describe('useAppRuntimeState', () => {
   });
 
   it('keeps retired chart cache prewarm out of the authenticated app shell', () => {
-    expect(useAppRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
-    expect(useAppRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
+    expect(useAppRuntimeStateSource).not.toContain('getInfrastructureSummaryCharts');
+    expect(useAppRuntimeStateSource).not.toContain('getWorkloadCharts');
     expect(useAppRuntimeStateSource).not.toContain('requestIdleCallback');
     expect(useAppRuntimeStateSource).not.toContain('App prewarm');
   });

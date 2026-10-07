@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "bd4f6e36c40f2f47658adaf92051694f73ef5fe0",
+  "verified_at": "2026-10-07T11:50:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/utils/infrastructureSummaryCache.ts",
+    "frontend-modern/src/utils/workloadsSummaryCache.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "f5906a562d0a029a67cc64b82b57525ce1ca42753f2163a694513861b4f5f4d3",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "cf481a5bfea04e278750a9238b64f3583e03ae9e1ce764d28216206a3c214d85",
+    "frontend-modern/src/utils/infrastructureSummaryCache.ts": "deleted",
+    "frontend-modern/src/utils/workloadsSummaryCache.ts": "deleted"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change, served by a private DEMO_MODE mock backend (50 Proxmox nodes, 929 guests, PULSE_TELEMETRY=false); an embedded build of the unchanged base ran beside it for comparison. The build base differs from bd4f6e36c4 only by two unused helpers in utils/format.ts and utils/status.ts, which tree-shaking drops",
+    "Proxmox overview in Trends mode at 1440x900: 12 of 12 visible node rows draw CPU, memory and disk sparklines (36 with data) and 140 of 140 rendered guest rows draw history sparklines (420 with data), identical to the base build",
+    "Proxmox overview in Trends mode at 390x844: 6 of 6 node rows (18 sparklines) and 36 of 36 guest rows (108 sparklines) draw history, identical to the base build",
+    "Network: one /api/charts/workloads and one /api/charts/infrastructure read on load and one of each on the next 30-second poll, matching the base build",
+    "Storage: no pulse.infrastructureSummaryCharts.* or pulse.workloadsSummaryCharts.* localStorage keys, no Storage.setItem/removeItem calls on those prefixes and no JSON.stringify output over 200k characters during 75 seconds; the base build serialized 924,249 and 9,629,902 characters per poll (5-31 ms each) and then removed both keys because they exceeded the 900k cap"
+  ],
+  "interactions": [
+    "Demo sign-in, then load /proxmox with the Workloads display mode stored as Trends (sparklines)",
+    "Hold the page through a 30-second history poll and re-count sparklines, chart requests and localStorage keys",
+    "Wrap Storage.setItem/removeItem and JSON.stringify before load to record summary-cache storage traffic and large serializations on both builds",
+    "Screenshot of the node table sparklines at 1440x900"
+  ]
+}
