@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -90,6 +91,7 @@ func TestBuildManualMetadataAndCertificate(t *testing.T) {
 	cfg.IDPIssuer = "issuer"
 	certPEM, _, _ := generateTestCert(t)
 	cfg.IDPCertificate = string(certPEM)
+	certBlock, _ := pem.Decode(certPEM)
 
 	metadata, err := service.buildManualMetadata()
 	if err != nil {
@@ -103,6 +105,14 @@ func TestBuildManualMetadataAndCertificate(t *testing.T) {
 	}
 	if len(metadata.IDPSSODescriptors[0].KeyDescriptors) == 0 {
 		t.Fatal("expected key descriptor with certificate")
+	}
+	// crewjam/saml reads <X509Certificate> content: base64 DER, never PEM.
+	certs := metadata.IDPSSODescriptors[0].KeyDescriptors[0].KeyInfo.X509Data.X509Certificates
+	if len(certs) != 1 {
+		t.Fatalf("expected one signing certificate, got %d", len(certs))
+	}
+	if certs[0].Data != base64.StdEncoding.EncodeToString(certBlock.Bytes) {
+		t.Fatalf("expected the signing certificate as base64 DER, got %.40q", certs[0].Data)
 	}
 
 	cfg.IDPSSOURL = "https://user:pass@idp.example.com/sso"

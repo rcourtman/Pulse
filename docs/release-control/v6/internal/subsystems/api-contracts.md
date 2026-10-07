@@ -6495,6 +6495,27 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same manual SAML configuration must verify signatures with the IdP
+certificate the administrator supplied. With no IdP metadata,
+`SAMLService.buildManualMetadata` in `internal/api/saml_service.go` builds the
+IdP descriptor from `idpSsoUrl`, optional `idpSloUrl` and the PEM signing
+certificate in `idpCertificate` or `idpCertFile`, and must put that certificate
+in the signing `KeyDescriptor` as base64 DER, the `<X509Certificate>` content
+IdP metadata carries. crewjam/saml base64-decodes that field to verify every
+ACS Response and LogoutResponse, so the PEM block it once held failed each
+check with "illegal base64 data" before any key was compared, and no manually
+configured provider could accept a login or complete SLO. The stored
+`idpCertificate` stays the PEM the administrator supplied; only the descriptor
+rebuilt in memory on each load changed, so no saved configuration needs
+migrating. `TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures` in
+`internal/api/contract_test.go` signs an ACS Response and a LogoutResponse with
+one test IdP key and proves an inline-certificate provider, a certificate-file
+provider and a metadata provider accept both alike, while a Response signed by
+another key is refused. The proof enables IdP-initiated responses because
+`SAMLService.ProcessResponse` records no AuthnRequest IDs: with
+`allowIdpInitiated` off, crewjam refuses every ACS Response on `InResponseTo`
+whatever its signature. That is a known open exception, not part of this
+contract.
 That same SSO provider-detail boundary must return the non-secret nested
 provider configuration used by the settings edit form. `GET
 /api/security/sso/providers/{id}` may keep the flat list/card fields for

@@ -8947,6 +8947,14 @@ cookie for any response (the logout request already cleared both), and
 `/api/saml/{id}/logout` refuses a request that carries no session. No agent
 registration, enrolment, install, update or removal path changed.
 
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` changed only so a SAML provider configured with
+`idpSsoUrl` and a PEM `idpCertificate` or `idpCertFile` puts that certificate
+into its in-memory IdP descriptor as base64 DER, which crewjam/saml can read
+when it verifies the IdP's ACS Responses and LogoutResponses. No agent
+registration, enrolment, install, update or removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

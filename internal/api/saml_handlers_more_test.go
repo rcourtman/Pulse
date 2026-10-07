@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -725,4 +727,108 @@ func TestExtractSAMLProviderID(t *testing.T) {
 	if got := extractSAMLProviderID("/api/other/okta/login", "login"); got != "" {
 		t.Fatalf("expected empty provider for non-saml path, got %q", got)
 	}
+}
+
+const samlManualCertTestIdPEntityID = "https://idp.example.com/metadata"
+
+// samlManualCertTestIdP holds an IdP signing key and its PEM certificate, the
+// form an administrator pastes or points IDPCertFile at for a provider
+// configured without IdP metadata. It signs ACS Responses and LogoutResponses
+// the way the real IdP would.
+type samlManualCertTestIdP struct {
+	certPEM []byte
+	idp     *saml.IdentityProvider
+	slo     *samlSLOTestIdP
+}
+
+func newSAMLManualCertTestIdP(t *testing.T) *samlManualCertTestIdP {
+	t.Helper()
+	certPEM, _, key := generateTestCert(t)
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		t.Fatal("decode IdP certificate PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("parse IdP certificate: %v", err)
+	}
+	entityID, err := url.Parse(samlManualCertTestIdPEntityID)
+	if err != nil {
+		t.Fatalf("parse IdP entity ID: %v", err)
+	}
+	const signatureMethod = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+	return &samlManualCertTestIdP{
+		certPEM: certPEM,
+		idp: &saml.IdentityProvider{
+			Key:             key,
+			Certificate:     cert,
+			MetadataURL:     *entityID,
+			SignatureMethod: signatureMethod,
+		},
+		slo: &samlSLOTestIdP{signer: &saml.ServiceProvider{
+			EntityID:        samlManualCertTestIdPEntityID,
+			Key:             key,
+			Certificate:     cert,
+			SignatureMethod: signatureMethod,
+		}},
+	}
+}
+
+// metadataXML publishes the same signing certificate as IdP metadata does,
+// base64 DER inside <X509Certificate>.
+func (idp *samlManualCertTestIdP) metadataXML() string {
+	return `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="` + samlManualCertTestIdPEntityID + `">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <KeyDescriptor use="signing">
+      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <X509Data><X509Certificate>` + base64.StdEncoding.EncodeToString(idp.idp.Certificate.Raw) + `</X509Certificate></X509Data>
+      </KeyInfo>
+    </KeyDescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+}
+
+// acsPost returns the HTTP-POST binding request to the service's ACS carrying
+// a signed, unsolicited (no InResponseTo) Response that identifies alice.
+func (idp *samlManualCertTestIdP) acsPost(t *testing.T, service *SAMLService) *http.Request {
+	t.Helper()
+	spMetadata := service.sp.Metadata()
+	authn := &saml.IdpAuthnRequest{
+		IDP:                     idp.idp,
+		HTTPRequest:             httptest.NewRequest(http.MethodPost, "https://idp.example.com/sso", nil),
+		ServiceProviderMetadata: spMetadata,
+		SPSSODescriptor:         &spMetadata.SPSSODescriptors[0],
+		ACSEndpoint:             &saml.IndexedEndpoint{Binding: saml.HTTPPostBinding, Location: service.sp.AcsURL.String()},
+		Now:                     time.Now(),
+	}
+	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(authn, &saml.Session{
+		ID:         "idp-session-alice",
+		CreateTime: time.Now(),
+		ExpireTime: time.Now().Add(time.Hour),
+		Index:      "idx-alice",
+		NameID:     "alice",
+	}); err != nil {
+		t.Fatalf("make assertion: %v", err)
+	}
+	form, err := authn.PostBinding()
+	if err != nil {
+		t.Fatalf("sign ACS Response: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, service.sp.AcsURL.String(),
+		strings.NewReader(url.Values{"SAMLResponse": {form.SAMLResponse}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return req
+}
+
+// samlRejectionDetail adds crewjam/saml's private reason to a rejected
+// response, which its public error ("Authentication failed") hides.
+func samlRejectionDetail(err error) string {
+	var invalid *saml.InvalidResponseError
+	if errors.As(err, &invalid) && invalid.PrivateErr != nil {
+		return err.Error() + ": " + invalid.PrivateErr.Error()
+	}
+	return fmt.Sprint(err)
 }

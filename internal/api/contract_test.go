@@ -4450,6 +4450,81 @@ func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
 	}
 }
 
+// A SAML provider configured by hand, with the IdP's SSO URL and its PEM
+// signing certificate pasted inline or named by IDPCertFile, verifies the
+// IdP's signatures with that certificate exactly as a provider configured from
+// IdP metadata does: the ACS accepts the IdP's signed Response and reads the
+// user from it, the IdP's signed answer to an SP-initiated logout completes
+// that logout, and a Response signed by any other key is refused. Manual
+// metadata used to hold the certificate as a PEM block where crewjam/saml
+// base64-decodes DER, so every signature check for these providers failed
+// before reaching the key.
+func TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	impostor := newSAMLManualCertTestIdP(t)
+	certFile := filepath.Join(t.TempDir(), "idp-signing.pem")
+	if err := os.WriteFile(certFile, idp.certPEM, 0o600); err != nil {
+		t.Fatalf("write IdP certificate file: %v", err)
+	}
+	manual := func(inline, file string) *config.SAMLProviderConfig {
+		return &config.SAMLProviderConfig{
+			IDPSSOURL:      "https://idp.example.com/sso",
+			IDPSLOURL:      "https://idp.example.com/slo",
+			IDPEntityID:    samlManualCertTestIdPEntityID,
+			IDPCertificate: inline,
+			IDPCertFile:    file,
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  *config.SAMLProviderConfig
+	}{
+		{name: "IdP metadata", cfg: &config.SAMLProviderConfig{IDPMetadataXML: idp.metadataXML()}},
+		{name: "manual inline certificate", cfg: manual(string(idp.certPEM), "")},
+		{name: "manual certificate file", cfg: manual("", certFile)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// ProcessResponse records no AuthnRequest IDs, so by default
+			// crewjam refuses every Response on InResponseTo. Allowing
+			// IdP-initiated responses skips that check and leaves the
+			// signature, issuer, destination and timing checks to decide.
+			tc.cfg.AllowIDPInitiated = true
+			service, err := NewSAMLService(context.Background(), "okta", tc.cfg, "https://pulse.example.com")
+			if err != nil {
+				t.Fatalf("NewSAMLService: %v", err)
+			}
+
+			result, _, err := service.ProcessResponse(idp.acsPost(t, service))
+			if err != nil {
+				t.Fatalf("ACS refused the configured IdP's signed Response: %s", samlRejectionDetail(err))
+			}
+			if result.Username != "alice" {
+				t.Fatalf("ACS read username %q from the Response, want alice", result.Username)
+			}
+			if _, _, err := service.ProcessResponse(impostor.acsPost(t, service)); err == nil {
+				t.Fatal("ACS accepted a Response signed by a key the provider was not given")
+			}
+
+			dataPath := t.TempDir()
+			resetSessionStoreForTests()
+			t.Cleanup(resetSessionStoreForTests)
+			resetCSRFStoreForTests()
+			t.Cleanup(resetCSRFStoreForTests)
+			InitSessionStore(dataPath)
+			InitCSRFStore(dataPath)
+			router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+			router.samlManager.services["okta"] = service
+			requestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "alice"))
+			rec := deliverSAMLTestLogoutResponse(router, idp.slo.redirectQuery(t, requestID), "")
+			if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/?logout=success" {
+				t.Fatalf("SLO refused the configured IdP's signed LogoutResponse: status=%d location=%q body=%q",
+					rec.Code, rec.Header().Get("Location"), rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)

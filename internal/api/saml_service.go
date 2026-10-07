@@ -359,8 +359,11 @@ func (s *SAMLService) addIDPCertificate(metadata *saml.EntityDescriptor) error {
 				Use: "signing",
 				KeyInfo: saml.KeyInfo{
 					X509Data: saml.X509Data{
+						// Base64 DER, as <X509Certificate> carries it in IdP
+						// metadata: crewjam/saml base64-decodes this field to
+						// verify signatures and cannot read a PEM block.
 						X509Certificates: []saml.X509Certificate{
-							{Data: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}))},
+							{Data: base64.StdEncoding.EncodeToString(cert.Raw)},
 						},
 					},
 				},

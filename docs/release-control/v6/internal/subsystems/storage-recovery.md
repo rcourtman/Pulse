@@ -6886,6 +6886,15 @@ refuses a LogoutResponse that does not answer one of them. The records are not
 persisted, and the SLO handler no longer writes session state. No storage,
 retention, backup, migration or recovery path is added or moved.
 
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` now encodes a manually configured SAML IdP
+signing certificate as base64 DER in the IdP descriptor it rebuilds in memory
+on each load. The saved settings are read as before: `idpCertificate` holds
+the PEM the administrator pasted and `idpCertFile` the path of a PEM file, so
+nothing persisted changes or needs migrating. No storage, retention, backup,
+migration or recovery path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
