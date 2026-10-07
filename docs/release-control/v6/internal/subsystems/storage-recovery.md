@@ -4416,10 +4416,13 @@ one that returns must stay page-scoped instead of collapsing to the expanded
 row or replacing the page overview with row-local empty states.
 That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
-auto-scroll the table. Reveal belongs only to deliberate focus: a focused
-pool or disk row may switch to the owning view or expand the owning group
-through the bridge's `revealActiveSeries` callback, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge.
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group, and a pinned pool-group
+header that sits off-screen scrolls into view through the same bridge. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through

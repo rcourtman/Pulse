@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "48c2d6cdce8d019151e3567873de88e21b76bb22",
+  "verified_at": "2026-10-07T18:53:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/shared/contextualFocus.ts",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "9f4734cf74cb44b7db9222bd08d25fa2ae52d787e192bd07e36640e2e81cde6d",
+    "frontend-modern/src/components/shared/contextualFocus.ts": "4dc89355f978c9dfee90cb0c780976504ac4e7e158bbe7ddf02d566c57211fff",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts": "9e4f4f9275cd01f2a19b98c1c795eec5c7f37be8f5a002170a94f400bdae4625",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts": "52c46c227696b5dc9713d0cc3d9b76e434fecafeeda46edb064858b0328732ee"
+  },
+  "routes": [
+    "/proxmox/storage",
+    "/proxmox/storage?tab=disks",
+    "/proxmox/storage?group=node&resource=ceph-rbd",
+    "/proxmox/storage?resource=ceph-rbd",
+    "/proxmox/storage?group=node",
+    "/proxmox/storage?group=node&summaryGroup=storage:node:West%20Production%20F",
+    "/proxmox",
+    "/proxmox?resource=<guest id>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private 12-node mock stack (backend :7783, Vite :5323 from the landing clone). One Playwright scenario script ran with the four runtime files swapped back to origin/main (before) and with this change (after) at 1440x900 and 390x844, then again after rebasing onto 71a723abb1 with the backend rebuilt from that tree; the final parent adds only #2677 (Patrol correlation fetch), which touches none of these files; no page errors in any run",
+    "Storage pools: hovering 8 rows marks each data-summary-row-active and never moves the page; clicking a lower pool opens its inline detail and scrolls just enough to show the row header and top of the detail; Escape closes it; identical before and after",
+    "Storage deep link ?resource=ceph-rbd opens the Ceph pool detail in view; with group=node, clicking a group header pins it (summaryGroup in the URL, header marked active); a summaryGroup deep link pins and scrolls toward the last group, landing the header in or just below view with the same timing spread before and after",
+    "Storage Physical Disks: clicking a lower disk opens its detail with the same reveal, and focus stays on the Physical Disks view; pool focus stays on the pools view; identical before and after",
+    "Storage in-app link: with group=node, collapsing the shared group with its disclosure button hides ceph-rbd; a client-side navigation to ?resource=ceph-rbd then reopens the group and lands the Ceph pool detail in view, at both widths, identical before and after",
+    "Workloads (/proxmox): hovering guest rows marks them active; clicking a lower guest opens its inline drawer in view and Escape closes it; a ?resource deep link opens the drawer in view; identical before and after",
+    "Cost: window scroll listeners drop from 2 to 1 and resize by one on both pages; getComputedStyle calls during 8 row hovers fall 128 to 0 (Storage) and 175-193 to 13-39 (Workloads), during 10 scroll steps 320 to 0 and 274-472 to 130",
+    "Pre-existing on main and unchanged here: with a pool open, Storage scrolls itself back to it a few seconds after scrolling away (disks view and Workloads do not), and collapsing the group holding the open pool bounces it open; traced to the reveal effect tracking reads inside revealActiveSeries, left for a follow-up"
+  ],
+  "interactions": [
+    "Hovered 8 rows then scrolled the app shell 10 steps on Storage and Workloads with window listener and getComputedStyle counters installed before load",
+    "Clicked a pool row, a physical disk row and a guest row near the bottom, measured the row and detail rectangles, pressed Escape",
+    "Loaded the ceph-rbd, summaryGroup and guest resource deep links, repeating the summaryGroup link four times per width",
+    "Collapsed the shared storage group via its disclosure button, then pushed /proxmox/storage?group=node&resource=ceph-rbd through the router",
+    "Clicked a storage group header to pin it, and clicked the header of the group holding an open pool",
+    "Scrolled the shell to the top with a pool, a disk and a guest open and sampled the scroll position every 500 ms for 12 s"
+  ]
+}
