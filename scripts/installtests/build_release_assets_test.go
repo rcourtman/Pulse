@@ -5359,3 +5359,20 @@ func TestCITestCompilationPreservesChecks(t *testing.T) {
 		}
 	}
 }
+
+func TestDockerModuleDownloadKeepsPinnedGraphAndBoundedRecovery(t *testing.T) {
+	assertFileContainsAll(t, repoFile("Dockerfile"),
+		"COPY go.mod go.sum ./\nCOPY scripts/go-mod-download.sh /usr/local/bin/pulse-go-mod-download",
+		"--mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod",
+		"sh /usr/local/bin/pulse-go-mod-download",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "go-mod-download.sh"),
+		"timeout 180 go mod download", "[ \"$attempt\" -eq 3 ]", "INTERNAL_ERROR; received from peer",
+		"exit !(seen && !unknown)",
+	)
+	// The automatic script-smoke discovery must execute the behavioural proof,
+	// not leave Docker's new recovery path guarded only by text assertions.
+	if _, err := os.Stat(repoFile("scripts", "tests", "test_go_mod_download.py")); err != nil {
+		t.Fatalf("missing actual-shell module-download proof: %v", err)
+	}
+}

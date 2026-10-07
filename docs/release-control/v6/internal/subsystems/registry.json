@@ -4546,6 +4546,7 @@
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
         "scripts/generate-release-notes.sh",
+        "scripts/go-mod-download.sh",
         "scripts/hot-dev-bg.sh",
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
@@ -5136,6 +5137,19 @@
             "exact_files": [
               ".github/scripts/tests/test_demo_runtime_transaction.py",
               "scripts/installtests/demo_transaction_test.go"
+            ]
+          },
+          {
+            "id": "go-module-download-runtime",
+            "label": "exact Docker Go module-download recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/go-mod-download.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_go_mod_download.py"
             ]
           }
         ],
