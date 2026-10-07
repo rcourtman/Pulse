@@ -3270,6 +3270,76 @@ ownership is `internal/alerts/alert_identity_migration_test.go`,
 `internal/monitoring/monitor_alert_override_migration_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
 
+### Alert config snapshots are owned copies
+
+`Manager.GetConfig()` returns `AlertConfig.Clone()`, a typed deep copy that
+shares no map, slice or pointer with the live config (custom rule filter
+values are copied as decoded JSON values). Callers encode, persist
+and edit that snapshot outside `m.mu`: the GET config handler, alert
+activation, the identity migration, backup evaluation and diagnostics. It used
+to be a shallow copy, so `SaveAlertConfig` normalizing it in place, or
+`UpdateConfig` re-normalizing the overrides of a re-applied snapshot, wrote the
+live maps while evaluation or another encoder read them, and Go aborted Pulse
+with a concurrent map write. `SaveAlertConfig` also clones before normalizing,
+because a config just handed to `UpdateConfig` is the live config. Persistence
+keeps an explicit `0` type-level delay as no delay on save and load, matching
+`NormalizeTimeThresholds`. It used to store and load it as the 5-second factory
+delay, which the noisy-gauge rule stretches to 300 seconds for memory and
+temperature, and the shared map write was what made the running manager agree.
+Pulse saves never wrote a `0`, so only a newly sent or hand-edited `0` changes
+meaning. `internal/alerts/config/clone_test.go`
+fills every field and fails when a new reference field is not copied.
+Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
+`internal/config/persistence_alert_ownership_test.go`.
+
+### Alert evaluation owns the thresholds it normalizes
+
+Host, guest and Docker container evaluation copy what they read from
+`m.config` while holding `m.mu`, and only then fill in defaults.
+`CheckHost` and `CheckGuest` clone a per-disk
+override's `Disk` threshold before `ensureHysteresisThreshold` sets a missing
+`Clear` to the trigger minus 5. They used to normalize the live override's
+pointer after unlocking, so a `GetConfig()` clone under the read lock raced
+the write, and the saved override changed to whatever the last poll filled in.
+The live override now keeps the clear it was saved with, and the config API
+returns that value. Docker container evaluation resolves its thresholds from
+cloned `DockerDefaults` plus the override under the same lock, and reads the
+restart-loop and memory-limit settings under the lock. It used to point into
+`m.config.DockerDefaults` with no lock while `UpdateConfig` replaced
+`m.config`. The test-only `getThresholdForMetricFromConfig`, which normalized
+in place, is gone. `internal/alerts/alerts_test.go`
+`TestAlertEvaluationLeavesTheLiveConfigToTheLock` runs host, guest and Docker
+evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
+`-race`.
+
+### Config-save reevaluation judges a filesystem alert by its own threshold
+
+`UpdateConfig` re-judges every active alert, and a filesystem usage alert's
+threshold resolves through the same per-filesystem helper its evaluator uses.
+`hostDiskUsageThresholdNoLock` resolves an agent filesystem
+(`agent:<host>/disk:<label>`): its own override, then the `DiskFillByType`
+threshold for a hardware type inferred from the device while the host's disk
+alerting is on, then the host's disk threshold. `guestDiskUsageThresholdNoLock`
+resolves a guest filesystem (`<guestID>-disk-<key>`): its `guest-disk:`
+override, then the guest's disk threshold. `CheckHost` and `CheckGuest` call
+them under the read lock, and `resolveHostAlertThresholdsNoLock` and
+`resolveGuestAlertThresholdsNoLock` call them for reevaluation. Both return an
+override or per-type threshold as an owned copy. A guest filesystem alert
+resolves its guest's threshold, override and identity-based custom rules by the
+canonical `instance:node:vmid` guest ID that `parseGuestAlertIdentity` reads
+from its resource ID. Custom rules that filter on live metrics still see no
+readings there, as for every reevaluated guest alert. Reevaluation used to
+judge agent filesystems by the host threshold, and guest filesystems without
+their `guest-disk:` override or the guest's own override, because the
+filesystem's resource ID names no guest. Any settings save resolved an alert a
+per-disk threshold of 70 raised at 80 under a default of 90, notifying
+recovery, and the next poll raised it again as a new alert.
+`internal/alerts/threshold_resolution_shared_test.go`
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` covers an agent
+filesystem override, an NVMe fill threshold, a guest filesystem override and a
+guest override: an unchanged save must keep the alert, and a save lifting the
+trigger above the reading must resolve it.
+
 ### Versioned alert-intent policy
 
 The alerts runtime owns one versioned alert-intent document and its durable
@@ -4108,3 +4178,15 @@ and first fresh healthy poll send no recovery; confirmed recovery sends one
 resolved receipt with the original occurrence identity, and the queue drains
 without failed/DLQ work. This is synthetic callback/receiver acceptance, not a
 native appliance or external webhook-provider result.
+
+### Composed host filesystem threshold ownership
+
+The shared filesystem resolver preserves the explicit host or linked-resource
+Disk override ahead of per-hardware-type defaults, for both host reports and
+configuration-save reevaluation. A filesystem-specific override still takes
+precedence. Disabling that filesystem releases its canonical usage metric and
+pending intent, retaining the reviewed agent/node ownership semantics.
+`TestHostDiskOverrideBeatsDiskFillByType` checks agent and inherited overrides
+through a configuration save and the next report without losing the occurrence;
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` retains per-filesystem
+and per-type controls. This is source composition, not installed delivery proof.

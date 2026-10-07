@@ -352,8 +352,19 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	resourceType := "app-container"
 	containerTags := dockerLabelTags(container.Labels)
 
+	// Resolve the metric thresholds while the lock is held: the Docker defaults
+	// are fields of m.config, which UpdateConfig replaces, and the override
+	// still points into it. applyThresholdOverride clones what it keeps.
 	m.mu.RLock()
 	overrideConfig, hasOverride := m.lookupDockerContainerOverrideNoLock(host.ID, container.Name, resourceID)
+	thresholds := ThresholdConfig{
+		CPU:    cloneThreshold(&m.config.DockerDefaults.CPU),
+		Memory: cloneThreshold(&m.config.DockerDefaults.Memory),
+		Disk:   cloneThreshold(&m.config.DockerDefaults.Disk),
+	}
+	if hasOverride {
+		thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
+	}
 	m.mu.RUnlock()
 	if hasOverride && overrideConfig.Disabled {
 		// Alerts disabled via override; clear any existing alerts and skip evaluation.
@@ -376,16 +387,6 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 		m.clearDockerContainerMetricAlerts(resourceID, "cpu", "memory", "disk")
 	} else {
 		m.clearDockerContainerStateAlert(resourceID)
-
-		// Use Docker-specific defaults for containers
-		thresholds := ThresholdConfig{
-			CPU:    &m.config.DockerDefaults.CPU,
-			Memory: &m.config.DockerDefaults.Memory,
-			Disk:   &m.config.DockerDefaults.Disk,
-		}
-		if hasOverride {
-			thresholds = m.applyThresholdOverride(thresholds, overrideConfig)
-		}
 
 		if thresholds.CPU != nil {
 			cpuCapacityPercent := models.DockerContainerCPUCapacityPercent(container, host.CPUs)
@@ -998,6 +999,8 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 	now := time.Now()
 
+	m.mu.Lock()
+
 	// Get config values with defaults
 	restartThreshold := m.config.DockerDefaults.RestartCount
 	if restartThreshold == 0 {
@@ -1007,8 +1010,6 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	if timeWindow == 0 {
 		timeWindow = 300 // Default: 5 minutes (300 seconds)
 	}
-
-	m.mu.Lock()
 
 	record, exists := m.dockerRestartTracking[resourceID]
 	if !exists {
@@ -1164,11 +1165,13 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
 
 	// Get config values with defaults
+	m.mu.RLock()
 	warnThreshold := float64(m.config.DockerDefaults.MemoryWarnPct)
+	criticalThreshold := float64(m.config.DockerDefaults.MemoryCriticalPct)
+	m.mu.RUnlock()
 	if warnThreshold == 0 {
 		warnThreshold = 90.0 // Default: 90%
 	}
-	criticalThreshold := float64(m.config.DockerDefaults.MemoryCriticalPct)
 	if criticalThreshold == 0 {
 		criticalThreshold = 95.0 // Default: 95%
 	}

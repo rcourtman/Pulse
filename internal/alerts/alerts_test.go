@@ -2756,6 +2756,101 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	}
 }
 
+// Host and guest evaluation used to fill in the Clear of a disk override's
+// threshold after dropping m.mu, writing through the live config's pointer
+// while GetConfig cloned it under the read lock, and Docker evaluation read
+// m.config.DockerDefaults with no lock while UpdateConfig replaced m.config.
+// Evaluation now copies what it needs under m.mu. Run with -race.
+func TestAlertEvaluationLeavesTheLiveConfigToTheLock(t *testing.T) {
+	originalLogLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	t.Cleanup(func() {
+		zerolog.SetGlobalLevel(originalLogLevel)
+	})
+
+	m := newTestManager(t)
+
+	host := models.Host{
+		ID:       "eval-lock",
+		Hostname: "eval-lock",
+		Status:   "online",
+		Disks:    []models.Disk{{Mountpoint: "/", Device: "/dev/sda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	hostDiskOverrideID, _ := hostDiskResourceID(host, host.Disks[0])
+	vm := models.VM{
+		ID:       BuildGuestKey("pve1", "node1", 101),
+		VMID:     101,
+		Name:     "eval-lock",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks:    []models.Disk{{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	guestDiskOverrideID := "guest-disk:guest:pve1:101/disk:boot-dev-vda1"
+	dockerHost := models.DockerHost{
+		ID:          "eval-lock-docker",
+		Hostname:    "eval-lock-docker",
+		DisplayName: "eval-lock-docker",
+		Containers: []models.DockerContainer{{
+			ID:            "abcdef123456",
+			Name:          "web",
+			State:         "running",
+			CPUPercent:    10,
+			MemoryPercent: 10,
+			MemoryUsage:   100 << 20,
+			MemoryLimit:   1 << 30,
+		}},
+	}
+
+	// A disk override saved with only a trigger leaves Clear for evaluation
+	// to default.
+	withTriggerOnlyDiskOverrides := func(cfg AlertConfig) AlertConfig {
+		cfg.Enabled = true
+		cfg.ActivationState = ActivationActive
+		cfg.Overrides = map[string]ThresholdConfig{
+			hostDiskOverrideID:  {Disk: &HysteresisThreshold{Trigger: 90}},
+			guestDiskOverrideID: {Disk: &HysteresisThreshold{Trigger: 90}},
+		}
+		return cfg
+	}
+	m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+
+	m.CheckHost(host)
+	m.CheckGuest(vm, "pve1")
+	live := m.GetConfig()
+	for _, id := range []string{hostDiskOverrideID, guestDiskOverrideID} {
+		if got := live.Overrides[id].Disk.Clear; got != 0 {
+			t.Fatalf("evaluating %s wrote clear %v into the live override", id, got)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			// Resetting the overrides gives evaluation a Clear to fill again.
+			m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+			m.UpdateConfig(m.GetConfig())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = m.GetConfig()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			m.CheckHost(host)
+			m.CheckGuest(vm, "pve1")
+			m.CheckDockerHost(dockerHost)
+		}
+	}()
+	wg.Wait()
+}
+
 func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	m := newTestManager(t)
 

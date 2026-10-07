@@ -4588,12 +4588,12 @@ The recency line beside the header actions also renders coverage
 alongside time when the canonical `getPatrolRecencyPresentation` helper
 returns `resourcesCheckedLabel` from the latest completed run. Render code
 must gate on `<Show when={recency().resourcesCheckedLabel}>` (truthy) so
-zero-coverage runs do not surface a misleading coverage phrase, failed or
-scoped runs use neutral checked wording, and only successful full patrols read
-as verified. Any Patrol assessment shell must pass the same run-history facts
-into `getPatrolAssessmentPresentation` so assessment coverage caveats do not
-contradict the header's verified full-run coverage state; the page renders no
-assessment shell today.
+zero-coverage runs do not surface a misleading coverage phrase. The label
+reads `checked N resources` for every completed run with a positive count
+(full, targeted, follow-up, or errored) and never says `verified`. The page
+renders no assessment shell today; if one returns, its coverage caveats must
+come from the same run-history facts so they do not contradict the coverage
+the header line shows.
 The same header row may surface `Trigger status` when
 `getPatrolTriggerStatusSummary` returns a runtime-relevant value from the
 Patrol status payload. That text is page-owned operational metadata inside the
@@ -4990,6 +4990,16 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
+`frontend-modern/scripts/canonical-platform-audit.mjs` carries no Patrol
+summary-card rule. Its `canonical-patrol/no-local-summary-card-presentation`
+regex matched only text shaped like the deleted summary card's tint ternaries
+on `summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The
+Patrol state hook's `summaryStats` accessor has had no reader since that card
+was deleted, so the accessor and the rule are both gone.
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` is off the audit
+allowlist too: it now holds only the recency and verification presenters,
+which no audit rule needs to exempt, so the audit scans it like any other
+module.
 The Patrol page renders no summary shell today. If one returns, the same
 hierarchy applies inside it: once its primary assessment strip states Patrol's
 current risk and verification basis,
@@ -5005,10 +5015,10 @@ That same summary shell should also keep the shared Pulse surface neutral:
 severity belongs in compact accents, inline readouts, and badges rather than
 turning the whole assessment into a tinted warning banner, nested card, or
 hero-style block that breaks the surrounding operator workflow.
-That same summary-shell rule also applies to timing metadata: if the header,
-verification card, or findings footer already presents the governed Patrol
-activity timestamp, the summary chip row must not add another recency badge
-that competes with those owned timing surfaces.
+That same summary-shell rule also applies to timing metadata: the header
+recency line already presents the governed Patrol activity timestamp, so a
+returning summary chip row must not add another recency badge that competes
+with it.
 The same default-readout rule applies to collapsed Patrol issue rows:
 `MetadataBadge` may carry severity, recurrence, and active decision/work states,
 but the default Patrol page must not render raw lifecycle or investigation
@@ -5358,8 +5368,8 @@ than hardcoded gray palettes; non-gray typed tones may retain their state color
 vocabulary so success, warning, danger, info, and platform-adjacent metadata do
 not collapse into visually identical chips.
 Patrol run-history labels follow this state-badge boundary:
-Patrol may derive the status label and typed variant in
-`patrolRunPresentation.ts` or `patrolSummaryPresentation.ts`, but
+Patrol derives the status label and typed variant in
+`patrolRunPresentation.ts`, but
 `RunHistoryEntry.tsx` must render visible state badges through
 `StatusIndicatorBadge` rather than `runStatus.badgeClass` or a local span.
 The shared segmented selector now follows that same owner split.
@@ -6856,19 +6866,19 @@ same-day scoped follow-up work, that summary shell should also carry a compact
 activity-mix explanation rather than forcing operators to infer why Patrol
 looked busy from a second competing status band.
 That explanation belongs on the verification surface itself when operators are
-reconciling `Recently verified` copy against same-day scoped Patrol bursts; the
+reconciling `Recently checked` copy against same-day scoped Patrol bursts; the
 supporting activity context may complement the readout, but it is not
 sufficient as the only explanation path.
-That same shell rule also owns Patrol recency labels. Shared Patrol header and
-status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
-transport fact and use `Last activity` for scoped or verification work instead
-of collapsing both timestamps back into a generic `Last run` label. Coverage
-phrases on those recency surfaces must come from the Patrol recency presenter
-instead of hardcoding verified wording in the shell.
-That same run-history ownership applies to assessment caveats: Patrol summary
-shells should not present `Recent coverage is incomplete` when the shared
-recency/verification helpers already prove a successful full patrol with
-non-zero resource coverage.
+Patrol recency labels and coverage phrases come from the Patrol recency
+presenter (`getPatrolRecencyPresentation`), never from hardcoded shell copy.
+The header labels the latest completed run of any type `Last check`; without
+run history it uses `Last check` for the `last_patrol_at` full-sweep transport
+fact and `Last activity` when `last_activity_at` is newer, and it never
+collapses them into a generic `Last run` label. Its coverage phrase reads
+`checked N resources` and never says `verified`.
+If a summary shell returns, it should not present `Recent coverage is
+incomplete` when run history shows a successful full patrol with non-zero
+resource coverage.
 That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from

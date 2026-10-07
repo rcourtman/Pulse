@@ -86,16 +86,6 @@ func getThresholdForMetric(config ThresholdConfig, metricType string) *Hysteresi
 	}
 }
 
-// getThresholdForMetricFromConfig returns the threshold for a specific metric type from a ThresholdConfig
-// ensuring hysteresis is properly set.
-func getThresholdForMetricFromConfig(config ThresholdConfig, metricType string) *HysteresisThreshold {
-	th := getThresholdForMetric(config, metricType)
-	if th == nil {
-		return nil
-	}
-	return ensureHysteresisThreshold(th)
-}
-
 // getTimeThreshold determines the delay to apply for a metric/resource combination.
 func (m *Manager) getTimeThreshold(resourceID string, resourceType, metricType string) int {
 	effective := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))

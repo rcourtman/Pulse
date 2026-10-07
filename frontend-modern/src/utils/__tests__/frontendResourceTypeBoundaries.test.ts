@@ -479,7 +479,6 @@ import systemLogsPresentationSource from '@/utils/systemLogsPresentation.ts?raw'
 import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
 import approvalRiskPresentationSource from '@/utils/approvalRiskPresentation.ts?raw';
 import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
-import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import modelSelectorSource from '@/components/AI/Chat/ModelSelector.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
@@ -3633,8 +3632,6 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
     );
-    expect(patrolSummaryPresentationSource).toContain('badgeVariant:');
-    expect(patrolSummaryPresentationSource).not.toContain('badgeClass:');
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
     // Work-group badge tones resolve in the patrolControlPresentation adapter
     // (getPatrolWorkspaceWorkGroups), never inline in the workspace component.
@@ -3714,18 +3711,6 @@ describe('frontend resource type boundaries', () => {
       'historicalRegressionCount={state.historicalRegressionCount()}',
     );
     expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900/25 border-green-200 dark:border-green-800'",
-    );
-    expect(patrolSummaryPresentationSource).toContain(
-      'export function getPatrolSummaryPresentation',
-    );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950/25 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
     );
