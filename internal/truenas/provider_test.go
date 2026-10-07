@@ -261,6 +261,53 @@ func TestProviderRecordsSynthesizesIncidentFromUnhealthyPoolStatus(t *testing.T)
 	}
 }
 
+func TestProviderRecordsPopulateStorageEnabledAndActive(t *testing.T) {
+	records := FixtureRecords(FixtureSnapshot{
+		CollectedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC),
+		System:      SystemInfo{Hostname: "truenas-main", Healthy: true},
+		Pools: []Pool{
+			{ID: "pool-tank", Name: "tank", Status: "ONLINE", TotalBytes: 1000, UsedBytes: 400},
+			{ID: "pool-cold", Name: "cold", Status: "DEGRADED", TotalBytes: 1000, UsedBytes: 400},
+			{ID: "pool-gone", Name: "gone", Status: "UNAVAIL"},
+			{ID: "pool-odd", Name: "odd", Status: ""},
+		},
+		Datasets: []Dataset{
+			{ID: "tank/apps", Name: "tank/apps", Pool: "tank", Mounted: true},
+			{ID: "tank/spare", Name: "tank/spare", Pool: "tank", Mounted: false},
+			{ID: "tank/vault", Name: "tank/vault", Pool: "tank", Mounted: false, Locked: true},
+		},
+	})
+
+	cases := []struct {
+		name   string
+		record unifiedresources.IngestRecord
+		active bool
+	}{
+		{"online pool", requirePoolRecord(t, records, "tank"), true},
+		{"degraded pool", requirePoolRecord(t, records, "cold"), true},
+		{"unavailable pool", requirePoolRecord(t, records, "gone"), false},
+		// An unreported pool state is not known offline, matching its status.
+		{"unknown-state pool", requirePoolRecord(t, records, "odd"), true},
+		{"mounted dataset", requireRecordByNameAndType(t, records, "tank/apps", unifiedresources.ResourceTypeStorage), true},
+		{"unmounted dataset", requireRecordByNameAndType(t, records, "tank/spare", unifiedresources.ResourceTypeStorage), false},
+		{"locked dataset", requireRecordByNameAndType(t, records, "tank/vault", unifiedresources.ResourceTypeStorage), false},
+	}
+	for _, tc := range cases {
+		storage := tc.record.Resource.Storage
+		if storage == nil {
+			t.Fatalf("%s: missing storage facet", tc.name)
+		}
+		// Consumers read these flags directly, so the zero value would mark
+		// every TrueNAS pool and dataset as disabled and inactive.
+		if !storage.Enabled {
+			t.Errorf("%s: Enabled = false, want true", tc.name)
+		}
+		if storage.Active != tc.active {
+			t.Errorf("%s: Active = %v, want %v", tc.name, storage.Active, tc.active)
+		}
+	}
+}
+
 func TestProviderRecordsDoesNotDuplicateNativePoolAlert(t *testing.T) {
 	alertTime := time.Date(2026, 6, 29, 11, 30, 0, 0, time.UTC)
 	records := FixtureRecords(FixtureSnapshot{

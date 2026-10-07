@@ -6474,6 +6474,18 @@ That availability contract also applies when recovery points are the only storag
 `internal/ai/tools/executor.go` must keep `pulse_storage` exposed whenever a
 `RecoveryPointsProvider` is configured, so tenant and self-hosted Chat surfaces do not lose
 recovery-backed snapshot and backup-task reads just because backup/read-state adapters are absent.
+Storage pool rows built by `storagePoolSummaryFromResource` in
+`internal/ai/tools/tools_storage.go` (`pulse_storage` pools and `pulse_query`
+storage pools) take `enabled` from the storage facet's own
+`StorageMeta.Enabled`, so storage that reported itself unavailable (Proxmox
+`active=0`, unified status `offline`) never reads as administratively disabled
+to Patrol or Assistant. `active` is the facet's `Active` flag and also requires
+the row not to be `offline`, because some sources (PBS datastores) report
+`Active` even while unavailable. Only a row without a storage facet falls back
+to the status-derived value.
+`TestStoragePoolSummaryReadsStorageFacetFlags` in
+`internal/ai/tools/tools_storage_test.go` pins unavailable, disabled, online,
+offline-but-flagged-active and facet-less rows.
 Tenant-scoped AI services must now also follow canonical runtime ownership:
 Patrol may initialize and operate from tenant `ReadState` and unified-resource
 providers without requiring a tenant snapshot-provider bridge, and

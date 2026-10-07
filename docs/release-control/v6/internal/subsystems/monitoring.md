@@ -4937,6 +4937,15 @@ remain separate through refresh, cache rebuild, restart, and registry ingest.
 Replication-target readonly classification remains a separate native-evidence
 step and cannot hide locked or unmounted dataset state.
 
+TrueNAS pool and dataset storage facets carry `StorageMeta.Enabled` and
+`Active` like every other storage producer, because the AI storage tools and
+storage platform payloads read those flags directly. TrueNAS has no disabled
+state for an imported pool or a listed dataset, so both are always `Enabled`. A
+pool is `Active` unless its native state is FAULTED, OFFLINE, REMOVED or
+UNAVAIL, and a dataset is `Active` only while it is mounted and unlocked.
+`TestProviderRecordsPopulateStorageEnabledAndActive` in
+`internal/truenas/provider_test.go` pins both.
+
 Ceph monitoring may enter the provider-neutral pool-health envelope only from
 the native cluster health state and native health-check map. It preserves check
 codes, severity, and summaries in deterministic order. A cluster-level
