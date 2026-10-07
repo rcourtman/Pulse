@@ -694,6 +694,72 @@ func TestResourceListInvalidatesUnifiedSeedCacheOnFreshnessChange(t *testing.T) 
 	}
 }
 
+type staleThresholdSeedProvider struct {
+	resources  []unified.Resource
+	freshness  time.Time
+	thresholds map[unified.DataSource]time.Duration
+}
+
+func (p *staleThresholdSeedProvider) ReadSnapshot() models.StateSnapshot {
+	return models.StateSnapshot{}
+}
+
+func (p *staleThresholdSeedProvider) UnifiedResourceSnapshotWithStaleThresholds() ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration) {
+	out := make([]unified.Resource, len(p.resources))
+	copy(out, p.resources)
+	return out, p.freshness, p.thresholds
+}
+
+// A cached registry was built with one seed's stale thresholds; a seed judged
+// by others needs a rebuild even when its freshness marker is unchanged. The
+// provider changes its threshold map in place, so the cache must keep its own
+// copy to notice.
+func TestResourceListRebuildsWhenSeedStaleThresholdsChange(t *testing.T) {
+	now := time.Now().UTC()
+	polled := now.Add(-90 * time.Second)
+	provider := &staleThresholdSeedProvider{
+		resources: []unified.Resource{{
+			ID: "agent-pve2", Type: unified.ResourceTypeAgent, Name: "pve2", Status: unified.StatusOnline,
+			LastSeen: polled, UpdatedAt: polled,
+			Sources:      []unified.DataSource{unified.SourceProxmox},
+			SourceStatus: map[unified.DataSource]unified.SourceStatus{unified.SourceProxmox: {Status: "online", LastSeen: polled}},
+			Proxmox:      &unified.ProxmoxData{NodeName: "pve2", Instance: "homelab"},
+			Identity:     unified.ResourceIdentity{Hostnames: []string{"pve2"}},
+		}},
+		freshness:  now,
+		thresholds: map[unified.DataSource]time.Duration{unified.SourceProxmox: 4 * time.Minute},
+	}
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(provider)
+
+	list := func(t *testing.T) unified.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var response ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(response.Data) != 1 {
+			t.Fatalf("resources = %#v, want the one node", response.Data)
+		}
+		return response.Data[0]
+	}
+
+	if got := list(t); got.Status != unified.StatusOnline || got.SourceStatus[unified.SourceProxmox].Status != "online" {
+		t.Fatalf("under a four-minute threshold: status %q, Proxmox sighting %q; want online for both",
+			got.Status, got.SourceStatus[unified.SourceProxmox].Status)
+	}
+	provider.thresholds[unified.SourceProxmox] = 60 * time.Second
+	if got := list(t); got.SourceStatus[unified.SourceProxmox].Status != "stale" {
+		t.Fatalf("under sixty seconds at the same freshness: Proxmox sighting %q, want stale; the cached registry was reused",
+			got.SourceStatus[unified.SourceProxmox].Status)
+	}
+}
+
 func TestResourceListMergesOneSidedLinkedHostWhenHostnameCorroborates(t *testing.T) {
 	now := time.Now().UTC()
 	node := models.Node{

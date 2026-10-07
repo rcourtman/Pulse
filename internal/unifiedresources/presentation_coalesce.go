@@ -11,7 +11,18 @@ import (
 // monitored host when a runtime/platform view and the Pulse agent view share a
 // canonical hostname.
 func CoalescePresentationHostResources(resources []Resource) []Resource {
-	return CoalescePresentationHostResourcesWithExclusions(resources, nil)
+	return coalescePresentationHostResources(resources, nil, nil)
+}
+
+// CoalescePresentationHostResourcesWithStaleThresholds applies the
+// presentation host coalesce, judging which source's metrics are current by
+// the caller's stale thresholds: those the registry that produced the
+// resources judged its sightings by.
+func CoalescePresentationHostResourcesWithStaleThresholds(
+	resources []Resource,
+	thresholds map[DataSource]time.Duration,
+) []Resource {
+	return coalescePresentationHostResources(resources, nil, thresholds)
 }
 
 // CoalescePresentationHostResourcesWithExclusions applies the presentation
@@ -20,9 +31,17 @@ func CoalescePresentationHostResourcesWithExclusions(
 	resources []Resource,
 	excluded func(left, right Resource) bool,
 ) []Resource {
-	coalesced := coalescePresentationHostResourcesOnce(resources, excluded)
+	return coalescePresentationHostResources(resources, excluded, nil)
+}
+
+func coalescePresentationHostResources(
+	resources []Resource,
+	excluded func(left, right Resource) bool,
+	thresholds map[DataSource]time.Duration,
+) []Resource {
+	coalesced := coalescePresentationHostResourcesOnce(resources, excluded, thresholds)
 	for len(coalesced) < len(resources) {
-		next := coalescePresentationHostResourcesOnce(coalesced, excluded)
+		next := coalescePresentationHostResourcesOnce(coalesced, excluded, thresholds)
 		if len(next) == len(coalesced) {
 			return refreshPresentationProxmoxChildActionAgents(next)
 		}
@@ -35,6 +54,7 @@ func CoalescePresentationHostResourcesWithExclusions(
 func coalescePresentationHostResourcesOnce(
 	resources []Resource,
 	excluded func(left, right Resource) bool,
+	thresholds map[DataSource]time.Duration,
 ) []Resource {
 	if len(resources) == 0 {
 		return resources
@@ -74,7 +94,7 @@ func coalescePresentationHostResourcesOnce(
 			if !shouldMergePresentationHostResources(existing, resource) {
 				continue
 			}
-			mergedResource := mergePresentationHostResources(existing, resource)
+			mergedResource := mergePresentationHostResources(existing, resource, thresholds)
 			coalesced[existingIndex] = mergedResource
 			addPresentationParentRedirect(parentRedirects, existing.ID, mergedResource.ID)
 			addPresentationParentRedirect(parentRedirects, resource.ID, mergedResource.ID)
@@ -414,7 +434,7 @@ func mergePresentationSources(left, right []DataSource) []DataSource {
 	return merged
 }
 
-func mergePresentationHostResources(left, right Resource) Resource {
+func mergePresentationHostResources(left, right Resource, thresholds map[DataSource]time.Duration) Resource {
 	primary, secondary := left, right
 	if preferPresentationHostPrimary(right, left) {
 		primary, secondary = right, left
@@ -467,8 +487,12 @@ func mergePresentationHostResources(left, right Resource) Resource {
 		for source, status := range primary.SourceStatus {
 			combinedStatus[source] = status
 		}
+		// Judged by the producing registry's thresholds and the rule its
+		// stale pass and metric merge read, so where both rows carry a
+		// reading this merge prefers a current source over a stale one as
+		// the registry's own merges do.
 		stale := func(source DataSource) bool {
-			return presentationSourceStale(now, combinedStatus, source)
+			return metricSourceStale(now, combinedStatus, source, thresholds)
 		}
 		merged.Metrics = mergePresentationMetrics(merged.Metrics, secondary.Metrics, stale)
 	}
@@ -566,24 +590,6 @@ func uniquePresentationStrings(values []string) []string {
 		unique = append(unique, trimmed)
 	}
 	return unique
-}
-
-// presentationSourceStale reports whether a source's most recent report is
-// older than its stale threshold. A zero/unknown last-seen is treated as NOT
-// stale so coalescing never demotes a source on missing information.
-func presentationSourceStale(now time.Time, status map[DataSource]SourceStatus, source DataSource) bool {
-	if status == nil {
-		return false
-	}
-	st, ok := status[source]
-	if !ok || st.LastSeen.IsZero() {
-		return false
-	}
-	threshold, ok := defaultStaleThresholds[source]
-	if !ok {
-		threshold = 60 * time.Second
-	}
-	return now.Sub(st.LastSeen) > threshold
 }
 
 // mergePresentationMetric keeps the primary (left) value, except that a metric

@@ -4478,7 +4478,9 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 	if metricsTargetResolver == nil {
 		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
 	}
-	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
+	// Coalescing picks each merged metric's source by freshness, judged by
+	// the thresholds the view's own registry judged its sightings by.
+	broadcastResources := unifiedresources.CoalescePresentationHostResourcesWithStaleThresholds(unifiedView.resources, unifiedView.staleThresholds)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
@@ -5052,6 +5054,9 @@ type monitorUnifiedStateView struct {
 	readState      unifiedresources.ReadState
 	freshness      time.Time
 	metricsTargets MetricsTargetResourceStore
+	// staleThresholds are those the listed resources' registry generation
+	// was judged by; nil means the registry defaults.
+	staleThresholds map[unifiedresources.DataSource]time.Duration
 }
 
 type unifiedResourceReadStateLister interface {
@@ -5121,9 +5126,10 @@ func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifi
 		return view
 	}
 
-	resources, targets := unifiedProjectionResources(lister)
+	resources, targets, thresholds := unifiedProjectionResourcesWithStaleThresholds(lister)
 	view.resources = resources
 	view.metricsTargets = targets
+	view.staleThresholds = thresholds
 	if view.freshness.IsZero() {
 		view.freshness = latestUnifiedResourceLastSeen(resources)
 	}
@@ -5229,11 +5235,11 @@ func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State)
 // associated freshness marker. In mock mode it returns the shared mock
 // unified-resource fixture graph rather than the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	view := m.currentUnifiedStateView()
 	// REST /api/resources seeds its registry from this snapshot. Apply the
 	// same user-metadata hydration (container customUrl) as the websocket
 	// broadcast path, so the two payload shapes cannot drift.
-	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness
+	resources, freshness, _ := m.UnifiedResourceSnapshotWithStaleThresholds()
+	return resources, freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the

@@ -15012,6 +15012,182 @@ func TestContract_ResourceListUsesTenantStateProviderAtStartup(t *testing.T) {
 	}
 }
 
+// The resources API rebuilds its registry from a monitor's unified seed, so it
+// judges source freshness by the thresholds that seed's registry judged it by,
+// for the default monitor and a tenant monitor alike. A Proxmox estate polled
+// every two minutes, read ninety seconds after its last poll, lists as the
+// websocket broadcast shows it: every node online on a current poll, with the
+// node's own readings over those of an agent silent for seventy-five seconds.
+// With the registry defaults the API called each poll stale (warning), and
+// both views showed the silent agent's readings on a node whose agent keeps
+// its own row. A monitor without a resource store builds its view with the
+// defaults, which call the ninety-second polls stale, and both views then
+// follow the defaults: no row takes a reading from a source its own sighting
+// calls stale over a live one.
+func TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast(t *testing.T) {
+	now := time.Now().UTC()
+	polledMonitor := func(t *testing.T, withStore bool) *monitoring.Monitor {
+		t.Helper()
+		monitor, state, _ := newTestMonitor(t)
+		setUnexportedField(t, monitor, "config", &config.Config{PVEPollingInterval: 2 * time.Minute})
+		polled := now.Add(-90 * time.Second)
+		agentSilent := now.Add(-75 * time.Second)
+		state.UpdateNodesForInstance("homelab", []models.Node{
+			{
+				ID: "homelab-pve1", Name: "pve1", Instance: "homelab", Status: "online",
+				LinkedAgentID: "host-pve1", CPU: 0.12,
+				Memory:   models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+				Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: polled,
+			},
+		})
+		state.UpsertHost(models.Host{
+			ID: "host-pve1", MachineID: "machine-pve1", Hostname: "pve1", LinkedNodeID: "homelab-pve1",
+			Status: "online", CPUUsage: 80,
+			Memory:   models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+			LastSeen: agentSilent, IntervalSeconds: 30,
+		})
+		state.UpsertHost(models.Host{
+			ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3",
+			Status: "online", CPUUsage: 70,
+			Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+			LastSeen: agentSilent, IntervalSeconds: 30,
+		})
+		if withStore {
+			adapter := unifiedresources.NewMonitorAdapter(nil)
+			monitor.SetResourceStore(adapter)
+			adapter.PopulateFromSnapshot(state.GetSnapshot())
+		}
+		return monitor
+	}
+
+	type nodeRow struct {
+		status      string
+		cpu, memory float64
+	}
+	nodeNames := map[string]bool{"pve1": true, "pve2": true, "pve3": true}
+	broadcastRows := func(t *testing.T, monitor *monitoring.Monitor) map[string]nodeRow {
+		t.Helper()
+		rows := make(map[string]nodeRow)
+		for _, resource := range monitor.BuildBroadcastFrontendState().Resources {
+			if !nodeNames[resource.Name] {
+				continue
+			}
+			if _, dup := rows[resource.Name]; dup {
+				t.Fatalf("broadcast shows node %s twice", resource.Name)
+			}
+			row := nodeRow{status: resource.Status}
+			if row.status == "degraded" {
+				// The broadcast spells a host's warning status as degraded.
+				row.status = string(unifiedresources.StatusWarning)
+			}
+			if resource.CPU != nil {
+				row.cpu = resource.CPU.Current
+			}
+			if resource.Memory != nil {
+				row.memory = resource.Memory.Current
+			}
+			rows[resource.Name] = row
+		}
+		return rows
+	}
+	// listedRows also returns each row's Proxmox sighting, which the
+	// broadcast payload does not carry.
+	listedRows := func(t *testing.T, h *ResourceHandlers, orgID string) (map[string]nodeRow, map[string]string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
+		if orgID != "" {
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		}
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var response ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		rows := make(map[string]nodeRow)
+		sightings := make(map[string]string)
+		for _, resource := range response.Data {
+			if !nodeNames[resource.Name] {
+				continue
+			}
+			if _, dup := rows[resource.Name]; dup {
+				t.Fatalf("resources API lists node %s twice", resource.Name)
+			}
+			row := nodeRow{status: string(resource.Status)}
+			if resource.Metrics != nil && resource.Metrics.CPU != nil {
+				row.cpu = resource.Metrics.CPU.Percent
+			}
+			if resource.Metrics != nil && resource.Metrics.Memory != nil {
+				row.memory = resource.Metrics.Memory.Percent
+			}
+			rows[resource.Name] = row
+			sightings[resource.Name] = resource.SourceStatus[unifiedresources.SourceProxmox].Status
+		}
+		return rows, sightings
+	}
+	current := map[string]nodeRow{
+		"pve1": {status: "online", cpu: 12, memory: 25},
+		"pve2": {status: "online", cpu: 30, memory: 50},
+		"pve3": {status: "online", cpu: 20, memory: 12.5},
+	}
+	check := func(t *testing.T, monitor *monitoring.Monitor, h *ResourceHandlers, orgID string, want map[string]nodeRow, wantSighting string) {
+		t.Helper()
+		broadcast := broadcastRows(t, monitor)
+		if !reflect.DeepEqual(broadcast, want) {
+			t.Fatalf("broadcast node rows = %+v, want %+v", broadcast, want)
+		}
+		listed, sightings := listedRows(t, h, orgID)
+		for name, sighting := range sightings {
+			if sighting != wantSighting {
+				t.Errorf("resources API %s Proxmox sighting = %q, want %q", name, sighting, wantSighting)
+			}
+		}
+		if !reflect.DeepEqual(listed, broadcast) {
+			t.Fatalf("resources API node rows = %+v, want the broadcast's %+v", listed, broadcast)
+		}
+	}
+
+	t.Run("default monitor", func(t *testing.T) {
+		monitor := polledMonitor(t, true)
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(monitor)
+		check(t, monitor, h, "", current, "online")
+	})
+	t.Run("tenant monitor", func(t *testing.T) {
+		tenant := polledMonitor(t, true)
+		defaultMonitor, _, _ := newTestMonitor(t)
+		mtm := &monitoring.MultiTenantMonitor{}
+		setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"acme": tenant})
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(defaultMonitor)
+		h.SetTenantStateProvider(NewMultiTenantStateProvider(mtm, defaultMonitor))
+		check(t, tenant, h, "acme", current, "online")
+	})
+	t.Run("monitor without a resource store", func(t *testing.T) {
+		monitor := polledMonitor(t, false)
+		h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+		h.SetStateProvider(monitor)
+		check(t, monitor, h, "", map[string]nodeRow{
+			"pve1": {status: "warning", cpu: 80, memory: 75},
+			"pve2": {status: "warning", cpu: 30, memory: 50},
+			"pve3": {status: "warning", cpu: 70, memory: 62.5},
+		}, "stale")
+	})
+}
+
 func TestContract_ResourceCapabilitiesJSONSnapshot(t *testing.T) {
 	payload := struct {
 		ResourceID   string                                `json:"resourceId"`

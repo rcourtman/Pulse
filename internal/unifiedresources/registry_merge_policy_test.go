@@ -355,6 +355,158 @@ func TestMetricMergeFreshnessMatchesTheStalePass(t *testing.T) {
 	}
 }
 
+// staleThresholdEstateSnapshot is a Proxmox estate polled every two minutes,
+// read ninety seconds after its last poll: a node merged with its auto-linked
+// agent, silent for seventy-five seconds; a node with no agent; and a node
+// whose agent the registry keeps as its own row, which presentation coalesces
+// into the node by hostname.
+func staleThresholdEstateSnapshot(now time.Time) models.StateSnapshot {
+	polled := now.Add(-90 * time.Second)
+	agentSilent := now.Add(-75 * time.Second)
+	return models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID: "homelab-pve1", Name: "pve1", Instance: "homelab", Status: "online",
+				LinkedAgentID: "host-pve1", CPU: 0.12,
+				Memory:   models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+				Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+				LastSeen: polled,
+			},
+			{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: polled,
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID: "host-pve1", MachineID: "machine-pve1", Hostname: "pve1", LinkedNodeID: "homelab-pve1",
+				Status: "online", CPUUsage: 80,
+				Memory:   models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+				LastSeen: agentSilent, IntervalSeconds: 30,
+			},
+			{
+				ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3",
+				Status: "online", CPUUsage: 70,
+				Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+				LastSeen: agentSilent, IntervalSeconds: 30,
+			},
+		},
+		LastUpdate: now,
+	}
+}
+
+// presentedNodeRows indexes the coalesced rows that carry a Proxmox sighting
+// by name.
+func presentedNodeRows(t *testing.T, resources []Resource) map[string]Resource {
+	t.Helper()
+	rows := make(map[string]Resource)
+	for _, resource := range resources {
+		if _, ok := resource.SourceStatus[SourceProxmox]; !ok {
+			continue
+		}
+		if _, dup := rows[resource.Name]; dup {
+			t.Fatalf("two presented rows carry Proxmox node %q", resource.Name)
+		}
+		rows[resource.Name] = resource
+	}
+	return rows
+}
+
+// A registry rebuilt from the monitor's resources, as the resources API
+// rebuilds one, judges source freshness by the monitor's configured
+// thresholds: its stale pass, and the presentation coalesce of both views,
+// agree with the monitor's own registry. With the defaults the rebuild called
+// every node's poll stale at ninety seconds (warning status), and both views
+// showed the silent agent's readings on the node whose agent stays its own
+// row.
+func TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	thresholds := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}
+	snapshot := staleThresholdEstateSnapshot(now)
+
+	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), thresholds)
+	adapter.PopulateFromSnapshot(snapshot)
+	adapter.PopulateFromSnapshot(snapshot)
+
+	broadcast := presentedNodeRows(t, CoalescePresentationHostResourcesWithStaleThresholds(adapter.GetAll(), thresholds))
+	seeded := NewRegistryWithStaleThresholds(nil, thresholds)
+	seeded.IngestResources(adapter.GetAll())
+	api := presentedNodeRows(t, seeded.ListForPresentation())
+
+	want := map[string]struct {
+		cpu, memory float64
+		agent       bool
+	}{
+		"pve1": {cpu: 12, memory: 25, agent: true},
+		"pve2": {cpu: 30, memory: 50},
+		"pve3": {cpu: 20, memory: 12.5, agent: true},
+	}
+	for view, rows := range map[string]map[string]Resource{"broadcast": broadcast, "resources API": api} {
+		if len(rows) != len(want) {
+			t.Fatalf("%s presents %d node rows, want %d", view, len(rows), len(want))
+		}
+		for name, expected := range want {
+			row, ok := rows[name]
+			if !ok {
+				t.Fatalf("%s lost node %s", view, name)
+			}
+			if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+				t.Errorf("%s %s Proxmox sighting = %q, want online: ninety seconds is within the configured four minutes", view, name, poll.Status)
+			}
+			if row.Status != StatusOnline {
+				t.Errorf("%s %s status = %q, want online", view, name, row.Status)
+			}
+			if agent, ok := row.SourceStatus[SourceAgent]; ok != expected.agent || (ok && agent.Status != "stale") {
+				t.Errorf("%s %s agent sighting = %+v (present %v), want a stale one present %v", view, name, agent, ok, expected.agent)
+			}
+			if row.Metrics == nil || row.Metrics.CPU == nil || row.Metrics.Memory == nil {
+				t.Fatalf("%s %s lost its readings: %+v", view, name, row.Metrics)
+			}
+			if cpu, memory := row.Metrics.CPU, row.Metrics.Memory; cpu.Source != SourceProxmox || cpu.Percent != expected.cpu ||
+				memory.Source != SourceProxmox || memory.Percent != expected.memory {
+				t.Errorf("%s %s cpu %.1f%% from %s, memory %.1f%% from %s; want the current poll's %.1f%% and %.1f%%",
+					view, name, cpu.Percent, cpu.Source, memory.Percent, memory.Source, expected.cpu, expected.memory)
+			}
+		}
+	}
+
+	// The fixture sits where the thresholds decide: a rebuild judged by the
+	// defaults calls the same polls stale.
+	defaults := NewRegistry(nil)
+	defaults.IngestResources(adapter.GetAll())
+	defaultRows := presentedNodeRows(t, defaults.ListForPresentation())
+	if len(defaultRows) != len(want) {
+		t.Fatalf("default-threshold rebuild presents %d node rows, want %d", len(defaultRows), len(want))
+	}
+	for name, row := range defaultRows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "stale" {
+			t.Fatalf("default-threshold rebuild %s Proxmox sighting = %q, want stale; the fixture no longer exercises the thresholds", name, poll.Status)
+		}
+	}
+}
+
+// An ingest that passes thresholds of its own keeps them over the registry's.
+func TestRegistryIngestThresholdsOverrideConstructionThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := staleThresholdEstateSnapshot(now)
+	registry := NewRegistryWithStaleThresholds(nil, map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute})
+	registry.IngestSnapshotWithStaleThresholds(snapshot, map[DataSource]time.Duration{SourceProxmox: 60 * time.Second})
+	rows := presentedNodeRows(t, registry.List())
+	if len(rows) != 3 {
+		t.Fatalf("registry lists %d Proxmox node rows, want 3", len(rows))
+	}
+	for name, row := range rows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "stale" {
+			t.Fatalf("%s Proxmox sighting = %q, want stale under the ingest's own sixty seconds", name, poll.Status)
+		}
+	}
+}
+
 // Docker hosts hold a shorter lease than the registry's Docker stale
 // threshold, so a silent Docker host was offline for a while and then
 // flipped to warning once its sighting went stale.

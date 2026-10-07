@@ -6884,6 +6884,15 @@ unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
 reads them for the usage export only. No new file, directory, retention
 window, backup, migration or recovery authority is introduced.
 
+### Resource freshness thresholds open no storage or recovery path
+
+`internal/api/resourceapi/resources.go` builds the `/api/resources` registry
+with the stale thresholds its seed was judged by, and
+`internal/api/router_helpers.go` hands a tenant monitor's seed and thresholds
+to it.
+Both are read-path changes to source freshness and presentation; no storage,
+retention, backup or recovery path is added or moved.
+
 ### Webhook configuration never persists the API mask
 
 `internal/api/alerting/notifications.go` resolves each `***REDACTED***`

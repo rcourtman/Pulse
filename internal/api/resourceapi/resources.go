@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -66,6 +67,22 @@ type UnifiedResourceSnapshotProvider interface {
 	UnifiedResourceSnapshot() ([]unified.Resource, time.Time)
 }
 
+// UnifiedResourceSnapshotWithStaleThresholdsProvider supplies the default
+// tenant's unified-resource seed with the stale thresholds the seed's registry
+// judged its sightings by (nil: the registry defaults). The registry rebuilt
+// from the seed runs its own stale pass, merges and presentation coalesce,
+// which must judge by the same thresholds or a source the monitor calls
+// current between configured polls reads stale here.
+type UnifiedResourceSnapshotWithStaleThresholdsProvider interface {
+	UnifiedResourceSnapshotWithStaleThresholds() ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration)
+}
+
+// TenantUnifiedResourceSnapshotWithStaleThresholdsProvider is the
+// tenant-scoped form of UnifiedResourceSnapshotWithStaleThresholdsProvider.
+type TenantUnifiedResourceSnapshotWithStaleThresholdsProvider interface {
+	UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID string) ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration)
+}
+
 // ResourceDiscoveryReadinessProvider projects service-discovery state onto a
 // unified resource without coupling the resource API to discovery storage.
 type ResourceDiscoveryReadinessProvider interface {
@@ -77,6 +94,9 @@ type registrySeed struct {
 	resources     []unified.Resource
 	lastUpdate    time.Time
 	unifiedSource bool
+	// staleThresholds are those the seed's registry judged it by; nil
+	// means the registry defaults.
+	staleThresholds map[unified.DataSource]time.Duration
 }
 
 // SupplementalRecordsProvider provides out-of-band ingest records for a specific source.
@@ -1058,7 +1078,8 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 
 	h.cacheMu.Lock()
 	entry, ok := h.registryCache[key]
-	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) {
+	if ok && entry.registry != nil && !seed.lastUpdate.IsZero() && entry.lastUpdate.Equal(seed.lastUpdate) &&
+		maps.Equal(entry.staleThresholds, seed.staleThresholds) {
 		h.cacheMu.Unlock()
 		return entry.registry, nil
 	}
@@ -1071,7 +1092,11 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 	}
 	h.supplementalMu.RUnlock()
 
-	registry := unified.NewRegistry(store)
+	// The rebuild runs its own stale pass, merges and presentation coalesce,
+	// so it judges freshness by the thresholds the seed was judged by; with
+	// the defaults a Proxmox node polled every two minutes read stale here
+	// between polls while the monitor called it current.
+	registry := unified.NewRegistryWithStaleThresholds(store, seed.staleThresholds)
 	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
 	supplementalSources := sortedSupplementalSources(supplementalProviders)
 	if seed.unifiedSource {
@@ -1114,7 +1139,7 @@ func (h *QueryService) buildRegistry(orgID string) (*unified.ResourceRegistry, e
 	if h.registryCache == nil {
 		h.registryCache = make(map[string]registryCacheEntry)
 	}
-	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate}
+	h.registryCache[key] = registryCacheEntry{registry: registry, lastUpdate: seed.lastUpdate, staleThresholds: seed.staleThresholds}
 	h.cacheMu.Unlock()
 
 	return registry, nil
@@ -1153,14 +1178,28 @@ func (h *QueryService) registrySeed(orgID string) (registrySeed, error) {
 		if h.tenantStateProvider == nil {
 			return seed, errors.New("tenant state provider unavailable")
 		}
-		resources, lastUpdate := h.tenantStateProvider.UnifiedResourceSnapshotForTenant(orgID)
-		seed.resources = resources
-		seed.lastUpdate = lastUpdate
+		if provider, ok := any(h.tenantStateProvider).(TenantUnifiedResourceSnapshotWithStaleThresholdsProvider); ok {
+			var thresholds map[unified.DataSource]time.Duration
+			seed.resources, seed.lastUpdate, thresholds = provider.UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID)
+			seed.staleThresholds = maps.Clone(thresholds)
+		} else {
+			seed.resources, seed.lastUpdate = h.tenantStateProvider.UnifiedResourceSnapshotForTenant(orgID)
+		}
 		seed.unifiedSource = true
 		return seed, nil
 	}
 
-	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
+	if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotWithStaleThresholdsProvider); ok {
+		resources, lastUpdate, thresholds := provider.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(resources) > 0 || !lastUpdate.IsZero() {
+			seed.resources = resources
+			seed.lastUpdate = lastUpdate
+			seed.unifiedSource = true
+			// Owned copy: the cache compares it with the next seed's.
+			seed.staleThresholds = maps.Clone(thresholds)
+			return seed, nil
+		}
+	} else if provider, ok := any(h.stateProvider).(UnifiedResourceSnapshotProvider); ok {
 		resources, lastUpdate := provider.UnifiedResourceSnapshot()
 		if len(resources) > 0 || !lastUpdate.IsZero() {
 			seed.resources = resources
@@ -1626,6 +1665,9 @@ type StorageIncidentSection struct {
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
+	// staleThresholds are those the registry was built with; a seed judged
+	// by others needs a rebuild even at the same lastUpdate.
+	staleThresholds map[unified.DataSource]time.Duration
 	// rawList and presentation are lazily built once per registry generation
 	// and SHARED between requests. Both the slices and the nested data of
 	// their elements are read-only: take a flat copy (flatCopyResources)

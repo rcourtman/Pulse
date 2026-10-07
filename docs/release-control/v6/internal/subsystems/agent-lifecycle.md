@@ -8732,6 +8732,17 @@ nodes/controller members, and confirmed inventory removal.
 `TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
 This is synthetic runtime evidence, not USB hardware or reporter acceptance.
 
+### Coalesced host readings follow configured source freshness
+
+The websocket broadcast coalesces a Proxmox node with a Pulse agent that keeps
+its own registry row, and now judges which source's readings the row shows by
+the stale thresholds the view's registry used, the monitor's configured ones
+on the resource store (`internal/monitoring/monitor.go`).
+This changes which readings a coalesced row shows, not agent admission,
+registration, linking, heartbeat or removal. Proof:
+`TestBroadcastCoalescedHostJudgesFreshnessByConfiguredThresholds` in
+`internal/monitoring/monitor_host_agents_test.go`.
+
 ### Quick security setup preserves unrelated settings
 
 Authenticated force setup in `internal/api/security_setup_fix.go` retains the

@@ -279,6 +279,83 @@ func TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable(t *testing.
 	}
 }
 
+// The broadcast coalesces an agent that keeps its own registry row into its
+// Proxmox node by hostname, and picks each reading's source by freshness
+// judged by the configured thresholds, as the registry's own merges are. A
+// node polled every two minutes, read ninety seconds after its poll, shows its
+// own readings rather than those of its agent, silent for seventy-five
+// seconds. Polled at the default cadence, the node is stale at ninety seconds
+// too, so the agent's readings stand.
+func TestBroadcastCoalescedHostJudgesFreshnessByConfiguredThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name        string
+		interval    time.Duration
+		cpu, memory float64
+	}{
+		{"two-minute polls", 2 * time.Minute, 20, 12.5},
+		{"default polls", 10 * time.Second, 70, 62.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &Monitor{state: models.NewState(), config: &config.Config{PVEPollingInterval: tc.interval}}
+			m.state.UpdateNodesForInstance("homelab", []models.Node{{
+				ID: "homelab-pve3", Name: "pve3", Instance: "homelab", Status: "online", CPU: 0.20,
+				Memory:   models.Memory{Total: 64 << 30, Used: 8 << 30, Free: 56 << 30, Usage: 12.5},
+				LastSeen: now.Add(-90 * time.Second),
+			}})
+			m.state.UpsertHost(models.Host{
+				ID: "host-pve3", MachineID: "machine-pve3", Hostname: "pve3", Status: "online", CPUUsage: 70,
+				Memory:   models.Memory{Total: 64 << 30, Used: 40 << 30, Free: 24 << 30, Usage: 62.5},
+				LastSeen: now.Add(-75 * time.Second), IntervalSeconds: 30,
+			})
+			m.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+
+			var rows []models.ResourceFrontend
+			for _, resource := range m.BuildBroadcastFrontendState().Resources {
+				if resource.Name == "pve3" {
+					rows = append(rows, resource)
+				}
+			}
+			if len(rows) != 1 {
+				t.Fatalf("broadcast shows %d pve3 rows, want the node and its agent coalesced into one", len(rows))
+			}
+			if rows[0].CPU == nil || rows[0].Memory == nil {
+				t.Fatalf("pve3 lost its readings: cpu %+v memory %+v", rows[0].CPU, rows[0].Memory)
+			}
+			if rows[0].CPU.Current != tc.cpu || rows[0].Memory.Current != tc.memory {
+				t.Fatalf("pve3 cpu %.1f%%, memory %.1f%%; want %.1f%% and %.1f%%",
+					rows[0].CPU.Current, rows[0].Memory.Current, tc.cpu, tc.memory)
+			}
+		})
+	}
+}
+
+// A monitor view pairs its listing with the thresholds that registry
+// generation was judged by. Thresholds set on the store since its last
+// rebuild belong to the next generation, so the view and the seed it hands
+// the resources API keep the ones the listing was judged by.
+func TestUnifiedViewCarriesItsGenerationsStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	m := &Monitor{state: models.NewState(), config: &config.Config{PVEPollingInterval: 2 * time.Minute}}
+	m.state.UpdateNodesForInstance("homelab", []models.Node{{
+		ID: "homelab-pve2", Name: "pve2", Instance: "homelab", Status: "online", CPU: 0.30,
+		Memory:   models.Memory{Total: 64 << 30, Used: 32 << 30, Free: 32 << 30, Usage: 50},
+		LastSeen: now.Add(-90 * time.Second),
+	}})
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	m.SetResourceStore(adapter)
+	adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+	adapter.SetStaleThresholds(map[unifiedresources.DataSource]time.Duration{unifiedresources.SourceProxmox: time.Minute})
+
+	resources, _, thresholds := m.UnifiedResourceSnapshotWithStaleThresholds()
+	if got := thresholds[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+		t.Fatalf("seed thresholds = %v, want the four minutes its generation was judged by", thresholds)
+	}
+	if len(resources) != 1 || resources[0].SourceStatus[unifiedresources.SourceProxmox].Status != "online" {
+		t.Fatalf("seed = %+v, want pve2 with the Proxmox sighting its generation judged online", resources)
+	}
+}
+
 func TestHostAgentCorrelationKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
 	now := time.Now()
 	state := &models.State{
@@ -6925,6 +7002,10 @@ func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource 
 func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget) {
 	s.reads++
 	return s.MonitorAdapter.GetAllWithMetricsTargets()
+}
+func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargetsAndStaleThresholds() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget, map[unifiedresources.DataSource]time.Duration) {
+	s.reads++
+	return s.MonitorAdapter.GetAllWithMetricsTargetsAndStaleThresholds()
 }
 func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
 	return false

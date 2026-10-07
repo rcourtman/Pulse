@@ -26,7 +26,11 @@ type MonitorAdapter struct {
 	activeAlerts    []models.Alert
 	lastRebuiltAt   time.Time
 	staleThresholds map[DataSource]time.Duration
-	legacyHistory   legacyHistoryBackfill
+	// registryStaleThresholds are the thresholds the current registry
+	// generation was built and judged with. staleThresholds may already hold
+	// newer ones, which reach the registry at the next rebuild.
+	registryStaleThresholds map[DataSource]time.Duration
+	legacyHistory           legacyHistoryBackfill
 
 	overlays overlayReadStateCache
 }
@@ -64,8 +68,9 @@ func NewMonitorAdapterWithStaleThresholds(registry *ResourceRegistry, staleThres
 	}
 
 	return &MonitorAdapter{
-		registry:        registry,
-		staleThresholds: cloneStaleThresholds(staleThresholds),
+		registry:                registry,
+		staleThresholds:         cloneStaleThresholds(staleThresholds),
+		registryStaleThresholds: cloneStaleThresholds(staleThresholds),
 	}
 }
 
@@ -78,6 +83,20 @@ func (a *MonitorAdapter) SetStaleThresholds(staleThresholds map[DataSource]time.
 	a.mu.Lock()
 	a.staleThresholds = cloneStaleThresholds(staleThresholds)
 	a.mu.Unlock()
+}
+
+// StaleThresholds returns the source freshness thresholds the current
+// registry generation was judged by; nil means the registry defaults.
+// Thresholds set since that rebuild are not reported until the next one
+// judges a generation by them.
+func (a *MonitorAdapter) StaleThresholds() map[DataSource]time.Duration {
+	if a == nil {
+		return nil
+	}
+	a.mu.RLock()
+	thresholds := cloneStaleThresholds(a.registryStaleThresholds)
+	a.mu.RUnlock()
+	return thresholds
 }
 
 func (a *MonitorAdapter) currentStaleThresholds() map[DataSource]time.Duration {
@@ -117,7 +136,10 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 		return readState
 	}
 
-	registry := adapter.currentRegistry()
+	// The overlay re-judges the generation's listing, so it takes the
+	// thresholds that generation was judged by, not ones set since: those
+	// cannot clear a stale verdict the listing already carries.
+	registry, thresholds := adapter.currentRegistryAndStaleThresholds()
 	if registry == nil {
 		return readState
 	}
@@ -133,7 +155,6 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 	}
 
 	cloned := NewRegistry(registry.store)
-	thresholds := adapter.currentStaleThresholds()
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
 	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
@@ -182,6 +203,19 @@ func (c *overlayReadStateCache) store(registry *ResourceRegistry, rebuiltAt time
 	c.key = key
 	c.builtAt = now
 	c.overlay = overlay
+}
+
+// currentRegistryAndStaleThresholds reads the current registry generation
+// together with the thresholds it was judged by.
+func (a *MonitorAdapter) currentRegistryAndStaleThresholds() (*ResourceRegistry, map[DataSource]time.Duration) {
+	if a == nil {
+		return nil, nil
+	}
+	a.mu.RLock()
+	registry := a.registry
+	thresholds := cloneStaleThresholds(a.registryStaleThresholds)
+	a.mu.RUnlock()
+	return registry, thresholds
 }
 
 func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
@@ -472,6 +506,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 
 	a.mu.Lock()
 	a.registry = rebuilt
+	a.registryStaleThresholds = staleThresholds
 	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
@@ -545,6 +580,19 @@ func (a *MonitorAdapter) GetAllWithMetricsTargets() ([]Resource, map[string]Metr
 		return nil, nil
 	}
 	return registry.ListWithMetricsTargets()
+}
+
+// GetAllWithMetricsTargetsAndStaleThresholds is GetAllWithMetricsTargets
+// plus the stale thresholds the listed registry generation was judged by,
+// read with the registry pointer, so a rebuild publishing meanwhile cannot
+// pair one generation's listing with another's thresholds.
+func (a *MonitorAdapter) GetAllWithMetricsTargetsAndStaleThresholds() ([]Resource, map[string]MetricsTarget, map[DataSource]time.Duration) {
+	registry, thresholds := a.currentRegistryAndStaleThresholds()
+	if registry == nil {
+		return nil, nil, nil
+	}
+	resources, targets := registry.ListWithMetricsTargets()
+	return resources, targets, thresholds
 }
 
 func (a *MonitorAdapter) unifiedAIAdapter() *UnifiedAIAdapter {
@@ -660,12 +708,14 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	a.mutationMu.Lock()
 	defer a.mutationMu.Unlock()
 
-	registry := a.currentRegistry()
+	// Records merge into the current generation, so they are judged by the
+	// thresholds it was; thresholds set since wait for the next rebuild.
+	registry, thresholds := a.currentRegistryAndStaleThresholds()
 	if registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return
 	}
 	before := registry.List()
-	registry.IngestRecordsWithStaleThresholds(source, records, a.currentStaleThresholds())
+	registry.IngestRecordsWithStaleThresholds(source, records, thresholds)
 	rebuiltAt := time.Now().UTC()
 	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	registry.PersistIdentityPins()

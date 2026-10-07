@@ -9366,6 +9366,22 @@ That same resource-handler seed contract must also stay on canonical unified
 resource ownership for tenant-scoped requests: once a tenant state provider
 implements `UnifiedResourceSnapshotForTenant`, `/api/resources` may not fall
 back to raw tenant `StateSnapshot` seeding when that unified seed is empty.
+The seed contract carries source freshness too. A provider that implements
+`UnifiedResourceSnapshotWithStaleThresholds` (the default monitor) or
+`UnifiedResourceSnapshotWithStaleThresholdsForTenant` (the tenant state
+provider) returns the seed together with the stale thresholds its registry
+generation judged it by, captured with the listing, and the registry
+`/api/resources` rebuilds is built with them. Its stale pass and
+presentation coalesce then judge as the websocket broadcast does: a Proxmox node
+polled every two minutes stays online with a current sighting between polls
+instead of reading stale with warning status. The registry cache is keyed by
+its own copy of those thresholds as well as the freshness marker. A provider without those
+methods leaves the registry defaults, and the resources API reads them
+through optional interface checks, so `internal/api/router_helpers.go`
+asserts the monitor and the tenant state provider implement them. Proof:
+`TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` (default
+and tenant monitors on a resource store, and a monitor without one, each
+against the same monitor's broadcast).
 That same mock/runtime contract now also governs chart payloads under
 `internal/api/chartapi/service.go`: when demo or mock presentation is enabled,
 `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts` must

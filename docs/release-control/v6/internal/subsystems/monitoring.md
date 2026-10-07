@@ -1193,6 +1193,18 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+Each unified view carries the thresholds its listed registry generation was
+judged by, read with the listing from the same generation: the resource
+store's configured ones, or none (the defaults) for a view built from mock
+fixtures or a bare state snapshot.
+`UnifiedResourceSnapshotWithStaleThresholds` hands them, with the seed, to
+consumers that rebuild a registry from the monitor's resources (the resources
+API reads each tenant monitor's), and the websocket broadcast coalesces split
+host rows with them, so a coalesced row prefers readings by the same
+freshness rule and thresholds as the view's own merges. Regression coverage:
+`TestBroadcastCoalescedHostJudgesFreshnessByConfiguredThresholds` and
+`TestUnifiedViewCarriesItsGenerationsStaleThresholds` in
+`internal/monitoring/monitor_host_agents_test.go`.
 PBS and PMG configured instances also have one monitoring-owned runtime
 resource identity constructor. Poll publication, connection status, setup and
 auto-registration checks, canonical alias resolution, and alert-policy bridges
