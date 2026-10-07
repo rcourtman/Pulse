@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -1794,4 +1795,55 @@ func TestNodeTemperatureStaysWithinSameNamedNodesSite(t *testing.T) {
 			t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
 		}
 	})
+}
+
+// Exercise the actual scheduler result, admission and health entry points.
+// No provider request, backup operation or database is involved in this control.
+func TestMonitorPersistentFailureBackoffAndRecovery(t *testing.T) {
+	m := &Monitor{
+		config:          &config.Config{},
+		circuitBreakers: make(map[string]*circuitBreaker),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
+	}
+	failed := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "offline"}
+	healthy := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "healthy"}
+	for failure := 1; failure <= 130; failure++ {
+		m.recordTaskResult(failed.InstanceType, failed.InstanceName, errors.New("connection timeout"))
+		if failure < 3 {
+			continue
+		}
+		cb := m.ensureBreaker(schedulerKey(failed.InstanceType, failed.InstanceName))
+		state, count, retryAt := cb.State()
+		if state != "open" || count != failure || !retryAt.After(time.Now()) || m.allowExecution(failed) {
+			t.Fatalf("failure %d lost scheduler containment: state=%s count=%d retry=%v", failure, state, count, retryAt)
+		}
+		if !m.allowExecution(healthy) {
+			t.Fatal("one failing connection blocked another instance")
+		}
+		health := m.SchedulerHealth()
+		if len(health.Breakers) != 1 || health.Breakers[0].Failures != failure || !health.Breakers[0].RetryAt.Equal(retryAt) || health.Breakers[0].State != "open" {
+			t.Fatalf("served scheduler health lost the owned retry fence: %+v", health.Breakers)
+		}
+		// Simulate reaching the scheduled retry without sleeping or polling a host.
+		if !cb.allow(retryAt) {
+			t.Fatal("due probe was not admitted")
+		}
+	}
+	m.recordTaskResult(failed.InstanceType, failed.InstanceName, nil)
+	if !m.allowExecution(failed) || len(m.SchedulerHealth().Breakers) != 0 {
+		t.Fatal("successful poll did not restore scheduler admission and health")
+	}
+	status := m.pollStatusMap[schedulerKey(failed.InstanceType, failed.InstanceName)]
+	if status.ConsecutiveFailures != 0 || !status.LastErrorAt.IsZero() || status.LastErrorMessage != "" || status.LastErrorCategory != "" || status.LastSuccess.IsZero() {
+		t.Fatalf("successful poll retained an outstanding failure: %+v", status)
+	}
+	for i := 0; i < 3; i++ {
+		m.recordTaskResult(failed.InstanceType, failed.InstanceName, errors.New("connection timeout"))
+	}
+	cb := m.ensureBreaker(schedulerKey(failed.InstanceType, failed.InstanceName))
+	if cb.retryInterval != 40*time.Second || m.allowExecution(failed) {
+		t.Fatal("new failure episode did not restart the original backoff")
+	}
 }
