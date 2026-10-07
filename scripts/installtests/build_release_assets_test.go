@@ -5072,11 +5072,12 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 		missingBase              bool
 		diffStatus               int
 		code, dependencies       string
+		goCompile                bool
 		audit                    bool
 		auditStatus              int
 	}{
 		{name: "docs_only", files: "docs/FAQ.md\nREADME.md\n", code: "false", dependencies: "false"},
-		{name: "unrelated_code", files: "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "unrelated_code", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false"},
 		{name: "manifest", files: "frontend-modern/package.json\n", code: "true", dependencies: "true"},
 		{name: "lock", files: "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
 		{name: "audit_runner", files: "scripts/npm-audit-retry.sh\n", code: "true", dependencies: "true"},
@@ -5085,15 +5086,15 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 		{name: "large_runner_first", files: "scripts/npm-audit-retry.sh\n" + docs, code: "true", dependencies: "true"},
 		{name: "large_lock_last", files: docs + "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
 		{name: "large_docs_only", files: docs, code: "false", dependencies: "false"},
-		{name: "large_unrelated_code", files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "large_unrelated_code", goCompile: true, files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
 		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\n", code: "true", dependencies: "false"},
 		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
-		{name: "zero_push_base", base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
-		{name: "missing_base", missingBase: true, code: "true", dependencies: "true"},
-		{name: "manual_dispatch", event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
+		{name: "zero_push_base", goCompile: true, base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
+		{name: "missing_base", goCompile: true, missingBase: true, code: "true", dependencies: "true"},
+		{name: "manual_dispatch", goCompile: true, event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
 		{name: "failed_diff", diffStatus: 42},
 		{name: "large_changed_graph_critical_blocks", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true", audit: true, auditStatus: 1},
-		{name: "unchanged_graph_critical_warns", files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
+		{name: "unchanged_graph_critical_warns", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -5137,6 +5138,9 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", "-c", run)
+			// Actions runs this shell from the checkout root, including its
+			// repo-relative compilation helper. Keep that real execution context.
+			cmd.Dir = repoFile()
 			cmd.Env = env
 			result, commandErr := cmd.CombinedOutput()
 			if tc.diffStatus != 0 {
@@ -5166,8 +5170,8 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 				}
 				values[key] = value
 			}
-			if values["code"] != tc.code || values["frontend_deps"] != tc.dependencies {
-				t.Errorf("actual classification = %v; want code=%s frontend_deps=%s (%d changed bytes)", values, tc.code, tc.dependencies, len(tc.files))
+			if values["code"] != tc.code || values["frontend_deps"] != tc.dependencies || values["go_compile"] != strconv.FormatBool(tc.goCompile) {
+				t.Errorf("actual classification = %v; want code=%s frontend_deps=%s go_compile=%t (%d changed bytes)", values, tc.code, tc.dependencies, tc.goCompile, len(tc.files))
 			}
 			if !tc.audit {
 				return

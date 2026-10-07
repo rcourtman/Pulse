@@ -5787,3 +5787,20 @@ saved-identity/manual-token contract. `pve_backup_warning_test.go` exercises
 as well as unknown evidence and hostile endpoint text. The HTTP status helper
 has wrapped-error/body-injection controls in `api_error_status_test.go`. These
 are local source controls, not a native permission diagnosis or availability.
+
+### Physical-disk chart metadata without invented History
+
+`GetPhysicalDiskTemperatureCharts` preserves a currently collected physical
+disk's identity, display name, node and instance even when its stored
+temperature series is empty. A retained-only disk with no observed samples
+does not introduce an empty chart entry. Neither current nor retained readings
+create historical timestamps, duplicate a single stored point or pad a flat
+series: stored sample values and times remain unchanged. This composes current
+disk metadata with the sparse-history and retained-observation boundaries;
+collection policy and native health claims are unchanged.
+
+`TestDiskTemperatureChartsRetainOnlyObservedSamples` in
+`internal/monitoring/monitor_metrics_slo_test.go` binds live-without-history
+metadata, retained-without-history exclusion and original single-point
+observations to the production chart path. These source controls do not
+establish native temperature collection or installed History acceptance.

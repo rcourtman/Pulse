@@ -532,7 +532,8 @@ function usesSharedChangePresentation(consumer: string, adapter: string): boolea
       !ts.isStringLiteral(node.moduleSpecifier) ||
       node.moduleSpecifier.text !== '@/utils/resourceChangePresentation' ||
       node.importClause?.isTypeOnly
-    ) continue;
+    )
+      continue;
     const imports = node.importClause?.namedBindings;
     if (!imports || !ts.isNamedImports(imports)) continue;
     for (const item of imports.elements) {
@@ -549,9 +550,13 @@ function usesSharedChangePresentation(consumer: string, adapter: string): boolea
       bindings.has(node.expression.text) &&
       node.arguments.length > 0 &&
       // The metadata-aware adapter needs the change, not just its kind.
-      !(metadataAware && ts.isPropertyAccessExpression(node.arguments[0]) &&
-        node.arguments[0].name.text === 'kind')
-    ) called = true;
+      !(
+        metadataAware &&
+        ts.isPropertyAccessExpression(node.arguments[0]) &&
+        node.arguments[0].name.text === 'kind'
+      )
+    )
+      called = true;
     ts.forEachChild(node, visit);
   };
   visit(tree);
@@ -2185,10 +2190,17 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_KIND_ORDER');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_TYPE_ORDER');
     expect(resourceDetailDrawerSource).toContain('RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER');
-    expect(usesSharedChangePresentation(resourceDetailDrawerOverviewSource, resourceChangePresentationSource)).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        resourceDetailDrawerOverviewSource,
+        resourceChangePresentationSource,
+      ),
+    ).toBe(true);
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
-    expect(usesSharedChangePresentation(resourceChangeSummarySource, resourceChangePresentationSource)).toBe(true);
+    expect(
+      usesSharedChangePresentation(resourceChangeSummarySource, resourceChangePresentationSource),
+    ).toBe(true);
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceAdapterPresentation');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
@@ -4354,7 +4366,6 @@ describe('frontend resource type boundaries', () => {
   });
 });
 
-
 describe('shared resource change presentation boundary controls', () => {
   const kindAdapter = 'export function getResourceChangeKindPresentation(kind) {}';
   const metadataAdapter = `${kindAdapter}\nexport function getResourceChangePresentation(change) {}`;
@@ -4362,25 +4373,80 @@ describe('shared resource change presentation boundary controls', () => {
     `import { ${name} } from '@/utils/resourceChangePresentation'; ${name}(${argument});`;
 
   it('accepts the kind adapter before the metadata-aware API exists', () => {
-    expect(usesSharedChangePresentation(consumer('getResourceChangeKindPresentation', 'change.kind'), kindAdapter)).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangeKindPresentation', 'change.kind'),
+        kindAdapter,
+      ),
+    ).toBe(true);
   });
 
   it('requires the whole-change adapter once available, even if the old helper still exists', () => {
-    expect(usesSharedChangePresentation(consumer('getResourceChangePresentation'), metadataAdapter)).toBe(true);
-    expect(usesSharedChangePresentation(consumer('getResourceChangeKindPresentation', 'change.kind'), metadataAdapter)).toBe(false);
-    expect(usesSharedChangePresentation(consumer('getResourceChangePresentation', 'change.kind'), metadataAdapter)).toBe(false);
+    expect(
+      usesSharedChangePresentation(consumer('getResourceChangePresentation'), metadataAdapter),
+    ).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangeKindPresentation', 'change.kind'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation', 'change.kind'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
   });
 
   it('resolves named import aliases without accepting an inline lookalike', () => {
-    expect(usesSharedChangePresentation("import { getResourceChangePresentation as present } from '@/utils/resourceChangePresentation'; present(change);", metadataAdapter)).toBe(true);
-    expect(usesSharedChangePresentation('function getResourceChangePresentation(change) {} getResourceChangePresentation(change);', metadataAdapter)).toBe(false);
-    expect(usesSharedChangePresentation(consumer('getResourceChangePresentation').replace("@/utils/resourceChangePresentation", '@/utils/localCopy'), metadataAdapter)).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        "import { getResourceChangePresentation as present } from '@/utils/resourceChangePresentation'; present(change);",
+        metadataAdapter,
+      ),
+    ).toBe(true);
+    expect(
+      usesSharedChangePresentation(
+        'function getResourceChangePresentation(change) {} getResourceChangePresentation(change);',
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace(
+          '@/utils/resourceChangePresentation',
+          '@/utils/localCopy',
+        ),
+        metadataAdapter,
+      ),
+    ).toBe(false);
   });
 
   it('rejects comment-only, unused and type-only imports', () => {
-    expect(usesSharedChangePresentation('// ' + consumer('getResourceChangePresentation'), metadataAdapter)).toBe(false);
-    expect(usesSharedChangePresentation("import { getResourceChangePresentation } from '@/utils/resourceChangePresentation';", metadataAdapter)).toBe(false);
-    expect(usesSharedChangePresentation(consumer('getResourceChangePresentation').replace('import {', 'import type {'), metadataAdapter)).toBe(false);
-    expect(usesSharedChangePresentation(consumer('getResourceChangePresentation').replace('{ getResource', '{ type getResource'), metadataAdapter)).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        '// ' + consumer('getResourceChangePresentation'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        "import { getResourceChangePresentation } from '@/utils/resourceChangePresentation';",
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace('import {', 'import type {'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
+    expect(
+      usesSharedChangePresentation(
+        consumer('getResourceChangePresentation').replace('{ getResource', '{ type getResource'),
+        metadataAdapter,
+      ),
+    ).toBe(false);
   });
 });
