@@ -53,7 +53,24 @@ func IsUsableHardwareID(value string) bool {
 		"TO BE FILLED BY O.E.M.", "0123456789":
 		return false
 	}
-	compact := strings.NewReplacer("-", "", ":", "", ".", "", " ", "").Replace(upper)
+	if isQEMUDefaultDiskSerial(upper) {
+		return false
+	}
+	// A WWN framing prefix must not hide an all-zero value: udev reports
+	// ID_WWN=0x0000000000000000 for some bridges, and the 0x would otherwise
+	// keep it from counting as all zeros.
+	digits := upper
+	for {
+		trimmed := digits
+		for _, prefix := range []string{"NAA.", "EUI.", "WWN-", "0X"} {
+			trimmed = strings.TrimPrefix(trimmed, prefix)
+		}
+		if trimmed == digits {
+			break
+		}
+		digits = trimmed
+	}
+	compact := strings.NewReplacer("-", "", ":", "", ".", "", " ", "").Replace(digits)
 	if compact == "" {
 		return false
 	}
@@ -64,6 +81,57 @@ func IsUsableHardwareID(value string) bool {
 		allF = allF && char == 'F'
 	}
 	return !allZero && !allF
+}
+
+// isQEMUDefaultDiskSerial recognizes the serial QEMU reports for a virtual
+// disk configured without one. Every VM built the same way reports the same
+// value, so it names a slot, not a disk: each node of a nested Proxmox cluster
+// lists its first disk with serial drive-scsi0.
+//
+//   - A SCSI disk falls back to its drive ID: "drive-scsi0" under Proxmox,
+//     "drive-scsi0-0-0-0" under libvirt, and QEMU's automatic ID for a -drive
+//     given none, "scsi0-hd0" for if=scsi or "none0" for if=none.
+//   - An ATA disk takes a per-VM counter, "QM00001".
+//
+// The grammar is kept to those exact shapes so a real serial that merely
+// starts with "DRIVE-" or "QM" stays usable. The argument must already be
+// upper-cased.
+func isQEMUDefaultDiskSerial(upper string) bool {
+	if counter, ok := strings.CutPrefix(upper, "QM"); ok {
+		return len(counter) == 5 && isASCIIDigits(counter)
+	}
+	if address, ok := strings.CutPrefix(upper, "DRIVE-SCSI"); ok {
+		groups := strings.Split(address, "-")
+		if len(groups) > 4 {
+			return false
+		}
+		for _, group := range groups {
+			if !isASCIIDigits(group) {
+				return false
+			}
+		}
+		return true
+	}
+	if bus, unit, ok := strings.Cut(upper, "-HD"); ok {
+		index, isSCSI := strings.CutPrefix(bus, "SCSI")
+		return isSCSI && isASCIIDigits(index) && isASCIIDigits(unit)
+	}
+	if unit, ok := strings.CutPrefix(upper, "NONE"); ok {
+		return isASCIIDigits(unit)
+	}
+	return false
+}
+
+func isASCIIDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizeHardwareID canonicalizes a serial or WWN for cross-source
