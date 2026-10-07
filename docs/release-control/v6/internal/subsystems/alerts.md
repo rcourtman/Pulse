@@ -3911,3 +3911,35 @@ It covers both families sharing a disk, interruption/reconfirmation, partial
 rule disablement, re-enablement, legacy/unknown causes, filesystem and host
 isolation, removal and node-link ownership. These are source lifecycle controls,
 not collector, smartctl, installed notification or native disk-recovery proof.
+
+### Storage observation gaps restart confirmation and timing
+
+An absent or `unknown` storage connectivity status interrupts activation,
+recovery confirmations and pending offline intent grace without resolving an
+existing outage or changing its acknowledgement. Capacity is independently
+observable while connectivity is unknown. Missing/unconfirmed-zero capacity,
+negative usage and offline/unavailable storage interrupt capacity activation,
+and intent grace timing; they do not supply healthy capacity evidence.
+Capacity recovery retains its existing immediate measured-clear behaviour,
+not the recovery stability window used by memory and temperature gauges.
+A confirmed empty store still supplies a genuine zero-usage recovery reading.
+Fresh observations must satisfy the existing full confirmation/delay after a
+gap. Interruption is scoped to the storage's canonical identity and applied to
+both live and shadow reducers; interrupted intent is checkpointed for restart.
+
+`TestStorageConnectivityObservationGaps` and
+`TestStorageConnectivityGapRestartsIntentGrace` exercise the real storage
+entry point, acknowledged occurrence retention, neighbour isolation, fresh
+reconfirmation and empty intent checkpoint. Storage routes in
+`TestMetricObservationGapRestartsActivation` covers capacity gaps and explicit
+intent grace; `TestStorageCapacityGapHoldsOccurrence` verifies retained,
+acknowledged capacity incidents and genuine immediate empty-store recovery. Existing restart, empty-capacity and predictive-capacity controls
+remain required. These source controls are not native storage recovery or
+installed destination-delivery evidence.
+
+`TestStorageConnectivityGapWebhook` also exercises the production Monitor
+callbacks, ordinary notification queue and guest-local HTTP receiver: the gap
+and first fresh healthy poll send no recovery; confirmed recovery sends one
+resolved receipt with the original occurrence identity, and the queue drains
+without failed/DLQ work. This is synthetic callback/receiver acceptance, not a
+native appliance or external webhook-provider result.
