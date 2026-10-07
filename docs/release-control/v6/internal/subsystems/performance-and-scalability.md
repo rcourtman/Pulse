@@ -2685,13 +2685,14 @@ Workload rows keep their object while a guest's serialized data is unchanged,
 so a quiet guest's row re-derives nothing on refresh, and an age computed at
 render froze there. The guest backup cell in `GuestRowCells.tsx` therefore
 reads the frontend-primitives shared relative-time clock for its age badge and
-its fresh, stale or overdue band (measured from the later of the clock and the
-wall clock), and `useGuestRowState.ts` passes the clock to the availability
-probe presentation only for guests that carry a probe. On each 30-second tick
-the backup cell of every guest with a recorded backup re-derives its badge
-(one shared timer, no per-row interval); guests without a probe skip the probe
-presentation, and a guest's backup cell does not depend on the clock's ticks
-while it has no recorded backup time.
+its fresh, stale or overdue band, and `useGuestRowState.ts` passes the clock to
+the availability probe presentation only for guests that carry a probe. Every
+clock read returns the wall clock, so a row that mounts between ticks bands a
+backup from seconds ago as fresh rather than as a future time. On each
+30-second tick the backup cell of every guest with a recorded backup re-derives
+its badge (one shared timer, no per-row interval); guests without a probe skip
+the probe presentation, and a guest's backup cell does not depend on the
+clock's ticks while it has no recorded backup time.
 That per-row link state now also consumes the shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper instead of a workload-local routing shim. Future infrastructure-link

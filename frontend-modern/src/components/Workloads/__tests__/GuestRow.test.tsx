@@ -2402,6 +2402,37 @@ describe('backup column', () => {
     expect(badge()?.textContent?.trim()).toBe('None');
   });
 
+  it('bands a backup from seconds ago as fresh in a row that mounts between clock ticks', () => {
+    const start = Date.parse('2026-05-26T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    // An earlier row keeps the shared clock running.
+    renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-26T07:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS - 5_000);
+
+    // No tick has fired since the backup finished, so measuring from the last
+    // tick would put it in the future and band it unknown.
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: start + RELATIVE_TIME_TICK_MS - 10_000,
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    expect(
+      container.querySelector('[aria-label^="Backup status:"]')?.getAttribute('aria-label'),
+    ).toMatch(/^Backup status: fresh, last backup /);
+  });
+
   it('keeps a mounted backup badge aging through its bands without new data', () => {
     const start = Date.parse('2026-05-26T12:00:00Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });

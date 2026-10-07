@@ -320,13 +320,10 @@ function BackupStatusCell(props: {
 
   const alertsActivation = useAlertsActivation();
   // Guest rows stay mounted while the last backup time never changes, so the
-  // age badge and its fresh, stale or overdue band read the shared clock. The
-  // clock can trail the wall clock by up to one tick, and a backup that
-  // finished inside that window must not band as a future, unknown age. A
+  // age badge and its fresh, stale or overdue band read the shared clock. A
   // guest with no recorded backup has no age, so its cell does not depend on
   // the clock's ticks.
-  const tickNow = useRelativeTimeNow();
-  const now = () => Math.max(tickNow(), Date.now());
+  const now = useRelativeTimeNow();
   const hasBackupTime = () =>
     props.lastBackup !== null &&
     props.lastBackup !== undefined &&

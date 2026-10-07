@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "0324a3a3d75ed09d04fc382579592a065496813f",
+  "verified_at": "2026-10-07T12:40:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "e95edaa71cb4fcd2201427a925c7442ea751dc47c8f7a75adb56643009c10dd6"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "BackupStatusCell reads useRelativeTimeNow directly; the Math.max against Date.now() is gone because every clock read now returns the wall clock (main's relative-time clock change)",
+    "Private mock stack (backend :7741 built from the merged tree, Vite :5261 serving it) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled",
+    "Proxmox guests with every VM's last backup injected five minutes inside the 24-hour fresh window (REST and websocket payloads): at 1440, 50 cells 'Backup status: fresh, last backup 23 hours ago' became 'stale, last backup 1 day ago' with the 1d badge after ten held minutes, and the running-backup row moved from 'last completed backup 23 hours ago' to '1 day ago' and kept its Running badge",
+    "At 390 the guests table does not show the Backup column, so the phone pass only confirmed the page renders without errors",
+    "No page errors at either viewport; Workloads suites pass and tsc is clean on the merged tree"
+  ],
+  "interactions": [
+    "Loaded /proxmox, waited for the guest rows, held the stream and advanced the page clock ten one-minute steps, at both viewports"
+  ]
+}

@@ -1292,6 +1292,24 @@ once at mount would age a job that keeps syncing and count it overdue.
 `apiFetch`, so a replaced or unmounted replication read stops instead of
 running on in the background, and it throws `apiErrorFromResponse` errors that
 keep the HTTP status, so a 401 or 403 withdraws the jobs as an access failure.
+The same clock drives the remaining consumers whose rows, cards and drawers
+stay mounted over unchanged data. Availability check rows, fleet tiles and the
+drawer probe card measure the checked and last-success ages and the fresh or
+stale band from it, and the standalone status indicator, its filter bucket,
+the attention sort and the availability posture counts and `latest data` age
+read it too, so a probe that stops reporting turns stale, sorts first and
+counts as needing attention without new data. The Machines status dot's
+five-minute stale fallback for a silent agent reads it, so the row renders as
+a fresh load at the same moment would. The Docker host drawer's container
+update Last checked, and the resource drawer's change history observed and
+occurred ages, operator-state set time, maintenance-verification window end
+and review times and debug source last-seen ages read it as well. The drawer's
+correlation last-seen and action-audit updated ages stay read-time: those
+facets are read once per drawer and describe latest readings of records that
+may have moved since.
+`sortStandaloneResourcesByAttention` re-sorts on every clock tick, so it
+classifies each resource once per sort rather than twice per comparison, and
+the Settings availability page classifies loaded checks on the same clock.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
