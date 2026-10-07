@@ -673,9 +673,9 @@ func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testi
 }
 
 // A temperature, current or retained, cannot supply historical timestamps.
-// Keep only observed samples, including single-point histories, and omit disks
-// with none. This composes upstream retained-value protection with the reviewed
-// sparse-history contract rather than restoring synthetic two-point padding.
+// Keep only observed samples, including single-point histories. Collected
+// readings retain disk metadata even without history; retained-only readings do
+// not add empty entries. Neither may restore synthetic two-point padding.
 func TestDiskTemperatureChartsRetainOnlyObservedSamples(t *testing.T) {
 	now := time.Now().UTC()
 	standby := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
@@ -705,8 +705,8 @@ func TestDiskTemperatureChartsRetainOnlyObservedSamples(t *testing.T) {
 		t.Fatalf("silent agent disk series = %+v (found %v), want only its stored 44C sample at %s", silentEntry.Temperature, ok, sampledAt)
 	}
 	live, ok := charts["LIVE-NO-HISTORY"]
-	if ok {
-		t.Fatalf("a live disk with no stored samples got fabricated history: %+v", live.Temperature)
+	if !ok || len(live.Temperature) != 0 || live.Name != "WDC WD80EFAX" || live.Node != "node-a" {
+		t.Fatalf("live disk = %+v (found %v), want its metadata with no fabricated history", live, ok)
 	}
 	m.metricsHistory.AddDiskMetric("LIVE-NO-HISTORY", "smart_temp", 37, sampledAt)
 	live, ok = m.GetPhysicalDiskTemperatureCharts(time.Hour)["LIVE-NO-HISTORY"]

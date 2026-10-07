@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -275,10 +276,11 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 
 	// Phase 1: Collect disk metadata and resource IDs.
 	type diskMeta struct {
-		resourceID string
-		name       string
-		node       string
-		instance   string
+		resourceID           string
+		name                 string
+		node                 string
+		instance             string
+		temperatureCollected bool
 	}
 	var disks []diskMeta
 	for _, disk := range readState.PhysicalDisks() {
@@ -302,10 +304,11 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			name = strings.TrimSpace(disk.DevPath())
 		}
 		disks = append(disks, diskMeta{
-			resourceID: resourceID,
-			name:       name,
-			node:       strings.TrimSpace(disk.Node()),
-			instance:   strings.TrimSpace(disk.Instance()),
+			resourceID:           resourceID,
+			name:                 name,
+			node:                 strings.TrimSpace(disk.Node()),
+			instance:             strings.TrimSpace(disk.Instance()),
+			temperatureCollected: diskinventory.TemperatureCollected(disk.Temperature(), disk.Collection()),
 		})
 	}
 
@@ -354,9 +357,10 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		}
 
 		// Neither a current nor a retained temperature is two historical
-		// observations. Keep single-point histories intact, and omit disks
-		// without stored samples instead of inventing a flat line.
-		if len(tempPoints) == 0 {
+		// observations. Keep empty and single-point histories intact instead
+		// of inventing a flat line. A collected reading still supplies current
+		// disk metadata; a retained-only reading with no history supplies none.
+		if len(tempPoints) == 0 && !d.temperatureCollected {
 			continue
 		}
 
