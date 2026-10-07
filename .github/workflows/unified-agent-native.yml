@@ -17,6 +17,10 @@ on:
       - 'internal/remoteconfig/**'
       - 'internal/updatesignature/**'
       - 'pkg/agents/**'
+      # Every native platform installs/builds this graph, and Windows uses its
+      # Vitest runtime for the generated PowerShell 5.1 install command.
+      - 'frontend-modern/package.json'
+      - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'
@@ -40,6 +44,8 @@ on:
       - 'internal/remoteconfig/**'
       - 'internal/updatesignature/**'
       - 'pkg/agents/**'
+      - 'frontend-modern/package.json'
+      - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'

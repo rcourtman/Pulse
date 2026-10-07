@@ -6904,3 +6904,17 @@ Windows CI also executes the actual guards against failed and successful native
 processes, including the unguarded masking control. An unavailable local
 PowerShell is an explicit skip, not native acceptance. Installer behaviour,
 service-state exclusions and the existing lifecycle checks are unchanged.
+
+### Native frontend graph admission (7 October 2026)
+
+The existing native-agent jobs install the locked frontend graph and build real
+API-linked assets on every platform. Windows additionally executes generated
+installation commands using that graph's test runtime in PowerShell 5.1. Both
+PR and main path filters therefore include the frontend manifest and lockfile,
+even when no Go or command-generator file changes. Ordinary UI-only edits do
+not gain a new full native matrix trigger.
+
+`TestNativeAgentWorkflowAdmitsFrontendGraphChanges` decodes each event and rejects
+either omitted graph input or a later exclusion. Existing real-build ordering,
+Linux helper, Windows exit/service and installer checks remain unchanged. This
+is admission coverage, not a local Windows/macOS verdict or installed recovery.

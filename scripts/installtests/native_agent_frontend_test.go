@@ -18,6 +18,87 @@ type nativeAgentFrontendStep struct {
 	Run              string
 }
 
+func validateNativeAgentFrontendTriggers(content []byte) error {
+	var workflow struct {
+		On map[string]struct{ Paths []string }
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		return err
+	}
+	for _, event := range []string{"push", "pull_request"} {
+		paths := workflow.On[event].Paths
+		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json"} {
+			found := false
+			for _, pattern := range paths {
+				if strings.HasPrefix(pattern, "!") {
+					return fmt.Errorf("%s must not exclude native frontend inputs", event)
+				}
+				found = found || pattern == required
+			}
+			if !found {
+				return fmt.Errorf("%s must admit native frontend graph changes in %s", event, required)
+			}
+		}
+	}
+	return nil
+}
+
+func TestNativeAgentWorkflowAdmitsFrontendGraphChanges(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateNativeAgentFrontendTriggers(content); err != nil {
+		t.Fatal(err)
+	}
+	// Decode each event, rather than accepting a matching path elsewhere in
+	// the file. Both PR qualification and containing-main checks need it.
+	for _, event := range []string{"push", "pull_request"} {
+		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json"} {
+			t.Run(event+" missing "+required, func(t *testing.T) {
+				var workflow map[string]interface{}
+				if err := yaml.Unmarshal(content, &workflow); err != nil {
+					t.Fatal(err)
+				}
+				trigger := workflow["on"].(map[string]interface{})[event].(map[string]interface{})
+				paths := trigger["paths"].([]interface{})
+				var changed []interface{}
+				for _, pattern := range paths {
+					if pattern != required {
+						changed = append(changed, pattern)
+					}
+				}
+				if len(changed) != len(paths)-1 {
+					t.Fatal("control must remove exactly one original input")
+				}
+				trigger["paths"] = changed
+				mutant, err := yaml.Marshal(workflow)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := validateNativeAgentFrontendTriggers(mutant); err == nil {
+					t.Fatal("accepted frontend graph change without native verification")
+				}
+			})
+		}
+		t.Run(event+" excluded frontend graph", func(t *testing.T) {
+			var workflow map[string]interface{}
+			if err := yaml.Unmarshal(content, &workflow); err != nil {
+				t.Fatal(err)
+			}
+			trigger := workflow["on"].(map[string]interface{})[event].(map[string]interface{})
+			trigger["paths"] = append(trigger["paths"].([]interface{}), "!frontend-modern/**")
+			mutant, err := yaml.Marshal(workflow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateNativeAgentFrontendTriggers(mutant); err == nil {
+				t.Fatal("accepted a later filter excluding the native frontend graph")
+			}
+		})
+	}
+}
+
 func validateNativeAgentFrontendPreparation(steps []nativeAgentFrontendStep) error {
 	indices := map[string]int{}
 	for i, step := range steps {
