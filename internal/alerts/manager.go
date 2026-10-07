@@ -251,7 +251,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,
-		config:                          defaultAlertConfig(),
+		config:                          DefaultAlertConfig(),
 		skipPersistedRestore:            opts.skipPersistedAlertRestore,
 	}
 	intentClockEpoch := time.Now()

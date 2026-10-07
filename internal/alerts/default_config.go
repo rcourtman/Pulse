@@ -1,6 +1,10 @@
 package alerts
 
-func defaultAlertConfig() AlertConfig {
+// DefaultAlertConfig returns the factory alert configuration: the one a new
+// Manager starts with and the one a fresh install loads before alerts.json
+// exists. Callers that need factory values build them here instead of
+// declaring their own copy.
+func DefaultAlertConfig() AlertConfig {
 	alertOrphaned := true
 	return AlertConfig{
 		Enabled:                true,
@@ -162,7 +166,7 @@ func defaultAlertConfig() AlertConfig {
 				Enabled:  false, // OFF - users should opt-in to quiet hours
 				Start:    "22:00",
 				End:      "08:00",
-				Timezone: "America/New_York",
+				Timezone: "", // Unset: the server's local zone; the settings page offers the browser's zone
 				Days: map[string]bool{
 					"monday":    true,
 					"tuesday":   true,
@@ -194,9 +198,9 @@ func defaultAlertConfig() AlertConfig {
 			},
 		},
 		// Alert TTL defaults
-		MaxAlertAgeDays:           7,  // Cleanup unacknowledged alerts inactive for 7 days
-		MaxAcknowledgedAgeDays:    1,  // Auto-cleanup acknowledged alerts older than 1 day
-		AutoAcknowledgeAfterHours: 24, // Auto-acknowledge alerts after 24 hours
+		MaxAlertAgeDays:           7, // Cleanup unacknowledged alerts inactive for 7 days
+		MaxAcknowledgedAgeDays:    1, // Auto-cleanup acknowledged alerts older than 1 day
+		AutoAcknowledgeAfterHours: 0, // Off: a firing alert stays unacknowledged until someone acknowledges it
 		// Flapping detection defaults
 		FlappingEnabled:         true, // Enable flapping detection
 		FlappingWindowSeconds:   300,  // 5 minute window

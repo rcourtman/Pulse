@@ -1057,7 +1057,7 @@ func (m *Manager) HostDiskTemperatureThreshold(host DiskTemperatureHost, diskTyp
 // DefaultDiskTemperatureThreshold is DiskTemperatureThreshold under the
 // factory alert configuration, for callers with no alert manager.
 func DefaultDiskTemperatureThreshold(diskType string) *HysteresisThreshold {
-	config := defaultAlertConfig()
+	config := DefaultAlertConfig()
 	return cloneThreshold(diskTemperatureThresholdForType(config.DiskTempByType, config.AgentDefaults.DiskTemperature, false, diskType))
 }
 

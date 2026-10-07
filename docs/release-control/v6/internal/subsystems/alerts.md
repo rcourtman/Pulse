@@ -1746,8 +1746,8 @@ compatibility aliases and wrapper functions for the leaf config package,
 `model.go` owns alert runtime data structures and clone semantics,
 `constants.go` owns package-wide cleanup and storage constants,
 `metric_hooks.go` owns Prometheus integration callbacks, `manager.go` owns
-Manager state and construction, `default_config.go` owns the default runtime
-configuration literal, `lifecycle.go` owns shutdown, and `escalation.go` owns
+Manager state and construction, `default_config.go` owns the factory runtime
+configuration (`DefaultAlertConfig`), `lifecycle.go` owns shutdown, and `escalation.go` owns
 the escalation loop and escalation state mutation. Future changes must extend
 the owning file rather than reintroducing a central catch-all manager file.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
@@ -1756,6 +1756,34 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Fresh installs load the factory alert configuration
+
+`DefaultAlertConfig` in `internal/alerts/default_config.go` is the only
+declaration of factory alert settings. A new Manager starts from it, and
+`LoadAlertConfig` in `internal/config/persistence.go` returns it while
+`alerts.json` does not exist; persistence must not declare a second copy. The
+copy it used to return left out `DockerDefaults`, a value struct, so a fresh
+install loaded container CPU, memory and disk as trigger 0, `UpdateConfig`
+kept that as a deliberate Off, the thresholds page called the container Global
+Defaults Custom, and the startup identity migration wrote those zeros to
+`alerts.json` within a second of first boot. The missing-file config carries
+no activation state, because activation is a stored decision: node updates and
+imports reapply `LoadAlertConfig`, and `UpdateConfig` then keeps a running
+manager's state, while a new manager starts pending review. An existing
+`alerts.json` is never rewritten to factory values, because a stored trigger 0
+is how a saved Off looks. The factory leaves `AutoAcknowledgeAfterHours` at 0: no settings
+control shows it, and the 24 hours it used to declare never reached an
+install. It leaves the quiet-hours timezone empty so the settings page offers
+the viewer's browser zone. Flapping detection and alert TTL cleanup are on in
+the factory and now reach fresh installs; a thresholds-page save still sends
+neither field, so it turns them off. `TestLoadAlertConfigFreshInstallUsesFactoryConfig`,
+`TestLoadAlertConfigMissingFileKeepsRunningActivation` and
+`TestLoadAlertConfigKeepsStoredDockerDefaultsOff` in
+`internal/config/persistence_alert_fresh_install_test.go`, plus
+`TestDefaultAlertConfigLeavesFiringAlertsUnacknowledged` and
+`TestDefaultAlertConfigLeavesQuietHoursTimezoneUnset` in
+`internal/alerts/alerts_test.go`, pin this.
 
 ### Agent disk temperature alerts clear when their threshold is off
 

@@ -1005,70 +1005,17 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	alertOrphaned := true
 	data, err := c.fs.ReadFile(c.alertFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return default config if file doesn't exist
-			return &alerts.AlertConfig{
-				Enabled: true,
-				GuestDefaults: alerts.ThresholdConfig{
-					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-				},
-				NodeDefaults: alerts.ThresholdConfig{
-					CPU:         &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory:      &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-				},
-				AgentDefaults: alerts.ThresholdConfig{
-					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-				},
-				Schedule: alerts.ScheduleConfig{
-					Cooldown:        5,
-					MaxAlertsHour:   10,
-					InitialNotify:   "all",
-					NotifyOnResolve: true,
-					Grouping: alerts.GroupingConfig{
-						Enabled: true,
-						Window:  30,
-						ByNode:  true,
-						ByGuest: false,
-					},
-				},
-				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-				TimeThresholds: map[string]int{
-					"guest":   5,
-					"node":    5,
-					"agent":   5,
-					"storage": 5,
-					"pbs":     5,
-				},
-				MinimumDelta:      2.0,
-				SuppressionWindow: 5,
-				HysteresisMargin:  5.0,
-				SnapshotDefaults: alerts.SnapshotAlertConfig{
-					Enabled:         false,
-					WarningDays:     30,
-					CriticalDays:    45,
-					WarningSizeGiB:  0,
-					CriticalSizeGiB: 0,
-				},
-				BackupDefaults: alerts.BackupAlertConfig{
-					Enabled:       false,
-					WarningDays:   7,
-					CriticalDays:  14,
-					FreshHours:    24,
-					StaleHours:    72,
-					AlertOrphaned: &alertOrphaned,
-					IgnoreVMIDs:   []string{},
-				},
-				Overrides: make(map[string]alerts.ThresholdConfig),
-			}, nil
+			// A fresh install has no alerts.json yet. It starts from the alert
+			// manager's factory configuration; a second literal here left out
+			// Docker container thresholds, so they loaded as Off. Activation
+			// is a stored decision, not a factory value: leaving it unset lets
+			// UpdateConfig keep a running manager's state.
+			config := alerts.DefaultAlertConfig()
+			config.ActivationState = ""
+			return &config, nil
 		}
 		return nil, err
 	}

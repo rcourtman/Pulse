@@ -20161,8 +20161,8 @@ func TestSetAckRecordUsesCanonicalKeyWithoutMutatingLiveAlert(t *testing.T) {
 }
 
 func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.T) {
-	first := defaultAlertConfig()
-	second := defaultAlertConfig()
+	first := DefaultAlertConfig()
+	second := DefaultAlertConfig()
 
 	if first.BackupDefaults.AlertOrphaned == nil {
 		t.Fatal("first default backup AlertOrphaned is nil")
@@ -20178,6 +20178,41 @@ func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.
 	*first.BackupDefaults.AlertOrphaned = false
 	if !*second.BackupDefaults.AlertOrphaned {
 		t.Fatal("mutating one default config changed another default config")
+	}
+}
+
+// A fresh install runs the factory configuration, and the settings page has no
+// auto-acknowledge control, so the factory must never acknowledge a firing
+// alert on the user's behalf.
+func TestDefaultAlertConfigLeavesFiringAlertsUnacknowledged(t *testing.T) {
+	m := newTestManager(t)
+
+	now := time.Now()
+	m.mu.Lock()
+	m.activeAlerts["firing-alert"] = &Alert{
+		ID:        "firing-alert",
+		StartTime: now.Add(-72 * time.Hour),
+		LastSeen:  now,
+	}
+	m.mu.Unlock()
+
+	m.Cleanup(time.Hour)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, "firing-alert")
+	m.mu.RUnlock()
+	if alert.Acknowledged {
+		t.Fatalf("factory config acknowledged a firing alert as %q", alert.AckUser)
+	}
+}
+
+// The settings page offers the viewer's browser zone only while the stored
+// quiet-hours timezone is empty; a factory zone would replace it with one
+// fixed city for every fresh install.
+func TestDefaultAlertConfigLeavesQuietHoursTimezoneUnset(t *testing.T) {
+	cfg := DefaultAlertConfig()
+	if cfg.Schedule.QuietHours.Timezone != "" {
+		t.Fatalf("factory quiet-hours timezone = %q, want unset", cfg.Schedule.QuietHours.Timezone)
 	}
 }
 
