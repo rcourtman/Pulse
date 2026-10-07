@@ -5221,22 +5221,9 @@ surface either re-reads the snapshot in the background, as Proxmox replication
 and the external watchdog panel do, or keeps the read-time age, as the Patrol
 attention detail does for Last seen. The external watchdog panel orders its
 re-reads by request, so a slow or hung read can neither pin it to an older
-snapshot nor overwrite a newer outcome while its ages keep moving. An immutable event time (when a delivery
-was attempted, a transition happened, a policy was set) ages correctly over any
-snapshot and reads the clock.
-A presentation helper that formats an age measures it from the time its caller
-passes rather than reading the wall clock itself, so the caller's
-`useRelativeTimeNow` reaches every age and band the helper derives:
-`getAvailabilityProbePresentation(resource, now)` measures its checked and
-last-success ages from the same `now` as its fresh or stale band,
-`getUpdateCheckedLabel(lastCheckedMs, now)` takes the Updates panel's clock,
-and `getProxmoxUpdateEvidencePresentation(node, now)` takes the Proxmox node
-drawer's for its update check age.
-The Availability settings helpers (`getAvailabilityTargetHealth`, its status
-class and title helpers, `getAvailabilityTargetsSummary`) take the settings
-panel's clock as `nowMs` the same way, and a creation time in a settings list
-or dialog (API token Created, an earlier profile-suggestion draft) is a fixed
-event, so its age reads the clock.
+snapshot nor overwrite a newer outcome while its ages keep moving. An
+immutable event time (when a delivery was attempted, a transition happened, a
+policy was set) ages correctly over any snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
