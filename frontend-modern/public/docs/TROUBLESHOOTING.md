@@ -521,7 +521,7 @@ service restart or database access is needed.
   command -v timeout >/dev/null 2>&1 || {
     printf 'Write samples unavailable: GNU timeout is required.\n' >&2; exit 1
   }
-  if samples=$(timeout --signal=TERM --kill-after=1s 80s bash <<'PULSE_WRITE_SAMPLES' 2>/dev/null
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_WRITE_SAMPLES' 2>/dev/null
 set -eu
 read_sample() {
   set -eu
@@ -571,9 +571,10 @@ PULSE_WRITE_SAMPLES
 ```
 
 Each recipe requires **GNU `timeout`** and limits the complete two-sample
-collection, including the 60-second wait, to 80 seconds plus a one-second
-termination grace. It signals only its own collection commands, not Pulse or
-Docker. A missing utility, permission failure, timeout or changed identity
+collection, including the 60-second wait, to 80 seconds. At the deadline it
+kills its own read-only collection group, including readers that ignore TERM,
+not Pulse or Docker. This deliberate hard stop prevents a reader surviving after
+the collection shell exits. A missing utility, permission failure, timeout or changed identity
 makes the pair unavailable; no partial identity, counter or raw reader error is
 printed, and there is no unbounded fallback. Stop sampling on failure rather
 than removing the deadline or retrying against an unresponsive installation.
@@ -603,7 +604,7 @@ a replacement, restart or stopped container makes the pair unavailable.
   command -v timeout >/dev/null 2>&1 || {
     printf 'Container samples unavailable: GNU timeout is required.\n' >&2; exit 1
   }
-  if samples=$(timeout --signal=TERM --kill-after=1s 80s bash <<'PULSE_CONTAINER_SAMPLES' 2>/dev/null
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_CONTAINER_SAMPLES' 2>/dev/null
 set -eu
 read_sample() {
   set -eu

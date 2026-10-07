@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Execute both copied performance recipes with synthetic readers.
 
-Real awk validates fixtures and real GNU timeout enforces the deadline. Only
+Real awk validates fixtures and real GNU timeout enforces the whole-group deadline. Only
 this test's shell group can be killed by the test cleanup; no Pulse service,
 database, Docker socket, workload or destination is used.
 """
@@ -55,6 +55,7 @@ with log.open('a') as stream:
 if os.environ.get('HANG_TOOL') == name:
     if os.environ.get('IGNORE_TERM'):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    (root / 'hung-reader.json').write_text(json.dumps({'pid': os.getpid(), 'group': os.getpgrp()}))
     time.sleep(100)
 if name == 'date':
     assert args == ['-u', '+%Y-%m-%dT%H:%M:%SZ']
@@ -140,6 +141,16 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
                        RECIPE_FIXTURE=str(directory), REAL_AWK=shutil.which("awk"),
                        DOCKER_IDENTITY=DOCKER_IDENTITY, **settings)
             result = run_owned(copied if copied is not None else recipes()[deployment], env)
+            hung_reader = directory / "hung-reader.json"
+            if hung_reader.exists():
+                pid = json.loads(hung_reader.read_text())["pid"]
+                state = Path(f"/proc/{pid}/stat")
+                try:
+                    # A reaped process or a zombie cannot keep running a reader.
+                    remaining = state.read_text().rsplit(") ", 1)[1].split()[0]
+                except FileNotFoundError:
+                    remaining = None
+                self.assertIn(remaining, (None, "Z"), "owned reader survived the collection deadline")
             log = directory / "calls.jsonl"
             calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
@@ -156,7 +167,7 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
         for copied in recipes().values():
             result = subprocess.run(["bash", "-n"], input=copied, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("timeout --signal=TERM --kill-after=1s 80s bash", copied)
+            self.assertIn("timeout --signal=KILL 80s bash", copied)
 
     def test_systemd_samples_only_valid_write_counters_and_stable_identity(self):
         result, calls = self.exercise("systemd")
@@ -280,10 +291,10 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
                 started = time.monotonic()
                 result, _ = self.exercise(deployment, HANG_TOOL=name)
                 self.assert_unavailable(result)
-                self.assertEqual(result.returncode, 124)
+                self.assertEqual(result.returncode, 137)
                 self.assertLess(time.monotonic() - started, 83)
 
-    def test_real_kill_grace_stops_a_reader_ignoring_term(self):
+    def test_real_whole_group_deadline_stops_a_reader_ignoring_term(self):
         started = time.monotonic()
         result, _ = self.exercise("docker", HANG_TOOL="docker", IGNORE_TERM="1")
         self.assert_unavailable(result)
