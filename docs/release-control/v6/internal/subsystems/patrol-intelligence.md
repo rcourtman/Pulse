@@ -1624,12 +1624,13 @@ ready raises a fixed warning notification, a failed Patrol mode save raises an e
 notification, and neither offers an Assistant handoff. A provider or model save
 in Settings > Provider & Models reports the readiness summary, provider and
 model in its own save message.
-The Patrol mode selector in that header and configuration dialog must
-compose the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx`
-instead of rebuilding a local active-button group. The wide default Patrol
-header uses the segmented layout; the constrained configuration dialog may use
-the shared prominent layout so all four mode labels remain readable without
-inventing a Patrol-local selector. Patrol owns the default visible four-level
+The Patrol mode selector in that header must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` instead of
+rebuilding a local active-button group. When the header shows Patrol mode
+options, it renders the selector in the segmented layout inside its `Mode and
+automation` disclosure; a constrained surface that hosts it may use the shared
+prominent layout so all four mode labels remain readable without inventing a
+Patrol-local selector. Patrol owns the default visible four-level
 policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
 `Autopilot`), entitlement locks, and the rule that choosing the highest
 Autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
