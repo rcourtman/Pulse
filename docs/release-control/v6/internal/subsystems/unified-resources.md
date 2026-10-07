@@ -2288,7 +2288,11 @@ A standalone host agent past its reporting lease reaches the Machines table as
 offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
 and temperature cells. The machine drawer drops a silent agent's uptime and
 marks its non-disk Thermals rows "(last known)" with the reason as title,
-keyed on `agent.stale` because those rows are that agent's own sensors. For SMART disk
+keyed on `agent.stale` because those rows are that agent's own sensors.
+Its Disks card reads the agent's retained filesystem usage as last known on the
+same signal (`agentReadingsLastKnownReason`): each figure stays, muted and
+titled with the reason, without threshold colour or usage bars.
+For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
 (`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
