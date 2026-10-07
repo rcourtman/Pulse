@@ -201,7 +201,7 @@ class ZFSMonitoringDocsTest(unittest.TestCase):
         self.assertNotRegex(ZFS_DOC.read_text(), r"journalctl[^\n]*\|")
         for distinction in ("TROUBLESHOOTING.md#inspect-notification-logs",
                             "original time window", "read inside that container, not the Proxmox host",
-                            "For Docker, use the container reader",
+                            "for Docker, use the container reader",
                             "matching partial line can mask a failed read",
                             "empty search does not prove collection succeeded",
                             "Do not restart Pulse, enable Debug or run diagnostics"):
