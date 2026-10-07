@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -412,7 +413,8 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 					temperature := 0
 					if disk.PhysicalDisk != nil {
 						health = strings.ToUpper(strings.TrimSpace(disk.PhysicalDisk.Health))
-						temperature = disk.PhysicalDisk.Temperature
+						// A retained last-known reading is not current heat.
+						temperature = tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Collected
 					}
 					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || temperature >= 50 {
 						attention = append(attention, disk)
@@ -431,8 +433,8 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 							if value := strings.TrimSpace(disk.PhysicalDisk.Health); value != "" {
 								health = value
 							}
-							if disk.PhysicalDisk.Temperature > 0 {
-								temperature = fmt.Sprintf(", Temp: %dC", disk.PhysicalDisk.Temperature)
+							if text := tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Format("C"); text != "" {
+								temperature = ", Temp: " + text
 							}
 						}
 						healthSummary := ""

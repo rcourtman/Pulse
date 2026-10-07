@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -669,6 +670,50 @@ func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testi
 
 	target := effectiveMonitoringSLOTarget(SLOPhysicalDiskChartFallbackP95, SLOPhysicalDiskChartFallbackGHA)
 	assertLatencySLO(t, "GetPhysicalDiskTemperatureCharts(native-history fallback)", latencies, target)
+}
+
+// The disk temperature charts pad a short series to now with the disk's
+// current reading. A retained last-known temperature (a disk in standby, a host
+// agent past its reporting lease) is not a reading taken now: the samples
+// stored while the disk was live stay as they are, and a disk with none gets no
+// series rather than a flat line at the retained value.
+func TestDiskTemperatureChartsPadOnlyWithCollectedReading(t *testing.T) {
+	now := time.Now().UTC()
+	standby := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
+	silent := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason)}
+	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{
+		{ID: "disk-standby", Node: "node-a", DevPath: "/dev/sda", Model: "WDC WD80EFAX", Serial: "STANDBY-NO-HISTORY", Temperature: 41, Collection: standby, LastChecked: now},
+		{ID: "disk-silent", Node: "node-a", DevPath: "/dev/sdb", Model: "WDC WD80EFAX", Serial: "SILENT-ONE-SAMPLE", Temperature: 43, Collection: silent, LastChecked: now},
+		{ID: "disk-live", Node: "node-a", DevPath: "/dev/sdc", Model: "WDC WD80EFAX", Serial: "LIVE-NO-HISTORY", Temperature: 38, Collection: collected, LastChecked: now},
+	}})
+	m := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		state:          models.NewState(),
+		resourceStore:  unifiedresources.NewMonitorAdapter(registry),
+	}
+	sampledAt := now.Add(-20 * time.Minute)
+	m.metricsHistory.AddDiskMetric("SILENT-ONE-SAMPLE", "smart_temp", 44, sampledAt)
+
+	charts := m.GetPhysicalDiskTemperatureCharts(time.Hour)
+	if entry, ok := charts["STANDBY-NO-HISTORY"]; ok {
+		t.Fatalf("a standby disk with no stored samples got a series from its retained reading: %+v", entry.Temperature)
+	}
+	silentEntry, ok := charts["SILENT-ONE-SAMPLE"]
+	if !ok || len(silentEntry.Temperature) != 1 || silentEntry.Temperature[0].Value != 44 ||
+		!silentEntry.Temperature[0].Timestamp.Equal(sampledAt) {
+		t.Fatalf("silent agent disk series = %+v (found %v), want only its stored 44C sample at %s", silentEntry.Temperature, ok, sampledAt)
+	}
+	live, ok := charts["LIVE-NO-HISTORY"]
+	if !ok || len(live.Temperature) != 2 {
+		t.Fatalf("live disk series = %+v (found %v), want the padded 2-point sparkline", live.Temperature, ok)
+	}
+	for _, point := range live.Temperature {
+		if point.Value != 38 {
+			t.Fatalf("live disk padded with %.0f, want its collected 38C", point.Value)
+		}
+	}
 }
 
 func TestSLO_GetDiskMetricsForChart_WithNativeStoreFallback(t *testing.T) {

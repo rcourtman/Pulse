@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -882,11 +883,23 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 				Type:        pd.DiskType,
 				Size:        pd.SizeBytes,
 				Health:      pd.Health,
-				Temperature: pd.Temperature,
+				Temperature: reportDiskTemperature(*pd),
 				WearLevel:   pd.Wearout,
 			})
 		}
 	}
+}
+
+// reportDiskTemperature returns the disk temperature a report may tabulate:
+// one the current observation collected. Normalization may keep a last-known
+// temperature it did not collect (a disk in standby, a host agent past its
+// reporting lease); a report presents its values as measured, so that one is
+// left out (0, rendered as no reading) rather than shown as current.
+func reportDiskTemperature(pd unifiedresources.PhysicalDiskMeta) int {
+	if !diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
+		return 0
+	}
+	return pd.Temperature
 }
 
 // enrichVMReport adds VM-specific data to the report request

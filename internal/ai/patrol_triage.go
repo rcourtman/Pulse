@@ -345,7 +345,7 @@ func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]b
 	flags := make([]TriageFlag, 0)
 
 	for _, disk := range patrolPhysicalDiskRows(snap, scopedSet) {
-		flags = append(flags, triagePhysicalDiskFlags(disk.id, disk.name, disk.health, disk.wearout, disk.temperature)...)
+		flags = append(flags, triagePhysicalDiskFlags(disk.id, disk.name, disk.health, disk.wearout, disk.temperature.Collected)...)
 	}
 
 	return flags

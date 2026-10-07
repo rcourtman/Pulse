@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -267,11 +268,13 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 
 	// Phase 1: Collect disk metadata and resource IDs.
 	type diskMeta struct {
-		resourceID  string
-		name        string
-		node        string
-		instance    string
-		temperature int
+		resourceID string
+		name       string
+		node       string
+		instance   string
+		// collectedTemperature is the reading the current observation took,
+		// or 0 when the disk only retains a last-known value.
+		collectedTemperature int
 	}
 	var disks []diskMeta
 	for _, disk := range readState.PhysicalDisks() {
@@ -294,12 +297,16 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		if name == "" {
 			name = strings.TrimSpace(disk.DevPath())
 		}
+		collectedTemperature := 0
+		if diskinventory.TemperatureCollected(disk.Temperature(), disk.Collection()) {
+			collectedTemperature = disk.Temperature()
+		}
 		disks = append(disks, diskMeta{
-			resourceID:  resourceID,
-			name:        name,
-			node:        strings.TrimSpace(disk.Node()),
-			instance:    strings.TrimSpace(disk.Instance()),
-			temperature: disk.Temperature(),
+			resourceID:           resourceID,
+			name:                 name,
+			node:                 strings.TrimSpace(disk.Node()),
+			instance:             strings.TrimSpace(disk.Instance()),
+			collectedTemperature: collectedTemperature,
 		})
 	}
 
@@ -349,12 +356,19 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 
 		// Sparklines require >= 2 points. If the store returned 0 or 1 points
 		// but the disk has a live temperature reading, pad to 2 points so the
-		// chart can render (flat line at current temperature).
+		// chart can render (flat line at current temperature). A retained
+		// last-known temperature (standby, a silent host agent) is not a
+		// reading taken now, so the stored samples stay as they are and a
+		// disk with none has no series.
 		if len(tempPoints) < 2 {
-			now := time.Now()
-			tempPoints = []MetricPoint{
-				{Timestamp: now.Add(-60 * time.Second), Value: float64(d.temperature)},
-				{Timestamp: now, Value: float64(d.temperature)},
+			if d.collectedTemperature > 0 {
+				now := time.Now()
+				tempPoints = []MetricPoint{
+					{Timestamp: now.Add(-60 * time.Second), Value: float64(d.collectedTemperature)},
+					{Timestamp: now, Value: float64(d.collectedTemperature)},
+				}
+			} else if len(tempPoints) == 0 {
+				continue
 			}
 		}
 

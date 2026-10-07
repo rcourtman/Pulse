@@ -3871,6 +3871,15 @@ consumers outside the history writers: the metrics-history API serves a disk
 series from the disk's reading or pads a stored one, only from a collected
 temperature, so a retained standby or silent-agent reading never reappears as a
 point at the current time.
+The SMART history writers in `internal/monitoring/monitor.go` and
+`monitor_agents.go` call that helper rather than a private copy of the rule,
+and `GetPhysicalDiskTemperatureCharts` pads a short disk temperature series out
+to now only with a collected reading: with a retained one the stored samples
+stay as they are, and a disk with none gets no series. Mock mode can still
+substitute its generic demo series for that disk ID before this step; that
+series is not derived from the disk's reading. Proof:
+`TestDiskTemperatureChartsPadOnlyWithCollectedReading` in
+`internal/monitoring/monitor_metrics_slo_test.go`.
 Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
