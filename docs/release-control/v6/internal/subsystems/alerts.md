@@ -1842,6 +1842,23 @@ well as its alerts.
 `internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
 restarted count and the pending-run and count cleanup.
 
+### Proxmox node cleanup keeps platform metric alerts
+
+`CleanupAlertsForNodes` runs on every Proxmox node poll (and every mock alert
+tick) and removes alerts whose `Node` is not a current Proxmox node or PBS
+instance. Kubernetes, TrueNAS and vSphere metric alerts carry a cluster or
+platform host in `Node` and a display label such as `TrueNAS Disk` or
+`Kubernetes Pod` in `metadata.resourceType`, which the preserve list's
+platform words never matched. The cleanup used to delete them silently on
+each poll while their reducer incident stayed firing, so the next evaluation
+re-created each one and handed it to the alert callback again as a new
+alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
+`metadata.platformType`, or whose label maps through
+`CanonicalAlertResourceType` to a Kubernetes, TrueNAS or vSphere type.
+`TestCleanupAlertsForNodesKeepsPlatformMetricAlerts` in
+`internal/alerts/alerts_test.go` pins both signals, and its
+sibling pins that a guest alert on a removed Proxmox node is still removed.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
