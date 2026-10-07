@@ -185,12 +185,12 @@ describe('summaryCardInteraction.branchcov0724pm', () => {
       });
     });
 
-    it('prefers a valid chartHoveredSeriesId over the hoveredGroupScope group return, confirming b37 is precedence-gated (regression guard)', () => {
-      // chartHoveredSeriesId 'alpha' is in the resolved scope -> entity/preview
+    it('prefers a hovered series inside the scope over the hoveredGroupScope group return, confirming b37 is precedence-gated (regression guard)', () => {
+      // hoveredSeriesId 'alpha' is in the resolved scope -> entity/preview
       // return wins; the hoveredGroupScope group arm (b37) is NOT taken here.
       expect(
         resolveSummaryScopeState({
-          chartHoveredSeriesId: 'alpha',
+          hoveredSeriesId: 'alpha',
           hoveredGroupScope: validScope,
         }),
       ).toEqual({

@@ -88,7 +88,6 @@ export const resolveSummaryGroupMemberInteractionState = (options: {
 };
 
 export const resolveSummaryScopeState = (options: {
-  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
   hoveredGroupScope?: SummarySeriesGroupScope | null;
@@ -101,19 +100,6 @@ export const resolveSummaryScopeState = (options: {
       hoveredGroupScope: options.hoveredGroupScope,
       focusedGroupScope: options.focusedGroupScope,
     });
-
-  const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
-  if (
-    chartHoveredSeriesId &&
-    (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))
-  ) {
-    return {
-      groupScope,
-      kind: 'entity',
-      seriesId: chartHoveredSeriesId,
-      source: 'preview',
-    };
-  }
 
   const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
   if (
@@ -170,7 +156,6 @@ export const resolveSummaryScopeState = (options: {
 };
 
 export function resolveSummaryActiveSeriesId(options: {
-  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
   groupScope?: SummarySeriesGroupScope | null;

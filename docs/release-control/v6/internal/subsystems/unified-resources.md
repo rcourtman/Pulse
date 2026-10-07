@@ -2303,6 +2303,16 @@ evidence of what the array was doing when the agent went quiet, but without
 live status colour. Where a retained rebuild percentage is shown, it reads
 "Rebuild was at N%" with no speed or progress bar, and a member that was not
 healthy names its state in its badge.
+A Pulse agent manually linked into a guest carries the same signal there.
+`AgentData.Stale` is always on the wire, because browsers merge agent facets
+field by field (`resourceStateAdapters.ts`) and would keep a resumed agent's
+omitted false as true; `TestAgentDataAlwaysSendsStale` pins it. That always
+present `stale` also marks a native agent facet, so one without `disks` has
+withdrawn them, and a native Proxmox VM facet's new guest-read outcome likewise
+drops `disks` it no longer reports; either way the other source's filesystems
+take over without a reload (`resourceStateAdapters.test.ts`). `VMView.DiskFromLinkedAgent` names the agent
+as the owner of a guest's selected disk metric, which the monitoring poller
+reads before it carries a Proxmox disk reading forward.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
@@ -5465,6 +5475,43 @@ A row's own serial is kept even when it is a placeholder, as the
 adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
 `TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
 `TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
+The adapters' disk temperature rule is shared with the agent disk history
+writer. `HostSMARTDiskTemperature` returns the temperature and collection state
+a SMART row's disk shows: the row's own reading, or, when it has none, its
+Unraid row's under `unraidDiskTemperatureStatus`. `matchUnraidDisk` finds that
+Unraid row by the SMART row's usable serial anywhere in the inventory before
+any device path, and a placeholder serial matches nothing. The fallback, like
+the serial a row without one takes (`hostSMARTDiskSerial`), comes only from an
+Unraid row that describes the row's disk (`unraidDiskDescribesSMARTRow`): one
+carrying the row's usable serial, or one naming the row's device path when the
+row is that whole kernel block device. A controller member, even the only one
+reported, and a row sharing its path with other SMART rows are not, because
+the Unraid row describes the block device as a whole. `HostUnraidDiskTemperature`
+returns what a disk built from an Unraid row alone shows, and
+`HostUnraidDiskMetricID` returns the key that disk's metrics target reads: its
+usable serial, else its `HostUnraidDiskSourceID`, and nothing for a row without
+a device, which is not ingested. The writer used to take only the SMART row's
+own reading, so a temperature shown from the Unraid inventory, for a disk whose
+SMART probe returned none or one excluded from SMART collection, was never
+charted. Proof: `TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget`.
+`HostDiskTemperatureReadings` lists the reading each disk of a host agent shows
+for consumers that judge disk heat, the agent disk temperature alerts in
+`CheckHost`: one per SMART row the registry ingests (no virtual block device),
+then one per Unraid row whose disk key (`HostUnraidDiskMetricID`) no SMART row's
+`HostSMARTDiskMetricID` equals, the history writer's rule, with a row without a
+device skipped as the registry skips it. Rows with one key are one registry
+disk whatever device labels they carry, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`). When smartctl and Unraid
+report different usable serials for one device the registry shows both disks,
+and both are listed. Each reading is taken from the disk resource
+`resourceFromHostSMARTDisk` or `resourceFromHostUnraidPhysicalDisk` builds, so
+its temperature, collection state and disk type are the ones that row's disk
+shows. Unraid rows on different devices that share a key and no SMART row are
+one registry disk but keep a reading each, since alerts are keyed by device.
+Proof: `TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows` compares
+each reading with the ingested disk, including two disks on one device and a
+controller member Unraid lists under its block device.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
@@ -5581,12 +5628,14 @@ wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
 Platform tables supply the resource-label resolver to the resource drawer
 through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
 in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`

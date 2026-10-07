@@ -681,6 +681,167 @@ func TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports(t *testing.T) {
 	}
 }
 
+// An Unraid host's disk can show a temperature only its Unraid inventory
+// reports: a member the agent's SMART collection skips (--disk-exclude), or
+// one Unraid reads with its own per-disk SMART settings while the agent's
+// probe returns no temperature. The chart must hold the reading the disk
+// shows, under the key its metrics target reads, and nothing for a reading the
+// disk does not show as collected (a spun-down disk, a host past its lease) or
+// does not show at all (a controller member behind the device Unraid reads).
+func TestAgentDiskChartsTheUnraidTemperatureItShows(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	m := &Monitor{metricsStore: store, rateTracker: NewRateTracker()}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	host := models.Host{ID: "host-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: now}
+	host.Sensors.SMART = []models.HostDiskSMART{
+		// The agent's identity-only row for a disk its probe got nothing from.
+		{Device: "sdb", Serial: "SER-B", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// A row with its own reading keeps it; the Unraid one is not written too.
+		{Device: "sdc", WWN: "0x5000c500aaaa0003", Health: "PASSED", Temperature: 41, Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Available("smartctl")}},
+		// The agent's native standby row for a disk Unraid reports spun down.
+		{Device: "sdd", Serial: "SER-D", Health: "UNKNOWN", Standby: true, Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("unraid", "disk is reported spun down")}},
+		// Controller members behind one kernel block device, which the Unraid
+		// row describes as a whole: neither member takes its temperature.
+		{Device: "sdh", Controller: "sdh", Target: "megaraid,0", WWN: "0x5000c500bbbb0001", Health: "PASSED", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		{Device: "sdh", Controller: "sdh", Target: "megaraid,1", WWN: "0x5000c500bbbb0002", Health: "PASSED", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// A member whose own serial is the Unraid row's is the disk that row
+		// describes, though its path is shared.
+		{Device: "sdi", Controller: "sdi", Target: "megaraid,0", Serial: "SER-I", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		{Device: "sdi", Controller: "sdi", Target: "megaraid,1", Serial: "SER-I2", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// A placeholder serial is no evidence of which member the row is.
+		{Device: "sdn", Controller: "sdn", Target: "megaraid,0", Serial: "UNKNOWN", WWN: "0x5000c500cccc0001", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		{Device: "sdn", Controller: "sdn", Target: "megaraid,1", Serial: "UNKNOWN", WWN: "0x5000c500cccc0002", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// A placeholder serial matches no Unraid row; the row's path finds its own.
+		{Device: "sdo", Serial: "0123456789", WWN: "0x5000c500eeee0001", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// The only reported member behind a controller path is still a member.
+		{Device: "sdq", Controller: "sdq", Target: "megaraid,0", WWN: "0x5000c500ffff0001", Health: "UNKNOWN", Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data")}},
+		// Without a serial or WWN, a member charts its own reading under its
+		// topology key.
+		{Device: "sdr", Controller: "sdr", Target: "megaraid,0", Health: "PASSED", Temperature: 35, Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Available("smartctl")}},
+		// A SMART row's key is its own: the merged disk shows the row's reading,
+		// here not collected, and the Unraid one is not charted over it.
+		{Device: "sdm", WWN: "0x5000c500dddd0001", Health: "PASSED", Temperature: 40, Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+	}
+	host.Unraid = &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{
+		{Device: "sdb", Serial: "SER-B", Name: "disk1", Role: "data", Status: "online", Temperature: 38},
+		{Device: "sdc", Serial: "SER-C", Name: "disk2", Role: "data", Status: "online", Temperature: 39},
+		{Device: "sdd", Serial: "SER-D", Name: "disk3", Role: "data", Status: "online", Temperature: 35, SpunDown: true},
+		// Members with no SMART row at all.
+		{Device: "sde", Serial: "SER-E", Name: "disk4", Role: "data", Status: "online", Temperature: 36},
+		{Device: "sdf", Serial: "SER-F", Name: "disk5", Role: "data", Status: "online", Temperature: 33, SpunDown: true},
+		{Device: "sdg", Name: "disk6", Role: "data", Status: "online", Temperature: 37},
+		{Device: "sdh", Serial: "SER-H", Name: "disk7", Role: "data", Status: "online", Temperature: 42},
+		{Device: "sdi", Serial: "SER-I", Name: "disk8", Role: "data", Status: "online", Temperature: 44},
+		// Rows sharing one history key are one disk, showing the latest reading.
+		{Device: "sdj", Name: "disk9", Role: "data", Status: "online"},
+		{Device: "sdj", Name: "disk10", Role: "data", Status: "online", Temperature: 43},
+		{Device: "sdk", Name: "disk11", Role: "data", Status: "online", Temperature: 38},
+		{Device: "sdk", Name: "disk12", Role: "data", Status: "online", Temperature: 39},
+		{Device: "sdl", Name: "disk13", Role: "data", Status: "online", Temperature: 40},
+		{Device: "sdl", Name: "disk14", Role: "data", Status: "online", Temperature: 32, SpunDown: true},
+		{Device: "sdn", Serial: "UNKNOWN", Name: "disk15", Role: "data", Status: "online", Temperature: 45},
+		{Device: "sdm", Serial: "SER-M", Name: "disk16", Role: "data", Status: "online", Temperature: 37},
+		{Device: "sdp", Serial: "0123456789", Name: "disk17", Role: "data", Status: "online", Temperature: 30},
+		{Device: "sdo", Serial: "0123456789", Name: "disk18", Role: "data", Status: "online", Temperature: 46},
+		{Device: "sdq", Serial: "SER-Q", Name: "disk19", Role: "data", Status: "online", Temperature: 47},
+		{Device: "sdr", Serial: "SER-R", Name: "disk20", Role: "data", Status: "online", Temperature: 36},
+	}}
+	// Disks by usable serial, else WWN, else device path, and the reading each
+	// shows as collected.
+	want := map[string]float64{
+		"SER-B": 38, "SER-C": 41, "SER-D": 0, "SER-E": 36, "SER-F": 0, "sdg": 37,
+		"SER-H": 42, "0x5000c500bbbb0001": 0, "0x5000c500bbbb0002": 0,
+		"SER-I": 44, "SER-I2": 0, "sdj": 43, "sdk": 39, "sdl": 0,
+		"sdn": 45, "0x5000c500cccc0001": 0, "0x5000c500cccc0002": 0, "SER-M": 0,
+		"0x5000c500eeee0001": 46, "sdo": 46, "sdp": 30, "0x5000c500ffff0001": 0, "SER-Q": 47,
+		"sdr": 35, "SER-R": 36,
+	}
+
+	m.writeHostSMARTMetrics(host, now)
+	// Once the host's lease expires its last report is kept, offline, as
+	// context; nothing it carries is a current reading.
+	reported := host
+	reported.Sensors.SMART = append([]models.HostDiskSMART(nil), host.Sensors.SMART...)
+	state := &models.State{Hosts: []models.Host{reported}}
+	offline, expired := state.ExpireHostTelemetry(host.ID, host.LastSeen)
+	if !expired {
+		t.Fatal("host telemetry did not expire")
+	}
+	m.writeHostSMARTMetrics(offline, now.Add(30*time.Second))
+	store.Flush()
+
+	live := unifiedresources.NewRegistry(nil)
+	live.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	rehydrated := unifiedresources.NewRegistry(nil)
+	rehydrated.IngestResources(live.List())
+	for _, tc := range []struct {
+		name     string
+		registry *unifiedresources.ResourceRegistry
+	}{{"live", live}, {"rehydrated", rehydrated}} {
+		disks := tc.registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(disks) != len(want) {
+			t.Fatalf("%s: disks = %d, want %d", tc.name, len(disks), len(want))
+		}
+		for _, disk := range disks {
+			device := disk.PhysicalDisk.Serial
+			if !diskinventory.IsUsableHardwareID(device) {
+				device = ""
+			}
+			if device == "" {
+				device = disk.PhysicalDisk.WWN
+			}
+			if device == "" {
+				device = disk.PhysicalDisk.DevPath
+			}
+			wantTemp, ok := want[device]
+			if !ok {
+				t.Fatalf("%s: unexpected disk %s at %q", tc.name, disk.ID, device)
+			}
+			shown := 0.0
+			if diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
+				shown = float64(disk.PhysicalDisk.Temperature)
+			}
+			if shown != wantTemp {
+				t.Fatalf("%s: disk %s shows %v°C as collected, want %v°C", tc.name, device, shown, wantTemp)
+			}
+			target := tc.registry.MetricsTarget(disk.ID)
+			if target == nil {
+				t.Fatalf("%s: disk %s has no metrics target", tc.name, device)
+			}
+			points, err := store.Query(target.ResourceType, target.ResourceID, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch {
+			case wantTemp == 0 && len(points) != 0:
+				t.Errorf("%s: disk %s shows no collected temperature but target %+v charts %+v", tc.name, device, *target, points)
+			case wantTemp > 0 && (len(points) != 1 || points[0].Value != wantTemp || !points[0].Timestamp.Equal(now)):
+				t.Errorf("%s: disk %s shows %v°C but target %+v charts %+v, want one sample at the online report", tc.name, device, wantTemp, *target, points)
+			}
+		}
+	}
+}
+
 // A SMART row found only by device path may describe the slot's previous
 // occupant. It is refused when its identity contradicts the Proxmox disk's,
 // judged only on what both producers report like for like: WWNs for every

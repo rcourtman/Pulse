@@ -294,6 +294,14 @@ expose only a raw reason. A same-VM fresh observation withdraws the notice and
 updates values without remounting the row. Permission, disabled-agent and actual
 unavailable cases retain their own explanations.
 
+When a linked Pulse agent's filesystems fill in for a VM with no Proxmox guest
+filesystems (`disksFromAgent`), the reading follows that agent instead of the
+Proxmox reason: current while it reports, last known once it is stale, and
+unavailable once the guest is stopped. `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts` owns that rule for the workload row's disk cell,
+the guest drawer's filesystem rows and its History, so the three cannot
+disagree about one guest; `workloadGuestPresentation.test.ts` pins it.
+
 Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
 `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
 and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
@@ -3023,9 +3031,9 @@ Agent`), with the plain-language source phrase available through accessible
    than receiving an unfiltered copy of the estate. Opaque unified-resource ids
    are not part of that visible search vocabulary and must not retain a node
    when the normalized guest table has no corresponding match.
-8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today; one that returns must consume that same resolved scope, and the chart under the pointer must promote its series into the shared active entity through the bridge's `setChartHoverSync` input instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
+8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today, and the bridge carries no chart-hover input; one that returns must consume that same resolved scope, and the chart under the pointer must enter its hovered series into `resolveSummaryScopeState` as a preview input that outranks row hover instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
 9. Keep any page summary page-scoped when table rows enter contextual focus. No infrastructure, workloads, or storage summary cards render today. If one returns, route-backed row selection may add a focused label and shared series emphasis, but the summary must continue to render the page-level series set instead of collapsing down to the selected row or replacing the global trend view with row-local empty states.
-10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
+10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface. `frontend-modern/src/components/shared/summaryTableFocus.ts` measures and scrolls rows only for deliberate focus, a focused row's inline detail or a pinned group header, so it must not keep window-level scroll or resize listeners or re-measure the hovered row on hover changes and scroll frames; an off-screen affordance for the active row needs a rendered consumer before that cost returns.
 11. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
 12. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
@@ -5140,10 +5148,10 @@ KPI, problem-resource, or card shells. Workload-table and guest-row fallback
 copy that lives under `frontend-modern/src/components/Workloads/` must keep
 using `frontend-modern/src/utils/workloadEmptyStatePresentation.ts` and
 `frontend-modern/src/utils/workloadGuestPresentation.ts`. New route-level empty
-states, tone mapping, or compact issue copy must extend the shared
-`emptyStatePresentation`, `semanticTonePresentation`, and
-`problemResourcePresentation` helpers instead of reviving deleted
-dashboard-only KPI, metric, storage, recovery, or trend presentation helpers.
+states or tone mapping must extend the shared `emptyStatePresentation` and
+`semanticTonePresentation` helpers instead of reviving deleted dashboard-only
+KPI, metric, storage, recovery, problem-resource, or trend presentation
+helpers.
 That shell must also stay passive with respect to data ownership: future
 overview trend cards may render summary-range controls and operator-facing
 empty or error copy only after they have a governed owner, and they must not
@@ -6442,20 +6450,6 @@ rollups, points, or facets payloads arrive, it must keep that selected
 platform present in the option set so the shared `LabeledFilterSelect` shows
 the owned value immediately instead of flashing back to `All Platforms` until
 recovery data warms.
-`frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
-that same dashboard overview boundary so the problem-resource severity contract
-stays shared with `ProblemResourcesTable.tsx` instead of floating as an
-unowned helper.
-Problem-resource table readability belongs to that same owner. Repeated rows
-may collapse only when they share the same governed display label, resource
-type, and problem signal; the header count and Pulse Brief counts must continue
-to represent the underlying affected resources, and grouped links must route to
-the broad owning surface rather than inventing a synthetic resource target.
-Problem Resources and Pulse Brief wording must not amplify generic
-status-shaped names such as `storage (offline)` into first-viewport prose or
-grouped-row sublabels; when the resource name is only a type plus status, the
-surface should summarize the type-level issue in operator language instead of
-repeating raw backend-shaped labels.
 The retired dashboard action queue must not be reintroduced as a compact
 Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
 governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their

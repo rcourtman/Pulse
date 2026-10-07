@@ -9036,6 +9036,11 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/discover/"},
 			{method: http.MethodHead, path: "/api/discover"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
+			{method: http.MethodGet, path: "/debug/pprof"},
+			{method: http.MethodGet, path: "/debug/pprof/"},
+			{method: http.MethodGet, path: "/debug/pprof/heap"},
+			{method: http.MethodPost, path: "/debug/pprof/symbol"},
+			{method: http.MethodOptions, path: "/debug/pprof/trace"},
 		}
 
 		for _, tc := range testCases {
@@ -9196,6 +9201,95 @@ func TestContract_DemoModeUpgradeHeadersDoNotExemptWrites(t *testing.T) {
 	defer conn.Close()
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("demo session websocket handshake status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
+	}
+}
+
+// The pprof routes are gated only on admin auth and session logins skip token
+// scopes, so the public demo's shared login reaches them like any admin. The
+// demo guard must answer every pprof path with 404 for that session, whatever
+// the method, while the handlers below it stay registered.
+func TestContract_DemoModeHidesPprofFromDemoAdminSession(t *testing.T) {
+	t.Setenv("PULSE_PPROF_DISABLED", "")
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+	belowDemoGuard := newIPv4HTTPServer(t, router.mux)
+	t.Cleanup(belowDemoGuard.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+	}
+	if len(cookiePairs) == 0 {
+		t.Fatal("expected session cookies after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	send := func(baseURL, method, path string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, baseURL+path, nil)
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	status, body := send(belowDemoGuard.URL, http.MethodGet, "/debug/pprof/cmdline")
+	if status != http.StatusOK || body == "" {
+		t.Fatalf("demo session below the demo guard: pprof cmdline status = %d, want %d with a body", status, http.StatusOK)
+	}
+
+	paths := []string{
+		"/debug/pprof",
+		"/debug/pprof/",
+		"/debug/pprof/heap?gc=1",
+		"/debug/pprof/goroutine?debug=2",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile?seconds=1",
+		"/debug/pprof/symbol",
+		"/debug/pprof/trace?seconds=1",
+	}
+	methods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}
+	for _, path := range paths {
+		for _, method := range methods {
+			if status, _ := send(server.URL, method, path); status != http.StatusNotFound {
+				t.Errorf("demo session %s %s status = %d, want %d", method, path, status, http.StatusNotFound)
+			}
+		}
 	}
 }
 
