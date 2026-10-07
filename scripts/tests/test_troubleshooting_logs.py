@@ -10,7 +10,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -38,41 +41,61 @@ def recipes() -> dict[str, str]:
             for block in blocks}
 
 
-READER = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
-name = pathlib.Path(sys.argv[0]).name
-expected = (['-u', 'pulse', '--since', '15 minutes ago', '--lines', '1000', '--no-pager']
-            if name == 'journalctl' else ['logs', '--since', '15m', '--tail', '1000', 'pulse'])
+READER = f'''#!{sys.executable}
+import json, os, pathlib, signal, sys, time
 pathlib.Path(os.environ['READER_ARGV']).write_text(json.dumps(sys.argv[1:]))
-if sys.argv[1:] != expected:
-    print('unexpected log-reader arguments', file=sys.stderr)
-    sys.exit(64)
 sys.stdout.write(os.environ.get('LOG_STDOUT', ''))
 sys.stderr.write(os.environ.get('LOG_STDERR', ''))
+sys.stdout.flush()
+sys.stderr.flush()
+if os.environ.get('READER_HANG'):
+    if os.environ['READER_HANG'] == 'ignore-term':
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    time.sleep(30)
 sys.exit(int(os.environ.get('READER_EXIT', '0')))
 '''
 
 
+def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: str = "",
+                        exit_code: int = 0, hang: str = "", missing_timeout: bool = False):
+    """Own and clean up only this synthetic shell's process group on failure."""
+    with tempfile.TemporaryDirectory() as temporary:
+        directory = Path(temporary)
+        command = directory / reader
+        command.write_text(READER, encoding="utf-8")
+        command.chmod(0o700)
+        argv = directory / "argv.json"
+        path = str(directory) if missing_timeout else f"{directory}:{os.environ['PATH']}"
+        env = dict(os.environ, PATH=path, READER_ARGV=str(argv), LOG_STDOUT=stdout,
+                   LOG_STDERR=stderr, READER_EXIT=str(exit_code), READER_HANG=hang)
+        with subprocess.Popen([shutil.which("bash"), "-c", copied], env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, start_new_session=True) as process:
+            try:
+                output, errors = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate(timeout=5)
+                raise
+        result = subprocess.CompletedProcess(process.args, process.returncode, output, errors)
+        return result, json.loads(argv.read_text()) if argv.exists() else None
+
+
 class TroubleshootingLogRecipesTest(unittest.TestCase):
     def exercise(self, reader: str, *, stdout: str = "", stderr: str = "",
-                 exit_code: int = 0, recipe: str | None = None):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            command = directory / reader
-            command.write_text(READER, encoding="utf-8")
-            command.chmod(0o700)
-            argv = directory / "argv.json"
-            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
-                       READER_ARGV=str(argv), LOG_STDOUT=stdout, LOG_STDERR=stderr,
-                       READER_EXIT=str(exit_code))
-            copied = (recipe if recipe is not None else recipes()[reader]).replace(
-                "REQUEST_ID='abc123'", f"REQUEST_ID='{REQUEST_ID}'"
-            )
-            result = subprocess.run(["bash", "-c", copied], env=env,
-                                    capture_output=True, text=True, timeout=10)
-            self.assertTrue(argv.exists(), "copied recipe did not invoke its log reader")
-            self.assertNotEqual(result.returncode, 64, result.stderr)
-            return result
+                 exit_code: int = 0, recipe: str | None = None, **settings):
+        copied = (recipe if recipe is not None else recipes()[reader]).replace(
+            "REQUEST_ID='abc123'", f"REQUEST_ID='{REQUEST_ID}'"
+        )
+        result, argv = exercise_log_recipe(reader, copied, stdout=stdout, stderr=stderr,
+                                          exit_code=exit_code, **settings)
+        expected = (["-u", "pulse", "--since", "15 minutes ago", "--lines", "1000", "--no-pager"]
+                    if reader == "journalctl" else ["logs", "--since", "15m", "--tail", "1000", "pulse"])
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
 
     def test_shipped_document_is_the_same_guide(self):
         self.assertEqual(DOC.read_bytes(),
@@ -88,10 +111,12 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
                     self.assertEqual(result.stdout, log)
                     self.assertEqual(result.stderr, "")
 
-    def test_docker_logs_written_to_stderr_are_searchable(self):
-        result = self.exercise("docker", stdout=DECOY_LOG, stderr=JSON_LOG)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, JSON_LOG)
+    def test_logs_written_to_stderr_are_searchable_for_both_readers(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout=DECOY_LOG, stderr=JSON_LOG)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, JSON_LOG)
 
     def test_no_match_is_nonzero_and_does_not_print_unrelated_logs(self):
         for reader in recipes():
@@ -106,8 +131,26 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
         for reader in recipes():
             with self.subTest(reader=reader):
                 result = self.exercise(reader, stdout=JSON_LOG, stderr=error, exit_code=2)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(error, result.stderr)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn(error, result.stderr)
+                self.assertIn("Log read unavailable (exit 2)", result.stderr)
+
+    def test_hung_readers_withhold_partial_matches_and_stop_by_deadline(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout=JSON_LOG, hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable", result.stderr)
+
+    def test_missing_timeout_stops_before_either_reader(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, missing_timeout=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
 
     def test_console_only_selector_is_a_negative_control_for_json(self):
         copied = recipes()["journalctl"].replace(
