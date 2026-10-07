@@ -4860,6 +4860,10 @@ transition and evidence times) from the frontend-primitives shared
 relative-time clock. That is presentation over the same `GET
 /api/ai/patrol/status`, run history and `GET /api/ai/patrol/attention/{id}`
 payloads: no field, request or polling cadence changes.
+The attention detail's suppression `expiresAt` and a finding's `remind_at` and
+`snoozed_until` from `GET /api/ai/patrol/findings` are future times, so the
+page presents them as countdowns from the same clock ("in 1d") instead of
+ages. That is presentation only: no field, request or polling cadence changes.
 
 ### Resource-list facets preserve scoped navigation evidence
 
