@@ -5,7 +5,11 @@ No provider calls, setup commands, backups or guest-agent probes are executed.
 """
 
 from pathlib import Path
+import json
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 
 
@@ -138,6 +142,83 @@ class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
         safety = (ROOT / "docs/VM_DISK_MONITORING.md").read_text()
         self.assertIn("every filesystem covered by the backup", safety)
         self.assertIn("Pulse monitoring and alerts are unavailable", safety)
+
+
+class LegacySensorCleanupDocsTest(unittest.TestCase):
+    """Exercise the copied invocation only, never the real host cleanup helper."""
+
+    def section(self):
+        return (ROOT / "docs/TEMPERATURE_MONITORING.md").read_text().split(
+            "## Legacy Cleanup (If Upgrading)\n", 1
+        )[1]
+
+    def invocation(self):
+        commands = re.findall(r"```bash\n(.*?)```", self.section(), re.DOTALL)
+        invocations = [c for c in commands if c.lstrip().startswith('bash ')]
+        self.assertEqual(len(invocations), 1, "one deliberate local cleanup only")
+        return invocations[0]
+
+    def test_copied_cleanup_is_one_local_preserving_action(self):
+        command = self.invocation()
+        self.assertNotRegex(command, r"--purge|--remove-proxmox-access|--ssh-known-hosts|\|\||;")
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            private = home / ".config/pulse"
+            private.mkdir(parents=True)
+            # Only this synthetic helper executes. No pct/systemctl/SSH or
+            # credential operation is available through it.
+            helper = private / "sensor-proxy-uninstall.sh"
+            helper.write_text('''python3 - "$@" <<'PY'
+import json, os, sys
+from pathlib import Path
+Path(os.environ['CALLS']).write_text(json.dumps(sys.argv[1:]))
+sys.exit(int(os.environ['HELPER_EXIT']))
+PY
+''')
+            witness = home / "preserved-config-and-log"
+            witness.write_text("unchanged synthetic recovery evidence\n")
+            calls = home / "calls.json"
+            for status in (0, 29):
+                with self.subTest(status=status):
+                    calls.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["bash", "-c", command], text=True, capture_output=True, timeout=10,
+                        env=dict(os.environ, HOME=str(home), CALLS=str(calls), HELPER_EXIT=str(status)),
+                    )
+                    self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                    self.assertEqual(json.loads(calls.read_text()), ["--uninstall", "--local-only"])
+                    self.assertEqual(witness.read_text(), "unchanged synthetic recovery evidence\n")
+
+    def test_disruption_and_failed_operations_are_not_hidden_by_local_only(self):
+        text = " ".join(self.section().split())
+        for phrase in ("disruptive maintenance, not a diagnostic or a dry run",
+                       "stop and start running LXCs", "including the Pulse container",
+                       "does not restrict cleanup to one container", "every affected LXC",
+                       "backup, restore or migration", "shut down the affected LXCs",
+                       "independent monitoring", "private backups", "marked SSH keys",
+                       "exit zero or its completion message is not proof",
+                       "no automatic rollback", "recorded active before maintenance"):
+            self.assertIn(phrase, text)
+        helper = (ROOT / "scripts/uninstall-sensor-proxy.sh").read_text()
+        for fact in ('timeout 30 pct stop "$ctid"', 'timeout 30 pct start "$ctid"',
+                     'cleanup_sensor_proxy_lines_in_conf "$conf" "$snapshot_line"',
+                     'systemctl "$@" >/dev/null 2>&1 || true'):
+            self.assertIn(fact, helper)
+
+    def test_preserves_credentials_and_explains_remote_cleanup_scope(self):
+        text = " ".join(self.section().split())
+        for phrase in ("preserves persisted proxy state, configuration, logs and its service account",
+                       "current connection may still use", "Neither is required to stop",
+                       "not re-add nodes or rerun setup", "not a cluster-wide uninstall",
+                       "stop on a warning, failed check or unknown state",
+                       "unrelated configuration and SSH access remain intact"):
+            self.assertIn(phrase, text)
+        helper = (ROOT / "scripts/uninstall-sensor-proxy.sh").read_text()
+        for fact in ("PURGE=false", "REMOVE_PROXMOX_ACCESS=false", 'if [[ "$PURGE" == "true" ]]',
+                     'if [[ "$REMOVE_PROXMOX_ACCESS" != "true" ]]'):
+            self.assertIn(fact, helper)
+        self.assertEqual((ROOT / "docs/TEMPERATURE_MONITORING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TEMPERATURE_MONITORING.md").read_bytes())
 
 
 ZFS_DOC = ROOT / "docs/ZFS_MONITORING.md"

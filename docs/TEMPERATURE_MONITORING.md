@@ -183,9 +183,36 @@ the exit, relevant redacted error and affected sensor if help is needed.
 
 ## Legacy Cleanup (If Upgrading)
 
-If you still have the old sensor proxy installed from prior releases, remove it
-from each **Proxmox host** (not the Pulse container) with the supported cleanup
-helper. In that host's trusted administrative shell, download it privately.
+The retired `pulse-sensor-proxy` is separate from the unified agent and the
+Pulse server. A server upgrade does not remove it from a Proxmox host. Do not
+run cleanup merely because a temperature is missing, or reinstall/re-add a
+working connection to retire it.
+
+**This helper is disruptive maintenance, not a diagnostic or a dry run.** It
+stops legacy proxy units, removes their installed files and marked legacy SSH
+keys, and edits LXC configurations containing `pulse-sensor-proxy`. It can
+**stop and start running LXCs**, including the Pulse container. `--local-only`
+prevents cluster SSH; it does not restrict cleanup to one container. Removing
+a marked SSH key can also interrupt a legacy temperature-collection path.
+
+Before executing anything, an authorised Proxmox administrator must:
+
+1. Inspect the saved helper and the existing host configuration privately.
+   Identify every affected LXC, the proxy units and marked SSH keys, and record
+   which services and containers were active. Do not assume a familiar CT name
+   or an upgraded Pulse server establishes the cleanup scope.
+2. Keep private backups of the affected LXC configurations, authorised-key file,
+   proxy installation, configuration and logs. These are recovery material, not
+   an issue attachment; do not share tokens, SSH keys or complete host files.
+3. Schedule an outage for all affected workloads, not just Pulse. Finish any
+   backup, restore or migration first. If an operation's state or the affected
+   container set is unknown, stop and resolve it before cleanup. Deliberately
+   shut down the affected LXCs through their normal maintenance procedure before
+   running the helper; do not rely on its forced stop/start path. Arrange
+   independent monitoring while Pulse or its old collection path is unavailable.
+
+Download preparation alone makes no host change. In the Proxmox host's trusted
+administrative shell (not inside the Pulse container), save the helper privately.
 This refuses an existing target, symlinked configuration directory or
 failed/partial download; it does not overwrite an earlier helper or run a
 response as a command:
@@ -223,26 +250,40 @@ Curl's local configuration is ignored, redirects are not followed and TLS
 verification stays enabled. This is an HTTPS download from the repository's
 current main, not a signed release asset. Inspect the complete saved script
 and choose the cleanup scope before running it.
-Do not pipe a web response into a privileged shell:
+Do not pipe a web response into a privileged shell. Only after completing the
+maintenance steps above, run the inspected helper in the authorised host shell:
 
 ```bash
-bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" \
-  --uninstall --purge --local-only
+bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" --uninstall --local-only
 ```
 
-`--local-only` avoids cluster SSH entirely; run the command once on every
-Proxmox node that carried the proxy. For one cluster-wide pass instead, omit
-`--local-only`. Remote nodes must already have trusted host keys in root's
-normal OpenSSH user/system known_hosts files, or supply a separately
-provisioned file with `--ssh-known-hosts /path/to/known_hosts`. The helper never
-accepts or enrolls an unknown host key, and a missing or changed key makes the
-remote portion fail after local cleanup completes.
+This deliberately omits `--purge` and `--remove-proxmox-access`. The default
+preserves persisted proxy state, configuration, logs and its service account;
+it still removes installed proxy files and marked SSH keys. Purging would
+remove recovery evidence, and removing Proxmox access would delete the
+`pulse-monitor@pam` API user and its tokens, which a current connection may
+still use. Neither is required to stop the retired proxy. Preserve current
+monitoring credentials, connections and history; do not re-add nodes or rerun
+setup as part of cleanup.
 
-If you also want to remove the old `pulse-monitor@pam` API user and tokens before re-adding the node, include `--remove-proxmox-access`:
+Use `--local-only` separately on each host confirmed to carry the proxy, during
+that host's planned maintenance. Omitting it can edit SSH keys on other cluster
+nodes; that is **not a cluster-wide uninstall** of their proxy services or
+files. Do not broaden the operation or enrol SSH host keys to make cleanup work.
 
-```bash
-bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" \
-  --uninstall --purge --remove-proxmox-access --local-only
-```
+**Verify the actual result before resuming workloads.** The helper suppresses
+some service and container-operation errors; exit zero or its completion message
+is not proof that cleanup succeeded. Check locally that the legacy proxy and
+selfheal units are inactive, the affected live LXC configurations no longer
+reference the proxy, and unrelated configuration and SSH access remain intact.
+Keep the original output private and stop on a warning, failed check or unknown
+state rather than repeating cleanup or adding destructive flags.
 
-Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.
+Restore only the containers and services recorded active before maintenance,
+using their normal deployment procedure, then verify workload liveness and
+ordinary Pulse/agent monitoring. A restored temperature alone does not prove
+all workloads or monitoring recovered. The helper has no automatic rollback:
+if restoration fails, retain the backups and use the administrator's targeted
+recovery procedure; do not blindly overwrite cluster configuration or today's
+data. Keep preserved proxy evidence until recovery and its normal retention
+policy permit disposal.
