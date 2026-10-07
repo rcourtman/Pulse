@@ -60,6 +60,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -9259,6 +9260,119 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The public demo signs every visitor in as the configured admin, so admin
+// routes accept a demo session and the demo guard is the only thing between it
+// and a write. Websocket handshake headers must not carry a write past that
+// guard, while a genuine handshake from the same session must still connect.
+func TestContract_DemoModeUpgradeHeadersDoNotExemptWrites(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+	if err := monitor.SetMockMode(true); err != nil {
+		t.Fatalf("set monitor mock mode: %v", err)
+	}
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	router := NewRouter(cfg, monitor, nil, hub, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	csrfToken := ""
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+		if cookie.Name == CookieNameCSRF {
+			csrfToken = cookie.Value
+		}
+	}
+	if csrfToken == "" {
+		t.Fatal("expected CSRF cookie after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	send := func(method, path, body string, headers map[string]string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	if status, body := send(http.MethodGet, "/api/system/mock-mode", "", nil); status != http.StatusOK {
+		t.Fatalf("demo session read of admin route status = %d, want %d: %s", status, http.StatusOK, body)
+	}
+
+	status, body := send(http.MethodPost, "/api/system/mock-mode", `{"enabled":false}`, map[string]string{
+		"Content-Type":          "application/json",
+		"X-CSRF-Token":          csrfToken,
+		"Connection":            "Upgrade",
+		"Upgrade":               "websocket",
+		"Sec-WebSocket-Version": "13",
+		"Sec-WebSocket-Key":     "dGhlIHNhbXBsZSBub25jZQ==",
+	})
+	if status != http.StatusForbidden || !strings.Contains(body, "Demo mode enabled") {
+		t.Fatalf("demo write with websocket upgrade headers status = %d, want %d demo block: %s", status, http.StatusForbidden, body)
+	}
+	if !mock.IsMockEnabled() {
+		t.Fatal("demo write with websocket upgrade headers switched mock mode off")
+	}
+
+	wsHeaders := wsHeadersForHTTP(t, server.URL)
+	wsHeaders.Set("Cookie", sessionCookies)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL)+"/ws", wsHeaders)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("demo session websocket handshake failed: %v (status %d)", err, status)
+	}
+	defer conn.Close()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("demo session websocket handshake status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
+	}
 }
 
 func TestContract_ReleaseDemoFixtureRuntimeGuardrailsRemainCanonical(t *testing.T) {

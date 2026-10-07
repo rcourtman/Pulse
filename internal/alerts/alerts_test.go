@@ -12300,6 +12300,65 @@ func TestCheckEscalations(t *testing.T) {
 	})
 }
 
+// A config save re-judges open TrueNAS disk temperature alerts against the
+// threshold the next evaluation applies to each disk's type.
+func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
+	sata := trueNASTemperatureDisk("sda", "sata", 57)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	checkTrueNASTemperatureDisk(t, m, sata)
+	for _, disk := range []unifiedresources.Resource{nvme, sata} {
+		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
+			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+		}
+	}
+
+	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
+	// SATA alert, still over its own trigger, open.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
+		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	}
+	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
+		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	}
+}
+
+// An alert raised before it recorded its disk type is held to the lowest
+// per-type trigger, so a save never resolves an alert the next evaluation
+// raises again.
+func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
+	if !firing {
+		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
+		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	}
+}
+
 func TestCleanupAlertsForNodes(t *testing.T) {
 	// t.Parallel()
 
@@ -12628,62 +12687,79 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 	})
 }
 
-// A config save re-judges open TrueNAS disk temperature alerts against the
-// threshold the next evaluation applies to each disk's type.
-func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+// TestCleanupAlertsForNodesKeepsPlatformMetricAlerts pins that the Proxmox
+// node cleanup, which runs on every Proxmox poll, leaves Kubernetes, TrueNAS
+// and vSphere metric alerts alone. Their Node is a cluster or platform host,
+// never a Proxmox node, and their resourceType is a display label.
+func TestCleanupAlertsForNodesKeepsPlatformMetricAlerts(t *testing.T) {
 	m := newTestManager(t)
-	cfg := unifiedEvalBaseConfig()
-	cfg.TrueNASDiskDefaults = ThresholdConfig{}
-	configureUnifiedEvalManager(t, m, cfg)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
-	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
-	sata := trueNASTemperatureDisk("sda", "sata", 57)
-	checkTrueNASTemperatureDisk(t, m, nvme)
-	checkTrueNASTemperatureDisk(t, m, sata)
-	for _, disk := range []unifiedresources.Resource{nvme, sata} {
-		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
-			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+	inputs := []*UnifiedResourceInput{
+		{ID: "physical-disk:truenas-main/sda", Type: "truenas-disk", Name: "sda", Node: "truenas-main", Instance: "TrueNAS", Temperature: &UnifiedResourceMetric{Value: 80, Percent: 80}},
+		{ID: "storage:truenas-main/pool:tank", Type: "truenas-pool", Name: "tank", Node: "truenas-main", Instance: "TrueNAS", Disk: &UnifiedResourceMetric{Percent: 95}},
+		{ID: "k8s:prod:pod:api", Type: "pod", Name: "api", Node: "k8s-node-1", Instance: "prod", CPU: &UnifiedResourceMetric{Percent: 99}},
+		{ID: "vmware:vc:vm:app-01", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "vc", CPU: &UnifiedResourceMetric{Percent: 99}},
+	}
+	for _, input := range inputs {
+		m.CheckUnifiedResource(input)
+	}
+	platformAlerts := alertKeys(m)
+	if len(platformAlerts) != len(inputs) {
+		t.Fatalf("expected one alert per platform resource, got %v", platformAlerts)
+	}
+
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	for _, alertID := range platformAlerts {
+		if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+			t.Fatalf("Proxmox node cleanup removed platform alert %q; remaining %v", alertID, alertKeys(m))
 		}
 	}
 
-	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
-	// SATA alert, still over its own trigger, open.
+	// The platform id alone keeps an alert whose label is not recognised.
 	m.mu.Lock()
-	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
-	m.reevaluateActiveAlertsLocked()
-	m.mu.Unlock()
-	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
-		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	labels := make(map[*Alert]interface{}, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		labels[alert] = alert.Metadata["resourceType"]
+		alert.Metadata["resourceType"] = "Unrecognised"
 	}
-	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
-		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("platform alerts removed despite their platformType: %v", got)
+	}
+	m.mu.Lock()
+	for alert, label := range labels {
+		alert.Metadata["resourceType"] = label
+	}
+	m.mu.Unlock()
+
+	// A legacy-shaped alert whose metadata predates platformType is still kept
+	// by its display label.
+	m.mu.Lock()
+	for _, alert := range m.activeAlerts {
+		delete(alert.Metadata, alertPlatformTypeKey)
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("display-label platform alerts removed without platformType: %v", got)
 	}
 }
 
-// An alert raised before it recorded its disk type is held to the lowest
-// per-type trigger, so a save never resolves an alert the next evaluation
-// raises again.
-func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+// The cleanup still removes a Proxmox guest alert whose node left the estate.
+func TestCleanupAlertsForNodesStillRemovesMissingProxmoxNodeAlerts(t *testing.T) {
 	m := newTestManager(t)
-	cfg := unifiedEvalBaseConfig()
-	cfg.TrueNASDiskDefaults = ThresholdConfig{}
-	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
-	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
-	configureUnifiedEvalManager(t, m, cfg)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
-	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
-	checkTrueNASTemperatureDisk(t, m, nvme)
-	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
-	if !firing {
-		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	m.CheckUnifiedResource(&UnifiedResourceInput{ID: "pve-gone:node-gone:101", Type: "vm", Name: "vm-101", Node: "node-gone", Instance: "pve-gone", CPU: &UnifiedResourceMetric{Percent: 99}})
+	if len(alertKeys(m)) != 1 {
+		t.Fatalf("expected the guest CPU alert, got %v", alertKeys(m))
 	}
-
-	m.mu.Lock()
-	delete(alert.Metadata, "diskType")
-	m.reevaluateActiveAlertsLocked()
-	m.mu.Unlock()
-	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
-		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != 0 {
+		t.Fatalf("guest alert on a removed node survived cleanup: %v", got)
 	}
 }
 

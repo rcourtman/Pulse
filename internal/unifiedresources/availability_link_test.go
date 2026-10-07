@@ -403,6 +403,133 @@ func TestAvailabilityKeepsEveryConfiguredCheckWithMultipleServicesOnOneHost(t *t
 	}
 }
 
+func TestAvailabilitySummaryPrefersConfirmedOutageOverEarlierUnconfirmedFailure(t *testing.T) {
+	rr := NewRegistry(nil)
+	hostID := ingestAgentFixture(t, rr, "host-1", "machine-1")
+	now := time.Now().UTC()
+	check := func(targetID, address string, facet AvailabilityData) IngestRecord {
+		checkedAt := now
+		facet.LinkedResourceID = hostID
+		facet.Address = address
+		facet.Protocol = "https"
+		facet.Enabled = true
+		facet.LastChecked = &checkedAt
+		facet.FailureThreshold = 3
+		return availabilityProbeRecord(targetID, address, &facet)
+	}
+
+	// probe-a sorts first by target id and has failed once, below its
+	// threshold. probe-b is past its threshold and owns the outage incident.
+	unconfirmed := check("probe-a", "203.0.113.10", AvailabilityData{
+		AggregateState:         "unavailable",
+		ConsecutiveFailures:    1,
+		ApplicationFailureCode: "status_mismatch",
+	})
+	unconfirmed.Resource.Status = StatusWarning
+	confirmed := check("probe-b", "203.0.113.11", AvailabilityData{
+		AggregateState:      "unavailable",
+		ConsecutiveFailures: 3,
+	})
+	confirmed.Resource.Status = StatusOffline
+	confirmed.Resource.Incidents = []ResourceIncident{{
+		Provider: string(SourceAvailability),
+		NativeID: "probe-b",
+		Code:     "availability_unreachable",
+	}}
+	rr.IngestRecords(SourceAvailability, []IngestRecord{unconfirmed, confirmed})
+
+	host, ok := rr.Get(hostID)
+	if !ok || host == nil {
+		t.Fatalf("host %q missing after ingest", hostID)
+	}
+	if len(AvailabilityChecksForResource(*host)) != 2 {
+		t.Fatalf("availability checks = %+v, want both attached checks", host.AvailabilityChecks)
+	}
+	if host.Availability == nil || host.Availability.TargetID != "probe-b" {
+		t.Fatalf("availability summary = %+v, want the confirmed outage on probe-b", host.Availability)
+	}
+	health := EvaluateResourceHealth(*host, nil, now)
+	if health.Verdict != HealthCritical || len(health.Reasons) == 0 ||
+		health.Reasons[0].Code != "availability_failed" || health.Reasons[0].Detail != "" {
+		t.Fatalf("host health = %+v, want availability_failed from probe-b", health)
+	}
+
+	// Once probe-b recovers, the unconfirmed failure is the worst check left:
+	// it is the summary again, and it does not make the host an outage.
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		check("probe-b", "203.0.113.11", AvailabilityData{
+			AggregateState: "healthy",
+			Available:      true,
+		}),
+	})
+	host, _ = rr.Get(hostID)
+	if host.Availability == nil || host.Availability.TargetID != "probe-a" {
+		t.Fatalf("availability summary = %+v, want the remaining failure on probe-a", host.Availability)
+	}
+	health = EvaluateResourceHealth(*host, nil, now)
+	for _, reason := range health.Reasons {
+		if reason.Code == "availability_failed" {
+			t.Fatalf("host health = %+v, want no outage below the failure threshold", health)
+		}
+	}
+}
+
+func TestAvailabilitySummaryDoesNotConfirmOutageFromSilentProbeAgent(t *testing.T) {
+	rr := NewRegistry(nil)
+	hostID := ingestAgentFixture(t, rr, "host-1", "machine-1")
+	now := time.Now().UTC()
+	checkedAt := now
+	unconfirmed := availabilityProbeRecord("probe-a", "203.0.113.10", &AvailabilityData{
+		LinkedResourceID:    hostID,
+		Address:             "203.0.113.10",
+		Protocol:            "https",
+		Enabled:             true,
+		AggregateState:      "unavailable",
+		ProbeOutcome:        "unreachable",
+		LastChecked:         &checkedAt,
+		ConsecutiveFailures: 1,
+		FailureThreshold:    3,
+	})
+	unconfirmed.Resource.Status = StatusWarning
+
+	// The poller's read of a single-location probe whose agent stopped
+	// reporting: the old failure count survives, but the outcome is
+	// indeterminate, the aggregate unknown, and no incident is raised.
+	lastReport := now.Add(-time.Hour)
+	silent := availabilityProbeRecord("probe-b", "203.0.113.11", &AvailabilityData{
+		LinkedResourceID:    hostID,
+		Address:             "203.0.113.11",
+		Protocol:            "https",
+		ProbeAgentID:        "agent-probe-1",
+		Enabled:             true,
+		AggregateState:      "unknown",
+		ProbeOutcome:        "indeterminate",
+		ExpectedLocations:   1,
+		LastChecked:         &lastReport,
+		ConsecutiveFailures: 5,
+		FailureThreshold:    3,
+		LastError:           "no recent report from probe agent",
+	})
+	silent.Resource.Status = StatusWarning
+	rr.IngestRecords(SourceAvailability, []IngestRecord{unconfirmed, silent})
+
+	host, ok := rr.Get(hostID)
+	if !ok || host == nil {
+		t.Fatalf("host %q missing after ingest", hostID)
+	}
+	if host.Availability == nil || host.Availability.TargetID != "probe-a" {
+		t.Fatalf("availability summary = %+v, want probe-a: a silent probe confirms no outage", host.Availability)
+	}
+	for _, resource := range []Resource{*host, availabilityEndpointByTarget(t, rr, "probe-b")} {
+		health := EvaluateResourceHealth(resource, nil, now)
+		for _, reason := range health.Reasons {
+			if reason.Code == "availability_failed" {
+				t.Fatalf("%s health = %+v, want no outage from a silent probe agent", resource.ID, health)
+			}
+		}
+	}
+}
+
 func TestAvailabilityEditReplacesEndpointAndMovesProjection(t *testing.T) {
 	rr := NewRegistry(nil)
 	hostA := ingestAgentFixture(t, rr, "host-a", "machine-a")

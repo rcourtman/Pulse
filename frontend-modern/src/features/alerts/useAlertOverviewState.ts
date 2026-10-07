@@ -3,6 +3,7 @@ import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { Override } from './types';
 import { useAlertAcknowledgementState } from './useAlertAcknowledgementState';
 import { useAlertSnoozeState } from './useAlertSnoozeState';
@@ -34,8 +35,7 @@ export interface UseAlertOverviewStateProps {
 }
 
 export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
-  const [tick, setTick] = createSignal(Date.now());
-  const tickInterval = setInterval(() => setTick(Date.now()), 60_000);
+  const now = useRelativeTimeNow();
   const activeAlerts = createMemo(() => Object.values(props.activeAlerts()));
   const {
     unacknowledgedAlerts,
@@ -55,10 +55,6 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     handleSnooze,
     handleUnsnooze,
   } = useAlertSnoozeState({ alerts: activeAlerts, updateAlert: props.updateAlert });
-
-  onCleanup(() => {
-    clearInterval(tickInterval);
-  });
 
   // Delivery diagnoses answer "did/will this alert notify?" per card. One
   // bulk request covers every active alert; a failed refresh keeps the last
@@ -98,11 +94,16 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
       .join('\n'),
   );
   createEffect(() => {
-    // Refresh when the active alert set changes and on the shared minute
-    // tick, so time-based holds (cooldown, quiet hours) stay current.
+    // Refresh when the active alert set changes.
     activeAlertIdsKey();
-    tick();
     void refreshDeliveryDiagnoses();
+  });
+  // And once a minute, so time-based holds (cooldown, quiet hours) stay
+  // current. This is a server read, so it keeps its own minute rather than
+  // following the 30-second clock the ages read.
+  const diagnosisInterval = setInterval(() => void refreshDeliveryDiagnoses(), 60_000);
+  onCleanup(() => {
+    clearInterval(diagnosisInterval);
   });
 
   const alertStats = createMemo(() => {
@@ -110,7 +111,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     const recent = alerts.filter((alert) => {
       const ts = new Date(alert.startTime).getTime();
       if (Number.isNaN(ts)) return true;
-      const age = tick() - ts;
+      const age = now() - ts;
       return age >= 0 && age < 86_400_000;
     });
     const unacknowledged = alerts.filter((alert) => !alert.acknowledged);
@@ -169,7 +170,6 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   });
 
   return {
-    tick,
     alertStats,
     filteredAlerts,
     groupedAlerts,
