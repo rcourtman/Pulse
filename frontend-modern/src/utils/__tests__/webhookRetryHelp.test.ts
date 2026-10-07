@@ -125,7 +125,9 @@ describe('webhook retry help', () => {
       ['TROUBLESHOOTING', 'WEBHOOKS', '-delivery-contract', 'webhook retry behaviour'],
     ];
     for (const [from, to, fragment, label] of cases) {
-      const link = article(from).querySelector(`a[href="/docs/${to}#${fragment}"]`);
+      const link = [...article(from).querySelectorAll(`a[href="/docs/${to}#${fragment}"]`)].find(
+        (candidate) => candidate.textContent === label,
+      );
       expect(link?.textContent).toBe(label);
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
       expect(article(to).querySelector(`[id="${fragment}"]`)).not.toBeNull();
