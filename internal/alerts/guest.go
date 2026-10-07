@@ -141,8 +141,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		return
 	}
 
-	settings := policy.TagSettings
-	monitorOnly := settings.MonitorOnly
+	monitorOnly := policy.TagSettings.MonitorOnly
 	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
 		log.Debug().
 			Str("guest", name).
@@ -215,18 +214,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	// If guest is running, clear any powered-off alert
 	m.clearGuestPoweredOffAlert(guestID, name)
 
-	// Get thresholds (check custom rules, then overrides, then defaults)
+	// Get thresholds (defaults, custom rules, overrides, then the
+	// pulse-relaxed floor)
 	m.mu.RLock()
 	thresholds := m.getGuestThresholds(guest, guestID)
 	m.mu.RUnlock()
-
-	if settings.Relaxed {
-		thresholds = applyRelaxedGuestThresholds(thresholds)
-		log.Info().
-			Str("guest", name).
-			Float64("trigger", thresholds.CPU.Trigger).
-			Msg("Applied relaxed thresholds for pulse-relaxed tag")
-	}
 
 	// If alerts are disabled for this guest, clear any existing alerts and return
 	if thresholds.Disabled {
@@ -688,12 +680,19 @@ func parsePulseTags(tags []string) pulseTagSettings {
 	return settings
 }
 
+// applyRelaxedGuestThresholds lifts a pulse-relaxed guest's CPU, memory and
+// disk triggers to a 95/92/95 floor. An unset threshold gets the floor; one
+// switched Off (trigger <= 0) stays Off, since relaxing a guest must never
+// raise an alert its config turned off.
 func applyRelaxedGuestThresholds(cfg ThresholdConfig) ThresholdConfig {
 	relaxed := cloneThresholdConfig(cfg)
 
 	adjust := func(th **HysteresisThreshold, minTrigger float64) {
 		if *th == nil {
 			*th = &HysteresisThreshold{Trigger: minTrigger, Clear: minTrigger - 5}
+			return
+		}
+		if (*th).Trigger <= 0 {
 			return
 		}
 		ensureHysteresisThreshold(*th)
