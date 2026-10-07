@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Audit report cleanup belongs to the original invoking process
+
+The npm audit wrapper retains a captured advisory until the parent classifies
+it. An early-stopped watchdog can inherit the parent's zero subshell counter;
+that counter alone cannot authorise report deletion. The EXIT hook instead
+asks a direct `/bin/sh` child whether its actual parent PID is the invoking
+script's PID. This keeps the report in an inherited trap while retaining parent
+cleanup on Linux and native Bash 3.2. Strict findings still fail; unchanged-graph
+findings still warn with their captured detail. No advisory policy, endpoint,
+retry budget or severity threshold changes.
+
+`TestNpmAuditReportCleanupRemainsParentOwned` executes the actual hook with
+normal and pre-initialisation child counters, rejects the prior counter-only
+and unconditional hooks, and checks parent cleanup. The existing native-scope
+argument controls continue to require findings, exact argv and a single audit.
+
 ### Community auto-updates require a verified installed edition
 
 Before release discovery or installation, the unattended updater requires a

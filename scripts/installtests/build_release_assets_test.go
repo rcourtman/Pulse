@@ -5292,11 +5292,13 @@ func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
 		t.Fatal("audit report cleanup hook is missing")
 	}
 	for _, tc := range []struct {
-		name, hook string
-		status     int
+		name, hook, childSetup string
+		status                 int
 	}{
-		{"actual_parent_owned_hook", hook, 0},
-		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, 23},
+		{"actual_parent_owned_hook", hook, "", 0},
+		{"actual_hook_before_subshell_counter_initialization", hook, "BASH_SUBSHELL=0\n", 0},
+		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, "", 23},
+		{"legacy_counter_guard_rejected_before_initialization", `trap 'if [ "$BASH_SUBSHELL" -eq 0 ]; then rm -f "${report_file}"; fi' EXIT`, "BASH_SUBSHELL=0\n", 23},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "report")
@@ -5304,7 +5306,7 @@ func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
 			// the early-signal window, without timing a background process.
 			// It must retain the report there, and still remove it at parent exit.
 			script := "report_file=\"$REPORT_FIXTURE\"\nprintf retained >\"$report_file\"\n" + tc.hook +
-				"\n(\n" + tc.hook + "\n)\ntest -f \"$report_file\" || exit 23\n"
+				"\n(\n" + tc.hook + "\n" + tc.childSetup + ")\ntest -f \"$report_file\" || exit 23\n"
 			cmd := exec.Command("bash", "-c", script)
 			cmd.Env = append(os.Environ(), "REPORT_FIXTURE="+path)
 			output, err := cmd.CombinedOutput()
