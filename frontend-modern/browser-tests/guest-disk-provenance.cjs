@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
+const { createPublicationFixtureServer } = require('./publication-fixture-server.cjs');
 
 const root = '/workspace/frontend-modern';
 const output = '/workspace/tmp/guest-disk-provenance';
@@ -35,14 +36,12 @@ const settle = (page) =>
       'node_modules/@playwright/test'
     ].version,
   );
-  process.chdir(root);
-  const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
-  const server = await createServer({
+  const server = createPublicationFixtureServer(
     root,
-    configFile: path.join(root, 'vite.config.ts'),
-    cacheDir: output + '/cache',
-    server: { host: '127.0.0.1', port: 5315, strictPort: true },
-  });
+    5315,
+    'browser-tests/guest-disk-provenance.html',
+  );
+  result.compiled = server.binding;
   let browser;
   try {
     await server.listen();
