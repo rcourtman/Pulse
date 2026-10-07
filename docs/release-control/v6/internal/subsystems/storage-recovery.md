@@ -6879,3 +6879,9 @@ migration or recovery authority is added or moved.
 The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
+
+The handler likewise withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, or answers a lapsed linked agent from its node row. It reads
+only snapshot status and the registry's per-source sightings, and writes
+nothing.

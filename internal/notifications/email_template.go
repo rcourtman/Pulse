@@ -90,7 +90,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	alertType := alertTypeDisplay(alert.Type)
 
 	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
-		titleCase(string(level)), alertType, alert.ResourceName)
+		titleCase(string(level)), boundEmailSubjectLabel(emailSubjectLabel(alertType)), emailSubjectIdentities([]*alerts.Alert{alert}))
 
 	escapedLevel := html.EscapeString(string(level))
 	escapedResourceName := html.EscapeString(alert.ResourceName)
@@ -316,6 +316,9 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 		severityParts = append(severityParts, fmt.Sprintf("%d Info", info))
 	}
 	subject = fmt.Sprintf("[Pulse Alert] %s alert%s", strings.Join(severityParts, ", "), pluralize(len(alertList)))
+	if identities := emailSubjectIdentities(alertList); identities != "" {
+		subject += ": " + identities
+	}
 
 	// Build alert rows
 	var alertRows strings.Builder
