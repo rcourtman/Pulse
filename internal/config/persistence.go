@@ -882,8 +882,11 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 		config.TimeThresholds = make(map[string]int)
 	}
 	defaultDelay := 5
+	// Zero means no delay, as the alert manager reads it
+	// (alerts.Manager.UpdateConfig keeps it); only a missing or negative
+	// delay takes the default.
 	ensureDelay := func(key string) {
-		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+		if delay, ok := config.TimeThresholds[key]; !ok || delay < 0 {
 			config.TimeThresholds[key] = defaultDelay
 		}
 	}
@@ -892,7 +895,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	ensureDelay("agent")
 	ensureDelay("storage")
 	ensureDelay("pbs")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelay
 	}
 
@@ -961,6 +964,11 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Normalize a copy. Callers hand in alerts.Manager.GetConfig() snapshots
+	// and configs they have just applied to the manager, so normalizing their
+	// maps and threshold pointers in place wrote into the running config.
+	config = config.Clone()
 
 	// Save-specific: normalize override clear values before shared defaults run
 	if config.MinimumDelta <= 0 {

@@ -3121,6 +3121,28 @@ ownership is `internal/alerts/alert_identity_migration_test.go`,
 `internal/monitoring/monitor_alert_override_migration_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
 
+### Alert config snapshots are owned copies
+
+`Manager.GetConfig()` returns `AlertConfig.Clone()`, a typed deep copy that
+shares no map, slice or pointer with the live config (custom rule filter
+values are copied as decoded JSON values). Callers encode, persist
+and edit that snapshot outside `m.mu`: the GET config handler, alert
+activation, the identity migration, backup evaluation and diagnostics. It used
+to be a shallow copy, so `SaveAlertConfig` normalizing it in place, or
+`UpdateConfig` re-normalizing the overrides of a re-applied snapshot, wrote the
+live maps while evaluation or another encoder read them, and Go aborted Pulse
+with a concurrent map write. `SaveAlertConfig` also clones before normalizing,
+because a config just handed to `UpdateConfig` is the live config. Persistence
+keeps an explicit `0` type-level delay as no delay on save and load, matching
+`NormalizeTimeThresholds`. It used to store and load it as the 5-second factory
+delay, which the noisy-gauge rule stretches to 300 seconds for memory and
+temperature, and the shared map write was what made the running manager agree.
+Pulse saves never wrote a `0`, so only a newly sent or hand-edited `0` changes
+meaning. `internal/alerts/config/clone_test.go`
+fills every field and fails when a new reference field is not copied.
+Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
+`internal/config/persistence_alert_ownership_test.go`.
+
 ### Versioned alert-intent policy
 
 The alerts runtime owns one versioned alert-intent document and its durable
