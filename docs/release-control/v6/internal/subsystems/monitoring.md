@@ -4514,6 +4514,13 @@ disk usage when the last VM snapshot is still recent guest-agent truth rather
 than an already carried-forward fallback. That keeps transient guest-agent or
 status-call failures from regressing a VM back to misleading allocated-disk
 data while still avoiding indefinite replay of stale disk summaries.
+The previous VM that `previousVMFromView` builds from the unified read state
+carries disk usage only when it is Proxmox's own reading. When a manually
+linked Pulse agent's disk filled in because Proxmox had no guest filesystems
+(`VMView.DiskFromLinkedAgent`), carrying it would relabel the agent's value as
+a Proxmox `prev-` read, and with Proxmox outranking the agent on guests that
+copy would then freeze over the agent's live disk.
+`TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry` pins both owners.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,

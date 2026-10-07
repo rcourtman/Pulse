@@ -5138,6 +5138,118 @@ func TestResourceRegistry_ManualGuestAgentLinkUsesAgentCPUOnlyWhenPlatformHasNoC
 	}
 }
 
+// The workload table, guest drawer and History judge a guest's disk reading by
+// the linked agent's freshness when the agent's filesystems fill in for
+// Proxmox's (useWorkloads disksFromAgent). That needs the registry to keep the
+// agent's disk metric while Proxmox has no guest disk usage, also once the
+// agent is silent, and Proxmox's own fresh reading otherwise.
+func TestResourceRegistry_ManualGuestAgentLinkDiskMetricFollowsProxmoxGuestFilesystems(t *testing.T) {
+	now := time.Now().UTC()
+	agentDisks := []models.Disk{{Total: 1000, Used: 400, Free: 600, Usage: 40, Mountpoint: "/"}}
+	cases := []struct {
+		name          string
+		vmDisk        models.Disk
+		vmDisks       []models.Disk
+		reason        string
+		agentStatus   string
+		agentLastSeen time.Time
+		wantSource    DataSource
+		wantPercent   float64
+		wantStale     bool
+	}{
+		{
+			name:          "no proxmox filesystems, live agent",
+			vmDisk:        models.Disk{Total: 32 << 30, Usage: -1},
+			reason:        "agent-not-running",
+			agentStatus:   "online",
+			agentLastSeen: now,
+			wantSource:    SourceAgent,
+			wantPercent:   40,
+		},
+		{
+			name:          "no proxmox filesystems, silent agent keeps its last disk",
+			vmDisk:        models.Disk{Total: 32 << 30, Usage: -1},
+			reason:        "agent-not-running",
+			agentStatus:   "offline",
+			agentLastSeen: now.Add(-10 * time.Minute),
+			wantSource:    SourceAgent,
+			wantPercent:   40,
+			wantStale:     true,
+		},
+		{
+			name:          "proxmox guest filesystems keep proxmox disk",
+			vmDisk:        models.Disk{Total: 1000, Used: 700, Free: 300, Usage: 70},
+			vmDisks:       []models.Disk{{Total: 1000, Used: 700, Free: 300, Usage: 70, Mountpoint: "/"}},
+			agentStatus:   "online",
+			agentLastSeen: now,
+			wantSource:    SourceProxmox,
+			wantPercent:   70,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := models.StateSnapshot{
+				VMs: []models.VM{{
+					ID:               "pve-a:node-1:402",
+					VMID:             402,
+					Name:             "vm-402",
+					Node:             "node-1",
+					Instance:         "pve-a",
+					Type:             "qemu",
+					Status:           "running",
+					LastSeen:         now,
+					Disk:             tc.vmDisk,
+					Disks:            tc.vmDisks,
+					DiskStatusReason: tc.reason,
+				}},
+				Hosts: []models.Host{{
+					ID:       "agent-402",
+					Hostname: "guest-402",
+					Status:   tc.agentStatus,
+					LastSeen: tc.agentLastSeen,
+					Disks:    agentDisks,
+				}},
+			}
+			store := NewMemoryStore()
+			unlinked := NewRegistry(store)
+			unlinked.IngestSnapshot(snapshot)
+			var vmID, agentID string
+			for _, resource := range unlinked.List() {
+				switch resource.Type {
+				case ResourceTypeVM:
+					vmID = resource.ID
+				case ResourceTypeAgent:
+					agentID = resource.ID
+				}
+			}
+			if vmID == "" || agentID == "" {
+				t.Fatalf("vm %q / agent %q not ingested", vmID, agentID)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+
+			rr := NewRegistry(store)
+			rr.IngestSnapshot(snapshot)
+			got, ok := rr.Get(vmID)
+			if !ok || got.Metrics == nil || got.Metrics.Disk == nil {
+				t.Fatalf("linked guest lost its disk metric: %+v", got)
+			}
+			if got.Metrics.Disk.Source != tc.wantSource || got.Metrics.Disk.Percent != tc.wantPercent {
+				t.Fatalf("disk = %+v, want %s at %.0f%%", got.Metrics.Disk, tc.wantSource, tc.wantPercent)
+			}
+			agentFilesystemsFillIn := got.Proxmox != nil && len(got.Proxmox.Disks) == 0 &&
+				got.Agent != nil && len(got.Agent.Disks) > 0
+			if agentFilesystemsFillIn != (tc.wantSource == SourceAgent) {
+				t.Fatalf("agent filesystems fill in = %v, disk metric source %s", agentFilesystemsFillIn, tc.wantSource)
+			}
+			if got.Agent == nil || got.Agent.Stale != tc.wantStale {
+				t.Fatalf("agent stale = %+v, want %v", got.Agent, tc.wantStale)
+			}
+		})
+	}
+}
+
 func TestResourceRegistry_ManualGuestAgentLinkReconnectRestoresFreshPlatformCPU(t *testing.T) {
 	now := time.Now().UTC()
 	const (
