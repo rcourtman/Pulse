@@ -106,33 +106,82 @@ connection is usually enough for TrueNAS inventory and usage; an agent is
 optional for host-local data.
 
 1. In that shell, protect the file before opening the editor. Save only the
-   Pulse agent token, with no quotes or header. Use your own private directory
-   and regular files, not shared paths or symlinks:
+   Pulse agent token, with no quotes or header. This preparation preserves an
+   existing regular token file and refuses symlinked or non-regular credential
+   paths. **Stop if preparation fails**; do not continue to the installer:
 
    ```bash
-   umask 077
-   mkdir -p "$HOME/.config/pulse"
-   chmod 700 "$HOME/.config/pulse"
-   touch "$HOME/.config/pulse/agent-token"
-   chmod 600 "$HOME/.config/pulse/agent-token"
-   vi "$HOME/.config/pulse/agent-token"
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     credential_file="$config_dir/agent-token"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+       printf 'Refusing a symlinked credential path.\n' >&2
+       exit 1
+     fi
+     if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+       printf 'Credential file must be a regular file.\n' >&2
+       exit 1
+     fi
+     mkdir -p "$config_dir"
+     chmod 700 "$config_dir"
+     touch "$credential_file"
+     chmod 600 "$credential_file"
+     vi "$credential_file"
+   )
    ```
 
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
-   in both the download and installation commands. Download to a file:
+   in both the download and installation commands. Download to a new private
+   file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
+   and does not follow redirects or overwrite an existing installer:
 
    ```bash
-   curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
-     --output "$HOME/.config/pulse/agent-install.sh" \
-     https://pulse.example.com/install.sh
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     installer_file="$config_dir/agent-install.sh"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ ! -d "$config_dir" ]; then
+       printf 'Prepare the private token directory first.\n' >&2
+       exit 1
+     fi
+     if [ -e "$installer_file" ] || [ -L "$installer_file" ]; then
+       printf 'Refusing to replace an existing installer path.\n' >&2
+       exit 1
+     fi
+     chmod 700 "$config_dir"
+     download_file=$(mktemp "$config_dir/agent-download.XXXXXX")
+     curl_exit=0
+     status=$(curl --disable --fail --silent --show-error --proto '=https' \
+       --connect-timeout 10 --max-time 60 --output "$download_file" \
+       --write-out '%{http_code}' https://pulse.example.com/install.sh) || curl_exit=$?
+     printf 'HTTP %s\n' "$status"
+     [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+     [ "$status" = 200 ]
+     mv -n "$download_file" "$installer_file"
+     [ ! -e "$download_file" ]
+   )
    ```
 
-   **Stop if the download fails.** Inspect the saved script before executing
-   it. Do not bypass certificate verification or pipe an unchecked response
-   into a privileged shell. For a private CA, add curl's `--cacert` with the
-   separately verified CA file, and supply the installer's `--cacert` option
-   for the agent connection as well. Do not substitute GitHub's top-level
-   `install.sh`: that installs the Pulse server, not the agent.
+   **Stop if the download fails.** A temporary download, redirect or TLS error
+   is not an installer; do not execute its temporary file. Inspect the saved
+   `agent-install.sh` only after a successful download. If that path already
+   exists, review it locally rather than deleting or overwriting it blindly;
+   retargeting needs the installer from the **new** server, not an older saved
+   copy. Preserve any earlier copy separately through normal maintenance
+   before downloading again.
+
+   Keep `--disable` first in the curl command: local settings could enable
+   tracing, redirects or a TLS bypass. Do not bypass certificate verification
+   or pipe an unchecked response into a privileged shell. For a private CA,
+   add curl's `--cacert` **after `--disable`**, using a separately verified CA
+   file, and supply the installer's `--cacert` option for the agent connection
+   as well. A successful download is not signature verification; inspect and
+   trust the serving Pulse installation before executing its script. Do not
+   substitute GitHub's top-level `install.sh`: that installs the Pulse server,
+   not the agent.
 
 3. Install with the private token file, adding a profile from
    [Installation Options](#installation-options) when needed:

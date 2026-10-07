@@ -84,7 +84,7 @@ class AgentDocsTest(unittest.TestCase):
         self.assertEqual(count, 18)
 
     def test_private_file_preparation_preserves_existing_token(self):
-        command = recipe(NAMES[0], 'vi "$HOME/.config/pulse/agent-token"')
+        command = recipe(NAMES[0], 'credential_file="$config_dir/agent-token"')
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             tools = home / "tools"
@@ -100,12 +100,135 @@ class AgentDocsTest(unittest.TestCase):
                     token.write_text(TOKEN + "\n")
                     token.chmod(0o644)
                     token.parent.chmod(0o755)
-                result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True)
+                # Run the fence as copied, without supplying errexit for it.
+                result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual(stat.S_IMODE(token.stat().st_mode), 0o600)
                 self.assertEqual(stat.S_IMODE(token.parent.stat().st_mode), 0o700)
                 self.assertEqual(token.read_text(), TOKEN + "\n" if existing else "")
                 self.assertNotIn(TOKEN.encode(), result.stdout + result.stderr)
+
+    def test_private_file_preparation_refuses_symlinks_and_nonregular_tokens(self):
+        command = recipe(NAMES[0], 'credential_file="$config_dir/agent-token"')
+        for placement in (".config", ".config/pulse", ".config/pulse/agent-token"):
+            for kind in ("symlink", "dangling-symlink", "directory", "fifo"):
+                # Directories are normal parents; reject non-regular token files.
+                if kind == "directory" and placement != ".config/pulse/agent-token":
+                    continue
+                with self.subTest(placement=placement, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                    home = Path(temporary)
+                    path = home / placement
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    target = home / "untouched"
+                    target.mkdir(mode=0o755)
+                    target.chmod(0o755)
+                    witness = target / "agent-token"
+                    witness.write_text(TOKEN)
+                    witness.chmod(0o644)
+                    if kind == "symlink":
+                        path.symlink_to(witness if placement.endswith("agent-token") else target)
+                    elif kind == "dangling-symlink":
+                        path.symlink_to(home / "must-not-be-created")
+                    elif kind == "directory":
+                        path.mkdir()
+                    else:
+                        os.mkfifo(path)
+                    tools = home / "tools"
+                    tools.mkdir()
+                    editor = tools / "vi"
+                    editor.write_text('#!/bin/sh\nprintf called > "$EDITOR_RECEIPT"\n')
+                    editor.chmod(0o700)
+                    receipt = home / "editor-called"
+                    env = fixture_environment(home)
+                    env.update(PATH=f"{tools}:{os.environ['PATH']}", EDITOR_RECEIPT=str(receipt))
+                    result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(receipt.exists(), "unsafe preparation must stop before opening the editor")
+                    self.assertEqual(witness.read_text(), TOKEN)
+                    self.assertEqual(stat.S_IMODE(witness.stat().st_mode), 0o644)
+                    self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
+                    self.assertFalse((home / "must-not-be-created").exists())
+                    self.assertNotIn(TOKEN.encode(), result.stdout + result.stderr)
+
+    def test_download_refuses_unsafe_paths_before_contacting_server(self):
+        command = recipe(NAMES[0], 'installer_file="$config_dir/agent-install.sh"')
+        for placement, kind in ((".config", "symlink"), (".config/pulse", "symlink"),
+                                (".config/pulse", "missing"),
+                                (".config/pulse/agent-install.sh", "file"),
+                                (".config/pulse/agent-install.sh", "directory"),
+                                (".config/pulse/agent-install.sh", "symlink"),
+                                (".config/pulse/agent-install.sh", "dangling-symlink")):
+            with self.subTest(placement=placement, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                path = home / placement
+                path.parent.mkdir(parents=True, exist_ok=True)
+                target = home / "untouched"
+                target.mkdir(mode=0o755)
+                target.chmod(0o755)
+                witness = target / "agent-install.sh"
+                witness.write_text("previous inspected installer\n")
+                witness.chmod(0o644)
+                if kind == "symlink":
+                    path.symlink_to(witness if placement.endswith(".sh") else target)
+                elif kind == "dangling-symlink":
+                    path.symlink_to(home / "must-not-be-created")
+                elif kind == "directory":
+                    path.mkdir()
+                elif kind == "file":
+                    path.write_text("existing installer\n")
+                tools = home / "tools"
+                tools.mkdir()
+                curl = tools / "curl"
+                curl.write_text('#!/bin/sh\nprintf called > "$CURL_RECEIPT"\nexit 19\n')
+                curl.chmod(0o700)
+                receipt = home / "curl-called"
+                env = fixture_environment(home)
+                env.update(PATH=f"{tools}:{os.environ['PATH']}", CURL_RECEIPT=str(receipt))
+                result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(receipt.exists(), "unsafe download must stop before invoking curl")
+                self.assertEqual(witness.read_text(), "previous inspected installer\n")
+                self.assertEqual(stat.S_IMODE(witness.stat().st_mode), 0o644)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
+                if kind == "file":
+                    self.assertEqual(path.read_text(), "existing installer\n")
+                self.assertFalse((home / "must-not-be-created").exists())
+
+    def test_failed_download_or_publish_conflict_never_replaces_installer(self):
+        command = recipe(NAMES[0], 'installer_file="$config_dir/agent-install.sh"')
+        for mode, expected_exit in (("partial", 23), ("publish-conflict", 1)):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                private = home / ".config/pulse"
+                private.mkdir(parents=True, mode=0o700)
+                tools = home / "tools"
+                tools.mkdir()
+                curl = tools / "curl"
+                curl.write_text('''#!/usr/bin/env python3
+import os, sys
+from pathlib import Path
+args = sys.argv[1:]
+assert args[0] == '--disable'
+Path(args[args.index('--output') + 1]).write_text('downloaded prefix\\n')
+print('200', end='')
+if os.environ['DOWNLOAD_MODE'] == 'partial':
+    sys.exit(23)
+Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other saved installer\\n')
+''')
+                curl.chmod(0o700)
+                env = fixture_environment(home)
+                env.update(PATH=f"{tools}:{os.environ['PATH']}", DOWNLOAD_MODE=mode)
+                result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                installer = private / "agent-install.sh"
+                if mode == "partial":
+                    self.assertFalse(installer.exists())
+                else:
+                    self.assertEqual(installer.read_text(), "other saved installer\n")
+                downloads = list(private.glob("agent-download.*"))
+                self.assertEqual(len(downloads), 1)
+                self.assertEqual(downloads[0].read_text(), "downloaded prefix\n")
+                self.assertEqual(stat.S_IMODE(downloads[0].stat().st_mode), 0o600)
 
     def test_windows_file_handoff_matches_installer_contract(self):
         windows = "\n".join(blocks(NAMES[0], "powershell"))
@@ -131,9 +254,14 @@ class AgentDocsTest(unittest.TestCase):
             "os.execv(os.environ['REAL_CURL'], [os.environ['REAL_CURL'], *sys.argv[1:]])\n"
         )
         recorder.chmod(0o700)
+        trace = home / "curl-trace.txt"
+        (home / ".curlrc").write_text(
+            f'header = "X-Curlrc-Injected: {TOKEN}"\ninsecure\nlocation\ntrace-ascii = "{trace}"\n'
+        )
         env = fixture_environment(home)
         env.update(PATH=f"{tools}:{os.environ['PATH']}", REAL_CURL=shutil.which("curl"),
-                   CURL_RECEIPT=str(home / "curl-argv.json"))
+                   CURL_RECEIPT=str(home / "curl-argv.json"), CURL_HOME=str(home),
+                   XDG_CONFIG_HOME=str(home / ".config"))
         command = command.replace("https://pulse.example.com", f"https://{hostname}:{port}")
         command = command.replace("https://raw.githubusercontent.com", f"https://{hostname}:{port}")
         if ca is not None:
@@ -141,7 +269,7 @@ class AgentDocsTest(unittest.TestCase):
                 command = command.replace("curl --disable ", f'curl --disable --cacert "{ca}" ', 1)
             else:
                 command = command.replace("curl ", f'curl --cacert "{ca}" ', 1)
-        result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=20)
+        result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, timeout=20)
         argv = json.loads((home / "curl-argv.json").read_text())
         self.assertNotIn(TOKEN, " ".join(argv))
         self.assertNotIn(TOKEN.encode(), result.stdout + result.stderr)
@@ -149,17 +277,19 @@ class AgentDocsTest(unittest.TestCase):
             self.assertIn(argument, argv)
         self.assertNotIn("--insecure", argv)
         self.assertNotIn("-k", argv)
-        if "sensor-cleanup-download.XXXXXX" in command:
-            self.assertEqual(argv[0], "--disable")
+        self.assertEqual(argv[0], "--disable")
+        self.assertFalse(trace.exists(), "local curl settings must not enable tracing")
         return result
 
     def test_downloads_require_verified_tls_and_success(self):
         for name, path, needle, output in (
-            (NAMES[0], "/install.sh", '--output "$HOME/.config/pulse/agent-install.sh"', "agent-install.sh"),
+            (NAMES[0], "/install.sh", 'installer_file="$config_dir/agent-install.sh"', "agent-install.sh"),
             (NAMES[1], CLEANUP_PATH, 'helper_file="$config_dir/sensor-proxy-uninstall.sh"', "sensor-proxy-uninstall.sh"),
         ):
             for status, ca, hostname, expected in (
                 (200, self.cert, "localhost", 0),
+                (204, self.cert, "localhost", 1),
+                (302, self.cert, "localhost", 1),
                 (403, self.cert, "localhost", 22),
                 (200, None, "localhost", 60),
                 (200, self.other_cert, "localhost", 60),
@@ -173,9 +303,8 @@ class AgentDocsTest(unittest.TestCase):
                             self.assertEqual(result.returncode, expected, result.stderr.decode())
                             if expected == 0:
                                 self.assertEqual((home / ".config/pulse" / output).read_bytes(), b"# harmless installer fixture\n")
-                                if name == NAMES[1]:
-                                    self.assertEqual(stat.S_IMODE((home / ".config/pulse" / output).stat().st_mode), 0o600)
-                            elif name == NAMES[1]:
+                                self.assertEqual(stat.S_IMODE((home / ".config/pulse" / output).stat().st_mode), 0o600)
+                            else:
                                 self.assertFalse((home / ".config/pulse" / output).exists(),
                                                  "a failed temporary download must not become the cleanup helper")
                             if expected == 60:
@@ -183,6 +312,8 @@ class AgentDocsTest(unittest.TestCase):
                             for requested_path, headers in requests:
                                 self.assertEqual(requested_path, path)
                                 self.assertNotIn("Authorization", headers)
+                                self.assertNotIn("X-Curlrc-Injected", headers)
+                            self.assertLessEqual(len(requests), 1, "a redirect or error must not trigger another request")
 
     def test_every_profile_passes_only_private_file_not_token_arguments(self):
         profiles = []
