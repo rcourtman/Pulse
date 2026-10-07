@@ -5255,7 +5255,19 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
-The rule has one deliberate exception. The age of a latest reading (last used,
+Future times have their own formatter. `formatRelativeTime` is past-only: it
+reads a time ahead of `now` as "just now" (compact) or "0s ago", which is right
+for clock skew on something already observed and wrong for an expiry, a
+reminder or a schedule.
+Those go through `formatTimeUntil` (`frontend-modern/src/utils/format.ts`),
+which counts down ("in 3h", "in 1d"), rounds to the nearest unit so a duration
+just chosen reads as chosen, and returns `dueText` (default "now") once the
+time arrives. A countdown target does not change while its surface stays open,
+so the countdown passes `now` from the shared clock, as the Patrol suppression
+expiry and the Patrol findings reminder and snooze lines do. The replication
+Next sync column and the Patrol header's next-check `CountdownTimer` keep their
+own minute- and second-precision countdowns.
+The relative-age rule has one deliberate exception. The age of a latest reading (last used,
 last seen, last success, last checked) on data the surface reads once and does
 not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
