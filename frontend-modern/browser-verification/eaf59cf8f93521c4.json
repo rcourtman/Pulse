@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "156d2e274d9f14e8283ca3d9e64243fb6882672a",
+  "verified_at": "2026-10-07T14:04:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "68542124c9cd1742051332aa09fc9795ff93ba705522f59007f42dbbb4815d87"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/protection",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Tree = origin/main 156d2e274d plus this change; production vite build embedded in a go build binary, private DEMO_MODE mock stack on :7791 (demo/demo, PULSE_TELEMETRY=false), driven by Playwright",
+    "Runtime-neutral proof: before/after production builds of this tree give byte-identical dist output (all 187 files equal by shasum), so the removed exports were already tree-shaken; check-bundle-size.mjs passes",
+    "Patrol Inbox, Protection, Activity, Finding options and history (Open work), finding review panel, run findings snapshot ('What Patrol found during this run.') and selected run in Patrol history: none render 'Recent changes', 'Learned correlations', 'Policy coverage', 'policy-covered', 'Supporting context' or a Details context control, at both viewports",
+    "Assistant drawer after 'Explain with Assistant' shows the Pulse Patrol attention briefing naming the selected decision's resource (buildPatrolAttentionAssistantHandoff from the changed module); the demo instance refuses the chat reply itself ('Demo mode enabled'), which is expected read-only behaviour",
+    "Assistant drawer after the selected run's 'Discuss' shows the 'Patrol run attached' briefing (buildPatrolRunAssistantHandoff from the changed module)",
+    "No page errors; the only console error (desktop) is 'Failed to load intelligence summary: TypeError: Failed to fetch' paired with net::ERR_ABORTED /api/ai/intelligence, i.e. a read cancelled by the script's own page.goto between Patrol routes; CSP inline-style reports and demo-mode 403s are pre-existing"
+  ],
+  "interactions": [
+    "Loaded /patrol, selected the first decision row and clicked 'Explain with Assistant'",
+    "Loaded /patrol/protection and waited for Protected outcomes to finish loading",
+    "Loaded /patrol/activity, expanded 'Finding options and history', opened 'Review issue' for the Docker host finding, switched to History, opened the newest run, returned to History and clicked the run's 'Discuss' button",
+    "Repeated every step at 1440x900 and 390x844"
+  ]
+}

@@ -11,13 +11,11 @@ import {
   buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantFindingHandoffActions,
   buildPatrolConfigurationFailureHandoff,
-  buildPatrolInvestigationContextSummary,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantModelContext,
   buildPatrolRunAssistantHandoff,
   patrolAssistantFindingHandoffRequiresApprovalMode,
-  selectPatrolSupportingRecentChanges,
 } from '../patrolInvestigationContextModel';
 
 // Second branch-coverage companion to patrolInvestigationContextModel.test.ts.
@@ -34,122 +32,6 @@ const minimalRecord = {
   trigger: { detected_at: '2026-01-01T00:00:00Z' },
   status: 'completed',
 } as unknown as InvestigationRecord;
-
-describe('buildPatrolInvestigationContextSummary (residual branches)', () => {
-  it('returns zero correlations when the response is present but has no count and no array', () => {
-    // normalizeCorrelationCount final `return 0` arm: object that is neither a
-    // finite numeric count nor an Array `correlations` field.
-    const summary = buildPatrolInvestigationContextSummary({
-      correlations: { unexpected: 'shape' } as unknown as
-        import('@/types/aiIntelligence').CorrelationsResponse | null,
-    });
-
-    expect(summary).toMatchObject({
-      correlationCount: 0,
-      hasContext: false,
-      summaryText: '',
-    });
-  });
-});
-
-describe('selectPatrolSupportingRecentChanges (same-state transition branches)', () => {
-  it('uses a custom reason and skips non-array changedFields', () => {
-    // formatSameStateTransitionReason: changedFieldLabels empty (metadata
-    // present but changedFields not an array) -> falls through to the reason
-    // arm, and a reason that is not the default yields "${reason} while ${state}".
-    const [change] = selectPatrolSupportingRecentChanges([
-      {
-        id: 'c-reason',
-        observedAt: '2026-01-01T00:00:00Z',
-        resourceId: 'vm-1',
-        kind: 'state_transition',
-        from: 'online',
-        to: 'online',
-        sourceType: 'pulse_diff',
-        confidence: 'high',
-        reason: 'operator-initiated restart',
-        metadata: { note: 'not an array' },
-      },
-    ]);
-
-    expect(change).toMatchObject({
-      from: undefined,
-      to: undefined,
-      reason: 'operator-initiated restart while online',
-    });
-  });
-
-  it('skips blank changed-field entries and falls back to the identifier label for unknown fields', () => {
-    const [change] = selectPatrolSupportingRecentChanges([
-      {
-        id: 'c-fields',
-        observedAt: '2026-01-01T00:00:00Z',
-        resourceId: 'vm-1',
-        kind: 'restart',
-        from: 'on',
-        to: 'on',
-        sourceType: 'pulse_diff',
-        confidence: 'high',
-        metadata: { changedFields: ['', '  ', 'custom_field', 'tags'] },
-      },
-    ]);
-
-    // Blank entries are skipped; 'custom_field' uses formatIdentifierLabel
-    // fallback ("Custom Field"); 'tags' resolves to the known map label.
-    expect(change.reason).toBe('Custom Field and tags changed while on');
-  });
-
-  it('renders the single-field and three-or-more-field compact label lists', () => {
-    const [single] = selectPatrolSupportingRecentChanges([
-      {
-        id: 'c-one',
-        observedAt: '2026-01-01T00:00:00Z',
-        resourceId: 'vm-1',
-        kind: 'state_transition',
-        from: 'online',
-        to: 'online',
-        sourceType: 'pulse_diff',
-        confidence: 'high',
-        metadata: { changedFields: ['tags'] },
-      },
-    ]);
-    expect(single.reason).toBe('tags changed while online');
-
-    const [many] = selectPatrolSupportingRecentChanges([
-      {
-        id: 'c-many',
-        observedAt: '2026-01-01T00:00:00Z',
-        resourceId: 'vm-1',
-        kind: 'state_transition',
-        from: 'online',
-        to: 'online',
-        sourceType: 'pulse_diff',
-        confidence: 'high',
-        metadata: { changedFields: ['status', 'incidents', 'parentId'] },
-      },
-    ]);
-    expect(many.reason).toBe('status, incident state, and 1 more changed while online');
-  });
-
-  it('falls back to the default wording when the reason is exactly the no-op default', () => {
-    const [change] = selectPatrolSupportingRecentChanges([
-      {
-        id: 'c-default',
-        observedAt: '2026-01-01T00:00:00Z',
-        resourceId: 'vm-1',
-        kind: 'state_transition',
-        from: 'online',
-        to: 'online',
-        sourceType: 'pulse_diff',
-        confidence: 'high',
-        reason: 'Resource state changed',
-      },
-    ]);
-
-    // Case-insensitive match against the default -> generic fallback wording.
-    expect(change.reason).toBe('state details changed while online');
-  });
-});
 
 describe('buildPatrolInvestigationRecordPresentation (residual branches)', () => {
   it('labels an unknown tool via the identifier fallback', () => {

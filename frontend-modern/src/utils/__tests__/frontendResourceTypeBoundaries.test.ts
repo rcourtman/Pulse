@@ -3610,15 +3610,14 @@ describe('frontend resource type boundaries', () => {
     // Verify the symbol is imported from the model without prescribing a
     // specific single- vs multi-line import shape; usePatrolIntelligenceState
     // groups several patrolInvestigationContextModel imports together.
-    expect(patrolIntelligenceStateSource).toContain(
-      'buildPatrolAssistantFindingHandoffFromUnifiedFinding',
+    expect(patrolIntelligenceStateSource).toMatch(
+      /import\s*\{[^}]*\bbuildPatrolAssistantFindingHandoffFromUnifiedFinding\b[^}]*\}\s*from '\.\/patrolInvestigationContextModel';/,
     );
     expect(patrolIntelligenceStateSource).toContain('buildPatrolSettingsReadinessFailure');
-    expect(patrolIntelligenceStateSource).toContain("from './patrolInvestigationContextModel'");
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
-      'export function buildPatrolInvestigationContextSummary',
+      'export function buildPatrolAssistantFindingHandoffFromUnifiedFinding',
     );
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationRecordPresentation',
@@ -3637,7 +3636,9 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).not.toContain(
       'record.proposed_fix.commands.join',
     );
-    expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
+    // Patrol renders no supporting-context summary, so the model must not
+    // carry its policy-coverage count copy either.
+    expect(patrolInvestigationContextModelSource).not.toContain('policy-covered resource');
     expect(patrolIntelligenceHeaderSource).not.toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceHeaderSource).not.toContain('quickstart_credits');
