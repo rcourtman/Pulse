@@ -6893,8 +6893,8 @@ That posture snapshot must render redaction labels through the canonical
 unified-resource hint order, not alphabetically, so the AI summary, drawer,
 and any future policy surfaces all present the same redaction precedence.
 Its sensitivity and routing counts must also follow the canonical
-unified-resource order and shared human-readable count summaries, so both the
-backend summary and the frontend policy card stay aligned on the same
+unified-resource order and shared human-readable count summaries, so the
+backend summary and any frontend posture presentation stay aligned on the same
 presentation sequence.
 The unified AI resource data-governance block must also use the shared
 unified-resource redaction-label helper directly, so the same canonical
