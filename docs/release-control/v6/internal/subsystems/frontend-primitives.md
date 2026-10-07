@@ -39,8 +39,9 @@ guesses or the breach message. `useAlertHistoryState` exposes its active-alert
 accessor so the incident panel matches its open occurrence to the live alert
 without a second store read, and the panel reads `useRelativeTimeNow` so a
 reading that stops updating turns stale on screen. From the `sm` breakpoint the
-card's text column keeps a 16rem floor and breaks long words, so the action
-buttons wrap instead of squeezing the reading to its longest word beside them.
+card's left column (status icon and text) keeps a 16rem floor and the text
+breaks long words, so the action buttons wrap instead of squeezing the reading
+to its longest word beside them.
 
 ### Canonical drawer History preserves guest read provenance
 
