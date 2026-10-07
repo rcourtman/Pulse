@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Community auto-updates require a verified installed edition
+
+Before release discovery or installation, the unattended updater requires a
+regular executable in the primary or, only when absent, legacy binary path.
+Its `--version` probe must exit successfully within five seconds, with a
+one-second KILL backstop. A `Pulse Pro` first line leaves the paid runtime
+untouched; only the public `Pulse vX.Y.Z` version format admits community
+updates. Failed, missing, non-executable or unrecognised binaries stop with a
+manual-recovery message. A VERSION file is not edition evidence, and a broken
+primary executable cannot defer to a legacy community executable. Probe output
+is not included in the error message. Signed assets, consent and rollback
+requirements remain unchanged.
+
+`scripts/installtests/pulse_auto_update_consent_test.go` also executes this
+edition boundary: primary/legacy precedence, successful and failed version
+output, a real TERM-resistant probe deadline, and the actual `main` flow's
+release-discovery/installer boundary with a plausible VERSION fallback.
+`TestAutoUpdateEditionGateStopsMainBeforeDownloads` proves that unknown and Pro
+editions cause no release read or installer action, while a recognised community
+binary still reaches both. These ordinary-user shell fixtures do not establish
+installed systemd, paid customer or native update acceptance.
+
 ### Unattended update consent comes from complete configuration
 
 When `system.json` exists, the unattended updater requires one complete JSON

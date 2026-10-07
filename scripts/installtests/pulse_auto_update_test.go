@@ -376,14 +376,14 @@ func TestInstalledBinaryIsPulseProGuard(t *testing.T) {
 		})
 	}
 
-	t.Run("missing binary is not flagged", func(t *testing.T) {
-		script := fn + "\nINSTALL_DIR=" + t.TempDir() + "\nif installed_binary_is_pulse_pro; then echo pro; else echo community; fi\n"
+	t.Run("missing binary is unknown", func(t *testing.T) {
+		script := fn + "\nINSTALL_DIR=" + t.TempDir() + "\nif installed_binary_is_pulse_pro; then echo pro; else echo STATUS=$?; fi\n"
 		out, err := exec.Command("bash", "-c", script).CombinedOutput()
 		if err != nil {
 			t.Fatalf("bash: %v\n%s", err, out)
 		}
-		if got := strings.TrimSpace(string(out)); got != "community" {
-			t.Fatalf("missing binary should not be flagged as Pro, got %q", got)
+		if got := strings.TrimSpace(string(out)); got != "STATUS=2" {
+			t.Fatalf("missing binary must not establish community edition, got %q", got)
 		}
 	})
 }
