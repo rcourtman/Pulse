@@ -950,20 +950,7 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				}
 			}
 		case ResourceTypePhysicalDisk:
-			if resource.PhysicalDisk == nil {
-				return ""
-			}
-			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
-				return diskinventory.PreferredID(
-					resource.PhysicalDisk.Serial,
-					resource.PhysicalDisk.WWN,
-					parentSourceID,
-					resource.PhysicalDisk.DevPath,
-					resource.PhysicalDisk.Controller,
-					resource.PhysicalDisk.Target,
-				)
-			}
-			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, "")
+			return rr.seedAgentPhysicalDiskSourceIDLocked(resource)
 		}
 	case SourceDocker:
 		if resource.Docker == nil {
@@ -2969,6 +2956,21 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			}
 		} else if excluded {
 			resource.ID = candidateID
+			if resource.Type == ResourceTypePhysicalDisk {
+				// An agent disk's source-specific ID hashes its bare serial
+				// (sourceSpecificIDKey), so another machine's split copy may
+				// hold it, and one machine's observations may meet on it.
+				resource.ID = rr.physicalDiskFallbackIDLocked(candidateID, &resource, source)
+				if existing := rr.resources[resource.ID]; existing != nil && existing.Type == ResourceTypePhysicalDisk {
+					if onlyMissing {
+						return ""
+					}
+					rr.mergeInto(existing, resource, source, sourceID)
+					rr.bySource[source][sourceID] = existing.ID
+					rr.matcher.Add(existing.ID, existing.Identity)
+					return existing.ID
+				}
+			}
 			if onlyMissing && rr.resources[resource.ID] != nil {
 				return ""
 			}
@@ -5512,8 +5514,9 @@ func (rr *ResourceRegistry) physicalDiskScopedIDLocked(disk *Resource) string {
 }
 
 // physicalDiskFallbackIDLocked returns the observation's source-specific ID,
-// keyed to its machine when another machine's disk already holds it: agent
-// disk source IDs are the bare serial, so one candidate ID serves every host.
+// keyed to its machine when another machine's disk already holds it: an agent
+// disk's source-specific ID hashes its bare serial (sourceSpecificIDKey), so
+// one candidate ID serves every host.
 func (rr *ResourceRegistry) physicalDiskFallbackIDLocked(candidateID string, incoming *Resource, source DataSource) string {
 	holder := rr.resources[candidateID]
 	if holder == nil || (holder.Type == ResourceTypePhysicalDisk && !rr.physicalDiskMachinesConflictLocked(holder, incoming, source)) {
@@ -5672,8 +5675,7 @@ func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, i
 }
 
 func (rr *ResourceRegistry) sourceSpecificID(resourceType ResourceType, source DataSource, sourceID string) string {
-	stable := fmt.Sprintf("%s:%s", source, normalizeSourceID(sourceID))
-	return buildHashID(resourceType, stable)
+	return SourceSpecificID(resourceType, source, sourceID)
 }
 
 func buildHashID(resourceType ResourceType, stable string) string {

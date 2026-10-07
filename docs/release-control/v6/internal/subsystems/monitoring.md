@@ -4104,6 +4104,14 @@ ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
 shape, while multiple controller members behind one block path add their
 controller target to the fallback identity. Per-member I/O must never inherit
 an aggregate controller counter.
+A linked node's agent with no SMART reading for a device, such as a member's
+standby row, files that device's I/O under the Proxmox disk's metrics target
+(`proxmoxPhysicalDiskMatchesForLinkedNode` reads `MetricResourceID`). For a
+member merged with its Proxmox row that target is the member's own SMART key,
+scoped to the member once (`PhysicalDiskMetaMetricID`), so its SMART and I/O
+history share one series. The target used to carry the member topology twice,
+and I/O already stored under that doubled key is left to age out rather than
+migrated. Proof: `TestIdentitylessControllerMembersReadTheirWritersHistory`.
 The same rules apply to SATA and NVMe inventory: direct-disk source IDs keep
 their historical shape, controller-member IDs add their member target, and
 cross-source correlation is scoped to the canonical parent node. A successful
@@ -4790,6 +4798,20 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+The SMART-resolved id is the serial the disk resource carries: when a SMART row
+reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
+reports for that disk, as the unified-resources adapter does, unless several
+SMART rows share the disk's device path, and `hostDiskIOMetricResourceID` keys
+a device with no non-standby SMART row by its Unraid serial
+(`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
+before the linked Proxmox node's disks and the `<host>:<device>` fallback.
+Controller members sharing a device path keep distinct keys, so the I/O
+writer's aggregate-device guard, which compares every row on the path by its
+own identity (standby rows and legacy `sdc [sat]` labels included), files
+their counter under no member.
+Proof:
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
+`TestHostDiskIOMetricResourceIDFallbacks`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared

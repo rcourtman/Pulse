@@ -362,13 +362,321 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		{host.Sensors.SMART[3], 0},
 		{host.Sensors.SMART[4], 0},
 	} {
-		id := unifiedresources.HostSMARTDiskSourceID(host, tc.disk)
+		id := unifiedresources.HostSMARTDiskMetricID(host, tc.disk)
 		points, err := store.Query("disk", id, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(points) != tc.want {
 			t.Fatalf("%s: temperature samples = %d, want %d", tc.disk.Serial, len(points), tc.want)
+		}
+	}
+}
+
+// A controller member without a usable serial or WWN keys its history by its
+// source ID, which already names the member behind the shared block path: the
+// host agent writes under HostSMARTDiskMetricID, Proxmox under
+// PhysicalDiskMetricID, which returns ProxmoxPhysicalDiskSourceID. The metrics
+// target a chart reads must be that key, in the live registry and in one
+// rehydrated from persisted resources, not the key with the member's topology
+// appended a second time, or every sample those writers store goes unread. The
+// agent's I/O for a lone member is filed under the member's SMART key. A linked
+// node's agent files the I/O of a member it reads no SMART for through the
+// Proxmox disk's metrics target, so that I/O must share the member's SMART key.
+func TestIdentitylessControllerMembersReadTheirWritersHistory(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	state := models.NewState()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, metricsStore: store, rateTracker: NewRateTracker()}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	collected := func() *diskinventory.CollectionStatus {
+		return &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+	}
+	state.UpdateNodesForInstance("pve", []models.Node{
+		{ID: "pve-node1", Name: "node1", Instance: "pve", Status: "online", LastSeen: now},
+		{ID: "pve-node2", Name: "node2", Instance: "pve", Status: "online", LastSeen: now, LinkedAgentID: "agent-node2"},
+	})
+	standalone := models.Host{ID: "host-pve", Hostname: "standalone", MachineID: "machine-standalone", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "sdd", Controller: "ctrl0", Target: "megaraid,3", Type: "sas", Temperature: 33, Collection: collected()},
+			{Device: "sdd", Controller: "ctrl0", Target: "megaraid,4", Type: "sas", Temperature: 34, Collection: collected()},
+			{Device: "/dev/sde", Controller: "ctrl0", Target: "megaraid,5", Type: "sas", Temperature: 35, Collection: collected()},
+		}},
+		DiskIO: []models.DiskIO{{Device: "sde", ReadBytes: 1 << 20, WriteBytes: 1 << 20, IOTime: 100}},
+	}
+	linked := models.Host{ID: "agent-node2", Hostname: "node2", MachineID: "machine-node2", LinkedNodeID: "pve-node2", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "sdc", Controller: "ctrl1", Target: "megaraid,1", Type: "sas", Standby: true, Collection: &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+		}},
+		DiskIO: []models.DiskIO{{Device: "sdc", ReadBytes: 1 << 20, WriteBytes: 1 << 20, IOTime: 100}},
+	}
+	state.UpsertHost(standalone)
+	state.UpsertHost(linked)
+	pveMember := models.PhysicalDisk{
+		ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("pve", "node1", "/dev/sdx", "", "megaraid,0"),
+		Instance: "pve", Node: "node1", DevPath: "/dev/sdx", Target: "megaraid,0", Type: "sas", Temperature: 40, LastChecked: now,
+	}
+	pveBlockPath := models.PhysicalDisk{
+		ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("pve", "node2", "/dev/sdc", "", ""),
+		Instance: "pve", Node: "node2", DevPath: "/dev/sdc", Serial: "unknown", Type: "sas", LastChecked: now,
+	}
+	state.UpdatePhysicalDisks("pve", []models.PhysicalDisk{pveMember, pveBlockPath})
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+
+	hosts := []models.Host{standalone, linked}
+	for _, host := range hosts {
+		m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second))
+	}
+	for _, host := range hosts {
+		for i := range host.DiskIO {
+			host.DiskIO[i].ReadBytes += 1 << 20
+			host.DiskIO[i].WriteBytes += 1 << 20
+			host.DiskIO[i].IOTime += 1000
+		}
+		m.writeHostPhysicalDiskIOMetrics(host, now)
+		m.writeHostSMARTMetrics(host, now)
+	}
+	m.writeSMARTMetrics(pveMember, now)
+	store.Flush()
+
+	smartTemp := []string{"smart_temp"}
+	diskIO := []string{"diskread", "diskwrite", "disk"}
+	want := map[string]struct {
+		key     string
+		metrics []string
+	}{
+		"megaraid,3": {unifiedresources.HostSMARTDiskMetricID(standalone, standalone.Sensors.SMART[0]), smartTemp},
+		"megaraid,4": {unifiedresources.HostSMARTDiskMetricID(standalone, standalone.Sensors.SMART[1]), smartTemp},
+		"megaraid,5": {unifiedresources.HostSMARTDiskMetricID(standalone, standalone.Sensors.SMART[2]), append(smartTemp, diskIO...)},
+		"megaraid,0": {unifiedresources.PhysicalDiskMetricID(pveMember), smartTemp},
+		"megaraid,1": {unifiedresources.HostSMARTDiskMetricID(linked, linked.Sensors.SMART[0]), diskIO},
+	}
+	for target, member := range map[string]string{
+		"megaraid,3": "host-pve:sdd@ctrl0/megaraid,3",
+		"megaraid,5": "host-pve:sde@ctrl0/megaraid,5",
+		"megaraid,0": "pve-node1--dev-sdx:sdx@/megaraid,0",
+		"megaraid,1": "agent-node2:sdc@ctrl1/megaraid,1",
+	} {
+		if want[target].key != member {
+			t.Fatalf("%s: writer key = %q, want the member scoped once %q", target, want[target].key, member)
+		}
+	}
+
+	live := unifiedresources.NewRegistry(nil)
+	live.IngestSnapshot(state.GetSnapshot())
+	payload, err := json.Marshal(live.List())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted []unifiedresources.Resource
+	if err := json.Unmarshal(payload, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	rehydrated := unifiedresources.NewRegistry(nil)
+	rehydrated.IngestResources(persisted)
+	for _, tc := range []struct {
+		name     string
+		registry *unifiedresources.ResourceRegistry
+	}{{"live", live}, {"rehydrated", rehydrated}} {
+		disks := tc.registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(disks) != len(want) {
+			t.Fatalf("%s: disks = %d, want %d with the standby member merged into its Proxmox row", tc.name, len(disks), len(want))
+		}
+		for _, disk := range disks {
+			member, ok := want[disk.PhysicalDisk.Target]
+			if !ok {
+				t.Fatalf("%s: unexpected disk %s at %q target %q", tc.name, disk.ID, disk.PhysicalDisk.DevPath, disk.PhysicalDisk.Target)
+			}
+			target := tc.registry.MetricsTarget(disk.ID)
+			if target == nil || target.ResourceType != "disk" || target.ResourceID != member.key {
+				t.Errorf("%s: %s metrics target = %+v, want the writer's disk/%s", tc.name, disk.PhysicalDisk.Target, target, member.key)
+				continue
+			}
+			for _, metric := range member.metrics {
+				points, err := store.Query(target.ResourceType, target.ResourceID, metric, now.Add(-time.Minute), now.Add(time.Minute), 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(points) == 0 {
+					t.Errorf("%s: %s metrics target %s reads no %s history", tc.name, disk.PhysicalDisk.Target, target.ResourceID, metric)
+				}
+			}
+		}
+	}
+}
+
+// A dual-ported SAS shelf, cloned VMs with an explicit serial and fixed-serial
+// USB bridges report one usable serial on several hosts. The registry keeps a
+// disk per host, and each must keep its own agent source target, in the live
+// registry and in one rehydrated from its resources, or a disk only the agent
+// reports has no metrics target and no chart. Both targets read the series the
+// agent's SMART writer files under the serial: disk history follows the drive's
+// hardware identity, not the host.
+func TestSameSerialAgentDisksOnTwoHostsEachKeepTheirMetricsTarget(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	m := &Monitor{metricsStore: store}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	const serial = "SHELF-SERIAL-1"
+	hosts := []models.Host{
+		{ID: "agent-alpha", Hostname: "alpha", MachineID: "machine-alpha", Status: "online", LastSeen: now},
+		{ID: "agent-beta", Hostname: "beta", MachineID: "machine-beta", Status: "online", LastSeen: now},
+	}
+	wantSourceIDs := make(map[string]bool, len(hosts))
+	for i := range hosts {
+		hosts[i].Sensors.SMART = []models.HostDiskSMART{{Device: "sda", Serial: serial, Model: "Shelf Disk", Type: "sas",
+			Health: "PASSED", Temperature: 40 + i, Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}}}
+		m.writeHostSMARTMetrics(hosts[i], now)
+		wantSourceIDs[unifiedresources.HostSMARTDiskSourceID(hosts[i], hosts[i].Sensors.SMART[0])] = true
+	}
+	store.Flush()
+	if len(wantSourceIDs) != len(hosts) {
+		t.Fatalf("agent disk source IDs = %v, want one per host", wantSourceIDs)
+	}
+
+	live := unifiedresources.NewRegistry(nil)
+	live.IngestSnapshot(models.StateSnapshot{Hosts: hosts})
+	rehydrated := unifiedresources.NewRegistry(nil)
+	rehydrated.IngestResources(live.List())
+	for _, tc := range []struct {
+		name     string
+		registry *unifiedresources.ResourceRegistry
+	}{{"live", live}, {"rehydrated", rehydrated}} {
+		disks := tc.registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(disks) != len(hosts) {
+			t.Fatalf("%s: disks = %d, want one per host", tc.name, len(disks))
+		}
+		gotSourceIDs := make(map[string]bool, len(disks))
+		for _, disk := range disks {
+			for _, target := range tc.registry.SourceTargets(disk.ID) {
+				if target.Source == unifiedresources.SourceAgent {
+					gotSourceIDs[target.SourceID] = true
+				}
+			}
+			target := tc.registry.MetricsTarget(disk.ID)
+			if target == nil {
+				t.Fatalf("%s: disk %s has no metrics target", tc.name, disk.ID)
+			}
+			if target.ResourceType != "disk" || target.ResourceID != serial {
+				t.Fatalf("%s: disk %s metrics target = %+v, want the serial's disk series", tc.name, disk.ID, *target)
+			}
+			points, err := store.Query(target.ResourceType, target.ResourceID, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(points) == 0 {
+				t.Fatalf("%s: disk %s metrics target reads no SMART temperature history", tc.name, disk.ID)
+			}
+		}
+		if len(gotSourceIDs) != len(wantSourceIDs) {
+			t.Fatalf("%s: agent source targets = %v, want each host's own %v", tc.name, gotSourceIDs, wantSourceIDs)
+		}
+		for sourceID := range wantSourceIDs {
+			if !gotSourceIDs[sourceID] {
+				t.Fatalf("%s: agent source targets = %v, want each host's own %v", tc.name, gotSourceIDs, wantSourceIDs)
+			}
+		}
+	}
+}
+
+// An Unraid host reports each array disk twice: as a SMART row and as an
+// Unraid inventory row. When the SMART row carries no serial, smartctl's
+// standby row among them, the disk takes the serial its Unraid row reports,
+// and its metrics target reads that serial. The SMART and disk I/O writers must
+// file under it too, as must the I/O writer for a disk with no SMART row,
+// or the disk's temperature and I/O history never chart.
+func TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	m := &Monitor{metricsStore: store, rateTracker: NewRateTracker()}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	collected := func() *diskinventory.CollectionStatus {
+		return &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+	}
+	host := models.Host{ID: "host-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: now}
+	host.Sensors.SMART = []models.HostDiskSMART{
+		{Device: "sdb", Temperature: 40, Collection: collected()},
+		{Device: "/dev/sdc", WWN: "0x5000c500aaaa0001", Temperature: 41, Collection: collected()},
+		{Device: "sdd", Standby: true, Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+	}
+	host.Unraid = &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{
+		{Device: "sdb", Serial: "UNRAID-SERIAL-B", Name: "disk1", Role: "data", Status: "online"},
+		{Device: "sdc", Serial: "UNRAID-SERIAL-C", Name: "disk2", Role: "data", Status: "online"},
+		{Device: "sdd", Serial: "UNRAID-SERIAL-D", Name: "disk3", Role: "data", Status: "online", SpunDown: true},
+		{Device: "sde", Serial: "UNRAID-SERIAL-E", Name: "disk4", Role: "data", Status: "online"},
+		{Device: "sdf", Name: "disk5", Role: "data", Status: "online"},
+	}}
+	want := map[string][]string{
+		"sdb":      {"smart_temp", "diskread", "diskwrite", "disk"},
+		"/dev/sdc": {"smart_temp", "diskread", "diskwrite", "disk"},
+		"sdd":      {"diskread", "diskwrite", "disk"},
+		"sde":      {"diskread", "diskwrite", "disk"},
+		"sdf":      {"diskread", "diskwrite", "disk"},
+	}
+	for _, device := range []string{"sdb", "sdc", "sdd", "sde", "sdf"} {
+		host.DiskIO = append(host.DiskIO, models.DiskIO{Device: device, ReadBytes: 1 << 20, WriteBytes: 1 << 20, IOTime: 100})
+	}
+	m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second))
+	for i := range host.DiskIO {
+		host.DiskIO[i].ReadBytes += 1 << 20
+		host.DiskIO[i].WriteBytes += 1 << 20
+		host.DiskIO[i].IOTime += 1000
+	}
+	m.writeHostPhysicalDiskIOMetrics(host, now)
+	m.writeHostSMARTMetrics(host, now)
+	store.Flush()
+
+	live := unifiedresources.NewRegistry(nil)
+	live.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	rehydrated := unifiedresources.NewRegistry(nil)
+	rehydrated.IngestResources(live.List())
+	for _, tc := range []struct {
+		name     string
+		registry *unifiedresources.ResourceRegistry
+	}{{"live", live}, {"rehydrated", rehydrated}} {
+		disks := tc.registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(disks) != len(want) {
+			t.Fatalf("%s: disks = %d, want %d", tc.name, len(disks), len(want))
+		}
+		for _, disk := range disks {
+			metricNames, ok := want[disk.PhysicalDisk.DevPath]
+			if !ok {
+				t.Fatalf("%s: unexpected disk %s at %q", tc.name, disk.ID, disk.PhysicalDisk.DevPath)
+			}
+			target := tc.registry.MetricsTarget(disk.ID)
+			if target == nil {
+				t.Fatalf("%s: disk %s has no metrics target", tc.name, disk.PhysicalDisk.DevPath)
+			}
+			for _, metric := range metricNames {
+				points, err := store.Query(target.ResourceType, target.ResourceID, metric, now.Add(-time.Minute), now.Add(time.Minute), 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(points) == 0 {
+					t.Errorf("%s: disk %s metrics target %+v reads no %s history", tc.name, disk.PhysicalDisk.DevPath, *target, metric)
+				}
+			}
 		}
 	}
 }

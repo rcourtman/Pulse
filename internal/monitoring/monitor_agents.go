@@ -4082,7 +4082,7 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 	}
 
 	for _, disk := range host.Sensors.SMART {
-		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)
 		if resourceID == "" {
 			continue
 		}
@@ -4228,23 +4228,33 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 		return ""
 	}
 
+	smartDevice := diskinventory.DeviceToken(io.Device)
 	smartMetricID := ""
+	smartRowID := ""
 	for _, disk := range host.Sensors.SMART {
-		if disk.Standby {
+		if !strings.EqualFold(diskinventory.DeviceToken(disk.Device), smartDevice) {
 			continue
 		}
-		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
-			candidate := unifiedresources.HostSMARTDiskSourceID(host, disk)
-			if smartMetricID != "" && smartMetricID != candidate {
-				// Multiple controller members share this kernel block path.
-				// The counter belongs to the aggregate device, not any member.
-				return ""
-			}
-			smartMetricID = candidate
+		// Multiple controller members share this kernel block path. The
+		// counter belongs to the aggregate device, not any member. Judge that
+		// on each row's own identity, standby rows included, since members
+		// never take the path's Unraid serial.
+		rowID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		if smartRowID != "" && smartRowID != rowID {
+			return ""
+		}
+		smartRowID = rowID
+		if !disk.Standby {
+			smartMetricID = unifiedresources.HostSMARTDiskMetricID(host, disk)
 		}
 	}
 	if smartMetricID != "" {
 		return smartMetricID
+	}
+	// A disk with no SMART reading to key it, spun down or unread, still
+	// carries the serial its Unraid row reports.
+	if unraidMetricID := unifiedresources.HostUnraidDeviceMetricID(host, device); unraidMetricID != "" {
+		return unraidMetricID
 	}
 
 	for _, pd := range proxmoxDisks {
