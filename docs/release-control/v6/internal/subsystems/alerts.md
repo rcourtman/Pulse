@@ -1093,6 +1093,43 @@ history and affirmative recovery. This is source-fixture lifecycle proof, not
 an installed registry/destination result or a diagnosis of a reporter's daily
 resolve/reopen cycle.
 
+### A settings save keeps the alert settings it did not send
+
+`PUT /api/alerts/config` applies the body to the stored configuration through
+`Manager.ApplyConfigUpdate` and `ApplyAlertConfigUpdate` in
+`internal/alerts/config/update.go`: a top-level key the client sent replaces
+that setting whole, a key it left out keeps the stored value, and the result
+is normalized as any update is. The thresholds page has no control for
+flapping detection (`flappingEnabled` and its window, threshold and cooldown),
+alert TTL cleanup (`maxAlertAgeDays`, `maxAcknowledgedAgeDays`,
+`autoAcknowledgeAfterHours`) or `customRules`, so it never sends them. The
+handler used to decode the body into a zero `AlertConfig`, so every thresholds
+save turned flapping detection and TTL cleanup off, reset the flapping tuning
+to its defaults, dropped custom rules, and persisted that. The page's
+`flapping`, `aggregation` and `ioNormalization` payload objects are not
+`AlertConfig` fields and never enabled anything. A stored config keeps what it
+holds, including values an earlier save zeroed; nothing rewrites them.
+
+The body is decoded on its own, so sent keys mean exactly what the decoder
+makes of them, duplicates and case-folded keys included. Unsent fields are
+copied from a JSON round trip of the stored config, so the result shares no
+maps or slices with it. `ApplyConfigUpdate` reads, merges and applies under
+the manager lock, so two concurrent partial saves cannot revert each other in
+memory, and returns a JSON-cloned snapshot so that persistence, which
+normalizes the config it is handed in place, never writes into the live
+config's maps.
+
+`internal/alerts/config/update_test.go` covers unsent, explicit-off,
+case-folded, duplicate-key, malformed and full-body updates, a sent object
+replacing its stored value whole (a sent `truenasDiskDefaults: {}` does not
+inherit the stored temperature) and the no-sharing rule.
+`TestUpdateConfigKeepsSettingsAThresholdsSaveDidNotSend` and
+`TestApplyConfigUpdateKeepsConcurrentPartialUpdates` in
+`config_validation_test.go` run saves through the manager, and
+`TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys` in
+`internal/api/alerting/alerts_test.go` drives the handler against a real
+manager.
+
 ### Confirmed empty storage is recovery evidence
 
 Static storage capacity evaluation must admit a zero usage observation when

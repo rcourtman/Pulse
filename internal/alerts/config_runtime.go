@@ -1,6 +1,8 @@
 package alerts
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,7 +15,36 @@ import (
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.updateConfigLocked(config)
+}
 
+// ErrConfigSnapshot reports an update that was applied but could not be copied
+// for the caller.
+var ErrConfigSnapshot = errors.New("snapshot applied alert configuration")
+
+// ApplyConfigUpdate applies a client's JSON update to the stored
+// configuration: keys the update carries replace their settings and the rest
+// keep their stored values (see alertconfig.ApplyAlertConfigUpdate). Reading,
+// merging and applying under one lock keeps two partial updates from
+// reverting each other's settings. It returns a snapshot of the applied
+// config that the caller owns, so persisting it cannot write into the live
+// config's maps.
+func (m *Manager) ApplyConfigUpdate(update []byte) (AlertConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, err := alertconfig.ApplyAlertConfigUpdate(m.config, update)
+	if err != nil {
+		return AlertConfig{}, err
+	}
+	m.updateConfigLocked(config)
+	snapshot, err := alertconfig.CloneAlertConfig(m.config)
+	if err != nil {
+		return AlertConfig{}, fmt.Errorf("%w: %w", ErrConfigSnapshot, err)
+	}
+	return snapshot, nil
+}
+
+func (m *Manager) updateConfigLocked(config AlertConfig) {
 	// Clients and rollback-era config writers may not know about the additive
 	// identity schema marker. Never lower a version already held by this
 	// process; an older binary can still omit it on disk and the migration will

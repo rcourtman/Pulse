@@ -3678,6 +3678,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Alert settings saves do not touch agent lifecycle
+
+`PUT /api/alerts/config` in `internal/api/alerting/alerts.go` now keeps stored
+values for the top-level keys a client leaves out. Agent alert defaults
+(`agentDefaults`) follow the same rule as every other key; enrollment,
+reporting leases, commands and agent removal are unchanged.
+`internal/api/alerting/alerts_test.go` pins the handler.
+
 ### VM guest execution admission (backup precaution)
 
 `AgentRegisterPayload.guest_exec_guard_version` is optional; version 1 on a
