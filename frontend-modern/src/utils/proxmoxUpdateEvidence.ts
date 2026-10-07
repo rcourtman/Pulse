@@ -31,13 +31,15 @@ const reasonLabel = (reason: Node['pendingUpdatesReason']): string => {
 const countLabel = (count: number): string =>
   count === 0 ? 'No pending updates' : `${count} pending`;
 
+// The checked age is measured from the caller's `now`, so a drawer that stays
+// open passes its shared relative-time clock and the age keeps moving.
 export const getProxmoxUpdateEvidencePresentation = (
   node: UpdateEvidenceNode,
-  formatCheckedAt: (value: string) => string = (value) => formatRelativeTime(value),
+  now: number = Date.now(),
 ): ProxmoxUpdateEvidencePresentation | null => {
   const count = Math.max(0, Math.trunc(node.pendingUpdates ?? 0));
   const checkedAt = node.pendingUpdatesCheckedAt
-    ? formatCheckedAt(node.pendingUpdatesCheckedAt)
+    ? formatRelativeTime(node.pendingUpdatesCheckedAt, { now })
     : '';
   const reason = reasonLabel(node.pendingUpdatesReason);
   const status =

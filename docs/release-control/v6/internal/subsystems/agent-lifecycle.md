@@ -2159,6 +2159,10 @@ Agent profile management tables follow that same presentation boundary:
 profile and assignment columns, but embedded table framing must route through
 `PulseDataGrid`'s shared frame variants instead of lifecycle-local
 `overflow-x-auto` or side-border wrappers.
+The assignment table's Last Seen reads the frontend-primitives shared
+relative-time clock: `connectedAgents` re-derives only when an agent's own
+fields change, so a silent agent's row otherwise kept the age it had when the
+agent last reported.
 Agent profile prompt and description textareas follow the same shared primitive
 boundary. `AgentProfilesPanel.tsx` and `SuggestProfileModal.tsx` may own agent
 profile lifecycle behavior and API mutations, but multi-line form controls in

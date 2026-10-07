@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "81e5b8f60d8d68a62090888646b3395ddc4fbda6",
+  "verified_at": "2026-10-07T12:45:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx": "a49db87e4669320adc257271ad1e994b3995dca85deb26439f28acdb8e3f9ac7",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "25cc73d103e102e7ddb6bc8289483cc1119703d04bf92b2dcdf63120ad17415f",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "d44a2acabeadd1abe5fdd9cb8d5fa11c94595b8d3aabceab9726da7915ee0e5a",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "0fec6845e75fdacd6041478f760b7d296524c268ad345512a19790f1fa5bc31a"
+  },
+  "routes": [
+    "/standalone/availability?view=fleet",
+    "/standalone/machines",
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined content after merging the watchdog branch (which carries origin/main bd4f6e36c4: moved-alert change presentation, silent-agent offline and last-known readings, threshold-alert attention copy) into this branch (shared relative-time clock for drawer change ages, the Machines stale fallback and the node update check age)",
+    "Private mock stack (backend :7741 built from the merged tree, Vite :5261 serving it) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled; ten one-minute steps per surface",
+    "Availability fleet drawer (first tile) with injected change history (a moved_to_agent alert close 5/7 minutes old and a state transition 9 minutes old) and injected resource intelligence: change history read 'Alert moved' and 'State transition' with 5 mins / Occurred 7 mins / 9 mins ago, then 15 / 17 / 19 mins ago; the Platform details > Context card's latest canonical change read 'Alert moved' with '5m ago', then '15m ago', at 1440 and 390",
+    "Machines table, first rows (Apollo-114, Meridian-848, Spectrum-709) at 1440 and 390: status dots emerald -> amber through the five-minute stale fallback, CPU/memory/disk cells kept, Last seen 'just now' -> '10m ago'; no mock agent is offline or carries last-known temperatures, so main's offline gate rendered no dashes",
+    "Proxmox node drawer (West Production A) with update evidence injected into every node facet: 'No pending updates \u00b7 checked 20 mins ago' -> '30 mins ago' at 1440 and 390; no mock node carries an active alert, so the drawer's Needs attention list (main's threshold-alert copy) was not reachable on this stack",
+    "No page errors at either viewport; Infrastructure, Workloads, standalone, alerts, patrol, docker, Settings, proxmox and utils suites pass on the merged tree apart from six agentInstallCommand shell-execution tests that need a TTY (termios 'Inappropriate ioctl for device'), and tsc is clean"
+  ],
+  "interactions": [
+    "Opened the first availability fleet tile's drawer, expanded Platform details and Show context, held the stream and advanced the page clock",
+    "Loaded /standalone/machines and /proxmox, opened the first node's drawer, held the stream and advanced the page clock",
+    "Opened each Proxmox node drawer in turn looking for a Needs attention section"
+  ]
+}

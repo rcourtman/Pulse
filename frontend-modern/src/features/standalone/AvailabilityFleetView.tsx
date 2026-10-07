@@ -10,6 +10,7 @@ import type {
 } from '@/api/availabilityHistory';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getAvailabilityProbeEndpointLabel,
   getAvailabilityProbePresentation,
@@ -237,6 +238,9 @@ export const AvailabilityFleetView: Component<{
   });
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     props.resources.find((resource) => resource.id === resourceId)?.name;
+  // Tiles stay mounted while a stalled probe's lastChecked stops changing, so
+  // the checked age and the stale status read the shared clock.
+  const now = useRelativeTimeNow();
 
   return (
     <section aria-label="Availability fleet" class="space-y-3">
@@ -275,8 +279,8 @@ export const AvailabilityFleetView: Component<{
         <For each={props.resources}>
           {(resource) => {
             const availability = () => availabilityFor(resource);
-            const probe = () => getAvailabilityProbePresentation(resource);
-            const indicator = () => getStandaloneResourceStatusIndicator(resource);
+            const probe = () => getAvailabilityProbePresentation(resource, new Date(now()));
+            const indicator = () => getStandaloneResourceStatusIndicator(resource, now());
             const targetID = () => availability()?.targetId ?? resource.platformId ?? resource.id;
             const history = () => props.historyByTarget.get(targetID());
             const buckets = () => history()?.buckets ?? [];
@@ -295,6 +299,7 @@ export const AvailabilityFleetView: Component<{
               formatRelativeTime(availability()?.lastChecked, {
                 compact: true,
                 emptyText: 'Not checked',
+                now: now(),
               });
             const latency = () => {
               const value = availability()?.latencyMillis;

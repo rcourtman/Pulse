@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { SuggestProfileModal } from '../SuggestProfileModal';
 
 const suggestProfileMock = vi.fn();
@@ -197,6 +198,51 @@ describe('SuggestProfileModal', () => {
     await waitFor(() => {
       expect(onSuggestionAccepted).toHaveBeenCalledWith(secondSuggestion);
     });
+  });
+
+  it('keeps an earlier draft age moving while the dialog stays open', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-08-30T12:00:00Z'),
+    });
+    suggestProfileMock
+      .mockResolvedValueOnce({
+        name: 'Production Profile',
+        description: 'For prod workloads',
+        config: { enable_docker: true },
+        rationale: [],
+      })
+      .mockResolvedValueOnce({
+        name: 'Development Profile',
+        description: 'For dev workloads',
+        config: { log_level: 'debug' },
+        rationale: [],
+      });
+    validateConfigMock.mockResolvedValue({ valid: true, errors: [], warnings: [] });
+
+    try {
+      renderModal();
+      const promptInput = screen.getByPlaceholderText(
+        'Describe the agents and use case for this profile...',
+      );
+      fireEvent.input(promptInput, { target: { value: 'Production profile' } });
+      fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
+      expect(await screen.findByText('Production Profile')).toBeInTheDocument();
+
+      vi.advanceTimersByTime(4 * RELATIVE_TIME_TICK_MS);
+      fireEvent.input(promptInput, { target: { value: 'Development profile' } });
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+      expect(await screen.findByText('Development Profile')).toBeInTheDocument();
+      const draft = () => screen.getByText('Production Profile').parentElement!;
+      expect(draft()).toHaveTextContent('2 mins ago');
+
+      // The dialog stays open with no new draft: only the clock moves.
+      vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+      expect(draft()).toHaveTextContent('12 mins ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces canonical validation payload failures instead of hiding them behind a generic warning', async () => {

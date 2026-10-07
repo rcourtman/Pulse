@@ -30,6 +30,7 @@ import {
   formatObservedSpeed,
   normalizeDiskArray,
 } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 interface DockerHostDrawerOverviewProps {
@@ -103,6 +104,9 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
     const parsed = Date.parse(checkedAt());
     return Number.isFinite(parsed) ? parsed : null;
   });
+  // The drawer stays open between update checks, so the age reads the shared
+  // clock instead of freezing at the time the drawer opened.
+  const now = useRelativeTimeNow();
 
   return (
     <Show when={hostSourceId() && !summaryOnly()}>
@@ -114,7 +118,10 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
           <InfoCardKeyValueRow label="Available" value={updatesAvailable()} />
           <Show when={checkedAtMillis()} keyed>
             {(timestamp) => (
-              <InfoCardKeyValueRow label="Last checked" value={formatRelativeTime(timestamp)} />
+              <InfoCardKeyValueRow
+                label="Last checked"
+                value={formatRelativeTime(timestamp, { now: now() })}
+              />
             )}
           </Show>
           <Show when={hostCommand()?.type || hostCommand()?.status}>

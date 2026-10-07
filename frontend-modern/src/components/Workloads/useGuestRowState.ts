@@ -19,6 +19,7 @@ import {
 } from '@/utils/workloads';
 import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
@@ -294,15 +295,24 @@ export function useGuestRowState(props: GuestRowProps) {
     isDockerManagedAppContainer(props.guest) ? getWorkloadDockerHostId(props.guest) : '',
   );
 
-  const availabilityPresentation = createMemo(() =>
-    getAvailabilityProbePresentation({
-      type: props.guest.type as never,
-      platformType: (props.guest.platformType ?? '') as never,
-      status: props.guest.status as never,
-      availability: props.guest.availability,
-      platformData: { availability: props.guest.availability },
-    }),
-  );
+  // A probe's checked age and stale band keep moving on the shared clock while
+  // the row stays mounted. Only guests that carry a probe read the clock here,
+  // so probe-free rows never re-run this presentation on its tick.
+  const now = useRelativeTimeNow();
+  const availabilityPresentation = createMemo(() => {
+    const availability = props.guest.availability;
+    if (!availability) return null;
+    return getAvailabilityProbePresentation(
+      {
+        type: props.guest.type as never,
+        platformType: (props.guest.platformType ?? '') as never,
+        status: props.guest.status as never,
+        availability,
+        platformData: { availability },
+      },
+      new Date(now()),
+    );
+  });
 
   return {
     appContainerRuntimeBadge,

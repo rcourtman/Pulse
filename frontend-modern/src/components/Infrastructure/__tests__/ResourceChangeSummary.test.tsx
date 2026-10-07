@@ -1,7 +1,13 @@
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { ResourceChangeSummary } from '../ResourceChangeSummary';
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('ResourceChangeSummary', () => {
   it('sorts recent changes canonically and truncates the feed', () => {
@@ -99,5 +105,38 @@ describe('ResourceChangeSummary', () => {
     expect(screen.queryByText('Platform event')).toBeNull();
     expect(screen.queryByText('Proxmox adapter')).toBeNull();
     expect(screen.queryByText('Heuristic')).toBeNull();
+  });
+
+  it('keeps a change age moving while the open summary data does not change', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-03-18T12:05:00Z'),
+    });
+
+    render(() => (
+      <ResourceChangeSummary
+        title="Latest canonical change"
+        changes={[
+          {
+            id: 'restart',
+            resourceId: 'storage-2',
+            kind: 'restart',
+            observedAt: '2026-03-18T12:00:00Z',
+            sourceType: 'platform_event',
+            confidence: 'high',
+          },
+        ]}
+        compact
+      />
+    ));
+    const meta = () => screen.getByText('storage-2').parentElement!;
+
+    expect(meta()).toHaveTextContent('storage-2·5m ago');
+
+    // No new change arrives: the summary keeps the same change and only the
+    // clock moves.
+    vi.advanceTimersByTime(3 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+    expect(meta()).toHaveTextContent('storage-2·3h ago');
   });
 });

@@ -226,7 +226,7 @@ const getFailureCountLabel = (availability: ResourceAvailabilityMeta): string | 
 
 export const getAvailabilityProbePresentation = (
   resource: AvailabilityProbeResource,
-  now = new Date(),
+  now = new Date(Date.now()),
 ): AvailabilityProbePresentation | null => {
   const platformAvailability = resource.platformData?.availability as
     ResourceAvailabilityMeta | undefined;
@@ -241,14 +241,16 @@ export const getAvailabilityProbePresentation = (
   const freshnessLabel = getAvailabilityFreshnessLabel(availability, now);
   const correlationLabel = getAvailabilityCorrelationLabel(availability);
   const netIoLabel = targetLabel ? `${targetLabel}: ${resultLabel}` : resultLabel;
-  const checked = formatRelativeTime(availability.lastChecked);
+  // The checked age and the freshness band measure from the same time, so a
+  // caller that passes the shared relative-time clock keeps both moving.
+  const checked = formatRelativeTime(availability.lastChecked, { now: now.getTime() });
   const failures = getFailureCountLabel(availability);
   const detailParts = [`${methodLabel} - ${resultLabel}`, freshnessLabel];
   if (checked) detailParts.push(`checked ${checked}`);
   if (correlationLabel) detailParts.push(correlationLabel);
   if (failures) detailParts.push(failures);
   if (availability.lastSuccess && availability.available === false) {
-    const lastSuccess = formatRelativeTime(availability.lastSuccess);
+    const lastSuccess = formatRelativeTime(availability.lastSuccess, { now: now.getTime() });
     if (lastSuccess) detailParts.push(`last success ${lastSuccess}`);
   }
   if (availability.lastError) detailParts.push(availability.lastError);

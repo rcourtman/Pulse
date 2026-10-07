@@ -245,4 +245,48 @@ describe('standalonePageModel', () => {
     expect(summary.warning).toBe(2);
     expect(summary.normal).toBe(0);
   });
+
+  it('sorts a stalled check first by the time it is given and classifies each check once', () => {
+    let statusReads = 0;
+    const probe = (id: string, lastChecked: string) => {
+      const item = resource({
+        id,
+        displayName: id,
+        type: 'network-endpoint',
+        platformType: 'availability',
+        availability: { available: true, lastChecked, pollIntervalSeconds: 60 },
+      });
+      Object.defineProperty(item, 'status', {
+        get: () => {
+          statusReads += 1;
+          return 'online';
+        },
+      });
+      return item;
+    };
+    const checks = [
+      probe('a-fresh', '2026-10-05T12:10:00Z'),
+      probe('b-stalled', '2026-10-05T12:00:00Z'),
+      probe('c-fresh', '2026-10-05T12:10:00Z'),
+    ];
+
+    expect(
+      sortStandaloneResourcesByAttention(checks, Date.parse('2026-10-05T12:01:00Z')).map(
+        (item) => item.id,
+      ),
+    ).toEqual(['a-fresh', 'b-stalled', 'c-fresh']);
+
+    // The same unchanged checks, ten quiet minutes later: the stalled one
+    // turns stale and sorts first.
+    statusReads = 0;
+    expect(
+      sortStandaloneResourcesByAttention(checks, Date.parse('2026-10-05T12:10:30Z')).map(
+        (item) => item.id,
+      ),
+    ).toEqual(['b-stalled', 'a-fresh', 'c-fresh']);
+    const readsPerSort = statusReads;
+    statusReads = 0;
+    sortStandaloneResourcesByAttention([checks[0]], Date.parse('2026-10-05T12:10:30Z'));
+    expect(readsPerSort).toBe(checks.length * statusReads);
+  });
 });

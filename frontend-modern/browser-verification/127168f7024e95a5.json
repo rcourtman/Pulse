@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "base_sha": "278c403d9674cb2eb2066707637e88770636658b",
+  "verified_at": "2026-10-06T15:55:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Infrastructure/MaintenanceVerificationSection.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "688760093e38334e5c1286a009dad724d43cda62a01454fa9996565513305904",
+    "frontend-modern/src/components/Infrastructure/MaintenanceVerificationSection.tsx": "92ebe05eb459cfbffb926303d884fc57cf777c8542188b2c86a6018c7f64b8f8",
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx": "19aed3bba7ef483069481849e6b948dafa901890015317dc9a1081477471a828",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx": "96ebc6b05e7f73d1da925775badacbc70f02dbae5d59fe97a991edba8254793f",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "451b755371e3eee33b6677d860c16d17d9d8663f77e4f98a86d2e92b9f68132b",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "fc230d7aa822a15217e649f378fd732b7f722688b2d5cee5e90ff9ddd67df0ac",
+    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx": "d6bc0c038751ffa0a3cefcd31d0874aa748d80606db0a71372d2544f1c31a1c6",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "4806506e6a952881e4aa2b3d39c7cbf413633d820bceef1424964d245ecc2790",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "b263765658b056a0869ff6ebc7e7fe0951ed99578084551c6c9d2eef90b1afe1",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "84bb83d03f5bac115fdeac488d50bd58c197809f1a4554064f5ae60ce77a1b1f",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "e7988b77b9715604a684073a756e08ffb09e47c4cfea918406845a86ca12dbab",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "4003b0dc19d2ca9dde98282ba9c7a9e1d0c1f67e974812a0df1767ec23afd43a",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "eb0d657177fa5a8043412b6ba250a54eca0d45c7636ce23060c3c7dedba5868a",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "c6bee39b99bfdb3cdf9f864ab52f5333b54be1226caccc2bae8caa8f068af94a",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "050984db83d1771af57cfa6f23a8425d680f722bb4d4bec151fa5c9848228b22",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "8fb1ecb08eca93884ddac621d8c008602e2f1d4ebdd8ce7bfc49b6de7971de04",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "1adb98655b6d5f0379f49a9089c1bdb5f594e79362d5c9494a53c61dd3972990",
+    "frontend-modern/src/utils/updatesPresentation.ts": "d4f4fb004d63c7396598037ac1ec5e924229cac7479fced0e4f108d341ca6d29"
+  },
+  "routes": [
+    "/standalone/availability",
+    "/standalone/machines",
+    "/docker",
+    "/proxmox",
+    "/settings/system-updates",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7731, Vite :5251 serving this exact tree on top of the watchdog/Patrol commit, origin/main bffd21f470 with #2578 and #2579) with Playwright page.clock installed before load; data held by dropping /ws data frames, replaying cached API GETs and stalling resource-collection refetches, while a data-free keep-alive frame per fake minute keeps one live socket (no heartbeat reconnect); each surface advanced ten one-minute steps",
+    "Availability checks table at 1440 and 390: rows went from fresh, 'checked 20s ago', Online/Degraded dots to stale, 'checked 10 mins ago', Stale dots; Degraded filter count 2 -> 6; posture card 'latest data just now' -> '10m ago' with every check counted as needing attention; rows re-sorted by attention",
+    "Availability fleet tiles: 'Checked just now' with Online/Degraded dots -> 'Checked 10m ago' with Stale dots",
+    "Machines table at 1440 and 390: status dots green -> amber through the five-minute stale fallback with the 3 metric bars per row kept; remounting the table at the same moment rendered identical rows",
+    "Docker host drawer (Edge Apps 01) container updates with an injected check time 3 minutes old: 'Last checked 3 mins ago' -> '13 mins ago'",
+    "Proxmox workloads with one VM's last backup injected 5 minutes inside the 24-hour fresh window: 'fresh, last backup 23 hours ago' -> 'stale, last backup 1 day ago' with the 1d badge; a VM with an injected TCP probe: '4ms', 'checked 21s ago' -> '4ms \u00b7 stale', 'checked 10 mins ago'",
+    "Proxmox node drawer with injected update evidence: 'No pending updates \u00b7 checked 20 mins ago' -> '30 mins ago'",
+    "Availability fleet drawer (MQTT power meter) with injected change, operator-state and maintenance-verification facets (the mock has none): probe card Checked 20s fresh -> 10 mins stale; change 5/7 mins -> 15/17 mins ago; 'Set by admin 5m ago' -> '15m ago'; 'Window ended 10 mins ago' -> '20 mins ago'; 'Reviewed 2 mins ago' -> '12 mins ago'; Machines drawer debug tab with pulse_debug_mode: 'Agent online \u2022 17s ago' -> '10 mins ago'",
+    "Settings > System updates (version intercepted as a systemd release build): 'Checked 0s ago' -> 'Checked 9 mins ago'; Settings > Infrastructure > Install Pulse Agent > Manage agent profiles (agent_profiles capability intercepted) at 1440 and 390: assignment rows 'Online 37s ago' -> 'Online 10 mins ago'",
+    "Same-session control with the runtime files swapped back to origin/main under the running Vite: every one of these ages, bands, dots and counts stayed frozen at its read-time value",
+    "Storage pool stale tooltip, Patrol run history rows and the unrendered UnifiedResourceTable host card are deliberately not changed: the first two re-derive on 30s/60s polls and the last has no consumer",
+    "After the pass, one code comment in UpdatesSettingsPanel.tsx was reworded for the canonical settings copy audit (no behavior change); the Checked age line it describes was the one verified above",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded each route, waited for data, held the stream and advanced the page clock ten one-minute steps, reading the same elements before and after",
+    "Opened Docker host, Proxmox node, availability fleet and Machines drawers and switched to their Manage, Overview and Debug tabs before holding",
+    "Toggled Machines away and back in-app to remount the table at the advanced time",
+    "Repeated every scenario with the pre-change files as the control"
+  ]
+}

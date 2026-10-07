@@ -4,6 +4,7 @@ import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
 import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -2380,6 +2381,84 @@ describe('backup column', () => {
     });
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
+
+  it('keeps a guest with no recorded backup at None while the clock moves', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-05-26T12:00:00Z'),
+    });
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    const badge = () => container.querySelector('[aria-label="Backup status: no backup found"]');
+
+    expect(badge()?.textContent?.trim()).toBe('None');
+
+    // A guest without a backup has no age to move, so ticks change nothing.
+    vi.advanceTimersByTime(2 * 24 * 60 * 60 * 1000);
+
+    expect(badge()?.textContent?.trim()).toBe('None');
+  });
+
+  it('bands a backup from seconds ago as fresh in a row that mounts between clock ticks', () => {
+    const start = Date.parse('2026-05-26T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    // An earlier row keeps the shared clock running.
+    renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-26T07:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS - 5_000);
+
+    // No tick has fired since the backup finished, so measuring from the last
+    // tick would put it in the future and band it unknown.
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: start + RELATIVE_TIME_TICK_MS - 10_000,
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    expect(
+      container.querySelector('[aria-label^="Backup status:"]')?.getAttribute('aria-label'),
+    ).toMatch(/^Backup status: fresh, last backup /);
+  });
+
+  it('keeps a mounted backup badge aging through its bands without new data', () => {
+    const start = Date.parse('2026-05-26T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-26T07:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    const badge = () => container.querySelector('[aria-label^="Backup status:"]');
+
+    expect(badge()).toHaveAttribute('aria-label', 'Backup status: fresh, last backup 5 hours ago');
+
+    // No new backup completes: lastBackup never changes and only the clock
+    // moves, so the row must age into stale and then overdue on its own.
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(badge()).toHaveAttribute('aria-label', 'Backup status: stale, last backup 1 day ago');
+    expect(badge()?.textContent?.trim()).toBe('1d');
+
+    vi.advanceTimersByTime(2 * 24 * 60 * 60 * 1000);
+    expect(badge()).toHaveAttribute('aria-label', 'Backup status: overdue, last backup 3 days ago');
+    expect(badge()?.textContent?.trim()).toBe('3d');
+  });
 });
 
 describe('info merged column', () => {
@@ -2521,4 +2600,35 @@ describe('GuestRow backup evidence disclosure', () => {
       expect(onClick).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('availability probe column', () => {
+  it('keeps a stalled probe badge aging into stale without new data', () => {
+    const start = Date.parse('2026-05-26T12:00:20Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    renderGuestRow({
+      guest: makeGuest({
+        availability: {
+          protocol: 'tcp',
+          port: 22,
+          available: true,
+          latencyMillis: 5,
+          lastChecked: '2026-05-26T12:00:00Z',
+          pollIntervalSeconds: 60,
+        },
+      }),
+      visibleColumnIds: ['name', 'availability'],
+    });
+
+    const probe = () => screen.getByTitle(/^22: 5 ms - checked/);
+    expect(probe()).toHaveTextContent('5ms');
+    expect(probe()).toHaveAttribute('title', '22: 5 ms - checked 20s ago');
+
+    // The probe stalls: lastChecked never changes and only the clock moves.
+    vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+    expect(probe()).toHaveTextContent('5ms · stale');
+    expect(probe()).toHaveAttribute('title', '22: 5 ms - checked 10 mins ago');
+  });
 });

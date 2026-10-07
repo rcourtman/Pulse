@@ -1,9 +1,13 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AvailabilityProbeStatusCard } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('AvailabilityProbeStatusCard', () => {
   it('does not turn an unobserved check into a confirmed failure', () => {
@@ -121,5 +125,37 @@ describe('AvailabilityProbeStatusCard', () => {
 
     expect(screen.getByText('Endpoint answered')).toBeInTheDocument();
     expect(screen.getByText('Contract failed · HTTP 503')).toBeInTheDocument();
+  });
+
+  it('keeps a stalled probe aging into stale while the card stays open', () => {
+    const start = Date.parse('2026-05-06T13:00:20Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    render(() => (
+      <AvailabilityProbeStatusCard
+        availability={{
+          targetId: 'probe-mqtt',
+          address: 'mqtt.example.test',
+          protocol: 'tcp',
+          port: 1883,
+          enabled: true,
+          available: true,
+          latencyMillis: 7,
+          lastChecked: '2026-05-06T13:00:00Z',
+          pollIntervalSeconds: 60,
+        }}
+      />
+    ));
+
+    expect(screen.getByText('20s ago')).toBeInTheDocument();
+    expect(screen.getByText('fresh')).toBeInTheDocument();
+
+    // The probe stalls: lastChecked never changes and only the clock moves.
+    vi.setSystemTime(start + 5 * 60 * 1000);
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+
+    expect(screen.getByText('5 mins ago')).toBeInTheDocument();
+    expect(screen.getByText('stale')).toBeInTheDocument();
+    expect(screen.getByText('Stale')).toBeInTheDocument();
   });
 });

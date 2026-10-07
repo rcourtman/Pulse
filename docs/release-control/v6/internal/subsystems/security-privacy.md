@@ -2238,6 +2238,10 @@ stale `pulse-hot-dev` service name or any lane-local restart folklore.
 continue to carry the direct `security-settings-surfaces` proof path together
 with the API-contract token-management proof instead of borrowing coverage only
 from broader settings-shell or API ownership.
+The API token inventory's Created age reads the frontend-primitives shared
+relative-time clock, while Last used keeps the age it had when the list was
+read: a moving Last used over a list that is not re-read would present a token
+in active use as idle, which is the wrong signal for a revoke decision.
 That same token-settings surface must also derive presets lazily from the
 canonical scope constants. `apiTokenManagerModel.ts` may expose a
 `getAPITokenScopePresets()` factory, but it must not freeze preset scope data

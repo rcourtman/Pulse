@@ -19,6 +19,7 @@ import { FormTextarea } from '@/components/shared/FormTextarea';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS,
   formatAgentProfileSuggestionValue,
@@ -59,6 +60,9 @@ interface SettingPreviewItem {
 const createHistoryId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) => {
+  // Earlier suggestions keep their creation time while the dialog stays open,
+  // so their ages read the shared clock.
+  const now = useRelativeTimeNow();
   const [prompt, setPrompt] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -572,7 +576,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 {item.suggestion.name}
                               </span>
                               <span class="text-xs text-muted">
-                                {formatRelativeTime(item.createdAt)}
+                                {formatRelativeTime(item.createdAt, { now: now() })}
                               </span>
                             </div>
                             <p class="text-xs text-muted mt-1 truncate" title={item.prompt}>

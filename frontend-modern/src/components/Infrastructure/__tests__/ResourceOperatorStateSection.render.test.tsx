@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 
 import type { ResourceCapability } from '@/types/resource';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const apiClientMock = vi.hoisted(() => ({
   apiFetchJSON: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock('@/utils/apiClient', async (importOriginal) => {
 });
 
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 // Regression for issue #1621: rows saved with only "intentionally offline"
 // left the auto_remediation_policy_json column NULL, and the pre-fix read
@@ -115,4 +120,32 @@ describe('maintenance schedule timestamps', () => {
       expect(badge.parentElement).toHaveTextContent(/attention.*paused/i);
     },
   );
+
+  it('keeps the persisted policy age moving while the drawer stays open', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-20T10:05:00Z'),
+    });
+    apiClientMock.apiFetchJSON.mockResolvedValue(OPERATOR_STATE_WITH_NULL_CAPABILITIES);
+
+    try {
+      render(() => (
+        <ResourceOperatorStateSection
+          resourceId="docker:host-1/ct-nginx-age"
+          capabilities={RESTART_CAPABILITY}
+        />
+      ));
+
+      const attribution = await screen.findByText('5m ago');
+      expect(attribution.parentElement).toHaveTextContent('Set by admin 5m ago');
+
+      // The policy is not saved again: its set time never changes and only the
+      // clock moves.
+      vi.advanceTimersByTime(3 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+      expect(attribution.parentElement).toHaveTextContent('Set by admin 3h ago');
+    } finally {
+      cleanup();
+    }
+  });
 });

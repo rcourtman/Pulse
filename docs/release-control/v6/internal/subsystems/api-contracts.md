@@ -1771,6 +1771,10 @@ payload shape change when the portal presents compact client rows.
     pressed/unpressed selector pill shell routes through frontend-primitives
     `SelectablePillButton` instead of API-token-local rounded-full selector
     classes.
+    A token's Created age reads the frontend-primitives shared relative-time
+    clock because the creation time never changes; Last used is a latest
+    reading from a token list read once per visit, so it stays the age at
+    read time. Neither changes the token list payload or its read cadence.
 16. `frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx` shared with `security-privacy`: the deferred API token edit and revoke dialogs preserve the shared security/privacy and API contract boundary.
     Edit and revoke dialogs are deferred behind the explicit row action so the
     API Access entry chunk does not ship mutation-only controls before they are
@@ -1815,6 +1819,11 @@ payload shape change when the portal presents compact client rows.
     count is zero, and a never-checked target is pending. Settings and the
     Machines availability tab therefore report the same counts in the same
     words.
+    Both read the frontend-primitives shared relative-time clock for that
+    classification, passed as `nowMs` through `getAvailabilityTargetHealth`,
+    its status class and title helpers and `getAvailabilityTargetsSummary`, so
+    a loaded check that stops reporting turns stale and needs attention on the
+    settings page by time alone, as it does on Machines.
     Availability target probe-result and error notices may compose
     frontend-primitives' `CalloutCard` for shared settings callout chrome;
     API contracts own the target CRUD/test payload semantics and endpoint

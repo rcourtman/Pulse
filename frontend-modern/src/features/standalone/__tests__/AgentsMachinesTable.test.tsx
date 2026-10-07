@@ -1557,4 +1557,53 @@ describe('AgentsMachinesTable', () => {
       vi.useRealTimers();
     }
   });
+
+  it('turns a silent machine stale on the clock and renders it as a fresh load would', () => {
+    const start = Date.parse('2026-07-08T09:01:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const machine = resource({
+      id: 'omv',
+      name: 'omv',
+      lastSeen: Date.parse('2026-07-08T09:00:00Z'),
+      agent: { agentVersion: '6.0.2' },
+      cpu: { current: 12 },
+      memory: { current: 32, total: 100, used: 32, free: 68 },
+    });
+    const renderTable = () =>
+      render(() => (
+        <AgentsMachinesTable
+          resources={[machine]}
+          emptyIcon={emptyIcon}
+          emptyTitle="No machines"
+          emptyDescription="Install Pulse Agent."
+        />
+      ));
+    const rowState = () => ({
+      dot: screen.getByTitle('online').className,
+      cpuBar: screen.queryByTestId('agent-machine-cpu-bar') !== null,
+      memoryBar: screen.queryByTestId('agent-machine-memory-bar') !== null,
+    });
+
+    try {
+      renderTable();
+      expect(rowState()).toEqual({
+        dot: expect.stringContaining('bg-emerald-500'),
+        cpuBar: true,
+        memoryBar: true,
+      });
+
+      // The agent stays silent past the five-minute stale fallback: no new data
+      // arrives and only the clock moves.
+      vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+      const moved = rowState();
+      expect(moved.dot).toContain('bg-amber-500');
+
+      // A fresh load at the same moment renders the same dot and metric bars.
+      cleanup();
+      renderTable();
+      expect(rowState()).toEqual(moved);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

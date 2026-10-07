@@ -9,6 +9,7 @@ import {
   getAvailabilityProbePresentation,
 } from '@/utils/availabilityProbePresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 export interface AvailabilityProbeStatusCardProps {
   availability: ResourceAvailabilityMeta;
@@ -57,15 +58,21 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     const ms = props.availability.latencyMillis;
     return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 ? `${Math.round(ms)}ms` : null;
   };
-  const lastChecked = () => formatRelativeTime(props.availability.lastChecked);
+  // The card stays open while a stalled probe's lastChecked stops changing,
+  // so its ages and its stale band read the shared clock.
+  const now = useRelativeTimeNow();
+  const lastChecked = () => formatRelativeTime(props.availability.lastChecked, { now: now() });
   const method = () => getAvailabilityProbeMethodLabel(props.availability);
   const presentation = () =>
-    getAvailabilityProbePresentation({
-      type: 'network-endpoint',
-      platformType: 'availability',
-      status: isUp() ? 'online' : isDown() ? 'offline' : 'unknown',
-      availability: props.availability,
-    });
+    getAvailabilityProbePresentation(
+      {
+        type: 'network-endpoint',
+        platformType: 'availability',
+        status: isUp() ? 'online' : isDown() ? 'offline' : 'unknown',
+        availability: props.availability,
+      },
+      new Date(now()),
+    );
   const isStale = () => presentation()?.freshnessLabel === 'stale';
   const isFreshUp = () => isUp() && !isStale();
   const targetAddr = () => getAvailabilityProbeEndpointLabel(props.availability);
@@ -124,7 +131,7 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     if (!value) return null;
     const expiry = new Date(value);
     if (!Number.isFinite(expiry.getTime())) return null;
-    const days = Math.ceil((expiry.getTime() - Date.now()) / 86_400_000);
+    const days = Math.ceil((expiry.getTime() - now()) / 86_400_000);
     const date = expiry.toLocaleDateString(undefined, {
       day: 'numeric',
       month: 'short',
@@ -223,7 +230,7 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
                     >
                       {locationLabel(location)}
                     </div>
-                    <Show when={formatRelativeTime(location.lastChecked)}>
+                    <Show when={formatRelativeTime(location.lastChecked, { now: now() })}>
                       {(checked) => <div class="text-[10px] text-muted">checked {checked()}</div>}
                     </Show>
                   </div>

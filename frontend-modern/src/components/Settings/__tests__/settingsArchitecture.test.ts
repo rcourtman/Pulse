@@ -1301,6 +1301,15 @@ describe('settings architecture guardrails', () => {
     expect(apiTokenManagerSource).not.toContain('rel="noreferrer"');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageSummary');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageTitle');
+    // Created is a fixed event and ages on the shared clock; Last used is a
+    // latest reading from a list read once, so it stays the read-time age.
+    expect(apiTokenManagerSource).toContain('const now = useRelativeTimeNow();');
+    expect(apiTokenManagerSource).toContain(
+      'formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })',
+    );
+    expect(apiTokenManagerSource).toContain(
+      'formatRelativeTime(new Date(token.lastUsedAt).getTime())',
+    );
     expect(apiTokenManagerStateSource).toContain('getAPITokenDockerPodmanUsageCountLabel');
 
     for (const source of [
@@ -1569,10 +1578,12 @@ describe('settings architecture guardrails', () => {
     // Up to date state must carry the age of the check it came from through
     // the shared presentation helper, or a stale verdict reads as a live
     // comparison (#1601). The copy stays in the presentation owner, never
-    // inline in the panel shell.
+    // inline in the panel shell, and the age reads the shared relative-time
+    // clock so it keeps moving while the panel stays open.
     expect(updatesSettingsPanelSource).toContain(
-      'getUpdateCheckedLabel(updateStore.lastCheckedAt())',
+      'getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())',
     );
+    expect(updatesSettingsPanelSource).toContain('const now = useRelativeTimeNow();');
     expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
     expect(updatesPresentationSource).toContain("return 'Not checked yet'");
     expect(updatesPresentationSource).toContain('`Checked ${relative}`');

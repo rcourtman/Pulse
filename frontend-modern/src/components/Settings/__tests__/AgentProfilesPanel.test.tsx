@@ -7,6 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { ConnectedInfrastructureItem, State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 let mockResources: Resource[] = [];
 let mockWsStore: {
@@ -407,6 +408,27 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     await waitFor(() => {
       expect(unassignProfileMock).toHaveBeenCalledWith('agent-123');
     });
+  });
+
+  it("keeps a silent agent's Last Seen age moving while its row stays listed", async () => {
+    const start = Date.parse('2026-08-30T12:02:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    mockResources = [makeAgentResource({ lastSeen: Date.parse('2026-08-30T12:00:00Z') })];
+
+    try {
+      render(() => <AgentProfilesPanel />);
+
+      const row = (await screen.findByText('Agent One')).closest('tr') as HTMLElement;
+      expect(row).toHaveTextContent('2 mins ago');
+
+      // The agent stays silent: its resource never changes and only the clock
+      // moves.
+      vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+      expect(row).toHaveTextContent('12 mins ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('lists assignable v6 agent resources (e.g. node agents)', async () => {

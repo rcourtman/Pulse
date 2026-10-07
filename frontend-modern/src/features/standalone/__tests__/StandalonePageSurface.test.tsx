@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { StandalonePageSurface } from '../StandalonePageSurface';
 
 const mocks = vi.hoisted(() => ({
@@ -502,5 +503,43 @@ describe('StandalonePageSurface', () => {
       'href',
       '/standalone/availability',
     );
+  });
+
+  it('keeps the availability posture aging when every check goes quiet', () => {
+    const start = Date.parse('2026-08-30T12:00:10Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    mocks.pathname = '/standalone/availability';
+    const quietCheck = (id: string) =>
+      resource({
+        id,
+        type: 'network-endpoint',
+        platformType: 'availability',
+        sources: ['availability'],
+        lastSeen: Date.parse('2026-08-30T12:00:00Z'),
+        availability: freshAvailability({ lastChecked: '2026-08-30T12:00:00Z' }),
+      });
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [quietCheck('mqtt-meter'), quietCheck('nas-web')],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    try {
+      render(() => <StandalonePageSurface />);
+      const summary = () => screen.getByTestId('standalone-posture-summary');
+
+      expect(summary()).toHaveTextContent('All 2 checks reporting normally');
+      expect(summary()).toHaveTextContent('latest data just now');
+
+      // No check reports again: the resources never change and only the clock
+      // moves, so the posture must notice the silence on its own.
+      vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+      expect(summary()).toHaveTextContent('2 checks need attention');
+      expect(summary()).toHaveTextContent('latest data 10m ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -14,6 +14,7 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { useResources } from '@/hooks/useResources';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   AvailabilityTargetsAPI,
   type AvailabilityTarget,
@@ -59,6 +60,9 @@ export const AvailabilitySettingsPanel: Component = () => {
     }
     return byId;
   });
+  // A loaded check turns stale by time alone while the page stays open, so
+  // the status pills and summary classify it on the shared clock.
+  const now = useRelativeTimeNow();
   const resourceForTarget = (target: AvailabilityTarget) =>
     availabilityResourceByTargetId().get(target.id);
   const [targets, setTargets] = createSignal<AvailabilityTarget[]>([]);
@@ -201,7 +205,7 @@ export const AvailabilitySettingsPanel: Component = () => {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-base-content">
-                {getAvailabilityTargetsSummary(targets(), resourceForTarget)}
+                {getAvailabilityTargetsSummary(targets(), resourceForTarget, now())}
               </div>
               <p class="mt-1 text-xs leading-5 text-muted">
                 Monitor endpoint-only devices and services with ICMP, TCP, and HTTP probes.
@@ -288,10 +292,11 @@ export const AvailabilitySettingsPanel: Component = () => {
                           {target.name}
                         </div>
                         <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target, resourceForTarget(target))}`}
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target, resourceForTarget(target), now())}`}
                           title={getAvailabilityTargetStatusTitle(
                             target,
                             resourceForTarget(target),
+                            now(),
                           )}
                         >
                           {getAvailabilityTargetStatusLabel(target)}

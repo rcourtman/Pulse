@@ -9,6 +9,7 @@ import {
   type MaintenanceVerificationStatus,
 } from '@/api/maintenanceVerification';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 /**
  * MaintenanceVerificationSection surfaces Maintenance Verification
@@ -51,6 +52,9 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
   props,
 ) => {
   const [refreshTick, setRefreshTick] = createSignal(0);
+  // A report's window end and review time never change while the drawer stays
+  // open, so their ages read the shared clock.
+  const now = useRelativeTimeNow();
 
   const query = createNonSuspendingQuery<MaintenanceVerificationReport[], string>({
     source: () => (props.resourceId ? `${props.resourceId}:${refreshTick()}` : null),
@@ -162,7 +166,9 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                     </span>
                     <span class="text-xs text-muted">
                       Window ended{' '}
-                      {report.windowEndedAt ? formatRelativeTime(report.windowEndedAt) : 'unknown'}
+                      {report.windowEndedAt
+                        ? formatRelativeTime(report.windowEndedAt, { now: now() })
+                        : 'unknown'}
                     </span>
                   </div>
                   <Show when={!report.userOutcome}>
@@ -178,7 +184,10 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                   </Show>
                   <Show when={report.userOutcome === 'reviewed'}>
                     <span class="text-[11px] text-muted">
-                      Reviewed {report.reviewedAt ? formatRelativeTime(report.reviewedAt) : ''}
+                      Reviewed{' '}
+                      {report.reviewedAt
+                        ? formatRelativeTime(report.reviewedAt, { now: now() })
+                        : ''}
                       {report.reviewedBy ? ` by ${report.reviewedBy}` : ''}
                     </span>
                   </Show>
