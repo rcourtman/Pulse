@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -952,6 +953,254 @@ func TestLeavingMockModeDiscardsAnInFlightConnectionCheck(t *testing.T) {
 	monitor.checkConnectionAlerts()
 	if active := manager.GetActiveAlerts(); len(active) != 1 {
 		t.Fatalf("three live degraded observations raised %d alerts, want 1: %s", len(active), describeAlerts(active))
+	}
+}
+
+// startTenantMonitors starts the default organization's monitor and one
+// other tenant's through MultiTenantMonitor, as the server does, each with its
+// own alert manager, and waits until both monitoring loops run. An hour
+// between ticks leaves each loop the pass it runs on start, so the test drives
+// every later pass itself.
+func startTenantMonitors(t *testing.T) (defaultMonitor, tenantMonitor *Monitor) {
+	t.Helper()
+	mtp, _ := newTestTenantPersistence(t)
+	mtm := NewMultiTenantMonitor(&config.Config{DataPath: t.TempDir(), PVEPollingInterval: time.Hour}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+	mtm.SetMonitorInitializer(func(monitor *Monitor) {
+		cfg := monitor.alertManager.GetConfig()
+		cfg.Enabled = true
+		cfg.TimeThresholds = map[string]int{}
+		cfg.MetricTimeThresholds = nil
+		cfg.BackupDefaults.Enabled = false
+		cfg.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
+		cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
+		monitor.alertManager.UpdateConfig(cfg)
+	})
+	if err := mtp.SaveOrganization(&models.Organization{ID: "org-b", DisplayName: "Org B"}); err != nil {
+		t.Fatalf("SaveOrganization(org-b): %v", err)
+	}
+	monitors := make([]*Monitor, 0, 2)
+	for _, orgID := range []string{"default", "org-b"} {
+		monitor, err := mtm.GetMonitor(orgID)
+		if err != nil {
+			t.Fatalf("GetMonitor(%s): %v", orgID, err)
+		}
+		// Start sets its runtime context before it joins the monitors a
+		// switch reaches, so wait for the join itself.
+		waitForCondition(t, 30*time.Second, func() bool {
+			mockModeSwitchMu.Lock()
+			defer mockModeSwitchMu.Unlock()
+			_, running := mockModeRunningMonitors[monitor]
+			return running
+		}, orgID+" monitoring loop did not join mock-mode switches")
+		monitors = append(monitors, monitor)
+	}
+	return monitors[0], monitors[1]
+}
+
+func mockHostAgentCount(monitor *Monitor) int {
+	monitor.mockHostAgentsMu.Lock()
+	defer monitor.mockHostAgentsMu.Unlock()
+	return len(monitor.mockHostAgents)
+}
+
+func TestLeavingMockModeClearsEveryRunningTenantMonitor(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	mustSetMockEnabled(t, true)
+	defaultMonitor, tenantMonitor := startTenantMonitors(t)
+
+	// Each loop runs a mock pass on start and raises the fixture's alerts in
+	// its own alert manager.
+	monitors := map[string]*Monitor{"default": defaultMonitor, "org-b": tenantMonitor}
+	for name, monitor := range monitors {
+		waitForCondition(t, 30*time.Second, func() bool {
+			return len(monitor.alertManager.GetActiveAlerts()) > 0 && mockHostAgentCount(monitor) > 0
+		}, name+" monitor raised no fixture alerts in mock mode")
+	}
+
+	// The mock-mode API switches through the requesting tenant's monitor.
+	mustSetMonitorMockMode(t, tenantMonitor, false)
+
+	for name, monitor := range monitors {
+		if active := monitor.alertManager.GetActiveAlerts(); len(active) != 0 {
+			t.Errorf("%s monitor kept %d fixture alerts after mock mode was left through org-b: %s",
+				name, len(active), describeAlerts(active))
+		}
+		if count := mockHostAgentCount(monitor); count != 0 {
+			t.Errorf("%s monitor still tracks %d fixture agents in live mode", name, count)
+		}
+	}
+}
+
+func TestEnteringMockModeClearsEveryRunningTenantMonitor(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	defaultMonitor, tenantMonitor := startTenantMonitors(t)
+
+	monitors := map[string]*Monitor{"default": defaultMonitor, "org-b": tenantMonitor}
+	for name, monitor := range monitors {
+		monitor.alertManager.CheckNode(models.Node{
+			ID:       name + "-live-node",
+			Name:     "live-node",
+			Instance: "live",
+			Status:   "online",
+			Memory:   models.Memory{Total: 64 << 30, Used: 60 << 30, Free: 4 << 30, Usage: 93.75},
+		})
+		if len(monitor.alertManager.GetActiveAlerts()) == 0 {
+			t.Fatalf("live node raised no alert in %s", name)
+		}
+	}
+
+	// The demo-fixture licence sync switches through the default monitor.
+	mustSetMonitorMockMode(t, defaultMonitor, true)
+
+	for name, monitor := range monitors {
+		for _, alert := range monitor.alertManager.GetActiveAlerts() {
+			if alert.ResourceID == name+"-live-node" {
+				t.Errorf("%s kept its live %s alert after mock mode was entered through the default monitor", name, alert.Type)
+			}
+		}
+	}
+}
+
+func TestMonitorStartedAfterAMockModeSwitchLeavesTheModeItWasBuiltIn(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{
+		state:          models.NewState(),
+		alertManager:   manager,
+		metricsHistory: NewMetricsHistory(10, time.Hour),
+	}
+	// Built in live mode: New restored this live alert from disk.
+	manager.CheckNode(models.Node{
+		ID:       "live-node",
+		Name:     "live-node",
+		Instance: "live",
+		Status:   "online",
+		Memory:   models.Memory{Total: 64 << 30, Used: 60 << 30, Free: 4 << 30, Usage: 93.75},
+	})
+	if len(manager.GetActiveAlerts()) == 0 {
+		t.Fatal("live node raised no alert")
+	}
+
+	// Another monitor switched to mock mode before this one's Start joined.
+	mustSetMockEnabled(t, true)
+	started := false
+	leave := monitor.joinMockModeSwitches(func(mockEnabled bool) { started = mockEnabled })
+	defer leave()
+
+	if !started {
+		t.Fatal("Start was not handed mock mode")
+	}
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("a monitor built in live mode started in mock mode with its live alerts: %s", describeAlerts(active))
+	}
+	mockModeSwitchMu.Lock()
+	_, running := mockModeRunningMonitors[monitor]
+	mockModeSwitchMu.Unlock()
+	if !running {
+		t.Fatal("joined monitor is not reached by later switches")
+	}
+}
+
+func TestMonitorStartedAfterAMockModeRoundTripDropsWhatItRaisedMeanwhile(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	newMonitor := func() *Monitor {
+		return &Monitor{
+			state:          models.NewState(),
+			alertManager:   newMockHostAlertTestManager(t),
+			metricsHistory: NewMetricsHistory(10, time.Hour),
+		}
+	}
+	switcher, starting := newMonitor(), newMonitor()
+	// Built in live mode, as New records it, and not running yet.
+	mockModeSwitchMu.Lock()
+	starting.mockModeSwitchesSeen = mockModeSwitchCount.Load()
+	mockModeSwitchMu.Unlock()
+
+	mustSetMonitorMockMode(t, switcher, true)
+	// A read path evaluates fixture data on the monitor before its Start runs.
+	fixture := mock.CurrentFixtureGraph().State.Nodes[0]
+	fixture.Status = "online"
+	fixture.Memory = models.Memory{Total: 64 << 30, Used: 60 << 30, Free: 4 << 30, Usage: 93.75}
+	starting.alertManager.CheckNode(fixture)
+	if len(starting.alertManager.GetActiveAlerts()) == 0 {
+		t.Fatal("fixture node raised no alert")
+	}
+	mustSetMonitorMockMode(t, switcher, false)
+
+	leave := starting.joinMockModeSwitches(func(bool) {})
+	defer leave()
+	if active := starting.alertManager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("a monitor that missed a mock-mode round trip started in live mode with fixture alerts: %s", describeAlerts(active))
+	}
+}
+
+func TestSetMockModeAlignsAMonitorWhoseModeTheFlagAlreadyHolds(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{
+		state:          models.NewState(),
+		alertManager:   manager,
+		metricsHistory: NewMetricsHistory(10, time.Hour),
+	}
+	// Built in live mode, with a live alert, and not running yet.
+	manager.CheckNode(models.Node{
+		ID:       "live-node",
+		Name:     "live-node",
+		Instance: "live",
+		Status:   "online",
+		Memory:   models.Memory{Total: 64 << 30, Used: 60 << 30, Free: 4 << 30, Usage: 93.75},
+	})
+	if len(manager.GetActiveAlerts()) == 0 {
+		t.Fatal("live node raised no alert")
+	}
+
+	// Another monitor's switch already set the flag.
+	mustSetMockEnabled(t, true)
+	mustSetMonitorMockMode(t, monitor, true)
+
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("SetMockMode(true) left a monitor built in live mode with its live alerts: %s", describeAlerts(active))
+	}
+}
+
+func TestMockModeSwitchLeavesAnUnjoinedMonitorsRuntimeToItsStart(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	// Start has set its runtime context but not joined the switches yet.
+	monitor := &Monitor{
+		config:         &config.Config{},
+		state:          models.NewState(),
+		alertManager:   newMockHostAlertTestManager(t),
+		metricsHistory: NewMetricsHistory(10, time.Hour),
+		runtimeCtx:     ctx,
+	}
+	t.Cleanup(monitor.stopMockMetricsSampler)
+
+	mustSetMonitorMockMode(t, monitor, true)
+	monitor.mu.RLock()
+	started := monitor.mockMetricsCancel != nil
+	monitor.mu.RUnlock()
+	if started {
+		t.Fatal("a switch started the runtime of a monitor whose Start has not joined; that runtime belongs to its Start")
+	}
+
+	leave := monitor.joinMockModeSwitches(func(mockEnabled bool) {
+		monitor.startModeRuntime(ctx, nil, mockEnabled)
+	})
+	defer leave()
+	monitor.mu.RLock()
+	started = monitor.mockMetricsCancel != nil
+	monitor.mu.RUnlock()
+	if !started {
+		t.Fatal("joining in mock mode did not start the mock sampler")
 	}
 }
 

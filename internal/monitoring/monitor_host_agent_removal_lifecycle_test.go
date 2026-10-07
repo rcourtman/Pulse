@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -883,4 +884,46 @@ func TestMockDockerHostLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 	if ids := dockerAlertIDsForHost(manager, kept.ID); len(ids) != len(kept.Containers) {
 		t.Fatalf("Docker host still in the mock estate has alerts %v, want one per exited container", ids)
 	}
+}
+
+func TestLeavingMockModeReleasesFixtureAgentNodeLinksOnEveryRunningMonitor(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+	pinDefaultMockEstate(t)
+	mustSetMockEnabled(t, true)
+	defaultMonitor, tenantMonitor := startTenantMonitors(t)
+
+	// org-b's start pass registers the fixture agents in org-b's own alert
+	// manager, each owning the usage alerts of the fixture node it runs on.
+	var linked models.Node
+	waitForCondition(t, 30*time.Second, func() bool {
+		tenantMonitor.mockHostAgentsMu.Lock()
+		defer tenantMonitor.mockHostAgentsMu.Unlock()
+		for _, host := range tenantMonitor.mockHostAgents {
+			if host.Status != "online" || host.LinkedNodeID == "" {
+				continue
+			}
+			for _, node := range mock.CurrentFixtureGraph().State.Nodes {
+				if node.ID == host.LinkedNodeID {
+					linked = node
+					return true
+				}
+			}
+		}
+		return false
+	}, "org-b registered no online fixture agent linked to a fixture node")
+
+	// The demo-fixture licence sync switches through the default monitor.
+	mustSetMonitorMockMode(t, defaultMonitor, false)
+
+	// org-b's fixture agents go through the removal lifecycle too, so the
+	// node an agent covered owns its metric alerts again.
+	linked.Status = "online"
+	linked.Memory = models.Memory{Total: 64 << 30, Used: 60 << 30, Free: 4 << 30, Usage: 93.75}
+	tenantMonitor.alertManager.CheckNode(linked)
+	for _, alert := range tenantMonitor.alertManager.GetActiveAlerts() {
+		if alert.ResourceID == linked.ID && alert.Type == "memory" {
+			return
+		}
+	}
+	t.Fatalf("org-b's node %s raised no memory alert: its fixture agent's node link outlived a switch made through the default monitor", linked.ID)
 }

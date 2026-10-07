@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -67,9 +68,9 @@ func keepRealPollingInMockMode() bool {
 // process that boots with mock mode already enabled never runs that path, so
 // alerts raised against real infrastructure are restored from disk and served
 // beside fixture data until something clears them.
-func alertManagerRestoreOptions() []alerts.ManagerOption {
+func alertManagerRestoreOptions(mockEnabled bool) []alerts.ManagerOption {
 	options := []alerts.ManagerOption{alerts.WithDurableAlertStore()}
-	if mock.IsMockEnabled() {
+	if mockEnabled {
 		options = append(options, alerts.WithoutPersistedAlertRestore())
 	}
 	return options
@@ -1335,6 +1336,8 @@ type Monitor struct {
 	mockFixtureRevision       uint64
 	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
 	mockModeFence             mockModeFence            // Keeps mode-dependent alert evaluations inside the epoch they read in
+	mockModeAligned           bool                     // Mock mode the alerts and state belong to; guarded by mockModeSwitchMu
+	mockModeSwitchesSeen      uint64                   // mockModeSwitchCount when they were last aligned; guarded by mockModeSwitchMu
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
 	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
@@ -1829,6 +1832,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		DataDir: cfg.DataPath,
 	})
 
+	// One read decides the alert restore and records the mode it belongs to,
+	// so Start can tell whether a mock-mode switch landed in between. The
+	// count is read first: a switch flips the flag before it counts, so one
+	// that overlaps these reads leaves a stale count, never a stale mode.
+	switchesSeen := mockModeSwitchCount.Load()
+	builtInMockMode := mock.IsMockEnabled()
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
@@ -1862,7 +1871,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
-		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions()...),
+		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions(builtInMockMode)...),
+		mockModeAligned:            builtInMockMode,
+		mockModeSwitchesSeen:       switchesSeen,
 		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManagerWithDeferredQueue(cfg.PublicURL, cfg.DataPath),
 		deadMan:                    newDeadManRuntime(config.ResolveRuntimeDataDir(cfg.DataPath)),
@@ -2144,33 +2155,13 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	// PVE-proxied PBS backup points to prevent duplicate recovery entries.
 	m.purgeStalePVEPBSBackupsBestEffort(ctx)
 
-	if mock.IsMockEnabled() {
-		m.startMockMetricsSampler(ctx)
-	}
-
-	// Initialize and start discovery service if enabled
-	if mock.IsMockEnabled() {
-		log.Info().Msg("mock mode enabled - skipping discovery service")
-		m.discoveryService = nil
-	} else if m.config.DiscoveryEnabled {
-		discoverySubnet := m.config.DiscoverySubnet
-		if discoverySubnet == "" {
-			discoverySubnet = "auto"
-		}
-		cfgProvider := func() config.DiscoveryConfig {
-			return m.discoveryConfigSnapshot()
-		}
-		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
-		if m.discoveryService != nil {
-			m.discoveryService.Start(ctx)
-			log.Info().Msg("discovery service initialized and started")
-		} else {
-			log.Error().Msg("failed to initialize discovery service")
-		}
-	} else {
-		log.Info().Msg("discovery service disabled by configuration")
-		m.discoveryService = nil
-	}
+	// From here every mock-mode switch reaches this monitor. The sampler or
+	// discovery is chosen while no switch can run, so a switch cannot land
+	// between reading the mode and starting the runtime for it.
+	leaveMockModeSwitches := m.joinMockModeSwitches(func(mockEnabled bool) {
+		m.startModeRuntime(ctx, wsHub, mockEnabled)
+	})
+	defer leaveMockModeSwitches()
 
 	// Set up alert callbacks. Projection replay is deliberately absent here:
 	// the canonical resource store is not attached yet, so a replay now could
@@ -2306,6 +2297,38 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			log.Info().Msg("monitoring loop stopped")
 			return
 		}
+	}
+}
+
+// startModeRuntime starts the mock metrics sampler in mock mode, or the
+// discovery service in live mode when it is enabled.
+func (m *Monitor) startModeRuntime(ctx context.Context, wsHub *websocket.Hub, mockEnabled bool) {
+	if mockEnabled {
+		m.startMockMetricsSampler(ctx)
+	}
+
+	// Initialize and start discovery service if enabled
+	if mockEnabled {
+		log.Info().Msg("mock mode enabled - skipping discovery service")
+		m.discoveryService = nil
+	} else if m.config.DiscoveryEnabled {
+		discoverySubnet := m.config.DiscoverySubnet
+		if discoverySubnet == "" {
+			discoverySubnet = "auto"
+		}
+		cfgProvider := func() config.DiscoveryConfig {
+			return m.discoveryConfigSnapshot()
+		}
+		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
+		if m.discoveryService != nil {
+			m.discoveryService.Start(ctx)
+			log.Info().Msg("discovery service initialized and started")
+		} else {
+			log.Error().Msg("failed to initialize discovery service")
+		}
+	} else {
+		log.Info().Msg("discovery service disabled by configuration")
+		m.discoveryService = nil
 	}
 }
 
@@ -4635,65 +4658,93 @@ func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Aler
 	hub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 }
 
-// mockModeSwitchMu serializes mock-mode switches. The mode is process-wide,
-// and a switch is several steps (flip, end the epoch, clear, reset state), so
-// two interleaved switches could clear what the later one just admitted.
-var mockModeSwitchMu sync.Mutex
-
-// SetMockMode switches between mock data and real infrastructure data at runtime.
-// It must not be called from inside an alert evaluation, whose completion it
-// may wait for.
+// SetMockMode switches between mock data and real infrastructure data at
+// runtime. The mode is process-wide, so the switch reaches m and every running
+// monitor (see mockModeSwitchMu), whichever tenant's monitor it was made
+// through. It must not be called from inside an alert evaluation of any of
+// them, whose completion it may wait for.
 func (m *Monitor) SetMockMode(enable bool) error {
 	mockModeSwitchMu.Lock()
 	defer mockModeSwitchMu.Unlock()
 
-	current := mock.IsMockEnabled()
-	if current == enable {
-		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
-		return nil
+	monitors := mockModeSwitchTargetsLocked(m)
+	flip := mock.IsMockEnabled() != enable
+	if !flip {
+		// The flag already holds the mode, but a monitor that was not running
+		// during an earlier switch can still hold the other mode's alerts
+		// and state; only those leave it.
+		monitors = slices.DeleteFunc(monitors, func(monitor *Monitor) bool {
+			return monitor.mockModeAligned == enable
+		})
+		if len(monitors) == 0 {
+			log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
+			return nil
+		}
 	}
 
-	// Every evaluation of mode-dependent data that started before the flip
-	// must finish or be refused before the clear, or it reopens alerts for
-	// the side the monitor just left (see mockModeFence).
+	for _, monitor := range monitors {
+		monitor.stopMockMetricsSampler()
+	}
+	if flip {
+		if err := mock.SetEnabled(enable); err != nil {
+			return err
+		}
+		mockModeSwitchCount.Add(1)
+	}
+	for _, monitor := range monitors {
+		monitor.endMockModeEpoch(enable)
+	}
+	for _, monitor := range monitors {
+		_, running := mockModeRunningMonitors[monitor]
+		monitor.resumeAfterMockModeSwitch(enable, running)
+	}
 	if enable {
-		m.stopMockMetricsSampler()
-		if err := mock.SetEnabled(true); err != nil {
-			return err
-		}
-		m.mockModeFence.advance()
-		m.alertManager.ClearActiveAlerts()
-		m.mu.Lock()
-		m.resetStateLocked()
-		m.metricsHistory.Reset()
-		m.mu.Unlock()
-		m.StopDiscoveryService()
-		m.mu.RLock()
-		ctx := m.runtimeCtx
-		m.mu.RUnlock()
-		if ctx != nil {
-			m.startMockMetricsSampler(ctx)
-		}
-		log.Info().Msg("switched monitor to mock mode")
+		log.Info().Int("monitors", len(monitors)).Msg("switched monitors to mock mode")
 	} else {
-		m.stopMockMetricsSampler()
-		if err := mock.SetEnabled(false); err != nil {
-			return err
-		}
-		m.mockModeFence.advance()
-		m.alertManager.ClearActiveAlerts()
-		m.forgetMockFixtureHosts()
-		m.mu.Lock()
-		m.resetStateLocked()
-		m.metricsHistory.Reset()
-		m.mu.Unlock()
-		log.Info().Msg("switched monitor to real data mode")
+		log.Info().Int("monitors", len(monitors)).Msg("switched monitors to real data mode")
 	}
+	return nil
+}
 
+// endMockModeEpoch leaves the mode the monitor's alerts and state belong to
+// once the process flag already holds the new one. Every evaluation of
+// mode-dependent data that started before the flip must finish or be refused
+// before the clear, or it reopens alerts for the side the monitor just left
+// (see mockModeFence). The caller holds mockModeSwitchMu.
+func (m *Monitor) endMockModeEpoch(enable bool) {
+	m.mockModeFence.advance()
+	m.alertManager.ClearActiveAlerts()
+	if !enable {
+		m.forgetMockFixtureHosts()
+	}
+	m.mu.Lock()
+	m.resetStateLocked()
+	m.metricsHistory.Reset()
+	m.mu.Unlock()
+	if enable {
+		m.StopDiscoveryService()
+	}
+	m.mockModeAligned = enable
+	m.mockModeSwitchesSeen = mockModeSwitchCount.Load()
+}
+
+// resumeAfterMockModeSwitch restarts the mode-dependent runtime of a monitor
+// whose Start loop has joined the switches, once every monitor has ended its
+// epoch. A monitor that has not joined yet starts that runtime itself when it
+// does (Start sets its runtime context first), and one whose loop has stopped
+// only broadcasts.
+func (m *Monitor) resumeAfterMockModeSwitch(enable, running bool) {
 	m.mu.RLock()
 	ctx := m.runtimeCtx
 	hub := m.wsHub
 	m.mu.RUnlock()
+	if !running || (ctx != nil && ctx.Err() != nil) {
+		ctx = nil
+	}
+
+	if enable && ctx != nil {
+		m.startMockMetricsSampler(ctx)
+	}
 
 	if hub != nil {
 		m.broadcastCurrentState(hub)
@@ -4711,8 +4762,6 @@ func (m *Monitor) SetMockMode(enable bool) error {
 			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
 		}
 	}
-
-	return nil
 }
 
 func (m *Monitor) resetStateLocked() {
