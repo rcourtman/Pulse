@@ -115,6 +115,28 @@ type AlertInfo struct {
 	StartTime    time.Time
 	ResolvedTime *time.Time // nil if still active
 	Acknowledged bool
+	// ResourceID is the resource the alert was raised on, so an alert that
+	// moved can find the alert its successor raised for the same metric.
+	ResourceID string
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, such as a node alert handed to its Pulse agent. A report
+	// never counts such an alert as resolved.
+	Resolution *AlertResolution
+}
+
+// AlertResolution says why an alert closed without its condition clearing.
+// It mirrors models.AlertResolution so this package stays free of internal
+// dependencies.
+type AlertResolution struct {
+	// Reason is the alert engine's reason code, such as
+	// AlertResolutionMovedToAgent.
+	Reason              string
+	SuccessorResourceID string
+	SuccessorName       string
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: check the agent for the
+	// current reading."
+	Summary string
 }
 
 // BackupInfo contains backup information for VMs/containers

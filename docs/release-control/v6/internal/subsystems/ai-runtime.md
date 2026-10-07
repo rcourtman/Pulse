@@ -4686,9 +4686,14 @@ metadata when it projects from the canonical timeline).
 `TestService_buildAlertContext_HandoverIsNotARecovery`,
 `TestExecuteListResolvedAlertsReportsHandover` and
 `TestIncidentStore_HandoverCloseIsNotARecovery` pin it. Performance reports
-(`pkg/reporting`, the report narrator) do not carry the resolution yet: a
-report generated within the five-minute recently-resolved window after a
-handover still lists that alert as resolved. The projection also collapses open/resolved churn:
+carry the resolution too: the report narrator sends such an alert with
+`resolved: false` and the engine's summary as `resolution`, plus
+`successor_alert_listed` when the same report lists the alert the resource
+it moved to raised for that metric. Its system prompt forbids counting the
+alert as resolved or calling the resource healthy on its account, and tells
+the model to describe a covered condition once, from the successor's alert
+(`TestBuildReportNarratorPayload_HandoverIsNotARecovery`). The
+deterministic verdict lives in `pkg/reporting` (see api-contracts). The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and
@@ -4702,6 +4707,21 @@ calm-evaluation age; raw resource IDs are forbidden as metric labels.
 Assistant receives a selected attention item only after the operator opens it.
 The handoff is explanation-only and cannot infer a capability, approve an
 action, or replace evidence and lifecycle truth.
+
+A held threshold alert's attention summary leads with the live reading (issue
+#2068). An alert's `Message` keeps the last breach while the alert waits below
+its trigger for the clear level, so for a `MetricStatus` in the `latched` or
+`recovering` phase that is under ten minutes old, the projection builds
+`plainLanguageSummary` from the status instead: the reading now, then for a
+latched alert the alert level it is back under and the clear level with its
+hold, and for a recovering alert the clear level, delay and progress so far
+(rounded down). The words and rounding follow the frontend's
+`features/alerts/metricAlertPresentation.ts`, and a guest's disk is named
+from `metadata.label`. Temperatures stay in °C like the alert messages,
+because the server does not know a viewer's unit preference. A breaching
+alert keeps `Message`, which tracks the breach, and a stale or missing status
+falls back to it. The Patrol inbox, the investigation handoff and API clients
+read that summary, so none of them re-derives the phase.
 
 ### Patrol model-readiness evidence
 

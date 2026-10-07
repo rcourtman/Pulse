@@ -9648,6 +9648,39 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
+Report alerts keep the alert engine's resolution. The node, VM and
+container enrichers in `internal/api/metrics_reporting_handlers.go` build
+every row through `reportActiveAlertInfo` and `reportResolvedAlertInfo`,
+which carry the alert's `ResourceID` and copy `models.AlertResolution` into
+`reporting.AlertInfo.Resolution`, so a node alert that moved to its Pulse
+agent inside the five-minute recently-resolved window is never reported as
+a recovery (`TestContract_ReportingAlertsCarryHandoverResolution`). In
+`pkg/reporting`, `AlertInfo.Recovered()` is true only for a close without a
+resolution, and `unresolvedAlerts` treats an alert that closed without
+recovering as still live unless the report also shows its successor's own
+reading for that metric: an alert of the same type on the successor or one
+of its children that is open, or recovered at or after the handover (an
+earlier successor recovery does not count). That alert then carries the
+condition, so it is counted once. Fleet reports match each handover against
+every resource's alerts (`unresolvedAlertsAmong` over
+`MultiReportData.fleetAlerts`). The single-resource PDF health card, Quick
+Stats and active list and the heuristic narrator's verdict, observations and
+recommendations read that rule: a lone handover renders WARNING (or CRITICAL
+at its level) with `Alert moved to <agent> - check the agent for the current
+reading`, and the alerts table shows `Moved` in neutral text with the
+engine's summary as a note. Fleet reports count it as an active alert in the
+aggregate, health card, table and resource blocks, and the fleet heuristic
+recommends checking the agent it moved to. "Triggered and resolved" counts
+recoveries only, and the report narrator's payload marks a covered handover
+with `successor_alert_listed` so the model describes the condition once.
+Reports requested as `agent`, which is how the Reports picker addresses every
+Proxmox node and standalone agent in v6, carry no alert rows yet:
+`enrichReportRequest` enriches node, VM and container reports only, so an
+agent report's deterministic verdict ignores its machine's alerts (HEALTHY,
+or NO DATA without metrics). The rule above reaches those reports once they
+attach the machine's alerts. The fleet heuristic offers its all-clear
+pattern and "No fleet-wide action required" only while no alert, moved
+ones included, is active.
 Multi-resource fleet reports (`engine.GenerateMulti`) now also carry an
 optional fleet-level narrative through a distinct
 `pkg/reporting.FleetNarrator` interface, kept separate from the

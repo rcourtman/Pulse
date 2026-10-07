@@ -5395,6 +5395,67 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	}
 }
 
+// A node alert that moved to its linked Pulse agent closed without
+// recovering. The report request must keep that resolution and each alert's
+// resource, so the report neither calls the node healthy nor counts the
+// condition twice beside the agent's own alert.
+func TestContract_ReportingAlertsCarryHandoverResolution(t *testing.T) {
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	snapshot := reportingEnrichmentSnapshot{
+		Nodes: []models.Node{{ID: "pve1-node", Name: "pve1"}},
+		ActiveAlerts: []models.Alert{{
+			ID:         "agent:host-1-memory",
+			Type:       "memory",
+			Level:      "warning",
+			ResourceID: "agent:host-1",
+			Node:       "pve1",
+			Message:    "Agent memory at 94%",
+			StartTime:  now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID:         "pve1-node-memory",
+				Type:       "memory",
+				Level:      "warning",
+				ResourceID: "pve1-node",
+				Node:       "pve1",
+				Message:    "Node memory at 95%",
+				StartTime:  now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-1",
+					SuccessorName:       "pve1 (Host Agent)",
+					Summary:             summary,
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+	req := reporting.MetricReportRequest{ResourceType: "node", ResourceID: "pve1-node"}
+	NewReportingHandlers(nil, nil).enrichNodeReport(&req, snapshot, now.Add(-24*time.Hour), now)
+
+	if len(req.Alerts) != 2 {
+		t.Fatalf("expected the agent alert and the moved node alert, got %+v", req.Alerts)
+	}
+	active, moved := req.Alerts[0], req.Alerts[1]
+	if active.ResourceID != "agent:host-1" || active.ResolvedTime != nil || active.Resolution != nil {
+		t.Fatalf("active alert row = %+v", active)
+	}
+	if moved.ResourceID != "pve1-node" || moved.ResolvedTime == nil || moved.Recovered() {
+		t.Fatalf("moved alert must stay resolved-but-not-recovered, got %+v", moved)
+	}
+	want := reporting.AlertResolution{
+		Reason:              reporting.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent:host-1",
+		SuccessorName:       "pve1 (Host Agent)",
+		Summary:             summary,
+	}
+	if moved.Resolution == nil || *moved.Resolution != want {
+		t.Fatalf("resolution = %+v, want %+v", moved.Resolution, want)
+	}
+}
+
 func TestContract_ReportBrandingSettingsRejectWorkspaceLogoPath(t *testing.T) {
 	err := validateReportBrandingSettings(map[string]interface{}{
 		"displayName": "Client One",
