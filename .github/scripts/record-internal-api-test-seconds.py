@@ -28,8 +28,11 @@ The recorder also requires one completed package and complete, non-repeated
 top-level test executions. CI supplies its source-derived selected test list
 and package identity: every selected test must run and finish exactly once,
 with no other test or package substituted. Individual test skips are explicit
-completed executions, not missing coverage. Empty, malformed and truncated
-streams fail closed; their original observations remain in the sidecar.
+completed executions, not missing coverage. The sidecar distinguishes fully
+skipped top-level tests from parents with skipped subtests, exporting only
+bounded source identifiers and aggregate child-event counts, never skip reasons
+or subtest labels. Empty, malformed and truncated streams fail closed; their
+original observations remain in the sidecar.
 
 The exit status is non-zero when any test or package failed, but the caller
 must still run with `set -o pipefail` so a `go test` failure that produced no
@@ -91,6 +94,9 @@ def main() -> int:
     package_seconds = None
     failed = False
     failed_tests: set[str] = set()
+    skipped_tests: set[str] = set()
+    parents_with_skipped_subtests: set[str] = set()
+    skipped_subtest_events = 0
     package_terminal_action = None
     package_terminal_count = 0
     non_json_lines = 0
@@ -164,6 +170,17 @@ def main() -> int:
                 package_seconds = float(event["Elapsed"])
             continue
 
+        # Retain explicit skip observations even if the package later fails
+        # or never finishes. A passing parent can contain unavailable native
+        # cases, so top-level completion alone is not exercised-case evidence.
+        # Count child events without ever retaining their parameterised labels.
+        if action == "skip":
+            if test == top:
+                skipped_tests.add(top)
+            else:
+                parents_with_skipped_subtests.add(top)
+                skipped_subtest_events += 1
+
         if action == "run" and test == top:
             if top in started:
                 invalid_events += 1
@@ -218,6 +235,9 @@ def main() -> int:
         "recorder_exit_code": 1 if failed else 0,
         "failed_top_level_tests": bounded_identifiers(failed_tests),
         "unfinished_top_level_tests": bounded_identifiers(running),
+        "skipped_top_level_tests": bounded_identifiers(skipped_tests),
+        "top_level_tests_with_skipped_subtests": bounded_identifiers(parents_with_skipped_subtests),
+        "skipped_subtest_event_count": skipped_subtest_events,
         # Only the final package action matters; retain contrary earlier
         # actions as a count instead of exporting an unbounded event stream.
         "package_terminal_action": package_terminal_action,

@@ -201,6 +201,69 @@ class APIFailureIndexTest(unittest.TestCase):
         self.assertEqual(index['completed_top_level_test_count'], 2)
         self.assertEqual(index['missing_selected_tests']['observed_count'], 0)
         self.assertEqual(index['unexpected_top_level_tests']['observed_count'], 0)
+        self.assertIn('skipped_top_level_tests', index)
+        self.assertEqual(index['skipped_top_level_tests'],
+                         {'names': ['TestNative'], 'observed_count': 1, 'omitted_count': 0})
+        self.assertEqual(index['top_level_tests_with_skipped_subtests']['observed_count'], 0)
+        self.assertEqual(index['skipped_subtest_event_count'], 0)
+
+    def test_skipped_subtests_do_not_disappear_under_a_passing_parent(self):
+        private = 'customer@example.invalid/secret-case'
+        stream = (event('run', 'TestPartial') +
+                  event('run', 'TestPartial/' + private) +
+                  event('output', 'TestPartial/' + private, 'private skip reason\n') +
+                  event('skip', 'TestPartial/' + private) +
+                  event('run', 'TestPartial/another-private-case') +
+                  event('skip', 'TestPartial/another-private-case') +
+                  event('pass', 'TestPartial', elapsed=0.5) + event('pass', elapsed=0.6))
+        result, seconds, index, raw = self.record(stream, ['TestPartial'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(seconds, '# package-seconds 0.60\nTestPartial 0.50\n')
+        self.assertIn('top_level_tests_with_skipped_subtests', index)
+        self.assertEqual(index['top_level_tests_with_skipped_subtests'],
+                         {'names': ['TestPartial'], 'observed_count': 1, 'omitted_count': 0})
+        self.assertEqual(index['skipped_top_level_tests']['observed_count'], 0)
+        self.assertEqual(index['skipped_subtest_event_count'], 2)
+        for hidden in [private, 'another-private-case', 'private skip reason']:
+            self.assertNotIn(hidden, raw)
+
+    def test_skip_observations_survive_failure_and_missing_completion(self):
+        partial = (event('run', 'TestPartial') +
+                   event('skip', 'TestPartial/private-case') +
+                   event('run', 'TestUnavailable') + event('skip', 'TestUnavailable'))
+        for terminal in ['', event('fail', 'TestPartial') + event('fail')]:
+            with self.subTest(completed=bool(terminal)):
+                result, _, index, raw = self.record(
+                    partial + terminal, ['TestPartial', 'TestUnavailable'])
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('skipped_top_level_tests', index)
+                self.assertEqual(index['skipped_top_level_tests']['names'], ['TestUnavailable'])
+                self.assertEqual(index['top_level_tests_with_skipped_subtests']['names'],
+                                 ['TestPartial'])
+                self.assertEqual(index['skipped_subtest_event_count'], 1)
+                self.assertNotIn('private-case', raw)
+                field = 'failed_top_level_tests' if terminal else 'unfinished_top_level_tests'
+                self.assertEqual(index[field]['names'], ['TestPartial'])
+
+    def test_skip_identifiers_are_bounded_and_private_labels_are_not_exported(self):
+        names = [f'TestSkip{i:04d}' for i in range(300, -1, -1)]
+        names += ['TestÜnicode', 'Test' + 'A' * 257, 'not-a-source-test']
+        stream = ''.join(event('run', name) + event('skip', name + '/private-child') +
+                         event('skip', name) for name in names) + event('pass')
+        result, _, index, raw = self.record(stream)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for field in ['skipped_top_level_tests', 'top_level_tests_with_skipped_subtests']:
+            self.assertIn(field, index)
+            observed = index[field]
+            self.assertEqual(observed['observed_count'], 304)
+            self.assertEqual(len(observed['names']), 256)
+            self.assertEqual(observed['omitted_count'], 48)
+            self.assertEqual(observed['names'], sorted(set(observed['names'])))
+        self.assertEqual(index['skipped_subtest_event_count'], 304)
+        for hidden in ['private-child', 'Ünicode', 'not-a-source-test', 'A' * 257]:
+            self.assertNotIn(hidden, raw)
+        self.assertLess(len(raw.encode()), 150_000)
 
     def test_successful_producer_cannot_substitute_incomplete_execution(self):
         good = event('run', 'TestGood') + event('pass', 'TestGood', elapsed=0.2)
@@ -312,6 +375,10 @@ import ("fmt"; "testing")
 type Fixture struct{}
 func TestGood(t *testing.T) { t.Log("passing fixture output") }
 func TestSkip(t *testing.T) { t.Skip("explicit native fixture exclusion") }
+func TestPartial(t *testing.T) {
+    t.Run("working", func(t *testing.T) {})
+    t.Run("private-child", func(t *testing.T) { t.Skip("private native fixture reason") })
+}
 func TestFailure(t *testing.T) { t.Fatal("retained fixture failure") }
 func FuzzSeed(f *testing.F) { f.Add(1); f.Fuzz(func(t *testing.T, n int) {}) }
 func ExampleFixture() { fmt.Println("fixture")
@@ -325,7 +392,7 @@ func ExampleFixture() { fmt.Println("fixture")
             names = [name for name in listing.stdout.splitlines()
                      if name.startswith(('Test', 'Fuzz', 'Example'))]
             selected = [name for name in names if name != 'TestFailure']
-            self.assertEqual(set(selected), {'TestGood', 'TestSkip', 'FuzzSeed', 'ExampleFixture'})
+            self.assertEqual(set(selected), {'TestGood', 'TestSkip', 'TestPartial', 'FuzzSeed', 'ExampleFixture'})
             command = ['go', 'test', '-race', '-count=1', '-timeout', '30s', '-json']
             # Exercise the same shorter-side -skip path used by large CI shards.
             passing = subprocess.run(command + ['-skip', '^TestFailure$', '.'],
@@ -333,7 +400,13 @@ func ExampleFixture() { fmt.Println("fixture")
             self.assertEqual(passing.returncode, 0, passing.stderr)
             result, _, index, _ = self.record(passing.stdout, selected, package)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(index['completed_top_level_test_count'], 4)
+            self.assertEqual(index['completed_top_level_test_count'], 5)
+            self.assertIn('skipped_top_level_tests', index)
+            self.assertEqual(index['skipped_top_level_tests']['names'], ['TestSkip'])
+            self.assertEqual(index['top_level_tests_with_skipped_subtests']['names'], ['TestPartial'])
+            self.assertEqual(index['skipped_subtest_event_count'], 1)
+            self.assertNotIn('private-child', json.dumps(index))
+            self.assertNotIn('private native fixture reason', json.dumps(index))
             self.assertNotIn('passing fixture output', result.stdout)
 
             # Real Go exits zero while selecting fewer tests than the source
@@ -343,7 +416,7 @@ func ExampleFixture() { fmt.Println("fixture")
             self.assertEqual(omitted.returncode, 0, omitted.stderr)
             result, _, index, _ = self.record(omitted.stdout, selected, package)
             self.assertEqual(result.returncode, 1)
-            self.assertEqual(index['missing_selected_tests']['observed_count'], 3)
+            self.assertEqual(index['missing_selected_tests']['observed_count'], 4)
 
             # Completed tests without the final package event are not a pass.
             events = [json.loads(line) for line in passing.stdout.splitlines()]
