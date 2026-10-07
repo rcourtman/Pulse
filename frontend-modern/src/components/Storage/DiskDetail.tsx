@@ -180,10 +180,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </Show>
       </div>
 
-      <div
-        class={activeTab() === 'history' ? 'space-y-3' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? 'space-y-3' : 'hidden'}`}>
         <Show when={activeTab() === 'history'}>
           <Show when={metricResourceId() && liveIOAvailable()}>
             <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>

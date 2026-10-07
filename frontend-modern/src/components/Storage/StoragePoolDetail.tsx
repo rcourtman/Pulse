@@ -115,8 +115,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           />
 
           <div
-            class={activeTab() === 'overview' ? STORAGE_DETAIL_ROOT_GRID_CLASS : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
+            class={`[overflow-anchor:none] ${activeTab() === 'overview' ? STORAGE_DETAIL_ROOT_GRID_CLASS : 'hidden'}`}
           >
             <Show when={topologyRows().length > 0}>
               <div class={STORAGE_DETAIL_CARD_CLASS}>
@@ -305,10 +304,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
             </Show>
           </div>
 
-          <div
-            class={activeTab() === 'history' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
+          <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
             <Show when={activeTab() === 'history'}>
               <div class={STORAGE_DETAIL_CARD_CLASS}>
                 <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
