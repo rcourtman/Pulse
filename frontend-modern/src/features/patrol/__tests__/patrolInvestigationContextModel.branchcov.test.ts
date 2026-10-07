@@ -12,7 +12,6 @@ import {
   buildPatrolAssistantFindingHandoffInputFromUnifiedFinding,
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolAssistantProposedFixBriefingInputFromApproval,
-  buildPatrolConfigurationFailureHandoff,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRunAssistantHandoff,
 } from '../patrolInvestigationContextModel';
@@ -461,72 +460,6 @@ describe('buildPatrolAssistantFindingHandoffInputFromUnifiedFinding (branch cove
       type: 'vm',
     });
     expect(handoff.context.handoffActions).toHaveLength(1);
-  });
-});
-
-describe('buildPatrolConfigurationFailureHandoff (branch coverage)', () => {
-  it('falls back to the default message and bare subject when message and code are empty', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({ message: '' });
-    expect(handoff.context.briefing?.subject).toBe('Patrol mode could not be saved.');
-    expect(handoff.context.briefing?.title).toBe('Patrol mode save failure attached');
-    expect(handoff.context.briefing?.statusLabel).toBeUndefined();
-    expect(handoff.context.briefing?.detailLines).toEqual([]);
-  });
-
-  it('derives the cause from blockedCause when readiness is absent', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      message: 'm',
-      blockedCause: 'provider_unavailable',
-    });
-
-    expect(handoff.context.briefing?.statusLabel).toBe('provider_unavailable');
-    expect(handoff.context.briefing?.detailLines).toEqual(['Cause: Provider Unavailable']);
-    expect(handoff.context.context?.readinessCause).toBe('provider_unavailable');
-  });
-
-  it('renders the full requested-settings line for an enabled full-mode configuration', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      message: 'm',
-      autonomyLevel: 'approval',
-      fullModeUnlocked: true,
-      investigationBudget: 5,
-      investigationTimeoutSec: 30,
-    });
-
-    expect(handoff.context.briefing?.detailLines).toContain(
-      'Requested settings: mode approval, automatic critical fixes enabled, budget 5, timeout 30s',
-    );
-  });
-
-  it('surfaces provider and model when readiness carries only those fields', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      message: 'm',
-      readiness: { provider: 'ollama', model: 'm1' },
-    });
-
-    expect(handoff.context.briefing?.detailLines).toEqual(['Provider: ollama', 'Model: m1']);
-    expect(handoff.context.context?.provider).toBe('ollama');
-    expect(handoff.context.context?.model).toBe('m1');
-  });
-
-  it('withholds sensitive keys and command-bearing values while showing safe details', () => {
-    const handoff = buildPatrolConfigurationFailureHandoff({
-      message: 'm',
-      details: {
-        db_password: 'secret123',
-        normal_field: 'visible value',
-        cmd_value: 'operator ran sudo rm',
-      },
-    });
-
-    expect(handoff.context.briefing?.evidence).toEqual([
-      'Db Password: sensitive or command detail withheld',
-      'Normal Field: visible value',
-      'Cmd Value: sensitive or command detail withheld',
-    ]);
-    expect(JSON.stringify(handoff)).not.toContain('secret123');
-    expect(JSON.stringify(handoff)).not.toContain('sudo rm');
-    expect(JSON.stringify(handoff)).toContain('visible value');
   });
 });
 

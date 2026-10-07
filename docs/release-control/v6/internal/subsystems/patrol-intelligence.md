@@ -1085,10 +1085,11 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
     present. The panel must not invent, smooth, or client-side infer a forecast;
     a missing forecast simply means no urgency line renders.
    The Patrol page must not render a standalone Trust strip above the
-   Findings/Runs tab bar or a parallel header trust line. The primary
-   Patrol assessment readout is the default owner for current operator
-   state, and may include high-signal trust facts such as
-   `state.patrolStatus()?.trust.regressed_at_least_once` (the
+   Findings/Runs tab bar or a parallel header trust line. Patrol renders no
+   primary assessment readout today; the header control row and the
+   attention workbench carry current operator state. If a readout returns,
+   it owns current operator state and may include high-signal trust facts
+   such as `state.patrolStatus()?.trust.regressed_at_least_once` (the
    FindingsTrustSummary block on the patrol-status response) only as
    compact status text. New trust categories must extend the
    `FindingsTrustSummary` contract first rather than inventing
@@ -1153,45 +1154,18 @@ fix`, or `Explain` based on current finding state), while secondary
    than dropping it; runtime-failure findings produced by
    `internal/ai/patrol_runtime_failure.go` are the first source to depend
    on that path reaching the Patrol page surface.
-   The primary Patrol assessment summary may open Assistant as a whole-surface
-   review handoff, but that handoff must also flow through
-   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`.
-   The summary action may pass the current assessment title, health score,
-   verification recency, latest run, secondary investigation context, bounded
-   recent-change and learned-correlation evidence, active-finding summaries,
-   structured resource references, structured approval/action references, and
-   model-only context. Assessment-level handoffs must
-   identify the drawer target as
-   `patrol-assessment` with `targetId=pulse-patrol-assessment`, matching saved
-   session restore semantics rather than the retired dashboard target.
-   Active-finding
-   summaries may include live pending approval posture only as safe metadata:
-   approval ID, pending status, risk, target, requested/expiry timestamps,
-   action plan identity, approval policy, plan expiry, dry-run posture, and
-   command count. They must force request-local approval-required mode, keep raw
-   command and approval payloads out of prompt and drawer copy, surface visible
-   drawer action posture from the same safe references, make the initial prompt
-   lead with approval/action review when governed references are attached, and
-   frame Assistant as explanation, prioritization, and model-owned next-step reasoning
-   rather than a generic reactive chat
-   box. That whole-surface assessment handoff must send safe
-   `handoff_metadata.kind=patrol_assessment` so saved Assistant sessions restore
-   as current-assessment context instead of becoming generic scoped context or
-   an accidental single-finding session because one bounded action reference
-   names a finding. Saved assessment and finding sessions must not expose or
-   restore Patrol-authored next-step titles, recommendation detail, action
-   labels, or app-route hrefs through `handoff_summary`; legacy stored
-   recommendation fields are ignored rather than converted into hidden context.
-   Assessment Assistant drawer briefings must stay compact and source-named
-   instead of presenting a recommended step title, reason, route action, or
-   suggested prompt chips as operator-facing answers, so
-   provider-setting/runtime-visibility failures remain plain context for the
-   configured model rather than Pulse-authored recovery guidance.
-   When the current Patrol assessment is coverage-incomplete with no active
-   infrastructure finding, the same handoff model may describe incomplete
-   coverage as evidence, but it must let the configured model decide whether
-   more verification, operator action, or governed tool use is needed. Execution
-   or retry remains operator-controlled.
+   Patrol no longer opens a whole-surface assessment handoff: the summary card
+   that offered it and its builder in
+   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` are
+   gone. Assistant sessions saved from that handoff still restore through the
+   shared drawer as `handoff_metadata.kind=patrol_assessment` with the
+   `patrol-assessment` target and `targetId=pulse-patrol-assessment`, never as
+   generic scoped context or as a single-finding session because one bounded
+   action reference names a finding. Saved assessment and finding sessions must
+   not expose or restore Patrol-authored next-step titles, recommendation
+   detail, action labels, or app-route hrefs through `handoff_summary`; legacy
+   stored recommendation fields are ignored rather than converted into hidden
+   context.
    Patrol run-history entries may also open Assistant for a selected run, but
    that handoff must flow through the same Patrol-owned investigation-context
    model rather than a row-local prompt. The browser-visible prompt and drawer
@@ -1209,8 +1183,11 @@ fix`, or `Explain` based on current finding state), while secondary
    frame Assistant as explanation and next-step review rather than execution or
    automatic retry authority.
 9. Keep the normal Patrol status summary plain and operator-first rather
-   than a hero-style or decorative card surface. The default collapsed state is
-   a compact readout, not a headline block: show the Patrol status label,
+   than a hero-style or decorative card surface. The default page renders no
+   status summary card or assessment strip today: the header control row
+   carries Patrol state, mode, trigger status, and recency. If a collapsed
+   status readout returns, it is a compact readout, not a headline block: show
+   the Patrol status label,
    current operator state, concise high-signal trust posture such as
    regressions when present, and score. Do not combine reassuring grade labels such as
    `Health A` with issue-state copy such as `Issues detected` in the collapsed
@@ -1399,12 +1376,11 @@ condition went, and that it is not a recovery) sits directly under the summary
 rather than only inside Evidence and history (`getAttentionHandoverClose` in
 `patrolHomePresentation.ts`). The timeline names that cause `Ownership
 transferred`, never `Recovery evidence`.
-The assessment handoff tells the same close the same way: a recent
-`alert_resolved` change carrying `alert_resolution` metadata enters the
-handoff context and briefing evidence as the alert engine's summary through
-the shared `formatResourceChangeHeadline`, never as `Alert resolved: ...`
-(`patrolInvestigationContextModel.ts`, pinned by
-`patrolInvestigationContextModel.test.ts`).
+Any Patrol Assistant handoff that attaches recent changes must tell the same
+close the same way: an `alert_resolved` change carrying `alert_resolution`
+metadata reads as the alert engine's summary through the shared
+`formatResourceChangeHeadline`, never as `Alert resolved: ...`. No Patrol
+handoff attaches recent changes today.
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The
@@ -1543,27 +1519,29 @@ once the shared catalog supplies it, not fall back visually to the default
 model or an unrelated OpenRouter entry because the popover mounted after the
 catalog request completed.
 The Patrol page now also treats Patrol runtime availability as a first-class
-render contract: the header chip, primary summary card, and status bar must
-all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
+render contract: any Patrol surface that presents runtime availability must
+route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 helper plus the backend `runtime_state` payload instead of inferring operator
 state from the last healthy summary snapshot or run history alone.
-The primary summary strip is descriptive only: it surfaces the current Patrol
-assessment label and compact counts, while action choices remain in the
-Findings/Runs workspace, header controls, and the LLM-driven Assistant chat.
-`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` may
-package the current Patrol assessment, verification posture, latest run,
-secondary investigation context, bounded recent-change and learned-correlation
-evidence, bounded active-finding summaries, deduped resource references, and
-safe structured approval/action references as model-only context, but visible
-drawer copy must not promote Pulse-authored next-step metadata, action chips, or
-suggested prompts as the answer. Command payloads stay out of drawer chrome.
+Patrol renders no primary summary strip today. If one returns it stays
+descriptive only: it surfaces the current Patrol assessment label and compact
+counts, while action choices remain in the workspace, header controls, and the
+LLM-driven Assistant chat.
+`frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
+packages the Patrol finding, attention-item, and run handoffs, carrying only
+bounded model-only context, resource references, and safe structured
+approval/action references, and visible drawer copy must not promote
+Pulse-authored next-step metadata, action chips, or suggested prompts as the
+answer. Command payloads stay out of drawer chrome.
 Run-history rows now follow that same Assistant handoff model. A selected
 `frontend-modern/src/components/patrol/RunHistoryEntry.tsx` row may open
 Assistant through
 `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` with a
-`[Patrol Run Context]` block, scoped resource references, runtime failure
-summary/detail when present, bounded outcome and coverage facts, and a visible
-`Patrol run attached` drawer briefing. The row must not create a second
+visible `Patrol run attached` drawer briefing (bounded outcome and coverage
+facts plus a redacted runtime failure summary when present) and safe run
+identity metadata; the backend (`internal/ai/patrol_assistant_handoff.go`)
+builds the model-only `[Patrol Run Context]` block and scoped resource
+references from the run ID. The row must not create a second
 prompt-only Assistant shortcut or imply that Assistant can retry Patrol,
 change provider configuration, or execute remediation from run-history context.
 That active-runtime label must stay operational rather than verdict-like: the
@@ -1583,21 +1561,22 @@ viewport, avoid duplicating the inline Patrol control policy, expose
 provider/model, schedule, trigger, and user-level model checks directly, and surface
 the backend's concrete license/validation reason when a settings change is
 rejected instead of replacing it with a generic `Failed to save advanced
-settings` toast. That inline failure may
-handoff to Assistant only as model-only explanation context: raw command,
-script, credential, and provider-detail payloads stay redacted, Assistant opens
-with `autonomousMode:false`, and the Patrol control panel closes so the operator
-is not left behind an overlapping popover. Patrol-control save-failure handoffs
-must keep the compatible `handoff_metadata.kind=patrol_configuration_failure` plus only
-the runtime-failure boolean needed for drawer/session presentation, so the
-saved session restores as a Patrol control issue without carrying raw
-provider, credential, command, or retry payloads into the browser.
+settings` toast. That inline failure no longer
+opens Assistant. If it does again, the handoff is model-only explanation
+context: raw command, script, credential, and provider-detail payloads stay
+redacted, Assistant opens with `autonomousMode:false`, and the Patrol control
+panel closes so the operator is not left behind an overlapping popover.
+Patrol-control save-failure sessions saved by earlier builds keep the
+compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
+runtime-failure boolean needed for drawer/session presentation, so they restore
+as a Patrol control issue without carrying raw provider, credential, command,
+or retry payloads into the browser.
 Successful provider-model saves that return
 `patrol_readiness.status=not_ready` are still Patrol control issues, not silent
 successes: the Patrol popover must keep the saved provider/model visible,
 render a `Patrol control needs attention` inline state with the returned
-readiness cause and summary, and hand off to Assistant as a model-only Patrol
-control issue rather than as a save failure.
+readiness cause and summary; any Assistant handoff from that state must
+describe a Patrol control issue rather than a save failure.
 A separate browser proof in
 `tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts` keeps the
 authenticated launch workbench monitor-first. When the runtime has monitored
@@ -1618,11 +1597,12 @@ control state owner must also clamp stale investigation/remediation
 autonomy back to findings-only `monitor` and clear stale full-mode unlock state
 before persisting Patrol control when the safe-remediation entitlement is not
 effective, so an expired or downgraded plan cannot turn a recoverable control
-review into a Pro-only save failure. The same inline error
-surface must render any Patrol readiness
-provider, model, and summary carried by the failure object, and keep the
-provider-settings action immediately available before the operator chooses to
-open the Assistant handoff.
+review into a Pro-only save failure. Patrol renders no inline error
+surface for these failures today: switching Patrol on or off while it is not
+ready raises a fixed warning notification, a failed Patrol mode save raises an error
+notification, and neither offers an Assistant handoff. A provider or model save
+in Settings > Provider & Models reports the readiness summary, provider and
+model in its own save message.
 The Patrol mode selector in that header and configuration dialog must
 compose the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx`
 instead of rebuilding a local active-button group. The wide default Patrol
@@ -1719,12 +1699,6 @@ consumers must not pair an `Issues detected` headline with a raw coverage-only
 `overall_health.prediction` sentence from a separate source; when active
 findings and incomplete verification are both true, the assessment should
 describe both in one canonical message.
-The same precedence applies to Patrol-to-Assistant assessment handoffs. An
-active finding, pending approval, or governed action reference must remain the
-primary Assistant prompt and briefing posture even when the attached model
-context carries a secondary coverage caveat. Coverage-incomplete language such
-as explaining scoped activity or a full-run gap is the primary handoff framing
-only for coverage-only assessments with no active findings.
 That same assessment contract must also distinguish Patrol-owned runtime
 findings from infrastructure findings. When the only active Patrol findings are
 synthetic Patrol service/runtime conditions such as the `ai-service`
@@ -1747,18 +1721,18 @@ inviting generic Assistant chat.
 When that recommendation has an immediate governed operator path, the same
 helper must also declare the bounded action kind. The summary card may map
 those action kinds only to existing Patrol controls: run a full Patrol,
-review approval-scoped findings, review active findings, open Patrol provider
-settings, or open the Patrol-owned Assistant assessment handoff. It must not
+review approval-scoped findings, review active findings, or open Patrol
+provider settings. It must not
 invent page-local remediation, approval, or execution authority from
 recommendation text.
-That same runtime-owned assessment must expose the fix path directly. When the
-primary Patrol issue is a Patrol runtime/provider problem rather than an
-infrastructure finding, the summary card should offer a direct `Open Patrol
+If a summary card returns, that same runtime-owned assessment must expose the
+fix path directly. When the primary Patrol issue is a Patrol runtime/provider
+problem rather than an infrastructure finding, the summary card should offer a direct `Open Patrol
 provider settings` action instead of making the operator dig through the
 findings list to discover where to correct provider configuration.
 That same runtime-versus-infrastructure distinction should route through the
 shared finding-presentation helper instead of being re-inferred separately by
-the summary card and the findings list. The active finding row should surface
+any summary card and the findings list. The active finding row should surface
 the same Patrol runtime classification with a runtime-qualified severity badge
 such as `Runtime issue` or `Runtime critical`, rather than pairing a generic
 infrastructure severity chip like `warning` with a second Patrol-runtime
@@ -1798,9 +1772,9 @@ rather than repeating the product prefix or legacy `Insufficient API credits`
 wording once the surrounding UI already makes the Patrol context explicit.
 That same finding presentation contract should own the primary remediation path
 for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
-lead with the same direct `Open Provider & Models` action that the top
-assessment uses, and that action must use the canonical Pulse Intelligence
-route `/settings/pulse-intelligence/provider` rather than the legacy
+lead with the shared `getPatrolProviderSettingsAction()` action (`Check Patrol
+model`), and that action must use the canonical Pulse Intelligence
+route `/settings/pulse-intelligence/patrol` rather than the legacy
 `/settings/system-ai` compatibility alias. Runtime/setup findings in the
 default current-issues flow must stay primary-action-only: they should not add
 a visible `Open in Assistant` secondary button or a generic `Manage` menu
@@ -1846,14 +1820,14 @@ work or fix-verification checks without claiming a new full verification pass.
 That same recency contract also applies to the header metadata row. The top
 header must not revert to a generic `Last:` timestamp when the rest of Patrol
 is explicitly distinguishing activity from full verification recency.
-That summary surface must also avoid reintroducing a second compact assessment
-or verification layer beneath the primary card. Supporting metric strips
+If Patrol renders a summary surface again, it must also avoid reintroducing a
+second compact assessment or verification layer beneath the primary card. Supporting metric strips
 belong to counts and outcomes such as active findings, critical findings,
 warnings, and fixes; they must not repeat Patrol assessment labels or
 verification labels in a second row that competes with the primary governed
 assessment and verification copy above.
-The same supporting-chip rule applies to timing: the primary summary card may
-show health and active-finding support, but it should not add another recency
+The same supporting-chip rule applies to timing: such a primary summary card
+may show health and active-finding support, but it should not add another recency
 pill once header metadata, verification, and findings footer already carry the
 governed activity/verification timestamps.
 That same Patrol-owned run-history surface must keep platform-backed system
@@ -1865,8 +1839,9 @@ That run-history distinction must not reopen a parallel raw `truenas`
 resource-type contract in Patrol findings, scoped-run filters, or alert-backed
 resource state. Those payloads stay canonical `agent` plus platform context,
 while the separate `TrueNAS` count remains a run-history coverage detail.
-That summary-card/metrics-strip split also applies to findings counts. The
-primary assessment card may keep health as supporting context, but active
+If Patrol renders a summary card again, the same summary-card/metrics-strip
+split also applies to findings counts: the primary assessment card may keep
+health as supporting context, but active
 findings, warning counts, and critical counts belong to the supporting metric
 strip rather than being repeated as duplicate badges inside the primary card.
 That same summary surface must also explain what Patrol actually checked
@@ -1924,8 +1899,8 @@ header settings surface should expose alert-triggered and anomaly-triggered
 scoped patrols as separate controls, with the legacy aggregate event-trigger
 toggle treated as compatibility-only transport rather than the primary product
 model.
-The findings empty state must also stay subordinate to the Patrol header and
-assessment shell rather than mirroring their timing metadata. In the primary
+The findings empty state must also stay subordinate to the Patrol header
+rather than mirroring its timing metadata. In the primary
 Patrol page, `frontend-modern/src/components/AI/FindingsPanel.tsx` should
 explain the absence of active findings without repeating `Last activity`,
 `Next run`, or interval schedule details that already belong to the header and
@@ -2345,7 +2320,8 @@ from the canonical helper rather than maintaining a parallel copy, so
 hover and inline never tell different stories about what Patrol does.
 The Patrol page header must not add a second trust-at-a-glance line under
 the page title. Current active/regressed/finding posture belongs to the
-primary assessment readout and the finding rows, so the header remains
+workspace below the tabs and its finding rows (Patrol renders no primary
+assessment readout today), so the header remains
 focused on product title, recency, and route controls instead of repeating
 the same trust counters above the workspace tabs.
 The same page-header recency line must also surface the coverage
