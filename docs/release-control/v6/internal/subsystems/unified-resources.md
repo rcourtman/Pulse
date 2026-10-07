@@ -6430,6 +6430,22 @@ ambiguity test rejects multiple opposite-source candidates in both directions.
 These are synthetic source proofs, not appliance acceptance or a claim about
 which collector produced a reporter's row.
 
+### Linked SAS path join refuses a contradicting WWN
+
+`resolveLinkedPhysicalDisk` falls back to joining a Proxmox disk to its linked
+agent's disk on the same path when the agent reports SAS, because Proxmox may
+report a SAS address as the serial (#1595). That path fallback is refused when
+both sides carry WWNs that name different disks
+(`diskinventory.HardwareIdentityConflict`, under which the agent's NAA field
+spelling equals the Proxmox WWN and udev's 64-bit NAA 6 prefix is no
+conflict): the agent's row may be the slot's previous occupant, retained by a
+silent agent, and the join would hand the replacement that disk's serial,
+readings and canonical resource. A hardware identity match still joins on its
+own, and without a WWN on either side the path fallback stands. The seeded
+source mapping reused after a restart is a separate path this does not cover.
+`TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale row and both
+same-disk shapes; monitoring's SMART merge applies the matching guard first.
+
 ### Drawer tab selection survives a transient snapshot change (#1723)
 
 The shared resource detail drawer keeps the operator's selected tab while a
