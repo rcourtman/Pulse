@@ -4071,6 +4071,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"set -euo pipefail",
 		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
             | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		`printf '%s\n' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"`,
+		`package=$(go list ./internal/api)`,
+		`"$timings/api-${API_SHARD_INDEX}.selected" "$package"`,
 		"if: always() && needs.changes.outputs.code == 'true'",
 		"name: internal-api-test-seconds-${{ matrix.index }}",
 		"path: ${{ runner.temp }}/internal-api-test-seconds/",
@@ -4121,9 +4124,13 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	t.Helper()
 	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
-	record := func(events string) (string, string, map[string]any, error) {
+	record := func(events string, selected []string) (string, string, map[string]any, error) {
 		out := filepath.Join(t.TempDir(), "seconds.txt")
-		cmd := exec.Command("python3", recorder, out)
+		selection := out + ".selected"
+		if err := os.WriteFile(selection, []byte(strings.Join(selected, "\n")+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("python3", recorder, out, selection, "example/internal/api")
 		cmd.Stdin = strings.NewReader(events)
 		printed, err := cmd.Output()
 		written, readErr := os.ReadFile(out)
@@ -4148,7 +4155,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
 		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
 	}, "\n") + "\n"
-	printed, written, index, err := record(passing)
+	printed, written, index, err := record(passing, []string{"TestQuiet"})
 	if err != nil {
 		t.Fatalf("recorder must pass a passing run: %v", err)
 	}
@@ -4172,7 +4179,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
 	}, "\n") + "\n"
-	printed, written, index, err = record(failing)
+	printed, written, index, err = record(failing, []string{"TestBroken", "TestHung"})
 	if err == nil {
 		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
 	}
@@ -4196,6 +4203,18 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	}
 	if index["package_terminal_action"] != nil {
 		t.Fatalf("unfinished stream must not manufacture package completion: %v", index)
+	}
+	// A successful producer alone is not coverage. Require the observed
+	// package completion and every source-selected test, not only emitted names.
+	for _, events := range []string{"", `{"Action":"pass",` + pkg + `}`, passing} {
+		_, _, index, err = record(events, []string{"TestQuiet", "TestMissing"})
+		if err == nil {
+			t.Fatal("recorder accepted missing selected tests or package completion")
+		}
+		missing := index["missing_selected_tests"].(map[string]any)
+		if missing["observed_count"].(float64) < 1 {
+			t.Fatalf("recorder did not retain missing coverage: %v", index)
+		}
 	}
 }
 

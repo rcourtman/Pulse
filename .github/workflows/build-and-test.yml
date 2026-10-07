@@ -515,8 +515,14 @@ jobs:
           echo "internal/api shard ${API_SHARD_INDEX} of ${API_SHARD_COUNT} runs $(printf '%s\n' "$selected" | wc -l | tr -d ' ') of ${total} tests (${selected%%$'\n'*} .. ${selected##*$'\n'})"
           timings="$RUNNER_TEMP/internal-api-test-seconds"
           mkdir -p "$timings"
+          # Bind the observed runtime stream to this exact source-derived
+          # selection. A package pass alone cannot prove a shard ran its tests.
+          # The non-.txt suffix keeps selection names out of timing refreshes.
+          printf '%s\n' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"
+          package=$(go list ./internal/api)
           go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
-            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt" \
+                "$timings/api-${API_SHARD_INDEX}.selected" "$package"
 
       - name: Upload internal/api test timings
         if: always() && needs.changes.outputs.code == 'true'

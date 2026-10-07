@@ -223,10 +223,24 @@ at 256 ASCII source names of at most 256 characters, with observed/omitted count
 missing package completion remains explicit. The artifact's run/source binding
 must be reconciled before using the index. Empty lists alone are not a pass,
 and this does not replace terminal logs, diagnose failures, grant a retry or
-change test selection, exit status, race/vet coverage or required check names.
+change test selection, race/vet coverage or required check names.
 `test_api_failure_index.py` exercises failure/unfinished/package-only/unknown,
 privacy and bounds controls; the existing Go shard contract verifies the index
 beside unchanged timing output.
+The recorder itself must now fail incomplete or inconsistent execution evidence,
+even when the producer exits zero: it requires exactly one passing package
+completion, no malformed events, and non-repeated complete top-level executions.
+Each CI shard supplies its exact source-derived selection in a `.selected` file
+and its `go list` package identity. Every selected test must start and finish
+exactly once, without another test or package substituting for it. Explicit
+per-test skips remain completed observations; a skipped package is not a passed
+shard. Missing/unexpected source names use the same bounded, payload-free index
+rules above. The selection is retained in the existing artifact but excluded
+from timing refreshes by its non-`.txt` suffix. Real credential-free Go race JSON
+controls cover pass, skip, fuzz seeds and examples, ordinary failure, a zero-exit
+producer omitting selected tests, and a truncated package completion. This
+strengthens CI evidence admission, not installed or native acceptance; cached
+Go events remain subject to the existing Go cache semantics.
 `.github/scripts/refresh-internal-api-test-seconds.py --run <id>` downloads
 those artifacts with `gh run download`, takes each test's median across the
 given runs, and rewrites the weights file with `DEFAULT_WEIGHT` set to the mean
