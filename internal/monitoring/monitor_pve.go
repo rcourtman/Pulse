@@ -1284,6 +1284,15 @@ func cloneDiskIO(in *models.DiskIO) *models.DiskIO {
 	return &out
 }
 
+// previousPhysicalDiskEvidence finds the previous poll's record of the disk
+// now observed, so evidence the current poll could not collect can be
+// retained. Stable hardware identity is tried first. The source ID and device
+// token name a slot, not a disk: a replacement in the same slot keeps both, so
+// a slot match is rejected when the two records carry hardware identities that
+// disagree. Without that guard, a replacement inherits the previous
+// occupant's retained readings, and one whose record arrives without a serial
+// inherits the old serial too, which keys it to the old disk's canonical
+// resource, and every later poll carries that serial forward.
 func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models.PhysicalDisk) (models.PhysicalDisk, bool) {
 	sameScope := func(candidate models.PhysicalDisk) bool {
 		return strings.EqualFold(strings.TrimSpace(candidate.Instance), strings.TrimSpace(current.Instance)) &&
@@ -1305,25 +1314,27 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 		return matched, found
 	}
 
-	if serial := strings.TrimSpace(current.Serial); diskinventory.IsUsableHardwareID(serial) {
+	// Serial before WWN, as before; each may match either field of the
+	// earlier record because reporters disagree on which one holds the
+	// durable identifier.
+	for _, identity := range [][2]string{{current.Serial, ""}, {"", current.WWN}} {
 		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
-			return candidate.Serial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), serial)
+			return diskinventory.HardwareIdentityMatch(identity[0], identity[1], candidate.Serial, candidate.WWN)
 		}); ok {
 			return matched, true
 		}
 	}
-	if wwn := strings.TrimSpace(current.WWN); diskinventory.IsUsableHardwareID(wwn) {
-		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
-			return candidate.WWN != "" && strings.EqualFold(strings.TrimSpace(candidate.WWN), wwn)
-		}); ok {
-			return matched, true
+	sameSlotOccupant := func(matched models.PhysicalDisk, ok bool) (models.PhysicalDisk, bool) {
+		if !ok || physicalDiskHardwareIdentitiesConflict(current, matched) {
+			return models.PhysicalDisk{}, false
 		}
+		return matched, true
 	}
 	if id := strings.TrimSpace(current.ID); id != "" {
 		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
 			return strings.TrimSpace(candidate.ID) == id
 		}); ok {
-			return matched, true
+			return sameSlotOccupant(matched, ok)
 		}
 	}
 
@@ -1331,7 +1342,7 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 	if device == "" {
 		return models.PhysicalDisk{}, false
 	}
-	return uniqueMatch(func(candidate models.PhysicalDisk) bool {
+	return sameSlotOccupant(uniqueMatch(func(candidate models.PhysicalDisk) bool {
 		return normalizeSMARTDeviceIdentifier(candidate.DevPath) == device &&
 			diskTopologyCompatible(
 				current.Controller,
@@ -1339,7 +1350,21 @@ func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models
 				candidate.Controller,
 				candidate.Target,
 			)
-	})
+	}))
+}
+
+// physicalDiskHardwareIdentitiesConflict reports whether both records carry a
+// serial or WWN and none of them names the same disk. Missing identity is not
+// conflicting identity, so a disk whose identity went unreported this poll
+// still matches its slot. Matching a record against itself applies the same
+// normalization as the comparison, so a placeholder such as a 0x-prefixed
+// all-zero WWN counts as unreported rather than as a different disk.
+func physicalDiskHardwareIdentitiesConflict(left, right models.PhysicalDisk) bool {
+	hasID := func(disk models.PhysicalDisk) bool {
+		return diskinventory.HardwareIdentityMatch(disk.Serial, disk.WWN, disk.Serial, disk.WWN)
+	}
+	return hasID(left) && hasID(right) &&
+		!diskinventory.HardwareIdentityMatch(left.Serial, left.WWN, right.Serial, right.WWN)
 }
 
 func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDisk) models.PhysicalDisk {

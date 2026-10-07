@@ -88,6 +88,32 @@ func TestHardwareIdentityMatch(t *testing.T) {
 			want: true,
 		},
 		{
+			// internal/hostagent formatWWN spells smartctl's NAA 5 triple
+			// with unpadded fields; PVE reports udev's ID_WWN.
+			name: "agent naa-oui-id wwn matches pve 0x wwn",
+			aWWN: "5-c50-a1b2c3d4",
+			bWWN: "0x5000c500a1b2c3d4",
+			want: true,
+		},
+		{
+			name: "agent naa-oui-id wwn of another disk stays distinct",
+			aWWN: "5-c50-a1b2c3d5",
+			bWWN: "0x5000c500a1b2c3d4",
+			want: false,
+		},
+		{
+			name:    "serial shaped like the field form is not re-padded",
+			aSerial: "5-c50-a1b2c3d4",
+			bWWN:    "0x5000c500a1b2c3d4",
+			want:    false,
+		},
+		{
+			name: "field form wider than NAA 5 is not re-padded",
+			aWWN: "5-c50-123456789abc",
+			bWWN: "0x5000c50123456789abc",
+			want: false,
+		},
+		{
 			name:    "truncated udev wwn never matches full sibling identifier",
 			aWWN:    "0x61866da053481f00",
 			bSerial: "61866da053481f0030543ecb1d3b4cca",
