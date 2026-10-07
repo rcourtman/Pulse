@@ -483,9 +483,9 @@ func TestHostUnraidDiskSourceIDNormalizesDeviceAndPrefersSerial(t *testing.T) {
 			want: "host-tower:sdf",
 		},
 		{
-			name: "serial wins",
+			name: "serial wins, scoped to its host",
 			disk: models.HostUnraidDisk{Device: "/dev/sdg", Serial: "SERIAL-DATA"},
-			want: "SERIAL-DATA",
+			want: "host-tower/physical-disk:SERIAL-DATA",
 		},
 		{
 			name: "slot fallback",
@@ -500,6 +500,405 @@ func TestHostUnraidDiskSourceIDNormalizesDeviceAndPrefersSerial(t *testing.T) {
 				t.Fatalf("HostUnraidDiskSourceID(%+v) = %q, want %q", tt.disk, got, tt.want)
 			}
 		})
+	}
+}
+
+// An agent disk's source ID carries its host, because a usable serial or WWN
+// names the drive but not the machine; its metrics key is the hardware ID
+// alone. Without hardware identity the two keep one host/device/topology key.
+// The source-specific ID an operator split derives from still hashes the bare
+// hardware ID it was derived from before the host joined the source ID.
+func TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost(t *testing.T) {
+	host := models.Host{ID: "host-tower"}
+	tests := []struct {
+		name       string
+		disk       models.HostDiskSMART
+		wantSource string
+		wantMetric string
+	}{
+		{
+			name:       "serial",
+			disk:       models.HostDiskSMART{Device: "/dev/sda", Serial: "SERIAL-A", WWN: "5000c500a1b2c3d4"},
+			wantSource: "host-tower/physical-disk:SERIAL-A",
+			wantMetric: "SERIAL-A",
+		},
+		{
+			name:       "wwn when the serial is a placeholder",
+			disk:       models.HostDiskSMART{Device: "sdb", Serial: "To Be Filled By O.E.M.", WWN: "5000c500a1b2c3d4"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3d4",
+			wantMetric: "5000c500a1b2c3d4",
+		},
+		{
+			name:       "no hardware identity",
+			disk:       models.HostDiskSMART{Device: "sdc [sat]", Serial: "0000000000"},
+			wantSource: "host-tower:sdc",
+			wantMetric: "host-tower:sdc",
+		},
+		{
+			name:       "identity-less controller member",
+			disk:       models.HostDiskSMART{Device: "sdd", Controller: "ctrl0", Target: "megaraid,3"},
+			wantSource: "host-tower:sdd@ctrl0/megaraid,3",
+			wantMetric: "host-tower:sdd@ctrl0/megaraid,3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HostSMARTDiskSourceID(host, tt.disk); got != tt.wantSource {
+				t.Fatalf("HostSMARTDiskSourceID = %q, want %q", got, tt.wantSource)
+			}
+			if got := HostSMARTDiskMetricID(host, tt.disk); got != tt.wantMetric {
+				t.Fatalf("HostSMARTDiskMetricID = %q, want %q", got, tt.wantMetric)
+			}
+		})
+	}
+
+	sourceID := HostSMARTDiskSourceID(host, tests[0].disk)
+	if got, want := SourceSpecificID(ResourceTypePhysicalDisk, SourceAgent, sourceID), SourceSpecificID(ResourceTypePhysicalDisk, SourceAgent, "SERIAL-A"); got != want {
+		t.Fatalf("agent disk source-specific ID = %q, want the bare serial's %q", got, want)
+	}
+	rr := NewRegistry(nil)
+	if got, want := rr.sourceSpecificID(ResourceTypePhysicalDisk, SourceAgent, sourceID), SourceSpecificID(ResourceTypePhysicalDisk, SourceAgent, sourceID); got != want {
+		t.Fatalf("registry source-specific ID = %q, want SourceSpecificID's %q", got, want)
+	}
+	if got, want := SourceSpecificID(ResourceTypeStorage, SourceAgent, "host-tower/physical-disk:x"), SourceSpecificID(ResourceTypeStorage, SourceAgent, "x"); got == want {
+		t.Fatalf("only agent physical disks drop the host from their source-specific ID, got %q for storage", got)
+	}
+}
+
+// A SMART row without a serial takes the one the host's Unraid inventory
+// reports for the disk, and its metrics key follows, because the disk resource
+// carries that serial and its metrics target reads it. The source ID stays the
+// row's own. A row's own serial, even a placeholder, is kept, as the adapter
+// keeps it, and the Unraid row then stays a disk of its own. So does a row on a
+// device path several rows share: controller members behind one block device
+// keep their own identity. A disk with no SMART row is keyed by its Unraid
+// serial alone, unless several Unraid rows name its device.
+func TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports(t *testing.T) {
+	host := models.Host{ID: "host-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: time.Now().UTC()}
+	host.Unraid = &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{
+		{Name: "disk1", Device: "sdb", Role: "data", Serial: "UNRAID-B"},
+		{Name: "disk2", Device: "sdc", Role: "data", Serial: "UNRAID-C"},
+		{Name: "disk3", Device: "sdd", Role: "data", Serial: "UNRAID-D"},
+		{Name: "disk4", Device: "sde", Role: "data", Serial: "UNRAID-E"},
+		{Name: "disk5", Device: "sdf", Role: "data", Serial: "UNRAID-F"},
+		{Name: "disk6", Device: "sdg", Role: "data"},
+		{Name: "disk7", Device: "sdh", Role: "data", Serial: "UNRAID-H"},
+		{Name: "disk8", Device: "sdi", Role: "data", Serial: "UNRAID-I1"},
+		{Name: "disk9", Device: "sdi", Role: "data", Serial: "UNRAID-I2"},
+	}}
+	tests := []struct {
+		name       string
+		disk       models.HostDiskSMART
+		wantSource string
+		wantMetric string
+	}{
+		{
+			name:       "no hardware identity",
+			disk:       models.HostDiskSMART{Device: "/dev/sdb"},
+			wantSource: "host-tower:sdb",
+			wantMetric: "UNRAID-B",
+		},
+		{
+			name:       "standby row",
+			disk:       models.HostDiskSMART{Device: "sdc", Standby: true},
+			wantSource: "host-tower:sdc",
+			wantMetric: "UNRAID-C",
+		},
+		{
+			name:       "wwn only",
+			disk:       models.HostDiskSMART{Device: "sdd", WWN: "5000c500a1b2c3d4"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3d4",
+			wantMetric: "UNRAID-D",
+		},
+		{
+			name:       "own serial",
+			disk:       models.HostDiskSMART{Device: "sde", Serial: "SMART-E"},
+			wantSource: "host-tower/physical-disk:SMART-E",
+			wantMetric: "SMART-E",
+		},
+		{
+			name:       "own placeholder serial",
+			disk:       models.HostDiskSMART{Device: "sdf", Serial: "0000000000"},
+			wantSource: "host-tower:sdf",
+			wantMetric: "host-tower:sdf",
+		},
+		{
+			name:       "unraid row without serial",
+			disk:       models.HostDiskSMART{Device: "sdg"},
+			wantSource: "host-tower:sdg",
+			wantMetric: "host-tower:sdg",
+		},
+		{
+			name:       "controller member sharing a path",
+			disk:       models.HostDiskSMART{Device: "sdh", WWN: "5000c500a1b2c3e0", Controller: "ctrl0", Target: "megaraid,0"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3e0",
+			wantMetric: "5000c500a1b2c3e0",
+		},
+		{
+			name:       "second controller member on that path",
+			disk:       models.HostDiskSMART{Device: "/dev/sdh", WWN: "5000c500a1b2c3e1", Controller: "ctrl0", Target: "megaraid,1"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3e1",
+			wantMetric: "5000c500a1b2c3e1",
+		},
+	}
+	host.Sensors.SMART = make([]models.HostDiskSMART, 0, len(tests))
+	for _, tt := range tests {
+		host.Sensors.SMART = append(host.Sensors.SMART, tt.disk)
+	}
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	targetBySourceID := make(map[string]string)
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		target := rr.MetricsTarget(disk.ID)
+		if target == nil {
+			continue
+		}
+		for _, sourceTarget := range rr.SourceTargets(disk.ID) {
+			if sourceTarget.Source == SourceAgent {
+				targetBySourceID[sourceTarget.SourceID] = target.ResourceID
+			}
+		}
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HostSMARTDiskSourceID(host, tt.disk); got != tt.wantSource {
+				t.Fatalf("HostSMARTDiskSourceID = %q, want %q", got, tt.wantSource)
+			}
+			if got := HostSMARTDiskMetricID(host, tt.disk); got != tt.wantMetric {
+				t.Fatalf("HostSMARTDiskMetricID = %q, want %q", got, tt.wantMetric)
+			}
+			if got := targetBySourceID[tt.wantSource]; got != tt.wantMetric {
+				t.Fatalf("disk metrics target = %q, want the writer's %q", got, tt.wantMetric)
+			}
+		})
+	}
+
+	for device, want := range map[string]string{"/dev/sde": "UNRAID-E", "sdg": "", "sdi": "", "sdz": ""} {
+		if got := HostUnraidDeviceMetricID(host, device); got != want {
+			t.Fatalf("HostUnraidDeviceMetricID(%q) = %q, want %q", device, got, want)
+		}
+	}
+}
+
+// A registry seeded from unified resources rebuilds each agent disk's source
+// mapping from the resource alone, after a JSON round trip drops per-source
+// parents. It must reproduce the key the agent's observation ingests under,
+// for a disk on the host, behind a controller, in the Unraid array or a cache
+// pool, or merged with a linked node's Proxmox row, with or without hardware
+// identity, so a rehydrated disk keeps its agent source and metrics targets.
+func TestRehydratedAgentDisksKeepTheirLiveSourceIDs(t *testing.T) {
+	now := time.Now().UTC()
+	tower := models.Host{
+		ID: "host-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "sda", Serial: "BOOT-SERIAL", Model: "Boot SSD", Health: "PASSED"},
+			{Device: "sdb", Serial: "ARRAY-SERIAL", Model: "Array Disk", Health: "PASSED"},
+			{Device: "sdc", Model: "Array Disk", Health: "PASSED"},
+			{Device: "nvme0n1", Serial: "CACHE-SERIAL", Model: "Cache NVMe", Health: "PASSED"},
+			{Device: "sdd", Model: "RAID Member", Controller: "ctrl0", Target: "megaraid,3", Health: "PASSED"},
+		}},
+		Unraid: &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", Disks: []models.HostUnraidDisk{
+			{Name: "disk1", Device: "sdb", Role: "data", Status: "DISK_OK", Serial: "ARRAY-SERIAL"},
+			{Name: "disk2", Device: "sdc", Role: "data", Status: "DISK_OK"},
+			{Name: "cache", Device: "nvme0n1", Role: "cache", Status: "DISK_OK", Serial: "CACHE-SERIAL"},
+		}},
+	}
+	for _, tc := range []struct {
+		name          string
+		snapshot      models.StateSnapshot
+		wantSourceIDs map[string]bool
+	}{
+		{
+			name:     "unraid host",
+			snapshot: models.StateSnapshot{Hosts: []models.Host{tower}},
+			wantSourceIDs: map[string]bool{
+				"host-tower/physical-disk:BOOT-SERIAL":  true,
+				"host-tower/physical-disk:ARRAY-SERIAL": true,
+				"host-tower:sdc":                        true,
+				"host-tower/physical-disk:CACHE-SERIAL": true,
+				"host-tower:sdd@ctrl0/megaraid,3":       true,
+			},
+		},
+		{
+			name:          "linked proxmox node",
+			snapshot:      sharedSerialDiskSnapshot(now, true, "pve1"),
+			wantSourceIDs: map[string]bool{"host-pve1/physical-disk:" + sharedDiskSerial: true},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			live := NewRegistry(nil)
+			live.IngestSnapshot(tc.snapshot)
+			payload, err := json.Marshal(live.List())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var persisted []Resource
+			if err := json.Unmarshal(payload, &persisted); err != nil {
+				t.Fatal(err)
+			}
+			rehydrated := NewRegistry(nil)
+			rehydrated.IngestResources(persisted)
+
+			agentSourceID := func(rr *ResourceRegistry, diskID string) string {
+				for _, target := range rr.SourceTargets(diskID) {
+					if target.Source == SourceAgent {
+						return target.SourceID
+					}
+				}
+				return ""
+			}
+			seen := make(map[string]bool, len(tc.wantSourceIDs))
+			for _, disk := range live.ListByType(ResourceTypePhysicalDisk) {
+				liveID := agentSourceID(live, disk.ID)
+				if liveID == "" {
+					continue
+				}
+				seen[liveID] = true
+				if rehydratedID := agentSourceID(rehydrated, disk.ID); rehydratedID != liveID {
+					t.Fatalf("disk %s rehydrated agent source ID = %q, want the live %q", disk.Name, rehydratedID, liveID)
+				}
+				if live, seeded := live.MetricsTarget(disk.ID), rehydrated.MetricsTarget(disk.ID); live == nil || seeded == nil || *live != *seeded {
+					t.Fatalf("disk %s metrics target live %+v, rehydrated %+v, want one non-nil target", disk.Name, live, seeded)
+				}
+			}
+			if len(seen) != len(tc.wantSourceIDs) {
+				t.Fatalf("live agent source IDs = %v, want %v", seen, tc.wantSourceIDs)
+			}
+			for id := range tc.wantSourceIDs {
+				if !seen[id] {
+					t.Fatalf("live agent source IDs = %v, want %v", seen, tc.wantSourceIDs)
+				}
+			}
+		})
+	}
+}
+
+// Two agent IDs can report from one machine (a re-enrolled agent whose old
+// record still reports), so their disks no longer share a source key, and an
+// operator split sends the second onto the source-specific ID, which hashes
+// the bare serial. Another machine's split copy must then take that ID keyed
+// to its own machine, never overwrite the first machine's disk.
+func TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	host := func(id, machine string) models.Host {
+		return models.Host{
+			ID: id, Hostname: machine, MachineID: "machine-" + machine, Status: "online", LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Health: "PASSED",
+			}}},
+		}
+	}
+	snapshot := models.StateSnapshot{Hosts: []models.Host{host("c1", "c"), host("c2", "c"), host("a1", "a"), host("a2", "a")}}
+
+	unsplit := NewRegistry(nil)
+	unsplit.IngestSnapshot(snapshot)
+	machineADisk := unsplit.sourceResourceID(SourceAgent, HostSMARTDiskSourceID(snapshot.Hosts[2], snapshot.Hosts[2].Sensors.SMART[0]))
+	if machineADisk == "" {
+		t.Fatal("machine a's disk has no agent source mapping")
+	}
+	store := NewMemoryStore()
+	agentCandidate := SourceSpecificID(ResourceTypePhysicalDisk, SourceAgent, sharedDiskSerial)
+	for _, splitFrom := range []string{MachineIdentityCanonicalID(ResourceTypePhysicalDisk, sharedDiskSerial), machineADisk} {
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: splitFrom, ResourceB: agentCandidate}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	split := NewRegistry(store)
+	split.IngestSnapshot(snapshot)
+	diskIDs := make(map[string]bool, len(snapshot.Hosts))
+	for _, h := range snapshot.Hosts {
+		hostID := split.sourceResourceID(SourceAgent, h.ID)
+		diskID := split.sourceResourceID(SourceAgent, HostSMARTDiskSourceID(h, h.Sensors.SMART[0]))
+		disk, ok := split.Get(diskID)
+		if hostID == "" || !ok {
+			t.Fatalf("%s: host %q disk %q, want both mapped", h.ID, hostID, diskID)
+		}
+		if disk.ParentID == nil || *disk.ParentID != hostID {
+			t.Fatalf("%s's disk %s sits under %v, want its own machine %s", h.ID, diskID, disk.ParentID, hostID)
+		}
+		diskIDs[diskID] = true
+	}
+	if !diskIDs[agentCandidate] {
+		t.Fatalf("disk IDs = %v, want the first split copy on its source-specific ID %s", diskIDs, agentCandidate)
+	}
+}
+
+// The metrics reader scopes a controller member's fallback key to the member
+// once, as the writers do. A source ID that already names the member is the
+// writer's key and stays unchanged. A Proxmox source ID from before members
+// were scoped, and the canonical resource ID a view falls back to, get the
+// member topology appended. A disk that is no controller member keeps its
+// fallback.
+func TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce(t *testing.T) {
+	agent := models.Host{ID: "host-pve"}
+	agentMember := models.HostDiskSMART{Device: "sdd", Controller: "ctrl0", Target: "megaraid,3"}
+	labelledMember := models.HostDiskSMART{Device: "sdc [megaraid,1]", Controller: "sdc", Target: "megaraid,1"}
+	pveMember := models.PhysicalDisk{
+		ID:       ProxmoxPhysicalDiskSourceID("pve", "node1", "/dev/sdx", "", "megaraid,0"),
+		Instance: "pve", Node: "node1", DevPath: "/dev/sdx", Target: "megaraid,0",
+	}
+	legacyPVEMember := pveMember
+	legacyPVEMember.ID = "pve-node1--dev-sdx"
+	tests := []struct {
+		name     string
+		meta     PhysicalDiskMeta
+		fallback string
+		want     string
+	}{
+		{
+			name:     "agent member source ID",
+			meta:     PhysicalDiskMeta{DevPath: "sdd", Controller: "ctrl0", Target: "megaraid,3"},
+			fallback: HostSMARTDiskSourceID(agent, agentMember),
+			want:     HostSMARTDiskMetricID(agent, agentMember),
+		},
+		{
+			name:     "agent member reported under its smartctl label, merged with its Proxmox path",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdc", Controller: "sdc", Target: "megaraid,1"},
+			fallback: HostSMARTDiskSourceID(agent, labelledMember),
+			want:     HostSMARTDiskMetricID(agent, labelledMember),
+		},
+		{
+			name:     "proxmox member source ID",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: pveMember.ID,
+			want:     PhysicalDiskMetricID(pveMember),
+		},
+		{
+			name:     "proxmox member source ID from before members were scoped",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: legacyPVEMember.ID,
+			want:     PhysicalDiskMetricID(legacyPVEMember),
+		},
+		{
+			name:     "canonical resource ID",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: "physical_disk-0123456789abcdef",
+			want:     "physical_disk-0123456789abcdef:sdx@/megaraid,0",
+		},
+		{
+			name:     "no controller member",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sda"},
+			fallback: "truenas-system:disk:sda",
+			want:     "truenas-system:disk:sda",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PhysicalDiskMetaMetricID(&tt.meta, tt.fallback); got != tt.want {
+				t.Fatalf("PhysicalDiskMetaMetricID(%q) = %q, want %q", tt.fallback, got, tt.want)
+			}
+		})
+	}
+	for name, key := range map[string]string{
+		"agent member":          HostSMARTDiskMetricID(agent, agentMember),
+		"proxmox member":        PhysicalDiskMetricID(pveMember),
+		"legacy proxmox member": PhysicalDiskMetricID(legacyPVEMember),
+		"labelled agent member": HostSMARTDiskMetricID(agent, labelledMember),
+	} {
+		if strings.Count(key, "@") != 1 {
+			t.Fatalf("%s writer key %q, want the member topology once", name, key)
+		}
 	}
 }
 

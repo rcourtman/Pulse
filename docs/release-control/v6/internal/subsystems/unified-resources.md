@@ -3612,6 +3612,24 @@ remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
 retain their historical device-scoped shape; controller members sharing one
 block path add controller/target scope so they cannot collapse into one
 resource. Topology correlation is parent-scoped and ambiguity fails closed.
+That scope is added once. A controller member without a usable serial or WWN
+keeps its history under a source ID that already names the member: the host
+agent's `HostSMARTDiskMetricID`, and the Proxmox `PhysicalDiskMetricID`, which
+returns `ProxmoxPhysicalDiskSourceID`. `PhysicalDiskMetaMetricID` therefore
+returns a fallback that already ends in the disk's own device, controller and
+target unchanged as the metrics target. It appends that topology only to a
+fallback without it: a Proxmox source ID from before members were scoped,
+which `PhysicalDiskMetricID` scopes the same way, or the canonical resource ID
+`PhysicalDiskView.MetricResourceID` falls back to. The suffix survives a merge
+because a member target only reaches a disk together with the controller the
+agent reported beside it (the multiplexed smartctl path sets both), and the
+Proxmox row copies both from that agent row. A registry rehydrated from
+persisted resources rebuilds the agent source ID in the same scoped shape
+(`seedAgentPhysicalDiskSourceIDLocked`). TrueNAS disks carry no controller
+target and keep their fallback. The reader used to append the topology to an
+already scoped source ID as well, so such a member's chart read a key no
+writer used. Proof: `TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce`,
+`TestIdentitylessControllerMembersReadTheirWritersHistory`.
 
 Host reports, monitoring models, registry merges, typed physical-disk views,
 API resources, websocket/REST snapshot merges, and storage presentation must
@@ -5382,7 +5400,8 @@ TrueNAS API and the agent on that box), and an unknown machine never splits a
 disk. A split (operator exclusion) recorded against any ID the disk can hold,
 unscoped, current or machine-scoped, keeps the observation on its
 source-specific ID, keyed to its machine when another machine's disk already
-holds that ID (agent disk source IDs are the bare serial). Once the identity
+holds that ID (an agent disk's source-specific ID hashes its bare serial or
+WWN, below). Once the identity
 spans machines the unscoped ID no longer names one disk, so a split recorded
 against it applies to every copy, erring towards an extra row rather than a
 merge the operator forbade, and a manual link recorded against it stops
@@ -5400,14 +5419,76 @@ same-serial disk first appears on another machine and back when it goes away,
 and alert-history rows owned under the unscoped ID do not follow a re-key; a
 disk two reporters share is scoped to its canonical parent when the identity
 first spans machines, which the fixed ingest order (snapshot sources, then
-supplemental records) and source priority decide; agent SMART and Unraid disk
-source IDs are the bare serial, so same-serial agent disks on different hosts
-share one `SourceAgent` mapping and only the last ingested keeps the agent
-source target; same-serial disks share one metrics history key; and across
-reporters, hostnames that normalize alike (default TrueNAS names, short names
-across domains) still join. `IdentityMatcher` keeps one resource per machine
-ID, so the registry indexes disks by hardware key (`physicalDisksByHardware`)
-to see every copy.
+supplemental records) and source priority decide; and across reporters,
+hostnames that normalize alike (default TrueNAS names, short names across
+domains) still join. `IdentityMatcher` keeps one resource per machine ID, so
+the registry indexes disks by hardware key (`physicalDisksByHardware`) to see
+every copy.
+An agent disk's source ID carries its host, because the registry keeps one
+resource per source ID: when it was the bare serial, same-serial agent disks on
+different hosts shared one `SourceAgent` mapping, every disk but the last
+ingested lost its agent source target, and a disk only the agent reports lost
+its metrics target and chart. `HostSMARTDiskSourceID` and
+`HostUnraidDiskSourceID` key a disk with a usable serial or WWN as
+`<agent ID>/physical-disk:<serial or WWN>`, which the SMART and Unraid
+observations of one disk share when both report its serial; a disk without
+hardware identity keeps its host/device/topology key. A registry seeded from
+unified resources rebuilds one key from the agent ID the host above the disk
+retains, directly or above its Unraid array or cache pool, and the merged
+disk's serial or WWN (`seedAgentPhysicalDiskSourceIDLocked`), so a rehydrated
+disk, which is what the resource API serves, keeps an agent source target,
+though not every key its observations ingest under (a SMART row missing the
+serial its Unraid row reports, or a host several agent IDs report from); with
+no agent host found, a disk with hardware identity seeds its bare serial or
+WWN. Canonical IDs do not move: a disk with hardware identity is keyed by it,
+and `SourceSpecificID` hashes an agent disk's bare serial or WWN without the
+host (`sourceSpecificIDKey`), so a disk split off onto its source-specific ID,
+and the exclusion that split it, keep the IDs recorded before the host joined
+the source ID. Every host's split copy shares that ID, so a split observation
+takes it keyed to its machine when another machine's disk holds it, and joins
+the holder on its own machine, whether the split reaches it through
+`physicalDiskIDForMachineLocked` or `findMatch`. A split therefore cannot
+separate observations of one disk that one machine reports under several agent
+IDs: they meet on that ID, as they met on one source key before. Disk history stays keyed by
+hardware identity, not host: `HostSMARTDiskMetricID`, like the Proxmox and
+TrueNAS writers and `PhysicalDiskMetaMetricID`, prefers the reported serial or
+WWN, so a drive keeps one SMART and I/O history across a move between hosts and
+across sources that report it by the same identifier, and both hosts of a
+dual-ported SAS disk chart the one drive. A host-scoped history key would
+orphan the stored history of every agent disk with hardware identity for the
+rare collision. Residual: distinct drives that share a usable serial on
+different hosts (cloned VM disks with an explicit serial, fixed-serial USB
+bridges) interleave their samples in one series, as they already merge into one
+disk on a single host. Proof:
+`TestSameSerialAgentDisksOnTwoHostsEachKeepTheirMetricsTarget`,
+`TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost`,
+`TestRehydratedAgentDisksKeepTheirLiveSourceIDs`,
+`TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther`.
+A SMART row that reports no serial, smartctl's standby row among them, takes
+the serial the host's Unraid inventory reports for the same disk
+(`hostSMARTDiskSerial` over `matchUnraidDisk`). The adapter shows that serial
+and the disk's metrics target reads it, so `HostSMARTDiskMetricID` resolves the
+same serial, and the disk I/O writer keys a device with no SMART reading by its
+Unraid serial (`HostUnraidDeviceMetricID`) before its Proxmox and host/device
+fallbacks. The writers used to key such a row on its WWN or host/device key,
+which the chart did not read, so the disk's SMART temperature and I/O history
+never appeared. The row's source ID stays its own (`HostSMARTDiskSourceID`
+reads only the row), so its SMART and Unraid observations still ingest under
+two keys onto one disk. Samples already written under the old key stay there:
+the chart did not read that key while the Unraid row named the disk (only
+Unraid OS reports an Unraid inventory, and it is never a Proxmox node whose
+disk row could replace the serial), and a device-keyed series can hold another
+disk's samples once device letters move. The key follows the inventory: while the host
+reports no Unraid row for the disk, the row's own key is both written and read.
+A row matches its Unraid row by device path alone, so a row on a path several
+of the host's SMART rows share, controller members behind one block device,
+takes no serial from it, and the I/O writer still files that device's counter
+under no member. The I/O writer's inventory fallback also skips a device
+several Unraid rows name, while a SMART row keeps the adapter's first match.
+A row's own serial is kept even when it is a placeholder, as the
+adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
+`TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
