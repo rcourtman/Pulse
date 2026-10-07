@@ -10,11 +10,7 @@ import {
   type FilterDef,
   type FilterSelectOption,
 } from '@/components/shared/FilterBar';
-import {
-  ChartVisibilityToggleButton,
-  FilterActionButton,
-  FilterSegmentedControl,
-} from '@/components/shared/FilterToolbar';
+import { FilterActionButton, FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -422,19 +418,6 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                   { value: 'shown', label: 'Show' },
                   { value: 'hidden', label: 'Hide' },
                 ]}
-              />
-            </div>
-          </Show>
-
-          <Show when={props.onChartsToggle}>
-            <div>
-              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Summary
-              </div>
-              <ChartVisibilityToggleButton
-                class="inline-flex!"
-                collapsed={props.chartsCollapsed?.() ?? false}
-                onToggle={() => props.onChartsToggle?.()}
               />
             </div>
           </Show>

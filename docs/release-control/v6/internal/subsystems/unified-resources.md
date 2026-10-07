@@ -2601,10 +2601,12 @@ application resource-provider or WebSocket lifecycle.
     in place through that shared runtime and the root app-shell restore path,
     instead of looking like a page refresh or remount.
 12. Keep summary-chart visibility a display preference, not a unified-resource
-    filter. Platform/runtime pages may hide or restore chart sections through
-    shared presentation controls, but those controls must not mutate resource
-    identity, table membership, source scope, or summary-hover state. The
-    retired top-level `/infrastructure` page, its summary chart strip, and its
+    filter. The workload and infrastructure summary chart sections are
+    retired and no platform page exposes a chart show/hide control today. If a
+    governed product decision brings one back, hiding or restoring it must not
+    mutate resource identity, table membership, source scope, or summary-hover
+    state. The retired top-level
+    `/infrastructure` page, its summary chart strip, and its
     saved-view/route-state machinery must not be reintroduced for this purpose.
 15. Keep operator-local resource search on the operator's own names.
     Resource-policy redaction is a transmission boundary (`docs/PRIVACY.md`),

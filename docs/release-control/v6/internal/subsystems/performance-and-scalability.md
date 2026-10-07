@@ -2809,12 +2809,12 @@ as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory
 column header after the View disclosure closes. No workload summary chart
-section renders today, so the chart-visibility control in
-`frontend-modern/src/components/Workloads/WorkloadsFilter.tsx` stays hidden
-(no surface passes `onChartsToggle`). If a summary section returns, that
-control must expose explicit `Show charts` / `Hide charts` pressed state, and
-hiding charts must remove the summary section rather than leaving an empty
-collapsed summary band on screen.
+section renders today, and `WorkloadsFilter` carries no chart-visibility
+control or `onChartsToggle` / `chartsCollapsed` props. A summary section that
+returns through a governed product decision must bring its own visibility
+control with explicit `Show charts` / `Hide charts` pressed state, and hiding
+charts must remove the summary section rather than leaving an empty collapsed
+summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of

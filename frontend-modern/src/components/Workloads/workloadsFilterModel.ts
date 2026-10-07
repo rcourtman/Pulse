@@ -75,8 +75,6 @@ export interface WorkloadsFilterProps {
   namespaceFilter?: WorkloadsToolbarFilterConfig;
   clusterFilter?: WorkloadsToolbarFilterConfig;
   containerRuntimeFilter?: WorkloadsToolbarFilterConfig;
-  chartsCollapsed?: () => boolean;
-  onChartsToggle?: () => void;
   metricDisplayMode?: () => WorkloadsMetricDisplayMode;
   setMetricDisplayMode?: (value: WorkloadsMetricDisplayMode) => void;
   metricHoverMode?: () => WorkloadsMetricHoverMode;

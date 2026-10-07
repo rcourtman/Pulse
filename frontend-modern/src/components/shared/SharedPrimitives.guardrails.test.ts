@@ -1573,56 +1573,25 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('HEADER_SORT_BUTTON');
   });
 
-  it('keeps chart visibility display actions on the shared toolbar toggle', () => {
+  it('keeps the retired summary chart-visibility toggle out of the shared toolbar', () => {
+    // The workload summary chart section this toggle controlled is deleted and
+    // no other page exposes a chart show/hide control. A returning summary
+    // section is a governed product decision that must register its own
+    // primitive.
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
-      rules?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        requiredConsumers?: Array<{ path?: string }>;
-      }>;
-      patternGuards?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        allPatterns?: string[];
-        scopes?: string[];
-        pathIncludes?: string[];
-        pathExcludes?: string[];
-        allowedPaths?: string[];
-        ignoredPaths?: string[];
-      }>;
+      rules?: Array<{ id: string; canonical?: { export?: string } }>;
+      patternGuards?: Array<{ id: string; canonical?: { export?: string } }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'chart-visibility-toggle-button',
-    );
-    const registeredGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'chart-visibility-local-toggle-labels',
-    );
+    const retiredIds = ['chart-visibility-toggle-button', 'chart-visibility-local-toggle-labels'];
+    for (const entry of [...(registry.rules ?? []), ...(registry.patternGuards ?? [])]) {
+      expect(retiredIds).not.toContain(entry.id);
+      expect(entry.canonical?.export).not.toBe('ChartVisibilityToggleButton');
+    }
 
-    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredRule?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Workloads/WorkloadsFilter.tsx',
-    ]);
-    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredGuard?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredGuard?.allPatterns).toEqual(['Show charts', 'Hide charts']);
-    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(registeredGuard?.ignoredPaths).toEqual([
-      'src/components/Workloads/__tests__/WorkloadsFilter.test.tsx',
-    ]);
-    expect(registeredGuard?.scopes).toEqual(
-      expect.arrayContaining(['src/components/Workloads', 'src/features', 'src/pages']),
-    );
-
-    expect(filterToolbarSource).toContain('export const ChartVisibilityToggleButton');
-    expect(filterToolbarSource).toContain("local.collapsed ? 'Show charts' : 'Hide charts'");
-    expect(filterToolbarSource).toContain('active={!local.collapsed}');
-    expect(filterToolbarSource).toContain('aria-pressed={!local.collapsed}');
-    expect(filterToolbarSource).toContain('title={label()}');
-
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
-    expect(workloadsFilterSource).not.toContain('Show charts');
-    expect(workloadsFilterSource).not.toContain('Hide charts');
+    expect(filterToolbarSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('onChartsToggle');
+    expect(workloadsFilterSource).not.toContain('chartsCollapsed');
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {
@@ -8667,7 +8636,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).toContain('trailingControls={');
     expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
     expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).toContain('<ColumnPicker');
     expect(workloadsFilterSource).toContain('onClearAll={handleClearAll}');
     expect(workloadsFilterSource).toContain('showClearAll={showClearAll}');
