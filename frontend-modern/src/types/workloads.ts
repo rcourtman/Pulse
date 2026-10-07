@@ -56,6 +56,8 @@ export type WorkloadGuest = (VM | Container) & {
   containerRuntime?: string;
   /** Identifies the producer of agentVersion instead of inferring it from VM type. */
   agentKind?: 'pulse' | 'qemu-guest';
+  /** ID of the Pulse agent running in this guest, the key of its alert overrides. */
+  agentId?: string;
   /** RAID arrays reported by the linked Pulse agent, not Proxmox virtual disks. */
   agentRaid?: HostRAIDArray[];
   updateStatus?: DockerContainerUpdateStatus;

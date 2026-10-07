@@ -17,6 +17,8 @@ import { resolvePhysicalDiskHistoryResourceId } from './diskResourceUtils';
 
 type UseDiskDetailModelOptions = {
   disk: Accessor<Resource>;
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: Accessor<string[] | undefined>;
 };
 
 export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
@@ -24,7 +26,11 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const { getDiskTemperatureThresholds } = useAlertsActivation();
 
   const diskData = createMemo<PhysicalDiskPresentationData>(() =>
-    extractPhysicalDiskPresentationData(options.disk(), getDiskTemperatureThresholds),
+    extractPhysicalDiskPresentationData(
+      options.disk(),
+      getDiskTemperatureThresholds,
+      options.alertResourceIds?.(),
+    ),
   );
   const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));
   const attributeCards = createMemo(() =>

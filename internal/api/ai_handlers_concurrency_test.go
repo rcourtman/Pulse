@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -67,7 +68,7 @@ func (concurrencyThresholdProvider) GetGuestMemoryThreshold() float64 {
 }
 func (concurrencyThresholdProvider) GetGuestDiskThreshold() float64 { return 95 }
 func (concurrencyThresholdProvider) GetStorageThreshold() float64   { return 92 }
-func (concurrencyThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+func (concurrencyThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 70, 65
 }
 

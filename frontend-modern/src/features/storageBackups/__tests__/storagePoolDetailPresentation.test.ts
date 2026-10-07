@@ -231,6 +231,7 @@ describe('storagePoolDetailPresentation', () => {
         state: 'online',
         sizeLabel: '1000 B',
         diskType: '',
+        alertResourceIds: [],
         temperature: 44,
         hasIssue: true,
         spunDown: false,
@@ -313,9 +314,13 @@ describe('storagePoolDetailPresentation', () => {
       },
     ] as Resource[];
 
-    const linkedDisks = getStoragePoolLinkedDisks(record, disks);
+    const linkedDisks = getStoragePoolLinkedDisks(record, disks, (disk) => [`owner-of-${disk.id}`]);
 
     expect(linkedDisks.map((disk) => disk.role)).toEqual(['parity', 'data']);
+    // Each linked disk carries the override keys its Temp colour is judged under.
+    expect(linkedDisks.map((disk) => disk.alertResourceIds)).toEqual(
+      linkedDisks.map((disk) => [`owner-of-${disk.id}`]),
+    );
     expect(linkedDisks[0].temperatureLastKnownTitle).toBeUndefined();
     expect(linkedDisks[1]).toEqual(
       expect.objectContaining({

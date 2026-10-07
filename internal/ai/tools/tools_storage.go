@@ -338,8 +338,16 @@ func storagePoolSummaryFromResource(r unifiedresources.Resource) StoragePoolSumm
 		freeBytes = totalBytes - usedBytes
 	}
 
+	// Enabled is the source's configuration flag, so an unavailable storage
+	// (Proxmox active=0) must not read as administratively disabled. Active
+	// also needs the row itself to be up: PBS datastores report Active even
+	// while unavailable, and an offline row is not usable whatever its flag.
 	active := r.Status != unifiedresources.StatusOffline
-	enabled := r.Status != unifiedresources.StatusOffline
+	enabled := active
+	if r.Storage != nil {
+		enabled = r.Storage.Enabled
+		active = active && r.Storage.Active
+	}
 
 	id := r.ID
 	if id == "" {

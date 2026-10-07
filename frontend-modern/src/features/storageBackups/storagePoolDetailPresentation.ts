@@ -1,5 +1,8 @@
 import type { HistoryTimeRange, ResourceType as HistoryChartResourceType } from '@/api/charts';
-import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskPresentation';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  type PhysicalDiskAlertResourceIdResolver,
+} from '@/features/storageBackups/diskPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   getStorageRecordContent,
@@ -27,6 +30,8 @@ export type StoragePoolDetailLinkedDisk = {
   state: string;
   sizeLabel: string;
   diskType: string;
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: string[];
   temperature: number;
   /** Set only when the temperature is a retained, not current, reading. */
   temperatureLastKnownTitle?: string;
@@ -402,6 +407,7 @@ const normalizeDevicePath = (value: string): string => value.trim().replace(/^\/
 export function getStoragePoolLinkedDisks(
   record: StorageRecord,
   physicalDisks: Resource[],
+  getAlertResourceIds?: PhysicalDiskAlertResourceIdResolver,
 ): StoragePoolDetailLinkedDisk[] {
   const pool = getStorageRecordZfsPool(record);
   const unraidStorageGroup = getUnraidStorageGroup(record).toLowerCase();
@@ -432,6 +438,7 @@ export function getStoragePoolLinkedDisks(
       state: readDiskState(disk),
       sizeLabel: readDiskSizeLabel(disk),
       diskType: readDiskType(disk),
+      alertResourceIds: getAlertResourceIds?.(disk) ?? [],
       temperature: readDiskTemperature(disk),
       temperatureLastKnownTitle: readDiskTemperatureLastKnownTitle(disk),
       hasIssue: readDiskHasIssue(disk),

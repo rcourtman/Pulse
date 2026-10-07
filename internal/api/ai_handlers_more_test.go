@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -154,7 +155,7 @@ func (stubThresholdProvider) GetGuestMemoryThreshold() float64 {
 }
 func (stubThresholdProvider) GetGuestDiskThreshold() float64 { return 95 }
 func (stubThresholdProvider) GetStorageThreshold() float64   { return 92 }
-func (stubThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+func (stubThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 70, 65
 }
 

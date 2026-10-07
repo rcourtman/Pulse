@@ -568,25 +568,27 @@ func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
 	}
 
 	m.state.SyncGuestBackupTimes()
-	m.updateResourceStore(m.state.GetSnapshot())
+	scope := m.mockModeFence.begin()
+	m.updateResourceStore(m.state.GetSnapshot(), scope)
 }
 
 func (m *Monitor) backupReadStateForInstance(instanceName string) unifiedresources.ReadState {
 	if m == nil {
 		return nil
 	}
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if backupReadStateHasGuestForInstance(readState, instanceName) || m.state == nil {
 		return readState
 	}
 
+	scope := m.mockModeFence.begin()
 	snapshot := m.state.GetSnapshot()
 	if !backupSnapshotHasGuestForInstance(snapshot, instanceName) {
 		return readState
 	}
 
-	m.updateResourceStore(snapshot)
-	readState = m.GetUnifiedReadStateOrSnapshot()
+	m.updateResourceStore(snapshot, scope)
+	readState = m.currentModeReadState()
 	if backupReadStateHasGuestForInstance(readState, instanceName) {
 		return readState
 	}
@@ -950,6 +952,8 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
+	// The guest inventory comes from the fixture read view in mock mode.
+	scope := m.mockModeFence.begin()
 	readState := m.backupReadStateForInstance(instanceName)
 	var vms []models.VM
 	for _, vm := range readState.VMs() {
@@ -1270,7 +1274,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	if m.alertManager != nil {
-		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups)
+		scope.run(func() { m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups) })
 	}
 
 	log.Debug().

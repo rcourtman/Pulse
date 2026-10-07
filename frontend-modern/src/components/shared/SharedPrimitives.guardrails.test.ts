@@ -364,6 +364,23 @@ describe('shared primitive guardrails', () => {
     ).toContain('lastKnownReason={props.drawer.agentReadingsLastKnownReason()}');
   });
 
+  it("keeps a silent agent's retained RAID state out of live colour and rebuild progress", () => {
+    const source = readFrontendSource('src/components/shared/cards/RaidCard.tsx');
+    expect(source).toContain('lastKnownReason?: string;');
+    expect(source).toContain('`Last known reading, not current: ${reason}`');
+    expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?getRaidStateTextClass/);
+    expect(source).toContain('Rebuild was at {Math.round(rebuildPercent())}%');
+    expect(source).toContain('RAID_LAST_KNOWN_DEVICE_BADGE_CLASS');
+    expect(
+      readFrontendSource('src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx'),
+    ).toMatch(
+      /<RaidCard\s+arrays=\{props\.drawer\.agentMeta\(\)\?\.raid\}\s+lastKnownReason=\{props\.drawer\.agentReadingsLastKnownReason\(\)\}/,
+    );
+    expect(readFrontendSource('src/features/standalone/AgentsMachinesTable.tsx')).toMatch(
+      /lastKnownReason=\{\s*agentStale\(\) \? HOST_AGENT_STOPPED_REPORTING_REASON : undefined\s*\}/,
+    );
+  });
+
   it('keeps one canonical agent-host metric history group catalog', () => {
     expect(HOST_METRICS_HISTORY_GROUPS.map((group) => group.id)).toEqual([
       'utilization',

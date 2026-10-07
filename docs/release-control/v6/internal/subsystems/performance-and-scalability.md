@@ -3426,6 +3426,10 @@ whole-estate physical-disk work to Workloads. The guest's existing agent RAID
 snapshot remains local to the opened drawer; an empty or failed child query
 must not imply that host disks belong to the guest. Focused hook and drawer
 tests pin the query and no-data/error presentations.
+The drawer judges those disks' heat under the guest agent's alert overrides:
+its `agentId`, which `useWorkloads` copies from `resource.agent.agentId` onto
+the workload row, then the guest's own override keys. That reads the alert
+configuration already loaded and adds no query, poll or per-row work.
 
 ### Configuration transfer authorization stays off persistence hot paths
 

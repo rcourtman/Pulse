@@ -1017,14 +1017,41 @@ func diskTemperatureThresholdForType(byType map[string]HysteresisThreshold, host
 // temperature alerts, Patrol and the Physical Disks Health verdict all judge
 // heat against it; disk risk does not. The disk is hot at the trigger, and the
 // clear value is where it stops being hot. A nil threshold or a non-positive
-// trigger means disk temperature alerting is off.
+// trigger means disk temperature alerting is off. A disk a host agent reports
+// is judged by HostDiskTemperatureThreshold instead.
 func (m *Manager) DiskTemperatureThreshold(diskType string) *HysteresisThreshold {
+	return m.HostDiskTemperatureThreshold(DiskTemperatureHost{}, diskType)
+}
+
+// DiskTemperatureHost is the host agent whose report carries a physical disk,
+// with the node and guests that agent is linked to. CheckHost evaluates the
+// disk's temperature under that host's thresholds.
+type DiskTemperatureHost struct {
+	ID                string
+	LinkedNodeID      string
+	LinkedVMID        string
+	LinkedContainerID string
+}
+
+// HostDiskTemperatureThreshold is the disk heat policy for a disk the given
+// host agent reports, resolved as CheckHost resolves it. An explicit disk
+// temperature override on the host, or one inherited from its linked node or
+// guest, replaces the disk type's entry. An override that switches the host's
+// alerts off switches its disk heat off too, so the result is nil. A host with
+// no ID resolves as DiskTemperatureThreshold.
+func (m *Manager) HostDiskTemperatureThreshold(host DiskTemperatureHost, diskType string) *HysteresisThreshold {
 	if m == nil {
 		return DefaultDiskTemperatureThreshold(diskType)
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return cloneThreshold(m.hostDiskTemperatureThresholdNoLock(m.config.AgentDefaults.DiskTemperature, false, diskType))
+	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	if thresholds.Disabled {
+		return nil
+	}
+	override, exists := m.hostThresholdOverrideNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	overridden := exists && override.DiskTemperature != nil
+	return cloneThreshold(m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, overridden, diskType))
 }
 
 // DefaultDiskTemperatureThreshold is DiskTemperatureThreshold under the
