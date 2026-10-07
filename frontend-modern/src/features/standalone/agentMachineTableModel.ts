@@ -2,6 +2,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { HostDiskIO, HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getPlatformTableFiniteMetric } from '@/features/platformPage/sharedPlatformPage';
+import { isPhysicalDiskTemperatureCurrent } from '@/features/storageBackups/diskTemperaturePresentation';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 
@@ -155,6 +156,9 @@ type TemperatureReading = {
 type SmartTemperatureReading = TemperatureReading & {
   standby?: boolean;
   diskType?: string;
+  // False for a retained value, such as the last temperature of a host agent
+  // that stopped reporting.
+  current: boolean;
 };
 
 export type AgentMachineTemperatureDetailRow = {
@@ -257,13 +261,21 @@ const getSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading
       value: temperature ?? 0,
       standby: disk.standby,
       diskType: asTrimmedString(disk.type),
+      current: isPhysicalDiskTemperatureCurrent(disk.collection),
     });
     return readings;
   }, []);
 
-const getActiveSmartTemperatureReadings = (machine: Resource): TemperatureReading[] =>
+// Only a temperature collected now can stand for the machine or pick its
+// threshold. A retained one stays in the detail rows, marked last known.
+const getActiveSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading[] =>
   getSmartTemperatureReadings(machine).filter(
-    (reading): reading is TemperatureReading => !reading.standby && reading.value > 0,
+    (reading) => !reading.standby && reading.value > 0 && reading.current,
+  );
+
+const getLastKnownSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading[] =>
+  getSmartTemperatureReadings(machine).filter(
+    (reading) => !reading.standby && reading.value > 0 && !reading.current,
   );
 
 const byHighestTemperature = (left: TemperatureReading, right: TemperatureReading): number =>
@@ -536,22 +548,38 @@ export const getAgentMachineDiskIODetails = (machine: Resource): AgentMachineDis
   }, []);
 };
 
+const hasMachineSensorTemperature = (machine: Resource): boolean =>
+  positiveTemperature(machine.temperature) !== undefined ||
+  getSensorTemperatureReadings(machine).length > 0;
+
+// The SMART readings the cell falls back to: the ones collected now, or the
+// retained ones when no disk has a current reading.
+const getCellSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading[] => {
+  const active = getActiveSmartTemperatureReadings(machine);
+  return active.length > 0 ? active : getLastKnownSmartTemperatureReadings(machine);
+};
+
 export const getAgentMachineTemperatureCelsius = (machine: Resource): number | undefined => {
   const direct = positiveTemperature(machine.temperature);
   if (direct !== undefined) return direct;
 
   return (
     maxTemperatureReading(getSensorTemperatureReadings(machine)) ??
-    maxTemperatureReading(getActiveSmartTemperatureReadings(machine))
+    maxTemperatureReading(getCellSmartTemperatureReadings(machine))
   );
 };
 
-// Disk type of the hottest active SMART reading — the disk whose temperature
-// the cell displays when it falls back to the diskTemperature metric.
+// True when the cell's value is a retained SMART reading, such as the last
+// disk temperature of a host agent that stopped reporting.
+export const isAgentMachineTemperatureLastKnown = (machine: Resource): boolean =>
+  !hasMachineSensorTemperature(machine) &&
+  getActiveSmartTemperatureReadings(machine).length === 0 &&
+  getLastKnownSmartTemperatureReadings(machine).length > 0;
+
+// Disk type of the hottest SMART reading the cell displays when it falls back
+// to the diskTemperature metric.
 export const getAgentMachineHottestSmartDiskType = (machine: Resource): string | undefined => {
-  const readings = getSmartTemperatureReadings(machine).filter(
-    (reading) => !reading.standby && reading.value > 0,
-  );
+  const readings = getCellSmartTemperatureReadings(machine);
   if (readings.length === 0) return undefined;
   return readings.reduce((worst, reading) => (reading.value > worst.value ? reading : worst))
     .diskType;
@@ -560,13 +588,8 @@ export const getAgentMachineHottestSmartDiskType = (machine: Resource): string |
 export const getAgentMachineTemperatureMetric = (
   machine: Resource,
 ): AgentMachineTemperatureMetric => {
-  if (positiveTemperature(machine.temperature) !== undefined) return 'temperature';
-  if (maxTemperatureReading(getSensorTemperatureReadings(machine)) !== undefined) {
-    return 'temperature';
-  }
-  if (maxTemperatureReading(getActiveSmartTemperatureReadings(machine)) !== undefined) {
-    return 'diskTemperature';
-  }
+  if (hasMachineSensorTemperature(machine)) return 'temperature';
+  if (getCellSmartTemperatureReadings(machine).length > 0) return 'diskTemperature';
   return 'temperature';
 };
 
@@ -584,6 +607,13 @@ export const getAgentMachineTemperatureDetailSections = (
     .map((reading) => ({
       label: `Disk ${reading.label}`,
       value: formatTemperatureValue(reading),
+    }));
+  const lastKnownSmartReadings = getLastKnownSmartTemperatureReadings(machine)
+    .sort(byHighestTemperature)
+    .map((reading) => ({
+      label: `Disk ${reading.label}`,
+      value: `${formatTemperatureValue(reading)} (last known)`,
+      muted: true,
     }));
   const standbySmartReadings = getSmartTemperatureReadings(machine)
     .filter((reading) => reading.standby)
@@ -609,7 +639,11 @@ export const getAgentMachineTemperatureDetailSections = (
     ...section('Temperatures', capTemperatureRows(sensorReadings)),
     ...section(
       'Disk Temperatures',
-      capTemperatureRows([...activeSmartReadings, ...standbySmartReadings]),
+      capTemperatureRows([
+        ...activeSmartReadings,
+        ...lastKnownSmartReadings,
+        ...standbySmartReadings,
+      ]),
     ),
     ...section('Fan Speeds', capTemperatureRows(fanReadings)),
     ...section('Other Sensors', capTemperatureRows(additionalReadings)),

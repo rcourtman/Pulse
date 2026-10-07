@@ -1,5 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { AlertsAPI } from '@/api/alerts';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
+import type { AlertConfig } from '@/types/alerts';
 
 import {
   TrueNASStorageTopologyTable,
@@ -214,5 +219,103 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(poolRow?.querySelector('td')).not.toHaveTextContent('DEGRADED');
     expect(healthyRow?.querySelector('[data-truenas-storage-health]')).toBeNull();
     expect(healthyRow).not.toHaveTextContent('Healthy');
+  });
+
+  it('flags a disk running hot by its type alert trigger', () => {
+    // Disk risk carries no heat, so the table judges it with the alerts
+    // store's per-type thresholds (factory here: SATA 55C, NVMe 70C).
+    const disk = (id: string, diskType: string, temperature: number) =>
+      makeStorageResource({
+        id,
+        type: 'physical_disk',
+        name: id,
+        storage: undefined,
+        physicalDisk: { devPath: `/dev/${id}`, serial: `serial-${id}`, diskType, temperature },
+      });
+    const resources = [disk('sda', 'sata', 56), disk('nvme0n1', 'nvme', 63)];
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+
+    const hotRow = container.querySelector('[data-truenas-storage-resource="sda"]');
+    expect(hotRow?.querySelector('[data-truenas-storage-health="attention"]')).toHaveAttribute(
+      'title',
+      'Disk temperature is 56°C, at or above its 55°C alert threshold.',
+    );
+    const warmRow = container.querySelector('[data-truenas-storage-resource="nvme0n1"]');
+    expect(warmRow?.querySelector('[data-truenas-storage-health]')).toBeNull();
+    // Phones hide the Health cell, so the status dot carries the heat too.
+    expect(hotRow?.querySelector('[title="Warning"]')).not.toBeNull();
+    expect(warmRow?.querySelector('[title="Online"]')).not.toBeNull();
+    // The hot disk sorts ahead of its cooler sibling.
+    expect(
+      [...container.querySelectorAll('[data-truenas-storage-resource]')].map((row) =>
+        row.getAttribute('data-truenas-storage-resource'),
+      ),
+    ).toEqual(['sda', 'nvme0n1']);
+  });
+
+  it('follows a disk temperature trigger the user raised in Alerts', async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: {
+        nvme: { trigger: 70, clear: 65 },
+        sas: { trigger: 65, clear: 60 },
+        sata: { trigger: 60, clear: 55 },
+      },
+    } as unknown as AlertConfig);
+    try {
+      const resources = [
+        makeStorageResource({
+          id: 'sda',
+          type: 'physical_disk',
+          name: 'sda',
+          storage: undefined,
+          physicalDisk: {
+            devPath: '/dev/sda',
+            serial: 'serial-sda',
+            diskType: 'sata',
+            temperature: 56,
+          },
+        }),
+      ];
+      const { container } = render(() => (
+        <TrueNASStorageTopologyTable
+          resources={resources}
+          scope={resources}
+          emptyIcon={<span />}
+          emptyTitle="No storage"
+          emptyDescription="No storage"
+        />
+      ));
+      const health = () =>
+        container.querySelector(
+          '[data-truenas-storage-resource="sda"] [data-truenas-storage-health]',
+        );
+      expect(health()).toHaveAttribute('data-truenas-storage-health', 'attention');
+      expect(screen.getByRole('button', { name: /Attention/ })).toHaveTextContent('1');
+      // With the Attention filter on, the storage-type counts judge heat too.
+      await fireEvent.click(screen.getByRole('button', { name: /Attention/ }));
+      expect(screen.getByRole('button', { name: 'Physical disks, 1' })).toBeInTheDocument();
+
+      await useAlertsActivation().refreshConfig();
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Physical disks, 0' })).toBeInTheDocument(),
+      );
+      // The status filter counts follow the same thresholds.
+      expect(screen.getByRole('button', { name: /Attention/ })).toHaveTextContent('0');
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
   });
 });

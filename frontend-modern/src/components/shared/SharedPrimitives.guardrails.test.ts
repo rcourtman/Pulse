@@ -216,6 +216,7 @@ import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
+import proxmoxPageModelSource from '@/features/proxmox/proxmoxPageModel.ts?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
@@ -1406,9 +1407,9 @@ describe('shared primitive guardrails', () => {
   });
 
   it('routes Proxmox node version presentation through the shared formatter', () => {
-    expect(nodeGroupHeaderSource).toContain("from '@/utils/proxmoxVersion'");
-    expect(nodeGroupHeaderSource).toContain('formatProxmoxVersion(props.node.pveVersion)');
-    expect(nodeGroupHeaderSource).not.toContain('pve-manager\\/');
+    expect(proxmoxPageModelSource).toContain("from '@/utils/proxmoxVersion'");
+    expect(proxmoxPageModelSource).toContain('formatProxmoxVersion(resource.proxmox?.pveVersion)');
+    expect(proxmoxPageModelSource).not.toContain('pve-manager\\/');
 
     expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
     expect(proxmoxVersionSource).toContain('pve-manager\\/');

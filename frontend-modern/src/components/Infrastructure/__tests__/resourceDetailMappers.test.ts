@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCustomSensorRows,
   buildTemperatureRows,
+  HOST_AGENT_STOPPED_REPORTING_REASON,
   formatInteger,
   formatSensorName,
   formatSourceType,
@@ -10,7 +11,7 @@ import {
 } from '@/components/Infrastructure/resourceDetailMappers';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
-import type { Resource } from '@/types/resource';
+import type { PhysicalDiskCollectionStatus, Resource } from '@/types/resource';
 
 const createHybridHostResource = (): Resource =>
   ({
@@ -203,6 +204,120 @@ describe('resourceDetailMappers', () => {
         },
       ]);
     });
+
+    it('marks a silent agent disk temperature as last known and drops disks without one', () => {
+      const rows = buildTemperatureRows({
+        smart: [
+          {
+            device: 'sda',
+            temperature: 71,
+            // A host agent past its reporting lease keeps its last reading.
+            collection: {
+              temperature: {
+                state: 'unavailable',
+                source: 'host_agent',
+                reason: 'host agent stopped reporting',
+              },
+            },
+          },
+          {
+            device: 'sdb',
+            temperature: 38,
+            collection: { temperature: { state: 'available', source: 'smartctl' } },
+          },
+          {
+            device: 'sdc',
+            temperature: 0,
+            collection: {
+              temperature: {
+                state: 'unsupported',
+                source: 'smartctl',
+                reason: 'device did not expose a temperature reading',
+              },
+            },
+          },
+        ],
+      });
+
+      expect(rows).toEqual([
+        {
+          label: 'Disk sda',
+          value: '71°C (last known)',
+          valueTitle: 'Last known reading, not current: host agent stopped reporting',
+        },
+        { label: 'Disk sdb', value: '38°C', valueTitle: '38.0°C' },
+      ]);
+    });
+
+    it("marks a silent agent's sensor readings last known and leaves disks to their own state", () => {
+      const rows = buildTemperatureRows(
+        {
+          thermalState: { pressure: 'serious' },
+          temperatureCelsius: { 'cpu.package': 45 },
+          fanRpm: { chassis_fan: 1200 },
+          smart: [
+            {
+              device: 'sda',
+              temperature: 38,
+              collection: { temperature: { state: 'available', source: 'smartctl' } },
+            },
+          ],
+        },
+        { lastKnownReason: HOST_AGENT_STOPPED_REPORTING_REASON },
+      );
+
+      const lastKnown = 'Last known reading, not current: host agent stopped reporting';
+      expect(rows).toEqual([
+        { label: 'Thermal pressure', value: 'Serious (last known)', valueTitle: lastKnown },
+        { label: 'Cpu.package', value: '45°C (last known)', valueTitle: lastKnown },
+        { label: 'Chassis Fan', value: '1,200 RPM (last known)', valueTitle: lastKnown },
+        // A disk row follows its own collection state, which the backend
+        // withdraws when the lease expires.
+        { label: 'Disk sda', value: '38°C', valueTitle: '38.0°C' },
+      ]);
+      expect(buildTemperatureRows({ temperatureCelsius: { 'cpu.package': 45 } })).toEqual([
+        { label: 'Cpu.package', value: '45°C', valueTitle: '45.0°C' },
+      ]);
+    });
+
+    it('lists a SMART row only for a positive reading in any state, never a standby disk', () => {
+      const states: (PhysicalDiskCollectionStatus | undefined)[] = [
+        undefined,
+        { temperature: { state: 'available', source: 'smartctl' } },
+        { temperature: { state: 'unavailable', source: 'smartctl' } },
+      ];
+      for (const collection of states) {
+        for (const temperature of [0, -3]) {
+          expect(
+            buildTemperatureRows({ smart: [{ device: 'sda', temperature, collection }] }),
+          ).toEqual([]);
+        }
+      }
+
+      expect(
+        buildTemperatureRows({
+          smart: [
+            {
+              device: 'sda',
+              temperature: 44,
+              standby: true,
+              collection: { temperature: { state: 'unavailable', source: 'smartctl' } },
+            },
+            {
+              device: 'sdb',
+              temperature: 39,
+              collection: { temperature: { state: 'missing', source: 'smartctl' } },
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Disk sdb',
+          value: '39°C (last known)',
+          valueTitle: 'Last known reading, not current',
+        },
+      ]);
+    });
   });
 
   describe('buildCustomSensorRows', () => {
@@ -357,6 +472,15 @@ describe('resourceDetailMappers', () => {
 
       expect(agent?.id).toBe('agent-canonical');
       expect(agent?.id).not.toBe('resource:host:hash-1');
+    });
+
+    it('reports no uptime for a silent agent, whose last report is not how long it has been up', () => {
+      const base = createHybridHostResource();
+      const reporting = { ...base, uptime: 2_500_000 } as Resource;
+      expect(toAgentFromResource(reporting)?.uptimeSeconds).toBe(2_500_000);
+
+      const silent = { ...reporting, agent: { stale: true } } as Resource;
+      expect(toAgentFromResource(silent)?.uptimeSeconds).toBe(0);
     });
 
     it('preserves the local infrastructure display name for governed resources', () => {

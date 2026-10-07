@@ -1060,6 +1060,20 @@ replay stays idempotent. The real alert-manager callback path is covered by
 `TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
 
+Docker host and Swarm service alert lifecycle events, and sub-resource alert
+events (ZFS pools and devices, host filesystems, disks, RAID arrays, sensors
+and the Unraid array), pass through the same writer, which binds them to the
+Docker host, Swarm service, storage or host named in the unified-resources
+history identity clause. Container names and shortened container IDs still
+bind nothing. `CheckDockerHost` gives a container without an ID its host's
+reference, so that container's events join the host's history. A producer
+that changes one of these reference shapes must change
+`dockerHostHistoryReference` or `historySubResourceOwner` with it.
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` pins the Docker host,
+Swarm service, ZFS pool and device, and host filesystem shapes against the
+real alert manager.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
@@ -1664,6 +1678,62 @@ boundaries:
 `TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode` and
 `TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling` in
 `internal/mock/generator_test.go`.
+
+Mock alert evaluation covers physical disks as well. Live Proxmox disks are
+evaluated by the physical disk poller in `maybePollPhysicalDisksAsync`, which
+only polls configured Proxmox instances, so fixture disks had no evaluation
+path. The fixture deliberately keeps a FAILED health cohort and worn SSDs
+stable across restarts, so the estate showed failing and "Replace Now" disks
+with no `disk-health` or `disk-wearout` alert. `checkMockAlerts` now evaluates
+fixture disks through `checkMockPhysicalDiskAlerts`. Both paths share the
+per-disk rule in `checkPhysicalDiskAlerts` (a device matched by the linked
+agent's `--disk-exclude` patterns is evaluated as healthy, otherwise
+`CheckDiskHealth` judges the disk), and the mock pass applies the poller's
+boundary around it:
+
+- Only disks on online nodes are evaluated, as the poller only evaluates nodes
+  it reached. A disk on an offline node keeps whatever alert it had. The mock
+  pass treats every disk on an online fixture node as collected; the poller
+  also skips a node whose disk query and SMART fallback both failed. Nodes are
+  matched by instance and name, as the poller only pairs a disk with its own
+  instance's nodes.
+- Excluding a disk resolves the alerts it already raised, because the excluded
+  device is evaluated as healthy rather than skipped.
+- The poller's wait for host-agent links to settle after a restart (#1674) is
+  not applied: fixture links and exclusions are complete from the first pass.
+- A disk whose node name leaves the estate loses its alerts through
+  `CleanupAlertsForNodes`, which the same pass already runs. That cleanup
+  matches node names only, so it relies on fixture node names being unique
+  across instances, which they are.
+
+The disk loop relies on the pass's single up-front mode check, like every
+loop in `checkMockAlerts` except the host-agent step, which re-checks under its
+own lock. A pass already past that check when mock mode is switched off can
+reopen its fixture alerts after `SetMockMode(false)` clears them, and
+other paths that evaluate fixture data (frontend refresh into unified alert
+evaluation, backup rollups) have the same window. That mode-exit race predates
+the disk loop and is not closed here; a lock around `checkMockAlerts` alone
+would leave the other paths open.
+
+The disk evaluation runs on the mock alert tick, not the poller's disk
+interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
+`CheckDiskHealth` logs at error level whenever it evaluates a FAILED disk
+(models with a known firmware bug skip the health check) and at warn level for
+a worn SSD, so an evaluated fixture disk in either state logs on every tick. On
+2026-10-06, private stacks with the public demo's estate (8 nodes) carried 12
+Proxmox disks, none FAILED. Baseline against patched, the only new disk alert
+was one warning-level `disk-wearout` (a 7% SSD on `pve5`), whose resource ID is
+one of the disk resource's canonical aliases, and neither stack had a
+`disk-health` alert. `CheckDiskHealth` raises only those two alert types, so
+the other differences between the two boots (ZFS and Docker service alerts) are
+not from the disk pass; those fixtures draw random state each boot. The default
+test estate raises five `disk-health` and one `disk-wearout` alert. The tests
+pin the boundary: `TestCheckMockAlertsEvaluatesPhysicalDisks` and
+`TestCheckMockPhysicalDiskAlertsFollowsPollerBoundary` in
+`internal/monitoring/monitor_mock_alerts_test.go`, with
+`TestProxmoxDiskAlertsRunOnMergedDiskState` in
+`internal/monitoring/canonical_guardrails_test.go` keeping the poller on the
+shared helper.
 
 Host and container-runtime disk collection supports an explicit include list
 for filesystems hidden by Pulse's automatic virtual/container filtering. The
@@ -3801,6 +3871,15 @@ consumers outside the history writers: the metrics-history API serves a disk
 series from the disk's reading or pads a stored one, only from a collected
 temperature, so a retained standby or silent-agent reading never reappears as a
 point at the current time.
+The SMART history writers in `internal/monitoring/monitor.go` and
+`monitor_agents.go` call that helper rather than a private copy of the rule,
+and `GetPhysicalDiskTemperatureCharts` pads a short disk temperature series out
+to now only with a collected reading: with a retained one the stored samples
+stay as they are, and a disk with none gets no series. Mock mode can still
+substitute its generic demo series for that disk ID before this step; that
+series is not derived from the disk's reading. Proof:
+`TestDiskTemperatureChartsPadOnlyWithCollectedReading` in
+`internal/monitoring/monitor_metrics_slo_test.go`.
 Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
@@ -4422,17 +4501,18 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
-That shared assessment judges only a disk temperature that was collected now.
-`storagehealth.CollectedTemperature` passes a reading through when its
-`collection.temperature` state is `available`, or when the source predates
-collection state, and otherwise drops it before `AssessPhysicalDisk` and
-`AssessHostSMARTDisk` build their sample. A last known value retained for a
-disk in standby or a host agent past its reporting lease therefore raises no
-`temperature_high` reason and cannot turn the disk's verdict or status into
-a warning, while the value itself stays on the resource as last-known
-history. Proof: `TestDiskAssessmentsIgnoreRetainedTemperature` and
-`TestCollectedTemperatureKeepsOnlyCurrentReadings` in
-`internal/storagehealth/risk_test.go`.
+That shared assessment never judges disk temperature. Heat is a metric owned
+by the alert disk temperature policy (`alerts.Manager.DiskTemperatureThreshold`:
+the per-type `diskTempByType` trigger, else the agent Disk Temp default), which
+users tune per disk type. Disk risk is rebuilt by registries that cannot see
+that configuration, so a heat rule here would contradict it: a flat 60/70C rule
+once called a healthy 63C NVMe hot and a 56C SATA disk fine. No disk type,
+temperature or collection state reaches `storagehealth.Sample`, the TrueNAS
+provider and the Unraid inventory assessment included, and a hot disk keeps an
+`online` status. Proof: `TestDiskAssessmentsNeverJudgeTemperature` in
+`internal/storagehealth/risk_test.go` and
+`TestRecordsLeaveDiskHeatToTheAlertPolicy` in
+`internal/truenas/provider_test.go`.
 That same monitoring-owned storage polling boundary also owns cluster-shared
 Proxmox storage status coherence. `internal/monitoring/monitor_polling_storage.go`
 must merge shared storage observations across nodes into one cluster-scoped

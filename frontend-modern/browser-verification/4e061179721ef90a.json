@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "1fe9f86d55271345492945a25ab9398892ec6bf0",
+  "verified_at": "2026-10-06T22:35:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "1879e91c0eb901261d6497cc0245e2a72b8d0acc72414cd69d3369d187e59fc5",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "0f710d2544c964ae36e04f5bdb1bb2e3f2db37deb9b1ad804df6909e22256fc9",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "32a8c017790a55dc230585e189bbff5cd3e81ee932a80c4379fc1be3ea61172d"
+  },
+  "routes": ["/proxmox/overview", "/vmware"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Vite dev server serving this tree (based on PR 2622 head 1fe9f86d55) against a private DEMO_MODE mock backend (50 PVE nodes, 929 guests, 7 ESXi hosts, telemetry off), headless Chromium via Playwright; desktop 1440x900 and phone 390x844.",
+    "Trends mode, 95 s per page counted per 30 s poll tick, before (base files swapped back under the same server) vs after: /vmware went from 1 /api/charts/infrastructure + 1 /api/charts/workloads read per tick to 0 + 1; /proxmox/overview from 2 + 2 to 1 + 1. Same on both viewports (95 s totals: vmware 4+4 to 0+4, proxmox 8+8 to 4+4).",
+    "Proxmox nodes table in Trends: every rendered node row draws its CPU, memory and disk sparklines (36 of 36 on desktop, 18 of 18 on phone), same as before; guest table sparklines unchanged (Proxmox 420 desktop / 108 phone, vSphere 54).",
+    "Bars mode on /proxmox/overview: node table shows no sparklines and the page makes no /api/charts reads.",
+    "Screenshots of both tables in Trends inspected at both viewports. The only failed request is the read-only demo refusing POST /api/usage/workload-history (403), the Trends activity ping, which this change does not touch."
+  ],
+  "interactions": [
+    "Desktop: opened the View popover and switched Bars to Trends; phone: opened Filters, then View, and switched Bars to Trends. The Trends button reports aria-pressed=true and the switch triggers exactly one workloads read and one infrastructure read.",
+    "Navigated between /vmware and /proxmox/overview with Trends persisted and watched three poll cycles on each page.",
+    "Scrolled the nodes table into view before each capture."
+  ]
+}

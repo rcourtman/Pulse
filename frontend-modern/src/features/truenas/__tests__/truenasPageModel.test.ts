@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { resolveDiskTemperatureDisplayThresholds } from '@/utils/metricThresholds';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
@@ -628,6 +629,82 @@ describe('truenasPageModel', () => {
       physicalDisk: { devPath: '/dev/ada1', serial: 'serial-online', health: 'PASSED' },
     });
     expect(mapTrueNASStorageStatus(healthyByState)).toBe('healthy');
+  });
+
+  it('flags a disk whose current reading reaches its alert trigger', () => {
+    // Disk risk carries no heat, so a hot disk stays `online`; the page judges
+    // it by the alert disk temperature thresholds, as Physical Disks does.
+    const resolveFactory = (diskType: string) =>
+      resolveDiskTemperatureDisplayThresholds(null, diskType);
+    const hotDisk = makeResource({
+      id: 'disk-hot',
+      type: 'physical_disk',
+      name: 'sda',
+      status: 'online',
+      physicalDisk: {
+        devPath: '/dev/sda',
+        serial: 'serial-hot',
+        diskType: 'sata',
+        health: 'UNKNOWN',
+        temperature: 56,
+      },
+    });
+    expect(mapTrueNASStorageStatus(hotDisk, resolveFactory)).toBe('attention');
+    expect(getTrueNASStorageIssue(hotDisk, resolveFactory)).toEqual({
+      status: 'attention',
+      label: 'Attention',
+      reasons: ['Disk temperature is 56°C, at or above its 55°C alert threshold.'],
+    });
+    // A cool sibling that sorts first by name: heat moves the hot disk ahead
+    // of it, and the status filter splits them.
+    const coolDisk = makeResource({
+      ...hotDisk,
+      id: 'disk-cool',
+      name: 'ada0',
+      physicalDisk: { ...hotDisk.physicalDisk!, serial: 'serial-cool', temperature: 40 },
+    });
+    const rows = buildTrueNASStorageTopologyRows([coolDisk, hotDisk], resolveFactory);
+    expect(rows.map((row) => row.id)).toEqual(['disk:disk-hot', 'disk:disk-cool']);
+    expect(buildTrueNASStorageTopologyRows([coolDisk, hotDisk]).map((row) => row.id)).toEqual([
+      'disk:disk-cool',
+      'disk:disk-hot',
+    ]);
+    expect(
+      filterTrueNASStorageTopologyRows(rows, '', 'attention', resolveFactory).map((row) => row.id),
+    ).toEqual(['disk:disk-hot']);
+    expect(
+      filterTrueNASStorageTopologyRows(rows, '', 'healthy', resolveFactory).map((row) => row.id),
+    ).toEqual(['disk:disk-cool']);
+
+    // Native TrueNAS alert text leads, and the heat reason stays listed.
+    const hotWithIncident = makeResource({
+      ...hotDisk,
+      incidents: [{ code: 'truenas_smart', severity: 'info', summary: 'SMART test scheduled' }],
+    });
+    expect(getTrueNASStorageIssue(hotWithIncident, resolveFactory)?.reasons).toEqual([
+      'SMART test scheduled',
+      'Disk temperature is 56°C, at or above its 55°C alert threshold.',
+    ]);
+
+    // An NVMe at 63C is under its 70C trigger.
+    const warmNVMe = makeResource({
+      ...hotDisk,
+      id: 'disk-nvme',
+      physicalDisk: { ...hotDisk.physicalDisk!, diskType: 'nvme', temperature: 63 },
+    });
+    expect(mapTrueNASStorageStatus(warmNVMe, resolveFactory)).toBe('healthy');
+    // A trigger the user raised, alerting switched off, and a retained reading
+    // are never heat.
+    expect(mapTrueNASStorageStatus(hotDisk, () => ({ warning: 55, critical: 60 }))).toBe('healthy');
+    expect(mapTrueNASStorageStatus(hotDisk, () => null)).toBe('healthy');
+    const retained = makeResource({
+      ...hotDisk,
+      physicalDisk: {
+        ...hotDisk.physicalDisk!,
+        collection: { temperature: { state: 'unavailable', source: 'truenas', reason: 'stale' } },
+      },
+    });
+    expect(mapTrueNASStorageStatus(retained, resolveFactory)).toBe('healthy');
   });
 
   it('renders expected receive-side replication readonly posture as healthy', () => {

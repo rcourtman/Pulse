@@ -333,3 +333,246 @@ func TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, []string{"lab:pve1:999"}, refs)
 }
+
+func requireHistoryReferenceBindings(t *testing.T, store *SQLiteResourceStore, bound map[string]string, unbound []string) {
+	t.Helper()
+	byResource := make(map[string][]string)
+	for ref, canonicalID := range bound {
+		byResource[canonicalID] = append(byResource[canonicalID], "fired-"+ref)
+		id, found, err := store.ResolveHistorySourceIdentity(ref)
+		require.NoError(t, err)
+		require.True(t, found, ref)
+		require.Equal(t, canonicalID, id, ref)
+	}
+	for canonicalID, want := range byResource {
+		got, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 50, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+		require.NoError(t, err)
+		ids := make([]string, 0, len(got))
+		for _, change := range got {
+			ids = append(ids, change.ID)
+			// A row journaled before its binding keeps its recorded reference.
+			require.Contains(t, []string{canonicalID, strings.TrimPrefix(change.ID, "fired-")}, change.ResourceID, change.ID)
+		}
+		require.ElementsMatch(t, want, ids, canonicalID)
+	}
+	for _, ref := range unbound {
+		_, found, err := store.ResolveHistorySourceIdentity(ref)
+		require.NoError(t, err)
+		require.False(t, found, ref)
+		got, err := store.GetRecentChanges(ref, time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, got, 1, ref)
+		require.Equal(t, ref, got[0].ResourceID, ref)
+	}
+}
+
+// Docker host alerts reference the host's source ID ("docker:<host ID>") and
+// Swarm service alerts the service ID ("docker:<host ID>/service/<ID>") from
+// every manager that reports the service. Both join the canonical host and
+// service history, also for a host merged into its agent's machine. Hostnames,
+// service names, container names and shortened container IDs never bind, not
+// even to the history of what they name, and a cluster with a service that
+// lacks an ID, whose alerts carry its normalized name, binds no service.
+func TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	container := strings.Repeat("f", 64)
+	serviceID := "x7k2m9q4w1e8r5t3y6u0i2o4p"
+	otherServiceID := "q1w2e3r4t5y6u7i8o9p0a1s2d"
+	manager := func(id, hostname, cluster string, services ...models.DockerService) models.DockerHost {
+		return models.DockerHost{ID: id, Hostname: hostname, Status: "online", LastSeen: now, Services: services,
+			Swarm: &models.DockerSwarmInfo{NodeID: id + "-node", NodeRole: "manager", LocalState: "active", ControlAvailable: true, ClusterID: cluster}}
+	}
+	web := models.DockerService{ID: serviceID, Name: "web"}
+	// hostA runs on a machine whose agent also reports, so the two merge.
+	hostA := manager("dh-7f3a", "tower", "swarm-1", web)
+	hostA.AgentID, hostA.MachineID = "host-tower", "0123456789abcdef"
+	hostA.Containers = []models.DockerContainer{{ID: container, Name: "worker", State: "running"}}
+	hostB := manager("dh-91c0", "rack", "swarm-1", web)
+	// In swarm-2 a service without an ID is named like another service's ID.
+	hostC := manager("dh-c4d2", "edge", "swarm-2", models.DockerService{ID: otherServiceID, Name: "api"}, models.DockerService{Name: strings.ToUpper(otherServiceID)})
+	// Rows journaled before this process started are bound by a later generation.
+	legacy := []string{"docker:dh-91c0", "docker:dh-91c0/service/" + serviceID, "docker:dh-7f3a/worker"}
+	for i, ref := range legacy {
+		require.NoError(t, store.RecordChange(ResourceChange{ID: "fired-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Duration(i) * time.Second)}))
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts:       []models.Host{{ID: "host-tower", Hostname: "tower", MachineID: "0123456789abcdef", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{hostA, hostB, hostC},
+	})
+	registry := adapter.currentRegistry()
+	hostAID := registry.sourceResourceID(SourceDocker, "dh-7f3a")
+	hostBID := registry.sourceResourceID(SourceDocker, "dh-91c0")
+	serviceResourceID := historyIdentityResourceID(t, registry, ResourceTypeDockerService, "web")
+	containerID := registry.sourceResourceID(SourceDocker, "dh-7f3a/container/"+container)
+	require.Equal(t, registry.sourceResourceID(SourceAgent, "host-tower"), hostAID, "the Docker host merges into its agent's machine")
+	require.NotEqual(t, hostAID, hostBID)
+	require.NotEmpty(t, containerID)
+
+	bound := map[string]string{
+		"docker:dh-91c0":                      hostBID,
+		"docker:dh-91c0/service/" + serviceID: serviceResourceID,
+		"docker:dh-7f3a":                      hostAID,
+		"docker:dh-7f3a/service/" + serviceID: serviceResourceID,
+	}
+	unbound := []string{
+		"docker:tower",                             // hostname
+		"docker:dh-7f3a/service/web",               // service name
+		"docker:dh-c4d2/service/" + otherServiceID, // its cluster has a service without an ID
+		"docker-service:web",                       // hostless service name
+		"docker:dh-7f3a/worker",                    // container name
+		"docker:dh-7f3a/" + container[:12],         // shortened container ID
+		"docker:unknown",
+	}
+	for i, ref := range append([]string{"docker:dh-7f3a", "docker:dh-7f3a/service/" + serviceID}, unbound...) {
+		if ref == "docker:dh-7f3a/worker" {
+			continue // journaled above
+		}
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: "fired-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Minute + time.Duration(i)*time.Second)}))
+	}
+	requireHistoryReferenceBindings(t, store, bound, unbound)
+	// Names and shortened IDs are never retried against later inventory.
+	require.Contains(t, adapter.legacyHistory.pending, "docker:tower")
+	for _, ref := range []string{"docker:dh-7f3a/worker", "docker:dh-7f3a/" + container[:12], "docker-service:web"} {
+		require.NotContains(t, adapter.legacyHistory.pending, ref)
+	}
+	got, err := store.GetRecentChangesFiltered(containerID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+	require.NoError(t, err)
+	require.Empty(t, got, "a container name or short ID never joins the container's history")
+	// While its cluster has a service without an ID, a service reference is a
+	// conflict and must not follow a binding recorded earlier.
+	collision := "docker:dh-c4d2/service/" + otherServiceID
+	apiID := historyIdentityResourceID(t, registry, ResourceTypeDockerService, "api")
+	require.NoError(t, store.RecordChangeWithSourceIdentity(ResourceChange{ID: "earlier-api", ResourceID: apiID, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now}, collision))
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "conflict-api", ResourceID: collision, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(2 * time.Minute)}))
+	// The same holds once the service with that ID has left inventory.
+	hostC.Services = hostC.Services[1:]
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts:       []models.Host{{ID: "host-tower", Hostname: "tower", MachineID: "0123456789abcdef", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{hostA, hostB, hostC},
+	})
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "conflict-api-removed", ResourceID: collision, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(3 * time.Minute)}))
+	for _, id := range []string{"conflict-api", "conflict-api-removed"} {
+		var recordedAs string
+		require.NoError(t, store.db.QueryRow(`SELECT canonical_id FROM resource_changes WHERE id = ?`, id).Scan(&recordedAs))
+		require.Equal(t, collision, recordedAs, id)
+	}
+
+	// After the service leaves inventory its alerts follow the retained binding;
+	// a container name still binds nothing.
+	removed := NewMonitorAdapter(NewRegistry(store))
+	for _, ref := range []string{"docker:dh-91c0/service/" + serviceID, "docker:dh-7f3a/worker"} {
+		require.NoError(t, removed.RecordChange(ResourceChange{ID: "resolved-" + ref, ResourceID: ref, Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Hour)}))
+	}
+	got, err = store.GetRecentChangesFiltered(serviceResourceID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired, ChangeAlertResolved}})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	require.Equal(t, "resolved-docker:dh-91c0/service/"+serviceID, got[0].ID)
+	require.Equal(t, serviceResourceID, got[0].ResourceID)
+	got, err = store.GetRecentChanges("docker:dh-7f3a/worker", time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "docker:dh-7f3a/worker", got[0].ResourceID)
+}
+
+// Sub-resource alerts (ZFS pools and devices, host filesystems, disks, RAID
+// arrays, sensors, the Unraid array) name no resource of their own. They join
+// the history of the owner their reference carries a durable ID for: the
+// storage, the host, or the Unraid array storage. Device labels never bind a
+// physical disk, and an owner of the wrong type or a name binds nothing.
+func TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.Storage = []models.Storage{{ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available", Total: 100, Used: 10, LastSeen: now}}
+	snapshot.Hosts[0].Sensors.SMART = []models.HostDiskSMART{{Device: "sda", Serial: "S3Z1NB0K", Model: "Samsung SSD", Health: "PASSED", Temperature: 34}}
+	snapshot.Hosts = append(snapshot.Hosts, models.Host{ID: "host-nas", Hostname: "nas", MachineID: "fedcba9876543210", Status: "online", LastSeen: now,
+		Unraid: &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", Disks: []models.HostUnraidDisk{{Name: "disk1", Device: "sdb", Role: "data", Status: "DISK_OK", Serial: "WD-1"}}}})
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	registry := adapter.currentRegistry()
+	nodeID := historyIdentityResourceID(t, registry, ResourceTypeAgent, "pve1")
+	storageID := registry.sourceResourceID(SourceProxmox, "lab-pve1-local-zfs")
+	unraidID := registry.sourceResourceID(SourceAgent, "host-nas/storage:unraid-array")
+	diskID := registry.sourceResourceID(SourceAgent, HostSMARTDiskSourceID(snapshot.Hosts[0], snapshot.Hosts[0].Sensors.SMART[0]))
+	require.NotEmpty(t, storageID)
+	require.NotEmpty(t, unraidID)
+	require.NotEmpty(t, diskID)
+
+	bound := map[string]string{
+		"lab-pve1-local-zfs/zfs-pool:local-zfs":             storageID,
+		"lab-pve1-local-zfs/zfs-pool:local-zfs/device:sda2": storageID,
+		"agent:host-pve1/disk:var":                          nodeID,
+		"agent:host-pve1/disk:sda":                          nodeID,
+		"agent:host-pve1/disk_temp:sda":                     nodeID,
+		"agent:host-pve1/raid:md0":                          nodeID,
+		"agent:host-pve1/custom:fan1":                       nodeID,
+		"agent:host-nas/storage:unraid-array":               unraidID,
+	}
+	unbound := []string{
+		"lab-pve1/zfs-pool:local-zfs",  // the owner part names a node, not a storage
+		"local-zfs/zfs-pool:local-zfs", // a storage name, not its ID
+		"agent:pve1/disk:var",          // a hostname, not the host ID
+		"agent:host-pve1/service:sshd", // not a sub-resource shape any producer emits
+		"agent:host-pve1/disk:",
+	}
+	refs := append([]string{}, unbound...)
+	for ref := range bound {
+		refs = append(refs, ref)
+	}
+	for i, ref := range refs {
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: "fired-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Duration(i) * time.Second)}))
+	}
+	requireHistoryReferenceBindings(t, store, bound, unbound)
+	got, err := store.GetRecentChangesFiltered(diskID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+	require.NoError(t, err)
+	require.Empty(t, got, "a kernel device label never binds a physical disk")
+
+	// Recovery after the storage left inventory follows the retained binding.
+	pool := "lab-pve1-local-zfs/zfs-pool:local-zfs"
+	removed := NewMonitorAdapter(NewRegistry(store))
+	require.NoError(t, removed.RecordChange(ResourceChange{ID: "resolved-" + pool, ResourceID: pool, Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Hour)}))
+	got, err = store.GetRecentChangesFiltered(storageID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertResolved}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, storageID, got[0].ResourceID)
+
+	// An owner reference that two resources answer to, or that names a resource
+	// of another type, binds nothing and must not follow the retained binding.
+	vmID := historyIdentityResourceID(t, registry, ResourceTypeVM, "web")
+	for _, conflict := range []struct {
+		name   string
+		source DataSource
+	}{{"ambiguous", SourcePBS}, {"wrong-type", SourceProxmox}} {
+		registry.mu.Lock()
+		delete(registry.bySource[SourcePBS], "lab-pve1-local-zfs")
+		if registry.bySource[conflict.source] == nil {
+			registry.bySource[conflict.source] = make(map[string]string)
+		}
+		registry.bySource[conflict.source]["lab-pve1-local-zfs"] = vmID
+		registry.mu.Unlock()
+		id := conflict.name + "-" + pool
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: id, ResourceID: pool, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(2 * time.Hour)}))
+		var recordedAs string
+		require.NoError(t, store.db.QueryRow(`SELECT canonical_id FROM resource_changes WHERE id = ?`, id).Scan(&recordedAs))
+		require.Equal(t, pool, recordedAs, conflict.name)
+		bound, _, err := store.ResolveHistorySourceIdentity(pool)
+		require.NoError(t, err)
+		require.Equal(t, storageID, bound, conflict.name)
+	}
+	// A conflicting reference without a binding is retried, like one found at
+	// startup, and binds once a generation names its owner unambiguously.
+	device := "lab-pve1-local-zfs/zfs-pool:local-zfs/device:sdc2"
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "fired-" + device, ResourceID: device, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(3 * time.Hour)}))
+	require.Contains(t, adapter.legacyHistory.pending, device)
+	adapter.PopulateFromSnapshot(snapshot)
+	deviceBinding, found, err := store.ResolveHistorySourceIdentity(device)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, storageID, deviceBinding)
+}

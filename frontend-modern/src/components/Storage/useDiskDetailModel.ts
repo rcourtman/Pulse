@@ -3,6 +3,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import {
   getPhysicalDiskCollectionMessages,
   extractPhysicalDiskPresentationData,
+  getPhysicalDiskTemperatureThresholds,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
 import {
@@ -23,11 +24,11 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const { getDiskTemperatureThresholds } = useAlertsActivation();
 
   const diskData = createMemo<PhysicalDiskPresentationData>(() =>
-    extractPhysicalDiskPresentationData(options.disk()),
+    extractPhysicalDiskPresentationData(options.disk(), getDiskTemperatureThresholds),
   );
   const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));
   const attributeCards = createMemo(() =>
-    getDiskDetailAttributeCards(diskData(), getDiskTemperatureThresholds(diskData().type)),
+    getDiskDetailAttributeCards(diskData(), getPhysicalDiskTemperatureThresholds(diskData())),
   );
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
   const healthPresentation = createMemo(() => getDiskDetailHealthPresentation(diskData()));

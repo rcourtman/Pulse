@@ -804,14 +804,10 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	model := strings.TrimSpace(disk.Model)
 	name := firstNonEmpty(model, disk.Name, disk.Device, host.Hostname)
 	health := unraidPhysicalDiskHealth(disk)
-	assessment := assessUnraidPhysicalDisk(host, disk)
+	assessment := assessUnraidPhysicalDisk(disk)
 	sizeBytes := unraidDiskSizeBytes(host, disk)
-	// The row records only a state that withdraws its reading. A positive
-	// claim from this provenance-less row would outrank another source's
-	// explicit state for the same disk when the registry merges them, even
-	// where that source's temperature is the one shown.
 	var collection *diskinventory.CollectionStatus
-	if status := unraidDiskTemperatureStatus(host, disk); status.State == diskinventory.FieldUnavailable {
+	if status := unraidDiskTemperatureStatus(host, disk); status.State != "" {
 		collection = &diskinventory.CollectionStatus{Temperature: status}
 	}
 	resource := Resource{
@@ -943,7 +939,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 	assessment := storagehealth.AssessHostSMARTDisk(disk)
 	if unraidDisk != nil {
-		assessment = storagehealth.SummarizeAssessments(assessment, assessUnraidPhysicalDisk(host, *unraidDisk))
+		assessment = storagehealth.SummarizeAssessments(assessment, assessUnraidPhysicalDisk(*unraidDisk))
 	}
 	wearout := physicalDiskWearoutFromSMARTAttributes(disk.Attributes)
 
@@ -1328,17 +1324,11 @@ func unraidPhysicalDiskHealth(disk models.HostUnraidDisk) string {
 	}
 }
 
-func assessUnraidPhysicalDisk(host models.Host, disk models.HostUnraidDisk) storagehealth.Assessment {
-	// A retained inventory temperature is not current evidence of heat.
-	temperature := 0
-	if status := unraidDiskTemperatureStatus(host, disk); status.State == diskinventory.FieldAvailable {
-		temperature = disk.Temperature
-	}
+func assessUnraidPhysicalDisk(disk models.HostUnraidDisk) storagehealth.Assessment {
 	assessment := storagehealth.AssessSample(storagehealth.Sample{
-		Model:       disk.Model,
-		Health:      unraidPhysicalDiskHealth(disk),
-		Temperature: temperature,
-		Wearout:     -1,
+		Model:   disk.Model,
+		Health:  unraidPhysicalDiskHealth(disk),
+		Wearout: -1,
 	})
 	addReason := func(code string, severity storagehealth.RiskLevel, summary string) {
 		if strings.TrimSpace(summary) == "" {

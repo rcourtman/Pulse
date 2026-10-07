@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "base_sha": "396bb5d517f14466795a2ccd2ff438fdba0ab077",
+  "verified_at": "2026-10-06T23:21:38Z",
+  "result": "passed",
+  "changed_paths": ["frontend-modern/src/features/truenas/truenasPageModel.ts"],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "91d7afa5bfb5b47692def18ae0a6e773ca47194d41faf0b57fa5c5c82d57d278"
+  },
+  "routes": ["/truenas/storage"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this exact content, with a local-only overlay (never committed) pinning TrueNAS mock disks: sdc (SAS, carries the native incident 'Device /dev/sdc has SMART test failures.') at 67C and sda (SATA, no incident) at 57C, factory disk temperature thresholds (SAS 65C, SATA 55C)",
+    "1440: sdc's Health cell reads 'Device /dev/sdc has SMART test failures.' with '+1', and its title lists that reason then 'Disk temperature is 67\u00b0C, at or above its 65\u00b0C alert threshold.'; before this change the heat reason was dropped whenever an incident had text. sda still reads 'Disk temperature is 57\u00b0C, at or above its 55\u00b0C alert threshold.'",
+    "390: the Health column stays phone-hidden; sda's status dot reads Warning and the cool sdd reads Online; no horizontal overflow (scrollWidth 390)"
+  ],
+  "interactions": [
+    "Loaded TrueNAS Storage at 1440x900 and 390x844 and read the sdc and sda Health cells, their titles and visible reason text, and the status dot titles",
+    "Moved sdc's pinned reading from 57C (under its SAS trigger: incident only, no heat) to 67C and reloaded to confirm the heat reason joins the incident text"
+  ]
+}

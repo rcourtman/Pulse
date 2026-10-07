@@ -536,7 +536,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(hostAgentLegacySource) {
 		t.Fatalf("legacy agent temperature not recorded as collected: temp=%d collection=%+v", reporting.Temperature, reporting.Collection)
 	}
-	if !diskTemperatureCollected(reporting.Temperature, reporting.Collection) {
+	if !diskinventory.TemperatureCollected(reporting.Temperature, reporting.Collection) {
 		t.Fatal("a reporting legacy agent's temperature must reach history")
 	}
 
@@ -549,7 +549,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		if got.Temperature != 38 || got.Collection.Temperature.State != diskinventory.FieldUnavailable {
 			t.Fatalf("%s: silent legacy agent temperature presented as collected: temp=%d collection=%+v", name, got.Temperature, got.Collection)
 		}
-		if diskTemperatureCollected(got.Temperature, got.Collection) {
+		if diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
 			t.Fatalf("%s: a silent legacy agent's retained temperature must not reach history", name)
 		}
 	}
@@ -687,11 +687,10 @@ func TestSilentUnraidAgentDiskTemperatureIsRetainedButNotCollected(t *testing.T)
 		return got
 	}
 
-	// A reporting agent's readings are collected. The inventory-only disk
-	// keeps no state of its own (it counts as collected); the SMART rows that
-	// borrow the inventory reading take its provenance.
+	// A reporting agent's inventory readings are collected, including where
+	// a SMART row borrows them.
 	collected := map[string]diskinventory.FieldStatus{
-		"UNRAID-ONLY1":  {},
+		"UNRAID-ONLY1":  diskinventory.Available("unraid"),
 		"UNRAID-SMART2": diskinventory.Available("unraid"),
 		"UNRAID-SAS3":   diskinventory.Available("unraid"),
 	}

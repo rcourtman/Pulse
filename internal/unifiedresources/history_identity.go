@@ -32,35 +32,180 @@ func legacyDockerHistoryIdentity(ref string) (sourceID, canonicalID string, ok b
 	return sourceID, SourceSpecificID(ResourceTypeAppContainer, SourceDocker, sourceID), true
 }
 
-// isDockerHistoryReference marks Docker alert source references, which only a
-// complete container ID binds (legacyDockerHistoryIdentity). A container name
-// or shortened ID must never join history through general reference matching.
+// isDockerHistoryReference marks Docker alert source references, including the
+// hostless "docker-service:<name>" form. They never join history through
+// general reference matching: only a Docker host, a Swarm service ID
+// (dockerHostHistoryReference) or a complete container ID
+// (legacyDockerHistoryIdentity) binds.
 func isDockerHistoryReference(ref string) bool {
-	return strings.HasPrefix(strings.TrimSpace(ref), "docker:")
+	ref = strings.TrimSpace(ref)
+	return strings.HasPrefix(ref, "docker:") || strings.HasPrefix(ref, "docker-service:")
 }
 
-// resolveHistoryReference resolves a non-Docker alert reference to the
-// resource whose history it joins. Only durable identities qualify: the
-// canonical ID, a retired era, a source ID (Proxmox node, guest and storage
-// IDs), a node-scoped Proxmox guest reference, or an agent alert reference
-// ("agent:<host ID>"). Names and hostnames never bind history, so a resource
-// named like a system reference cannot capture its events. claimed reports
-// that inventory answers to the reference, possibly ambiguously; an ambiguous
-// reference resolves to nothing and must not follow a retained binding.
+// isDockerNameHistoryReference marks Docker alert references that are not host
+// or service references: container references, which only a complete
+// container ID binds, and hostless service names. A name or shortened ID must
+// never join history, not even through a retained binding.
+func isDockerNameHistoryReference(ref string) bool {
+	_, _, ok := dockerHostHistoryReference(ref)
+	return isDockerHistoryReference(ref) && !ok
+}
+
+// dockerHostHistoryReference parses the Docker host alert reference
+// ("docker:<host ID>", alerts.DockerResourceID without a container) and the
+// Swarm service alert reference ("docker:<host ID>/service/<service ID>",
+// alerts.DockerServiceResourceID). serviceID is empty for a host reference.
+// "docker:unknown" is the shared fallback for alerts without a host.
+func dockerHostHistoryReference(ref string) (hostID, serviceID string, ok bool) {
+	rest, found := strings.CutPrefix(strings.TrimSpace(ref), "docker:")
+	if !found {
+		return "", "", false
+	}
+	hostID, serviceID, isService := strings.Cut(rest, "/service/")
+	if hostID == "" || hostID == "unknown" || strings.TrimSpace(hostID) != hostID || strings.Contains(hostID, "/") {
+		return "", "", false
+	}
+	if isService && (serviceID == "" || strings.TrimSpace(serviceID) != serviceID || strings.Contains(serviceID, "/")) {
+		return "", "", false
+	}
+	return hostID, serviceID, true
+}
+
+// dockerHistoryOwnerLocked resolves a Docker host or Swarm service alert
+// reference through the registry's own Docker source identities. The host ID
+// is the Docker host's source ID. A service reference names the service with
+// that ID in the host's Swarm cluster, which every manager of the cluster
+// reports under its own host ID. A service without an ID is referenced by its
+// normalized name in the same place, so while the cluster has such a service
+// every service reference there is a conflict.
+func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) (resourceID string, conflict bool) {
+	hostID, serviceID, ok := dockerHostHistoryReference(ref)
+	if !ok {
+		return "", false
+	}
+	hostResourceID := rr.bySource[SourceDocker][hostID]
+	host := rr.resources[hostResourceID]
+	if host == nil || CanonicalResourceType(host.Type) != ResourceTypeAgent {
+		return "", false
+	}
+	if serviceID == "" {
+		return hostResourceID, false
+	}
+	if host.Docker == nil {
+		return "", false
+	}
+	cluster := dockerSwarmClusterKeyFromMeta(host.Docker.Swarm)
+	if cluster == "" {
+		return "", false
+	}
+	for _, other := range rr.resources {
+		if CanonicalResourceType(other.Type) == ResourceTypeDockerService && other.Docker != nil &&
+			strings.TrimSpace(other.Docker.ServiceID) == "" && dockerSwarmClusterKeyFromMeta(other.Docker.Swarm) == cluster {
+			return "", true
+		}
+	}
+	serviceResourceID := rr.bySource[SourceDocker][normalizeSourceID(cluster+":service:"+serviceID)]
+	service := rr.resources[serviceResourceID]
+	if service == nil || CanonicalResourceType(service.Type) != ResourceTypeDockerService ||
+		service.Docker == nil || strings.TrimSpace(service.Docker.ServiceID) != serviceID {
+		return "", false
+	}
+	return serviceResourceID, false
+}
+
+// historySubResourceOwner names the owner of a sub-resource alert reference,
+// one that names no resource of its own, and the type that owner must have.
+// Only these producer shapes qualify, each carrying its owner's durable
+// identity:
+//   - "<storage ID>/zfs-pool:<pool>[/device:<device>]" (ZFS pool state,
+//     errors and device health) belongs to the storage.
+//   - "agent:<host ID>/storage:<array>" (Unraid array) is the agent source ID
+//     "<host ID>/storage:<array>" of the host's array storage.
+//   - "agent:<host ID>/disk:<mount or device>", ".../disk_temp:<device>",
+//     ".../raid:<device>" and ".../custom:<sensor>" belong to the host.
+//
+// Pool, mount and kernel device labels are names: a device name can belong to
+// a different disk after a reboot, so these never bind a physical disk.
+func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceType, ok bool) {
+	if rest, found := strings.CutPrefix(ref, "agent:"); found {
+		hostID, child, _ := strings.Cut(rest, "/")
+		kind, label, _ := strings.Cut(child, ":")
+		if hostID == "" || label == "" {
+			return "", "", false
+		}
+		switch kind {
+		case "storage":
+			return hostID + "/" + child, ResourceTypeStorage, true
+		case "disk", "disk_temp", "raid", "custom":
+			return "agent:" + hostID, ResourceTypeAgent, true
+		}
+		return "", "", false
+	}
+	if i := strings.LastIndex(ref, "/zfs-pool:"); i > 0 {
+		pool, device, hasDevice := strings.Cut(ref[i+len("/zfs-pool:"):], "/device:")
+		if pool == "" || strings.Contains(pool, "/") || (hasDevice && (device == "" || strings.Contains(device, "/"))) {
+			return "", "", false
+		}
+		return ref[:i], ResourceTypeStorage, true
+	}
+	return "", "", false
+}
+
+// resolveHistoryReference resolves an alert reference to the resource whose
+// history it joins. Only durable identities qualify: the canonical ID, a
+// retired era, a source ID (Proxmox node, guest and storage IDs), a
+// node-scoped Proxmox guest reference, an agent alert reference
+// ("agent:<host ID>"), a Docker host or Swarm service ID, or the owner of a
+// sub-resource reference (historySubResourceOwner). Names and hostnames never
+// bind history, so a resource named like a system reference cannot capture
+// its events. claimed reports that inventory answers to the reference,
+// possibly ambiguously; an ambiguous or conflicting reference resolves to
+// nothing and must not follow a retained binding.
 func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID string, claimed bool) {
 	ref = CanonicalResourceID(ref)
-	if rr == nil || ref == "" || isDockerHistoryReference(ref) {
+	if rr == nil || ref == "" {
 		return "", false
 	}
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
+	if isDockerHistoryReference(ref) {
+		resourceID, conflict := rr.dockerHistoryOwnerLocked(ref)
+		return resourceID, resourceID != "" || conflict
+	}
+	matches := rr.durableHistoryMatchesLocked(ref)
+	if ownerRef, ownerType, ok := historySubResourceOwner(ref); ok && len(matches) == 0 {
+		// The owner must resolve uniquely and have the expected type. An owner
+		// reference that names an ambiguous or incompatible resource is a
+		// conflict: the event keeps its own reference.
+		owners := rr.durableHistoryMatchesLocked(ownerRef)
+		for id := range owners {
+			if len(owners) != 1 || CanonicalResourceType(rr.resources[id].Type) != ownerType {
+				return "", true
+			}
+			matches[id] = struct{}{}
+		}
+	}
+	if len(matches) != 1 {
+		return "", len(matches) > 1
+	}
+	for id := range matches {
+		resourceID = id
+	}
+	return resourceID, true
+}
+
+// durableHistoryMatchesLocked lists the resources that answer to a reference
+// by durable identity.
+func (rr *ResourceRegistry) durableHistoryMatchesLocked(ref string) map[string]struct{} {
+	matches := make(map[string]struct{}, 1)
 	if rr.resources[ref] != nil {
-		return ref, true
+		matches[ref] = struct{}{}
+		return matches
 	}
 	if id := rr.supersededResourceIDLocked(ref); rr.resources[id] != nil {
-		return id, true
+		matches[id] = struct{}{}
+		return matches
 	}
-	matches := make(map[string]struct{}, 1)
 	for _, mapping := range rr.bySource {
 		if id := mapping[ref]; rr.resources[id] != nil {
 			matches[id] = struct{}{}
@@ -78,13 +223,7 @@ func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID stri
 			}
 		}
 	}
-	if len(matches) != 1 {
-		return "", len(matches) > 1
-	}
-	for id := range matches {
-		resourceID = id
-	}
-	return resourceID, true
+	return matches
 }
 
 // resourceHistoryIdentityWriter binds a source reference to the canonical
@@ -187,11 +326,12 @@ func (b *legacyHistoryBackfill) add(ref string, now time.Time) {
 }
 
 // unboundHistoryReferences lists alert journal references without a binding.
-// Docker references are excluded: the store migration binds full container
-// IDs, and names or shortened IDs must never bind.
+// Docker container references and hostless service names are excluded: the
+// store migration binds full container IDs, and names or shortened IDs must
+// never bind.
 func (s *SQLiteResourceStore) unboundHistoryReferences() ([]string, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT canonical_id FROM resource_changes
-		WHERE kind GLOB 'alert_*' AND canonical_id NOT GLOB 'docker:*'
+		WHERE kind GLOB 'alert_*'
 		AND canonical_id NOT IN (SELECT source_id FROM resource_history_aliases)
 		ORDER BY canonical_id`)
 	if err != nil {
@@ -204,7 +344,9 @@ func (s *SQLiteResourceStore) unboundHistoryReferences() ([]string, error) {
 		if err := rows.Scan(&ref); err != nil {
 			return nil, err
 		}
-		refs = append(refs, ref)
+		if !isDockerNameHistoryReference(ref) {
+			refs = append(refs, ref)
+		}
 	}
 	return refs, rows.Err()
 }

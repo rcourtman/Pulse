@@ -5378,6 +5378,15 @@ Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
 optional map without making it a required compatibility field, and clients must
 keep it as descriptive host telemetry rather than a temperature metric,
 resource identity, alert metric, or storage/recovery signal.
+Host sensor SMART rows (`smart[]`) also carry the optional per-field
+`collection` status (`PhysicalDiskCollectionStatus`). Backend API payloads and
+`frontend-modern/src/types/api.ts` (`HostDiskSMART.collection`) must preserve it
+on the agent facet. When a host agent passes its reporting lease, a SMART
+temperature that was current (`available`, or present without provenance) keeps
+its value and becomes `unavailable`. A state that was already not available is
+kept. Clients must read that state through the shared
+`isPhysicalDiskTemperatureCurrent` decision before treating the value as a
+current reading.
 Agent resource-context sections expose host package posture only as bounded
 operational facts: package manager, pending count, inventory state, inspection
 freshness, and reboot-required state. Raw package identifiers, versions, and
@@ -6332,6 +6341,23 @@ stored one out to `now`, only from a temperature collected now; without one the
 stored samples are returned as they are. An empty mock range can still fall
 through to the monitor's generic demo chart series for that disk ID, which is
 not derived from the disk's reading.
+Reports follow the same rule. A performance report's disk table
+(`enrichNodeReport` in `internal/api/metrics_reporting_handlers.go`) and the
+reporting runtime snapshot's disks (`internal/api/reporting_runtime_snapshot.go`)
+take a disk temperature through `reportDiskTemperature`. It keeps a reading only
+when `diskinventory.TemperatureCollected` holds, so a retained value is reported
+as 0 (no reading) rather than tabulated as measured. Proof:
+`TestContract_ReportsOmitRetainedDiskTemperatures` in
+`internal/api/contract_test.go`.
+Each reported disk also carries its alert disk temperature thresholds
+(`reporting.DiskInfo.TemperatureWarning` / `TemperatureCritical`, the clear
+value and the trigger). `reportDiskTemperatureThresholds` resolves them from
+the tenant's alert manager (`alerts.Manager.DiskTemperatureThreshold`, the
+factory policy when there is none). The PDF disk table colours a reading amber
+from the clear value and red from the trigger, as the Physical Disks Temp
+column does, and leaves it plain when disk temperature alerting is off. It no
+longer uses a fixed 50/60C. Proof:
+`TestContract_ReportsCarryDiskTemperatureAlertThresholds`.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics
