@@ -809,11 +809,13 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 				}
 			}
 		}
-		// The lease marker is unexported, so a persisted or serialized copy
-		// arrives without it. Its stored status still carries the verdict.
-		for source, status := range resource.SourceStatus {
-			if !status.leaseExpired && reportingLeaseExpired(source, *resource) {
-				status.leaseExpired = true
+		// Source verdicts are unexported, so a serialized copy arrives with
+		// none; an in-memory clone keeps them, and a facet sighting may lack
+		// one on purpose. Only a copy that lost them all takes its stored
+		// status as each source's verdict.
+		if !sourceVerdictsRecorded(resource.SourceStatus) && resource.Status != "" && resource.Status != StatusUnknown {
+			for source, status := range resource.SourceStatus {
+				status.reported = resource.Status
 				resource.SourceStatus[source] = status
 			}
 		}
@@ -1764,27 +1766,13 @@ func sourceSightingStatus(lastSeen time.Time) string {
 	return "online"
 }
 
-// reportingLeaseExpired reports whether a source delivered the machine,
-// Docker host or Kubernetes cluster it reports for as offline. Those
-// collectors push their own reports, and Pulse marks the reporter offline
-// only once its reporting lease runs out (evaluateHostAgents,
-// evaluateDockerAgents, evaluateKubernetesAgents). The registry's stale
-// threshold is a different clock: it can mark the sighting stale before
-// the lease ends, or leave it fresh after, so it must not decide the status.
-// Resources those sources describe (guests, containers, pods, disks) are
-// not lease holders and keep the stale-to-warning rule.
-func reportingLeaseExpired(source DataSource, resource Resource) bool {
-	if resource.Status != StatusOffline {
-		return false
+func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
+	for _, sighting := range sightings {
+		if sighting.reported != "" {
+			return true
+		}
 	}
-	switch source {
-	case SourceAgent, SourceDocker:
-		return resource.Type == ResourceTypeAgent
-	case SourceK8s:
-		return resource.Type == ResourceTypeK8sCluster
-	default:
-		return false
-	}
+	return false
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
@@ -2879,7 +2867,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	sighting := resource.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(resource.LastSeen)
 	sighting.LastSeen = resource.LastSeen
-	sighting.leaseExpired = reportingLeaseExpired(source, resource)
+	sighting.reported = resource.Status
 	resource.SourceStatus = map[DataSource]SourceStatus{source: sighting}
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
@@ -3820,7 +3808,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	sighting := incoming.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(incoming.LastSeen)
 	sighting.LastSeen = incoming.LastSeen
-	sighting.leaseExpired = reportingLeaseExpired(source, incoming)
+	sighting.reported = incoming.Status
 	existing.SourceStatus[source] = sighting
 
 	if incoming.LastSeen.After(existing.LastSeen) {
@@ -5864,39 +5852,54 @@ func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataS
 	return incoming
 }
 
+// aggregateStatus derives a resource's status from its source sightings. A
+// sighting's Status only says whether the source delivered recently; the
+// status the source reported is its verdict. While any source with a verdict
+// is current, only the current sources decide, in chooseStatus's priority
+// order: the highest-priority verdict, the best of equal ones. A source that
+// went quiet drops out of that decision, so a node the cluster reports
+// offline stays offline when its linked agent falls silent. A current facet
+// sighting without a verdict (the PBS association, an availability check)
+// counts as online only when no current source has one. Once every source is
+// quiet, an offline verdict survives (a node the poller expired, an agent past
+// its lease) and any other reads as warning; the best of those wins.
 func aggregateStatus(resource *Resource) ResourceStatus {
-	statusPriority := map[string]int{
-		"online":  3,
-		"stale":   2,
-		"offline": 1,
-	}
-	best := StatusUnknown
-	bestScore := 0
-	for _, status := range resource.SourceStatus {
-		state := strings.ToLower(strings.TrimSpace(status.Status))
-		// A reporter past its lease is offline, not merely late. Ranking its
-		// stale sighting above offline would show a silent machine as a
-		// warning while its retained readings render as current.
-		if status.leaseExpired {
-			state = "offline"
-		}
-		score := statusPriority[state]
-		if score > bestScore {
-			bestScore = score
-			switch state {
-			case "online":
-				best = StatusOnline
-			case "stale":
-				best = StatusWarning
-			case "offline":
-				best = StatusOffline
+	var current, quiet ResourceStatus
+	currentPriority := -1
+	deliveredWithoutVerdict := false
+	for source, sighting := range resource.SourceStatus {
+		switch strings.ToLower(strings.TrimSpace(sighting.Status)) {
+		case "online":
+			switch sighting.reported {
+			case "":
+				deliveredWithoutVerdict = true
+				continue
+			case StatusUnknown:
+				continue
 			}
+			if priority := sourcePriority(source); priority > currentPriority {
+				current, currentPriority = sighting.reported, priority
+			} else if priority == currentPriority {
+				current = betterPresentationStatus(current, sighting.reported)
+			}
+		case "stale", "offline":
+			verdict := StatusWarning
+			if sighting.reported == StatusOffline || strings.EqualFold(strings.TrimSpace(sighting.Status), "offline") {
+				verdict = StatusOffline
+			}
+			quiet = betterPresentationStatus(quiet, verdict)
 		}
 	}
-	if best == "" {
+	switch {
+	case currentPriority >= 0:
+		return current
+	case deliveredWithoutVerdict:
+		return StatusOnline
+	case quiet != "":
+		return quiet
+	default:
 		return StatusUnknown
 	}
-	return best
 }
 
 func (rr *ResourceRegistry) isExcluded(a, b string) bool {

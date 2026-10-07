@@ -3213,15 +3213,19 @@ pointer isolation are
 pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 `TestCloneResourceIsolatesCustomSensorValues`.
 
-### Expired reporting leases change status only
+### Source status verdicts change status only
 
-`SourceStatus` now carries an unexported marker that a push reporter (host
-agent, Docker, Kubernetes) delivered its machine, Docker host or cluster as
-offline at lease expiry. Status aggregation reads it, so such a row is
-`offline` instead of `warning`. The marker is not serialized, persisted or
-exposed on the wire, and the public `status`, `lastSeen` and cadence fields
-are unchanged. No storage path, recovery read or protection judgement depends
-on it. `TestCloneResource_MutateSourceStatusMap` pins that clones keep it.
+`SourceStatus` carries an unexported verdict: the status each source reported
+for the resource. It replaced the narrower marker for push reporters past their
+lease. Status aggregation reads it, so a node a live poll reports offline, a
+node the poller expired, an agent past its lease and a stopped guest on a quiet
+source are `offline` instead of `online` or `warning`, unless another source
+reports otherwise. The verdict is not serialized, persisted or exposed on the
+wire, and the public `status`, `lastSeen` and cadence fields are unchanged. A
+storage or datastore row that reported itself unavailable likewise stays
+`offline` when its only source's poll goes quiet. No storage path, recovery
+read or protection judgement depends on that status.
+`TestCloneResource_MutateSourceStatusMap` pins that clones keep the verdict.
 
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 

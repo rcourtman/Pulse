@@ -479,6 +479,314 @@ func TestStaleProxmoxNodeStaysWarning(t *testing.T) {
 	}
 }
 
+// A Proxmox node the cluster reports offline on a live poll (pollPVENode
+// stamps LastSeen now) stays offline when its linked agent falls silent, as a
+// powered-off machine's agent does. The stale pass used to read the live PVE
+// sighting as online, because it only says the poll delivered, and lifted the
+// node back to online.
+func TestProxmoxNodeReportedOfflineStaysOfflineWhenItsAgentFallsSilent(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tc := range []struct {
+		name        string
+		agentStatus string
+		agentSeen   time.Time
+	}{
+		{name: "agent late inside its lease", agentStatus: "online", agentSeen: now.Add(-90 * time.Second)},
+		{name: "agent past its lease", agentStatus: "offline", agentSeen: now.Add(-5 * time.Minute)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const machineID = "machine-pve1"
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(models.StateSnapshot{
+				Nodes: []models.Node{{
+					ID:               "homelab-pve1",
+					Name:             "pve1",
+					Instance:         "homelab",
+					ClusterName:      "homelab",
+					Status:           "offline",
+					ConnectionHealth: "error",
+					LastSeen:         now,
+				}},
+				Hosts: []models.Host{{
+					ID:              machineID,
+					MachineID:       machineID,
+					Hostname:        "pve1",
+					LinkedNodeID:    "homelab-pve1",
+					Status:          tc.agentStatus,
+					LastSeen:        tc.agentSeen,
+					IntervalSeconds: 30,
+				}},
+			})
+
+			resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+			if got := resource.SourceStatus[SourceProxmox].Status; got != "online" {
+				t.Fatalf("proxmox sighting = %q, want the live poll's delivery", got)
+			}
+			if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+				t.Fatalf("agent sighting = %q, want stale", got)
+			}
+			if resource.Status != StatusOffline {
+				t.Fatalf("status = %q, want offline as the live poll reported", resource.Status)
+			}
+			nodes := rr.Nodes()
+			if len(nodes) != 1 || nodes[0].Status() != StatusOffline {
+				t.Fatalf("node view status = %v, want offline", nodes)
+			}
+
+			rr.MarkStale(time.Now().UTC(), nil)
+			if got, _ := rr.Get(resource.ID); got.Status != StatusOffline {
+				t.Fatalf("second stale pass changed status to %q, want offline", got.Status)
+			}
+		})
+	}
+}
+
+// preserveOrExpireNodes marks a node offline once its poll has failed past
+// the grace period and keeps its old LastSeen. That verdict is the poller's
+// own and survives the sighting going stale; it used to read as warning.
+func TestPollerExpiredProxmoxNodeStaysOffline(t *testing.T) {
+	expiredAt := time.Now().UTC().Add(-10 * time.Minute)
+	node := models.Node{
+		ID:               "homelab-pve9",
+		Name:             "pve9",
+		Instance:         "homelab",
+		ClusterName:      "homelab",
+		Status:           "offline",
+		ConnectionHealth: "error",
+		LastSeen:         expiredAt,
+	}
+
+	t.Run("node alone", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{node}})
+
+		resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+		if got := resource.SourceStatus[SourceProxmox].Status; got != "stale" {
+			t.Fatalf("proxmox sighting = %q, want stale", got)
+		}
+		if resource.Status != StatusOffline {
+			t.Fatalf("status = %q, want offline for a node the poller expired", resource.Status)
+		}
+		// The sighting still reports the lost poller to health.
+		health := EvaluateResourceHealth(resource, nil, time.Now().UTC())
+		if health.Verdict != HealthCritical || len(health.Reasons) < 2 ||
+			health.Reasons[0].Code != "offline" || health.Reasons[1].Code != "telemetry_stale" {
+			t.Fatalf("health = %+v, want critical offline with the stale reason after it", health)
+		}
+	})
+
+	t.Run("node and its silent agent", func(t *testing.T) {
+		const machineID = "machine-pve9"
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{
+			Nodes: []models.Node{node},
+			Hosts: []models.Host{{
+				ID:              machineID,
+				MachineID:       machineID,
+				Hostname:        "pve9",
+				LinkedNodeID:    node.ID,
+				Status:          "offline",
+				LastSeen:        expiredAt,
+				IntervalSeconds: 30,
+			}},
+		})
+
+		resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+		if _, ok := resource.SourceStatus[SourceAgent]; !ok {
+			t.Fatalf("expected the node and its agent to share one resource, got sources %+v", resource.SourceStatus)
+		}
+		if resource.Status != StatusOffline {
+			t.Fatalf("status = %q, want offline when both sources last reported it offline", resource.Status)
+		}
+	})
+}
+
+// Guests take the same rule: a guest Proxmox last saw stopped stays offline
+// when the poll goes quiet, while a running one is only known to be stale.
+func TestQuietProxmoxPollKeepsEachGuestsLastVerdict(t *testing.T) {
+	lastPoll := time.Now().UTC().Add(-10 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "homelab-pve9-101", VMID: 101, Name: "stopped-vm", Node: "pve9", Instance: "homelab", Type: "qemu", Status: "stopped", LastSeen: lastPoll},
+			{ID: "homelab-pve9-102", VMID: 102, Name: "running-vm", Node: "pve9", Instance: "homelab", Type: "qemu", Status: "running", LastSeen: lastPoll},
+		},
+	})
+
+	want := map[string]ResourceStatus{"stopped-vm": StatusOffline, "running-vm": StatusWarning}
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != len(want) {
+		t.Fatalf("expected %d VMs, got %d", len(want), len(vms))
+	}
+	for _, vm := range vms {
+		if got := vm.SourceStatus[SourceProxmox].Status; got != "stale" {
+			t.Fatalf("%s sighting = %q, want stale", vm.Name, got)
+		}
+		if vm.Status != want[vm.Name] {
+			t.Fatalf("%s status = %q, want %q", vm.Name, vm.Status, want[vm.Name])
+		}
+	}
+}
+
+// A copy that went through JSON loses the unexported verdicts and recovers
+// them from its stored status, so a node reported offline with a silent
+// agent does not come back online.
+func TestProxmoxNodeReportedOfflineStaysOfflineAfterJSONRoundTrip(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-pve1"
+	source := NewRegistry(nil)
+	source.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:               "homelab-pve1",
+			Name:             "pve1",
+			Instance:         "homelab",
+			ClusterName:      "homelab",
+			Status:           "offline",
+			ConnectionHealth: "error",
+			LastSeen:         now,
+		}},
+		Hosts: []models.Host{{
+			ID:              machineID,
+			MachineID:       machineID,
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "offline",
+			LastSeen:        now.Add(-5 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+	payload, err := json.Marshal(source.List())
+	if err != nil {
+		t.Fatalf("marshal resources: %v", err)
+	}
+	var copied []Resource
+	if err := json.Unmarshal(payload, &copied); err != nil {
+		t.Fatalf("unmarshal resources: %v", err)
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestResources(copied)
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline after a JSON round trip", resource.Status)
+	}
+}
+
+// An in-memory copy keeps its verdicts, and a facet sighting that has none
+// on purpose (the PBS host-agent association) must not take the stored
+// status as one: that would let the facet decide once the agent goes quiet.
+func TestIngestResourcesKeepsAFacetSightingWithoutAVerdict(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{{
+		ID:       "agent-pbs-host",
+		Type:     ResourceTypeAgent,
+		Name:     "pbs-host",
+		Status:   StatusWarning,
+		LastSeen: now,
+		Sources:  []DataSource{SourceAgent, SourcePBS},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceAgent: {Status: "online", LastSeen: now, reported: StatusWarning},
+			SourcePBS:   {Status: "online", LastSeen: now},
+		},
+		Agent: &AgentData{AgentID: "host-pbs", Hostname: "pbs-host"},
+	}})
+
+	resource, ok := rr.Get("agent-pbs-host")
+	if !ok {
+		t.Fatal("resource missing")
+	}
+	if got := resource.SourceStatus[SourceAgent].reported; got != StatusWarning {
+		t.Fatalf("agent verdict = %q, want the copied warning", got)
+	}
+	if got := resource.SourceStatus[SourcePBS].reported; got != "" {
+		t.Fatalf("PBS facet verdict = %q, want none", got)
+	}
+	if resource.Status != StatusWarning {
+		t.Fatalf("status = %q, want the agent's warning", resource.Status)
+	}
+}
+
+// aggregateStatus is the one rule the stale pass and manual links apply.
+// Current sources decide by their own verdicts in chooseStatus's priority
+// order; quiet sources only decide when no source is current.
+func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
+	current := func(reported ResourceStatus) SourceStatus {
+		return SourceStatus{Status: "online", reported: reported}
+	}
+	quiet := func(reported ResourceStatus) SourceStatus {
+		return SourceStatus{Status: "stale", reported: reported}
+	}
+	for _, tc := range []struct {
+		name      string
+		sightings map[DataSource]SourceStatus
+		want      ResourceStatus
+	}{
+		{
+			name:      "live poll reports offline, agent quiet",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAgent: quiet(StatusOnline)},
+			want:      StatusOffline,
+		},
+		{
+			name:      "live poll reports online, agent past its lease",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOnline), SourceAgent: quiet(StatusOffline)},
+			want:      StatusOnline,
+		},
+		{
+			name:      "live agent outranks a poll that reports offline",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAgent: current(StatusOnline)},
+			want:      StatusOnline,
+		},
+		{
+			name:      "live agent warning holds as at merge time",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOnline), SourceAgent: current(StatusWarning), SourceDocker: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "quiet source that reported offline keeps it",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline)},
+			want:      StatusOffline,
+		},
+		{
+			name:      "quiet source that reported online is a warning",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "best of quiet sources",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline), SourceAgent: quiet(StatusOffline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "current facet without a verdict counts as online",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourcePBS: current("")},
+			want:      StatusOnline,
+		},
+		{
+			name:      "a facet without a verdict never outranks a current verdict",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			want:      StatusOffline,
+		},
+		{
+			name:      "current unknown verdict leaves the quiet sources to decide",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusUnknown), SourceAgent: quiet(StatusOnline)},
+			want:      StatusWarning,
+		},
+		{
+			name:      "no delivered sightings",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: {Status: "unknown"}},
+			want:      StatusUnknown,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := aggregateStatus(&Resource{SourceStatus: tc.sightings}); got != tc.want {
+				t.Fatalf("aggregateStatus = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCloneDockerDataPreservesContainerRuntimeMetadata(t *testing.T) {
 	startedAt := time.Date(2026, 6, 11, 13, 15, 30, 0, time.UTC)
 	finishedAt := startedAt.Add(45 * time.Minute)
