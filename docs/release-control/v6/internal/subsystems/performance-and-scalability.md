@@ -2712,9 +2712,26 @@ unavailable once the guest is stopped, whether its status or the Proxmox
 `vm-stopped` reason says so, and Proxmox's own guest filesystems keep their
 Proxmox read state. The two flags ride the existing row mapping and
 add no query or poll; `GuestDrawer.test.tsx` and `useWorkloads.test.ts` pin
-both sources. The workload table's disk cell and the drawer History still read
-the aggregate disk metric and the Proxmox reason, and the agent's OS, addresses
-and physical disk health carry no stale cue yet.
+both sources. The workload table's disk cell (`useGuestRowState.ts`,
+`GuestRow.tsx`) and the drawer History (`guestDrawerModel.ts`) judge the same
+guest through the drawer rows' rule, `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts`: a silent agent's bars carry the Last known
+label, a live agent's bars stay current under Proxmox `agent-not-running`, and
+History reads the aggregate disk metric as current, last known or unavailable
+the same way. The rule covers the aggregate because Proxmox records no guest
+disk usage without guest filesystems, so a manually linked guest then keeps the
+agent's disk metric, and the poller no longer carries that agent reading
+forward as Proxmox's own `prev-` read (see the monitoring contract).
+`TestResourceRegistry_ManualGuestAgentLinkDiskMetricFollowsProxmoxGuestFilesystems`
+pins that merge; `GuestRow.test.tsx` and `GuestDrawer.test.tsx` pin the cell and
+History. On the websocket path (`resourceStateAdapters.ts`) a native Proxmox VM
+facet's new guest-read outcome drops filesystems it no longer reports, a native
+agent facet without `disks` drops the agent's, and the agent facet always
+carries `stale`, so the rows switch source and lose the Last known label when
+the agent resumes, without a reload. A stale Proxmox source
+can still lose the aggregate to a live agent while its own filesystem rows
+remain; such a guest stays on the Proxmox rule. The agent's OS, addresses and
+physical disk health carry no stale cue yet.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while

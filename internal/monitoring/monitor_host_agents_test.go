@@ -7124,3 +7124,47 @@ func TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity(t *testing.T) 
 		})
 	}
 }
+
+// A Pulse agent linked into a VM fills the guest disk metric when Proxmox has
+// no guest filesystems. The next poll must not carry that agent reading
+// forward as Proxmox's own last known guest read: with Proxmox outranking the
+// agent on guests, the carried copy would freeze over the agent's live disk.
+func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
+	now := time.Now()
+	view := func(source unifiedresources.DataSource) *unifiedresources.VMView {
+		used, total := int64(400), int64(1000)
+		v := unifiedresources.NewVMView(&unifiedresources.Resource{
+			ID:       "vm-pve-node1-101",
+			Type:     unifiedresources.ResourceTypeVM,
+			Name:     "app-101",
+			LastSeen: now,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance:         "pve",
+				NodeName:         "node1",
+				VMID:             101,
+				RuntimeStatus:    "running",
+				DiskStatusReason: "agent-not-running",
+			},
+			// The linked agent's addresses count as recent guest evidence.
+			Identity: unifiedresources.ResourceIdentity{IPAddresses: []string{"10.0.0.5"}},
+			Metrics: &unifiedresources.ResourceMetrics{
+				Disk: &unifiedresources.MetricValue{Used: &used, Total: &total, Percent: 40, Source: source},
+			},
+		})
+		return &v
+	}
+	carry := func(source unifiedresources.DataSource) (float64, string) {
+		prev := previousVMFromView(view(source))
+		_, _, _, usage, _, reason := stabilizeGuestLowTrustDisk(
+			&prev, "running", 32<<30, 0, 32<<30, -1, nil, "agent-not-running", false, now,
+		)
+		return usage, reason
+	}
+
+	if usage, reason := carry(unifiedresources.SourceAgent); usage != -1 || reason != "agent-not-running" {
+		t.Fatalf("linked agent disk carried as Proxmox's: usage=%v reason=%q", usage, reason)
+	}
+	if usage, reason := carry(unifiedresources.SourceProxmox); usage != 40 || reason != "prev-agent-not-running" {
+		t.Fatalf("Proxmox's own guest disk not carried: usage=%v reason=%q", usage, reason)
+	}
+}

@@ -6867,6 +6867,15 @@ The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
 
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying

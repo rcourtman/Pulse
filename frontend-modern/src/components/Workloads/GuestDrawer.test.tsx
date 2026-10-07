@@ -440,6 +440,54 @@ describe('GuestDrawer', () => {
     }
   });
 
+  it("judges a linked agent's disk metric in History by that agent, not the Proxmox reason", async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      metrics: {},
+      source: 'store',
+    });
+    // Proxmox has no guest filesystems, so the agent's filesystems and disk
+    // metric fill in while Proxmox still reports its own agent-not-running.
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        disk: { total: 100, used: 40, free: 60, usage: 40 },
+        disks: [{ total: 100, used: 40, free: 60, usage: 40, mountpoint: '/' }],
+        disksFromAgent: true,
+        diskStatusReason: 'agent-not-running',
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    const history = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk40.0%current',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toBeNull();
+
+    setGuest({ ...guest(), agentStale: true });
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+      'Disk40.0%last known',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'The Pulse Agent in this guest stopped reporting.',
+    );
+
+    setGuest({ ...guest(), status: 'stopped' });
+    expect(history.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest filesystem stats unavailable while the VM is stopped.',
+    );
+  });
+
   it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
     expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
     expect(guestDrawerSource).not.toContain(
