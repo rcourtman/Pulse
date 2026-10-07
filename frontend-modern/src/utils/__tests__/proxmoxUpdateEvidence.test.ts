@@ -5,7 +5,8 @@ import {
   hasCurrentProxmoxUpdateEvidence,
 } from '@/utils/proxmoxUpdateEvidence';
 
-const relative = () => '5 mins ago';
+// Five minutes after the checks below completed.
+const NOW = Date.parse('2026-08-29T12:05:00Z');
 
 describe('Proxmox update evidence presentation', () => {
   it('makes a confirmed zero visible', () => {
@@ -16,7 +17,7 @@ describe('Proxmox update evidence presentation', () => {
           pendingUpdatesStatus: 'checked',
           pendingUpdatesCheckedAt: '2026-08-29T12:00:00Z',
         },
-        relative,
+        NOW,
       ),
     ).toEqual({
       value: 'No pending updates · checked 5 mins ago',
@@ -35,13 +36,28 @@ describe('Proxmox update evidence presentation', () => {
           pendingUpdatesReason: 'source_unavailable',
           pendingUpdatesCheckedAt: '2026-08-29T12:00:00Z',
         },
-        relative,
+        NOW,
       ),
     ).toMatchObject({
       value: '12 pending · stale · checked 5 mins ago',
       title: 'Proxmox source unavailable · last success 5 mins ago',
       current: false,
     });
+  });
+
+  it('measures the checked age from the time the caller passes', () => {
+    const node = {
+      pendingUpdates: 3,
+      pendingUpdatesStatus: 'checked' as const,
+      pendingUpdatesCheckedAt: '2026-08-29T12:00:00Z',
+    };
+
+    expect(getProxmoxUpdateEvidencePresentation(node, NOW)?.value).toBe(
+      '3 pending · checked 5 mins ago',
+    );
+    expect(
+      getProxmoxUpdateEvidencePresentation(node, Date.parse('2026-08-29T18:00:00Z'))?.value,
+    ).toBe('3 pending · checked 6 hours ago');
   });
 
   it('explains unavailable permission evidence without exposing provider errors', () => {

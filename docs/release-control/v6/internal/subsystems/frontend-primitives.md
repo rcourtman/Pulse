@@ -5228,8 +5228,10 @@ A presentation helper that formats an age measures it from the time its caller
 passes rather than reading the wall clock itself, so the caller's
 `useRelativeTimeNow` reaches every age and band the helper derives:
 `getAvailabilityProbePresentation(resource, now)` measures its checked and
-last-success ages from the same `now` as its fresh or stale band, and
-`getUpdateCheckedLabel(lastCheckedMs, now)` takes the Updates panel's clock.
+last-success ages from the same `now` as its fresh or stale band,
+`getUpdateCheckedLabel(lastCheckedMs, now)` takes the Updates panel's clock,
+and `getProxmoxUpdateEvidencePresentation(node, now)` takes the Proxmox node
+drawer's for its update check age.
 The Availability settings helpers (`getAvailabilityTargetHealth`, its status
 class and title helpers, `getAvailabilityTargetsSummary`) take the settings
 panel's clock as `nowMs` the same way, and a creation time in a settings list

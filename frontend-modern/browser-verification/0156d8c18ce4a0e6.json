@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "9ccae6c1e4c3f4765eeb3bea8aaafd73722ad48e",
+  "verified_at": "2026-10-07T12:16:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "3b883f635298a6af204ddaeb76f8e012460c7c88ee495d14b446dfc2522e109b",
+    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "feaf5696021e9c1060e12dce458518af895699da009f5db88125ca889f597f65"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "getProxmoxUpdateEvidencePresentation takes the caller's now instead of a formatter; NodeDrawerOverview passes its useRelativeTimeNow() value",
+    "Private mock stack (backend :7741, Vite :5261 serving this tree) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled",
+    "Proxmox page, first node drawer (West Production A) Overview with update evidence injected into every Proxmox node facet (confirmed zero checked 20 minutes before load; the mock records no checks): 'No pending updates \u00b7 checked 20 mins ago' -> 'checked 30 mins ago' after ten held minutes, at 1440 and 390",
+    "No page errors at either viewport; helper and node drawer update-evidence tests pass"
+  ],
+  "interactions": [
+    "Loaded /proxmox, opened the first node's drawer, held the stream and advanced the page clock ten one-minute steps, at both viewports"
+  ]
+}
