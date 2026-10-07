@@ -1812,10 +1812,10 @@ func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
 		timeline := incidentStore.GetTimelineByAlertAt(a.ID, a.StartTime)
 		require.NotNil(t, timeline)
 		require.Len(t, timeline.Events, 2)
-		wantName := "CPU reader"
+		wantName := "CPU reader (Host Agent)"
 		wantID := "agent:agent-a"
 		if a.Type == "memory" {
-			wantName = "Memory reader"
+			wantName = "Memory reader (Host Agent)"
 			wantID = "agent:agent-b"
 		}
 		summary := "Alert moved to " + wantName + ". This is not a recovery: check the agent for the current reading."
