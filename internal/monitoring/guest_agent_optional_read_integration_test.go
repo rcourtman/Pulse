@@ -131,6 +131,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					}
 				}
 				build := func() models.VM {
+					scope := m.mockModeFence.begin()
 					vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "optional", res, client, id, nil, previous)
 					if !ok {
 						t.Fatal("guest disappeared")
@@ -152,12 +153,12 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					// Read-only hydration may deliberately reuse a generation for
 					// two seconds; it is not a replacement for poll publication.
 					snapshot := models.StateSnapshot{VMs: []models.VM{vm}, LastUpdate: vm.LastSeen}
-					m.updateResourceStore(snapshot)
+					m.updateResourceStore(snapshot, scope)
 					live := m.GetUnifiedReadState().VMs()[0]
 					if live.ID() != canonicalID || (knownDisk && live.DiskUsed() != vm.Disk.Used) || live.DiskStatusReason() != vm.DiskStatusReason {
 						t.Fatal("accepted poll did not replace the production read generation")
 					}
-					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(snapshot).Resources)
+					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(snapshot, scope).Resources)
 					if err != nil || !strings.Contains(string(encoded), canonicalID) {
 						t.Fatal("guest identity missing from JSON read projection")
 					}

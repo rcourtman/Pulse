@@ -687,8 +687,15 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 			// In both cases, only count the device's capacity once.
 			fsTypeLower := strings.ToLower(fs.Type)
 			countThisFS := true
-			if fs.Disk != "" {
-				// Same device at multiple mount paths → count once
+			if volumeKey := windowsVMFilesystemCapacityKey(fs); volumeKey != "" {
+				// QGA's disk.dev is the backing physical drive on Windows,
+				// not the volume. Equal-sized partitions must remain separate.
+				// A GUID can still identify one volume mounted at several paths.
+				dedupeKey := fmt.Sprintf("windows:%s:%d", volumeKey, fs.TotalBytes)
+				countThisFS = !seenFilesystems[dedupeKey]
+				seenFilesystems[dedupeKey] = true
+			} else if fs.Disk != "" {
+				// Same non-Windows device at multiple mount paths → count once
 				dedupeKey := fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
 				if seenFilesystems[dedupeKey] {
 					countThisFS = false

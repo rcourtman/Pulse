@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### QEMU Windows capacity is owned by the volume, not the physical drive
+
+The guest filesystem aggregate uses the reported Windows volume GUID when
+present, or a normalised drive/mount path without one. QGA `disk.dev` names
+the backing `PhysicalDriveN`, so equal-sized partitions on that drive must not
+be treated as one filesystem. Multiple mount paths for one GUID still count
+capacity once; each admitted mount row and its original device metadata remain
+visible. Non-Windows device/subvolume deduplication, byte-validation and the
+signed aggregate-overflow fence are unchanged. These temporary capacity keys
+are not hardware identity, guest identity or History keys.
+
+`guest_filesystem_identity_test.go` checks separate equal-size volumes, alias
+mounts, missing GUIDs, Linux bind/device peers and overflow. Its synthetic
+QGA-only polling lifecycle carries complete capacity, volume removal and
+explicit zero through the native VM builder, canonical read state and both
+in-memory/persistent History. It establishes source acceptance, not native
+Windows/PVE recovery or a diagnosis of issue #2619. The optional-read lifecycle fixture also carries the same captured mock-mode
+scope through poll publication and broadcast after the mode-fence API change,
+rather than recapturing an epoch for stale state. Guest commands, operation
+locks, shared admission, retries, timeout and backup policy are unchanged.
+
 ### Sustained poll failures preserve the capped retry fence
 
 Scheduler circuit-breaker backoff saturates before duration arithmetic can
