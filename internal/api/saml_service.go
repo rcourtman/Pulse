@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
@@ -31,6 +34,93 @@ type SAMLService struct {
 	httpClient  *http.Client
 	baseURL     string
 	lastRefresh time.Time
+
+	// logoutRequests holds the SP-initiated LogoutRequests still waiting for
+	// the IdP's LogoutResponse.
+	logoutRequests samlLogoutRequestStore
+}
+
+const (
+	// samlLogoutRequestTTL bounds how long the IdP round trip of an
+	// SP-initiated logout may take, matching the OIDC login state lifetime.
+	samlLogoutRequestTTL        = 10 * time.Minute
+	maxSAMLLogoutRequestEntries = 1024
+	// samlLogoutResponseMaxBytes matches crewjam/saml's inflate limit for the
+	// HTTP-Redirect binding.
+	samlLogoutResponseMaxBytes = 10 << 20
+)
+
+// errSAMLLogoutResponseUnbound marks a LogoutResponse that verified but does
+// not answer an outstanding LogoutRequest this SP issued for the presenting
+// session.
+var errSAMLLogoutResponseUnbound = errors.New("logout response does not answer an outstanding logout request for this session")
+
+// samlLogoutRequestStore records the LogoutRequests this SP issued, keyed by
+// request ID, with the session each one logged out. crewjam/saml checks a
+// LogoutResponse's signature, destination, issuer, status and age but never
+// its InResponseTo, so without this record any recent signed response from the
+// IdP, including one answering another user's logout, would be accepted.
+type samlLogoutRequestStore struct {
+	mu      sync.Mutex
+	entries map[string]samlLogoutRequest
+}
+
+type samlLogoutRequest struct {
+	sessionKey string
+	expiresAt  time.Time
+}
+
+func (s *samlLogoutRequestStore) put(requestID, sessionKey string, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.entries == nil {
+		s.entries = make(map[string]samlLogoutRequest)
+	}
+	for id, entry := range s.entries {
+		if !now.Before(entry.expiresAt) {
+			delete(s.entries, id)
+		}
+	}
+	for len(s.entries) >= maxSAMLLogoutRequestEntries {
+		oldestID := ""
+		var oldestExpiry time.Time
+		for id, entry := range s.entries {
+			if oldestID == "" || entry.expiresAt.Before(oldestExpiry) || (entry.expiresAt.Equal(oldestExpiry) && id < oldestID) {
+				oldestID = id
+				oldestExpiry = entry.expiresAt
+			}
+		}
+		delete(s.entries, oldestID)
+	}
+	s.entries[requestID] = samlLogoutRequest{
+		sessionKey: sessionKey,
+		expiresAt:  now.Add(samlLogoutRequestTTL),
+	}
+}
+
+// consume spends the outstanding request a verified LogoutResponse answers.
+// sessionKey identifies the session the presenting browser carries, or is
+// empty when it carries none. The response may complete the logout only when
+// it answers an unexpired request and the browser carries either no session
+// or the session that request logged out. The request is spent on every
+// verified presentation, so a response is honored at most once.
+func (s *samlLogoutRequestStore) consume(requestID, sessionKey string, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry, ok := s.entries[requestID]
+	if requestID == "" || !ok {
+		return fmt.Errorf("%w: no outstanding request matches InResponseTo %q", errSAMLLogoutResponseUnbound, requestID)
+	}
+	delete(s.entries, requestID)
+	if !now.Before(entry.expiresAt) {
+		return fmt.Errorf("%w: request %q expired", errSAMLLogoutResponseUnbound, requestID)
+	}
+	if sessionKey != "" && sessionKey != entry.sessionKey {
+		return fmt.Errorf("%w: request %q logged out a different session", errSAMLLogoutResponseUnbound, requestID)
+	}
+	return nil
 }
 
 func normalizeSAMLBaseURL(baseURL string) (string, error) {
@@ -594,13 +684,18 @@ func (s *SAMLService) GetMetadata() ([]byte, error) {
 	return xml.MarshalIndent(metadata, "", "  ")
 }
 
-// MakeLogoutRequest creates a SAML LogoutRequest for SLO
-func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx string) (string, error) {
+// MakeLogoutRequest creates a SAML LogoutRequest for SLO and records its ID
+// as outstanding for sessionKey, the session being logged out, so that
+// ValidateLogoutResponse accepts only the IdP's answer to this request.
+func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx, sessionKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.sp == nil {
 		return "", errors.New("service provider not initialized")
+	}
+	if sessionKey == "" {
+		return "", errors.New("logout request has no session to bind")
 	}
 
 	// Check if IdP supports SLO
@@ -619,21 +714,32 @@ func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx string) (string, erro
 	// Build redirect URL
 	redirectURL := req.Redirect("")
 
-	return validateSAMLRedirectTarget(redirectURL.String(), s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices)
+	validatedURL, err := validateSAMLRedirectTarget(redirectURL.String(), s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices)
+	if err != nil {
+		return "", err
+	}
+	s.logoutRequests.put(req.ID, sessionKey, time.Now())
+	return validatedURL, nil
 }
 
 // ValidateLogoutResponse verifies an incoming IdP-signed SAML LogoutResponse,
 // checking the XML-DSig signature against the IdP's published certificate as
-// well as the standard LogoutResponse temporal / target invariants. Returns
-// nil only when the response is genuinely from the configured IdP and bound
-// to the SAML state — anything that fails validation (no payload, bad
-// signature, unknown issuer, expired) returns an error and the caller MUST
-// NOT mutate any session state on the strength of the request.
+// well as the standard LogoutResponse temporal / target invariants, and then
+// binds it to the request it answers: its InResponseTo must name an
+// unexpired LogoutRequest from MakeLogoutRequest, which it spends, and
+// sessionKey (the presenting browser's session, or "" for none) must be empty
+// or the session that request logged out. Returns nil only when all of that
+// holds — anything else (no payload, bad signature, unknown issuer, expired,
+// unsolicited, replayed, or another session's logout) returns an error and
+// the caller MUST NOT mutate any session state on the strength of the
+// request. Binding failures wrap errSAMLLogoutResponseUnbound.
 //
-// Without this validation the SLO callback endpoint was an unauthenticated
-// force-logout DoS: a cross-origin POST with no payload, or any forged
-// payload, cleared the user's session.
-func (s *SAMLService) ValidateLogoutResponse(req *http.Request) error {
+// Without signature validation the SLO callback endpoint was an
+// unauthenticated force-logout DoS: a cross-origin POST with no payload, or
+// any forged payload, cleared the user's session. Before the binding, any
+// user could replay the IdP's answer to their own logout through a cross-site
+// GET to clear someone else's session.
+func (s *SAMLService) ValidateLogoutResponse(req *http.Request, sessionKey string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -641,7 +747,81 @@ func (s *SAMLService) ValidateLogoutResponse(req *http.Request) error {
 		return errors.New("service provider not initialized")
 	}
 
-	return s.sp.ValidateLogoutResponseRequest(req)
+	inResponseTo, err := s.verifiedLogoutResponseInResponseTo(req)
+	if err != nil {
+		return err
+	}
+	return s.logoutRequests.consume(inResponseTo, sessionKey, time.Now())
+}
+
+// verifiedLogoutResponseInResponseTo selects the SAMLResponse payload the way
+// crewjam/saml's ValidateLogoutResponseRequest does (the HTTP-Redirect query
+// parameter first, then the HTTP-POST form field), has crewjam verify exactly
+// that payload, and reads InResponseTo from the same bytes.
+func (s *SAMLService) verifiedLogoutResponseInResponseTo(req *http.Request) (string, error) {
+	var raw []byte
+	if data := req.URL.Query().Get("SAMLResponse"); data != "" {
+		if err := s.sp.ValidateLogoutResponseRedirect(data); err != nil {
+			return "", err
+		}
+		compressed, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return "", fmt.Errorf("decode logout response: %w", err)
+		}
+		raw, err = io.ReadAll(io.LimitReader(flate.NewReader(bytes.NewReader(compressed)), samlLogoutResponseMaxBytes))
+		if err != nil {
+			return "", fmt.Errorf("inflate logout response: %w", err)
+		}
+	} else {
+		if err := req.ParseForm(); err != nil {
+			return "", fmt.Errorf("parse logout response form: %w", err)
+		}
+		data := req.PostForm.Get("SAMLResponse")
+		if err := s.sp.ValidateLogoutResponseForm(data); err != nil {
+			return "", err
+		}
+		var err error
+		raw, err = base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return "", fmt.Errorf("decode logout response: %w", err)
+		}
+	}
+	return logoutResponseInResponseTo(raw)
+}
+
+// logoutResponseInResponseTo returns the root LogoutResponse's InResponseTo
+// attribute as written without a prefix, the one the IdP's enveloped signature
+// covers, or "" when it has none. The attributes are read by hand, lexically,
+// because encoding/xml would also fill an un-namespaced attribute field from a
+// namespace declaration such as xmlns:InResponseTo="...", which exclusive
+// canonicalization can leave out of the signed form when nothing uses it. crewjam
+// has already checked that the root is a protocol LogoutResponse.
+func logoutResponseInResponseTo(raw []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(raw))
+	for {
+		token, err := decoder.RawToken()
+		if err != nil {
+			return "", fmt.Errorf("parse logout response: %w", err)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if start.Name.Local != "LogoutResponse" {
+			return "", fmt.Errorf("parse logout response: unexpected root element %q", start.Name.Local)
+		}
+		inResponseTo, found := "", false
+		for _, attr := range start.Attr {
+			if attr.Name.Space != "" || attr.Name.Local != "InResponseTo" {
+				continue
+			}
+			if found {
+				return "", errors.New("parse logout response: duplicate InResponseTo")
+			}
+			inResponseTo, found = attr.Value, true
+		}
+		return inResponseTo, nil
+	}
 }
 
 func validateSAMLRedirectTarget(rawURL string, allowedEndpoints []saml.Endpoint) (string, error) {

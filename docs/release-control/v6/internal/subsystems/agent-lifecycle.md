@@ -8936,6 +8936,17 @@ install, update, removal and report identity are unchanged.
 logout still takes `POST`. No agent registration, enrolment, install, update or
 removal path changed.
 
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/slo` accepts an IdP LogoutResponse when its signed
+`InResponseTo` names an unexpired LogoutRequest that `/api/saml/{id}/logout`
+issued, once, in a browser carrying no session or the session that logout
+ended. Other responses are refused, the SLO handler writes no session or
+cookie for any response (the logout request already cleared both), and
+`/api/saml/{id}/logout` refuses a request that carries no session. No agent
+registration, enrolment, install, update or removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

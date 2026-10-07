@@ -1081,3 +1081,53 @@ func TestParseAuditLimitCapsOversizedRequests(t *testing.T) {
 		})
 	}
 }
+
+// A signed SAML LogoutResponse answering one user's logout, replayed into
+// another user's browser through a cross-site GET to /slo, is refused like the
+// other SLO refusals: the victim keeps their session and one failed
+// saml_slo_callback audit event names the binding failure. The genuine
+// completion of a logout still audits success.
+func TestSAMLSLOAuditsLogoutResponseNotBoundToSession(t *testing.T) {
+	previousManager := GetTenantAuditManager()
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		SetTenantAuditManager(previousManager)
+	})
+	logger := &testAuditLoggerNoVerify{}
+	setAuditLogger(t, logger)
+
+	router, idp := newSAMLSLOTestRouter(t)
+	attackerRequestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "attacker"))
+	victim := newSAMLTestSession(t, "victim")
+
+	sloCallbackEvents := func() []audit.Event {
+		var events []audit.Event
+		for _, event := range logger.events {
+			if event.EventType == "saml_slo_callback" {
+				events = append(events, event)
+			}
+		}
+		return events
+	}
+
+	rec := deliverSAMLTestLogoutResponse(router, idp.redirectQuery(t, attackerRequestID), victim)
+	assertSAMLSLORefused(t, rec, "another session's response")
+	if !ValidateSession(victim) {
+		t.Fatal("another user's LogoutResponse cleared the victim's session")
+	}
+	refusals := sloCallbackEvents()
+	if len(refusals) != 1 || refusals[0].Success ||
+		refusals[0].Details != "LogoutResponse does not answer an outstanding logout request for this session" {
+		t.Fatalf("expected one failed saml_slo_callback binding refusal, got %+v", refusals)
+	}
+
+	logger.events = nil
+	victimRequestID := startSAMLTestLogout(t, router, victim)
+	if rec := deliverSAMLTestLogoutResponse(router, idp.redirectQuery(t, victimRequestID), ""); rec.Code != http.StatusFound {
+		t.Fatalf("genuine completion: expected status %d, got %d body=%q", http.StatusFound, rec.Code, rec.Body.String())
+	}
+	completions := sloCallbackEvents()
+	if len(completions) != 1 || !completions[0].Success || completions[0].Details != "SAML SLO complete" {
+		t.Fatalf("expected one successful saml_slo_callback event, got %+v", completions)
+	}
+}

@@ -8,6 +8,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"math/big"
 	"net/http"
 	"strings"
@@ -184,7 +186,7 @@ func TestSAMLServiceBasicFlows(t *testing.T) {
 		t.Fatalf("metadata error: %v", err)
 	}
 
-	logoutURL, err := service.MakeLogoutRequest("user", "sess")
+	logoutURL, err := service.MakeLogoutRequest("user", "sess", sessionHash("session-token"))
 	if err != nil || !strings.Contains(logoutURL, "SAMLRequest") {
 		t.Fatalf("unexpected logout url: %v %s", err, logoutURL)
 	}
@@ -196,11 +198,41 @@ func TestSAMLServiceBasicFlows(t *testing.T) {
 	if _, err := service.GetMetadata(); err == nil {
 		t.Fatal("expected error when sp missing")
 	}
-	if _, err := service.MakeLogoutRequest("user", "sess"); err == nil {
+	if _, err := service.MakeLogoutRequest("user", "sess", sessionHash("session-token")); err == nil {
 		t.Fatal("expected error when sp missing")
 	}
 	if err := service.RefreshMetadata(context.Background()); err == nil {
 		t.Fatal("expected refresh error without url")
+	}
+}
+
+// Outstanding SLO requests expire after samlLogoutRequestTTL, and the store
+// keeps at most maxSAMLLogoutRequestEntries by dropping the oldest.
+func TestSAMLLogoutRequestStoreExpiresAndEvictsOldest(t *testing.T) {
+	var store samlLogoutRequestStore
+	now := time.Now()
+	key := sessionHash("session-token")
+
+	store.put("id-expired", key, now)
+	if err := store.consume("id-expired", key, now.Add(samlLogoutRequestTTL)); !errors.Is(err, errSAMLLogoutResponseUnbound) {
+		t.Fatalf("expected an expired request to be refused, got %v", err)
+	}
+	store.put("id-live", key, now)
+	if err := store.consume("id-live", "", now.Add(samlLogoutRequestTTL-time.Second)); err != nil {
+		t.Fatalf("expected a live request to be accepted, got %v", err)
+	}
+
+	for i := 0; i <= maxSAMLLogoutRequestEntries; i++ {
+		store.put(fmt.Sprintf("id-%04d", i), key, now.Add(time.Duration(i)*time.Millisecond))
+	}
+	if len(store.entries) != maxSAMLLogoutRequestEntries {
+		t.Fatalf("expected %d outstanding requests, got %d", maxSAMLLogoutRequestEntries, len(store.entries))
+	}
+	if err := store.consume("id-0000", key, now); !errors.Is(err, errSAMLLogoutResponseUnbound) {
+		t.Fatalf("expected the oldest request to be evicted, got %v", err)
+	}
+	if err := store.consume(fmt.Sprintf("id-%04d", maxSAMLLogoutRequestEntries), key, now); err != nil {
+		t.Fatalf("expected the newest request to be kept, got %v", err)
 	}
 }
 

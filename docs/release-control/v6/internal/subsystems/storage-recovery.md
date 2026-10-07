@@ -6876,6 +6876,16 @@ so `/api/discovery/settings` (`PUT` or `POST`) and `/api/saml/{id}/logout`
 of changing the discovery staleness threshold or clearing a session. No
 storage, retention, backup, migration or recovery path is added or moved.
 
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` keeps each outstanding SAML LogoutRequest ID in
+memory on the provider's service, bound to the session-store hash of the
+session being logged out, and honors it for ten minutes (at most 1,024
+records; expired ones are dropped on the next logout). `internal/api/saml_handlers.go`
+refuses a LogoutResponse that does not answer one of them. The records are not
+persisted, and the SLO handler no longer writes session state. No storage,
+retention, backup, migration or recovery path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -384,6 +385,17 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 	if !requireRequestMethod(w, req, http.MethodPost) {
 		return
 	}
+	// The SAML routes are public and skip CSRF so the IdP flows can reach
+	// them, and a cross-site POST withholds the SameSite=Lax session cookie.
+	// A request carrying no session has nothing to log out, yet the deletion
+	// cookies every logout path below writes would log out whichever session
+	// that browser holds. Refuse it, as a deployment with authentication
+	// configured refuses an unauthenticated /api/logout. SP-initiated SAML
+	// logout always needs the browser session it ends.
+	if samlSessionBindingKey(req) == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Authentication required", nil)
+		return
+	}
 	providerID := extractSAMLProviderID(req.URL.Path, "logout")
 	if providerID == "" {
 		// Fall back to regular logout
@@ -413,11 +425,15 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Bind the LogoutRequest to the session it logs out before clearing it, so
+	// /slo can tell the IdP's answer to this logout from a replayed one.
+	sessionKey := samlSessionBindingKey(req)
+
 	// Clear local session first
 	r.clearSession(w, req)
 
 	// Attempt SAML SLO
-	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex)
+	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex, sessionKey)
 	if err != nil {
 		log.Warn().Err(err).Str("provider_id", providerID).Msg("SAML SLO not available, local logout only")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_logout", "", GetClientIP(req), req.URL.Path, true, "Local logout only (SLO not available)")
@@ -437,6 +453,16 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 // logout DoS against any user with a SAML session. Verify the IdP's
 // XML-DSig on the LogoutResponse before clearing anything; on validation
 // failure log the audit event and refuse to mutate session state.
+//
+// A valid signature alone is not enough: the IdP signs its answer to every
+// user's logout, and this route must take the HTTP-Redirect binding's GET,
+// which carries the SameSite=Lax session cookie on a cross-site navigation and
+// skips the CSRF check. The response must also answer an outstanding
+// LogoutRequest from handleSAMLLogout, once, in a browser carrying either no
+// session (handleSAMLLogout already cleared its cookie) or the session that
+// request logged out. Anything else is a replay or a forced logout and is
+// refused the same way. Completion writes no session state or cookie:
+// handleSAMLLogout already did that before redirecting to the IdP.
 func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 	providerID := extractSAMLProviderID(req.URL.Path, "slo")
 	if providerID == "" || !validateProviderID(providerID) {
@@ -482,7 +508,17 @@ func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := service.ValidateLogoutResponse(req); err != nil {
+	if err := service.ValidateLogoutResponse(req, samlSessionBindingKey(req)); err != nil {
+		if errors.Is(err, errSAMLLogoutResponseUnbound) {
+			log.Warn().
+				Err(err).
+				Str("provider_id", providerID).
+				Str("client_ip", GetClientIP(req)).
+				Msg("SAML LogoutResponse does not answer an outstanding logout for this session — refusing to clear session")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, false, "LogoutResponse does not answer an outstanding logout request for this session")
+			http.Error(w, "invalid LogoutResponse", http.StatusForbidden)
+			return
+		}
 		log.Warn().
 			Err(err).
 			Str("provider_id", providerID).
@@ -493,7 +529,11 @@ func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.clearSession(w, req)
+	// handleSAMLLogout already invalidated the session this response answers
+	// and expired its cookies. Write nothing here: a cross-site HTTP-POST
+	// delivery withholds the SameSite=Lax session cookie, so this request
+	// cannot see which session the browser holds, and deletion cookies would
+	// log out whichever one that is.
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, true, "SAML SLO complete")
 	http.Redirect(w, req, "/?logout=success", http.StatusFound)
 }
@@ -573,6 +613,18 @@ func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
 		NameID:       samlInfo.NameID,
 		SessionIndex: samlInfo.SessionIndex,
 	}
+}
+
+// samlSessionBindingKey identifies the session the request's cookie selects,
+// as the session store's token hash, or returns "" when the request carries
+// none. SLO binds each LogoutRequest to it and checks it again when the IdP's
+// LogoutResponse arrives.
+func samlSessionBindingKey(req *http.Request) string {
+	cookie, err := readSessionCookie(req)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	return sessionHash(cookie.Value)
 }
 
 // clearSession clears the current session - properly invalidates server-side session
