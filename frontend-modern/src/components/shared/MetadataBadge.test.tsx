@@ -47,4 +47,24 @@ describe('MetadataBadge', () => {
     expect(badgeClass).toContain('text-orange-700');
     expect(badgeClass).toContain('text-[10px]');
   });
+
+  it('keeps chips on one line unless a long identity value opts into wrapping', () => {
+    const defaultClass = getMetadataBadgeClass({ size: 'xs', shape: 'rounded' }).split(' ');
+    expect(defaultClass).toContain('whitespace-nowrap');
+    expect(defaultClass).not.toContain('wrap-anywhere');
+
+    render(() => (
+      <MetadataBadge size="xs" shape="rounded" wrap>
+        proxmox-lxc-docker:Production West:pve1:113
+      </MetadataBadge>
+    ));
+
+    const badge = screen.getByText('proxmox-lxc-docker:Production West:pve1:113');
+    expect(badge).toHaveClass('max-w-full');
+    expect(badge).toHaveClass('min-w-0');
+    expect(badge).toHaveClass('whitespace-normal');
+    expect(badge).toHaveClass('wrap-anywhere');
+    expect(badge).toHaveClass('text-left');
+    expect(badge).not.toHaveClass('whitespace-nowrap');
+  });
 });

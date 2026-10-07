@@ -2621,6 +2621,7 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/RunToolCallTrace.tsx',
       'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
+      'src/components/Infrastructure/ResourceDetailSummary.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
     expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
@@ -2688,6 +2689,18 @@ describe('shared primitive guardrails', () => {
     expect(metadataBadgeSource).toContain("muted: 'bg-surface-alt text-muted'");
     expect(metadataBadgeSource).toContain("warning: 'bg-amber-100 text-amber-800");
     expect(metadataBadgeSource).not.toContain(["muted: 'bg", 'slate', '100'].join('-'));
+    // Drawer identity values differ at their ends and a phone has no hover to
+    // show a title, so they wrap inside the drawer cell instead of spilling
+    // past the drawer edge, where the content shell clips them.
+    expect(metadataBadgeSource).toContain(
+      "METADATA_BADGE_WRAP_CLASS = 'min-w-0 max-w-full whitespace-normal wrap-anywhere text-left'",
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge tone="info" size="xs" shape="rounded" wrap title={ip}>',
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge size="xs" shape="rounded" wrap title={value}>',
+    );
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
     expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');

@@ -2352,6 +2352,20 @@ not a replacement status card, CTA band, or page-local nested card.
    Proxmox backup source/state chips follow the same boundary: storage/recovery
    owns backup-source labels and state semantics, while the visible chip shell
    and tone vocabulary route through `MetadataBadge`.
+   Resource drawer identity chips (the IP address and alias chips and the
+   alias overflow count in `ResourceDetailSummary.tsx`) compose `MetadataBadge`
+   too. Badges stay on one line by default; an identity value that can outgrow
+   a narrow drawer cell opts into the badge's `wrap` mode, which caps the chip
+   at its container and breaks inside a token only where no space or hyphen
+   fits. These values differ at their ends (`...:pve1:113`, a container hash)
+   and a phone has no hover to show a title, so they wrap rather than
+   truncate. A one-line alias used to overflow its fixed-width value cell at
+   phone widths, where the cell's hidden overflow and the inline drawer's
+   clipping content shell cut it off without an ellipsis.
+   `tests/integration/tests/04-mobile.spec.ts` opens a Docker container drawer
+   at phone width and checks that no element or text in its Identity section
+   crosses either edge of those clipping boxes, apart from values that end in
+   their own ellipsis.
    Workload backup freshness follows a separate shared presentation boundary:
    `frontend-modern/src/utils/workloadGuestPresentation.ts` owns the canonical
    tone and icon mapping consumed by workload rows and drawers. A recorded
