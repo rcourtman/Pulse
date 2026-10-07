@@ -38,7 +38,9 @@ describe('Recovery backup scope guidance', () => {
     const headings = [...article.querySelectorAll('h2')].map((heading) => heading.id);
     expect(headings[0]).toBe('choose-the-right-backup');
     expect(headings[1]).toBe('where-to-look');
-    const rows = [...article.querySelectorAll('table')[0].querySelectorAll('tbody tr')];
+    const rows = [
+      ...article.querySelectorAll('table')[0].querySelectorAll<HTMLTableRowElement>('tbody tr'),
+    ];
     expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.cells[0].textContent)).toEqual([
       'Provider backup, snapshot or replication artifact',
