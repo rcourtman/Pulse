@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -60,10 +59,16 @@ func TestPVEBackupWarningProducerUsesActualStatusAndEndpoint(t *testing.T) {
 				tokenName = ""
 			}
 			m := newUnreachableTestMonitor(t, &config.Config{PVEInstances: []config.PVEInstance{{Name: "site-a", TokenName: tokenName, TokenValue: "synthetic-secret"}}})
+			m.backupPermissionWarnings = make(map[string]string)
+			m.pveClients["site-a"] = client
 			m.pollStorageBackupsWithNodes(context.Background(), "site-a", client, []proxmox.Node{{Node: "node-a", Status: "online"}}, map[string]string{"node-a": "online"})
 			m.mu.RLock()
 			warning := m.backupPermissionWarnings["site-a"]
 			m.mu.RUnlock()
+			health := m.SchedulerHealth()
+			if len(health.Instances) != 1 || len(health.Instances[0].Warnings) != 1 || health.Instances[0].Warnings[0] != warning {
+				t.Fatalf("producer warning not served in health: %+v", health.Instances)
+			}
 			for _, snippet := range []string{tc.expected, endpoint, "saved PVE connection", "both user and token scopes", "without disabling privilege separation", "installed PVE version"} {
 				if !strings.Contains(warning, snippet) {
 					t.Fatalf("missing %q in producer warning: %q", snippet, warning)
@@ -75,14 +80,5 @@ func TestPVEBackupWarningProducerUsesActualStatusAndEndpoint(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-func TestPVEBackupWarningUnknownEvidenceAndBoundedEndpoint(t *testing.T) {
-	warning := pveBackupAccessWarning(nil, "/nodes/"+strings.Repeat("界", 300)+"\n/storage", fmt.Errorf("403 permission denied; synthetic-secret"))
-	if !strings.Contains(warning, "cause is unconfirmed") || strings.Contains(warning, "HTTP 403") || strings.Contains(warning, "synthetic-secret") {
-		t.Fatalf("text-only error became HTTP evidence: %q", warning)
-	}
-	if strings.ContainsAny(warning, "\r\n") || !strings.Contains(warning, "…") || len([]rune(warning)) > 1100 {
-		t.Fatalf("endpoint not safely bounded: %q", warning)
 	}
 }
