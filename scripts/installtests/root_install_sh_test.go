@@ -112,7 +112,6 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
 		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
 		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
-		`stop_pulse_for_replacement "$EXISTING_SERVICE"`,
 		`install_pulse_archive "$archive_path" "$expected_release"`,
 	}
 
@@ -126,6 +125,29 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 			t.Fatalf("download_pulse update safety steps are out of order at: %s", step)
 		}
 		previous = position
+	}
+	if strings.Contains(downloadPulse, "stop_pulse_for_replacement") {
+		t.Fatal("download_pulse must not stop Pulse before archive admission")
+	}
+	archiveInstall := extractRootInstallShellFunction(t, "install_pulse_archive")
+	previous = -1
+	for _, step := range []string{
+		`verify_release_signature "$archive_path"`,
+		`tar --no-same-owner --no-overwrite-dir -xzf`,
+		`validate_pulse_binary_architecture "$pulse_binary_path"`,
+		`cp "$pulse_binary_path" "$binary_stage/pulse"`,
+		`timeout 5 "$binary_stage/pulse" --version`,
+		`stop_pulse_for_replacement "$service_name"`,
+		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
+	} {
+		position := strings.Index(archiveInstall, step)
+		if position <= previous {
+			t.Fatalf("archive admission/replacement steps are out of order or missing at %s", step)
+		}
+		previous = position
+	}
+	if strings.Contains(archiveInstall, "pulse.old") || strings.Contains(archiveInstall, "temp_extract2") {
+		t.Fatal("archive replacement must not move/delete the old binary or blindly re-extract")
 	}
 }
 

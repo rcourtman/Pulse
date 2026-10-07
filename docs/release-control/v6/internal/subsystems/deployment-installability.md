@@ -15,29 +15,46 @@
 
 ## Purpose
 
-### Server replacement requires a confirmed inactive service
+### Server replacement requires admitted bytes and a confirmed inactive service
 
-The server installer's archive and source-build paths stage their inputs before
-stopping Pulse. Manual version changes, menu updates and reinstalls must not stop
-the service before staging, so a download/build failure does not create an outage.
-Immediately before binary replacement, the detected service must return an
-explicit `inactive` state. An `active` or `failed` unit is stopped with the
-existing five-second command bound and read back; only an `inactive` result
+The server installer's archive path verifies the signature, extracts the
+payload, checks its target architecture, copies the executable to a private
+staging directory on the destination filesystem, sets its permissions/owner,
+and checks its successful, five-second-bounded version result **before**
+stopping Pulse. A missing/unreadable or mismatched version fails admission.
+This applies to downloads and local `--archive` inputs; rejected local archives
+are retained. No failed admission changes installed binary bytes/modes,
+VERSION, source-build marker or persistent configuration. Temporary extraction
+and executable staging are removed. Signed-file checks remain mandatory.
+
+Manual version changes, menu updates and reinstalls must not stop the service
+before archive admission or source compilation, so staging failures do not
+create an outage. Immediately before binary replacement, the detected service
+must return an explicit `inactive` state. An `active` or `failed` unit is stopped
+with the existing five-second command bound and read back; only `inactive`
 admits replacement. A failed unit does not imply prior workload liveness.
 
 Failed/timed-out reads or stops, transitional states and malformed/empty results
-refuse replacement without an automatic restart or retry. Retain the installed
-binary, version and source-build marker on this refusal; temporary downloaded
-archives are cleaned up. Preserve the prior-active flag across a successful stop
-for the existing post-update liveness check. This does not establish restoration
-after a later installation failure, filesystem/data rollback or native systemd
-acceptance.
+refuse replacement without an automatic restart or retry. The archive path
+atomically renames its fully prepared executable over the live path, rather than
+moving away the old executable or retrying extraction after deleting it. A
+failed rename leaves the previous binary and metadata intact; only a service
+confirmed stopped after being `active` is started again, with bounded active
+readback. An inactive/failed service is not started by this failure recovery.
+Recovery cannot turn the failed update into success. Successful replacement
+preserves prior-active attribution for the existing post-update liveness check.
 
-`scripts/tests/test_server_installer_stop.py` exercises both real replacement
-paths with fixture-only external producers and a local service-command shim,
-including actual command timeouts, bytes/modes, liveness attribution and all
-three manual staging-failure flows. The existing root-installer ordering and
-update-resilience tests remain independent controls.
+`scripts/tests/test_server_installer_stop.py` now executes the actual archive
+installer with real tar/copy/rename bytes and fixture-only signing/architecture,
+service and ownership boundaries. Download/local admission failures, partial
+staging copies, version exits/timeouts, uncertain stops, atomic rename faults,
+prior-active-only recovery/readback and retained bytes/modes/configuration are
+checked, along with source-build and all three manual staging-failure flows.
+The existing root-installer ordering and update-resilience tests remain
+independent controls. These ordinary-user fixtures do not establish signature
+cryptography, native systemd/installed upgrade acceptance, ancillary-agent
+transaction rollback or filesystem/data rollback; those obligations remain
+separate.
 
 ### Shipped documentation is checked before CI dependency work
 
