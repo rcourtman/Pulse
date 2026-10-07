@@ -488,7 +488,6 @@ in-place click and chevron activation over a selection.
 64. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
 65. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
 66. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
-76. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
 77. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 78. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
 79. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
@@ -550,7 +549,6 @@ at desktop and phone widths; this is presentation proof, not native collection
 or a measured fleet performance improvement.
 
 
-1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `frontend-primitives`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
 12. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `frontend-primitives`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
@@ -1071,6 +1069,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    scope must be applied before deriving host, Kubernetes context/namespace,
    and container runtime facet options so embedded pages do not pay for or
    display unrelated platform options.
+   Net I/O and Disk I/O outlier statistics (median, MAD, p97, p99) are built
+   from guest throughput by `computeWorkloadIOEmphasis(...)` in
+   `workloadSelectors.ts`, which produces the stats that
+   `getOutlierEmphasis(...)` in `guestRowModel.tsx` reads; that math must not
+   move back behind a `Resource`-shaped infrastructure selector cast.
    Workloads source-health messaging must derive from the viewer-safe
    `/api/runtime/inventory-sources` projection through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
@@ -2948,12 +2951,12 @@ history into equal-time summary buckets before it reaches the shell/runtime
 owners, so long-range cards do not bunch recent higher-resolution samples at
 the right edge.
 Compact resource-facet summary chips render through the shared
-`ResourceFacetSummary` component, whose production consumer is the detail
-drawer's change history. A table-row use must set an explicit visible chip
-limit with overflow disclosure instead of letting mock-rich rows wrap an
-unbounded badge list, and must stay within the table's bounded windowing and
-mounted-row budget rather than forking separate table-only presentation
-logic. That component now also
+`ResourceFacetSummary` component, whose only production consumer is the
+detail drawer's change history, so it renders every chip. A table-row use must
+first give that shared component a visible chip limit with overflow disclosure
+instead of letting mock-rich rows wrap an unbounded badge list, and must stay
+within the table's bounded windowing and mounted-row budget rather than forking
+separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
@@ -2980,31 +2983,21 @@ history overview down to timeline counts and timeline-summary chips, so the
 performance-sensitive shared presentation path stays aligned with the
 investigation-first product contract instead of rendering low-signal generic
 facet sections by default.
-Governance metadata such as sensitivity and routing scope may be visible in
-the table, but it must remain on the same bounded row-windowing and mounted-row
-budget rather than creating a separate unbounded rendering path for
-policy-rich fleets.
-The detail drawer now also renders governed resource labels through the
-shared identity/display contract, which routes policy-aware resources through
-the canonical policy-aware helper and suppresses the raw alternate name when
-policy requires governed handling. That keeps the policy-aware label path
-inside the same rendering budget instead of adding a second display branch for
-redacted fleets.
+Governance metadata such as sensitivity and routing scope shown in a table
+must remain on the same bounded row-windowing and mounted-row budget rather
+than creating a separate unbounded rendering path for policy-rich fleets.
+The detail drawer's governance summary resolves governed resources through the
+canonical policy-aware `getResourcePolicyGovernedSummary(...)` helper. That
+keeps the policy-aware label path inside the same rendering budget instead of
+adding a second display branch for redacted fleets.
 Platform tables pass the canonical resource-label resolver into the detail
 drawer through `PlatformResourceDetailTableRow` so related-resource chips in
 the timeline/history path can resolve through the canonical catalog without adding a separate
 detail-only lookup branch to the hot-row path.
 The same detail drawer also uses that resolver for correlation dependency and
-dependent chips, so the investigation path does not fall back to raw IDs in
-the drawer while the AI page keeps its broader no-catalog fallback.
-The shared infrastructure selector search path now also routes through that
-same preferred resource display contract, so governed resources do not
-reappear via raw-name search candidates while the selector stays on the same
-hot-path budget.
-The shared workloads-link helper used by the resource drawer and table now
-also routes its Kubernetes-cluster fallback through the same preferred
-resource display contract, so navigation context does not leak raw
-`displayName` values for governed clusters.
+dependent chips, so the investigation path shows catalog labels in the drawer
+and keeps the raw ID only when the catalog cannot resolve one, while the AI
+page keeps its broader no-catalog fallback.
 That same workloads-link path and the workload projection now also
 share the canonical cluster-name helpers in the shared agent-resource layer,
 so route labels, pod grouping, and cluster-name fetch keys keep using the
@@ -3065,17 +3058,6 @@ bytes-per-second formatter shared by workload and infrastructure summary
 cards. Future throughput wording or workload-summary hot-path changes must
 extend these performance-owned surfaces instead of leaving the formatter or
 summary shell unowned in registry coverage.
-
-Infrastructure selector status ordering must now tolerate arbitrary filter-set
-strings without widening the canonical hot-path order tuple. Unknown statuses
-must sort after the governed status order instead of forcing the selector path
-to abandon the typed canonical order used by the infrastructure table and its
-performance proof surface.
-
-The Infrastructure page now also normalizes source filter keys through the
-shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
-selector boundary keeps using the canonical source-platform contract instead of
-maintaining a local source-normalization alias.
 
 Resource detail mappers now also use the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor

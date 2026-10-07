@@ -4,9 +4,7 @@ import {
   RESOURCE_POLICY_REDACTION_ORDER,
   RESOURCE_POLICY_ROUTING_ORDER,
   RESOURCE_POLICY_SENSITIVITY_ORDER,
-  hasBlockingResourcePolicyPosture,
   hasDefaultResourcePolicyPosture,
-  getResourcePolicyTableBadges,
   getResourcePolicyGovernedSummary,
   getResourcePolicyDisplayLabel,
   getResourcePolicyRedactionSummaries,
@@ -16,7 +14,6 @@ import {
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
-  shouldShowResourceAlternateName,
 } from '@/utils/resourcePolicyPresentation';
 
 describe('resourcePolicyPresentation utils', () => {
@@ -38,7 +35,7 @@ describe('resourcePolicyPresentation utils', () => {
     ).toEqual(['Hostname', 'IP Address']);
   });
 
-  it('keeps non-blocking policy posture out of table rows', () => {
+  it('recognizes only the canonical default policy posture', () => {
     expect(
       hasDefaultResourcePolicyPosture({
         sensitivity: 'internal',
@@ -49,43 +46,6 @@ describe('resourcePolicyPresentation utils', () => {
     ).toBe(true);
 
     expect(
-      getResourcePolicyTableBadges({
-        sensitivity: 'internal',
-        routing: {
-          scope: 'cloud-summary',
-        },
-      }),
-    ).toEqual([]);
-
-    expect(
-      hasBlockingResourcePolicyPosture({
-        sensitivity: 'sensitive',
-        routing: {
-          scope: 'local-first',
-          redact: ['hostname'],
-        },
-      }),
-    ).toBe(false);
-    expect(
-      getResourcePolicyTableBadges({
-        sensitivity: 'sensitive',
-        routing: {
-          scope: 'local-first',
-          redact: ['hostname'],
-        },
-      }).map((badge) => badge.label),
-    ).toEqual([]);
-    expect(
-      getResourcePolicyTableBadges({
-        sensitivity: 'internal',
-        routing: {
-          scope: 'cloud-summary',
-          redact: ['hostname'],
-        },
-      }).map((badge) => badge.label),
-    ).toEqual([]);
-
-    expect(
       hasDefaultResourcePolicyPosture({
         sensitivity: 'sensitive',
         routing: {
@@ -94,30 +54,6 @@ describe('resourcePolicyPresentation utils', () => {
         },
       }),
     ).toBe(false);
-  });
-
-  it('surfaces blocking local-only policy posture in table rows', () => {
-    expect(
-      hasBlockingResourcePolicyPosture({
-        sensitivity: 'restricted',
-        routing: {
-          scope: 'local-only',
-          redact: ['hostname'],
-        },
-      }),
-    ).toBe(true);
-
-    const badges = getResourcePolicyTableBadges({
-      sensitivity: 'restricted',
-      routing: {
-        scope: 'local-only',
-        redact: ['hostname'],
-      },
-    });
-
-    expect(badges.map((badge) => badge.label)).toEqual(['Local Only']);
-    expect(badges[0]?.title).toContain('Restricted');
-    expect(badges[0]?.title).toContain('Redacts Hostname');
   });
 
   it('uses concise governed labels for redacted resources', () => {
@@ -185,29 +121,6 @@ describe('resourcePolicyPresentation utils', () => {
     ).toBe(
       'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
     );
-  });
-
-  it('hides raw alternate names when policy requires governed handling', () => {
-    expect(
-      shouldShowResourceAlternateName({
-        name: 'sensitive-host',
-        displayName: 'Sensitive Host',
-        policy: {
-          sensitivity: 'restricted',
-          routing: {
-            scope: 'local-only',
-            redact: ['hostname'],
-          },
-        },
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldShowResourceAlternateName({
-        name: 'host-1',
-        displayName: 'Host 1',
-      }),
-    ).toBe(true);
   });
 
   it('formats canonical policy count summaries', () => {
