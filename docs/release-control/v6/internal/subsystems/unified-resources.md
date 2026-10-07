@@ -5474,6 +5474,43 @@ A row's own serial is kept even when it is a placeholder, as the
 adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
 `TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
 `TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
+The adapters' disk temperature rule is shared with the agent disk history
+writer. `HostSMARTDiskTemperature` returns the temperature and collection state
+a SMART row's disk shows: the row's own reading, or, when it has none, its
+Unraid row's under `unraidDiskTemperatureStatus`. `matchUnraidDisk` finds that
+Unraid row by the SMART row's usable serial anywhere in the inventory before
+any device path, and a placeholder serial matches nothing. The fallback, like
+the serial a row without one takes (`hostSMARTDiskSerial`), comes only from an
+Unraid row that describes the row's disk (`unraidDiskDescribesSMARTRow`): one
+carrying the row's usable serial, or one naming the row's device path when the
+row is that whole kernel block device. A controller member, even the only one
+reported, and a row sharing its path with other SMART rows are not, because
+the Unraid row describes the block device as a whole. `HostUnraidDiskTemperature`
+returns what a disk built from an Unraid row alone shows, and
+`HostUnraidDiskMetricID` returns the key that disk's metrics target reads: its
+usable serial, else its `HostUnraidDiskSourceID`, and nothing for a row without
+a device, which is not ingested. The writer used to take only the SMART row's
+own reading, so a temperature shown from the Unraid inventory, for a disk whose
+SMART probe returned none or one excluded from SMART collection, was never
+charted. Proof: `TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget`.
+`HostDiskTemperatureReadings` lists the reading each disk of a host agent shows
+for consumers that judge disk heat, the agent disk temperature alerts in
+`CheckHost`: one per SMART row the registry ingests (no virtual block device),
+then one per Unraid row whose disk key (`HostUnraidDiskMetricID`) no SMART row's
+`HostSMARTDiskMetricID` equals, the history writer's rule, with a row without a
+device skipped as the registry skips it. Rows with one key are one registry
+disk whatever device labels they carry, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`). When smartctl and Unraid
+report different usable serials for one device the registry shows both disks,
+and both are listed. Each reading is taken from the disk resource
+`resourceFromHostSMARTDisk` or `resourceFromHostUnraidPhysicalDisk` builds, so
+its temperature, collection state and disk type are the ones that row's disk
+shows. Unraid rows on different devices that share a key and no SMART row are
+one registry disk but keep a reading each, since alerts are keyed by device.
+Proof: `TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows` compares
+each reading with the ingested disk, including two disks on one device and a
+controller member Unraid lists under its block device.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
