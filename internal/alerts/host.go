@@ -450,9 +450,11 @@ func (m *Manager) CheckHost(host models.Host) {
 		diskResourceID, diskName := hostDiskResourceID(host, disk)
 		seenDisks[diskResourceID] = struct{}{}
 
-		// Check for disk-specific override
+		// Check for disk-specific override. The copy's Disk still points into
+		// the live config, so own it before ensureHysteresisThreshold fills Clear.
 		m.mu.RLock()
 		diskOverride, hasDiskOverride := m.config.Overrides[diskResourceID]
+		diskOverride.Disk = cloneThreshold(diskOverride.Disk)
 		m.mu.RUnlock()
 
 		// Determine the effective disk threshold

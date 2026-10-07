@@ -3143,6 +3143,26 @@ fills every field and fails when a new reference field is not copied.
 Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
 `internal/config/persistence_alert_ownership_test.go`.
 
+### Alert evaluation owns the thresholds it normalizes
+
+Host, guest and Docker container evaluation copy what they read from
+`m.config` while holding `m.mu`, and only then fill in defaults.
+`CheckHost` and `CheckGuest` clone a per-disk
+override's `Disk` threshold before `ensureHysteresisThreshold` sets a missing
+`Clear` to the trigger minus 5. They used to normalize the live override's
+pointer after unlocking, so a `GetConfig()` clone under the read lock raced
+the write, and the saved override changed to whatever the last poll filled in.
+The live override now keeps the clear it was saved with, and the config API
+returns that value. Docker container evaluation resolves its thresholds from
+cloned `DockerDefaults` plus the override under the same lock, and reads the
+restart-loop and memory-limit settings under the lock. It used to point into
+`m.config.DockerDefaults` with no lock while `UpdateConfig` replaced
+`m.config`. The test-only `getThresholdForMetricFromConfig`, which normalized
+in place, is gone. `internal/alerts/alerts_test.go`
+`TestAlertEvaluationLeavesTheLiveConfigToTheLock` runs host, guest and Docker
+evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
+`-race`.
+
 ### Versioned alert-intent policy
 
 The alerts runtime owns one versioned alert-intent document and its durable

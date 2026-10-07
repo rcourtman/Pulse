@@ -328,8 +328,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
 
 			effectiveDiskThreshold := thresholds.Disk
+			// Own the override's Disk before ensureHysteresisThreshold fills
+			// Clear: the returned copy still points into the live config.
 			m.mu.RLock()
 			diskOverride, hasDiskOverride := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, keySource)
+			diskOverride.Disk = cloneThreshold(diskOverride.Disk)
 			m.mu.RUnlock()
 			if hasDiskOverride {
 				if diskOverride.Disabled {
