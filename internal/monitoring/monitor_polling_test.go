@@ -359,7 +359,7 @@ func TestUpdateResourceStoreSyncsUnifiedIncidentAlerts(t *testing.T) {
 		},
 	}
 
-	monitor.updateResourceStore(models.StateSnapshot{})
+	monitor.updateResourceStore(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 	active := alertManager.GetActiveAlerts()
 	if len(active) != 1 {
@@ -420,7 +420,7 @@ func TestUpdateResourceStoreSyncsCanonicalStorageMetrics(t *testing.T) {
 			},
 		}
 
-		monitor.updateResourceStore(models.StateSnapshot{})
+		monitor.updateResourceStore(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 		memory := monitor.GetStorageMetrics("pool:tank", time.Hour)
 		if got := len(memory["usage"]); got == 0 {
@@ -467,7 +467,7 @@ func TestUpdateResourceStoreSyncsCanonicalStorageMetrics(t *testing.T) {
 			metricsStore:   store,
 		}
 
-		monitor.updateResourceStore(snapshot)
+		monitor.updateResourceStore(snapshot, monitor.mockModeFence.begin())
 
 		var storageResourceID string
 		for _, resource := range resourceStore.GetAll() {
@@ -532,7 +532,7 @@ func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) 
 		},
 	}
 
-	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{})
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 	if len(frontend.ActiveAlerts) != 1 {
 		t.Fatalf("expected 1 active alert in frontend state, got %d", len(frontend.ActiveAlerts))
@@ -1509,7 +1509,7 @@ func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t 
 		}},
 	}
 
-	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(staleSnapshot)
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(staleSnapshot, monitor.mockModeFence.begin())
 
 	if len(frontend.ActiveAlerts) != 1 {
 		t.Fatalf("expected 1 live active alert in frontend state, got %d", len(frontend.ActiveAlerts))
@@ -1635,7 +1635,7 @@ func TestBuildBroadcastFrontendStatePreservesSnapshotAlertsWithoutAlertManager(t
 		}},
 	}
 
-	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	frontend := monitor.buildBroadcastFrontendStateFromSnapshot(snapshot, monitor.mockModeFence.begin())
 	if len(frontend.ActiveAlerts) != 1 {
 		t.Fatalf("expected snapshot alert to be preserved, got %#v", frontend.ActiveAlerts)
 	}
@@ -2513,7 +2513,7 @@ func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
 		t.Fatalf("RegisterPollProvider failed: %v", err)
 	}
 
-	monitor.updateResourceStore(models.StateSnapshot{})
+	monitor.updateResourceStore(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 	if store.snapshotCalls != 1 {
 		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
@@ -2567,7 +2567,7 @@ func TestUpdateResourceStore_RecordsSupplementalChanges(t *testing.T) {
 		t.Fatalf("RegisterPollProvider failed: %v", err)
 	}
 
-	monitor.updateResourceStore(models.StateSnapshot{})
+	monitor.updateResourceStore(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 	if len(store.recordedChanges) != 1 {
 		t.Fatalf("expected 1 supplemental change recorded, got %d", len(store.recordedChanges))
@@ -2628,7 +2628,7 @@ func TestUpdateResourceStore_SuppressesProviderOwnedSnapshotSources(t *testing.T
 		PhysicalDisks: []models.PhysicalDisk{{}},
 		CephClusters:  []models.CephCluster{{}},
 		Hosts:         []models.Host{{}},
-	})
+	}, monitor.mockModeFence.begin())
 
 	if store.snapshotCalls != 1 {
 		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
@@ -2674,7 +2674,7 @@ func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T)
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
 	store.snapshotCalls = 0
 	store.recordsBySource = nil
-	monitor.updateResourceStore(models.StateSnapshot{})
+	monitor.updateResourceStore(models.StateSnapshot{}, monitor.mockModeFence.begin())
 
 	if store.snapshotCalls != 1 {
 		t.Fatalf("expected PopulateFromSnapshot to be called once, got %d", store.snapshotCalls)
@@ -2722,7 +2722,7 @@ func TestUpdateResourceStore_UsesAtomicStoreReplacementWhenAvailable(t *testing.
 		Hosts: []models.Host{{ID: "host-1", Hostname: "minipc", Status: "online"}},
 	}
 
-	monitor.updateResourceStore(snapshot)
+	monitor.updateResourceStore(snapshot, monitor.mockModeFence.begin())
 
 	if store.atomicCalls != 1 {
 		t.Fatalf("expected atomic populate to be called once, got %d", store.atomicCalls)
@@ -2774,7 +2774,7 @@ func TestUpdateResourceStore_SuppressesSnapshotForRegisteredSupplementalOwnershi
 		VMs:        []models.VM{{}},
 		Containers: []models.Container{{}},
 		Hosts:      []models.Host{{}},
-	})
+	}, monitor.mockModeFence.begin())
 
 	if len(store.lastSnapshot.Nodes) != 0 || len(store.lastSnapshot.VMs) != 0 || len(store.lastSnapshot.Containers) != 0 {
 		t.Fatalf("expected proxmox slices to be suppressed for direct provider ownership")

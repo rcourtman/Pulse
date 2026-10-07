@@ -560,11 +560,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			return &smartData[matchIndex]
 		}
 
-		// Try to match by WWN (most reliable)
+		// Try to match by WWN (most reliable). PVE and the agent spell one WWN
+		// differently (0x5000c500a1b2c3d4 against smartctl's 5-c50-a1b2c3d4),
+		// so compare the normalized identity, not the reported string.
 		if diskinventory.IsUsableHardwareID(updated[i].WWN) {
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
-				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
-					strings.EqualFold(candidate.WWN, updated[i].WWN) &&
+				return diskinventory.HardwareIdentityMatch("", updated[i].WWN, "", candidate.WWN) &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
 		}
@@ -578,7 +579,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			})
 		}
 
-		// Last resort: match by device path
+		// Last resort: match by device path. A path names a slot, not a disk,
+		// so the row there may describe the slot's previous occupant: the agent
+		// has not reported since the swap, or it went silent and its last rows
+		// are retained. A row whose identity contradicts the disk's is refused,
+		// or it would fill or promote the old serial onto the replacement,
+		// which would then take the old disk's canonical resource and history.
 		if matched == nil {
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
@@ -587,6 +593,15 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 					normalizedDiskDev == normalizedDevPath &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
+			if matched != nil && hostAgentSMARTIdentityConflicts(updated[i], *matched) {
+				log.Debug().
+					Str("node", updated[i].Node).
+					Str("device", updated[i].DevPath).
+					Str("serial", updated[i].Serial).
+					Str("smartSerial", matched.Serial).
+					Msg("Skipping host agent SMART row whose disk identity contradicts the Proxmox disk at the same path")
+				matched = nil
+			}
 		}
 
 		if matched == nil {
@@ -701,6 +716,40 @@ func diskTopologyCompatible(leftController, leftTarget, rightController, rightTa
 		return false
 	}
 	return true
+}
+
+// hostAgentSMARTIdentityConflicts reports whether a SMART row found only by
+// device path names a different disk than the Proxmox disk at that path.
+// WWNs are compared for every disk; serials only where both producers read
+// the drive's own serial (hostAgentSMARTSerialComparable). Any other Proxmox
+// serial still counts toward agreement.
+func hostAgentSMARTIdentityConflicts(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	if diskinventory.HardwareIdentityMatch(disk.Serial, disk.WWN, smart.Serial, smart.WWN) {
+		return false
+	}
+	serial := ""
+	if hostAgentSMARTSerialComparable(disk, smart) {
+		serial = disk.Serial
+	}
+	return diskinventory.HardwareIdentityConflict(serial, disk.WWN, smart.Serial, smart.WWN)
+}
+
+// hostAgentSMARTSerialComparable reports whether the Proxmox serial was read
+// from the drive itself, as smartctl's is. Proxmox takes the serial from udev:
+// for an NVMe namespace that is the controller's serial, and for a disk
+// presented with SCSI vendor "ATA" (libata, or a SAS HBA's SCSI-ATA
+// translation) udev's ata_id reads it from IDENTIFY. Any other disk's Proxmox
+// serial may be a SAS address or SCSI designator from VPD page 0x83 (#1595),
+// or a USB bridge's own serial.
+func hostAgentSMARTSerialComparable(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	agentType := strings.ToLower(strings.TrimSpace(smart.Type))
+	switch strings.ToLower(strings.TrimSpace(disk.Type)) {
+	case "nvme":
+		return agentType == "nvme"
+	case "usb", "sas":
+		return false
+	}
+	return agentType == "sata" && strings.EqualFold(strings.TrimSpace(disk.Vendor), "ATA")
 }
 
 func shouldPromoteHostAgentSerial(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
@@ -1285,6 +1334,7 @@ type Monitor struct {
 	mockDockerHosts           map[string]models.DockerHost
 	mockFixtureRevision       uint64
 	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
+	mockModeFence             mockModeFence            // Keeps mode-dependent alert evaluations inside the epoch they read in
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
 	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
@@ -4369,30 +4419,30 @@ func (m *Monitor) PBSBackupsSnapshot() []models.PBSBackup {
 // BuildFrontendState returns the current state converted to frontend format.
 // This replaces the GetState().ToFrontend() pattern in consumer code.
 func (m *Monitor) BuildFrontendState() models.StateFrontend {
-	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+	return m.buildBroadcastFrontendStateFromSnapshot(m.currentStateWithScope())
 }
 
 // BuildBroadcastFrontendState returns frontend state ready for websocket
 // broadcasts, including the unified resource payload when a resource store is
 // configured.
 func (m *Monitor) BuildBroadcastFrontendState() models.StateFrontend {
-	return m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
+	return m.buildBroadcastFrontendStateFromSnapshot(m.currentStateWithScope())
 }
 
 func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	return snapshot.ToFrontend()
 }
 
-func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
-	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, time.Now)
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot, scope mockModeScope) models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, scope, time.Now)
 }
 
 // The clock is sampled at the same post-read health-evaluation boundary as
 // ordinary broadcasts. Tests can compare complete projections at one instant
 // without mistaking a naturally advancing health-age label for lost content.
-func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot models.StateSnapshot, healthClock func() time.Time) models.StateFrontend {
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot models.StateSnapshot, scope mockModeScope, healthClock func() time.Time) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
-	m.updateResourceStoreForRead(snapshot)
+	m.updateResourceStoreForRead(snapshot, scope)
 	if m != nil && m.alertManager != nil {
 		if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
 			frontendState.ActiveAlerts = liveAlerts
@@ -4585,19 +4635,33 @@ func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Aler
 	hub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 }
 
+// mockModeSwitchMu serializes mock-mode switches. The mode is process-wide,
+// and a switch is several steps (flip, end the epoch, clear, reset state), so
+// two interleaved switches could clear what the later one just admitted.
+var mockModeSwitchMu sync.Mutex
+
 // SetMockMode switches between mock data and real infrastructure data at runtime.
+// It must not be called from inside an alert evaluation, whose completion it
+// may wait for.
 func (m *Monitor) SetMockMode(enable bool) error {
+	mockModeSwitchMu.Lock()
+	defer mockModeSwitchMu.Unlock()
+
 	current := mock.IsMockEnabled()
 	if current == enable {
 		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
 		return nil
 	}
 
+	// Every evaluation of mode-dependent data that started before the flip
+	// must finish or be refused before the clear, or it reopens alerts for
+	// the side the monitor just left (see mockModeFence).
 	if enable {
 		m.stopMockMetricsSampler()
 		if err := mock.SetEnabled(true); err != nil {
 			return err
 		}
+		m.mockModeFence.advance()
 		m.alertManager.ClearActiveAlerts()
 		m.mu.Lock()
 		m.resetStateLocked()
@@ -4616,6 +4680,7 @@ func (m *Monitor) SetMockMode(enable bool) error {
 		if err := mock.SetEnabled(false); err != nil {
 			return err
 		}
+		m.mockModeFence.advance()
 		m.alertManager.ClearActiveAlerts()
 		m.forgetMockFixtureHosts()
 		m.mu.Lock()
@@ -4759,7 +4824,7 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	// Guard against minimally initialized monitors (e.g., test fixtures
 	// with bare &Monitor{}) where m.state may be nil.
 	if store != nil && m.state != nil {
-		m.updateResourceStore(m.GetState())
+		m.updateResourceStore(m.currentStateWithScope())
 	}
 }
 
@@ -4786,7 +4851,7 @@ func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSou
 	}
 	m.mu.Unlock()
 
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 // SetLicenseChecker wires the commercial feature gate used by monitoring-owned
@@ -5162,6 +5227,25 @@ func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
 	return m.currentUnifiedStateView().readState
 }
 
+// currentModeReadState is GetUnifiedReadStateOrSnapshot for callers that act
+// on the inventory it lists: those that open or remove alerts from it (Docker
+// pruning, backup and snapshot guest lookups) and the pollers' previous-state
+// carry, which writes it back into live state. After leaving mock mode the
+// registry may still hold the fixture estate until an undisturbed rebuild in
+// the new epoch replaces it, so they get a view of current state meanwhile.
+// The view lists the state snapshot without provider-owned supplemental
+// resources or persisted manual links and copies the whole estate, so it is
+// only for callers outside per-resource loops.
+func (m *Monitor) currentModeReadState() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	if !mock.IsMockEnabled() && m.GetUnifiedReadState() != nil && !m.mockModeFence.registryCurrent() {
+		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState())).readState
+	}
+	return m.GetUnifiedReadStateOrSnapshot()
+}
+
 // shouldSkipNodeMetrics returns true if we should skip detailed metric polling
 // for the given node because a host agent is providing richer data.
 // This helps reduce API load when agents are active.
@@ -5203,7 +5287,7 @@ type readRefreshResourceStore interface {
 // above all must not queue behind an in-flight rebuild whose change-record
 // and identity-pin persistence can take seconds per transaction on slow
 // volumes (#1665: /api/state stuck for minutes with SQLite on NFS).
-func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
+func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope mockModeScope) {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
@@ -5213,7 +5297,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 	}
 	readStore, ok := store.(readRefreshResourceStore)
 	if !ok {
-		m.updateResourceStore(state)
+		m.updateResourceStore(state, scope)
 		return
 	}
 
@@ -5224,20 +5308,46 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 	if ownedSources := m.providerOwnedSnapshotSources(); len(ownedSources) > 0 {
 		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
 	}
-	rebuilt := readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, m.collectSupplementalRecordsBySource)
-	if !rebuilt {
+	rebuilt := false
+	mark, published := scope.publish(func() bool {
+		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, m.collectSupplementalRecordsBySource)
+		if rebuilt {
+			recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+		}
+		return rebuilt
+	})
+	if !published || !rebuilt {
 		return
 	}
-	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	m.syncPublishedResourceStore(store, scope, mark)
+}
+
+// syncPublishedResourceStore runs the metric and alert syncs over the registry
+// a refresh just published under scope. A rebuild from an ended mock-mode
+// epoch that overlapped the refresh may have replaced that registry with the
+// mode the monitor left, so the alert sync runs only if none did.
+func (m *Monitor) syncPublishedResourceStore(store ResourceStoreInterface, scope mockModeScope, mark uint64) {
 	store = newResourceSnapshotStore(store)
+	resources := store.GetAll()
 	m.syncAllUnifiedMetrics(store)
-	m.syncUnifiedResourceAlertsToState(store.GetAll())
+	if scope.undisturbedSince(mark) {
+		m.syncUnifiedResourceAlertsToState(resources, scope)
+	}
+}
+
+// currentStateWithScope reads the monitor state together with the mock-mode
+// scope it was read in. GetState serves the fixture graph in mock mode, so a
+// refresh that evaluates alerts from it must take the scope first.
+func (m *Monitor) currentStateWithScope() (models.StateSnapshot, mockModeScope) {
+	scope := m.mockModeFence.begin()
+	return m.GetState(), scope
 }
 
 // updateResourceStore populates the canonical resource store from current
 // monitoring state. Callers use it at accepted-ingest boundaries and before
 // broadcast hydration so every ReadState consumer observes the same snapshot.
-func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
+// The scope must predate the read of state (see currentStateWithScope).
+func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockModeScope) {
 	m.mu.RLock()
 	store := m.resourceStore
 	m.mu.RUnlock()
@@ -5272,46 +5382,48 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
 	}
 
-	recordsBySource := m.collectSupplementalRecordsBySource()
-	supplementalChanges := m.collectSupplementalChanges()
-	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
-		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
-		recordSupplementalResourceChanges(store, supplementalChanges)
-		store = newResourceSnapshotStore(store)
-		m.syncAllUnifiedMetrics(store)
-		for source, records := range recordsBySource {
-			if len(records) == 0 {
-				continue
+	mark, published := scope.publish(func() bool {
+		recordsBySource := m.collectSupplementalRecordsBySource()
+		supplementalChanges := m.collectSupplementalChanges()
+		if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
+			atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+			recordSupplementalResourceChanges(store, supplementalChanges)
+			for source, records := range recordsBySource {
+				if len(records) == 0 {
+					continue
+				}
+				log.Debug().
+					Str("source", string(source)).
+					Int("records", len(records)).
+					Msg("[Resources] Atomically ingested supplemental records")
 			}
-			log.Debug().
-				Str("source", string(source)).
-				Int("records", len(records)).
-				Msg("[Resources] Atomically ingested supplemental records")
+			return true
 		}
-		m.syncUnifiedResourceAlertsToState(store.GetAll())
+
+		store.PopulateFromSnapshot(snapshotForStore)
+
+		supplementalStore, ok := store.(SupplementalRecordStore)
+		if ok {
+			for source, records := range recordsBySource {
+				if len(records) == 0 {
+					continue
+				}
+				supplementalStore.PopulateSupplementalRecords(source, records)
+				log.Debug().
+					Str("source", string(source)).
+					Int("records", len(records)).
+					Msg("[Resources] Ingested supplemental records")
+			}
+		}
+
+		recordSupplementalResourceChanges(store, supplementalChanges)
+		return true
+	})
+	if !published {
+		// The snapshot belongs to the mode the monitor just left.
 		return
 	}
-
-	store.PopulateFromSnapshot(snapshotForStore)
-
-	supplementalStore, ok := store.(SupplementalRecordStore)
-	if ok {
-		for source, records := range recordsBySource {
-			if len(records) == 0 {
-				continue
-			}
-			supplementalStore.PopulateSupplementalRecords(source, records)
-			log.Debug().
-				Str("source", string(source)).
-				Int("records", len(records)).
-				Msg("[Resources] Ingested supplemental records")
-		}
-	}
-
-	recordSupplementalResourceChanges(store, supplementalChanges)
-	store = newResourceSnapshotStore(store)
-	m.syncAllUnifiedMetrics(store)
-	m.syncUnifiedResourceAlertsToState(store.GetAll())
+	m.syncPublishedResourceStore(store, scope, mark)
 }
 
 // resourceSnapshotStore serves one GetAll clone to every consumer of a single
@@ -5365,7 +5477,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentStateChange() {
 	if m == nil || m.state == nil {
 		return
 	}
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 // agentReportRefreshInterval bounds how often accepted agent reports refresh
@@ -5398,7 +5510,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
 	}
 	window := m.agentReportRefreshWindow
 	if window <= 0 {
-		m.updateResourceStore(m.GetState())
+		m.updateResourceStore(m.currentStateWithScope())
 		return
 	}
 
@@ -5414,7 +5526,7 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
 		r.running = true
 		r.lastRun = now
 		r.mu.Unlock()
-		m.updateResourceStore(m.GetState())
+		m.updateResourceStore(m.currentStateWithScope())
 		r.mu.Lock()
 		r.running = false
 		r.mu.Unlock()
@@ -5438,7 +5550,7 @@ func (m *Monitor) runTrailingAgentReportRefresh() {
 	r.lastRun = time.Now()
 	r.mu.Unlock()
 
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 
 	r.mu.Lock()
 	r.running = false

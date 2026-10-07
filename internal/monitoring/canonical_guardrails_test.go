@@ -493,7 +493,7 @@ func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
 	}
 	source := string(data)
 
-	metricIndex := strings.Index(source, "CheckUnifiedResourceMetricsWithCapacityTrends(resources")
+	metricIndex := strings.Index(source, "CheckUnifiedResourceWithCapacityTrend(input, capacityTrends[input.ID])")
 	incidentIndex := strings.Index(source, "SyncUnifiedResourceIncidents(resources)")
 	if metricIndex < 0 {
 		t.Fatalf("monitor alert sync must run unified resource metric evaluation")
@@ -503,6 +503,43 @@ func TestUnifiedResourceAlertSyncEvaluatesMetricsBeforeIncidents(t *testing.T) {
 	}
 	if metricIndex > incidentIndex {
 		t.Fatalf("unified resource metric evaluation must run before incident sync")
+	}
+}
+
+// Monitor state and live snapshots switch to the fixture graph in mock mode,
+// so a store refresh must take its mock-mode scope before it reads them.
+// Go evaluates call arguments left to right: a scope begun in the argument
+// after the read belongs to the epoch the snapshot may already have left.
+func TestStoreRefreshTakesItsMockModeScopeBeforeReadingState(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("glob monitoring sources: %v", err)
+	}
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, forbidden := range []string{
+			"GetState(), m.mockModeFence.begin()",
+			"GetSnapshot(), m.mockModeFence.begin()",
+		} {
+			if strings.Contains(source, forbidden) {
+				t.Errorf("%s reads state before taking its mock-mode scope (%q); use currentStateWithScope or begin the scope first", file, forbidden)
+			}
+		}
+	}
+
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	if got := strings.Count(string(data), "m.mockModeFence.advance()\n\t\tm.alertManager.ClearActiveAlerts()"); got != 2 {
+		t.Fatalf("SetMockMode must end the mock-mode epoch immediately before clearing alerts in both directions, found %d", got)
 	}
 }
 
@@ -2954,7 +2991,7 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 	if !view.freshness.IsZero() {
 		want.LastUpdate = view.freshness.UnixMilli()
 	}
-	got := m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, func() time.Time { return now })
+	got := m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, m.mockModeFence.begin(), func() time.Time { return now })
 	wantJSON, err := json.Marshal(want)
 	if err != nil {
 		t.Fatal(err)

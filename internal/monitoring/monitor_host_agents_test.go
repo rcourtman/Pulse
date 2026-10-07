@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -7055,5 +7057,139 @@ func TestSilentLinkedAgentStopsFeedingNodeDisk(t *testing.T) {
 	disk, source, host = poll(time.Now())
 	if source != "agent" || disk.Used != 900 || host.Status != "online" {
 		t.Fatalf("agent reporting again: node disk = %+v from %q, agent %q; want the agent's summary and online", disk, source, host.Status)
+	}
+}
+
+// A disk swapped into a slot must not take its identity from the linked host
+// agent's row for the slot's previous occupant. A silent agent keeps its last
+// rows, and that row used to match the replacement by device path alone: it
+// filled a serial Proxmox reported as "unknown" (recorded as unreported, so
+// the agent can fill it) or, for SAS, promoted its serial over the SAS address
+// Proxmox reports, and the registry joined a SAS replacement to the agent's
+// disk on the same path. Either way the replacement took the old disk's
+// serial, canonical resource and history, temperature and failed health.
+func TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity(t *testing.T) {
+	const (
+		oldSerial   = "ZA1OLD0001"
+		oldAgentWWN = "5-c50-aaaa0001" // smartctl's NAA field spelling
+		oldPVEWWN   = "0x5000c500aaaa0001"
+		newPVEWWN   = "0x5000c500bbbb0002"
+	)
+	for _, transport := range []struct {
+		agentType string
+		// pveSerial is what Proxmox reports for a disk with the given WWN.
+		pveSerial func(wwn string) string
+		// replacementSerial is the serial the replacement's record keeps.
+		replacementSerial string
+		serialState       diskinventory.FieldState
+	}{
+		{
+			agentType:         "sata",
+			pveSerial:         func(string) string { return "unknown" },
+			replacementSerial: "",
+			serialState:       diskinventory.FieldMissing,
+		},
+		{
+			agentType:         "sas",
+			pveSerial:         func(wwn string) string { return strings.TrimPrefix(wwn, "0x") },
+			replacementSerial: strings.TrimPrefix(newPVEWWN, "0x"),
+			serialState:       diskinventory.FieldAvailable,
+		},
+	} {
+		t.Run(transport.agentType, func(t *testing.T) {
+			t.Setenv("PULSE_DATA_DIR", t.TempDir())
+			now := time.Now()
+			state := models.NewState()
+			state.UpdateNodesForInstance("pve1", []models.Node{{
+				ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+				LastSeen: now, LinkedAgentID: "agent-1",
+			}})
+			state.UpsertHost(models.Host{
+				ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1",
+				Status: "online", IntervalSeconds: 30, LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device: "/dev/sdb", Serial: oldSerial, WWN: oldAgentWWN, Type: transport.agentType,
+					Health: "FAILED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Serial:      diskinventory.Available("smartctl"),
+						Temperature: diskinventory.Available("smartctl"),
+					},
+				}}},
+			})
+			alertManager := alerts.NewManager()
+			t.Cleanup(alertManager.Stop)
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m := &Monitor{
+				state: state, resourceStore: adapter, alertManager: alertManager,
+				metricsHistory: NewMetricsHistory(100, time.Hour),
+				startTime:      now.Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+			}
+			client := &slotDiskPVEClient{}
+			pveDisk := func(wwn string) proxmox.Disk {
+				return proxmox.Disk{
+					DevPath: "/dev/sdb", Model: "ST4000NM000A", Serial: transport.pveSerial(wwn), WWN: wwn,
+					Type: "hdd", Health: "PASSED", Wearout: 100, Size: 4000787030016,
+				}
+			}
+			poll := func() (models.PhysicalDisk, *unifiedresources.PhysicalDiskView) {
+				t.Helper()
+				adapter.PopulateFromSnapshot(state.GetSnapshot())
+				started := time.Now()
+				delete(m.lastPhysicalDiskPoll, "pve1")
+				m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client,
+					[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+				deadline := time.Now().Add(3 * time.Second)
+				for {
+					if disks := state.GetSnapshot().PhysicalDisks; len(disks) == 1 && !disks[0].LastChecked.Before(started) {
+						adapter.PopulateFromSnapshot(state.GetSnapshot())
+						var proxmoxViews []*unifiedresources.PhysicalDiskView
+						for _, view := range adapter.PhysicalDisks() {
+							if _, ok := view.SourceStatus(unifiedresources.SourceProxmox); ok {
+								proxmoxViews = append(proxmoxViews, view)
+							}
+						}
+						if len(proxmoxViews) != 1 {
+							t.Fatalf("canonical Proxmox physical disks = %d, want one", len(proxmoxViews))
+						}
+						return disks[0], proxmoxViews[0]
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("physical disk poll did not land in state")
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+
+			client.setDisk(pveDisk(oldPVEWWN))
+			original, originalView := poll()
+			if original.Serial != oldSerial || originalView.Serial() != oldSerial ||
+				original.Collection == nil || original.Collection.Serial.State != diskinventory.FieldAvailable {
+				t.Fatalf("agent serial not merged into the disk it describes: state %q, canonical %q, collection %+v",
+					original.Serial, originalView.Serial(), original.Collection)
+			}
+
+			// The agent stops reporting, keeping its rows, and the disk is replaced.
+			state.TouchHost("agent-1", now.Add(-hostAgentHealthWindow(30)-time.Minute))
+			m.evaluateHostAgents(now)
+			client.setDisk(pveDisk(newPVEWWN))
+			for round := 1; round <= 2; round++ {
+				got, view := poll()
+				if got.Serial != transport.replacementSerial || view.Serial() == oldSerial {
+					t.Fatalf("poll %d: replacement took the retained row's serial: state %q, canonical %q",
+						round, got.Serial, view.Serial())
+				}
+				if view.ID() == originalView.ID() {
+					t.Fatalf("poll %d: replacement took over the old disk's canonical resource %q", round, view.ID())
+				}
+				if got.Temperature != 0 || got.Health != "PASSED" || view.Temperature() != 0 || view.Health() != "PASSED" {
+					t.Fatalf("poll %d: replacement took the old disk's readings: state %d/%q, canonical %d/%q",
+						round, got.Temperature, got.Health, view.Temperature(), view.Health())
+				}
+				if got.WWN != newPVEWWN ||
+					got.Collection == nil || got.Collection.Serial.State != transport.serialState {
+					t.Fatalf("poll %d: replacement wwn %q, serial collection %+v", round, got.WWN, got.Collection)
+				}
+			}
+		})
 	}
 }

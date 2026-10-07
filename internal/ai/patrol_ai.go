@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -2447,6 +2448,10 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 	if urp != nil {
 		diskResources := urp.GetByType(unifiedresources.ResourceTypePhysicalDisk)
 		rows := make([]patrolPhysicalDiskRow, 0, len(diskResources))
+		var owners map[string]unifiedresources.Resource
+		if len(diskResources) > 0 {
+			owners = physicalDiskOwnerIndex(urp)
+		}
 		for _, r := range diskResources {
 			if !seedIsInScope(scopedSet, r.ID) || r.PhysicalDisk == nil {
 				continue
@@ -2479,7 +2484,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				temperature:   tools.SplitDiskTemperature(r.PhysicalDisk.Temperature, r.PhysicalDisk.Collection),
 				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
 			}
-			row.temperatureLimits = snap.diskTemperatureLimits(row.diskType)
+			row.temperatureLimits = snap.diskTemperatureLimits(physicalDiskTemperatureHost(r, owners), row.diskType)
 			rows = append(rows, row)
 		}
 		return rows
@@ -2522,7 +2527,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			temperature:   tools.SplitDiskTemperature(d.Temperature, d.Collection),
 			smartEvidence: modelPhysicalDiskSMARTIssueParts(d.SmartAttributes),
 		}
-		row.temperatureLimits = snap.diskTemperatureLimits(row.diskType)
+		row.temperatureLimits = snap.diskTemperatureLimits(alerts.DiskTemperatureHost{}, row.diskType)
 		rows = append(rows, row)
 	}
 	return rows

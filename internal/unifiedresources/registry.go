@@ -3272,8 +3272,14 @@ func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incomin
 			existing.PhysicalDisk.Serial, existing.PhysicalDisk.WWN,
 		)
 		existingDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(existing.PhysicalDisk.DevPath))
-		agentReportsSAS := (source == SourceProxmox && strings.EqualFold(existing.PhysicalDisk.DiskType, "sas")) ||
-			(source == SourceAgent && strings.EqualFold(incoming.PhysicalDisk.DiskType, "sas"))
+		// Proxmox may put a SAS disk's transport address in its serial, so
+		// the serials cannot refuse this path join, but a WWN naming another
+		// disk can: the agent's row may be the slot's previous occupant,
+		// retained by a silent agent, and joining it hands the replacement
+		// that disk's serial, readings and canonical resource.
+		agentReportsSAS := ((source == SourceProxmox && strings.EqualFold(existing.PhysicalDisk.DiskType, "sas")) ||
+			(source == SourceAgent && strings.EqualFold(incoming.PhysicalDisk.DiskType, "sas"))) &&
+			!diskinventory.HardwareIdentityConflict("", incomingWWN, "", existing.PhysicalDisk.WWN)
 		deviceMatch := (agentReportsSAS || physicalDiskMissingIdentityPathCompatible(incoming.PhysicalDisk, existing.PhysicalDisk)) &&
 			incomingDevice != "" &&
 			incomingDevice == existingDevice &&

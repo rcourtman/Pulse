@@ -1662,6 +1662,51 @@ later coarse healthy value and lets explicit SMART endurance replace
 contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
+The device-path match is the last resort, and a path names a slot, not a
+disk: the row there may describe the slot's previous occupant, because the
+agent has not reported since a swap or went silent and keeps its last rows.
+`mergeHostAgentSMARTIntoDisks` refuses such a row when its identity
+contradicts the Proxmox disk's (`diskinventory.HardwareIdentityConflict`):
+nothing agrees across serial and WWN, and a field both producers report like
+for like disagrees. WWNs are compared for every disk. Serials are compared
+only where Proxmox's serial is the drive's own, as smartctl's is: a Proxmox
+disk typed `nvme` against an NVMe row, and one presented with SCSI vendor
+`ATA` (libata, or a SAS HBA's SCSI-ATA translation, where udev's `ata_id`
+reads IDENTIFY) and not typed `usb` or `sas` against an ATA row. Any other
+Proxmox serial may be a SAS address or SCSI designator (#1595) or a USB
+bridge's own serial, so it counts toward agreement only; a USB bridge that
+does expose the drive's serial is excluded too unless it reports vendor `ATA`.
+Reporter spellings are not disagreement: serials compare on letters and digits
+only (udev writes whitespace as underscores), a T10 vendor designator for an
+ATA drive (`ATA`, the model, then the serial) is no evidence against the serial
+it ends with, and a WWN that begins with the other is no evidence (udev's `ID_WWN` keeps only
+the first 64 bits of a 128-bit NAA 6 identifier). The refusal comes after the
+unique-path check, so a second row on the path still makes it ambiguous. The
+WWN match itself compares through `HardwareIdentityMatch`, so the agent's
+`5-c50-a1b2c3d4` spelling finds the Proxmox `0x5000c500a1b2c3d4` disk. The
+registry's SAS path join applies the same WWN refusal (unified-resources).
+Proxmox's disk inventory (`PVE::Diskmanage`) writes the literal `unknown` for
+a serial or WWN udev cannot read; the poller records it as empty, so the
+serial's collection state reads `missing` and the agent's serial or WWN can
+fill it, where the placeholder used to read as a collected serial. Retained
+evidence carries a previous serial only when it is a usable identity, so a
+record from before this change cannot restore the placeholder. Identity keys
+already ignored the placeholder, so the empty value keys the same; a disk whose
+serial the linked agent now fills keys its Proxmox SMART samples on that serial
+instead of its WWN or path, as the agent's own samples already were. Before the
+guard, the retained row of a swapped-out disk filled or promoted the old serial
+onto the replacement, which keyed it to the old disk's canonical resource and
+history, and lent it the old disk's temperature and failed health
+(`TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity`,
+`TestHostAgentSMARTMergeRefusesPathMatchAcrossContradictingIdentity`,
+`TestRegistrySASPathJoinRefusesContradictingWWN`,
+`TestProxmoxUnknownDiskIdentityIsRecordedAsUnreported`,
+`TestHardwareIdentityConflict`). Without comparable evidence there is nothing
+to act on: a row without a usable serial or WWN still matches its path, and a
+replacement whose serial is not comparable (SAS, SCSI, USB) still takes a
+stale row's identity when either record lacks a WWN. The registry's seeded
+source mapping, which a restart reuses by the slot-shaped Proxmox source ID,
+does not apply this guard yet.
 Retaining evidence a disk poll could not collect follows the same identity
 rule. `previousPhysicalDiskEvidence` looks up the earlier record by serial, then
 by WWN, each compared through `diskinventory.HardwareIdentityMatch` against
@@ -1683,10 +1728,9 @@ serial, which keyed it to the old disk's canonical resource and SMART metric
 series, so every later poll carried the borrowed serial forward
 (`TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial`,
 `TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity`).
-This lookup is the only place the rule applies: a replacement that reports no
-usable serial or WWN cannot be told apart from the same disk and still
-inherits, and the linked agent's SMART merge, which runs first, can still fill
-or promote a serial from a stale SMART row it matched by device path.
+A replacement that reports no usable serial or WWN cannot be told apart from
+the same disk and still inherits. The linked agent's SMART merge, which runs
+first, refuses a contradicting device-path row on its own terms (above).
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
@@ -1890,16 +1934,18 @@ boundaries:
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
   `ClearActiveAlerts` drops their alerts but not their node links, and a
   leftover link would keep suppressing CPU, memory and disk alerts on any node
-  that later carries the linked fixture node's ID. The agent and Docker
-  steps of a pass whose snapshot predates the switch find mock mode off under
-  the same lock and evaluate nothing.
+  that later carries the linked fixture node's ID. `SetMockMode` ends the
+  mock-mode epoch before forgetting fixture hosts, so evaluations holding an
+  older epoch cannot recreate alerts after the clear. Departures refused by
+  the epoch fence remain tracked for the switch to remove.
 - Ticks start passes concurrently, so a pass whose snapshot predates an
-  estate rebuild can reach the lock after a newer one. Each pass carries the
-  fixture's structural revision, and the agent and Docker steps of a pass
-  older than the last applied or disabled revision are skipped, so they
-  cannot remove the new estate's hosts or re-evaluate retired ones, even
-  across a disable and re-enable. The pass's other loops (guests, nodes,
-  storage, PBS, PMG) take no part in this tracking and are not guarded.
+  estate rebuild can reach the lock after a newer one. The agent and Docker
+  steps also carry the fixture's structural revision and reject revisions
+  older than the last applied or disabled one. Both checks apply: the epoch
+  stops mode-crossing evaluations, while the revision stops an older estate
+  replacing newer host ownership within one epoch. Guest, node, storage, PBS,
+  PMG and physical-disk evaluations use the epoch fence, not host revision
+  tracking.
 
 Fixture agents must carry readings a real agent could report. Mock Kubernetes
 pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
@@ -1954,14 +2000,115 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
-The disk loop relies on the pass's single up-front mode check, like every
-loop in `checkMockAlerts` except the host-agent step, which re-checks under its
-own lock. A pass already past that check when mock mode is switched off can
-reopen its fixture alerts after `SetMockMode(false)` clears them, and
-other paths that evaluate fixture data (frontend refresh into unified alert
-evaluation, backup rollups) have the same window. That mode-exit race predates
-the disk loop and is not closed here; a lock around `checkMockAlerts` alone
-would leave the other paths open.
+Switching mock mode fences the alert evaluations that read mode-dependent data
+(`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
+fixture graph, the unified read view, the recovery rollups and the connection
+ledger all change source when the mode flips. A pass already holding one side's
+data used to reach the alert manager after `SetMockMode` cleared it, and its
+fixture alerts then stayed in live mode, with nothing left to evaluate or
+resolve them, until the 24-hour stale sweep. Each of these paths takes a scope
+before it reads anything mode-dependent and sends its alert-manager calls
+through it:
+
+- `checkMockAlerts`, for every loop including the host-agent and disk steps
+  and the mock alert snapshot cache;
+- `checkBackupAlerts`, shared by the PVE, PBS and mock polls, and
+  `pollGuestSnapshots`, whose guest inventory is the fixture read view in mock
+  mode;
+- `checkConnectionAlerts`, whose ledger lists fixture connections in mock mode;
+- `pruneStaleDockerAlerts`, which removes Docker alerts for hosts missing from
+  the read view;
+- the resource-store refresh. `updateResourceStore` and
+  `updateResourceStoreForRead` take the scope of the state they rebuild from
+  (`currentStateWithScope` for `GetState`), and the unified alert sync
+  (`syncUnifiedResourceAlertsToState`) runs its policy reconcile, identity and
+  availability-link migrations, per-resource metrics and incident sync under
+  it.
+
+`SetMockMode` flips the mode, ends the epoch, waits for the alert-manager calls
+already admitted under it and only then clears, so nothing these paths read
+before the flip lands after the clear, in either direction. Switches are
+serialized. The wait covers the calls already running, not whole passes, but it
+has no fixed wall-clock bound: backup evaluation and unified incident sync are
+estate-wide calls, and an admitted call can include metric-window reads and
+migration persistence. Unified metrics are evaluated one resource per call, and
+reads, capacity-trend queries and registry rebuilds stay outside the wait.
+Admission never blocks, so a call made inside an admitted one cannot deadlock a
+waiting switch; `SetMockMode` itself must not be called from inside an
+evaluation.
+
+A registry rebuild publishes shared state, so a rebuild holding the mode the
+monitor left can finish after a newer refresh published and replace the
+registry that refresh reads back. A rebuild whose epoch has ended does not
+start, and one already running is tracked: a refresh evaluates the registry it
+read back only if no ended-epoch rebuild overlapped it, and otherwise leaves the
+alerts to the next refresh. Even without a late rebuild, the registry still
+holds the fixture estate right after leaving mock mode, and may hold it until an
+undisturbed rebuild in the new epoch has replaced it
+(`mockModeFence.registryCurrent`); in mock mode the read paths use the fixture
+view instead. The live readers that act on that inventory (Docker pruning, the
+backup-age guest lookup, the guest inventory of the backup and snapshot
+pollers, and the pollers' previous-node and previous-guest carry, which writes
+back into live state) read it through `currentModeReadState`, which serves a
+view of current monitor state meanwhile. That view omits provider-owned
+supplemental resources and persisted manual agent links, so a carry in the
+window can fall back to platform guest memory for one poll, and it copies the
+estate, so only callers outside per-resource loops use it. Every other live
+registry reader (`GetUnifiedReadStateOrSnapshot` callers such as metrics
+targets and system usage, and the broadcast view) may still see the fixture
+estate until the next rebuild, as before, and metric samples synced from a late
+rebuild stay in metric history.
+
+The fixture sources behind the router's mock supplemental adapters
+(`mock.SupplementalRecords`, `mock.SupplementalChanges`) serve nothing while
+mock mode is off. The router swaps those adapters for the real TrueNAS and
+vSphere pollers only after `SetMockMode` returns, one source at a time with a
+refresh after each, and the adapters used to fall back to default fixtures, so
+a single switch to live mode raised fixture vSphere incidents. Two concurrent
+mock-mode requests can still leave the router's provider set disagreeing with
+the mode (fixture adapters serving nothing in live mode, or real pollers
+feeding mock mode); neither raises fixture alerts in live mode.
+
+Report admission and the live pollers outside the paths above are not fenced:
+a live report or poll already past its mock-mode check when mock mode is
+switched on can still evaluate after that clear, and its alerts can persist
+until mock mode is left.
+
+The fence and the clear are per monitor while the mode is process-wide. A
+tenant monitor other than the one `SetMockMode` was called on neither drains
+nor clears, so fixture alerts it raised outlive the switch as they did before
+the fence; switching mock mode with several tenant monitors running is not
+covered.
+
+The proofs park a real evaluation at a fixed point, switch modes and release
+it. `TestLeavingMockModeRefusesTheRestOfAnInFlightPass` holds a mock pass at its
+first storage capacity read, `TestLeavingMockModeDiscardsAnInFlightFrontendRefresh`
+holds a frontend read in its supplemental-records supply,
+`TestLeavingMockModeDiscardsAnInFlightBackupEvaluation` holds a backup
+evaluation at its guest lookup, and
+`TestLeavingMockModeDiscardsAnInFlightConnectionCheck` holds the ledger read.
+Against the unfenced code they left about 40 fixture storage, disk and Docker
+alerts, 5 vSphere incidents and 137 backup-age alerts in live mode, and counted
+a mock-mode observation toward a live connection's three-observation
+confirmation. `TestLeavingMockModeWaitsForAnInFlightEvaluation` holds an
+evaluation in its CPU window read, outside the alert manager's lock, and fails
+if the switch returns first; `TestLiveRefreshIgnoresARegistryRepublishedFromMockMode`
+lets a mock-mode rebuild republish while a live refresh is held before reading
+the registry back, then checks the next live refresh evaluates live records.
+Each of those two fails against a fence without its wait or its overlap check.
+`TestDockerPruneIgnoresTheRegistryMockModeLeft` raises a live Docker alert
+before any live rebuild and fails if pruning reads the fixture registry, and
+`TestPreviousStateCarryIgnoresTheRegistryMockModeLeft` fails if the
+previous-state carry returns fixture nodes or guests. All eight are in
+`internal/monitoring/monitor_mock_alerts_test.go`;
+`TestSupplementalFixturesServeNothingOutsideMockMode` in
+`internal/mock/platform_fixtures_test.go` pins the fixture sources;
+`TestMockModeFence*` in
+`internal/monitoring/mock_mode_fence_test.go` pin the fence itself, and
+`TestStoreRefreshTakesItsMockModeScopeBeforeReadingState` in
+`internal/monitoring/canonical_guardrails_test.go` rejects a call that reads
+state in an argument ahead of `m.mockModeFence.begin()` and pins the
+end-epoch-then-clear order in `SetMockMode`.
 
 The disk evaluation runs on the mock alert tick, not the poller's disk
 interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
@@ -5210,6 +5357,15 @@ Appliances with matching hostnames, restored pool GUIDs, or matching pool names
 remain separate through refresh, cache rebuild, restart, and registry ingest.
 Replication-target readonly classification remains a separate native-evidence
 step and cannot hide locked or unmounted dataset state.
+
+TrueNAS pool and dataset storage facets carry `StorageMeta.Enabled` and
+`Active` like every other storage producer, because the AI storage tools and
+storage platform payloads read those flags directly. TrueNAS has no disabled
+state for an imported pool or a listed dataset, so both are always `Enabled`. A
+pool is `Active` unless its native state is FAULTED, OFFLINE, REMOVED or
+UNAVAIL, and a dataset is `Active` only while it is mounted and unlocked.
+`TestProviderRecordsPopulateStorageEnabledAndActive` in
+`internal/truenas/provider_test.go` pins both.
 
 Ceph monitoring may enter the provider-neutral pool-health envelope only from
 the native cluster health state and native health-check map. It preserves check

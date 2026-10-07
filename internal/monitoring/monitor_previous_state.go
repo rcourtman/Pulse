@@ -27,7 +27,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if readState == nil {
 		return ctx
 	}
@@ -103,7 +103,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 func (m *Monitor) previousNodesForInstance(instanceName string) []models.Node {
 	prevInstanceNodes := make([]models.Node, 0)
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.currentModeReadState()
 	if readState == nil {
 		return prevInstanceNodes
 	}

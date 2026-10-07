@@ -57,6 +57,7 @@ const Storage: Component<StorageProps> = (props) => {
     focusedSummaryStorageGroupId,
     hoveredSummaryStorageGroupScope,
     physicalDisks,
+    getDiskAlertResourceIds,
     nodes,
     groupedRecords,
     expandedGroups,
@@ -139,6 +140,7 @@ const Storage: Component<StorageProps> = (props) => {
         <StorageContentCard
           view={view}
           physicalDisks={physicalDisks}
+          getDiskAlertResourceIds={getDiskAlertResourceIds}
           nodes={nodes}
           sourceFilter={sourceFilter}
           healthFilter={healthFilter}

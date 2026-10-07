@@ -823,9 +823,9 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 	kept := models.Host{ID: "host-linux-1", Hostname: "apollo-114", Status: "online", Memory: memory}
 	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", LinkedNodeID: "mock-cluster-1-pve9", Status: "online", Memory: memory}
 
-	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil, 1)
+	monitor.evaluateMockHostAgents(monitor.mockModeFence.begin(), []models.Host{kept, departed}, nil, 1)
 	// A runtime mock config change rebuilt the estate without pve9.
-	monitor.evaluateMockHostAgents([]models.Host{kept}, nil, 2)
+	monitor.evaluateMockHostAgents(monitor.mockModeFence.begin(), []models.Host{kept}, nil, 2)
 
 	keptAlert := false
 	for _, alert := range manager.GetActiveAlerts() {
@@ -869,13 +869,13 @@ func TestMockDockerHostLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 	// runtime mock config change can shift.
 	departed := newMockDockerHostWithExitedContainers("proxmox-lxc-docker:Production West:pve1:108", "pve1-ct108")
 
-	monitor.evaluateMockDockerHosts([]models.DockerHost{kept, departed}, 1)
-	monitor.evaluateMockDockerHosts([]models.DockerHost{kept, departed}, 1)
+	monitor.evaluateMockDockerHosts(monitor.mockModeFence.begin(), []models.DockerHost{kept, departed}, 1)
+	monitor.evaluateMockDockerHosts(monitor.mockModeFence.begin(), []models.DockerHost{kept, departed}, 1)
 	if ids := dockerAlertIDsForHost(manager, departed.ID); len(ids) != len(departed.Containers) {
 		t.Fatalf("departing host opened %v, want one alert per exited container", ids)
 	}
 
-	monitor.evaluateMockDockerHosts([]models.DockerHost{kept}, 2)
+	monitor.evaluateMockDockerHosts(monitor.mockModeFence.begin(), []models.DockerHost{kept}, 2)
 
 	if ids := dockerAlertIDsForHost(manager, departed.ID); len(ids) != 0 {
 		t.Fatalf("Docker host that left the mock estate kept alerts %v", ids)

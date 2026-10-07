@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -33,7 +34,7 @@ func TestDiskTemperatureLimitsFollowTheAlertPolicy(t *testing.T) {
 		{name: "alerting off", provider: &mockThresholdProvider{diskTemperature: map[string][2]float64{"sata": {0, 0}}}, diskType: "sata", want: diskTemperatureLimits{}},
 		{name: "clear above trigger", provider: &mockThresholdProvider{diskTemperature: map[string][2]float64{"sas": {60, 64}}}, diskType: "sas", want: diskTemperatureLimits{trigger: 60, clear: 60}},
 	} {
-		if got := diskTemperatureLimitsFor(tc.provider, tc.diskType); got != tc.want {
+		if got := diskTemperatureLimitsFor(tc.provider, alerts.DiskTemperatureHost{}, tc.diskType); got != tc.want {
 			t.Errorf("%s: limits = %+v, want %+v", tc.name, got, tc.want)
 		}
 	}
@@ -171,7 +172,7 @@ func TestPatrolRunStateCarriesTheConfiguredDiskTemperaturePolicy(t *testing.T) {
 		{ID: "nvme-72", DevPath: "/dev/nvme0n1", Type: "nvme", Health: "PASSED", Wearout: 90, Temperature: 72},
 	}}
 	ps := NewPatrolService(nil, &mockStateProvider{state: snapshot})
-	if got := ps.currentPatrolRuntimeState().diskTemperatureLimits("nvme"); got.trigger != 70 {
+	if got := ps.currentPatrolRuntimeState().diskTemperatureLimits(alerts.DiskTemperatureHost{}, "nvme"); got.trigger != 70 {
 		t.Fatalf("no provider: nvme trigger = %v, want the factory 70", got.trigger)
 	}
 
@@ -180,7 +181,7 @@ func TestPatrolRunStateCarriesTheConfiguredDiskTemperaturePolicy(t *testing.T) {
 		"current":  ps.currentPatrolRuntimeState(),
 		"snapshot": ps.patrolRuntimeStateForSnapshot(snapshot),
 	} {
-		if got := state.diskTemperatureLimits("nvme"); got.trigger != 75 || got.clear != 70 {
+		if got := state.diskTemperatureLimits(alerts.DiskTemperatureHost{}, "nvme"); got.trigger != 75 || got.clear != 70 {
 			t.Errorf("%s state: nvme limits = %+v, want the configured 75/70", name, got)
 		}
 		if flags := triageDiskHealthChecksState(state, nil); len(flags) != 0 {
@@ -194,7 +195,7 @@ func TestPatrolRunStateCarriesTheConfiguredDiskTemperaturePolicy(t *testing.T) {
 func TestScopedPatrolStateKeepsTheConfiguredDiskTemperaturePolicy(t *testing.T) {
 	state := diskTemperatureTriageState(raisedNVMeThresholds())
 	scoped := filterPatrolStateByScopeState(state, PatrolScope{ResourceIDs: []string{"nvme-72"}})
-	if got := scoped.diskTemperatureLimits("nvme"); got.trigger != 75 || got.clear != 70 {
+	if got := scoped.diskTemperatureLimits(alerts.DiskTemperatureHost{}, "nvme"); got.trigger != 75 || got.clear != 70 {
 		t.Fatalf("scoped state nvme limits = %+v, want the configured 75/70", got)
 	}
 	if flags := triageDiskHealthChecksState(scoped, nil); len(flags) != 0 {
@@ -212,19 +213,19 @@ func TestPatrolStartsWithAThresholdProviderSetBeforeIt(t *testing.T) {
 	if patrol == nil {
 		t.Fatal("expected Patrol to start once a state provider exists")
 	}
-	if got := patrol.currentPatrolRuntimeState().diskTemperatureLimits("nvme"); got.trigger != 75 {
+	if got := patrol.currentPatrolRuntimeState().diskTemperatureLimits(alerts.DiskTemperatureHost{}, "nvme"); got.trigger != 75 {
 		t.Fatalf("Patrol nvme trigger = %v, want the provider's 75", got.trigger)
 	}
 }
 
 // A heat finding recovers at the clear value, where its alert recovers.
 func TestDiskHeatRecoversAtTheClearValue(t *testing.T) {
-	limits := diskTemperatureLimitsFor(nil, "nvme")
+	limits := diskTemperatureLimitsFor(nil, alerts.DiskTemperatureHost{}, "nvme")
 	if !limits.cooled(65) || limits.cooled(66) {
 		t.Fatalf("nvme limits %+v: want 65C cooled and 66C still warm", limits)
 	}
 	// With no band below the trigger, a reading at the trigger is still hot.
-	noBand := diskTemperatureLimitsFor(&mockThresholdProvider{diskTemperature: map[string][2]float64{"sas": {70, 70}}}, "sas")
+	noBand := diskTemperatureLimitsFor(&mockThresholdProvider{diskTemperature: map[string][2]float64{"sas": {70, 70}}}, alerts.DiskTemperatureHost{}, "sas")
 	if !noBand.hot(70) || noBand.cooled(70) || !noBand.cooled(69) {
 		t.Fatalf("no-band limits %+v: want 70C hot and not cooled, 69C cooled", noBand)
 	}
@@ -245,5 +246,100 @@ func TestDiskHeatRecoveryNeedsACurrentReading(t *testing.T) {
 	recovered, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", "sata-retained-cool", "physical_disk")
 	if err != nil || !recovered {
 		t.Fatalf("retained 40C: recovered = %v, err = %v, want recovered", recovered, err)
+	}
+}
+
+// overriddenAgentDisksRegistry is two host agents, each reporting one NVMe
+// disk hotter than the NVMe trigger, with a Disk Temp override of 80C (clear
+// 75) set on agent-cool only. Alerts judge agent-cool's disk by the override.
+func overriddenAgentDisksRegistry(t *testing.T) (*unifiedresources.ResourceRegistry, *AlertThresholdAdapter) {
+	t.Helper()
+	now := time.Now()
+	agent := func(id string, temperature int) models.Host {
+		return models.Host{
+			ID: id, Hostname: id, DisplayName: id, Status: "online", LastSeen: now, IntervalSeconds: 30,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "nvme0n1", Model: "Samsung 990", Serial: id + "-serial", Type: "nvme",
+				Health: "PASSED", Temperature: temperature,
+			}}},
+		}
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{agent("agent-cool", 76), agent("agent-plain", 72)}})
+
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent-cool": {DiskTemperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}},
+	}
+	mgr.UpdateConfig(cfg)
+	return registry, NewAlertThresholdAdapter(mgr)
+}
+
+// A host agent's Disk Temp override replaces the per-type trigger for every
+// disk that agent reports, in Patrol exactly as in its alerts: agent-cool's
+// NVMe at 76C is under its 80C override, agent-plain's at 72C is over the
+// NVMe trigger of 70C.
+func TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride(t *testing.T) {
+	registry, provider := overriddenAgentDisksRegistry(t)
+	state := newPatrolRuntimeStateWithProviders(models.StateSnapshot{}, nil, unifiedresources.NewUnifiedAIAdapter(registry))
+	state.thresholdProvider = provider
+
+	rows := patrolPhysicalDiskRows(state, nil)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v, want one disk per agent", rows)
+	}
+	for _, row := range rows {
+		want, wantIssue := diskTemperatureLimits{trigger: 70, clear: 65}, true
+		if row.temperature.Collected == 76 {
+			want, wantIssue = diskTemperatureLimits{trigger: 80, clear: 75}, false
+		}
+		if row.temperatureLimits != want {
+			t.Errorf("disk at %dC: limits = %+v, want %+v", row.temperature.Collected, row.temperatureLimits, want)
+		}
+		if got := patrolPhysicalDiskHealthIssue(row); got != wantIssue {
+			t.Errorf("disk at %dC: health issue = %v, want %v", row.temperature.Collected, got, wantIssue)
+		}
+	}
+
+	s := &Service{}
+	s.SetUnifiedResourceProvider(unifiedresources.NewUnifiedAIAdapter(registry))
+	s.SetPatrolThresholdProvider(provider)
+	_, section, _ := strings.Cut(s.buildUnifiedResourceContext(), "Physical Disks Needing Attention")
+	section, _, _ = strings.Cut(section, "\n\n")
+	if !strings.Contains(section, "Temp: 72C") || strings.Contains(section, "Temp: 76C") {
+		t.Fatalf("attention section = %q, want agent-plain's 72C disk only", section)
+	}
+}
+
+// A disk reaches its reporting agent through its parent: the agent's machine
+// directly, or the storage pool an Unraid array or cache disk hangs off. A
+// disk on a machine with no agent gets the hostless policy.
+func TestPhysicalDiskTemperatureHostFollowsTheParentChain(t *testing.T) {
+	ref := func(id string) *string { return &id }
+	owners := map[string]unifiedresources.Resource{
+		"agent-1": {ID: "agent-1", Type: unifiedresources.ResourceTypeAgent, Agent: &unifiedresources.AgentData{
+			AgentID: "host-1", LinkedNodeID: "lab-pve1",
+		}},
+		"vm-1": {ID: "vm-1", Type: unifiedresources.ResourceTypeVM, Agent: &unifiedresources.AgentData{
+			AgentID: "host-vm", LinkedVMID: "lab-pve1-101",
+		}},
+		"array-1": {ID: "array-1", Type: unifiedresources.ResourceTypeStorage, ParentID: ref("agent-1")},
+		"node-1":  {ID: "node-1", Type: unifiedresources.ResourceTypeAgent},
+	}
+	for parent, want := range map[string]alerts.DiskTemperatureHost{
+		"agent-1": {ID: "host-1", LinkedNodeID: "lab-pve1"},
+		"vm-1":    {ID: "host-vm", LinkedVMID: "lab-pve1-101"},
+		"array-1": {ID: "host-1", LinkedNodeID: "lab-pve1"},
+		"node-1":  {},
+		"missing": {},
+	} {
+		disk := unifiedresources.Resource{ID: "disk-under-" + parent, Type: unifiedresources.ResourceTypePhysicalDisk, ParentID: ref(parent)}
+		if got := physicalDiskTemperatureHost(disk, owners); got != want {
+			t.Errorf("disk under %s: host = %+v, want %+v", parent, got, want)
+		}
+	}
+	if got := physicalDiskTemperatureHost(unifiedresources.Resource{ID: "orphan"}, owners); got != (alerts.DiskTemperatureHost{}) {
+		t.Errorf("parentless disk: host = %+v, want hostless", got)
 	}
 }

@@ -101,6 +101,9 @@ func (m *Monitor) checkBackupAlerts(ctx context.Context) {
 	}
 	defer m.backupAlertEvalMu.Unlock()
 
+	// Rollups and the guest lookup come from the fixture graph in mock mode;
+	// an evaluation that read them must not land after a mode change.
+	scope := m.mockModeFence.begin()
 	cfg := m.alertManager.GetConfig()
 	if !cfg.Enabled || !cfg.BackupDefaults.Enabled ||
 		(cfg.BackupDefaults.WarningDays <= 0 && cfg.BackupDefaults.CriticalDays <= 0) {
@@ -119,19 +122,23 @@ func (m *Monitor) checkBackupAlerts(ctx context.Context) {
 		// deadline, including connection-pool waiting, still needs visibility.
 		if !errors.Is(err, context.Canceled) {
 			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
-			m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
-				Type:        alerts.BackupEvaluationAlertType,
-				Level:       alerts.AlertLevelWarning,
-				Fingerprint: "recovery-rollups-unavailable",
-				Message:     "Backup-age alerts were not evaluated because recovery data could not be read. Existing backup alerts have been kept; check Pulse's logs.",
+			scope.run(func() {
+				m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
+					Type:        alerts.BackupEvaluationAlertType,
+					Level:       alerts.AlertLevelWarning,
+					Fingerprint: "recovery-rollups-unavailable",
+					Message:     "Backup-age alerts were not evaluated because recovery data could not be read. Existing backup alerts have been kept; check Pulse's logs.",
+				})
 			})
 		}
 		return
 	}
-	guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
-	m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
-	// Only a complete read/evaluation (including a genuinely empty result)
-	// resolves the outage. In-flight checks are coalesced, not queued, so an
-	// older successful read cannot later erase a newer failure.
-	m.alertManager.ClearSystemAlert(alerts.BackupEvaluationAlertType)
+	guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.currentModeReadState(), m.guestMetadataStore)
+	scope.run(func() {
+		m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
+		// Only a complete read/evaluation (including a genuinely empty result)
+		// resolves the outage. In-flight checks are coalesced, not queued, so an
+		// older successful read cannot later erase a newer failure.
+		m.alertManager.ClearSystemAlert(alerts.BackupEvaluationAlertType)
+	})
 }

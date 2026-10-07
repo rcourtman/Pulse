@@ -137,6 +137,7 @@ type APIResource = {
     vcpus?: number;
   };
   agent?: {
+    agentId?: string;
     hostname?: string;
     uptimeSeconds?: number;
     osName?: string;
@@ -608,6 +609,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
     agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
+    agentId: resource.agent?.agentId,
     agentRaid: resource.agent?.raid,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
     networkIn: finiteMetricNumber(resource.metrics?.netIn?.value) ?? 0,

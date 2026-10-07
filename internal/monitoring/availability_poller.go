@@ -415,7 +415,7 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 	}
 
 	m.refreshInstanceInfoCacheFromProviders()
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {
@@ -425,7 +425,7 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
 	m.applyAvailabilityObservationDetailed(target, uuid.NewString(), checkedAt, latency, result.Outcome, result.TransportOutcome, result.Application, err, result.Certificate, "", time.Time{})
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 // applyAvailabilityObservation records one availability observation regardless of

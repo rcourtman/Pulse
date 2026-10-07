@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import {
   buildPhysicalDiskPresentationDataMap,
@@ -399,6 +400,31 @@ describe('diskPresentation', () => {
           }
         }
       }
+    });
+
+    it('judges a disk under the Disk Temp override of the machine that reports it', () => {
+      const config = {
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+        overrides: { 'host-raised': { diskTemperature: { trigger: 80, clear: 75 } } },
+      } as unknown as AlertConfig;
+      const resolve = (diskType: string, alertResourceIds?: string[]) =>
+        resolveDiskTemperatureDisplayThresholds(config, diskType, alertResourceIds);
+      const raisedHostDisk = buildDisk('nvme0n1', { diskType: 'nvme', temperature: 72 });
+      const plainHostDisk = buildDisk('nvme1n1', { diskType: 'nvme', temperature: 72 });
+      const dataMap = buildPhysicalDiskPresentationDataMap(
+        [raisedHostDisk, plainHostDisk],
+        resolve,
+        (disk) => (disk === raisedHostDisk ? ['host-raised'] : ['host-plain']),
+      );
+
+      expect(dataMap.get('nvme0n1')!.temperatureThresholds).toEqual({ warning: 75, critical: 80 });
+      expect(getPhysicalDiskHealthStatus(dataMap.get('nvme0n1')!).label).toBe('Healthy');
+      expect(getPhysicalDiskHealthStatus(dataMap.get('nvme1n1')!).label).toBe('Running Hot');
+      expect(
+        extractPhysicalDiskPresentationData(raisedHostDisk, resolve, ['host-raised'])
+          .temperatureThresholds,
+      ).toEqual({ warning: 75, critical: 80 });
     });
 
     it('calls no disk hot when its temperature alerting is off', () => {
