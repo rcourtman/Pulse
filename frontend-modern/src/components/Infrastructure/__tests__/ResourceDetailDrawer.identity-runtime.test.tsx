@@ -354,7 +354,50 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Network')).toBeInTheDocument();
     expect(getByText('Disks')).toBeInTheDocument();
     expect(getByText('eth0')).toBeInTheDocument();
+    expect(getByTestId('disks-card-total')).not.toHaveTextContent('Last known');
   });
+
+  // A Proxmox node keeps its row online while its linked agent is silent.
+  it.each(['offline', 'online'] as const)(
+    "shows a silent agent's retained disk usage and sensors as last known on a %s row",
+    async (status) => {
+      const GiB = 1024 * 1024 * 1024;
+      const resource = baseResource({
+        status,
+        platformData: { sources: ['agent'] },
+        agent: {
+          agentId: 'agent-1',
+          agentVersion: '1.2.3',
+          hostname: 'host-1',
+          platform: 'linux',
+          stale: true,
+          disks: [
+            { mountpoint: '/', total: 100 * GiB, used: 93 * GiB },
+            { mountpoint: '/data', total: 100 * GiB, used: 41 * GiB },
+          ],
+          sensors: { temperatureCelsius: { cpu_package: 45 } },
+        },
+      });
+
+      const { getByRole, getByTestId, getByText, queryAllByTestId } = render(() => (
+        <ResourceDetailDrawer resource={resource} />
+      ));
+      fireEvent.click(getByRole('button', { name: 'Show details' }));
+
+      await waitFor(() => {
+        expect(getByTestId('disks-card-total')).toBeInTheDocument();
+      });
+      expect(getByTestId('disks-card-total')).toHaveTextContent('Last known 67% · 134 GB / 200 GB');
+      const root = getByText('Last known 93%');
+      expect(root).toHaveClass('text-muted');
+      expect(root.closest('[title]')).toHaveAttribute(
+        'title',
+        'Last known reading, not current: host agent stopped reporting',
+      );
+      expect(queryAllByTestId('disks-card-mount-bar')).toHaveLength(0);
+      expect(getByText('45°C (last known)')).toBeInTheDocument();
+    },
+  );
 
   it('shows PVE API network inventory when no linked agent supplies interfaces', async () => {
     const resource = baseResource({

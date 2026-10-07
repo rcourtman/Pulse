@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a21e0ef8f819c404338661f76b82b5bea09aedfd",
+  "verified_at": "2026-10-07T09:20:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "d1c98c016ddceb095a429680939398c15dfaf1e0c9521fd6984f433f76f04cf6",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "6ff3a895c4ba3c0c758bdb7e5c4f1b512f3ae3e2de1b8d03b7f03d4a7f249d51",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "2b80761565c92409919fe18f0fdf4229abbb397114deca69ec7cfcdb1dec88f1"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from a21e0ef8f8 with a local-only go build -overlay of internal/mock/generator.go that holds host-linux-1 (Apollo-114) offline past its lease: LastSeen frozen 14 minutes back, readings retained, root mount filled to 93% and a long /var/lib/docker/volumes/postgres-primary-data mount at 88%. /api/resources reports status offline with agent.stale true",
+    "Baseline on main (bea0cec8b9, before the rebase): the Machines row blanks every reading and Thermals reads 45°C (last known), but the Disks card shows / at 93% in red with a red aggregate StackedDiskBar and green/red per-mount bars, as if current",
+    "Patched, silent host: Total Usage reads Last known 75% · 2.29 TB / 3.07 TB, each mount reads Last known N% · used / total, all in text-muted (rgb 71,85,105 light, 148,163,184 dark) with title Last known reading, not current: host agent stopped reporting; no StackedDiskBar and no per-mount bars render",
+    "Patched, live control host Spectrum-709: unchanged, aggregate bar amber, /backup 80% amber text and bar, other mounts green bars, no Last known text",
+    "390 wide: before the wrap fix the long mountpoint label kept its full width and squeezed the value into a sliver (Last known / 88% over three lines, byte figures clipped by the card); with the mount row wrapping, the long label takes its own line and the full value sits below it, short mounts stay on one line, no horizontal page scroll at either width",
+    "Dark scheme at both widths for the silent host: muted values readable, no threshold colour",
+    "Re-run on the rebased tree after #2607 and #2637 landed; same readings at both widths"
+  ],
+  "interactions": [
+    "Open /standalone/machines, click the Apollo-114 row (phone: tap its second visible cell) to open the drawer",
+    "Expand Platform details, then Machine Show details, scroll to the Disks card and read text, computed colours, titles and bar fills",
+    "Repeat for the live Spectrum-709 row as a control"
+  ]
+}

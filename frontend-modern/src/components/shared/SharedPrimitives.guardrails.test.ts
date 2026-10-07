@@ -348,6 +348,19 @@ describe('shared primitive guardrails', () => {
     expect(source).toContain('<StackedDiskBar');
   });
 
+  it("keeps a silent agent's retained disk usage out of threshold colour and usage bars", () => {
+    const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
+    expect(source).toContain('lastKnownReason?: string;');
+    expect(source).toContain('`Last known reading, not current: ${reason}`');
+    expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?<StackedDiskBar/);
+    expect(source).toMatch(
+      /<Show when=\{!lastKnownTitle\(\)\}>\s*<div[^>]*data-testid="disks-card-mount-bar"/,
+    );
+    expect(
+      readFrontendSource('src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx'),
+    ).toContain('lastKnownReason={props.drawer.agentReadingsLastKnownReason()}');
+  });
+
   it('keeps one canonical agent-host metric history group catalog', () => {
     expect(HOST_METRICS_HISTORY_GROUPS.map((group) => group.id)).toEqual([
       'utilization',

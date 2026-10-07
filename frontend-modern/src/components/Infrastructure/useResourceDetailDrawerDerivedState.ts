@@ -202,11 +202,14 @@ export const useResourceDetailDrawerDerivedState = (
       [],
   );
   const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
-  // A silent agent's sensors are its last report, even on a row another
-  // source keeps online.
+  // A silent agent's sensors and disk usage are its last report, even on a
+  // row another source keeps online.
+  const agentReadingsLastKnownReason = createMemo(() =>
+    resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
+  );
   const temperatureRows = createMemo(() =>
     buildTemperatureRows(agentInfo()?.sensors, {
-      lastKnownReason: resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
+      lastKnownReason: agentReadingsLastKnownReason(),
     }),
   );
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
@@ -475,6 +478,7 @@ export const useResourceDetailDrawerDerivedState = (
     proxmoxNode,
     proxmoxNetworkInterfaces,
     agentInfo,
+    agentReadingsLastKnownReason,
     temperatureRows,
     customSensorRows,
     dockerHostData,
