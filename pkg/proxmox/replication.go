@@ -48,6 +48,9 @@ type ReplicationJob struct {
 // job with status data (last_sync, next_sync, duration, fail_count, state) from
 // /nodes/{node}/replication/{id}/status.
 func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	resp, err := c.get(ctx, "/cluster/replication")
 	if err != nil {
 		return nil, err
@@ -55,24 +58,34 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 	defer resp.Body.Close()
 
 	var raw struct {
-		Data []map[string]json.RawMessage `json:"data"`
+		Data *[]map[string]json.RawMessage `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
 
-	jobs := make([]ReplicationJob, 0, len(raw.Data))
-	for _, entry := range raw.Data {
+	if raw.Data == nil {
+		return nil, fmt.Errorf("replication inventory response is missing a data array")
+	}
+	jobs := make([]ReplicationJob, 0, len(*raw.Data))
+	for _, entry := range *raw.Data {
 		jobs = append(jobs, parseReplicationJob(entry))
 	}
 
 	// Enrich jobs with status data from the per-node status endpoint
 	// The /cluster/replication endpoint only returns config, not status
 	for i := range jobs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		c.enrichReplicationJobStatus(ctx, &jobs[i])
 	}
-
+	// Status enrichment deliberately tolerates individual access errors, but
+	// cancellation invalidates the whole observation, not just one job.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return jobs, nil
 }
 
