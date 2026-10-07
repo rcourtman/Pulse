@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1371,6 +1372,90 @@ func TestHostSMARTRiskFilesystemAndHostLifecycleStayIndependent(t *testing.T) {
 					testRequireActiveAlert(t, f.m, f.wearID)
 				}
 			}
+		})
+	}
+}
+
+func TestHostSMARTRiskFilesystemIdentityCannotSubstituteInventory(t *testing.T) {
+	for _, direction := range []string{"SMART-only", "filesystem-only"} {
+		t.Run(direction, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			f.host.Disks[0].Mountpoint = "/sda"
+			f.m.CheckHost(f.host)
+			diskResourceID, _ := hostDiskResourceID(f.host, f.host.Disks[0])
+			riskResourceID, _ := hostSMARTDiskResourceID(f.host, f.host.Sensors.SMART[0])
+			if diskResourceID != riskResourceID {
+				t.Fatal("control must share the disk resource ID")
+			}
+			usageID := canonicalMetricStateID(diskResourceID, "disk")
+			testRequireActiveAlert(t, f.m, usageID)
+			if direction == "SMART-only" {
+				f.host.Disks = nil
+				f.m.CheckHost(f.host)
+				if testHasActiveAlert(t, f.m, usageID) {
+					t.Fatal("SMART identity held missing filesystem usage")
+				}
+				f.held(t)
+			} else {
+				f.host.Sensors.SMART = []models.HostDiskSMART{f.host.Sensors.SMART[1]}
+				for i := 1; i <= 3; i++ {
+					f.m.CheckHost(f.host)
+					testRequireActiveAlert(t, f.m, usageID)
+					if i < 3 {
+						f.held(t)
+					}
+				}
+				f.resolved(t, f.healthID, f.wearID)
+			}
+		})
+	}
+}
+
+func TestHostSMARTRiskRestartAndGlobalPauseRestartDeparture(t *testing.T) {
+	for _, gap := range []string{"restart", "global-pause"} {
+		t.Run(gap, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			if err := f.m.AcknowledgeAlert(f.healthID, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			f.host.Sensors.SMART = []models.HostDiskSMART{f.host.Sensors.SMART[1]}
+			for i := 0; i < 2; i++ {
+				f.m.CheckHost(f.host)
+				f.held(t)
+			}
+			cfg := f.m.GetConfig()
+			if gap == "restart" {
+				dir := filepath.Dir(f.m.alertsDir)
+				f.m.Stop() // Actual checkpoint and ordinary persisted-alert restoration.
+				f.m = NewManagerWithDataDir(dir)
+				t.Cleanup(f.m.Stop)
+				f.m.UpdateConfig(cfg)
+				f.m.SetAlertCallback(func(a *Alert) {
+					if a.Type == "disk-health" || a.Type == "disk-wearout" {
+						f.fires.Add(1)
+					}
+				})
+				f.m.SetResolvedAlertCallback(func(r *ResolvedAlert) {
+					if r.Alert.Type == "disk-health" || r.Alert.Type == "disk-wearout" {
+						f.recoveries <- r
+					}
+				})
+			} else {
+				cfg.Enabled = false
+				f.m.UpdateConfig(cfg)
+				cfg.Enabled = true
+				f.m.UpdateConfig(cfg)
+			}
+			for i := 1; i <= 3; i++ {
+				f.m.CheckHost(f.host)
+				if i < 3 {
+					f.held(t)
+					if !testRequireActiveAlert(t, f.m, f.healthID).Acknowledged {
+						t.Fatal("gap lost persisted acknowledgement")
+					}
+				}
+			}
+			f.resolved(t, f.healthID, f.wearID)
 		})
 	}
 }
