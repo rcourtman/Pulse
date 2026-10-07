@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Legacy installer identity recovery is a whole-file decision
+
+An installer recovering a pre-descriptor-helper agent-ID file accepts exactly
+one bounded ID and its optional final newline. It must not accept a plausible
+first line from an oversized, multi-line or NUL-bearing file. Portable byte-size
+inspection precedes the bounded shell read, and every file byte must be accounted
+for. Existing root-boundary ownership/mode/parent checks and descriptor-first
+selection remain in force; no signature, service, token or enrolment rule changes.
+
+`TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte` verifies normal and
+maximum-length compatibility alongside rejected valid-prefix corruptions. The
+Unix real-agent controls keep their independent two-second watchdog, with
+process-group cancellation and separate build/probe timings. These source
+fixtures do not establish signed native installation, persistence or recovery.
+
 ### Audit report cleanup belongs to the original invoking process
 
 The npm audit wrapper retains a captured advisory until the parent classifies

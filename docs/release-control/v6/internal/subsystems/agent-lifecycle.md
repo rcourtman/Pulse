@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Installer identity recovery accounts for the whole legacy file
+
+The descriptor-safe collector command remains the primary agent-ID reader. Its
+root-owned legacy compatibility path accepts only one 1–128 character ID, with
+or without a final newline, from an owned 0600 regular file in an owned
+non-writable parent. Portable size inspection and a bounded read must account
+for every byte; a valid prefix cannot hide oversized state, another identity or
+a discarded NUL. Symlink/FIFO rejection, descriptor ownership/privacy and the
+real collector executable remain unchanged. This does not enrol an agent or
+establish installed recovery.
+
+`TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte` pins that fallback.
+`TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState` covers both
+readers, including a 0400 positive control that cannot use the legacy path.
+Its two-second probes retain build-versus-probe timings and cancel their whole
+fixture process group; `TestAgentIDRecoveryCancellationStopsDescendants` pins
+child termination and inherited-pipe completion, not a longer acceptance budget.
+
 ### Shared origin and webhook edit boundaries
 
 The referenced `internal/api/` settings boundary treats explicit empty
