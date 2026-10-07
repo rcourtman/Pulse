@@ -817,40 +817,6 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 	return nil
 }
 
-// normalizeHysteresisThreshold ensures a hysteresis threshold pointer has valid
-// trigger/clear values. If the pointer is nil or trigger is negative, it is set
-// to the given defaults. Trigger==0 means "disabled" (clear forced to 0).
-// Otherwise a non-positive clear is derived from trigger-5 with defaultClear as floor.
-func normalizeHysteresisThreshold(t **alerts.HysteresisThreshold, defaultTrigger, defaultClear float64) {
-	if *t == nil || (*t).Trigger < 0 {
-		*t = &alerts.HysteresisThreshold{Trigger: defaultTrigger, Clear: defaultClear}
-	} else if (*t).Trigger == 0 {
-		(*t).Clear = 0
-	} else if (*t).Clear <= 0 {
-		(*t).Clear = (*t).Trigger - 5
-		if (*t).Clear <= 0 {
-			(*t).Clear = defaultClear
-		}
-	}
-}
-
-// normalizeStorageDefault normalizes a non-pointer HysteresisThreshold used for
-// storage defaults. Same logic as normalizeHysteresisThreshold but operates on
-// a value (not pointer) and uses 0 as the clear floor.
-func normalizeStorageDefault(t *alerts.HysteresisThreshold) {
-	if t.Trigger < 0 {
-		t.Trigger = 85
-		t.Clear = 80
-	} else if t.Trigger == 0 {
-		t.Clear = 0
-	} else if t.Clear <= 0 {
-		t.Clear = t.Trigger - 5
-		if t.Clear < 0 {
-			t.Clear = 0
-		}
-	}
-}
-
 // normalizeAlertDefaults applies shared normalization logic to an AlertConfig.
 // Called by both SaveAlertConfig and LoadAlertConfig to avoid duplicating the
 // same validation and defaulting code.
@@ -858,7 +824,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	alerts.NormalizeAlertConfigAliases(config)
 
 	// Storage threshold
-	normalizeStorageDefault(&config.StorageDefault)
+	config.StorageDefault = *alerts.NormalizeHysteresisThreshold(&config.StorageDefault, 85, 80, "storage")
 
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -871,9 +837,9 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	}
 
 	// Agent defaults
-	normalizeHysteresisThreshold(&config.AgentDefaults.CPU, 80, 75)
-	normalizeHysteresisThreshold(&config.AgentDefaults.Memory, 85, 80)
-	normalizeHysteresisThreshold(&config.AgentDefaults.Disk, 90, 85)
+	config.AgentDefaults.CPU = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.CPU, 80, 75, "agent.cpu")
+	config.AgentDefaults.Memory = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.Memory, 85, 80, "agent.memory")
+	config.AgentDefaults.Disk = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.Disk, 90, 85, "agent.disk")
 
 	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
@@ -1135,7 +1101,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 
 	// Load-specific: NodeDefaults.Temperature normalization
-	normalizeHysteresisThreshold(&config.NodeDefaults.Temperature, 80, 75)
+	config.NodeDefaults.Temperature = alerts.NormalizeHysteresisThreshold(config.NodeDefaults.Temperature, 80, 75, "node.temperature")
 
 	// Shared normalization (storage, host defaults, time thresholds, snapshots, backups, etc.)
 	normalizeAlertDefaults(&config)

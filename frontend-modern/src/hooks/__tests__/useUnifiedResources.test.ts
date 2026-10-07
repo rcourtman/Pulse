@@ -1943,7 +1943,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('passes proxmox temperatureDetails through for the outdated-sensor-setup gate', async () => {
+  it('passes the proxmox temperature payload and sensor setup verdict through', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -1956,6 +1956,7 @@ describe('useUnifiedResources', () => {
               nodeName: 'pve1',
               temperature: 58.4,
               temperatureDetails: { available: true, legacySensorsFormat: true },
+              sensorSetupOutdated: true,
             },
           },
         ],
@@ -1974,6 +1975,9 @@ describe('useUnifiedResources', () => {
       available: true,
       legacySensorsFormat: true,
     });
+    // The outdated sensor setup notice reads the registry's verdict on the
+    // node, so it must survive the projection that rows on every tab go through.
+    expect(result!.resources()[0].proxmox?.sensorSetupOutdated).toBe(true);
 
     dispose();
   });

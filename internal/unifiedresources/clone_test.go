@@ -518,6 +518,25 @@ func TestCloneProxmoxData_TemperatureIsolation(t *testing.T) {
 	}
 }
 
+// List and presentation readers get detached clones of a node, so the
+// registry-derived sensor setup verdict travels with the clone and stays put
+// when the live node's verdict changes afterwards.
+func TestCloneProxmoxDataKeepsDerivedSensorSetupVerdict(t *testing.T) {
+	outdated := true
+	original := &ProxmoxData{NodeName: "pve", SensorSetupOutdated: &outdated}
+	cloned := cloneProxmoxData(original)
+	if cloned.SensorSetupOutdated == nil || !*cloned.SensorSetupOutdated {
+		t.Fatal("clone dropped the derived sensor setup verdict")
+	}
+	if cloned.SensorSetupOutdated == original.SensorSetupOutdated {
+		t.Fatal("clone shares the live node's verdict pointer")
+	}
+	*original.SensorSetupOutdated = false
+	if !*cloned.SensorSetupOutdated {
+		t.Fatal("changing the live node's verdict changed a clone already handed out")
+	}
+}
+
 func TestCloneProxmoxData_NetworkInterfaceIsolation(t *testing.T) {
 	original := &ProxmoxData{
 		NetworkInterfaces: []NetworkInterface{

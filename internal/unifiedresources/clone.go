@@ -198,6 +198,7 @@ func cloneProxmoxData(in *ProxmoxData) *ProxmoxData {
 	out.DockerCheckedAt = cloneTimePtr(in.DockerCheckedAt)
 	out.TemperatureMonitoringEnabled = cloneBoolPtr(in.TemperatureMonitoringEnabled)
 	out.PendingUpdatesCheckedAt = cloneTimePtr(in.PendingUpdatesCheckedAt)
+	out.SensorSetupOutdated = cloneBoolPtr(in.SensorSetupOutdated)
 	return &out
 }
 

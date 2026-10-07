@@ -3133,13 +3133,12 @@ a new API state machine, queue contract, or verification-accounting field.
    strip after current work has been ruled out. Latest coverage may appear only
    as bounded empty-state copy inside the current-findings surface, not as a
    separate calm-day posture list
-   while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and renders timeline, correlation, and policy-posture data as selected-item investigation context rather than as a separate headline product metric
+   while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and does not render timeline, correlation, or policy-posture data as a headline product metric
    and that secondary investigation context remains explanatory API evidence,
-   not a default workspace mode: the Patrol page may expand recent-change,
-   correlation, and policy-posture details only for an active Patrol finding or
-   an explicitly selected run record, and must not surface those backend
-   context payloads as a page-level forensic block from degraded summary health
-   alone
+   not a Patrol workspace mode: the Patrol page renders no recent-change,
+   correlation, or policy-posture details, whether or not a finding is active
+   or a run record is selected, and must not surface those backend context
+   payloads as a page-level forensic block
    and the Patrol status presentation boundary, so trigger/scheduling status
    from Patrol status APIs stays in the header/control surface instead of being
    repeated as default status chrome, watch-only presentation says Patrol checks
@@ -3291,15 +3290,15 @@ a new API state machine, queue contract, or verification-accounting field.
    workflow; Assistant handoffs remain contextual selected-finding actions, not
    the canonical API completion step for Patrol current work.
    and the canonical alert-triggered Patrol enqueue path in `internal/api/router.go`, so alert-fired Patrol work flows through the unified alert bridge and trigger manager instead of being duplicated by monitor callback wiring
-   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` card, so canonical recent-change timelines stay rendered through one governed frontend card instead of separate page-local list loops
-   and the shared `frontend-modern/src/utils/resourceChangePresentation.ts` formatter used by the summary page and resource drawer, so canonical change wording does not drift across surfaces
-   and the Patrol-owned `Details` context selector, so same-state recent-change
-   records from the canonical AI payload are normalized into changed-substate
-   wording before Patrol renders them or attaches them to Assistant, avoiding
+   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` card, so a compact recent-change summary renders through one governed frontend card instead of a page-local list loop; the resource drawer's full `Change history` timeline is a separate list built on the shared `frontend-modern/src/utils/resourceChangePresentation.ts` helpers
+   and the shared `frontend-modern/src/utils/resourceChangePresentation.ts` formatter used by the resource drawer, so canonical change wording does not drift across surfaces
+   and the Patrol supporting-context boundary, so the Patrol page keeps
+   recent-change payloads off the page with no `Details` context selector or
+   default forensic block, and any Patrol surface that does render same-state
+   recent-change records from the canonical AI payload or attach them to
+   Assistant normalizes them into changed-substate wording first, avoiding
    no-op operator copy such as `online` to `online` while preserving the
-   backend-owned timeline event, and so those context payloads stay behind a
-   compact operator-opened affordance rather than creating a default forensic
-   block on the Patrol page
+   backend-owned timeline event
    and the `/api/ai/intelligence/changes` route plus `internal/api/contract_test.go`, so the canonical recent-changes endpoint stays on the same intelligence facade and contract snapshot instead of bypassing the shared timeline source
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the resource-detail surface stays on one canonical intelligence contract instead of introducing a separate detail endpoint
@@ -3308,7 +3307,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
    and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
-   and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
+   and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so any Patrol recent-change, learned-correlation, or policy-coverage summary text is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
@@ -3354,7 +3353,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
-   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
+   and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' optional `buildResourceHref` input, so a surface that needs resource-filter links passes them into the shared card instead of rebuilding infrastructure URLs inline; the cards carry no link default since the cross-resource drilldown links were retired, and render resource labels as plain text
    and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions, run-history runtime-failure actions, and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
@@ -3495,9 +3494,9 @@ a new API state machine, queue contract, or verification-accounting field.
     score, current risk facts, verification facts, and action state needed for a
     compact operator summary, but it must not imply a hero, card, duplicate
     verdict layout, or expanded assessment panel. Normal Patrol page consumers
-    should keep explanatory assessment, verification, activity, and supporting
-    context in the owning Findings, Runs, and `Details` surfaces rather
-    than re-expanding the primary assessment strip.
+    should keep explanatory assessment, verification, and activity context in
+    the owning Findings and Runs surfaces rather than re-expanding the primary
+    assessment strip.
 18. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
 19. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
     That same shared auth boundary also owns hosted handoff authorization. `internal/api/cloud_handoff.go`,
@@ -4303,10 +4302,10 @@ the authoritative analysis outcome.
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the Current issues and history workspace the same payloads must not
    also drive a second page-level status strip elsewhere on the route
-   and the Patrol `Details` disclosure rule, so recent changes,
+   and the Patrol supporting-context rule, so recent changes,
    learned correlations, and policy coverage stay backend and Assistant context
-   instead of advertising a parallel Patrol workflow on otherwise healthy fully
-   verified states or degraded summary health alone. First-party Patrol page
+   instead of advertising a parallel Patrol workflow in any page state, healthy
+   or degraded. First-party Patrol page
    consumers must not turn those payloads into a generic Details/supporting
    context panel; selected finding and run records remain the source of truth for
    what the operator can inspect or do next.
@@ -7651,6 +7650,17 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+That generic write block keys on the request method alone. The demo
+middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
+execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
+`/ws` and `/api/agent/ws` are `GET` requests and connect through that read
+branch, so an `Upgrade: websocket` or `Connection: Upgrade` header never
+carries a `POST`, `PUT`, `PATCH` or `DELETE` past the guard. A demo deployment that signs
+visitors in as the configured admin, as the public demo does, has only this
+guard between that session and admin writes such as `/api/system/mock-mode`.
+`TestContract_DemoModeUpgradeHeadersDoNotExemptWrites` in
+`internal/api/contract_test.go` signs in as that admin through the full router
+and pins both halves.
 That shared infrastructure install boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at
 `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`

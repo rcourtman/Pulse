@@ -3073,10 +3073,10 @@ Agent`), with the plain-language source phrase available through accessible
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
     `frontend-modern/src/components/patrol/RunHistoryEntry.tsx`, and
     `frontend-modern/src/utils/patrolRuntimeActions.ts` must keep
-    Patrol assessment, verification, and findings primary; surface recent
-    changes, learned correlations, and policy coverage only as backend,
-    Assistant, selected-finding, or selected-run context when investigation
-    makes that evidence relevant; and use Patrol/provider wording for the shared provider settings,
+    Patrol assessment, verification, and findings primary; keep recent
+    changes, learned correlations, and policy coverage out of Patrol-owned
+    shells as backend or Assistant context, with no selected-finding or
+    selected-run page section for them; and use Patrol/provider wording for the shared provider settings,
     provider model, and provider circuit-breaker affordances instead of
     generic AI labels inside Patrol-owned shells. The shared app shell in
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
@@ -3091,9 +3091,10 @@ Agent`), with the plain-language source phrase available through accessible
     Assistant context rather than a default page section. Patrol initial data
     refresh failures must stay inside the Patrol feature shell as one compact
     stale-data retry banner; they must not replace the route with Suspense,
-    blank loading, raw transport errors, or page-local diagnostic panels. The Patrol
-    investigation-context owner normalizes same-state recent-change records into
-    changed-substate wording before Assistant handoff renders them. The same shared feature-shell
+    blank loading, raw transport errors, or page-local diagnostic panels. If a
+    Patrol Assistant handoff attaches recent-change records, the Patrol
+    investigation-context owner must first normalize same-state records into
+    changed-substate wording. The same shared feature-shell
     boundary owns the
     commercial-facing Patrol capability language: autonomy segmented controls
     and run-history/result labels must present the operator-facing policy levels
@@ -4912,8 +4913,8 @@ supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
 The collapsed Patrol assessment strip itself must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
-recommendation copy belongs in the owning Findings, Runs, `Details`,
-or Assistant chat surfaces rather than a normal-path summary details expansion.
+recommendation copy belongs in the owning Findings, Runs, or Assistant chat
+surfaces rather than a normal-path summary details expansion.
 That readout should lead with current operator state and score rather than
 mixing a reassuring grade label with issue-state copy in the same line.
 That same summary shell should also keep the shared Pulse surface neutral:
@@ -6666,6 +6667,11 @@ icon/content layout, and action-link chrome. The
 outdated-sensor notices, and the
 `platform-inline-notice-local-amber-shell` pattern guard blocks future
 `platformPage` files from reintroducing page-local amber notice shells.
+A notice's render predicate reads what its page hydrates on every tab the
+notice renders on. `collectOutdatedSensorSetupNodes` lists the PVE nodes that
+carry the registry's `proxmox.sensorSetupOutdated` verdict and takes no disk
+rows, because only the Proxmox Storage tab loads them; a predicate over them
+left the notice silent on Overview.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in
@@ -6777,8 +6783,8 @@ or polling lifecycle. The Patrol feature is the current reference shape:
 feature shell, reads its active workspace view from the route through
 `patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-owns the pure investigation-context summary and Patrol-to-Assistant operator
-briefing derivation, including the rule that active findings, pending
+owns the pure Patrol-to-Assistant handoff and operator briefing derivation,
+including the rule that active findings, pending
 approvals, and governed action references outrank secondary coverage caveats
 when building the Assistant prompt, action label, and safety note,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
@@ -6855,17 +6861,11 @@ parallel page-level status strip above the current-work workspace.
 That same composition rule applies to the workspace: the default path should
 move directly into findings and run history instead of repeating runtime
 context through a second pre-tab status strip.
-`Details` follows that same composition rule. Recent changes,
-learned correlations, and policy coverage belong behind an explicitly secondary
-supporting-context affordance that only appears when Patrol has active findings
-or a selected run that needs explanation; healthy fully verified Patrol states
-and degraded summary health by themselves must not advertise that supporting
-evidence as a peer workflow. The default workspace may show the compact
-`Details` control, but the full panel must render only after the operator
-opens it. When that disclosure expands, the workspace must explicitly label the
-selected finding or run as Patrol's record and frame the supporting cards as
-explanatory context rather than as a fresh Patrol result or raw evidence
-console.
+Supporting context follows that same composition rule. Recent changes,
+learned correlations, and policy coverage stay off the Patrol workspace: it has
+no `Details` control or supporting-context panel for them in any state, with or
+without active findings or a selected run, so that evidence never competes
+with current work as a peer workflow or reads as a fresh Patrol result.
 Selected-run history should also suppress generic findings filter chrome and
 read as a Patrol run record. Missing legacy `finding_ids` remains an internal
 fail-closed scoping condition, but the visible caveat should say the finding
@@ -7177,6 +7177,12 @@ shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
 alert stats, filtered ordering, and single/bulk acknowledge runtime behavior.
 Future overview control flow should extend that hook rather than restoring
 action timers or acknowledge mutations to the tab shell.
+The overview follows the shared-clock rule for relative ages: the alert card
+reads `useRelativeTimeNow` for its started age and the live reading's stale
+cut-off, and the hook reads it for the Last 24 Hours count. A hook-local
+minute signal used as "now" is a table-local interval under that rule; the
+hook keeps a minute interval only to refresh delivery diagnoses, a server read
+whose cadence is not tied to the age clock.
 Render-heavy overview ownership now lives in
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
@@ -7899,10 +7905,12 @@ renders above the chart.
 TrueNAS disk rows follow it too: the drawer's Temperature row reads
 "(last known)" with the reason as title and no heat tone, and the one-line
 summary leaves a retained reading out because it has no room for the reason.
-The Proxmox outdated sensor setup notice (`features/platformPage/sensorSetup.ts`)
-counts a SATA or SAS disk as having a temperature only when the reading is
-current, so a retained one cannot hide the notice for a disk Pulse cannot read
-now.
+The Proxmox outdated sensor setup notice reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict, which counts a SATA or SAS disk as having
+a temperature only when the reading was collected now
+(`diskinventory.TemperatureCollected` in
+`internal/unifiedresources/proxmox_sensor_setup.go`), so a retained one cannot
+hide the notice for a disk Pulse cannot read now.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,

@@ -142,6 +142,54 @@ describe('useWorkloads', () => {
     }
   });
 
+  it('marks a silent linked agent and the guest filesystems it supplied', async () => {
+    const disk = (mountpoint: string) => ({
+      mountpoint,
+      type: 'ext4',
+      total: 100,
+      used: 40,
+      free: 60,
+      usage: 40,
+    });
+    const [snapshot] = createSignal([
+      // Proxmox read no guest filesystems, so the agent's own report fills in.
+      {
+        ...sampleResource,
+        id: 'vm-agent-disks',
+        vmid: 102,
+        sources: ['proxmox', 'agent'],
+        agent: { agentVersion: '6.4.5', stale: true, disks: [disk('/agent')] },
+      },
+      // Proxmox guest filesystems win over a live agent's.
+      {
+        ...sampleResource,
+        id: 'vm-platform-disks',
+        vmid: 103,
+        sources: ['proxmox', 'agent'],
+        proxmox: { disks: [disk('/platform')] },
+        agent: { agentVersion: '6.4.5', stale: false, disks: [disk('/agent')] },
+      },
+    ] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      const byId = (id: string) =>
+        result!.workloads().find((workload) => workload.canonicalResourceId === id);
+      expect(byId('vm-agent-disks')).toMatchObject({ agentStale: true, disksFromAgent: true });
+      expect(byId('vm-agent-disks')?.disks?.map((d) => d.mountpoint)).toEqual(['/agent']);
+      expect(byId('vm-platform-disks')?.agentStale).toBeUndefined();
+      expect(byId('vm-platform-disks')?.disksFromAgent).toBeUndefined();
+      expect(byId('vm-platform-disks')?.disks?.map((d) => d.mountpoint)).toEqual(['/platform']);
+    } finally {
+      dispose();
+    }
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();

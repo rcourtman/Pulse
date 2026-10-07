@@ -2987,6 +2987,36 @@ or force every provider type back into the active route payload. Docker,
 Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
 maps, and the shared hook test pins facet normalization.
 
+### Proxmox node verdicts over disks arrive on the node
+
+The Proxmox page hydrates one query per workflow, and only its Storage tab
+loads `physical_disk` rows, so a node verdict that depends on the node's disks
+is derived in the registry and carried on the node, never rebuilt in the page
+from disk rows. `ProxmoxData.SensorSetupOutdated` (`proxmox.sensorSetupOutdated`
+on REST and websocket rows) is that verdict for the outdated sensor setup
+notice. `refreshProxmoxSensorSetupLocked`
+(`internal/unifiedresources/proxmox_sensor_setup.go`) runs after
+`buildChildCounts` on every ingest path and gives every Proxmox node an
+explicit true or false (other resources omit it), because browser facet merges
+read an omitted field as a partial snapshot and would keep an earlier true. It
+is true when the node's temperature payload is available and in the legacy
+`sensors -j` format (`models.Temperature.LegacySensorsFormat`) and a disk whose
+canonical parent is the node has no reading collected now
+(`diskinventory.TemperatureCollected`) and a type whose temperature a PVE node
+gets only through SMART: `sata`, `sas`, or the `hdd` and `ssd` form factors
+Proxmox's own inventory reports. Proxmox also types a non-rotational USB device
+`ssd`, so a USB device without SMART counts. A retained reading does not count
+as current, including one kept while a host agent reports the disk in standby;
+a reading a linked host agent collects now clears the disk. NVMe disks never
+set it, because kernel hwmon reports them even on a legacy setup, and a host
+agent the registry has not linked to the node contributes no disks. The
+verdict reflects the registry's node and disk state at each ingest.
+`TestProxmoxNodeSensorSetupOutdatedFromItsDisks` and
+`TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives` in
+`internal/unifiedresources/registry_test.go` pin the rule, the linked-agent
+case, the explicit false on the wire and the presented JSON;
+`resourceStateAdapters.test.ts` pins that a false clears a merged true.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox
@@ -6605,9 +6635,52 @@ conflict): the agent's row may be the slot's previous occupant, retained by a
 silent agent, and the join would hand the replacement that disk's serial,
 readings and canonical resource. A hardware identity match still joins on its
 own, and without a WWN on either side the path fallback stands. The seeded
-source mapping reused after a restart is a separate path this does not cover.
-`TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale row and both
-same-disk shapes; monitoring's SMART merge applies the matching guard first.
+source mapping a rehydrated registry reuses applies the same refusal (next
+section). `TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale
+row and both same-disk shapes; monitoring's SMART merge applies the matching
+guard first.
+
+### Seeded slot mapping refuses a replaced disk
+
+`ingestRecord` honours a source key's existing mapping, such as one
+`IngestResources` seeds from persisted unified resources, before any
+identity matching. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a disk swapped into the slot arrived
+under the previous disk's key, and `mergeInto` kept that disk's canonical ID
+and, where an agent report had been merged in, its serial, WWN, temperature
+and failed health. A Proxmox disk observation now refuses the mapping when
+the two carry hardware identities naming different disks
+(`proxmoxDiskSlotHoldsAnotherDisk`: `HardwareIdentityConflict` after
+`HardwareIdentityMatch`). Only fields reported on both sides count, so a
+missing serial or WWN, including Proxmox's literal `unknown`, is no evidence.
+Differing serials are no evidence when either side is SAS, because Proxmox
+may report the SAS address there (#1595), or when the mapped disk was merged
+with an agent report, whose serial `mergeInto` may have kept (collection
+status does not reliably say which serial it holds), unless Proxmox read the
+drive's own serial too, by the rule monitoring's
+`hostAgentSMARTSerialComparable` applies: NVMe on both sides, or an agent
+SATA disk under Proxmox vendor `ATA` that Proxmox does not type `usb`, not a
+SCSI designator or a USB bridge's serial. A refused key falls through to the linked-disk join,
+`findMatch` and `chooseNewID` like an unmapped one, except that none of them
+may merge it into the refused disk: an ID that lands on it is replaced with
+the key's source-specific ID. Agreement still wins, as it does in identity
+matching, so drives that share a serial they do not own, such as a USB
+bridge's, read as one disk: a second swap in the same enclosure joins the
+first replacement, which reported the same bridge serial. That belongs to
+identity matching, not this guard. The refused disk keeps its Proxmox
+facet and is not updated, so until the registry is rebuilt both disks answer
+to the slot's PVE alert reference, and canonical reference resolution treats
+that reference as ambiguous rather than handing it to either. A later
+rehydration may seed the slot key to the old disk again, and the refusal
+repeats. No current caller ingests Proxmox disk records over a seeded
+mapping: the monitor rebuilds a fresh registry each poll, and the resource
+API, host-continuity and Patrol registries seeded from unified resources do
+not replay Proxmox disk records. This closes the registry contract, not a
+reported symptom. `TestRegistrySeededSlotMappingRefusesReplacedDisk` covers
+SATA (with and without a new WWN), SAS, USB-enclosure and Proxmox-only
+replacements, plus eight same-disk controls (including a SCSI designator
+from an agent without collection status and a USB bridge serial under
+Proxmox vendor `ATA`), each through two rehydrations.
 
 ### Drawer tab selection survives a transient snapshot change (#1723)
 

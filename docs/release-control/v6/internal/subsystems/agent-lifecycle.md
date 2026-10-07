@@ -8944,3 +8944,12 @@ agent from its last report instead of from the PVE poll, and mark it stale at
 their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
+
+### Demo write guard ignores websocket upgrade headers
+
+`internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or
+`DELETE` carrying `Upgrade: websocket` is judged by the demo read-only guard
+like any other write instead of always reaching its handler. Agent command
+websocket handshakes to `/api/agent/ws` are HTTP/1.1 `GET` requests, the only
+transport its gorilla upgrader serves, and still connect on a demo instance.
+No agent registration, enrolment, install, update or removal path changed.
