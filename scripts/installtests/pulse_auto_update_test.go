@@ -237,6 +237,7 @@ curl() {
   cat <<'EOF'
 {
   "tag_name": "v5.1.28",
+  "draft": false,
   "prerelease": false,
   "name": "Pulse v5.1.28"
 }
@@ -933,5 +934,102 @@ printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 	}
 	if !strings.Contains(string(out), "TRANSACTION_ASSERTIONS_PASSED") {
 		t.Fatalf("transaction assertions did not finish:\n%s", out)
+	}
+}
+
+// Stable admission is object-bound, not a line-oriented tag/flag accumulator.
+// Each fixture runs the real selector with local transport stubs only.
+func TestAutoUpdateReleaseMetadataAdmission(t *testing.T) {
+	const stable = `{"tag_name":"v6.5.0","draft":false,"prerelease":false}`
+	cases := []struct {
+		name, list, latest, want string
+		listExit, calls          int
+	}{
+		{"compact list", `[{"tag_name":"v6.4.5","draft":false,"prerelease":false},` + stable + `]`, `{}`, "v6.5.0", 0, 1},
+		{"reordered fields", `[{"prerelease":false,"draft":false,"tag_name":"v6.5.0"}]`, `{}`, "v6.5.0", 0, 1},
+		{"no sibling maturity borrowing", "[\n{\n\"draft\":true,\n\"prerelease\":false,\n\"tag_name\":\"v9.9.9\"\n},\n{\n\"prerelease\":false,\n\"draft\":false,\n\"tag_name\":\"v6.5.0\"\n}\n]", `{}`, "v6.5.0", 0, 1},
+		{"confirmed latest fallback", `[]`, stable, "v6.5.0", 0, 2},
+		{"missing draft", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"prerelease\":false\n}", "", 0, 2},
+		{"missing prerelease", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"draft\":false\n}", "", 0, 2},
+		{"draft latest", `[]`, "{\n\"tag_name\":\"v9.9.9\",\n\"draft\":true,\n\"prerelease\":false\n}", "", 0, 2},
+		{"string flags", `[{"tag_name":"v9.9.9","draft":"false","prerelease":"false"}]`, `{}`, "", 0, 2},
+		{"nested flags", `[{"tag_name":"v9.9.9","status":{"draft":false,"prerelease":false}}]`, `{}`, "", 0, 2},
+		{"body is not release metadata", `[{"body":{"tag_name":"v9.9.9","draft":false,"prerelease":false}}]`, `{}`, "", 0, 2},
+		{"wrong list shape", stable, `{}`, "", 0, 2},
+		{"wrong latest shape", `[]`, `[` + stable + `]`, "", 0, 2},
+		{"non-object entry", `[` + stable + `,false]`, `{}`, "", 0, 2},
+		{"truncated list", `[` + stable + `,`, `{}`, "", 0, 2},
+		{"concatenated documents", `[` + stable + `] []`, `{}`, "", 0, 2},
+		{"partial transport output", `[` + stable + `]`, `{}`, "", 22, 2},
+		{"transport failure with confirmed fallback", `[` + stable + `]`, stable, "v6.5.0", 22, 2},
+		{"redirect is not maturity", `[]`, "Location: https://github.com/rcourtman/Pulse/releases/tag/v9.9.9\r\n", "", 0, 2},
+		{"multiline tag", `[{"tag_name":"unknown\nv9.9.9","draft":false,"prerelease":false}]`, `{}`, "", 0, 2},
+		{"preview and chart tags", `[{"tag_name":"v9.9.9-rc.1","draft":false,"prerelease":false},{"tag_name":"helm-chart-9.9.9","draft":false,"prerelease":false}]`, `{}`, "", 0, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, data := range map[string]string{"list": tc.list, "latest": tc.latest} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			script := `set -euo pipefail
+GITHUB_REPO=rcourtman/Pulse
+log() { printf '%s\n' "$*" >&2; }
+curl() {
+  printf '%s\n' "$*" >> "$FIXTURE_DIR/calls"
+  local url="${!#}"
+  case "$url" in
+    */releases?per_page=30) cat "$FIXTURE_DIR/list"; return "$LIST_EXIT" ;;
+    */releases/latest) cat "$FIXTURE_DIR/latest" ;;
+    *) echo "UNEXPECTED_TRANSPORT" >&2; return 99 ;;
+  esac
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + "\n" +
+				extractAutoUpdateFunction(t, "version_greater_than") + "\n" +
+				extractAutoUpdateFunction(t, "pick_highest_stable_tag") + "\n" +
+				extractAutoUpdateFunction(t, "get_latest_stable_version") + `
+get_latest_stable_version
+`
+			cmd := exec.Command("bash", "-c", script)
+			listExit := "0"
+			if tc.listExit != 0 {
+				listExit = "22"
+			}
+			cmd.Env = append(os.Environ(), "FIXTURE_DIR="+dir, "LIST_EXIT="+listExit)
+			out, err := cmd.CombinedOutput()
+			if err != nil || strings.TrimSpace(string(out)) != tc.want {
+				t.Fatalf("release selection: %v; got %q, want %q", err, out, tc.want)
+			}
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+			if len(lines) != tc.calls {
+				t.Fatalf("transport calls: got %d, want %d: %s", len(lines), tc.calls, calls)
+			}
+			for _, line := range lines {
+				if !strings.HasPrefix(line, "--disable --fail --silent --show-error --connect-timeout 5 --max-time 20 --proto =https https://api.github.com/repos/rcourtman/Pulse/") {
+					t.Fatalf("unbounded or ambient-config transport: %s", line)
+				}
+			}
+		})
+	}
+}
+
+func TestAutoUpdateReleaseMetadataRequiresParserBeforeTransport(t *testing.T) {
+	script := `set -euo pipefail
+command() { if [[ "$*" == '-v jq' ]]; then return 1; fi; builtin command "$@"; }
+log() { printf '%s\n' "$*" >&2; }
+curl() { echo UNEXPECTED_TRANSPORT; return 99; }
+` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
+result=$(get_latest_stable_version)
+[[ -z "$result" ]] && echo PARSER_REFUSED
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "PARSER_REFUSED") || strings.Contains(string(out), "UNEXPECTED_TRANSPORT") {
+		t.Fatalf("missing parser must stop before discovery: %v\n%s", err, out)
 	}
 }

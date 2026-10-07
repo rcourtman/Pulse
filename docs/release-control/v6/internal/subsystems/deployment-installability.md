@@ -5173,6 +5173,19 @@ miswritten upstream signal cannot cross a stable-channel install onto a
 preview tag. Dedicated prerelease-refusal tests in
 `scripts/installtests/pulse_auto_update_test.go` are the owned proof surface
 for that guard.
+Unattended release discovery must bind a stable-shaped tag to explicit JSON
+`draft=false` and `prerelease=false` in the same complete top-level release
+object. Whitespace, key ordering, nested/body data, sibling objects, truncated
+or concatenated documents and partial failed HTTP output cannot establish
+maturity. The list remains highest-version-first; its fallback must be a
+complete independently confirmed `/releases/latest` object, never a redirect
+alone. Missing `jq` stops before transport. Both HTTPS API reads ignore ambient
+curl configuration and have five-second connect/twenty-second overall bounds.
+`TestAutoUpdateReleaseMetadataAdmission` and
+`TestAutoUpdateReleaseMetadataRequiresParserBeforeTransport` in
+`scripts/installtests/pulse_auto_update_test.go` own this proof. Signature,
+edition, consent, backup, service-restoration and installation gates remain
+separate and unchanged.
 That same boundary also owns operator-facing management entry points for
 existing self-hosted installs: the installer's printed update/reset/uninstall
 commands and the active install or upgrade docs must route supported
