@@ -210,7 +210,7 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 		trueNASMemoryAlertResource(secondID, "", sharedName, 90),
 		trueNASMemoryAlertResource(newID, oldID, sharedName, 90),
 	}
-	monitor.syncUnifiedResourceAlertsToState(resources)
+	monitor.syncUnifiedResourceAlertsToState(resources, monitor.mockModeFence.begin())
 
 	inMemory := manager.GetConfig()
 	if _, exists := inMemory.Overrides[oldID]; exists {
@@ -246,7 +246,7 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 		trueNASMemoryAlertResource(newID, oldID, sharedName, 96),
 		trueNASMemoryAlertResource(secondID, "", sharedName, 70),
 	}
-	monitor.syncUnifiedResourceAlertsToState(resources)
+	monitor.syncUnifiedResourceAlertsToState(resources, monitor.mockModeFence.begin())
 	warning := waitForAlertNotification(t, notifications, newID, alerts.AlertLevelWarning)
 	waitForAlertResolution(t, resolutions, secondID)
 	if warning.Threshold != overridePct {
@@ -254,7 +254,7 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 	}
 
 	resources[0] = trueNASMemoryAlertResource(newID, oldID, sharedName, 99)
-	monitor.syncUnifiedResourceAlertsToState(resources)
+	monitor.syncUnifiedResourceAlertsToState(resources, monitor.mockModeFence.begin())
 	critical := waitForAlertNotification(t, notifications, newID, alerts.AlertLevelCritical)
 	if critical.Threshold != overridePct {
 		t.Fatalf("critical notification threshold = %.1f, want %.1f", critical.Threshold, overridePct)
@@ -264,7 +264,7 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 	}
 
 	resources[0] = trueNASMemoryAlertResource(newID, oldID, sharedName, 89)
-	monitor.syncUnifiedResourceAlertsToState(resources)
+	monitor.syncUnifiedResourceAlertsToState(resources, monitor.mockModeFence.begin())
 	if _, exists := activeMemoryAlertForResource(manager, newID); exists {
 		t.Fatalf("TrueNAS alert did not clear below the persisted 90%% recovery threshold")
 	}
@@ -284,7 +284,7 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 	restartedMonitor.syncUnifiedResourceAlertsToState([]unifiedresources.Resource{
 		trueNASMemoryAlertResource(newID, "", sharedName, 90),
 		trueNASMemoryAlertResource(secondID, "", sharedName, 70),
-	})
+	}, restartedMonitor.mockModeFence.begin())
 	if _, exists := activeMemoryAlertForResource(restartedManager, newID); exists {
 		t.Fatalf("restarted manager evaluated %s at the default threshold", newID)
 	}
@@ -434,7 +434,7 @@ func TestSyncUnifiedResourceAlertsMigratesDockerContainerOverrideKeys(t *testing
 	monitor.syncUnifiedResourceAlertsToState([]unifiedresources.Resource{
 		dockerApp("app-container-1111111111111111", "host-1", "aaaaaaaaaaaa", "media-server"),
 		dockerApp("app-container-0011223344556677", "host-1", "cccccccccccc", "proxy"),
-	})
+	}, monitor.mockModeFence.begin())
 
 	inMemory := manager.GetConfig()
 	for _, gone := range []string{
