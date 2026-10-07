@@ -53,6 +53,26 @@ editions cause no release read or installer action, while a recognised community
 binary still reaches both. These ordinary-user shell fixtures do not establish
 installed systemd, paid customer or native update acceptance.
 
+### Unattended update acceptance requires executable version evidence
+
+After the signed installer returns success, the unattended updater requires the
+selected primary (or, only when absent, legacy) executable to report a recognised
+community version on its first line and exit successfully within five seconds,
+with a one-second KILL backstop. Optional build details on later lines remain
+valid. An optional `v` prefix is normalised for comparison with the exact target.
+VERSION sidecars, failed or empty probes, other editions/brands and versions
+embedded in later lines cannot establish successful replacement. Unknown version
+identity or a mismatch enters the existing verified rollback transaction, never
+success. The same bounded read is used before release discovery.
+
+`TestAutoUpdateBackupTransaction` executes real local signed installers that
+return success but leave each adverse executable beside a target VERSION file.
+It checks failure, restored original bytes/modes/metadata/configuration and
+only-prior-active service restoration, with valid build-detail and unprefixed
+community controls. `TestAutoUpdateVersionProbeHasHardDeadline` exercises a real
+TERM-resistant executable. These are source fixtures, not native systemd or
+installed customer recovery. Consent, signatures and rollback gates are unchanged.
+
 ### Unattended update consent comes from complete configuration
 
 When `system.json` exists, the unattended updater requires one complete JSON
