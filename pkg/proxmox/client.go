@@ -1702,14 +1702,25 @@ type VMFileSystem struct {
 }
 
 func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
+	fields, valid := guestAgentResponseFields(data)
+	if !valid {
+		return fmt.Errorf("guest filesystem record is ambiguous or malformed")
+	}
+	for name := range fields {
+		for _, canonical := range []string{"total-bytes", "total-bytes-privileged", "used-bytes"} {
+			if name != canonical && strings.EqualFold(name, canonical) {
+				return fmt.Errorf("guest filesystem byte count has a noncanonical field name")
+			}
+		}
+	}
 	type rawVMFileSystem struct {
-		Name                 string      `json:"name"`
-		Type                 string      `json:"type"`
-		Mountpoint           string      `json:"mountpoint"`
-		TotalBytes           interface{} `json:"total-bytes"`
-		TotalBytesPrivileged interface{} `json:"total-bytes-privileged"`
-		UsedBytes            interface{} `json:"used-bytes"`
-		DiskRaw              interface{} `json:"disk"`
+		Name                 string          `json:"name"`
+		Type                 string          `json:"type"`
+		Mountpoint           string          `json:"mountpoint"`
+		TotalBytes           json.RawMessage `json:"total-bytes"`
+		TotalBytesPrivileged json.RawMessage `json:"total-bytes-privileged"`
+		UsedBytes            json.RawMessage `json:"used-bytes"`
+		DiskRaw              interface{}     `json:"disk"`
 	}
 
 	var raw rawVMFileSystem
@@ -1717,20 +1728,23 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	total, err := parseUint64Flexible(raw.TotalBytes)
+	total, err := parseVMFilesystemBytes(raw.TotalBytes, false)
 	if err != nil {
 		return err
 	}
-	totalPrivileged, err := parseUint64Flexible(raw.TotalBytesPrivileged)
+	totalPrivileged, err := parseVMFilesystemBytes(raw.TotalBytesPrivileged, false)
 	if err != nil {
 		return err
 	}
-	used, err := parseUint64Flexible(raw.UsedBytes)
+	used, err := parseVMFilesystemBytes(raw.UsedBytes, total > 0 || totalPrivileged > 0)
 	if err != nil {
 		return err
 	}
 	if total == 0 && totalPrivileged > 0 {
 		total = totalPrivileged
+	}
+	if used > total {
+		return fmt.Errorf("guest filesystem used bytes exceed total bytes")
 	}
 
 	fs.Name = raw.Name
@@ -2060,11 +2074,12 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	// If that fails, try as an object (might be an error response or different format)
 	var objectResult struct {
 		Data struct {
-			Result interface{} `json:"result"`
+			Result json.RawMessage `json:"result"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
-		if objectResult.Data.Result == nil {
+		rawFS := bytes.TrimSpace(objectResult.Data.Result)
+		if len(rawFS) == 0 || bytes.Equal(rawFS, []byte("null")) {
 			log.Debug().
 				Str("node", node).
 				Int("vmid", vmid).
@@ -2072,11 +2087,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 			return []VMFileSystem{}, nil
 		}
 
-		if fsMap, ok := objectResult.Data.Result.(map[string]interface{}); ok && looksLikeVMFilesystemResult(fsMap) {
-			rawFS, marshalErr := json.Marshal(fsMap)
-			if marshalErr != nil {
-				return nil, fmt.Errorf("failed to marshal object-style guest filesystem result: %w", marshalErr)
-			}
+		var fsMap map[string]interface{}
+		if json.Unmarshal(rawFS, &fsMap) == nil && looksLikeVMFilesystemResult(fsMap) {
 			var fs VMFileSystem
 			if unmarshalErr := json.Unmarshal(rawFS, &fs); unmarshalErr != nil {
 				return nil, fmt.Errorf("failed to parse object-style guest filesystem result: %w", unmarshalErr)
