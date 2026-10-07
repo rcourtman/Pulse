@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise copied log-correlation recipes with synthetic service log readers.
+"""Exercise copied incident-log recipes with synthetic service log readers.
 
 This checks shell behaviour, not an installed Pulse service or Docker daemon.
 """
@@ -29,14 +29,14 @@ CONSOLE_LOG = f"WRN Request failed request_id={REQUEST_ID} status=503\n"
 DECOY_LOG = "WRN Request failed request_id=traceX123:abc status=503\n"
 
 
-def section() -> str:
+def section(heading: str = "### Correlate Logs with Requests") -> str:
     return DOC.read_text(encoding="utf-8").split(
-        "### Correlate Logs with Requests\n", 1
+        heading + "\n", 1
     )[1].split("\n### ", 1)[0]
 
 
-def recipes() -> dict[str, str]:
-    blocks = re.findall(r"```bash\n(.*?)```", section(), re.DOTALL)
+def recipes(heading: str = "### Correlate Logs with Requests") -> dict[str, str]:
+    blocks = re.findall(r"```bash\n(.*?)```", section(heading), re.DOTALL)
     return {"docker" if "# Docker" in block else "journalctl": block
             for block in blocks}
 
@@ -171,6 +171,68 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
             self.assertIn(boundary, guide)
         self.assertNotRegex("\n".join(recipes().values()),
                             r"curl\b|--follow\b|\s-f\b|--token\b|--api-token\b")
+
+
+class GeneralLogEvidenceTest(unittest.TestCase):
+    """The general help entry must reach the same bounded readers, without an ID."""
+
+    def test_getting_help_reaches_bounded_readers_without_a_second_attempt(self):
+        help_text = " ".join(section("## 🆘 Getting Help").split())
+        self.assertIn("[bounded Pulse log readers](#inspect-notification-logs)", help_text)
+        self.assertNotRegex(help_text, r"journalctl\b|docker logs\b")
+        for boundary in ("Pulse server's deployment, not the monitored target",
+                         "record limit alone does not bound a hung reader",
+                         "do not use an unbounded substitute",
+                         "No request ID is required",
+                         "do not repeat the failed action"):
+            self.assertIn(boundary, help_text)
+        self.assertIn("also apply to other server errors",
+                      " ".join(section("### Inspect Notification Logs").split()))
+
+    def exercise(self, reader: str, **settings):
+        copied = recipes("### Inspect Notification Logs")[reader]
+        self.assertNotIn("REQUEST_ID", copied)
+        result, argv = exercise_log_recipe(reader, copied, **settings)
+        expected = (["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"]
+                    if reader == "journalctl" else ["logs", "--since", "15m", "--tail", "200", "pulse"])
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
+
+    def test_general_readers_keep_complete_stdout_and_stderr_without_an_id(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="server error\n", stderr="detail\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                # The two streams can flush in either order; require both
+                # records exactly once, not cross-stream chronology.
+                self.assertCountEqual(result.stdout.splitlines(), ["server error", "detail"])
+                self.assertEqual(result.stderr, "")
+
+    def test_general_readers_withhold_partial_errors_on_failed_reads(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="partial error\n",
+                                       stderr="private access error\n", exit_code=2)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 2)", result.stderr)
+                self.assertNotIn("private access error", result.stderr)
+
+    def test_general_readers_stop_and_withhold_partial_errors_at_real_deadline(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="partial error\n", hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_general_readers_do_not_fall_back_when_timeout_is_missing(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, missing_timeout=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
 
 
 if __name__ == "__main__":

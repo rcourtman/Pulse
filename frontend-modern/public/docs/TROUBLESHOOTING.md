@@ -915,9 +915,11 @@ error may be enough. See [Getting Help](#-getting-help).
 
 ### Inspect Notification Logs
 
-Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
-is needed, run only the command for your deployment, on the Pulse host with an
-account authorised to read its logs. For Proxmox LXC, run the systemd command
+For notification failures, prefer **Recent delivery activity** in **Alerts →
+Notifications**. These bounded Pulse log readers also apply to other server
+errors; a request ID is not required. If a local log is needed, run only the
+command for your deployment, on the Pulse host with an account authorised to
+read its logs. For Proxmox LXC, run the systemd command
 inside the Pulse container, not on the Proxmox host. Adjust the time window to
 the original incident and substitute your actual service or container name
 (`pulse-backend` on some older systemd installs). These examples read at most
@@ -1168,9 +1170,13 @@ If you're still stuck:
    safe, use **Settings → Diagnostics → GitHub (review first)** for
    connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
    For a visual problem, a screenshot or the exact
-   error may be enough. If logs are needed, inspect a bounded local excerpt
-   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
-   not a full configuration or data-directory upload.
+   error may be enough. If logs are needed, use the
+   [bounded Pulse log readers](#inspect-notification-logs), choosing the command
+   for the Pulse server's deployment, not the monitored target. A record limit
+   alone does not bound a hung reader. If the read fails or times out, retain
+   that result; do not use an unbounded substitute or treat a partial excerpt
+   as complete. No request ID is required; do not repeat the failed action to
+   obtain one. Never upload a full configuration or data directory.
 4. **Review before posting**: even a sanitized export or screenshot can contain
    identifying details. Remove credentials, session cookies, webhook URLs and
    private host, network or personal information. Never post bootstrap/recovery
