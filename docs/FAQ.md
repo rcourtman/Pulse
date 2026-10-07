@@ -21,8 +21,27 @@ run the unified agent directly.
 If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
 
 ### How do I change the port?
-- **Systemd**: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart.
-- **Docker**: Use `-p 8080:7655` in your run command.
+
+Distinguish Pulse's web listener from a container's published host port.
+`FRONTEND_PORT` controls the listener (default **7655**); the separate
+`PULSE_AGENT_INGEST_PORT` is not the web UI port.
+
+- **Systemd / Proxmox LXC**: change the active Pulse service's managed port
+  setting. For LXC, work inside the Pulse container, not on the Proxmox host.
+  A unit or drop-in change needs a service-manager reload and a restart of that
+  service during a suitable maintenance window.
+- **Docker / Compose**: with the default listener, `8080:7655` publishes the UI
+  on host port **8080**; it does not require changing `FRONTEND_PORT`. The
+  repository's Compose file uses `PULSE_PORT` for this host-side mapping.
+  Apply the change through your existing container manager's recreate/redeploy
+  operation, preserving the same image, data mount and other settings.
+  `docker restart` does not apply a new port mapping. Do not delete a data volume
+  or replace your existing deployment with a fresh `docker run` command.
+
+Update the reverse proxy's upstream port separately if needed; do not expose
+Pulse directly or broadly open the firewall to bypass it. Follow the
+[deployment-specific port checks](TROUBLESHOOTING.md#port-change-didnt-take-effect)
+and keep full service environments and container inspections private.
 
 ### Does updating the Pulse server update every agent immediately?
 
@@ -38,7 +57,28 @@ update. Use **Settings → Infrastructure → Install on a host** for first inst
 and v5-to-v6 upgrades. See [Unified Agent](UNIFIED_AGENT.md#auto-update).
 
 ### Why can't I change settings in the UI?
-If a setting is disabled with an amber warning, it's being overridden by an environment variable (e.g., `DISCOVERY_ENABLED`). Remove the env var to regain UI control.
+
+A warning that names an environment variable means that deployment setting
+manages the value, rather than the UI. If it is intentional, keep it and ask
+the deployment administrator to change that setting; do not remove unrelated
+authentication or security overrides.
+
+To hand that particular setting back to the UI, remove only its override from
+the active deployment source. Apply through the same deployment: environment
+changes for Docker require recreation/redeployment, not `docker restart`; a
+systemd unit or drop-in change needs a service-manager reload and restart.
+Preserve the image, data mount, credentials and other settings. Merely editing
+a file does not change the running process's environment.
+
+Re-open Settings afterwards and check both the warning and effective value.
+Removing an override does not necessarily erase the saved value underneath it
+or turn the setting off. For example, a saved CORS allowlist can remain after
+`ALLOWED_ORIGINS` is removed. See
+[environment precedence](CONFIGURATION.md#common-overrides-environment-variables) and
+[CORS checks](TROUBLESHOOTING.md#cors-errors). If no environment warning is
+shown, retain the displayed error rather than assuming an override is the cause.
+Do not post full environment, Compose or configuration dumps; they can contain
+passwords and tokens.
 
 ---
 
