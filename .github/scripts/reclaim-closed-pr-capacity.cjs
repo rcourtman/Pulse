@@ -2,6 +2,18 @@
 
 const ACTIVE_STATUSES = ['queued', 'in_progress'];
 
+function belongsToClosedPullRequest(run, pullRequestNumber, headRepository, headBranch) {
+  return (
+    Number.isSafeInteger(run.id) && run.id > 0 &&
+    run.event === 'pull_request' &&
+    ACTIVE_STATUSES.includes(run.status) &&
+    run.head_branch === headBranch &&
+    run.head_repository?.full_name === headRepository &&
+    Array.isArray(run.pull_requests) && run.pull_requests.length > 0 &&
+    run.pull_requests.every((pullRequest) => pullRequest?.number === pullRequestNumber)
+  );
+}
+
 async function cancelClosedPullRequestRuns({ github, context, core }) {
   const pullRequest = context.payload.pull_request;
   if (!pullRequest || !Number.isInteger(pullRequest.number)) {
@@ -52,17 +64,43 @@ async function cancelClosedPullRequestRuns({ github, context, core }) {
       per_page: 100,
     });
     for (const run of runs) {
-      if (
+      if (belongsToClosedPullRequest(run, pullRequest.number, headRepository, headBranch)) {
+        candidates.set(run.id, run);
+      } else if (
         run.head_branch === headBranch &&
         run.head_repository?.full_name === headRepository
       ) {
-        candidates.set(run.id, run);
+        core.info('A same-head run has no active, exclusive closed-PR association; leaving it alone.');
       }
     }
   }
 
   let cancellationRequests = 0;
   for (const run of candidates.values()) {
+    // Lists are discovery, not mutation authority: a reused branch can have
+    // another PR's runs, and a discovered run may have completed meanwhile.
+    // Missing associations (including some fork responses) stay untouched.
+    const observed = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: run.id });
+    if (
+      observed.data.id !== run.id ||
+      !belongsToClosedPullRequest(observed.data, pullRequest.number, headRepository, headBranch)
+    ) {
+      core.info(`Run ${run.id} no longer has an active, exclusive closed-PR association; leaving it alone.`);
+      continue;
+    }
+    const latest = await github.rest.pulls.get({ owner, repo, pull_number: pullRequest.number });
+    if (latest.data.state !== 'closed') {
+      core.info(`PR #${pullRequest.number} is no longer closed; stopping cancellation.`);
+      break;
+    }
+    const reused = await github.paginate(github.rest.pulls.list, {
+      owner, repo, state: 'open', head: `${headOwner}:${headBranch}`, per_page: 100,
+    });
+    if (reused.length > 0) {
+      core.info('The head now belongs to an open pull request; stopping cancellation.');
+      break;
+    }
+
     try {
       await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
       cancellationRequests += 1;
