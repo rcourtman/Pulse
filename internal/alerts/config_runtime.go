@@ -545,7 +545,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 
-			guestThresholds := m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+			guestThresholds := m.resolveGuestAlertThresholdsNoLock(alert, resourceID)
 			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -634,11 +634,15 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 	}
 }
 
-// GetConfig returns the current alert configuration.
+// GetConfig returns a copy of the alert configuration that the caller owns.
+// Callers encode, persist and edit it outside m.mu, and UpdateConfig
+// normalizes the maps it is handed in place, so a copy that shared the live
+// config's maps let a save or a re-apply write them while evaluation read
+// them, which Go aborts as a concurrent map write.
 func (m *Manager) GetConfig() AlertConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.config
+	return m.config.Clone()
 }
 
 func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {
