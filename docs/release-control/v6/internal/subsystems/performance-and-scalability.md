@@ -2778,10 +2778,13 @@ counts wrap independently so a narrow toolbar cannot strand View on a line by
 itself or force page-level horizontal overflow. The compact Add filter control
 joins that cluster only in the default state where no active menu chip,
 contextual Clear action, or leading action needs its own filter row; active
-scope editing keeps Add filter beside the chips. The sparkline range remains
-inline only while trends are active because it is the frequently changed
-analytical window, and its compact control must include a visible `Trend range`
-label so the values are not an orphaned set of durations. Columns must expand
+scope editing keeps Add filter beside the chips. The sparkline range is a
+trailing inline control, not a View option, because it is the frequently
+changed analytical window. `WorkloadsFilter` renders it whenever the metric
+mode is Trends, and in Bars only at desktop widths while Row hover is `History`
+(the default); Bars with `Details` hover, or Bars below the 768px `isMobile`
+breakpoint, hides it. Its compact control carries the visible `History` label
+so the values are not an orphaned set of durations. Columns must expand
 as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory

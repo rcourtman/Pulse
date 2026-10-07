@@ -464,6 +464,65 @@ describe('Storage', () => {
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
   });
 
+  it('gives a platform embed the canonical toolbar with source and node scope locked', async () => {
+    mockLocationSearch = '?node=node-2&source=truenas';
+    hookResources = [
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1', {
+        parentId: 'node-1',
+        parentName: 'pve1',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2', {
+        parentId: 'node-2',
+        parentName: 'pve2',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-3', 'Tank-TrueNAS', 'truenas-1', {
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+      }),
+    ];
+
+    render(() => (
+      <Storage
+        forcedSourceFilter="proxmox-all"
+        suppressNodeFilter
+        filterAriaLabel="Proxmox storage filters"
+        filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
+      />
+    ));
+
+    // No prop opts the embed into the toolbar or keeps it out of the view tabs.
+    expect(screen.getByRole('group', { name: 'Proxmox storage filters' })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search Proxmox storage by pool, datastore, node, or device'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+
+    // The forced source outranks the URL source, and the URL node resets to all.
+    await waitFor(() => {
+      expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
+      expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Tank-TrueNAS')).not.toBeInTheDocument();
+    expect(navigateSpy.mock.calls.some(([path]) => String(path).includes('source='))).toBe(false);
+
+    // Neither lock surfaces as a chip, an Add filter option, or a clear action.
+    expect(queryStorageChip('Source')).toBeNull();
+    expect(queryStorageChip('Node')).toBeNull();
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    expect(within(addFilter).getByRole('option', { name: 'Status: Warning' })).toBeInTheDocument();
+    expect(
+      within(addFilter).queryByRole('option', { name: /^(Source|Node):/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /charts/i })).not.toBeInTheDocument();
+
+    const viewOptions = openStorageViewOptions();
+    expect(within(viewOptions).getByLabelText('Group by')).toBeInTheDocument();
+    expect(within(viewOptions).getByLabelText('Sort by')).toBeInTheDocument();
+  });
+
   it('renders per-pool growth from the shared storage summary history contract', async () => {
     const gib = 1024 * 1024 * 1024;
     const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
@@ -1343,7 +1402,7 @@ describe('Storage', () => {
     );
   });
 
-  it('keeps the storage view selector available in table-only embedding', async () => {
+  it('keeps the storage view selector available in a platform-page embed', async () => {
     mockLocationPath = '/proxmox/storage';
     hookResources = [
       buildPhysicalDiskResource('sda', 'node-1', 'pve1'),
