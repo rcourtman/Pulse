@@ -8927,6 +8927,15 @@ their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
 
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go`, `internal/api/discovery_handlers.go` and
+`internal/api/saml_handlers.go` changed only so `/api/discovery/settings` and
+`/api/saml/{id}/logout` answer `405` to every method outside their allowed set,
+`GET` and `HEAD` included. The settings write still takes `PUT` or `POST` and
+logout still takes `POST`. No agent registration, enrolment, install, update or
+removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

@@ -377,8 +377,13 @@ func (r *Router) handleSAMLMetadata(w http.ResponseWriter, req *http.Request) {
 	w.Write(metadata)
 }
 
-// handleSAMLLogout handles SAML Single Logout
+// handleSAMLLogout handles SP-initiated SAML Single Logout. It is POST-only,
+// like the /api/logout fallback: the IdP's LogoutResponse returns to /slo, not
+// here, so a GET to this path could only be a forced logout.
 func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
+	if !requireRequestMethod(w, req, http.MethodPost) {
+		return
+	}
 	providerID := extractSAMLProviderID(req.URL.Path, "logout")
 	if providerID == "" {
 		// Fall back to regular logout

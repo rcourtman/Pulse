@@ -247,7 +247,9 @@ func TestHandleSAMLSLO_RejectsIDPInitiatedLogoutRequest(t *testing.T) {
 }
 
 func TestHandleSAMLLogout_SLOUnavailable(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
 
 	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
 	metadataXML := `<?xml version="1.0"?>
@@ -265,7 +267,7 @@ func TestHandleSAMLLogout_SLOUnavailable(t *testing.T) {
 		SessionIndex: "sess-1",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/logout", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: token})
 	rec := httptest.NewRecorder()
 
@@ -280,7 +282,9 @@ func TestHandleSAMLLogout_SLOUnavailable(t *testing.T) {
 }
 
 func TestHandleSAMLLogout_SLOSuccess(t *testing.T) {
-	InitSessionStore(t.TempDir())
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
 
 	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
 	metadataXML := `<?xml version="1.0"?>
@@ -299,7 +303,7 @@ func TestHandleSAMLLogout_SLOSuccess(t *testing.T) {
 		SessionIndex: "sess-1",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/logout", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: token})
 	rec := httptest.NewRecorder()
 
@@ -311,6 +315,64 @@ func TestHandleSAMLLogout_SLOSuccess(t *testing.T) {
 	loc := rec.Header().Get("Location")
 	if !strings.Contains(loc, "https://idp.example.com/slo") || !strings.Contains(loc, "SAMLRequest=") {
 		t.Fatalf("unexpected SLO redirect location %q", loc)
+	}
+}
+
+// A cross-site top-level GET carries the SameSite=Lax session cookie and skips
+// the CSRF check, so SP-initiated logout must not clear the session on GET or
+// HEAD.
+func TestHandleSAMLLogout_RefusesSafeMethods(t *testing.T) {
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+
+	router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+	metadataXML := `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", metadataXML)
+
+	token := generateSessionToken()
+	GetSessionStore().CreateSAMLSession(token, time.Hour, "agent", "127.0.0.1", "user", &SAMLTokenInfo{
+		ProviderID:   "okta",
+		NameID:       "name-id",
+		SessionIndex: "sess-1",
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		req := httptest.NewRequest(method, "/api/saml/okta/logout", nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: token})
+		rec := httptest.NewRecorder()
+
+		router.handleSAMLLogout(rec, req)
+
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: expected status %d, got %d", method, http.StatusMethodNotAllowed, rec.Code)
+		}
+		if allow := rec.Header().Get("Allow"); allow != http.MethodPost {
+			t.Fatalf("%s: expected Allow %q, got %q", method, http.MethodPost, allow)
+		}
+		if loc := rec.Header().Get("Location"); loc != "" {
+			t.Fatalf("%s: expected no SLO redirect, got %q", method, loc)
+		}
+		if !ValidateSession(token) {
+			t.Fatalf("%s: SAML logout cleared the session", method)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: token})
+	rec := httptest.NewRecorder()
+	router.handleSAMLLogout(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("POST: expected status %d, got %d", http.StatusFound, rec.Code)
+	}
+	if ValidateSession(token) {
+		t.Fatal("POST: expected SAML logout to clear the session")
 	}
 }
 

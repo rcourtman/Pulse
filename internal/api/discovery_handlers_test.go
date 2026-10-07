@@ -476,6 +476,41 @@ func TestHandleUpdateSettings(t *testing.T) {
 	// We can't check service private field easily, but we check 200 OK.
 }
 
+// GET and HEAD pass the demo-mode read-only guard and the CSRF check, so the
+// settings write must refuse them even when they carry a JSON body.
+func TestHandleUpdateSettingsRefusesSafeMethods(t *testing.T) {
+	h, service, _ := setupDiscoveryHandlers(t)
+	before := service.GetMaxDiscoveryAge()
+	reqBody := `{"max_discovery_age_days": 10}`
+	if before == 10*24*time.Hour {
+		t.Fatal("test body must change the default max discovery age")
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		req := httptest.NewRequest(method, "/api/discovery/settings", bytes.NewBufferString(reqBody))
+		req.SetBasicAuth("admin", "admin")
+		w := httptest.NewRecorder()
+
+		h.HandleUpdateSettings(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code, method)
+		assert.Equal(t, "PUT, POST", w.Header().Get("Allow"), method)
+		assert.Equal(t, before, service.GetMaxDiscoveryAge(), method)
+	}
+
+	for _, method := range []string{http.MethodPut, http.MethodPost} {
+		service.SetMaxDiscoveryAge(before)
+		req := httptest.NewRequest(method, "/api/discovery/settings", bytes.NewBufferString(reqBody))
+		req.SetBasicAuth("admin", "admin")
+		w := httptest.NewRecorder()
+
+		h.HandleUpdateSettings(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code, method)
+		assert.Equal(t, 10*24*time.Hour, service.GetMaxDiscoveryAge(), method)
+	}
+}
+
 func TestHandleListByType(t *testing.T) {
 	h, _, store := setupDiscoveryHandlers(t)
 

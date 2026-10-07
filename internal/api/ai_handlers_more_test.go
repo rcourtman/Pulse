@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type stubMetadataProvider struct{}
@@ -518,6 +519,78 @@ func TestAISettingsHandler_DiscoveryStoreAccessors(t *testing.T) {
 
 	if got := handler.GetDiscoveryStore(); got != store {
 		t.Fatalf("expected discovery store to match")
+	}
+}
+
+// In DEMO_MODE the demo middleware admits every GET and HEAD as a read, and
+// the CSRF check skips them, so a mutating handler reachable by a safe method
+// is a write any demo visitor can make. These routes dispatch without a mux
+// method pattern, so each handler must refuse GET and HEAD itself.
+func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
+	dataPath := t.TempDir()
+	hashed, err := internalauth.HashPassword("demo-router-test-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataPath,
+		ConfigPath: dataPath,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashed,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	handler := router.Handler()
+
+	discovery := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
+	router.SetDiscoveryService(discovery)
+	ageBefore := discovery.GetMaxDiscoveryAge()
+
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`)
+	samlSession := generateSessionToken()
+	GetSessionStore().CreateSAMLSession(samlSession, time.Hour, "agent", "127.0.0.1", "demo", &SAMLTokenInfo{
+		ProviderID:   "okta",
+		NameID:       "name-id",
+		SessionIndex: "sess-1",
+	})
+
+	cases := []struct {
+		path  string
+		body  string
+		allow string
+	}{
+		{path: "/api/discovery/settings", body: `{"max_discovery_age_days":10}`, allow: "PUT, POST"},
+		{path: "/api/saml/okta/logout", allow: http.MethodPost},
+	}
+	for _, tc := range cases {
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			req := httptest.NewRequest(method, tc.path, strings.NewReader(tc.body))
+			req.SetBasicAuth("demo", "demo-router-test-password")
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: samlSession})
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s %s status = %d, want %d: %s", method, tc.path, rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+			}
+			if allow := rec.Header().Get("Allow"); allow != tc.allow {
+				t.Fatalf("%s %s Allow = %q, want %q", method, tc.path, allow, tc.allow)
+			}
+		}
+	}
+
+	if got := discovery.GetMaxDiscoveryAge(); got != ageBefore {
+		t.Fatalf("safe methods changed the max discovery age: %s -> %s", ageBefore, got)
+	}
+	if !ValidateSession(samlSession) {
+		t.Fatal("safe methods cleared the SAML session")
 	}
 }
 

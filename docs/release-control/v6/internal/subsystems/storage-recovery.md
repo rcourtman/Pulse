@@ -6867,6 +6867,15 @@ The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
 
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go` adds `requireRequestMethod`, and
+`internal/api/discovery_handlers.go` and `internal/api/saml_handlers.go` use it
+so `/api/discovery/settings` (`PUT` or `POST`) and `/api/saml/{id}/logout`
+(`POST`) answer `405` to any other method, `GET` and `HEAD` included, instead
+of changing the discovery staleness threshold or clearing a session. No
+storage, retention, backup, migration or recovery path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
