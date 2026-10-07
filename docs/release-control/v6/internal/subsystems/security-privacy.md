@@ -3112,3 +3112,11 @@ the mock-mode synthetic series derived from that reading, when the temperature
 was not collected by the current observation. This only withholds a value the
 caller was already authorized to read; the route, its authentication and scope
 checks, tenant resolution and response shape are unchanged.
+
+The same endpoint also withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, and answers a lapsed agent linked to a Proxmox node from
+that node's row in the same monitor. This only withholds or substitutes values
+the caller could already read; the new `NodeView` and `DockerHostView`
+`SourceStatus` accessors expose no field beyond the delivery state the registry
+already records on the resource.

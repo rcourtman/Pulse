@@ -6334,6 +6334,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		storageFallbackOnce sync.Once
 		unifiedStorage      []storageMetricFallback
+
+		sightingFallbackOnce sync.Once
+		lapsedRows           map[string]struct{}
 	)
 
 	loadFallbackState := func() {
@@ -6528,17 +6531,113 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
-	findDockerContainer := func(id string) (*models.DockerContainer, int) {
+	findDockerContainer := func(id string) (*models.DockerContainer, *models.DockerHost) {
 		loadFallbackState()
 		for i := range dockerHosts {
 			host := &dockerHosts[i]
 			for j := range host.Containers {
 				if host.Containers[j].ID == id {
-					return &host.Containers[j], host.CPUs
+					return &host.Containers[j], host
 				}
 			}
 		}
-		return nil, 0
+		return nil, nil
+	}
+
+	// The snapshot rows above keep a silent source's last readings as
+	// context: ExpireHostTelemetry keeps an expired agent's telemetry, the
+	// PVE node grace policy keeps an unreachable node's memory and disk, and
+	// guests and Docker hosts keep their last report after the registry marks
+	// that source stale. A live point claims a reading taken now, so it is
+	// built only while a source behind the row is still reporting.
+	loadLapsedSightings := func() {
+		sightingFallbackOnce.Do(func() {
+			lapsedRows = make(map[string]struct{})
+			readState := monitor.GetUnifiedReadStateOrSnapshot()
+			if readState == nil {
+				return
+			}
+			// Index under both IDs a snapshot row can carry.
+			record := func(kind string, lapsed bool, ids ...string) {
+				if !lapsed {
+					return
+				}
+				for _, id := range ids {
+					if id = strings.TrimSpace(id); id != "" {
+						lapsedRows[kind+"\x00"+id] = struct{}{}
+					}
+				}
+			}
+			for _, vm := range readState.VMs() {
+				if vm != nil {
+					record("guest", readingSightingsLapsed(vm.SourceStatus), vm.SourceID(), vm.ID())
+				}
+			}
+			for _, ct := range readState.Containers() {
+				if ct != nil {
+					record("guest", readingSightingsLapsed(ct.SourceStatus), ct.SourceID(), ct.ID())
+				}
+			}
+			for _, node := range readState.Nodes() {
+				if node != nil {
+					record("node", readingSightingsLapsed(node.SourceStatus), node.SourceID(), node.ID())
+				}
+			}
+			// An agent row's own lease decides its status in HostsSnapshot;
+			// integration rows without an agent sighting fall back to their
+			// provider's sightings.
+			for _, host := range readState.Hosts() {
+				if host == nil {
+					continue
+				}
+				if agent, ok := host.SourceStatus(unifiedresources.SourceAgent); ok && !agent.LastSeen.IsZero() {
+					continue
+				}
+				record("host", readingSightingsLapsed(host.SourceStatus), host.AgentID(), host.ID())
+			}
+			// A Docker row's own readings and its containers arrive in the
+			// Docker report, so its Docker sighting decides.
+			for _, host := range readState.DockerHosts() {
+				if host != nil {
+					record("docker", readingSightingsLapsed(func(source unifiedresources.DataSource) (unifiedresources.SourceStatus, bool) {
+						if source != unifiedresources.SourceDocker {
+							return unifiedresources.SourceStatus{}, false
+						}
+						return host.SourceStatus(source)
+					}), host.HostSourceID(), host.ID())
+				}
+			}
+		})
+	}
+	rowLapsed := func(kind, id string) bool {
+		loadLapsedSightings()
+		_, lapsed := lapsedRows[kind+"\x00"+id]
+		return lapsed
+	}
+	// HostsSnapshot reports an agent row past its reporting lease as offline.
+	hostReporting := func(host *models.Host) bool {
+		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("host", host.ID)
+	}
+	// The poller marks a node it cannot reach, or one the cluster lists but
+	// this poll did not observe, offline or unknown and keeps earlier
+	// readings. A warning status alone is not a lapse: a linked agent's
+	// storage risk can set it on a row that is still reporting.
+	nodeReporting := func(node *models.Node) bool {
+		switch strings.ToLower(strings.TrimSpace(node.Status)) {
+		case "offline", "unknown":
+			return false
+		}
+		return !rowLapsed("node", node.ID)
+	}
+	guestReporting := func(id string) bool {
+		return !rowLapsed("guest", id)
+	}
+	// evaluateDockerAgents marks a host offline once its report is overdue.
+	// The registry's stale pass can later show that host as warning, and a
+	// merged agent row keeps the agent's status, so the Docker sighting
+	// decides as well.
+	dockerHostReporting := func(host *models.DockerHost) bool {
+		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("docker", host.ID)
 	}
 
 	findDisk := func(id string) *unifiedresources.Resource {
@@ -6596,7 +6695,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		switch resourceType {
 		case "vm":
 			vm := findVM(resourceID)
-			if vm == nil {
+			if vm == nil || !guestReporting(vm.ID) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(vm.CPU)}
@@ -6610,7 +6709,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(vm.NetworkOut)}
 		case "system-container", "oci-container":
 			ct := findContainer(resourceID)
-			if ct == nil {
+			if ct == nil || !guestReporting(ct.ID) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(ct.CPU)}
@@ -6624,7 +6723,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			points["netout"] = monitoring.MetricPoint{Timestamp: now, Value: float64(ct.NetworkOut)}
 		case "node":
 			node := findNode(resourceID)
-			if node == nil {
+			if node == nil || !nodeReporting(node) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
@@ -6664,7 +6763,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		case "docker-host":
 			host := findDockerHost(resourceID)
-			if host == nil {
+			if host == nil || !dockerHostReporting(host) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
@@ -6675,7 +6774,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
 		case "agent":
+			nodeID := resourceID
 			host := findHost(resourceID)
+			if host != nil && !hostReporting(host) {
+				// A host agent linked to a Proxmox node describes the same
+				// machine; once the agent's lease lapses, the node's poll
+				// still supplies its current readings.
+				if strings.TrimSpace(host.LinkedNodeID) == "" {
+					return points
+				}
+				nodeID, host = host.LinkedNodeID, nil
+			}
 			if host != nil {
 				points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
 				points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
@@ -6693,8 +6802,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				// Showing cumulative bytes as if they were rates would be misleading (showing GB instead of KB/s).
 				return points
 			}
-			node := findNode(resourceID)
-			if node == nil {
+			node := findNode(nodeID)
+			if node == nil || !nodeReporting(node) {
 				return points
 			}
 			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: chartapi.ProxmoxModelCPURatioPercent(node.CPU)}
@@ -6704,11 +6813,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "app-container":
-			container, hostCPUs := findDockerContainer(resourceID)
-			if container == nil {
+			// A container's readings arrive in its Docker host's report.
+			container, host := findDockerContainer(resourceID)
+			if container == nil || !dockerHostReporting(host) {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: models.DockerContainerCPUCapacityPercent(*container, hostCPUs)}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: models.DockerContainerCPUCapacityPercent(*container, host.CPUs)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: container.MemoryPercent}
 			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
 				diskPercent := float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
@@ -7406,6 +7516,36 @@ func canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID string
 		return unifiedresources.CanonicalKubernetesPodMetricID(trimmed)
 	}
 	return trimmed
+}
+
+// liveReadingSources are the sources that supply the readings of the rows
+// liveMetricPoints reads, so their sightings decide whether those readings are
+// current. A PBS sighting can join a host row without supplying its metrics,
+// and availability probes report reachability, not readings.
+var liveReadingSources = []unifiedresources.DataSource{
+	unifiedresources.SourceProxmox,
+	unifiedresources.SourceAgent,
+	unifiedresources.SourceDocker,
+	unifiedresources.SourceVMware,
+	unifiedresources.SourceTrueNAS,
+}
+
+// readingSightingsLapsed reports whether a row records at least one reading
+// source and the registry has marked every one of them stale. A sighting that
+// was never delivered (unknown) is not evidence of a lapse.
+func readingSightingsLapsed(sourceStatus func(unifiedresources.DataSource) (unifiedresources.SourceStatus, bool)) bool {
+	recorded := false
+	for _, source := range liveReadingSources {
+		status, ok := sourceStatus(source)
+		if !ok {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(status.Status), "stale") {
+			return false
+		}
+		recorded = true
+	}
+	return recorded
 }
 
 func primaryHostSensorTemperatureCelsius(sensors models.HostSensorSummary) *float64 {

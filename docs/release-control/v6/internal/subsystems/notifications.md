@@ -1301,3 +1301,30 @@ the queued close through the normal entry points for ntfy, and renders Discord,
 both Teams cards, Mattermost, PagerDuty, a grouped Slack list, a grouped ntfy
 batch and email/Apprise content, plus the unchanged ordinary recovery wording
 and visuals.
+
+### Default email subjects retain bounded resource and host identity
+
+Single firing subjects retain severity/type and name the resource and its host.
+Digest subjects retain every severity count and include up to three distinct
+resource/host labels, sorted and deduplicated before shortening, with `+N more`
+for omitted labels (not omitted alerts). A host display name retains its raw
+host alongside it when they differ; absent node identity is `unknown host`,
+never an inferred connection/instance. An empty resource name falls back to its
+resource ID, then `Unknown resource`. Each supplied label/type is bounded to
+48 UTF-8 bytes, with visible truncation; controls/whitespace become spaces.
+Full body identities remain unchanged. Subjects are hints, not globally unique
+resource keys or proof of current host identity.
+
+Email-only recovery subjects carry the same bounded identity while preserving
+single resolved/moved and batch resolved wording. Occurrence threading,
+recovery receipt admission, routing, queue policy and other destination titles
+are unchanged. Both ordinary and attachment MIME construction encode Unicode
+subjects with RFC 2047 and fold at spaces/encoded-word boundaries; they still
+sanitize header line breaks. `email_subject_identity_test.go` checks the
+three-host collision, display/raw/missing identities, severity, deterministic
+bounds/overflow, full bodies, MIME decode/injection safety and normal
+single/grouped/recovery construction through an in-memory transport. This is
+source acceptance, not SMTP/Gmail delivery or an installed reporter retest.
+Literal ASCII encoded-word syntax in supplied names is itself MIME-encoded,
+so decoding the subject once preserves the name rather than interpreting it as
+another identity. The literal-encoded-word control covers both MIME builders.

@@ -2199,6 +2199,7 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 	if subject == "" && textBody == "" {
 		return fmt.Errorf("failed to build resolved email content")
 	}
+	subject = resolvedEmailSubject(alertList)
 
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }

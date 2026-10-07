@@ -773,6 +773,18 @@ func (v NodeView) Status() ResourceStatus {
 	return v.r.Status
 }
 
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. A node row keeps an unreachable node's last readings, and a merged
+// row's status follows its highest-priority source, so consumers presenting
+// the row's readings as current must check the sightings here.
+func (v NodeView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
+}
+
 func (v NodeView) NodeName() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -1874,6 +1886,18 @@ func (v DockerHostView) LastSeen() time.Time {
 		return time.Time{}
 	}
 	return v.r.LastSeen
+}
+
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. The registry marks a Docker host's source stale once its report is
+// overdue while the row keeps the last report, so consumers presenting the
+// row's readings or its containers' as current must check the source here.
+func (v DockerHostView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
 }
 
 func (v DockerHostView) CPUPercent() float64 {
