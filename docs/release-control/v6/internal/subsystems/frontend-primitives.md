@@ -6465,6 +6465,11 @@ rebuilding it per surface. The overview shell must compose
 acknowledge/restore behavior rather than keeping duplicate API and notification
 logic inline in `useAlertOverviewState.ts` or a revived dashboard recent-alert
 panel.
+That hook takes the shared alert store's required `updateAlert` and keeps no
+acknowledgement override: the store holds the optimistic state until the server
+confirms it, while a second copy in the hook outlived that confirmation and hid
+a later unacknowledge from another session until reload. Snooze state reads the
+same store alerts.
 The same feature-owner rule now applies to the alert scheduling surface:
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
 schedule render shell, while

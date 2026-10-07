@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
@@ -18,18 +18,17 @@ import { getCanonicalAlertId } from './identity';
 
 export interface UseAlertAcknowledgementStateProps {
   alerts: Accessor<Alert[]>;
-  updateAlert?: (alertIdentifier: string, updates: Partial<Alert>) => void;
+  // The shared alert store owns the optimistic acknowledgement: it holds back
+  // stale payloads until the server confirms, then lets later server changes
+  // (an unacknowledge from another session) through. Keep no second copy
+  // here; one would outlive that confirmation and hide those changes.
+  updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => void;
   allowRestore?: boolean;
 }
-
-type AlertAcknowledgementOverride = Pick<Alert, 'acknowledged' | 'ackTime' | 'ackUser'>;
 
 export function useAlertAcknowledgementState(props: UseAlertAcknowledgementStateProps) {
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   const [bulkAckProcessing, setBulkAckProcessing] = createSignal(false);
-  const [acknowledgementOverrides, setAcknowledgementOverrides] = createSignal<
-    Record<string, AlertAcknowledgementOverride>
-  >({});
   const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   const clearProcessingReleaseTimer = (alertIdentifier: string) => {
@@ -46,45 +45,9 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     processingReleaseTimers.clear();
   });
 
-  createEffect(() => {
-    const alertsByIdentifier = new Map(
-      props.alerts().map((alert) => [getCanonicalAlertId(alert), alert] as const),
-    );
-
-    setAcknowledgementOverrides((previous) => {
-      let changed = false;
-      const next = { ...previous };
-
-      for (const [alertIdentifier, override] of Object.entries(previous)) {
-        const alert = alertsByIdentifier.get(alertIdentifier);
-        if (!alert || alert.acknowledged === override.acknowledged) {
-          delete next[alertIdentifier];
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-  });
-
-  const effectiveAlerts = createMemo(() =>
-    props.alerts().map((alert) => {
-      const override = acknowledgementOverrides()[getCanonicalAlertId(alert)];
-      return override ? { ...alert, ...override } : alert;
-    }),
-  );
-
   const unacknowledgedAlerts = createMemo(() =>
-    effectiveAlerts().filter((alert) => !alert.acknowledged),
+    props.alerts().filter((alert) => !alert.acknowledged),
   );
-
-  const applyAlertUpdate = (alertIdentifier: string, updates: AlertAcknowledgementOverride) => {
-    setAcknowledgementOverrides((previous) => ({
-      ...previous,
-      [alertIdentifier]: updates,
-    }));
-    props.updateAlert?.(alertIdentifier, updates);
-  };
 
   const releaseAlertProcessing = (alertIdentifier: string) => {
     clearProcessingReleaseTimer(alertIdentifier);
@@ -106,7 +69,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     }
 
     const currentAlert =
-      effectiveAlerts().find((entry) => getCanonicalAlertId(entry) === alertIdentifier) ?? alert;
+      props.alerts().find((entry) => getCanonicalAlertId(entry) === alertIdentifier) ?? alert;
     const wasAcknowledged = currentAlert.acknowledged;
     if (wasAcknowledged && !props.allowRestore) {
       return;
@@ -117,7 +80,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     try {
       if (wasAcknowledged) {
         await AlertsAPI.unacknowledge(alertIdentifier);
-        applyAlertUpdate(alertIdentifier, {
+        props.updateAlert(alertIdentifier, {
           acknowledged: false,
           ackTime: undefined,
           ackUser: undefined,
@@ -125,7 +88,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
         notificationStore.success(getAlertOverviewRestoredNotification());
       } else {
         await AlertsAPI.acknowledge(alertIdentifier);
-        applyAlertUpdate(alertIdentifier, {
+        props.updateAlert(alertIdentifier, {
           acknowledged: true,
           ackTime: new Date().toISOString(),
           ackUser: undefined,
@@ -160,7 +123,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       const failures = result.results.filter((entry) => !entry.success);
 
       successes.forEach((entry) => {
-        applyAlertUpdate(entry.alertIdentifier, {
+        props.updateAlert(entry.alertIdentifier, {
           acknowledged: true,
           ackTime: acknowledgedAt,
           ackUser: undefined,
@@ -187,7 +150,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
   const handleGroupAcknowledge = async (alerts: Alert[]) => {
     const pending = alerts.filter((alert) => {
       const id = getCanonicalAlertId(alert);
-      return !effectiveAlerts().find((e) => getCanonicalAlertId(e) === id)?.acknowledged;
+      return !props.alerts().find((e) => getCanonicalAlertId(e) === id)?.acknowledged;
     });
     if (pending.length === 0) return;
 
@@ -201,7 +164,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       const successes = result.results.filter((entry) => entry.success);
 
       successes.forEach((entry) => {
-        applyAlertUpdate(entry.alertIdentifier, {
+        props.updateAlert(entry.alertIdentifier, {
           acknowledged: true,
           ackTime: acknowledgedAt,
           ackUser: undefined,
@@ -220,7 +183,6 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
   };
 
   return {
-    effectiveAlerts,
     unacknowledgedAlerts,
     processingAlerts,
     bulkAckProcessing,
