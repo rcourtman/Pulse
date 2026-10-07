@@ -25,6 +25,7 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
@@ -45,6 +46,7 @@ type StoragePoolsTableProps = {
   storageGrowthBySeriesId: Map<string, StorageCapacityDeltaPresentation>;
   storageGrowthColumnLabel: string;
   physicalDisks: Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   nodeOnlineByLabel: Map<string, boolean>;
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
@@ -195,6 +197,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                       alertHeadlineCompact={rowModel().alertHeadlineCompact}
                       alertHeadlineClass={rowModel().alertHeadlineClass}
                       physicalDisks={props.physicalDisks}
+                      getDiskAlertResourceIds={props.getDiskAlertResourceIds}
                       alertDataAttrs={rowModel().alertDataAttrs}
                     />
                   );

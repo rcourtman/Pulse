@@ -970,6 +970,11 @@ the page supplies it through the Workloads `tableTitle` slot and the shared
 states. This heading alignment changes neither workload backup scope nor the
 storage/recovery evidence carried by the adjacent Backup column and Backups
 tab.
+The guest table's grouped node rows are identity-only dividers. Node stats and
+the node drawer stay with the Proxmox nodes table above it, so `ProxmoxPageSurface`
+passes `groupNodeDrawerMode: 'disabled'` and no host-metric option to the
+embedded Workloads state. Those dividers carry no backup or recovery evidence;
+the per-guest Backup column remains the overview's protection signal.
 The overview's node-row action selects the shared workload node scope and
 reveals the guest section. The title names the selected node and reports the
 filtered guest count, including zero. Activating the selected node again or
@@ -1484,6 +1489,10 @@ recovery scope, or a storage/recovery-owned secret source.
    generated report output when a separate reporting surface exposes it, but
    workspace logo settings are not backup artifacts, recovery-point metadata,
    restore evidence, or storage-provider credentials.
+   The alert rows that request assembly builds now keep an alert's
+   handover resolution (moved to a Pulse agent, not recovered). That changes
+   how a report states alert health only; it opens no storage, backup or
+   recovery path, and report backups still come from the recovery store.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery
@@ -3169,6 +3178,20 @@ pointer isolation are
 pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 `TestCloneResourceIsolatesCustomSensorValues`.
 
+### Source status verdicts change status only
+
+`SourceStatus` carries an unexported verdict: the status each source reported
+for the resource. It replaced the narrower marker for push reporters past their
+lease. Status aggregation reads it, so a node a live poll reports offline, a
+node the poller expired, an agent past its lease and a stopped guest on a quiet
+source are `offline` instead of `online` or `warning`, unless another source
+reports otherwise. The verdict is not serialized, persisted or exposed on the
+wire, and the public `status`, `lastSeen` and cadence fields are unchanged. A
+storage or datastore row that reported itself unavailable likewise stays
+`offline` when its only source's poll goes quiet. No storage path, recovery
+read or protection judgement depends on that status.
+`TestCloneResource_MutateSourceStatusMap` pins that clones keep the verdict.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes
@@ -3797,6 +3820,14 @@ values may remain visible as history, but their current collection state must
 remain explicit. In particular, members behind a shared controller must not
 inherit aggregate I/O counters, and a disk drawer must hide live-I/O charts
 when per-member collection is unavailable or unsupported.
+On a disk merged from several rows (Proxmox, host agent SMART, Unraid
+inventory, TrueNAS), the temperature state these surfaces read is the state of
+the reading the disk shows (`pairPhysicalDiskTemperatureState` in
+`internal/unifiedresources/registry.go`), so a retained value never arrives
+under another row's `available`. The merge keeps each row's reading in an
+unexported record on `PhysicalDiskMeta` (`internal/unifiedresources/types.go`)
+that is never serialized; storage surfaces read only the presented temperature
+and its state.
 
 A retained disk temperature reads as last known, never as a live reading. The
 Physical Disks table, the disk drawer and the pool drawer's linked-disk list
@@ -3814,6 +3845,21 @@ or alert evaluation. Verification: `diskPresentation.test.ts`,
 `diskDetailPresentation.test.ts`, `storagePoolDetailPresentation.test.ts`,
 `DiskList.test.tsx` (a row moving between current, retained and legacy states)
 and `DiskDetail.test.tsx`.
+The same decision reaches the disks that only a host agent's own SMART rows
+describe. `HostDiskSMART.collection` now crosses into the frontend type, and the
+helpers live in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+(re-exported by `diskPresentation.ts`, one implementation) so the Machines
+table and the machine drawer can use them without loading the Storage
+presenter. The guest drawer's card already loads it for extraction and health.
+A silent agent's retained SMART temperature never becomes the Machines row's
+value while another disk has a current reading. When the machine has no
+positive direct or `temperatureCelsius` reading and no non-standby disk is
+current, the cell shows the hottest retained non-standby value as last known,
+without the per-disk-type threshold colour. The guest drawer's Physical Disks card marks a
+retained value the way the Physical Disks table does. Still presentation only.
+Verification: `diskPresentation.test.ts` (one implementation behind both import
+paths), `agentMachineTableModel.test.ts`, `AgentsMachinesTable.test.tsx`,
+`resourceDetailMappers.test.ts` and `GuestPhysicalDisks.test.tsx`.
 
 Direct SATA, SAS, and NVMe device fallback identities remain compatible.
 Controller-member fallback identities add controller/target scope only where
@@ -6727,6 +6773,64 @@ disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
 `HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
 not live appliance collection or recovery success.
 
+### Physical-disk heat is not a replacement verdict
+
+The Physical Disks Health verdict names the action it asks for. A disk whose
+current temperature has reached its alert trigger reads `Running Hot` (compact
+`Hot`), red, with the reading and the trigger as its summary. `Replace Now`
+stays reserved for FAILED health, any critical risk reason, and a critical
+level that no listed reason explains. `Needs Attention` keeps the remaining
+warning evidence. Heat outranks warning evidence and failure evidence outranks
+heat. Sorting follows the verdict (replace, heat, attention), and the health
+filter places a hot disk with the critical disks, as its Temp cell reads red.
+
+Heat has one owner: the alert disk temperature policy (the per-type triggers in
+Alerts > Thresholds, `diskTempByType`, else the agent Disk Temp default).
+Disk risk never carries heat, because every registry that rebuilds it lacks the
+alert configuration. `extractPhysicalDiskPresentationData` takes the alerts
+store's `getDiskTemperatureThresholds` resolver, so the Temp cell colour and the
+verdict read one thresholds object. It resolves them under the alert override
+keys of the machine whose agent reports the disk, as disk temperature alerts
+are evaluated under that host. `getPhysicalDiskAlertResourceIds`
+(`components/Storage/physicalDiskAlertOwner.ts`) follows the disk's parent to
+the agent machine, through the pool for an Unraid array or cache disk, and
+reads that machine's keys in the order `CheckHost` reads them
+(`getAgentMachineAlertOverrideKeys`: the agent ID, the machine's canonical ID,
+then the node or guest the agent is merged with).
+A Disk Temp override set on the machine therefore replaces the per-type trigger
+for every disk it reports, on Physical Disks, the disk detail and the pool
+drawer's linked disks. A guest drawer passes the guest agent's ID, then the
+guest's own keys. An override that switches the machine's alerts off leaves its
+disks uncoloured and never hot. The band below the trigger is a Temp cell
+colour only, and a retained (not current) reading is never heat. The verdict
+judges the current reading, with no memory of an alert. A disk temperature
+alert held between its clear value and trigger shows an amber Temp cell, not
+`Running Hot`. A switched-off agent Disk Temp default resolves to null, which
+leaves the reading uncoloured and never hot, as alerting is off for it.
+The browser rebuilds that chain from what it loads, so it can differ from
+alerts and Patrol, which read the agent's own link hints and resolve every key
+to its canonical resource. On the Storage page, a disk whose agent an operator
+manually linked into a VM keeps the per-type trigger, because the page loads
+agents and pools, not guests. An override the agent inherits from a node or
+guest it is linked to without a merge, or one stored under that node's own
+canonical resource ID, does not reach the browser, because agent link hints
+are not published. The guest drawer applies the guest's own override keys,
+which `CheckHost` reads only when the agent is also linked to that guest
+automatically. Overrides set on the reporting agent's own row, or on the node
+or guest it is merged with, reach the browser through the keys above. PDF
+performance
+reports colour a disk reading by the same per-type thresholds, which
+`reporting.DiskInfo` carries.
+`frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
+pins cell-and-verdict agreement for every type from 40C to 80C under factory and
+raised triggers, plus retained readings, failure evidence, sorting and
+filtering. `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx`
+covers NVMe 63C, SATA 56C and a raised NVMe trigger loaded through the alerts
+store, and NVMe disks at 72C on three machines judged by an 80C override, the
+per-type trigger and switched-off alerts.
+`frontend-modern/src/components/Storage/__tests__/physicalDiskAlertOwner.test.ts`
+pins the owner walk and the key order.
+
 ### Pool-to-physical-disk ownership in Storage details
 
 `storagePoolDetailPresentation.ts` must scope inferred ZFS device and UnRAID
@@ -6779,8 +6883,11 @@ and the Unraid physical-disk adapter marks an inventory temperature kept past
 the host agent's lease as no longer collected. Both change presentation of
 values Pulse already holds: no metrics write, retention window, backup,
 migration or recovery authority is added or moved.
-The handler likewise withholds the live point for host agent, Proxmox node,
-guest, integration host, Docker host and app container rows it judges to have
-stopped reporting, or answers a lapsed linked agent from its node row. It reads
-only snapshot status and the registry's per-source sightings, and writes
-nothing.
+The performance report and reporting runtime snapshot handlers apply the same
+test before tabulating a disk temperature. That changes only which held value a
+report shows, not any storage or recovery path.
+The metrics-history handler likewise withholds the live point for host agent,
+Proxmox node, guest, integration host, Docker host and app container rows it
+judges to have stopped reporting, or answers a lapsed linked agent from its
+node row. It reads only snapshot status and the registry's per-source
+sightings, and writes nothing.

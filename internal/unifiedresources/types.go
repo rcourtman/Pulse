@@ -291,10 +291,20 @@ const (
 
 // SourceStatus describes the freshness of data from a source.
 type SourceStatus struct {
+	// Status describes delivery, not the resource: "online" means the source
+	// delivered recently, "stale" that it has gone quiet.
 	Status                        string    `json:"status"` // online, stale, offline
 	LastSeen                      time.Time `json:"lastSeen"`
 	Error                         string    `json:"error,omitempty"`
 	ExpectedUpdateIntervalSeconds int64     `json:"expectedUpdateIntervalSeconds,omitempty"` // Collector-authored cadence, zero uses source default
+
+	// reported is the status this source itself delivered for the resource:
+	// a node the cluster reports offline, a host agent past its reporting
+	// lease, a stopped guest. Status aggregation reads this verdict, so a
+	// source that delivered recently does not make the resource online. A
+	// facet sighting (the PBS association, an availability check) carries
+	// none; see aggregateStatus.
+	reported ResourceStatus
 }
 
 // ResourceIdentity holds identifiers used for matching.
@@ -537,6 +547,11 @@ type PhysicalDiskMeta struct {
 	Collection           *diskinventory.CollectionStatus `json:"collection,omitempty"`
 	SMART                *SMARTMeta                      `json:"smart,omitempty"`
 	Risk                 *PhysicalDiskRisk               `json:"risk,omitempty"`
+
+	// temperatureReadings is the registry's merge-time record of each row's
+	// own temperature reading. It is never serialized; see
+	// physicalDiskTemperatureReadings.
+	temperatureReadings *physicalDiskTemperatureReadings
 }
 
 // PhysicalDiskIOMeta preserves the cumulative kernel counters attributed to a

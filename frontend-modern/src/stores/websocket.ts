@@ -422,7 +422,12 @@ export function createWebSocketStore(url: string) {
         clearPendingAck(id);
       }
 
-      setActiveAlerts(id, alert);
+      // Each payload is the server's whole alert. A plain path set would
+      // shallow-merge it, so a field the server now omits (metricStatus on an
+      // alert restored after a restart, ackTime/ackUser after an unacknowledge)
+      // would keep its old value. reconcile removes omitted keys and diffs
+      // nested values in place, so unchanged fields stay quiet.
+      setActiveAlerts(id, reconcile(alert));
     });
 
     setState('activeAlerts', Object.values(alertsMap));
@@ -644,6 +649,31 @@ export function createWebSocketStore(url: string) {
     })();
     activeAlertsRecoveryInFlight = request;
     return request;
+  };
+
+  // A local acknowledgement is written once the server has accepted it, so a
+  // recovery in flight may hold the state from before it. Discard that
+  // response and fetch again once it settles.
+  const supersedeActiveAlertsRecovery = () => {
+    const inFlight = activeAlertsRecoveryInFlight;
+    if (!inFlight) return;
+    activeAlertsRevision += 1;
+    void inFlight.then(() => {
+      if (!isDisposed) void recoverActiveAlertsFromREST(true);
+    });
+  };
+
+  // A recovery already in flight may predate the change that made this
+  // re-sync necessary; its revision fence then discards it, so fetch again.
+  const resyncActiveAlertsFromREST = () => {
+    const inFlight = activeAlertsRecoveryInFlight;
+    if (!inFlight) {
+      void recoverActiveAlertsFromREST(true);
+      return;
+    }
+    void inFlight.then((applied) => {
+      if (!applied && !isDisposed) void recoverActiveAlertsFromREST(true);
+    });
   };
 
   const scheduleColdActiveAlertsRecovery = (connectionId: number) => {
@@ -1380,9 +1410,10 @@ export function createWebSocketStore(url: string) {
                 }
               });
 
-              // Add new resolved alerts
+              // Add new resolved alerts, replacing rather than merging (see
+              // applyActiveAlerts)
               Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
-                setRecentlyResolved(id, alert);
+                setRecentlyResolved(id, reconcile(alert));
               });
 
               setState('recentlyResolved', Object.values(newResolvedAlerts));
@@ -1951,8 +1982,25 @@ export function createWebSocketStore(url: string) {
     updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => {
       const existingAlert = activeAlerts[alertIdentifier];
       if (existingAlert) {
-        // Track this alert as having pending changes if acknowledgment is changing
+        let localUpdates = updates;
         if ('acknowledged' in updates) {
+          supersedeActiveAlertsRecovery();
+        }
+        if (
+          'acknowledged' in updates &&
+          !pendingAckChanges.has(alertIdentifier) &&
+          Boolean(existingAlert.acknowledged) === Boolean(updates.acknowledged)
+        ) {
+          // The request's own broadcast can beat its HTTP response, so the
+          // server's state may already be stored. A pending entry would wait
+          // for a second confirmation and hold back the next real change (an
+          // unacknowledge from another session), so keep the server's fields.
+          localUpdates = { ...updates };
+          delete localUpdates.acknowledged;
+          delete localUpdates.ackTime;
+          delete localUpdates.ackUser;
+        } else if ('acknowledged' in updates) {
+          // Track this alert as having pending changes if acknowledgment is changing
           const previousAckTime = existingAlert.ackTime;
           pendingAckChanges.set(alertIdentifier, {
             ack: !!updates.acknowledged,
@@ -1969,11 +2017,21 @@ export function createWebSocketStore(url: string) {
               notificationStore.error(
                 'Server did not confirm the alert acknowledgment in time. Re-syncing from latest data.',
               );
+              // The guard skipped the payloads that disagreed, and a quiet
+              // estate may send no further alert change, so fetch the
+              // server's current alerts rather than keep the local state.
+              resyncActiveAlertsFromREST();
             }
           }, 15000);
           pendingAckTimeouts.set(alertIdentifier, pendingTimeout);
         }
-        setActiveAlerts(alertIdentifier, { ...existingAlert, ...updates });
+        // Incoming payloads reconcile stored alerts in place, so store a copy
+        // of the update: an optimistic record can share nested objects with
+        // the record its caller keeps for rollback.
+        setActiveAlerts(alertIdentifier, {
+          ...existingAlert,
+          ...structuredClone(unwrap(localUpdates)),
+        });
       }
     },
   };

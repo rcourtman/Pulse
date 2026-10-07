@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { useAlertsActivation } from '@/stores/alertsActivation';
 import { formatBytes } from '@/utils/format';
 import { getTemperatureTextClass } from '@/utils/temperature';
 import {
@@ -77,6 +76,7 @@ import {
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthCompactLabel,
   getPhysicalDiskHealthStatus,
+  getPhysicalDiskTemperatureThresholds,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
   getPhysicalDiskLifeLabel,
@@ -86,6 +86,7 @@ import {
   getPhysicalDiskTableLayoutModeForContainer,
   getPhysicalDiskTemperaturePresentation,
   isPhysicalDiskColumnVisible,
+  type PhysicalDiskAlertResourceIdResolver,
   type PhysicalDiskTableColumnId,
 } from '@/features/storageBackups/diskPresentation';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -98,6 +99,8 @@ import { useDiskListModel } from './useDiskListModel';
 
 interface DiskListProps {
   disks: Resource[];
+  /** Alert override keys of the machine reporting each disk; absent means none. */
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   nodes: Resource[];
   selectedNode: string | null;
   sourceFilter?: string;
@@ -132,9 +135,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
   };
   const columnStyle = (columnId: PhysicalDiskTableColumnId) =>
     getPhysicalDiskColumnWidthStyle(layoutMode(), columnId);
-  const { getDiskTemperatureThresholds } = useAlertsActivation();
   const model = useDiskListModel({
     disks: () => props.disks,
+    getDiskAlertResourceIds: (disk) => props.getDiskAlertResourceIds?.(disk) ?? [],
     nodes: () => props.nodes,
     selectedNode: () => props.selectedNode,
     sourceFilter: () => props.sourceFilter ?? 'all',
@@ -523,7 +526,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 reading().current
                                   ? getTemperatureTextClass(
                                       data().temperature,
-                                      getDiskTemperatureThresholds(data().type),
+                                      getPhysicalDiskTemperatureThresholds(data()),
                                       'diskTemperature',
                                     )
                                   : PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
@@ -570,7 +573,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           colSpan={9}
                           class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
                         >
-                          <DiskDetail disk={disk} nodes={props.nodes} />
+                          <DiskDetail
+                            disk={disk}
+                            nodes={props.nodes}
+                            alertResourceIds={props.getDiskAlertResourceIds?.(disk)}
+                          />
                         </TableCell>
                       </TableRow>
                     </Show>

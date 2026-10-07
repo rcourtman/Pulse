@@ -7,6 +7,7 @@ import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/stora
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
@@ -16,6 +17,7 @@ import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInt
 type StorageContentCardProps = {
   view: () => StorageView;
   physicalDisks: () => Resource[];
+  getDiskAlertResourceIds: PhysicalDiskAlertResourceIdResolver;
   nodes: () => Resource[];
   sourceFilter: () => string;
   healthFilter: () => StorageHealthFilter;
@@ -75,6 +77,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
         <div class={STORAGE_CONTENT_CARD_BODY_CLASS}>
           <DiskList
             disks={props.physicalDisks()}
+            getDiskAlertResourceIds={props.getDiskAlertResourceIds}
             nodes={props.nodes()}
             sourceFilter={props.sourceFilter()}
             healthFilter={props.healthFilter()}
@@ -100,6 +103,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           storageGrowthBySeriesId={props.storageGrowthBySeriesId()}
           storageGrowthColumnLabel={props.storageGrowthColumnLabel()}
           physicalDisks={props.physicalDisks()}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           nodeOnlineByLabel={props.nodeOnlineByLabel()}
           highlightedRecordId={props.highlightedRecordId()}
           getRecordAlertState={props.getRecordAlertState}

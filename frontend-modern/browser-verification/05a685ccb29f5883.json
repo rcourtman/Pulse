@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "812c712abb97bd5b2824601d8d14010ad9f865ad",
+  "verified_at": "2026-10-07T10:48:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/shared/cards/RaidCard.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/utils/raidPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "e36aa008a1406010073cf5652591f7d6f381a76f7975abd617fa5442c728ef4e",
+    "frontend-modern/src/components/shared/cards/RaidCard.tsx": "a14817b710c2bc5d44829673fb2cb0d04cdb471a6074a2f8779b27254307b275",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "26f5ce7c77c598a9e4adb3f984d14bc85268b28ba4126b3d660938edaf085aef",
+    "frontend-modern/src/utils/raidPresentation.ts": "f195d08190b6bf83f28624c4a1c6afae5808d48a1fbd0a73cb634fa2fb54e0a8"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from 812c712abb (PR 2644 head) plus this change, with a local-only go build -overlay of internal/mock/generator.go: host-linux-1 (Apollo-114) held offline past its lease (LastSeen frozen 14 minutes back, readings retained) and seeded with md0 raid1 clean (sda1, sdb1 active sync) and md1 raid1 'clean, degraded, recovering' at rebuildPercent 45, 98000K/sec (sda2 active sync, sdc2 spare rebuilding, sdb2 faulty). The live control Spectrum-709 carries the same two arrays. /api/resources reports Apollo-114 offline with agent.stale true and Spectrum-709 online",
+    "Base behaviour, read from the base source and its unit tests rather than re-run in the browser: the drawer RAID card and the Machines tooltip gave a silent host's arrays the same live emerald/amber/red states, dots and member badges, 'Rebuild: 45% · 98000K/sec' and the amber rebuild bar as a live host, beside Disks and Thermals already reading last known; healthy 'active sync' members fell to the amber warning badge",
+    "Patched drawer, silent host (1920, 1440, 390): both arrays render data-raid-reading=last-known; states read 'clean (last known)' and 'clean, degraded, recovering (last known)' in text-muted with a slate dot, titled 'Last known reading, not current: host agent stopped reporting'; md1 reads 'Rebuild was at 45%' with no speed; badges are neutral border-border/bg-surface-alt/text-muted, reading /dev/sda2, '/dev/sdc2 · spare rebuilding', '/dev/sdb2 · faulty'; no emerald, amber or red class anywhere in the card; Disks reads Last known N% and Thermals 45°C (last known) beside it",
+    "Patched drawer, live control Spectrum-709 (all widths): unchanged colours, md0 clean emerald with emerald badges (active sync now healthy), md1 amber state, 'Rebuild: 45% · 98000K/sec', sdc2 amber and sdb2 red badges, data-raid-reading=current",
+    "390 wide: before the wrap fix, 'clean, degraded, recovering (last known)' squeezed the md1 name to 'm..' and the level to 'r...'; with the header row wrapping, the name and level keep their width and the state takes its own right-aligned line; live states still fit on one line; no horizontal page scroll at any width",
+    "Machines table at 1920 (the RAID column is container-hidden at 1440 and 390): silent row summary '1/2 degraded' in text-muted with sr-only ', last known' and aria-label 'RAID details: 1/2 degraded, last known'; live row summary in text-base-content",
+    "Machines RAID tooltip, silent host: header 'RAID Arrays (last known)', muted states with slate dots, 'Rebuild was at 45%' with no Rebuilding label, bar or speed, Failed 1 in base text, neutral badges naming spare rebuilding and faulty members; zero emerald/amber/red classes in the tooltip. Live host tooltip: unchanged emerald/amber/red classes, amber Rebuilding bar at 45% and 98000K/sec",
+    "Dark mode at 1440: silent states and badges rgb(148,163,184) on rgb(30,41,59) badge fill; live states emerald rgb(52,211,153) and amber rgb(251,191,36) with tinted badges",
+    "No page errors or console errors at any width"
+  ],
+  "interactions": [
+    "Opened the Machines tab with every default-hidden column revealed via localStorage",
+    "Hovered the RAID cell trigger of the silent and live rows at 1920 to open the RAID tooltip",
+    "Clicked (desktop) and tapped (390) each row to open its inline drawer, expanded Platform details and pressed Machine 'Show details' to reach the RAID card",
+    "Scrolled the RAID card into view and read state, rebuild and badge text, classes and titles",
+    "Repeated the drawer pass with prefers-color-scheme dark at 1440",
+    "Reloaded after the header-wrap fix and re-ran the full pass at all three widths",
+    "Re-ran the full pass at all three widths and the dark-mode drawer pass on the final code, after RaidCard's empty guard became tracked"
+  ]
+}

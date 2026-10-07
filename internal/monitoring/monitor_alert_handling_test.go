@@ -153,7 +153,10 @@ func TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
 // Docker host, Swarm service and sub-resource alerts (a ZFS pool and device,
 // a host filesystem) carry references the registry has no resource for. Their
 // lifecycle must reach the owner's canonical history, so the producers' ref
-// shapes are pinned here against the real alert manager.
+// shapes are pinned here against the real alert manager. A container or
+// service reported without an ID alerts under its own name reference, so it
+// joins neither its host's history nor that of the service whose ID it is
+// named like.
 func TestOwnerAlertTimelinesUseCanonicalHistoryIdentity(t *testing.T) {
 	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
 	require.NoError(t, err)
@@ -169,8 +172,10 @@ func TestOwnerAlertTimelinesUseCanonicalHistoryIdentity(t *testing.T) {
 	manager.UpdateConfig(config)
 	now := time.Now()
 	dockerHost := models.DockerHost{ID: "dh-7f3a", Hostname: "tower", DisplayName: "tower", Status: "online", LastSeen: now,
-		Swarm:    &models.DockerSwarmInfo{NodeID: "node-a", NodeRole: "manager", LocalState: "active", ControlAvailable: true, ClusterID: "swarm-1"},
-		Services: []models.DockerService{{ID: "x7k2m9q4w1e8r5t3y6u0i2o4p", Name: "web", DesiredTasks: 2, RunningTasks: 0}}}
+		Swarm:      &models.DockerSwarmInfo{NodeID: "node-a", NodeRole: "manager", LocalState: "active", ControlAvailable: true, ClusterID: "swarm-1"},
+		Containers: []models.DockerContainer{{Name: "sidecar", State: "running", Health: "unhealthy"}},
+		Services: []models.DockerService{{ID: "x7k2m9q4w1e8r5t3y6u0i2o4p", Name: "web", DesiredTasks: 2, RunningTasks: 0},
+			{Name: "X7K2M9Q4W1E8R5T3Y6U0I2O4P", DesiredTasks: 2, RunningTasks: 0}}}
 	storage := models.Storage{ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available", Total: 100, Used: 10, Usage: 10, Enabled: true, Active: true, LastSeen: now,
 		ZFSPool: &models.ZFSPool{Name: "rpool", State: "DEGRADED", Status: "Degraded", Devices: []models.ZFSDevice{{Name: "sda2", Type: "disk", State: "FAULTED"}}}}
 	agentHost := models.Host{ID: "host-nas", Hostname: "nas", DisplayName: "nas", MachineID: "fedcba9876543210", Status: "online", LastSeen: now,
@@ -208,6 +213,23 @@ func TestOwnerAlertTimelinesUseCanonicalHistoryIdentity(t *testing.T) {
 			found = found || change.Metadata["alert_type"] == alertType
 		}
 		require.True(t, found, "%s alert missing from %s history: %+v", alertType, canonicalID, changes)
+	}
+	alertTypes := func(ref string) []any {
+		changes, err := store.GetRecentChangesFiltered(ref, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		types := make([]any, 0, len(changes))
+		for _, change := range changes {
+			types = append(types, change.Metadata["alert_type"])
+		}
+		return types
+	}
+	require.ElementsMatch(t, []any{"docker-host-offline"}, alertTypes(owner["agent/tower"]))
+	require.ElementsMatch(t, []any{"docker-service-health"}, alertTypes(owner["docker-service/web"]))
+	require.ElementsMatch(t, []any{"docker-container-health"}, alertTypes("docker:dh-7f3a/name:sidecar"))
+	require.ElementsMatch(t, []any{"docker-service-health"}, alertTypes("docker:dh-7f3a/service/name:x7k2m9q4w1e8r5t3y6u0i2o4p"))
+	for _, name := range []string{"app-container/sidecar", "docker-service/X7K2M9Q4W1E8R5T3Y6U0I2O4P"} {
+		require.NotEmpty(t, owner[name], name)
+		require.Empty(t, alertTypes(owner[name]), "a name binds nothing: %s", name)
 	}
 }
 
@@ -1748,4 +1770,74 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	require.NotNil(t, poll())
 	require.True(t, temperatureAlert().LastSeen.After(held.LastSeen), "a fresh agent reading is evaluated")
+}
+
+// PVE disk alerts reference the disk by device path and record the evaluated
+// disk's serial and WWN. Through the real alert manager, each lifecycle row
+// joins the disk that identity names, even when a reboot has reordered the
+// devices and the registry still places the other disk at the path. The
+// Alerts history Resource action, which reads incidents by the alert's own
+// reference, still lists that reference's occurrences.
+func TestProxmoxDiskAlertTimelineFollowsRecordedHardware(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	disk := func(device, serial, health string) models.PhysicalDisk {
+		return models.PhysicalDisk{ID: unifiedresources.ProxmoxPhysicalDiskSourceID("lab", "pve1", device, "", ""), Node: "pve1", Instance: "lab",
+			DevPath: device, Model: "Disk " + serial, Serial: serial, WWN: "0x5000c500" + serial, Type: "sata", Health: health, Wearout: -1, LastChecked: now}
+	}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{disk("/dev/sda", "ZA1A2B3C", "FAILED"), disk("/dev/sdb", "ZA4D5E6F", "PASSED")}})
+	incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	incidents.SetResourceTimelineStore(store)
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry), incidentStore: incidents}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sda", "ZA1A2B3C", "FAILED")))
+	// A reboot swaps the devices before the registry catches up: the failing
+	// disk now raises its alert at /dev/sdb, and the healthy one at /dev/sda
+	// resolves the alert the failing disk raised there.
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sdb", "ZA1A2B3C", "FAILED")))
+	manager.CheckDiskHealth("lab", "pve1", proxmoxDiskFromPhysicalDisk(disk("/dev/sda", "ZA4D5E6F", "PASSED")))
+
+	diskIDs := map[string]string{}
+	for _, resource := range registry.List() {
+		diskIDs[resource.Name] = resource.ID
+	}
+	failing, healthy := diskIDs["Disk ZA1A2B3C"], diskIDs["Disk ZA4D5E6F"]
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved}}
+	changes, err := store.GetRecentChangesFiltered(failing, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 3)
+	sda := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	sdb := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sdb")
+	refs := map[string]int{}
+	for _, change := range changes {
+		require.Equal(t, failing, change.ResourceID)
+		refs[string(change.Kind)+" "+unifiedresources.OwnedAlertReference(change)]++
+	}
+	require.Equal(t, map[string]int{"alert_fired " + sda: 1, "alert_resolved " + sda: 1, "alert_fired " + sdb: 1}, refs)
+	changes, err = store.GetRecentChangesFiltered(healthy, time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Empty(t, changes)
+
+	page, err := incidents.QueryIncidents(memory.IncidentQuery{ResourceID: sda, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Incidents, 1)
+	require.Equal(t, memory.IncidentStatusResolved, page.Incidents[0].Status)
+	require.Equal(t, sda, page.Incidents[0].ResourceID)
+	page, err = incidents.QueryIncidents(memory.IncidentQuery{ResourceID: failing, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Incidents, 2)
+	page, err = incidents.QueryIncidents(memory.IncidentQuery{ResourceID: healthy, Limit: 10})
+	require.NoError(t, err)
+	require.Empty(t, page.Incidents)
 }

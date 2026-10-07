@@ -181,8 +181,10 @@ func (m *Monitor) checkConnectionAlerts() {
 	if lister == nil || m.alertManager == nil {
 		return
 	}
+	// The lister serves the mock connection ledger while mock mode is on.
+	scope := m.mockModeFence.begin()
 	for _, snap := range lister() {
-		m.alertManager.CheckConnection(snap)
+		scope.run(func() { m.alertManager.CheckConnection(snap) })
 	}
 }
 
@@ -628,6 +630,10 @@ func (m *Monitor) broadcastStateUpdate() {
 func (m *Monitor) checkMockAlerts() {
 	defer recoverFromPanic("checkMockAlerts")
 
+	// Passes overlap and can still be reading the fixture when the monitor
+	// leaves mock mode, so every evaluation below runs under the scope taken
+	// before the mode check and stops once SetMockMode ends its epoch.
+	scope := m.mockModeFence.begin()
 	log.Debug().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
 		log.Debug().Msg("mock mode not enabled, skipping mock alert check")
@@ -661,7 +667,7 @@ func (m *Monitor) checkMockAlerts() {
 	log.Debug().
 		Int("trackedNodes", len(existingNodes)).
 		Msg("Collecting resources for alert cleanup in mock mode")
-	m.alertManager.CleanupAlertsForNodes(existingNodes)
+	scope.run(func() { m.alertManager.CleanupAlertsForNodes(existingNodes) })
 
 	m.checkBackupAlerts(context.Background())
 
@@ -678,7 +684,7 @@ func (m *Monitor) checkMockAlerts() {
 				Msg("Reached guest check limit for this cycle")
 			break
 		}
-		m.alertManager.CheckGuest(vm, "mock")
+		scope.run(func() { m.alertManager.CheckGuest(vm, "mock") })
 		guestsChecked++
 	}
 
@@ -687,7 +693,7 @@ func (m *Monitor) checkMockAlerts() {
 		if guestsChecked >= maxGuestsPerCycle {
 			break
 		}
-		m.alertManager.CheckGuest(container, "mock")
+		scope.run(func() { m.alertManager.CheckGuest(container, "mock") })
 		guestsChecked++
 	}
 
@@ -699,11 +705,11 @@ func (m *Monitor) checkMockAlerts() {
 	// and disk alerts to its agent on the first tick, as the host-agent
 	// hostname deduplication does in production.
 	log.Debug().Int("hostCount", len(state.Hosts)).Msg("checking host agent alerts")
-	m.evaluateMockHostAgents(state.Hosts, state.Nodes)
+	m.evaluateMockHostAgents(scope, state.Hosts, state.Nodes)
 
 	// Check alerts for each node
 	for _, node := range state.Nodes {
-		m.alertManager.CheckNode(node)
+		scope.run(func() { m.alertManager.CheckNode(node) })
 	}
 
 	// Check alerts for storage
@@ -713,19 +719,28 @@ func (m *Monitor) checkMockAlerts() {
 			Str("name", storage.Name).
 			Float64("usage", storage.Usage).
 			Msg("Checking storage for alerts")
-		m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
+		trend := m.storageCapacityTrend(storage, time.Now())
+		scope.run(func() { m.alertManager.CheckStorageWithCapacityTrend(storage, trend) })
 	}
+
+	// Check alerts for physical disks. Live disks are evaluated by the
+	// physical disk poller, which only polls configured Proxmox instances, and
+	// the fixture deliberately keeps a FAILED cohort and worn SSDs, so without
+	// this pass the estate shows failing disks with no disk-health or
+	// disk-wearout alert.
+	log.Debug().Int("diskCount", len(state.PhysicalDisks)).Msg("checking physical disk alerts")
+	m.checkMockPhysicalDiskAlerts(scope, state.PhysicalDisks, state.Nodes, state.Hosts)
 
 	// Check alerts for PBS instances
 	log.Debug().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
 	for _, pbsInst := range state.PBSInstances {
-		m.alertManager.CheckPBS(pbsInst)
+		scope.run(func() { m.alertManager.CheckPBS(pbsInst) })
 	}
 
 	// Check alerts for PMG instances
 	log.Debug().Int("pmgCount", len(state.PMGInstances)).Msg("checking PMG alerts")
 	for _, pmgInst := range state.PMGInstances {
-		m.alertManager.CheckPMG(pmgInst)
+		scope.run(func() { m.alertManager.CheckPMG(pmgInst) })
 	}
 
 	// Check alerts for Docker hosts (container state/health/metrics/updates and
@@ -734,25 +749,29 @@ func (m *Monitor) checkMockAlerts() {
 	// against mock data.
 	log.Debug().Int("dockerHostCount", len(state.DockerHosts)).Msg("checking docker alerts")
 	for _, dockerHost := range state.DockerHosts {
-		m.checkMockDockerHostAlerts(dockerHost)
+		scope.run(func() { m.checkMockDockerHostAlerts(dockerHost) })
 	}
 
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
 	// mock state without needing to grab the alert manager lock again.
-	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+	scope.run(func() {
+		mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
+	})
 }
 
 // evaluateMockHostAgents evaluates every fixture agent and remembers the set.
 // A runtime mock config change rebuilds the estate, so an agent can leave it
 // between passes; it then goes through HandleHostRemoved, as a deleted live
 // agent does, or its alerts and hostname deduplication would outlive it.
-func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Node) {
+func (m *Monitor) evaluateMockHostAgents(scope mockModeScope, hosts []models.Host, nodes []models.Node) {
 	m.mockHostAgentsMu.Lock()
 	defer m.mockHostAgentsMu.Unlock()
 
 	// A pass that took its snapshot before the monitor left mock mode must
 	// not re-register fixture agents after forgetMockHostAgents ran.
-	if !mock.IsMockEnabled() {
+	// SetMockMode ends the epoch before it forgets them, so either this check
+	// fails or forgetMockHostAgents waits for this pass to record its set.
+	if !scope.current() {
 		return
 	}
 
@@ -765,12 +784,17 @@ func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Nod
 	// Remove first so a departed agent cannot unregister a hostname that a
 	// remaining agent registers on this same pass.
 	for id, host := range m.mockHostAgents {
-		if _, ok := current[id]; !ok {
-			m.alertManager.HandleHostRemoved(host)
+		if _, ok := current[id]; ok {
+			continue
+		}
+		if !scope.run(func() { m.alertManager.HandleHostRemoved(host) }) {
+			// Leaving mock mode refused the removal; keep the agent so
+			// forgetMockHostAgents still removes it.
+			current[id] = host
 		}
 	}
 	for _, host := range hosts {
-		m.checkMockHostAlerts(host, nodes)
+		scope.run(func() { m.checkMockHostAlerts(host, nodes) })
 	}
 	m.mockHostAgents = current
 }
@@ -778,9 +802,9 @@ func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Nod
 // forgetMockHostAgents removes the fixture agents when the monitor leaves mock
 // mode. ClearActiveAlerts drops their alerts but not their hostname
 // deduplication, so a real node named like a fixture agent (pve1) would keep
-// its CPU, memory and disk alerts suppressed with no agent to own them. The
-// removal also clears anything a pass already in flight recreated; mock mode
-// is off before this runs, so no later pass can register them again.
+// its CPU, memory and disk alerts suppressed with no agent to own them.
+// SetMockMode ends the mock epoch before this runs, so the set it removes is
+// final: no pass of that epoch can register an agent or evaluate one again.
 func (m *Monitor) forgetMockHostAgents() {
 	m.mockHostAgentsMu.Lock()
 	defer m.mockHostAgentsMu.Unlock()
@@ -814,4 +838,39 @@ func (m *Monitor) checkMockDockerHostAlerts(host models.DockerHost) {
 		return
 	}
 	m.alertManager.CheckDockerHost(host)
+}
+
+// checkMockPhysicalDiskAlerts applies the physical disk poller's alert
+// boundary to fixture disks. The poller only evaluates disks on nodes it
+// reached, so a disk on a node that is not online keeps whatever alert it
+// had, and a device matched by the linked agent's --disk-exclude patterns is
+// evaluated as healthy. The poller's wait for host-agent links to settle after
+// a restart does not apply: fixture links and exclusions are complete from the
+// first pass.
+func (m *Monitor) checkMockPhysicalDiskAlerts(scope mockModeScope, disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) {
+	type nodeKey struct{ instance, name string }
+
+	excludeByHost := make(map[string][]string, len(hosts))
+	for _, host := range hosts {
+		if len(host.DiskExclude) > 0 {
+			excludeByHost[host.ID] = host.DiskExclude
+		}
+	}
+	onlineNodes := make(map[nodeKey]bool, len(nodes))
+	excludeByNode := make(map[nodeKey][]string)
+	for _, node := range nodes {
+		key := nodeKey{instance: node.Instance, name: node.Name}
+		onlineNodes[key] = node.Status == "online"
+		if patterns := excludeByHost[node.LinkedAgentID]; node.LinkedAgentID != "" && len(patterns) > 0 {
+			excludeByNode[key] = patterns
+		}
+	}
+
+	for _, disk := range disks {
+		key := nodeKey{instance: disk.Instance, name: disk.Node}
+		if !onlineNodes[key] {
+			continue
+		}
+		scope.run(func() { m.checkPhysicalDiskAlerts(disk.Instance, disk, excludeByNode[key]) })
+	}
 }

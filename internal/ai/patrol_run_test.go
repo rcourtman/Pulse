@@ -149,12 +149,18 @@ func TestResolvePatrolScopeCanonicalIDOutranksAliasCollision(t *testing.T) {
 }
 
 func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
+	// A container reported without an ID alerts under its own name reference,
+	// so the host's reference stays unambiguous.
 	snapshot := models.StateSnapshot{DockerHosts: []models.DockerHost{{
 		ID: "nas", Hostname: "nas",
-		Containers: []models.DockerContainer{{ID: "abc123def456", Name: "dockhand-hawser-updater-nas", State: "exited"}},
+		Containers: []models.DockerContainer{
+			{ID: "abc123def456", Name: "dockhand-hawser-updater-nas", State: "exited"},
+			{Name: "legacy-sidecar", State: "exited"},
+		},
 	}}}
-	containerAlertID := alerts.DockerResourceID("nas", "abc123def456")
-	hostAlertID := alerts.DockerResourceID("nas", "")
+	containerAlertID := alerts.DockerContainerResourceID("nas", "abc123def456", "dockhand-hawser-updater-nas")
+	namedContainerAlertID := alerts.DockerContainerResourceID("nas", "", "legacy-sidecar")
+	hostAlertID := alerts.DockerHostResourceID("nas")
 
 	snapshotState := newPatrolRuntimeState(snapshot)
 	registry := unifiedresources.NewRegistry(nil)
@@ -165,7 +171,12 @@ func TestResolvePatrolScopeResolvesDockerAlertResourceIDs(t *testing.T) {
 		for _, tc := range []struct {
 			requested    string
 			resourceType string
-		}{{containerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
+		}{{containerAlertID, "app-container"}, {namedContainerAlertID, "app-container"}, {hostAlertID, "docker-host"}} {
+			if tc.requested == namedContainerAlertID && state.readState == nil {
+				// The legacy snapshot record of a container without an ID has
+				// no ID to scope by; only the unified read state can.
+				continue
+			}
 			resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{tc.requested}})
 			if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
 				t.Fatalf("alert resource ID %q did not resolve exactly: %+v", tc.requested, resolution)

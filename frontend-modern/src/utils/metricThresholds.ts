@@ -269,7 +269,12 @@ export const resolveMetricDisplayThresholds = (
  * Resolve display thresholds for a physical disk's SMART temperature.
  * Mirrors the backend precedence: an explicit diskTemperature override on the
  * host (or inherited linked resource) wins, then the per-type map
- * (diskTempByType: nvme/sas/sata), then the global agent default.
+ * (diskTempByType: nvme/sas/sata), then the global agent default. A
+ * switched-off agent default switches every type off, as disk temperature
+ * alerts do, and so does an override (or agent default) that switches the
+ * host's alerts off. Null means disk temperature alerting is off for this
+ * disk. `resourceIds` are the alert override keys of the machine whose agent
+ * reports the disk, in the order the backend reads them.
  */
 export const resolveDiskTemperatureDisplayThresholds = (
   config: AlertConfig | null,
@@ -280,9 +285,17 @@ export const resolveDiskTemperatureDisplayThresholds = (
   const normalizedType = (diskType ?? '').trim().toLowerCase();
 
   const override = findOverride(config?.overrides, resourceIds);
+  if (override?.disabled || config?.agentDefaults?.disabled === true) {
+    return null;
+  }
   const overrideValue = getOverrideValue(override, 'diskTemperature');
   if (overrideValue !== undefined) {
     return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
+  }
+
+  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
+  if (baseValue !== undefined && resolveThreshold(baseValue, undefined, margin) === null) {
+    return null;
   }
 
   const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
@@ -293,7 +306,6 @@ export const resolveDiskTemperatureDisplayThresholds = (
     }
   }
 
-  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
   return resolveThreshold(
     baseValue,
     byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,

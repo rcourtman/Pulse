@@ -25,6 +25,8 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
@@ -174,6 +176,61 @@ func newTestManager(t *testing.T) *Manager {
 	})
 
 	return m
+}
+
+// testLogCapture collects log events for captureTestLogs. TestMain installs
+// its hook before any test runs: writing log.Logger inside a test would race
+// with goroutines of managers that earlier tests left running.
+var testLogCapture struct {
+	mu     sync.Mutex
+	active bool
+	lines  []capturedLogLine
+}
+
+type capturedLogLine struct {
+	level   zerolog.Level
+	message string
+}
+
+func TestMain(m *testing.M) {
+	log.Logger = log.Logger.Hook(zerolog.HookFunc(func(_ *zerolog.Event, level zerolog.Level, message string) {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		if testLogCapture.active {
+			testLogCapture.lines = append(testLogCapture.lines, capturedLogLine{level: level, message: message})
+		}
+	}))
+	os.Exit(m.Run())
+}
+
+// captureTestLogs records log events, debug included, until the test ends.
+// The returned func counts the events seen so far with a level and message.
+func captureTestLogs(t *testing.T) func(zerolog.Level, string) int {
+	t.Helper()
+	originalLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	testLogCapture.mu.Lock()
+	testLogCapture.active = true
+	testLogCapture.lines = nil
+	testLogCapture.mu.Unlock()
+	t.Cleanup(func() {
+		testLogCapture.mu.Lock()
+		testLogCapture.active = false
+		testLogCapture.lines = nil
+		testLogCapture.mu.Unlock()
+		zerolog.SetGlobalLevel(originalLevel)
+	})
+	return func(level zerolog.Level, message string) int {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		n := 0
+		for _, line := range testLogCapture.lines {
+			if line.level == level && line.message == message {
+				n++
+			}
+		}
+		return n
+	}
 }
 
 func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
@@ -2720,7 +2777,7 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 		Containers:  []models.DockerContainer{container},
 	}
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 
 	// Run twice to satisfy the confirmation threshold when not ignored
@@ -2759,7 +2816,7 @@ func TestCheckDockerHostContainerCPUUsesCapacityNormalizedPercent(t *testing.T) 
 			CPUPercent: 240,
 		}},
 	}
-	alertID := canonicalMetricStateID(DockerResourceID(host.ID, "container-1"), "cpu")
+	alertID := canonicalMetricStateID(DockerContainerResourceID(host.ID, "container-1", ""), "cpu")
 
 	m.CheckDockerHost(host)
 	m.mu.RLock()
@@ -3058,7 +3115,7 @@ func TestDockerContainerStateUsesDockerDefaults(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3091,7 +3148,7 @@ func TestDockerContainerStateRespectsDisableDefault(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	alertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("did not expect docker container state alert when defaults disable connectivity")
@@ -3121,7 +3178,7 @@ func TestDockerContainerMemoryLimitHysteresis(t *testing.T) {
 
 	m.CheckDockerHost(hostHigh)
 
-	resourceID := DockerResourceID(hostID, containerID)
+	resourceID := DockerContainerResourceID(hostID, containerID, "")
 	alertID := fmt.Sprintf("docker-container-memory-limit-%s", resourceID)
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3190,7 +3247,7 @@ func TestDockerContainerDiskUsageAlert(t *testing.T) {
 
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+	resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 	alertID := canonicalMetricStateID(resourceID, "disk")
 	alert, exists := testLookupActiveAlert(t, m, alertID)
 	if !exists {
@@ -3782,7 +3839,7 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 		Hostname:    "docker-host.local",
 		Containers:  []models.DockerContainer{container},
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	stateAlertID := fmt.Sprintf("docker-container-state-%s", resourceID)
 	healthAlertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 	restartAlertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
@@ -3954,20 +4011,25 @@ func TestDockerContainerDisplayName(t *testing.T) {
 	}
 }
 
-func TestDockerResourceID(t *testing.T) {
+func TestDockerContainerResourceID(t *testing.T) {
 	// t.Parallel()
 
 	tests := []struct {
-		name        string
-		hostID      string
-		containerID string
-		want        string
+		name          string
+		hostID        string
+		containerID   string
+		containerName string
+		want          string
 	}{
-		{name: "both ids present", hostID: "host1", containerID: "abc", want: "docker:host1/abc"},
+		{name: "both ids present", hostID: "host1", containerID: "abc", containerName: "web", want: "docker:host1/abc"},
 		{name: "trims ids", hostID: " host1 ", containerID: " abc ", want: "docker:host1/abc"},
 		{name: "missing host id", hostID: "", containerID: "abc", want: "docker:container/abc"},
-		{name: "missing container id", hostID: "host1", containerID: "", want: "docker:host1"},
-		{name: "both missing", hostID: "", containerID: "", want: "docker:unknown"},
+		// A container without an ID never takes its host's reference.
+		{name: "missing container id uses the marked name", hostID: "host1", containerID: "", containerName: " /web ", want: "docker:host1/name:web"},
+		{name: "a name never equals an ID reference", hostID: "host1", containerID: "", containerName: "abc", want: "docker:host1/name:abc"},
+		{name: "no id and no name", hostID: "host1", containerID: "", containerName: " / ", want: ""},
+		{name: "a name without a host identifies nothing", hostID: "", containerID: "", containerName: "web", want: ""},
+		{name: "all missing", want: ""},
 	}
 
 	for _, tc := range tests {
@@ -3975,10 +4037,254 @@ func TestDockerResourceID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// t.Parallel()
 
-			if got := DockerResourceID(tc.hostID, tc.containerID); got != tc.want {
-				t.Fatalf("DockerResourceID(%q, %q) = %q, want %q", tc.hostID, tc.containerID, got, tc.want)
+			if got := DockerContainerResourceID(tc.hostID, tc.containerID, tc.containerName); got != tc.want {
+				t.Fatalf("DockerContainerResourceID(%q, %q, %q) = %q, want %q", tc.hostID, tc.containerID, tc.containerName, got, tc.want)
 			}
 		})
+	}
+	if got := DockerHostResourceID(" host1 "); got != "docker:host1" {
+		t.Fatalf("DockerHostResourceID = %q, want docker:host1", got)
+	}
+	if got := DockerHostResourceID(" "); got != "" {
+		t.Fatalf("DockerHostResourceID without a host = %q, want empty", got)
+	}
+}
+
+// Containers and Swarm services reported without an ID alert under their own
+// marked name, never under the host's reference or another service's ID
+// reference, so cleanup, removal and the policy switches reach them like any
+// other container or service.
+func TestDockerAlertsWithoutIDsUseTheirOwnReferences(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.SuppressionWindow = 0
+	m.UpdateConfig(config)
+
+	containerID := strings.Repeat("c", 64)
+	serviceID := "x7k2m9q4w1e8r5t3y6u0i2o4p"
+	host := models.DockerHost{ID: "h1", Hostname: "tower", DisplayName: "tower", Status: "online", LastSeen: time.Now(),
+		Containers: []models.DockerContainer{
+			{ID: containerID, Name: "web", State: "running", Health: "unhealthy"},
+			{Name: "/sidecar", State: "running", Health: "unhealthy"},
+			// Docker forbids slashes in names, but a report can carry anything.
+			{Name: "jobs/service/runner", State: "running", Health: "unhealthy"},
+			{State: "running", Health: "unhealthy"}, // no identity at all
+		},
+		Services: []models.DockerService{
+			{ID: serviceID, Name: "api", DesiredTasks: 2},
+			{Name: strings.ToUpper(serviceID), DesiredTasks: 2},
+			{DesiredTasks: 2},
+		}}
+	refs := func() map[string]bool {
+		got := map[string]bool{}
+		for _, alert := range m.GetActiveAlerts() {
+			got[alert.ResourceID] = true
+		}
+		return got
+	}
+	var firedMu sync.Mutex
+	fired := map[string]bool{}
+	m.SubscribeLifecycleCallback(func(event LifecycleEvent) {
+		if event.Type == eventlog.TypeFired && event.Alert != nil {
+			firedMu.Lock()
+			fired[event.Alert.ResourceID] = true
+			firedMu.Unlock()
+		}
+	})
+	m.CheckDockerHost(host)
+	want := map[string]bool{
+		"docker:h1/" + containerID:            true,
+		"docker:h1/name:sidecar":              true,
+		"docker:h1/name:jobs/service/runner":  true,
+		"docker:h1/service/" + serviceID:      true,
+		"docker:h1/service/name:" + serviceID: true,
+	}
+	if got := refs(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("alert references = %v, want %v", got, want)
+	}
+	firedMu.Lock()
+	if !reflect.DeepEqual(fired, want) {
+		t.Fatalf("fired alert references = %v, want %v", fired, want)
+	}
+	firedMu.Unlock()
+
+	// A container that leaves the report clears under its own reference.
+	reported := host
+	reported.Containers = host.Containers[:1]
+	m.CheckDockerHost(reported)
+	if got := refs(); got["docker:h1/name:sidecar"] || got["docker:h1/name:jobs/service/runner"] {
+		t.Fatalf("alerts of removed containers without an ID survived the report: %v", got)
+	}
+
+	// Before this reference existed such a container alerted under its host's.
+	// No producer refreshes those, so the next report clears them.
+	legacy := func() {
+		m.mu.Lock()
+		m.activeAlerts["legacy"] = &Alert{ID: "legacy", Type: "docker-container-health", ResourceID: "docker:h1", StartTime: time.Now(), LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "h1", "containerId": "", "containerName": "sidecar"}}
+		m.mu.Unlock()
+	}
+	legacy()
+	m.CheckDockerHost(host)
+	if refs()["docker:h1"] {
+		t.Fatal("a pre-upgrade container alert on the host's reference survived the host's report")
+	}
+	// Going offline clears it too, and keeps the host's own alert.
+	legacy()
+	for range 3 {
+		m.HandleDockerHostOffline(host)
+	}
+	offline := 0
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.ResourceID == "docker:h1" {
+			if alert.Type != "docker-host-offline" {
+				t.Fatalf("a pre-upgrade container alert on the host's reference survived going offline: %+v", alert)
+			}
+			offline++
+		}
+	}
+	if offline != 1 {
+		t.Fatalf("host offline alerts = %d, want 1", offline)
+	}
+
+	// The policy switches classify the name references by kind.
+	m.CheckDockerHost(host)
+	config = m.GetConfig()
+	config.DisableAllDockerContainers = true
+	m.UpdateConfig(config)
+	if got := refs(); len(got) != 2 || !got["docker:h1/service/"+serviceID] || !got["docker:h1/service/name:"+serviceID] {
+		t.Fatalf("after disabling containers, alert references = %v", got)
+	}
+	config.DisableAllDockerServices = true
+	m.UpdateConfig(config)
+	if got := refs(); len(got) != 0 {
+		t.Fatalf("after disabling services, alert references = %v", got)
+	}
+}
+
+// A Docker host disambiguated as "<base>::<suffix>" carries the canonical
+// state separator in its ID. Its alerts keep their full reference, so they
+// never take the reference of the host named "<base>", and a restored alert
+// whose reference was cut short there is not that host's to clear.
+func TestDockerHostIDWithSeparatorKeepsItsAlertReferences(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	m.UpdateConfig(config)
+	containerID := strings.Repeat("d", 64)
+	report := func(hostID string) models.DockerHost {
+		return models.DockerHost{ID: hostID, Hostname: "clone", LastSeen: time.Now(),
+			Containers: []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Health: "unhealthy"}}}
+	}
+	m.CheckDockerHost(report("base::suffix"))
+	m.CheckDockerHost(report("base"))
+	got := map[string]string{}
+	for _, alert := range m.GetActiveAlerts() {
+		got[alert.Metadata["hostId"].(string)] = alert.ResourceID
+	}
+	want := map[string]string{"base": "docker:base/" + containerID, "base::suffix": "docker:base::suffix/" + containerID}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("alert references by host = %v, want %v", got, want)
+	}
+
+	restored := &Alert{ID: "docker:base::suffix/x::docker:base::suffix/x-health", Type: "docker-container-health", ResourceID: "docker:base",
+		StartTime: time.Now(), LastSeen: time.Now(), Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": "x"}}
+	m.mu.Lock()
+	m.activeAlerts[restored.ID] = restored
+	m.mu.Unlock()
+	m.CheckDockerHost(report("base"))
+	m.mu.RLock()
+	_, kept := m.activeAlerts[restored.ID]
+	m.mu.RUnlock()
+	if !kept {
+		t.Fatal("host base cleared another host's restored alert as its own pre-upgrade container alert")
+	}
+}
+
+// Alerts saved before state IDs split after their own spec carry a resource
+// ID cut short at the first "::" of a host ID like "<base>::<suffix>". They
+// recover their reference on restore, so the owning host's report clears them
+// and carries the age of a pending update.
+func TestDockerAlertsRestoredWithCutShortReferencesRecover(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.DockerDefaults.UpdateAlertDelayHours = 24
+	m.UpdateConfig(config)
+	hostRef := "docker:base::suffix"
+	containerRef := hostRef + "/" + strings.Repeat("e", 64)
+	startedAt := time.Now().Add(-72 * time.Hour).Truncate(time.Second)
+	saved := []*Alert{
+		{ID: buildCanonicalStateID(hostRef, hostRef+"-image-update"), CanonicalSpecID: hostRef + "-image-update", Type: "docker-container-update",
+			ResourceID: "docker:base", Level: AlertLevelWarning, StartTime: startedAt, LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": "", "containerName": "sidecar"}},
+		{ID: buildCanonicalStateID(containerRef, containerRef+"-health"), CanonicalSpecID: containerRef + "-health", Type: "docker-container-health",
+			ResourceID: "docker:base", Level: AlertLevelCritical, StartTime: startedAt, LastSeen: time.Now(),
+			Metadata: map[string]interface{}{"hostId": "base::suffix", "containerId": strings.Repeat("e", 64), "containerName": "gone"}},
+	}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(m.getAlertsDir(), alertsDirPerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(m.getAlertsDir(), "active-alerts.json"), data, alertsFilePerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.LoadActiveAlerts(); err != nil {
+		t.Fatalf("LoadActiveAlerts() error = %v", err)
+	}
+	restored := map[string]bool{}
+	for _, alert := range m.GetActiveAlerts() {
+		restored[alert.ResourceID] = true
+	}
+	if want := map[string]bool{hostRef: true, containerRef: true}; !reflect.DeepEqual(restored, want) {
+		t.Fatalf("restored references = %v, want %v", restored, want)
+	}
+
+	m.CheckDockerHost(models.DockerHost{ID: "base::suffix", Hostname: "clone", LastSeen: time.Now(), Containers: []models.DockerContainer{{
+		Name: "sidecar", State: "running",
+		UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:a", LatestDigest: "sha256:b", LastChecked: time.Now()},
+	}}})
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || active[0].ResourceID != hostRef+"/name:sidecar" || !active[0].StartTime.Equal(startedAt) {
+		t.Fatalf("active alerts = %+v, want only the update on %s/name:sidecar started %s", active, hostRef, startedAt)
+	}
+}
+
+// Before a container without an ID had a reference of its own, its pending
+// image update was recorded under its host's reference. The first report
+// after the upgrade keeps that age instead of restarting the delay.
+func TestDockerContainerWithoutIDKeepsPendingUpdateAgeAcrossUpgrade(t *testing.T) {
+	m := newTestManager(t)
+	config := m.GetConfig()
+	config.Enabled = true
+	config.DockerDefaults.UpdateAlertDelayHours = 24
+	m.UpdateConfig(config)
+	startedAt := time.Now().Add(-72 * time.Hour).Truncate(time.Second)
+	legacyID := buildCanonicalStateID("docker:h1", "docker:h1-image-update")
+	m.mu.Lock()
+	m.activeAlerts[legacyID] = &Alert{ID: legacyID, Type: "docker-container-update", ResourceID: "docker:h1", StartTime: startedAt, LastSeen: time.Now(),
+		Metadata: map[string]interface{}{"hostId": "h1", "containerId": "", "containerName": "sidecar"}}
+	m.mu.Unlock()
+
+	m.CheckDockerHost(models.DockerHost{ID: "h1", Hostname: "tower", LastSeen: time.Now(), Containers: []models.DockerContainer{{
+		Name: "sidecar", State: "running", Image: "nginx:latest",
+		UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:a", LatestDigest: "sha256:b", LastChecked: time.Now()},
+	}}})
+	var updates []Alert
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.Type == "docker-container-update" {
+			updates = append(updates, alert)
+		}
+	}
+	if len(updates) != 1 || updates[0].ResourceID != "docker:h1/name:sidecar" || !updates[0].StartTime.Equal(startedAt) {
+		t.Fatalf("update alerts = %+v, want one on docker:h1/name:sidecar started %s", updates, startedAt)
 	}
 }
 
@@ -4249,6 +4555,10 @@ func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
 	if alert.Threshold != 10.0 {
 		t.Errorf("expected threshold 10.0, got %f", alert.Threshold)
 	}
+	// Wearout is life remaining: the message must not read as 5% worn.
+	if want := "SSD life remaining is 5%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
 		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
 	}
@@ -4304,6 +4614,56 @@ func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
 	}
 	if alert.Value != 6 {
 		t.Errorf("expected value to be updated to 6, got %f", alert.Value)
+	}
+	if want := "SSD life remaining is 6%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
+}
+
+// The physical-disk poller re-evaluates every disk each cycle (and mock mode
+// on every alert tick), so a failed or worn disk must log at error/warn once,
+// when its alert opens, and at debug on every later poll.
+func TestCheckDiskHealthLogsAlertOpeningOnce(t *testing.T) {
+	count := captureTestLogs(t)
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// Exactly at the wearout threshold, which still alerts.
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdf",
+		Model:   "Crucial CT500MX500SSD1",
+		Serial:  "2034E4A1B2C3",
+		Type:    "ssd",
+		Health:  "FAILED",
+		Wearout: 10,
+		Size:    500107862016,
+	}
+	const polls = 3
+	for i := 0; i < polls; i++ {
+		m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	}
+
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 1 {
+		t.Errorf("error-level health log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk health check still failing"); got != polls-1 {
+		t.Errorf("debug-level health log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+	if got := count(zerolog.WarnLevel, "Disk wearout alert created"); got != 1 {
+		t.Errorf("warn-level wearout log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk life remaining still at or below wearout threshold"); got != polls-1 {
+		t.Errorf("debug-level wearout log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+
+	// A disk that passes and then fails again opens a new alert, which logs
+	// at error again.
+	disk.Health = "PASSED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	disk.Health = "FAILED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 2 {
+		t.Errorf("error-level health log count after the disk failed again = %d, want 2", got)
 	}
 }
 
@@ -6127,81 +6487,89 @@ func TestDockerServiceResourceID(t *testing.T) {
 			expected:    "docker-service:svc-123",
 		},
 		{
-			name:        "derives ID from service name when ID empty",
+			name:        "marks the derived name when ID empty",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "My Service",
-			expected:    "docker:host-1/service/my-service",
+			expected:    "docker:host-1/service/name:my-service",
 		},
 		{
 			name:        "special chars in name replaced with dash",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my/service:v1.0",
-			expected:    "docker:host-1/service/my-service-v1-0",
+			expected:    "docker:host-1/service/name:my-service-v1-0",
 		},
 		{
 			name:        "backslash and colon replaced",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "path\\to:service",
-			expected:    "docker:host-1/service/path-to-service",
+			expected:    "docker:host-1/service/name:path-to-service",
 		},
 		{
 			name:        "preserves alphanumeric and underscore",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my_service_123",
-			expected:    "docker:host-1/service/my_service_123",
+			expected:    "docker:host-1/service/name:my_service_123",
 		},
 		{
 			name:        "preserves hyphens",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "my-service-name",
-			expected:    "docker:host-1/service/my-service-name",
+			expected:    "docker:host-1/service/name:my-service-name",
 		},
 		{
 			name:        "trims leading/trailing dashes and underscores",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "---my-service___",
-			expected:    "docker:host-1/service/my-service",
+			expected:    "docker:host-1/service/name:my-service",
 		},
 		{
 			name:        "truncates long derived ID to 32 chars",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "this-is-a-very-long-service-name-that-exceeds-the-limit",
-			expected:    "docker:host-1/service/this-is-a-very-long-service-name",
+			expected:    "docker:host-1/service/name:this-is-a-very-long-service-name",
 		},
 		{
-			name:        "uses 'service' when name is all special chars",
+			name:        "no identity when name is all special chars",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "!!!@@@###",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
-			name:        "uses 'service' when both ID and name empty",
+			name:        "no identity when both ID and name empty",
 			hostID:      "host-1",
 			serviceID:   "",
 			serviceName: "",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
-			name:        "uses 'service' when both ID and name whitespace",
+			name:        "no identity when both ID and name whitespace",
 			hostID:      "host-1",
 			serviceID:   "   ",
 			serviceName: "   ",
-			expected:    "docker:host-1/service/service",
+			expected:    "",
 		},
 		{
 			name:        "no host and derived name",
 			hostID:      "",
 			serviceID:   "",
 			serviceName: "webserver",
-			expected:    "docker-service:webserver",
+			expected:    "docker-service:name:webserver",
+		},
+		{
+			// A service named like another service's Swarm ID keeps its own reference.
+			name:        "a name never equals an ID reference",
+			hostID:      "host-1",
+			serviceID:   "",
+			serviceName: "X7K2M9Q4W1E8R5T3Y6U0I2O4P",
+			expected:    "docker:host-1/service/name:x7k2m9q4w1e8r5t3y6u0i2o4p",
 		},
 	}
 
@@ -13154,7 +13522,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for healthy container")
@@ -13181,7 +13549,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with empty health")
@@ -13208,7 +13576,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for container with none health")
@@ -13235,7 +13603,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no health alert for starting container")
@@ -13262,7 +13630,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13302,7 +13670,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13333,7 +13701,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected running unhealthy container to raise a health alert")
@@ -13376,7 +13744,7 @@ func TestDockerContainerHealthAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostUnhealthy)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-health-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected health alert to be raised")
@@ -13427,7 +13795,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for running container")
@@ -13454,7 +13822,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no OOM alert for container with exit code 1")
@@ -13478,7 +13846,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 			m.CheckDockerHost(host)
 
-			resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+			resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 			if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-oom-%s", resourceID)) {
 				t.Fatal("exit code 137 alone must not create an OOM alert")
 			}
@@ -13508,7 +13876,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13552,7 +13920,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13588,7 +13956,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		// First check - should create alert
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13633,7 +14001,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13687,7 +14055,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 
 		m.CheckDockerHost(hostOOM)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected OOM alert to be raised")
@@ -13738,7 +14106,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(host.ID, host.Containers[0].ID)
+		resourceID := DockerContainerResourceID(host.ID, host.Containers[0].ID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert on first check (just initializes tracking)")
@@ -13786,7 +14154,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Third check - still same restart count
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert for stable container")
@@ -13827,7 +14195,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 3
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		if testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected no restart loop alert when restarts <= threshold")
@@ -13873,7 +14241,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 4
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -13909,7 +14277,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 
 		hostID := "host-restart-5"
 		containerID := "container-5"
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 
 		// Manually set up a restart loop state
 		m.mu.Lock()
@@ -13989,7 +14357,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// First check - initializes
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 
 		// Restart 1
@@ -14042,7 +14410,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		host.Containers[0].RestartCount = 5
 		m.CheckDockerHost(host)
 
-		resourceID := DockerResourceID(hostID, containerID)
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
 		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
 		alert1, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
@@ -20293,7 +20661,7 @@ func TestDockerContainerOverrideSurvivesContainerRecreate(t *testing.T) {
 		}
 	}
 	stateAlertID := func(hostID, containerID string) string {
-		return fmt.Sprintf("docker-container-state-%s", DockerResourceID(hostID, containerID))
+		return fmt.Sprintf("docker-container-state-%s", DockerContainerResourceID(hostID, containerID, ""))
 	}
 
 	// Subtests keep the two managers in separate lifetimes: newTestManager
@@ -20345,13 +20713,13 @@ func TestDockerContainerOverrideLegacyIDKeyStillHonoured(t *testing.T) {
 	}
 
 	m.mu.Lock()
-	m.config.Overrides[DockerResourceID(host.ID, container.ID)] = ThresholdConfig{Disabled: true}
+	m.config.Overrides[DockerContainerResourceID(host.ID, container.ID, "")] = ThresholdConfig{Disabled: true}
 	m.mu.Unlock()
 
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	alertID := fmt.Sprintf("docker-container-state-%s", DockerResourceID(host.ID, container.ID))
+	alertID := fmt.Sprintf("docker-container-state-%s", DockerContainerResourceID(host.ID, container.ID, ""))
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected legacy ID-keyed override to still disable container alerts")
 	}
@@ -21741,5 +22109,36 @@ func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
 	}
 	if _, ok := m.activeAlerts[abandoned.ID]; ok {
 		t.Fatal("cleanup kept an alert nobody has evaluated for over a day")
+	}
+}
+
+// Resource history owns each PVE disk alert row by the hardware identity the
+// alert records, and reads by the path reference find those rows by alert
+// identifier. Both must match what CheckDiskHealth produces.
+func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	disk := proxmox.Disk{DevPath: "/dev/sdb", Model: "Crucial MX500", Serial: "2117E59AB123", WWN: "0x5002538f12345678",
+		Type: "ssd", Health: "FAILED", Wearout: 3}
+	for i := 0; i < 3; i++ {
+		m.CheckDiskHealth("lab", "pve1", disk)
+	}
+
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", disk.DevPath)
+	want := map[string]bool{}
+	for _, identifier := range unifiedresources.ProxmoxPhysicalDiskAlertIdentifiers(ref) {
+		want[identifier] = true
+	}
+	active := m.GetActiveAlerts()
+	if len(active) != len(want) {
+		t.Fatalf("active alerts = %d, want %d", len(active), len(want))
+	}
+	for _, alert := range active {
+		if !want[alert.ID] || alert.ResourceID != ref {
+			t.Fatalf("alert %q on %q is not a history identifier of %q", alert.ID, alert.ResourceID, ref)
+		}
+		if alert.Metadata[unifiedresources.MetadataDiskSerial] != disk.Serial || alert.Metadata[unifiedresources.MetadataDiskWWN] != disk.WWN {
+			t.Fatalf("alert %q records serial %v and WWN %v", alert.ID, alert.Metadata[unifiedresources.MetadataDiskSerial], alert.Metadata[unifiedresources.MetadataDiskWWN])
+		}
 	}
 }

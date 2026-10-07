@@ -464,41 +464,23 @@ func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 	pageWidth, _ := pdf.GetPageSize()
 
-	// Determine overall health status
-	healthStatus := "HEALTHY"
+	// Determine overall health status. An alert that closed without
+	// recovering (moved to its Pulse agent) still counts until the report
+	// lists the successor's own alert for that metric.
+	health := assessAlertHealth(data.Alerts)
+	healthStatus := health.Status
 	healthColor := colorAccent // Green
-	healthMessage := "All systems operating normally"
+	healthMessage := health.Message
 
-	activeAlerts := 0
-	criticalAlerts := 0
-	warningAlerts := 0
-	for _, alert := range data.Alerts {
-		if alert.ResolvedTime == nil {
-			activeAlerts++
-			if alert.Level == "critical" {
-				criticalAlerts++
-			} else {
-				warningAlerts++
-			}
-		}
-	}
+	unresolved := health.Unresolved
+	activeAlerts := len(unresolved)
+	criticalAlerts := health.Critical
+	warningAlerts := health.Warning
 
 	if criticalAlerts > 0 {
-		healthStatus = "CRITICAL"
 		healthColor = colorDanger
-		if criticalAlerts == 1 {
-			healthMessage = "1 critical issue requires immediate attention"
-		} else {
-			healthMessage = fmt.Sprintf("%d critical issues require immediate attention", criticalAlerts)
-		}
 	} else if warningAlerts > 0 {
-		healthStatus = "WARNING"
 		healthColor = colorWarning
-		if warningAlerts == 1 {
-			healthMessage = "1 warning detected - review recommended"
-		} else {
-			healthMessage = fmt.Sprintf("%d warnings detected - review recommended", warningAlerts)
-		}
 	} else if data.TotalPoints == 0 && len(data.Summary.ByMetric) == 0 {
 		// No metrics arrived for the requested window. Reporting
 		// HEALTHY would green-light an empty report and mislead the
@@ -633,8 +615,8 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 
 		pdf.SetFont("Arial", "", 9)
 		alertCount := 0
-		for _, alert := range data.Alerts {
-			if alert.ResolvedTime == nil && alertCount < 5 {
+		for _, alert := range unresolved {
+			if alertCount < 5 {
 				if alert.Level == "critical" {
 					pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
 					pdf.CellFormat(8, 5, "!", "", 0, "C", false, 0, "")
@@ -643,11 +625,7 @@ func (g *PDFGenerator) writeExecutiveSummary(pdf *fpdf.Fpdf, data *ReportData) {
 					pdf.CellFormat(8, 5, "!", "", 0, "C", false, 0, "")
 				}
 				pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-				msg := alert.Message
-				if len(msg) > 70 {
-					msg = msg[:67] + "..."
-				}
-				pdf.CellFormat(0, 5, msg, "", 1, "L", false, 0, "")
+				pdf.CellFormat(0, 5, unresolvedAlertLine(alert, 70), "", 1, "L", false, 0, "")
 				alertCount++
 			}
 		}
@@ -1509,8 +1487,12 @@ func (g *PDFGenerator) writeAlertsSection(pdf *fpdf.Fpdf, data *ReportData) {
 		// Started
 		pdf.CellFormat(colWidths[3], 6, alert.StartTime.Format("Jan 02 15:04"), "1", 0, "C", fill, 0, "")
 
-		// Resolved
-		if alert.ResolvedTime != nil {
+		// Resolved. A close that was not a recovery reads "Moved" in
+		// neutral text, never as a green resolve time.
+		if alert.ClosedWithoutRecovery() {
+			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+			pdf.CellFormat(colWidths[4], 6, closedWithoutRecoveryLabel(alert), "1", 0, "C", fill, 0, "")
+		} else if alert.ResolvedTime != nil {
 			pdf.SetTextColor(colorAccent[0], colorAccent[1], colorAccent[2])
 			pdf.CellFormat(colWidths[4], 6, alert.ResolvedTime.Format("Jan 02 15:04"), "1", 0, "C", fill, 0, "")
 		} else {
@@ -1523,7 +1505,60 @@ func (g *PDFGenerator) writeAlertsSection(pdf *fpdf.Fpdf, data *ReportData) {
 		fill = !fill
 	}
 
+	// Say once what each "Moved" row means, in the alert engine's words.
+	var notes []string
+	seenNotes := make(map[string]struct{})
+	for _, alert := range data.Alerts {
+		summary := alert.ResolutionSummary()
+		if summary == "" {
+			continue
+		}
+		note := closedWithoutRecoveryLabel(alert) + ": " + summary
+		if _, ok := seenNotes[note]; ok {
+			continue
+		}
+		seenNotes[note] = struct{}{}
+		notes = append(notes, note)
+	}
+	if len(notes) > 0 {
+		pdf.Ln(2)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
+		for _, note := range notes {
+			pdf.MultiCell(0, 4, note, "", "L", false)
+		}
+		pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
+	}
+
 	pdf.Ln(10)
+}
+
+// closedWithoutRecoveryLabel is the alerts table's Resolved cell for a close
+// that was not a recovery.
+func closedWithoutRecoveryLabel(alert AlertInfo) string {
+	if alert.Resolution != nil && alert.Resolution.Reason == AlertResolutionMovedToAgent {
+		return "Moved"
+	}
+	return "Closed"
+}
+
+// unresolvedAlertLine is one alert in an "Active Alerts" list, cut to max
+// characters. An alert that closed without recovering keeps its outcome,
+// such as "(moved to pve1 (Host Agent))", and gives up message text instead.
+func unresolvedAlertLine(alert AlertInfo, max int) string {
+	suffix := ""
+	if outcome := alert.ResolutionOutcome(); outcome != "" {
+		suffix = " (" + outcome + ")"
+	}
+	room := max - len(suffix)
+	if room < 10 {
+		room = 10
+	}
+	msg := alert.Message
+	if len(msg) > room {
+		msg = msg[:room-3] + "..."
+	}
+	return msg + suffix
 }
 
 // writeStorageSection writes storage pools table
@@ -1670,9 +1705,10 @@ func (g *PDFGenerator) writeDisksSection(pdf *fpdf.Fpdf, data *ReportData) {
 		tempStr := "-"
 		if disk.Temperature > 0 {
 			tempStr = fmt.Sprintf("%dC", disk.Temperature)
-			if disk.Temperature >= 60 {
+			switch diskTemperatureSeverity(disk) {
+			case "critical":
 				pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
-			} else if disk.Temperature >= 50 {
+			case "warning":
 				pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
 			}
 		}
@@ -1831,8 +1867,10 @@ func (g *PDFGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	_, pageHeight := pdf.GetPageSize()
 	bottomLimit := pageHeight - 30
 	pageOpen := false
+	fleetAlerts := data.fleetAlerts()
 	for _, rd := range data.Resources {
-		startNewPage := !pageOpen || pdf.GetY()+condensedResourceBlockHeight(rd) > bottomLimit
+		unresolved := unresolvedAlertsAmong(rd.Alerts, fleetAlerts)
+		startNewPage := !pageOpen || pdf.GetY()+condensedResourceBlockHeight(rd, unresolved) > bottomLimit
 		if startNewPage {
 			pdf.AddPage()
 			g.addMultiPageHeader(pdf, data, "Resource Details")
@@ -1843,7 +1881,7 @@ func (g *PDFGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 			pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
 			pdf.Ln(5)
 		}
-		g.writeCondensedResourcePage(pdf, rd)
+		g.writeCondensedResourcePage(pdf, rd, unresolved)
 	}
 
 	// Add page numbers to all pages except cover
@@ -2043,15 +2081,14 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 	totalActive := 0
 	totalCritical := 0
 	totalWarning := 0
+	fleetAlerts := data.fleetAlerts()
 	for _, rd := range data.Resources {
-		for _, alert := range rd.Alerts {
-			if alert.ResolvedTime == nil {
-				totalActive++
-				if alert.Level == "critical" {
-					totalCritical++
-				} else {
-					totalWarning++
-				}
+		for _, alert := range unresolvedAlertsAmong(rd.Alerts, fleetAlerts) {
+			totalActive++
+			if alert.Level == "critical" {
+				totalCritical++
+			} else {
+				totalWarning++
 			}
 		}
 	}
@@ -2215,12 +2252,7 @@ func (g *PDFGenerator) writeFleetSummary(pdf *fpdf.Fpdf, data *MultiReportData) 
 		pdf.CellFormat(colWidths[6], 6, fmt.Sprintf("%.1f%%", avgDisk), "1", 0, "C", fill, 0, "")
 
 		// Alerts count
-		alertCount := 0
-		for _, alert := range rd.Alerts {
-			if alert.ResolvedTime == nil {
-				alertCount++
-			}
-		}
+		alertCount := len(unresolvedAlertsAmong(rd.Alerts, fleetAlerts))
 		pdf.SetTextColor(getAlertCountColor(alertCount)[0], getAlertCountColor(alertCount)[1], getAlertCountColor(alertCount)[2])
 		pdf.CellFormat(colWidths[7], 6, fmt.Sprintf("%d", alertCount), "1", 0, "C", fill, 0, "")
 
@@ -2395,17 +2427,12 @@ func writeFleetNarrativeSection(pdf *fpdf.Fpdf, fn *FleetNarrative) {
 // resource block needs so the fleet layout can decide whether it fits on
 // the current page. Estimates err slightly high; a block that still
 // overflows is carried across pages by fpdf's auto page break.
-func condensedResourceBlockHeight(rd *ReportData) float64 {
+func condensedResourceBlockHeight(rd *ReportData, unresolved []AlertInfo) float64 {
 	height := 11.0 + 6.0 + 27.0 + 8.0 // name header + availability line + stats bar + padding
 	if len(rd.Metrics["cpu"]) >= 2 || len(rd.Metrics["memory"]) >= 2 {
 		height += 58 // chart title + canvas + legend
 	}
-	active := 0
-	for _, alert := range rd.Alerts {
-		if alert.ResolvedTime == nil {
-			active++
-		}
-	}
+	active := len(unresolved)
 	if active > 0 {
 		shown := active
 		if shown > 3 {
@@ -2422,7 +2449,9 @@ func condensedResourceBlockHeight(rd *ReportData) float64 {
 	return height
 }
 
-func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData) {
+// writeCondensedResourcePage writes one resource's block of a fleet report.
+// unresolved is the resource's live alerts matched against the whole fleet.
+func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData, unresolved []AlertInfo) {
 	// Resource header
 	resourceName := rd.ResourceID
 	if rd.Resource != nil && rd.Resource.Name != "" {
@@ -2586,13 +2615,8 @@ func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData
 		}
 	}
 
-	// Active alerts (up to 3)
-	activeAlerts := make([]AlertInfo, 0)
-	for _, alert := range rd.Alerts {
-		if alert.ResolvedTime == nil {
-			activeAlerts = append(activeAlerts, alert)
-		}
-	}
+	// Active alerts (up to 3), including any that moved without recovering
+	activeAlerts := unresolved
 
 	if len(activeAlerts) > 0 {
 		pdf.Ln(3)
@@ -2615,11 +2639,7 @@ func (g *PDFGenerator) writeCondensedResourcePage(pdf *fpdf.Fpdf, rd *ReportData
 			}
 			pdf.CellFormat(6, 5, "!", "", 0, "C", false, 0, "")
 			pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-			msg := alert.Message
-			if len(msg) > 80 {
-				msg = msg[:77] + "..."
-			}
-			pdf.CellFormat(0, 5, msg, "", 1, "L", false, 0, "")
+			pdf.CellFormat(0, 5, unresolvedAlertLine(alert, 80), "", 1, "L", false, 0, "")
 		}
 		if len(activeAlerts) > 3 {
 			pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -2807,4 +2827,21 @@ func formatDuration(d time.Duration) string {
 		minWord = "minute"
 	}
 	return fmt.Sprintf("%d %s", minutes, minWord)
+}
+
+// diskTemperatureSeverity colours a disk reading by its alert disk temperature
+// thresholds: "critical" from the trigger, "warning" from the clear value, and
+// "" below it or when the disk carries no thresholds.
+func diskTemperatureSeverity(disk DiskInfo) string {
+	if disk.Temperature <= 0 || disk.TemperatureCritical <= 0 {
+		return ""
+	}
+	reading := float64(disk.Temperature)
+	if reading >= disk.TemperatureCritical {
+		return "critical"
+	}
+	if disk.TemperatureWarning > 0 && reading >= disk.TemperatureWarning {
+		return "warning"
+	}
+	return ""
 }

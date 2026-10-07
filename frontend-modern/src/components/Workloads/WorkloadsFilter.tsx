@@ -294,6 +294,20 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
     buildWorkloadSearchSuggestions(props.searchSuggestionWorkloads?.() ?? []),
   );
 
+  // The history hint clears on the first populated row preview, while the
+  // pointer is over the table. Once shown, it keeps its box for as long as row
+  // hover previews history: removing it could unwrap the action row and slide
+  // the hovered guest out from under the pointer, retargeting the lens to the
+  // next row. Leaving bars + history hover, or remounting, releases the box.
+  const historyHintSlotReserved = createMemo<boolean>(
+    (reserved) =>
+      props.metricHistoryHintVisible?.() === true ||
+      (reserved &&
+        props.metricDisplayMode?.() === 'bars' &&
+        (props.metricHoverMode?.() ?? 'history') === 'history'),
+    false,
+  );
+
   return (
     <FilterBar
       role="group"
@@ -456,9 +470,11 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           }
         >
           <div class="flex items-center gap-2">
-            <Show when={props.metricHistoryHintVisible?.()}>
+            <Show when={historyHintSlotReserved()}>
               <span
-                class="hidden whitespace-nowrap text-[11px] lg:inline"
+                class={`hidden whitespace-nowrap text-[11px] lg:inline ${
+                  props.metricHistoryHintVisible?.() ? '' : 'invisible'
+                }`.trim()}
                 data-testid="workload-history-hover-hint"
               >
                 Hover a guest to preview history

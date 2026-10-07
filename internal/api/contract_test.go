@@ -5228,6 +5228,128 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 }
 
+// Normalization keeps a disk's last-known temperature when the current
+// observation did not collect one (a disk in standby, a host agent past its
+// reporting lease). Reports present their disk tables as measured, so the
+// performance report and the reporting runtime snapshot leave that value out.
+func TestContract_ReportsOmitRetainedDiskTemperatures(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath string, temperature int, collection diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: "hdd", Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: collection},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-standby", "/dev/sda", 61, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		disk("disk-silent", "/dev/sdb", 57, diskinventory.Unavailable("smartctl", "host agent stopped reporting")),
+		disk("disk-live", "/dev/sdc", 38, diskinventory.Available("smartctl")),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	want := map[string]int{"/dev/sda": 0, "/dev/sdb": 0, "/dev/sdc": 38}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	reported := map[string]int{}
+	for _, d := range engine.lastReq.Disks {
+		reported[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(reported, want) {
+		t.Fatalf("performance report disk temperatures = %v, want %v", reported, want)
+	}
+
+	snapshot, ok := handler.getRuntimeStateSnapshot(context.Background(), "default")
+	if !ok {
+		t.Fatal("expected runtime snapshot to be available")
+	}
+	snapshotted := map[string]int{}
+	for _, d := range snapshot.Disks {
+		snapshotted[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(snapshotted, want) {
+		t.Fatalf("reporting runtime snapshot disk temperatures = %v, want %v", snapshotted, want)
+	}
+}
+
+// Report disk tables colour a reading by the disk's alert disk temperature
+// thresholds (the tenant's per-type policy), not a fixed 50/60C: amber from the
+// clear value, red from the trigger, as the Physical Disks Temp column does.
+func TestContract_ReportsCarryDiskTemperatureAlertThresholds(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath, diskType string, temperature int) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: diskType, Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-nvme", "/dev/nvme0n1", "nvme", 63),
+		disk("disk-sata", "/dev/sda", "sata", 56),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	thresholdsByDevice := func() map[string][2]float64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		got := map[string][2]float64{}
+		for _, d := range engine.lastReq.Disks {
+			got[d.Device] = [2]float64{d.TemperatureWarning, d.TemperatureCritical}
+		}
+		return got
+	}
+
+	// No alert manager: the factory per-type policy.
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {65, 70}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("factory report disk thresholds = %v, want %v", got, want)
+	}
+
+	manager := alerts.NewManager()
+	cfg := manager.GetConfig()
+	cfg.DiskTempByType["nvme"] = alerts.HysteresisThreshold{Trigger: 75, Clear: 70}
+	manager.UpdateConfig(cfg)
+	setUnexportedField(t, monitor, "alertManager", manager)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {70, 75}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("configured report disk thresholds = %v, want %v", got, want)
+	}
+
+	cfg = manager.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	manager.UpdateConfig(cfg)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {0, 0}, "/dev/sda": {0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("report disk thresholds with disk temperature alerting off = %v, want %v", got, want)
+	}
+}
+
 func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()
@@ -5270,6 +5392,67 @@ func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	}
 	if got := engine.lastReq.Branding.EffectiveBrand(); got == nil || got.DisplayName != "Client One" {
 		t.Fatalf("effective brand should prefer workspace override, got %+v", got)
+	}
+}
+
+// A node alert that moved to its linked Pulse agent closed without
+// recovering. The report request must keep that resolution and each alert's
+// resource, so the report neither calls the node healthy nor counts the
+// condition twice beside the agent's own alert.
+func TestContract_ReportingAlertsCarryHandoverResolution(t *testing.T) {
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	snapshot := reportingEnrichmentSnapshot{
+		Nodes: []models.Node{{ID: "pve1-node", Name: "pve1"}},
+		ActiveAlerts: []models.Alert{{
+			ID:         "agent:host-1-memory",
+			Type:       "memory",
+			Level:      "warning",
+			ResourceID: "agent:host-1",
+			Node:       "pve1",
+			Message:    "Agent memory at 94%",
+			StartTime:  now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID:         "pve1-node-memory",
+				Type:       "memory",
+				Level:      "warning",
+				ResourceID: "pve1-node",
+				Node:       "pve1",
+				Message:    "Node memory at 95%",
+				StartTime:  now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-1",
+					SuccessorName:       "pve1 (Host Agent)",
+					Summary:             summary,
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+	req := reporting.MetricReportRequest{ResourceType: "node", ResourceID: "pve1-node"}
+	NewReportingHandlers(nil, nil).enrichNodeReport(&req, snapshot, now.Add(-24*time.Hour), now)
+
+	if len(req.Alerts) != 2 {
+		t.Fatalf("expected the agent alert and the moved node alert, got %+v", req.Alerts)
+	}
+	active, moved := req.Alerts[0], req.Alerts[1]
+	if active.ResourceID != "agent:host-1" || active.ResolvedTime != nil || active.Resolution != nil {
+		t.Fatalf("active alert row = %+v", active)
+	}
+	if moved.ResourceID != "pve1-node" || moved.ResolvedTime == nil || moved.Recovered() {
+		t.Fatalf("moved alert must stay resolved-but-not-recovered, got %+v", moved)
+	}
+	want := reporting.AlertResolution{
+		Reason:              reporting.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent:host-1",
+		SuccessorName:       "pve1 (Host Agent)",
+		Summary:             summary,
+	}
+	if moved.Resolution == nil || *moved.Resolution != want {
+		t.Fatalf("resolution = %+v, want %+v", moved.Resolution, want)
 	}
 }
 
@@ -12758,6 +12941,9 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		// A member the cluster lists online that this poll did not observe.
 		{ID: "pve-unobserved", Name: "unobserved", Instance: "pve", Type: "node", Status: "unknown", ConnectionHealth: "degraded", Memory: nodeMemory, LastSeen: now},
 		{ID: "pve-online", Name: "online", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.2, Memory: nodeMemory, LastSeen: now},
+		// A node row still carrying an online verdict whose Proxmox sighting
+		// went quiet.
+		{ID: "pve-quiet", Name: "quiet", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.25, Memory: nodeMemory, LastSeen: lapsed},
 		// Nodes merged with a linked host agent: one agent past its lease,
 		// one reporting a degraded array.
 		{ID: "pve-merged", Name: "merged", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.35, Memory: nodeMemory, LastSeen: now, LinkedAgentID: "agent-merged"},
@@ -12801,6 +12987,15 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		}
 	}
 	state.UpsertDockerHost(dockerHost("docker-degraded", "degraded", 30, now, 33, 9))
+	// A Docker host reported by a unified agent whose host module still
+	// reports while its Docker report lapsed.
+	state.UpsertHost(models.Host{ID: "agent-dockerbox", Hostname: "dockerbox", MachineID: "machine-dockerbox", Status: "online", IntervalSeconds: 30, LastSeen: now, CPUUsage: 18})
+	merged := dockerHost("docker-merged", "online", 30, lapsed, 24, 5)
+	merged.AgentID, merged.Hostname, merged.MachineID = "agent-dockerbox", "dockerbox", "machine-dockerbox"
+	state.UpsertDockerHost(merged)
+	if !state.SetDockerHostStatus("docker-merged", "offline") {
+		t.Fatal("docker-merged: offline transition not applied")
+	}
 	state.UpsertDockerHost(dockerHost("docker-reporting", "online", 30, now, 21, 8))
 
 	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
@@ -12814,15 +13009,24 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	setUnexportedField(t, monitor, "metricsStore", store)
 	router := &Router{monitor: monitor}
 
-	// Row status alone cannot tell a lapse from a warning: the stale pass
-	// shows the unreachable node as warning, and the reporting agent's
-	// degraded array gives its merged node the same status.
+	// Row status alone cannot tell a lapse from a warning: a node whose
+	// sources went quiet without an offline verdict reads warning, and so does
+	// the node whose reporting agent has a degraded array. A Docker row merged
+	// with a reporting agent keeps the agent's online after its Docker report
+	// lapses.
 	nodeStatus := make(map[string]string)
 	for _, node := range monitor.NodesSnapshot() {
 		nodeStatus[node.ID] = node.Status
 	}
-	if nodeStatus["pve-unreachable"] != "warning" || nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" {
-		t.Fatalf("node statuses = %v, want the unreachable and degraded-array nodes as warning and the merged node online", nodeStatus)
+	if nodeStatus["pve-quiet"] != "warning" || nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" || nodeStatus["pve-unreachable"] != "offline" {
+		t.Fatalf("node statuses = %v, want the quiet and degraded-array nodes as warning, the merged node online and the unreachable node offline", nodeStatus)
+	}
+	dockerStatus := make(map[string]string)
+	for _, host := range monitor.DockerHostsSnapshot() {
+		dockerStatus[host.ID] = host.Status
+	}
+	if dockerStatus["docker-merged"] != "online" || dockerStatus["docker-silent"] != "offline" {
+		t.Fatalf("Docker host statuses = %v, want the merged row online and the silent host offline", dockerStatus)
 	}
 
 	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
@@ -12851,6 +13055,7 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		{"node", "pve-unreachable", "memory"},
 		{"node", "pve-down", "memory"},
 		{"node", "pve-unobserved", "memory"},
+		{"node", "pve-quiet", "memory"},
 		{"agent", "pve-unreachable", "memory"},
 		{"vm", "pve:unreachable:101", "cpu"},
 		{"system-container", "pve:unreachable:201", "cpu"},
@@ -12858,6 +13063,9 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		{"docker-host", "docker-overdue", "cpu"},
 		{"app-container", "docker-silent-app", "memory"},
 		{"app-container", "docker-overdue-app", "memory"},
+		// The merged row's own CPU follows the reporting agent, but its
+		// containers arrive only in the lapsed Docker report.
+		{"app-container", "docker-merged-app", "memory"},
 	} {
 		target := "resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID
 		if resp, _ := history(target + "&metric=" + tc.metric); resp.Source == "live" || len(resp.Points) != 0 {
@@ -16978,9 +17186,9 @@ func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
 // An agent on a Proxmox cluster node reports SMART data for the node's disks,
 // and the registry stamps each disk with the owning node's identity so it
 // stays discoverable in the Proxmox workspace. A disk is not a cluster member:
-// projecting it as one folded its health into the node row, so a warm NVMe
-// drive rendered an actively reporting node as Stale whenever the agent's
-// report was newer than the last Proxmox poll.
+// projecting it as one folded its health into the node row, so a disk with a
+// SMART warning rendered an actively reporting node as Stale whenever the
+// agent's report was newer than the last Proxmox poll.
 func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
@@ -16991,6 +17199,7 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 
 	polledAt := time.Now().UTC().Add(-10 * time.Second)
 	reportedAt := polledAt.Add(6 * time.Second)
+	reallocatedSectors := int64(3)
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
 		Nodes: []models.Node{{
@@ -17019,8 +17228,9 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 					Model:       "WD_BLACK SN7100 4TB",
 					Serial:      "SN7100-AURORA",
 					Type:        "nvme",
-					Temperature: 63,
+					Temperature: 41,
 					Health:      "PASSED",
+					Attributes:  &models.SMARTAttributes{ReallocatedSectors: &reallocatedSectors},
 				}},
 			},
 		}},

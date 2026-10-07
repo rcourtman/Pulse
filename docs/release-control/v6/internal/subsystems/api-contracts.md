@@ -3307,7 +3307,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
-   and the shared `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx` card, so the AI summary page renders the governed policy-posture counts while the resource drawer stays on per-resource policy lines instead of carrying duplicate posture UI loops
+   and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
    and that same Patrol investigation-context owner, so the current Patrol
@@ -5378,6 +5378,15 @@ Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
 optional map without making it a required compatibility field, and clients must
 keep it as descriptive host telemetry rather than a temperature metric,
 resource identity, alert metric, or storage/recovery signal.
+Host sensor SMART rows (`smart[]`) also carry the optional per-field
+`collection` status (`PhysicalDiskCollectionStatus`). Backend API payloads and
+`frontend-modern/src/types/api.ts` (`HostDiskSMART.collection`) must preserve it
+on the agent facet. When a host agent passes its reporting lease, a SMART
+temperature that was current (`available`, or present without provenance) keeps
+its value and becomes `unavailable`. A state that was already not available is
+kept. Clients must read that state through the shared
+`isPhysicalDiskTemperatureCurrent` decision before treating the value as a
+current reading.
 Agent resource-context sections expose host package posture only as bounded
 operational facts: package manager, pending count, inventory state, inspection
 freshness, and reboot-required state. Raw package identifiers, versions, and
@@ -6332,6 +6341,23 @@ stored one out to `now`, only from a temperature collected now; without one the
 stored samples are returned as they are. An empty mock range can still fall
 through to the monitor's generic demo chart series for that disk ID, which is
 not derived from the disk's reading.
+Reports follow the same rule. A performance report's disk table
+(`enrichNodeReport` in `internal/api/metrics_reporting_handlers.go`) and the
+reporting runtime snapshot's disks (`internal/api/reporting_runtime_snapshot.go`)
+take a disk temperature through `reportDiskTemperature`. It keeps a reading only
+when `diskinventory.TemperatureCollected` holds, so a retained value is reported
+as 0 (no reading) rather than tabulated as measured. Proof:
+`TestContract_ReportsOmitRetainedDiskTemperatures` in
+`internal/api/contract_test.go`.
+Each reported disk also carries its alert disk temperature thresholds
+(`reporting.DiskInfo.TemperatureWarning` / `TemperatureCritical`, the clear
+value and the trigger). `reportDiskTemperatureThresholds` resolves them from
+the tenant's alert manager (`alerts.Manager.DiskTemperatureThreshold`, the
+factory policy when there is none). The PDF disk table colours a reading amber
+from the clear value and red from the trigger, as the Physical Disks Temp
+column does, and leaves it plain when disk temperature alerting is off. It no
+longer uses a fixed 50/60C. Proof:
+`TestContract_ReportsCarryDiskTemperatureAlertThresholds`.
 The live fallback for the other row types withholds the point when the
 snapshot row's source has stopped reporting. A host agent row gets none once
 `HostsSnapshot` reports it `offline` (the reporting lease
@@ -6351,11 +6377,10 @@ grace a node keeps its carried readings and its live point, as on other
 surfaces.
 These checks read row status and sightings, not the source each merged metric
 came from, so rows merged across sources keep the registry's merge decisions.
-A Docker row merged with a reporting host agent shows the agent's status until
-its Docker sighting goes stale. A node merged with a silent linked agent
-projects `online` while its Proxmox sighting is current, even after the poller
-reports the node offline. A hypervisor-managed guest merged with another
-source keeps its platform CPU after the platform stops reporting.
+A Docker row merged with a reporting host agent shows the agent's status, so
+its live point ends only when its Docker sighting goes stale. A
+hypervisor-managed guest merged with another source keeps its platform CPU
+after the platform stops reporting.
 With the metrics store available a withheld range stays empty; without a
 store, a request with no other fallback still answers 503, as one for a
 resource with no data does.
@@ -7330,11 +7355,12 @@ transport or settings failures as stale-data state rather than throwing through
 the route: the page stays mounted, preserves any last-known Patrol evidence,
 and exposes a retry affordance while backend/API failures remain available to
 debug logging and API-level diagnostics.
-The AI summary page now also renders the canonical
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-card for policy posture, so sensitivity, routing, and redaction counts are
-presented through one governed frontend component while the resource drawer
-keeps only the per-resource policy lines.
+No frontend surface currently renders the AI summary's `policy_posture`
+counts; the shared posture card the Patrol page once mounted has been removed.
+A surface that shows those counts again must present sensitivity, routing,
+and redaction counts through one governed shared component fed by that
+canonical payload, while the resource drawer keeps only the per-resource
+policy lines.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history
@@ -9652,6 +9678,39 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
+Report alerts keep the alert engine's resolution. The node, VM and
+container enrichers in `internal/api/metrics_reporting_handlers.go` build
+every row through `reportActiveAlertInfo` and `reportResolvedAlertInfo`,
+which carry the alert's `ResourceID` and copy `models.AlertResolution` into
+`reporting.AlertInfo.Resolution`, so a node alert that moved to its Pulse
+agent inside the five-minute recently-resolved window is never reported as
+a recovery (`TestContract_ReportingAlertsCarryHandoverResolution`). In
+`pkg/reporting`, `AlertInfo.Recovered()` is true only for a close without a
+resolution, and `unresolvedAlerts` treats an alert that closed without
+recovering as still live unless the report also shows its successor's own
+reading for that metric: an alert of the same type on the successor or one
+of its children that is open, or recovered at or after the handover (an
+earlier successor recovery does not count). That alert then carries the
+condition, so it is counted once. Fleet reports match each handover against
+every resource's alerts (`unresolvedAlertsAmong` over
+`MultiReportData.fleetAlerts`). The single-resource PDF health card, Quick
+Stats and active list and the heuristic narrator's verdict, observations and
+recommendations read that rule: a lone handover renders WARNING (or CRITICAL
+at its level) with `Alert moved to <agent> - check the agent for the current
+reading`, and the alerts table shows `Moved` in neutral text with the
+engine's summary as a note. Fleet reports count it as an active alert in the
+aggregate, health card, table and resource blocks, and the fleet heuristic
+recommends checking the agent it moved to. "Triggered and resolved" counts
+recoveries only, and the report narrator's payload marks a covered handover
+with `successor_alert_listed` so the model describes the condition once.
+Reports requested as `agent`, which is how the Reports picker addresses every
+Proxmox node and standalone agent in v6, carry no alert rows yet:
+`enrichReportRequest` enriches node, VM and container reports only, so an
+agent report's deterministic verdict ignores its machine's alerts (HEALTHY,
+or NO DATA without metrics). The rule above reaches those reports once they
+attach the machine's alerts. The fleet heuristic offers its all-clear
+pattern and "No fleet-wide action required" only while no alert, moved
+ones included, is active.
 Multi-resource fleet reports (`engine.GenerateMulti`) now also carry an
 optional fleet-level narrative through a distinct
 `pkg/reporting.FleetNarrator` interface, kept separate from the

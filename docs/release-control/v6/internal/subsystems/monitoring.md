@@ -1065,14 +1065,29 @@ events (ZFS pools and devices, host filesystems, disks, RAID arrays, sensors
 and the Unraid array), pass through the same writer, which binds them to the
 Docker host, Swarm service, storage or host named in the unified-resources
 history identity clause. Container names and shortened container IDs still
-bind nothing. `CheckDockerHost` gives a container without an ID its host's
-reference, so that container's events join the host's history. A producer
+bind nothing, and neither does the marked name a container or Swarm service
+reported without an ID alerts under, so its events join neither its host's
+history nor that of a service whose ID it is named like. A producer
 that changes one of these reference shapes must change
 `dockerHostHistoryReference` or `historySubResourceOwner` with it.
 `TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go` pins the Docker host,
-Swarm service, ZFS pool and device, and host filesystem shapes against the
-real alert manager.
+Swarm service, ID-less container and service, ZFS pool and device, and host
+filesystem shapes against the real alert manager.
+
+PVE disk health and wearout lifecycle events pass through the same writer but
+never bind their path reference: each row goes to the physical disk its
+recorded serial or WWN names, or stays under the reference, under the
+unified-resources history identity clause. When a reboot reorders devices
+before the registry catches up, a row that records a serial or WWN goes to the
+disk the stale registry places at the path only if that disk reports the same
+identity (the unified-resources clause lists where inventory merges or keys
+disks differently); a row without either names only an identity-less disk at
+its path.
+`TestProxmoxDiskAlertTimelineFollowsRecordedHardware` in
+`internal/monitoring/monitor_alert_handling_test.go` pins that path, and the
+reference's incidents for the Alerts history Resource action, against the real
+alert manager.
 
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
@@ -1493,9 +1508,67 @@ later coarse healthy value and lets explicit SMART endurance replace
 contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
+Retaining evidence a disk poll could not collect follows the same identity
+rule. `previousPhysicalDiskEvidence` looks up the earlier record by serial, then
+by WWN, each compared through `diskinventory.HardwareIdentityMatch` against
+both fields of the earlier record. `HardwareIdentityMatch`, which the
+registry's linked-disk join also uses, may additionally re-pad a WWN field
+written in the host agent's unpadded NAA 5 `naa-oui-id` spelling
+(`5-c50-a1b2c3d4`, from smartctl's WWN fields) to the 16-digit form udev and
+Proxmox report; serials are never re-padded. The registry's merged disk view
+keeps the agent's WWN spelling, so without it one disk seen by both reporters
+would read as two. The Proxmox source ID and the device token
+name a slot, not a disk, so a slot match is refused when both records carry a
+serial or WWN and no value is shared between them. Missing identity is not
+conflicting identity: Proxmox's literal `unknown` and other placeholders count
+as unreported, and a record whose serial arrives empty keeps the slot's last
+known serial, still marked `missing`. Before this rule, a replacement in the
+same slot took the previous occupant's retained temperature, controller, pool
+and I/O, and a replacement record with an empty serial also took the old
+serial, which keyed it to the old disk's canonical resource and SMART metric
+series, so every later poll carried the borrowed serial forward
+(`TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial`,
+`TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity`).
+This lookup is the only place the rule applies: a replacement that reports no
+usable serial or WWN cannot be told apart from the same disk and still
+inherits, and the linked agent's SMART merge, which runs first, can still fill
+or promote a serial from a stale SMART row it matched by device path.
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
+QEMU's default disk serials are placeholders too. A virtual disk configured
+without a serial reports one built from its drive ID or a per-VM counter, the
+same on every VM built the same way: a SCSI disk's udev `ID_SERIAL_SHORT`,
+which Proxmox's `disks/list` passes through as the serial, is `drive-scsi0`
+under Proxmox, `drive-scsi0-0-0-0` under libvirt, and QEMU's automatic drive
+ID for a `-drive` given none (`scsi0-hd0` for `if=scsi`, `none0` for
+`if=none`), and an ATA disk's serial is `QM` plus a five-digit counter.
+`diskinventory.IsUsableHardwareID` rejects exactly those shapes (`drive-scsi`
+plus digits with at most three `-digits` groups, `scsi<n>-hd<n>`, `none<n>`,
+and `QM` plus five digits), so a real serial that only shares a prefix, such
+as `DRIVE-ASSET123` or `QM0001`, stays identity. It also
+strips `naa.`, `eui.`, `wwn-` and `0x` framing before its all-zero and all-F
+test, so `0x0000000000000000` is a placeholder as well. Before this rule every
+node of a nested Proxmox cluster minted one `machine:drive-scsi0` canonical
+disk and one SMART series for its first disk, and all but one node lost that
+disk from inventory (`TestNestedProxmoxDefaultQEMUSerialsStayPerNode`,
+`TestIsUsableHardwareIDRejectsQEMUDefaultDiskSerials`). The TrueNAS provider
+applies the same rule: a disk takes its serial as canonical identity only when
+the serial is usable, and a disk without a usable serial is keyed on its
+source ID by native TrueNAS disk history and by the unified SMART writer for
+disks without a native writer, which is the key the registry's metrics target
+resolves for it. QEMU serials used to be accepted, so those disks shared one
+key. A serial that was already rejected, such as `UNKNOWN`, had the opposite
+problem: native history used TrueNAS's own disk identifier and the writer used
+the canonical resource ID, so neither reached the chart
+(`TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey`,
+`TestProviderPlaceholderDiskSerialsKeyNeitherIdentityNorHistory`). Upgrade
+effect: a disk reporting one of these values changes canonical ID and SMART
+metric key once. Samples recorded under the old key are not carried over,
+because that key mixed every disk that shared the value. Path-shaped alert
+references (Proxmox disk health and wearout, host-agent SMART) are unaffected;
+anything keyed on the old canonical ID or metric key starts again under the
+new one.
 Proxmox cluster API polling has one configured connection authority: the
 operator-saved `PVEInstance.Host` and its single credential set. Auto-discovered
 member/corosync addresses remain ordered failover candidates and direct
@@ -1648,10 +1721,12 @@ boundaries:
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
   `ClearActiveAlerts` drops their alerts but not their hostname registrations,
   and a real node named like a fixture agent (`pve1`) would otherwise keep its
-  metric alerts suppressed with no agent to own them. A pass whose snapshot
-  predates the switch finds mock mode off under the same lock and evaluates
-  nothing. Two overlapping passes can still evaluate an older snapshot after
-  a newer one; the next pass reconciles the set again.
+  metric alerts suppressed with no agent to own them. `SetMockMode` ends the
+  mock-mode epoch before it forgets them, so a pass whose snapshot predates the
+  switch finds its epoch ended under the same lock and evaluates nothing, and
+  an agent whose departure the switch refused stays in the forgotten set. Two
+  overlapping passes in one epoch can still evaluate an older snapshot after a
+  newer one; the next pass reconciles the set again.
 
 Fixture agents must carry readings a real agent could report. Mock Kubernetes
 pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
@@ -1678,6 +1753,163 @@ boundaries:
 `TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode` and
 `TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling` in
 `internal/mock/generator_test.go`.
+
+Mock alert evaluation covers physical disks as well. Live Proxmox disks are
+evaluated by the physical disk poller in `maybePollPhysicalDisksAsync`, which
+only polls configured Proxmox instances, so fixture disks had no evaluation
+path. The fixture deliberately keeps a FAILED health cohort and worn SSDs
+stable across restarts, so the estate showed failing and "Replace Now" disks
+with no `disk-health` or `disk-wearout` alert. `checkMockAlerts` now evaluates
+fixture disks through `checkMockPhysicalDiskAlerts`. Both paths share the
+per-disk rule in `checkPhysicalDiskAlerts` (a device matched by the linked
+agent's `--disk-exclude` patterns is evaluated as healthy, otherwise
+`CheckDiskHealth` judges the disk), and the mock pass applies the poller's
+boundary around it:
+
+- Only disks on online nodes are evaluated, as the poller only evaluates nodes
+  it reached. A disk on an offline node keeps whatever alert it had. The mock
+  pass treats every disk on an online fixture node as collected; the poller
+  also skips a node whose disk query and SMART fallback both failed. Nodes are
+  matched by instance and name, as the poller only pairs a disk with its own
+  instance's nodes.
+- Excluding a disk resolves the alerts it already raised, because the excluded
+  device is evaluated as healthy rather than skipped.
+- The poller's wait for host-agent links to settle after a restart (#1674) is
+  not applied: fixture links and exclusions are complete from the first pass.
+- A disk whose node name leaves the estate loses its alerts through
+  `CleanupAlertsForNodes`, which the same pass already runs. That cleanup
+  matches node names only, so it relies on fixture node names being unique
+  across instances, which they are.
+
+Switching mock mode fences the alert evaluations that read mode-dependent data
+(`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
+fixture graph, the unified read view, the recovery rollups and the connection
+ledger all change source when the mode flips. A pass already holding one side's
+data used to reach the alert manager after `SetMockMode` cleared it, and its
+fixture alerts then stayed in live mode, with nothing left to evaluate or
+resolve them, until the 24-hour stale sweep. Each of these paths takes a scope
+before it reads anything mode-dependent and sends its alert-manager calls
+through it:
+
+- `checkMockAlerts`, for every loop including the host-agent and disk steps
+  and the mock alert snapshot cache;
+- `checkBackupAlerts`, shared by the PVE, PBS and mock polls, and
+  `pollGuestSnapshots`, whose guest inventory is the fixture read view in mock
+  mode;
+- `checkConnectionAlerts`, whose ledger lists fixture connections in mock mode;
+- `pruneStaleDockerAlerts`, which removes Docker alerts for hosts missing from
+  the read view;
+- the resource-store refresh. `updateResourceStore` and
+  `updateResourceStoreForRead` take the scope of the state they rebuild from
+  (`currentStateWithScope` for `GetState`), and the unified alert sync
+  (`syncUnifiedResourceAlertsToState`) runs its policy reconcile, identity and
+  availability-link migrations, per-resource metrics and incident sync under
+  it.
+
+`SetMockMode` flips the mode, ends the epoch, waits for the alert-manager calls
+already admitted under it and only then clears, so nothing these paths read
+before the flip lands after the clear, in either direction. Switches are
+serialized. The wait covers the calls already running, not whole passes, but it
+has no fixed wall-clock bound: backup evaluation and unified incident sync are
+estate-wide calls, and an admitted call can include metric-window reads and
+migration persistence. Unified metrics are evaluated one resource per call, and
+reads, capacity-trend queries and registry rebuilds stay outside the wait.
+Admission never blocks, so a call made inside an admitted one cannot deadlock a
+waiting switch; `SetMockMode` itself must not be called from inside an
+evaluation.
+
+A registry rebuild publishes shared state, so a rebuild holding the mode the
+monitor left can finish after a newer refresh published and replace the
+registry that refresh reads back. A rebuild whose epoch has ended does not
+start, and one already running is tracked: a refresh evaluates the registry it
+read back only if no ended-epoch rebuild overlapped it, and otherwise leaves the
+alerts to the next refresh. Even without a late rebuild, the registry still
+holds the fixture estate right after leaving mock mode, and may hold it until an
+undisturbed rebuild in the new epoch has replaced it
+(`mockModeFence.registryCurrent`); in mock mode the read paths use the fixture
+view instead. The live readers that act on that inventory (Docker pruning, the
+backup-age guest lookup, the guest inventory of the backup and snapshot
+pollers, and the pollers' previous-node and previous-guest carry, which writes
+back into live state) read it through `currentModeReadState`, which serves a
+view of current monitor state meanwhile. That view omits provider-owned
+supplemental resources and persisted manual agent links, so a carry in the
+window can fall back to platform guest memory for one poll, and it copies the
+estate, so only callers outside per-resource loops use it. Every other live
+registry reader (`GetUnifiedReadStateOrSnapshot` callers such as metrics
+targets and system usage, and the broadcast view) may still see the fixture
+estate until the next rebuild, as before, and metric samples synced from a late
+rebuild stay in metric history.
+
+The fixture sources behind the router's mock supplemental adapters
+(`mock.SupplementalRecords`, `mock.SupplementalChanges`) serve nothing while
+mock mode is off. The router swaps those adapters for the real TrueNAS and
+vSphere pollers only after `SetMockMode` returns, one source at a time with a
+refresh after each, and the adapters used to fall back to default fixtures, so
+a single switch to live mode raised fixture vSphere incidents. Two concurrent
+mock-mode requests can still leave the router's provider set disagreeing with
+the mode (fixture adapters serving nothing in live mode, or real pollers
+feeding mock mode); neither raises fixture alerts in live mode.
+
+Report admission and the live pollers outside the paths above are not fenced:
+a live report or poll already past its mock-mode check when mock mode is
+switched on can still evaluate after that clear, and its alerts can persist
+until mock mode is left.
+
+The fence and the clear are per monitor while the mode is process-wide. A
+tenant monitor other than the one `SetMockMode` was called on neither drains
+nor clears, so fixture alerts it raised outlive the switch as they did before
+the fence; switching mock mode with several tenant monitors running is not
+covered.
+
+The proofs park a real evaluation at a fixed point, switch modes and release
+it. `TestLeavingMockModeRefusesTheRestOfAnInFlightPass` holds a mock pass at its
+first storage capacity read, `TestLeavingMockModeDiscardsAnInFlightFrontendRefresh`
+holds a frontend read in its supplemental-records supply,
+`TestLeavingMockModeDiscardsAnInFlightBackupEvaluation` holds a backup
+evaluation at its guest lookup, and
+`TestLeavingMockModeDiscardsAnInFlightConnectionCheck` holds the ledger read.
+Against the unfenced code they left about 40 fixture storage, disk and Docker
+alerts, 5 vSphere incidents and 137 backup-age alerts in live mode, and counted
+a mock-mode observation toward a live connection's three-observation
+confirmation. `TestLeavingMockModeWaitsForAnInFlightEvaluation` holds an
+evaluation in its CPU window read, outside the alert manager's lock, and fails
+if the switch returns first; `TestLiveRefreshIgnoresARegistryRepublishedFromMockMode`
+lets a mock-mode rebuild republish while a live refresh is held before reading
+the registry back, then checks the next live refresh evaluates live records.
+Each of those two fails against a fence without its wait or its overlap check.
+`TestDockerPruneIgnoresTheRegistryMockModeLeft` raises a live Docker alert
+before any live rebuild and fails if pruning reads the fixture registry, and
+`TestPreviousStateCarryIgnoresTheRegistryMockModeLeft` fails if the
+previous-state carry returns fixture nodes or guests. All eight are in
+`internal/monitoring/monitor_mock_alerts_test.go`;
+`TestSupplementalFixturesServeNothingOutsideMockMode` in
+`internal/mock/platform_fixtures_test.go` pins the fixture sources;
+`TestMockModeFence*` in
+`internal/monitoring/mock_mode_fence_test.go` pin the fence itself, and
+`TestStoreRefreshTakesItsMockModeScopeBeforeReadingState` in
+`internal/monitoring/canonical_guardrails_test.go` rejects a call that reads
+state in an argument ahead of `m.mockModeFence.begin()` and pins the
+end-epoch-then-clear order in `SetMockMode`.
+
+The disk evaluation runs on the mock alert tick, not the poller's disk
+interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
+`CheckDiskHealth` logs at error level whenever it evaluates a FAILED disk
+(models with a known firmware bug skip the health check) and at warn level for
+a worn SSD, so an evaluated fixture disk in either state logs on every tick. On
+2026-10-06, private stacks with the public demo's estate (8 nodes) carried 12
+Proxmox disks, none FAILED. Baseline against patched, the only new disk alert
+was one warning-level `disk-wearout` (a 7% SSD on `pve5`), whose resource ID is
+one of the disk resource's canonical aliases, and neither stack had a
+`disk-health` alert. `CheckDiskHealth` raises only those two alert types, so
+the other differences between the two boots (ZFS and Docker service alerts) are
+not from the disk pass; those fixtures draw random state each boot. The default
+test estate raises five `disk-health` and one `disk-wearout` alert. The tests
+pin the boundary: `TestCheckMockAlertsEvaluatesPhysicalDisks` and
+`TestCheckMockPhysicalDiskAlertsFollowsPollerBoundary` in
+`internal/monitoring/monitor_mock_alerts_test.go`, with
+`TestProxmoxDiskAlertsRunOnMergedDiskState` in
+`internal/monitoring/canonical_guardrails_test.go` keeping the poller on the
+shared helper.
 
 Host and container-runtime disk collection supports an explicit include list
 for filesystems hidden by Pulse's automatic virtual/container filtering. The
@@ -2693,14 +2925,12 @@ treats a host row reading `offline` as past its lease, and an agent linked to
 a Proxmox node then answers from the node row. For node rows it takes a
 projected `offline` or `unknown` as the lapse and otherwise reads the
 registry's sightings (`NodeView.SourceStatus`), because a projected `warning`
-is ambiguous: the stale pass shows an unreachable node that way, and so does a
-reporting linked agent's storage risk. The projection does not always carry
-the poller's verdict: a node merged with a silent linked agent projects
-`online` while its Proxmox sighting is current, even after the poller reports
-it offline. Docker host rows likewise lose the `offline` that
-`evaluateDockerAgents` set, to the stale pass's `warning` or to a merged
-agent's status, so that consumer also reads the Docker source's own sighting
-from `DockerHostView.SourceStatus(SourceDocker)`.
+is ambiguous: a node whose sources have all gone quiet without an `offline`
+verdict reads that way, and so does a node whose reporting linked agent has
+storage risk. A Docker host row merged with a reporting host agent keeps the
+agent's status after `evaluateDockerAgents` marks the Docker host offline, so
+that consumer also reads the Docker source's own sighting from
+`DockerHostView.SourceStatus(SourceDocker)`.
 
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
@@ -3817,7 +4047,16 @@ state supersede the availability it supplied earlier
 (`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
 host that is never disk-polled again can carry it forward. Expiry is
 compare-and-set on the report time the evaluation judged stale, so a report
-accepted in between is never expired. Every SMART temperature history writer
+accepted in between is never expired.
+A legacy agent (from before collection provenance) withdraws its readings
+without a source, so `hostAgentSMARTCollection` stamps its reading copied onto
+the Proxmox disk through `diskinventory.LegacyHostAgentStatus`, the same rule
+the unified-resources registry applies to match that withdrawal to the copy: a
+silent legacy agent's retained temperature is not collected on the canonical
+disk either, even when no disk poll refreshes the copy. Proof:
+`TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal` in
+`internal/monitoring/physical_disk_roundtrip_test.go`.
+Every SMART temperature history writer
 records a temperature only when its current collection state is available (or
 predates collection state), so a retained reading has to keep its non-available
 state to stay out of history; a path that relabels a carried reading as
@@ -3829,6 +4068,15 @@ consumers outside the history writers: the metrics-history API serves a disk
 series from the disk's reading or pads a stored one, only from a collected
 temperature, so a retained standby or silent-agent reading never reappears as a
 point at the current time.
+The SMART history writers in `internal/monitoring/monitor.go` and
+`monitor_agents.go` call that helper rather than a private copy of the rule,
+and `GetPhysicalDiskTemperatureCharts` pads a short disk temperature series out
+to now only with a collected reading: with a retained one the stored samples
+stay as they are, and a disk with none gets no series. Mock mode can still
+substitute its generic demo series for that disk ID before this step; that
+series is not derived from the disk's reading. Proof:
+`TestDiskTemperatureChartsPadOnlyWithCollectedReading` in
+`internal/monitoring/monitor_metrics_slo_test.go`.
 Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
@@ -3929,6 +4177,19 @@ offline. Node memory carry-over after a failed status read uses the poller's own
 validated `NodeMemorySnapshot`, not the read state, which holds the agent's
 reading on a node merged with a host agent, and keeps used, cache and free
 summing to the total.
+The poller's node verdicts reach the read state as its own. A cluster member
+`pollPVENode` reports offline on a live poll stays `offline` in
+`NodesSnapshot`, `/api/resources` and every read-state consumer when its linked
+host agent falls silent. A node `preserveOrExpireNodes` expires stays `offline`
+once its Proxmox sighting goes stale, unless another source says otherwise: a
+reporting agent or a current availability check keeps it `online`, and a quiet
+agent whose last verdict was not offline makes it `warning`. The registry's
+stale pass used to turn the first into `online` and the second into `warning`,
+because it read a sighting that had delivered recently as online
+(unified-resources, "Status follows each source's own verdict"). A node inside
+the offline grace keeps its `online` verdict and reads `warning` once its
+sighting goes stale. Node alerts were never affected, because `CheckNode` reads
+the poller's own `models.Node`.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
@@ -4450,17 +4711,18 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
-That shared assessment judges only a disk temperature that was collected now.
-`storagehealth.CollectedTemperature` passes a reading through when its
-`collection.temperature` state is `available`, or when the source predates
-collection state, and otherwise drops it before `AssessPhysicalDisk` and
-`AssessHostSMARTDisk` build their sample. A last known value retained for a
-disk in standby or a host agent past its reporting lease therefore raises no
-`temperature_high` reason and cannot turn the disk's verdict or status into
-a warning, while the value itself stays on the resource as last-known
-history. Proof: `TestDiskAssessmentsIgnoreRetainedTemperature` and
-`TestCollectedTemperatureKeepsOnlyCurrentReadings` in
-`internal/storagehealth/risk_test.go`.
+That shared assessment never judges disk temperature. Heat is a metric owned
+by the alert disk temperature policy (`alerts.Manager.DiskTemperatureThreshold`:
+the per-type `diskTempByType` trigger, else the agent Disk Temp default), which
+users tune per disk type. Disk risk is rebuilt by registries that cannot see
+that configuration, so a heat rule here would contradict it: a flat 60/70C rule
+once called a healthy 63C NVMe hot and a 56C SATA disk fine. No disk type,
+temperature or collection state reaches `storagehealth.Sample`, the TrueNAS
+provider and the Unraid inventory assessment included, and a hot disk keeps an
+`online` status. Proof: `TestDiskAssessmentsNeverJudgeTemperature` in
+`internal/storagehealth/risk_test.go` and
+`TestRecordsLeaveDiskHeatToTheAlertPolicy` in
+`internal/truenas/provider_test.go`.
 That same monitoring-owned storage polling boundary also owns cluster-shared
 Proxmox storage status coherence. `internal/monitoring/monitor_polling_storage.go`
 must merge shared storage observations across nodes into one cluster-scoped
@@ -4789,6 +5051,15 @@ Appliances with matching hostnames, restored pool GUIDs, or matching pool names
 remain separate through refresh, cache rebuild, restart, and registry ingest.
 Replication-target readonly classification remains a separate native-evidence
 step and cannot hide locked or unmounted dataset state.
+
+TrueNAS pool and dataset storage facets carry `StorageMeta.Enabled` and
+`Active` like every other storage producer, because the AI storage tools and
+storage platform payloads read those flags directly. TrueNAS has no disabled
+state for an imported pool or a listed dataset, so both are always `Enabled`. A
+pool is `Active` unless its native state is FAULTED, OFFLINE, REMOVED or
+UNAVAIL, and a dataset is `Active` only while it is mounted and unlocked.
+`TestProviderRecordsPopulateStorageEnabledAndActive` in
+`internal/truenas/provider_test.go` pins both.
 
 Ceph monitoring may enter the provider-neutral pool-health envelope only from
 the native cluster health state and native health-check map. It preserves check

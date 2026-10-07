@@ -374,6 +374,73 @@ describe('metricThresholds', () => {
       });
     });
 
+    it('switches every disk type off with the agent disk temperature default', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 0, clear: 0 } },
+        diskTempByType: {
+          nvme: { trigger: 70, clear: 65 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: { 'host-1': { diskTemperature: { trigger: 80, clear: 75 } } },
+      } as AlertConfig;
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'sata')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, '')).toBeNull();
+      // An explicit host override still applies, as CheckHost applies it.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', 'host-1')).toEqual({
+        warning: 75,
+        critical: 80,
+      });
+    });
+
+    it('judges a disk by the alert overrides of the machine that reports it', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+        diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'host-raised': { diskTemperature: { trigger: 80, clear: 75 } },
+          'host-memory-only': { memory: { trigger: 95, clear: 90 } },
+          'host-off': { disabled: true },
+        },
+      } as AlertConfig;
+      // The machine's first matching key decides, as CheckHost's chain does.
+      expect(
+        resolveDiskTemperatureDisplayThresholds(config, 'nvme', [
+          'agent:host-raised',
+          'host-raised',
+        ]),
+      ).toEqual({ warning: 75, critical: 80 });
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-memory-only'])).toEqual(
+        {
+          warning: 65,
+          critical: 70,
+        },
+      );
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-plain'])).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+      // A host whose alerts are switched off raises no disk temperature alert,
+      // so none of its disks is judged hot.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', ['host-off'])).toBeNull();
+      // An agent default that switches every host's alerts off does the same.
+      const agentsOff = {
+        ...config,
+        agentDefaults: { ...config.agentDefaults, disabled: true },
+      } as AlertConfig;
+      expect(
+        resolveDiskTemperatureDisplayThresholds(agentsOff, 'nvme', ['host-raised']),
+      ).toBeNull();
+    });
+
     it('falls back to seeded per-type disk temperature defaults without config', () => {
       expect(resolveDiskTemperatureDisplayThresholds(null, 'nvme')).toEqual({
         warning: 65,

@@ -94,6 +94,7 @@ describe('useStoragePoolDetailModel', () => {
         devPath: '/dev/sda',
         model: 'Disk A',
         diskType: '',
+        alertResourceIds: [],
         temperature: 44,
         hasIssue: false,
         errorCount: 0,

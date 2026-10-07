@@ -165,6 +165,33 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffContext).not.toContain('online to online');
   });
 
+  it("tells a moved alert close in the alert engine's words, not as a recovery", () => {
+    const summary =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: { title: 'Issues detected' },
+      supportingEvidence: {
+        recentChanges: [
+          {
+            id: 'change-moved',
+            observedAt: '2026-10-06T15:00:00Z',
+            resourceId: 'node:pve1',
+            kind: 'alert_resolved',
+            sourceType: 'heuristic',
+            confidence: 'high',
+            reason: summary,
+            metadata: { alert_resolution: 'moved_to_agent', alert_type: 'memory' },
+          },
+        ],
+      },
+      activeFindings: [],
+    });
+
+    expect(handoff.context.handoffContext).toContain(summary);
+    expect(handoff.context.handoffContext).not.toContain('Alert resolved');
+    expect(handoff.context.briefing?.evidence?.join('\n')).toContain(summary);
+  });
+
   it('includes bounded related-resource context in assessment handoff evidence', () => {
     const longRelatedResource =
       'storage-pool-with-a-very-long-description-that-keeps-going-beyond-the-handoff-limit-for-operators';

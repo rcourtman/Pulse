@@ -752,8 +752,8 @@ func (v NodeView) Status() ResourceStatus {
 
 // SourceStatus returns the canonical delivery freshness recorded for one
 // source. A node row keeps an unreachable node's last readings, and a merged
-// row's status follows its highest-priority source, so consumers presenting
-// the row's readings as current must check the sightings here.
+// row's status follows the verdicts of its current sources, so consumers
+// presenting the row's readings as current must check the sightings here.
 func (v NodeView) SourceStatus(source DataSource) (SourceStatus, bool) {
 	if v.r == nil {
 		return SourceStatus{}, false

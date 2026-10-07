@@ -39,6 +39,7 @@ import {
   STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS,
 } from '@/features/storageBackups/detailPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import { StorageDetailKeyValueRow } from './StorageDetailKeyValueRow';
@@ -47,6 +48,7 @@ import { useStoragePoolDetailModel } from './useStoragePoolDetailModel';
 interface StoragePoolDetailProps {
   record: StorageRecord;
   physicalDisks: Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   summarySeriesId: string;
   controlsId?: string;
 }
@@ -67,6 +69,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
   } = useStoragePoolDetailModel({
     record: () => props.record,
     physicalDisks: () => props.physicalDisks,
+    getDiskAlertResourceIds: props.getDiskAlertResourceIds,
   });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
@@ -115,8 +118,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           />
 
           <div
-            class={activeTab() === 'overview' ? STORAGE_DETAIL_ROOT_GRID_CLASS : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
+            class={`[overflow-anchor:none] ${activeTab() === 'overview' ? STORAGE_DETAIL_ROOT_GRID_CLASS : 'hidden'}`}
           >
             <Show when={topologyRows().length > 0}>
               <div class={STORAGE_DETAIL_CARD_CLASS}>
@@ -286,7 +288,10 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                                 ? PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
                                 : getLinkedDiskTemperatureTextClass(
                                     disk.temperature,
-                                    getDiskTemperatureThresholds(disk.diskType),
+                                    getDiskTemperatureThresholds(
+                                      disk.diskType,
+                                      disk.alertResourceIds,
+                                    ),
                                   )
                             }`}
                             title={disk.temperatureLastKnownTitle}
@@ -305,10 +310,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
             </Show>
           </div>
 
-          <div
-            class={activeTab() === 'history' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
+          <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
             <Show when={activeTab() === 'history'}>
               <div class={STORAGE_DETAIL_CARD_CLASS}>
                 <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>

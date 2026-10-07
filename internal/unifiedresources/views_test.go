@@ -972,8 +972,8 @@ func TestView_HostViewSourceStatusSeparatesAgentFromMergedRow(t *testing.T) {
 	}
 }
 
-// A node merged with a linked host agent takes the agent's status, so a
-// consumer judging whether the node's readings are current needs each
+// A node merged with a linked host agent carries one status for both sources,
+// so a consumer judging whether the node's readings are current needs each
 // source's own sighting.
 func TestView_NodeViewSourceStatusSeparatesMergedSources(t *testing.T) {
 	now := time.Now().UTC()
@@ -1011,15 +1011,19 @@ func TestView_NodeViewSourceStatusSeparatesMergedSources(t *testing.T) {
 	}
 }
 
-// A Docker host whose report is overdue keeps its last report, and the stale
-// pass shows it as warning, the same status a degraded host that is still
-// reporting carries. Only the Docker source's sighting tells them apart.
-func TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded(t *testing.T) {
+// A Docker host reported by a unified agent keeps the agent's status after
+// its Docker report lapses, and a degraded Docker host that still reports
+// reads warning. Only the Docker source's sighting shows which one has
+// stopped reporting.
+func TestView_DockerHostViewSourceStatusSeparatesDockerLapseFromRowStatus(t *testing.T) {
 	now := time.Now().UTC()
 	registry := NewRegistry(nil)
 	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "agent-1", Hostname: "box", MachineID: "machine-1", Status: "online", IntervalSeconds: 30, LastSeen: now},
+		},
 		DockerHosts: []models.DockerHost{
-			{ID: "docker-silent", AgentID: "agent-silent", Hostname: "silent", Status: "offline", IntervalSeconds: 30, LastSeen: now.Add(-time.Hour), CPUUsage: 20},
+			{ID: "docker-lapsed", AgentID: "agent-1", Hostname: "box", MachineID: "machine-1", Status: "offline", IntervalSeconds: 30, LastSeen: now.Add(-time.Hour), CPUUsage: 20},
 			{ID: "docker-degraded", AgentID: "agent-degraded", Hostname: "degraded", Status: "degraded", IntervalSeconds: 30, LastSeen: now, CPUUsage: 33},
 		},
 	})
@@ -1028,16 +1032,22 @@ func TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded(t *testing.T
 	for _, view := range registry.DockerHosts() {
 		views[view.HostSourceID()] = view
 	}
-	for id, want := range map[string]string{"docker-silent": "stale", "docker-degraded": "online"} {
+	for id, want := range map[string]struct {
+		status   ResourceStatus
+		sighting string
+	}{
+		"docker-lapsed":   {StatusOnline, "stale"},
+		"docker-degraded": {StatusWarning, "online"},
+	} {
 		view := views[id]
 		if view == nil {
 			t.Fatalf("missing Docker host view %s", id)
 		}
-		if view.Status() != StatusWarning {
-			t.Fatalf("%s status = %q, want warning", id, view.Status())
+		if view.Status() != want.status {
+			t.Fatalf("%s status = %q, want %q", id, view.Status(), want.status)
 		}
-		if sighting, ok := view.SourceStatus(SourceDocker); !ok || sighting.Status != want {
-			t.Fatalf("%s Docker sighting = %+v (ok=%v), want %s", id, sighting, ok, want)
+		if sighting, ok := view.SourceStatus(SourceDocker); !ok || sighting.Status != want.sighting {
+			t.Fatalf("%s Docker sighting = %+v (ok=%v), want %s", id, sighting, ok, want.sighting)
 		}
 	}
 	if _, ok := views["docker-degraded"].SourceStatus(SourceProxmox); ok {

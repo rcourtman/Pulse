@@ -46,6 +46,8 @@ import { useDiskDetailModel } from './useDiskDetailModel';
 interface DiskDetailProps {
   disk: Resource;
   nodes: Resource[];
+  /** Alert override keys of the machine whose agent reports the disk. */
+  alertResourceIds?: string[];
 }
 
 type DiskDetailTab = 'overview' | 'history';
@@ -65,6 +67,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     liveIOAvailable,
   } = useDiskDetailModel({
     disk: () => props.disk,
+    alertResourceIds: () => props.alertResourceIds,
   });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(DISK_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
@@ -180,10 +183,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </Show>
       </div>
 
-      <div
-        class={activeTab() === 'history' ? 'space-y-3' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? 'space-y-3' : 'hidden'}`}>
         <Show when={activeTab() === 'history'}>
           <Show when={metricResourceId() && liveIOAvailable()}>
             <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>

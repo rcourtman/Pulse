@@ -990,19 +990,75 @@ func hostDiskTemperatureResourceID(hostID, device string) string {
 }
 
 // hostDiskTemperatureThresholdNoLock returns the threshold for one SMART disk
-// given the host's resolved disk temperature threshold. An enabled threshold
-// gives way to the disk type's DiskTempByType entry unless an explicit host or
-// linked-resource override set it. Callers must hold m.mu.
+// given the host's resolved disk temperature threshold. Callers must hold m.mu.
 func (m *Manager) hostDiskTemperatureThresholdNoLock(hostThreshold *HysteresisThreshold, overridden bool, diskType string) *HysteresisThreshold {
+	return diskTemperatureThresholdForType(m.config.DiskTempByType, hostThreshold, overridden, diskType)
+}
+
+// diskTemperatureThresholdForType is the disk temperature policy. An enabled
+// host threshold gives way to the disk type's DiskTempByType entry unless an
+// explicit host or linked-resource override set it; a disabled one switches
+// disk temperature alerting off for every type.
+func diskTemperatureThresholdForType(byType map[string]HysteresisThreshold, hostThreshold *HysteresisThreshold, overridden bool, diskType string) *HysteresisThreshold {
 	if hostThreshold == nil || hostThreshold.Trigger <= 0 || overridden {
 		return hostThreshold
 	}
 	if diskType = strings.ToLower(strings.TrimSpace(diskType)); diskType != "" {
-		if th, ok := m.config.DiskTempByType[diskType]; ok {
+		if th, ok := byType[diskType]; ok {
 			return &th
 		}
 	}
 	return hostThreshold
+}
+
+// DiskTemperatureThreshold returns the threshold that judges a physical disk's
+// temperature when no host override applies: the disk type's DiskTempByType
+// entry, else the agent default. This is the canonical disk heat policy. Disk
+// temperature alerts, Patrol and the Physical Disks Health verdict all judge
+// heat against it; disk risk does not. The disk is hot at the trigger, and the
+// clear value is where it stops being hot. A nil threshold or a non-positive
+// trigger means disk temperature alerting is off. A disk a host agent reports
+// is judged by HostDiskTemperatureThreshold instead.
+func (m *Manager) DiskTemperatureThreshold(diskType string) *HysteresisThreshold {
+	return m.HostDiskTemperatureThreshold(DiskTemperatureHost{}, diskType)
+}
+
+// DiskTemperatureHost is the host agent whose report carries a physical disk,
+// with the node and guests that agent is linked to. CheckHost evaluates the
+// disk's temperature under that host's thresholds.
+type DiskTemperatureHost struct {
+	ID                string
+	LinkedNodeID      string
+	LinkedVMID        string
+	LinkedContainerID string
+}
+
+// HostDiskTemperatureThreshold is the disk heat policy for a disk the given
+// host agent reports, resolved as CheckHost resolves it. An explicit disk
+// temperature override on the host, or one inherited from its linked node or
+// guest, replaces the disk type's entry. An override that switches the host's
+// alerts off switches its disk heat off too, so the result is nil. A host with
+// no ID resolves as DiskTemperatureThreshold.
+func (m *Manager) HostDiskTemperatureThreshold(host DiskTemperatureHost, diskType string) *HysteresisThreshold {
+	if m == nil {
+		return DefaultDiskTemperatureThreshold(diskType)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	if thresholds.Disabled {
+		return nil
+	}
+	override, exists := m.hostThresholdOverrideNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	overridden := exists && override.DiskTemperature != nil
+	return cloneThreshold(m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, overridden, diskType))
+}
+
+// DefaultDiskTemperatureThreshold is DiskTemperatureThreshold under the
+// factory alert configuration, for callers with no alert manager.
+func DefaultDiskTemperatureThreshold(diskType string) *HysteresisThreshold {
+	config := defaultAlertConfig()
+	return cloneThreshold(diskTemperatureThresholdForType(config.DiskTempByType, config.AgentDefaults.DiskTemperature, false, diskType))
 }
 
 // lowestHostDiskTemperatureThresholdNoLock returns the lowest enabled
@@ -1547,8 +1603,6 @@ func splitSMARTAlertReasons(reasons []storagehealth.Reason) ([]storagehealth.Rea
 		switch reason.Code {
 		case "wearout_low", "nvme_available_spare_low", "nvme_percentage_used_high":
 			wearReasons = append(wearReasons, reason)
-		case "temperature_high":
-			continue
 		default:
 			healthReasons = append(healthReasons, reason)
 		}

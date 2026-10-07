@@ -68,6 +68,23 @@ func (a *AlertThresholdAdapter) GetGuestDiskThreshold() float64 {
 	}, 90)
 }
 
+// GetDiskTemperatureThreshold returns the disk temperature alert trigger and
+// clear values for a disk of a type that a host agent reports, resolved
+// exactly as disk temperature alerts resolve them
+// (alerts.Manager.HostDiskTemperatureThreshold), host overrides included.
+func (a *AlertThresholdAdapter) GetDiskTemperatureThreshold(host alerts.DiskTemperatureHost, diskType string) (float64, float64) {
+	var threshold *alerts.HysteresisThreshold
+	if a.manager != nil {
+		threshold = a.manager.HostDiskTemperatureThreshold(host, diskType)
+	} else {
+		threshold = alerts.DefaultDiskTemperatureThreshold(diskType)
+	}
+	if threshold == nil || threshold.Trigger <= 0 {
+		return 0, 0
+	}
+	return threshold.Trigger, threshold.Clear
+}
+
 // GetStorageThreshold returns the usage alert trigger threshold for storage (0-100%)
 func (a *AlertThresholdAdapter) GetStorageThreshold() float64 {
 	return a.getThreshold(func(cfg alerts.AlertConfig) (float64, bool) {

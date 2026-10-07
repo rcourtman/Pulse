@@ -6632,10 +6632,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	guestReporting := func(id string) bool {
 		return !rowLapsed("guest", id)
 	}
-	// evaluateDockerAgents marks a host offline once its report is overdue.
-	// The registry's stale pass can later show that host as warning, and a
-	// merged agent row keeps the agent's status, so the Docker sighting
-	// decides as well.
+	// evaluateDockerAgents marks a host offline once its report is overdue,
+	// but a Docker row merged with a reporting host agent keeps the agent's
+	// status, so the Docker sighting decides as well.
 	dockerHostReporting := func(host *models.DockerHost) bool {
 		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("docker", host.ID)
 	}

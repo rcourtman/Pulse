@@ -2,7 +2,7 @@ import { type Component, For, Show, createMemo } from 'solid-js';
 import type { ResourceChange } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
-  getResourceChangeKindPresentation,
+  getResourceChangePresentation,
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
   formatResourceChangeHeadline,
@@ -83,7 +83,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
               const shouldShowReason = reason.length > 0 && reason !== headline;
               const resourceHref = buildResourceHref(change.resourceId);
               const relatedResources = (change.relatedResources ?? []).slice(0, 3);
-              const kindPresentation = getResourceChangeKindPresentation(change.kind);
+              const kindPresentation = getResourceChangePresentation(change);
               const sourceTypePresentation = getResourceChangeSourceTypePresentation(
                 change.sourceType,
               );

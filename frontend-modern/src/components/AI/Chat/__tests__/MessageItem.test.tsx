@@ -679,6 +679,27 @@ describe('MessageItem', () => {
       expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
     });
 
+    it('staggers the first-token dots with classes the production CSP allows', () => {
+      const { container } = render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            pendingTools: [],
+            streamEvents: [],
+          })}
+          {...makeHandlers()}
+        />
+      ));
+
+      const dots = Array.from(container.querySelectorAll('.animate-bounce'));
+      expect(dots).toHaveLength(3);
+      expect(dots.map((dot) => dot.getAttribute('style'))).toEqual([null, null, null]);
+      expect(dots[1]).toHaveClass('[animation-delay:120ms]');
+      expect(dots[2]).toHaveClass('[animation-delay:240ms]');
+    });
+
     it('shows workflow progress inline before content arrives', () => {
       render(() => (
         <MessageItem

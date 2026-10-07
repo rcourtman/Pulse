@@ -284,41 +284,39 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	}
 }
 
-// dockerAlertResourcePath returns the portion of the alert's resource ID after
-// the "docker:" scheme, matching the IDs built by DockerResourceID and
-// DockerServiceResourceID. Canonical alerts are stored under
+// dockerAlertResourcePath splits the alert's resource ID after the "docker:"
+// scheme into the host and the child path, matching the IDs built by
+// DockerHostResourceID ("<host>"), DockerContainerResourceID
+// ("<host>/<container ID>" or "<host>/name:<name>") and
+// DockerServiceResourceID ("<host>/service/<service ID>" or
+// "<host>/service/name:<name>"). child is empty for a host's own alert. A
+// name can contain anything, so callers classify by the first segment of
+// child, never by searching the whole path. Canonical alerts are stored under
 // "<resourceID>::<specID>" state IDs, so the legacy "docker-container-" /
 // "docker-service-" alert-ID prefixes never match them.
-func dockerAlertResourcePath(alert *Alert) (string, bool) {
+func dockerAlertResourcePath(alert *Alert) (host, child string, ok bool) {
 	if alert == nil {
-		return "", false
+		return "", "", false
 	}
-	resourceID := strings.TrimSpace(alert.ResourceID)
-	if !strings.HasPrefix(resourceID, "docker:") {
-		return "", false
+	path, found := strings.CutPrefix(strings.TrimSpace(alert.ResourceID), "docker:")
+	if !found {
+		return "", "", false
 	}
-	return strings.TrimPrefix(resourceID, "docker:"), true
+	host, child, _ = strings.Cut(path, "/")
+	return host, child, true
 }
 
 func isDockerContainerAlert(alert *Alert) bool {
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	// "hostID/containerID" has a path separator; host-level IDs ("hostID") do
-	// not, and services use "hostID/service/serviceID".
-	return strings.Contains(path, "/") && !strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && child != "" && !strings.HasPrefix(child, "service/")
 }
 
 func isDockerServiceAlert(alert *Alert) bool {
 	if alert != nil && strings.HasPrefix(strings.TrimSpace(alert.ResourceID), "docker-service:") {
 		return true
 	}
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	return strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && strings.HasPrefix(child, "service/")
 }
 
 func alertPrimaryResourceType(alert *Alert) string {

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 type RiskLevel string
@@ -31,7 +30,12 @@ type Assessment struct {
 
 // SMARTThresholds controls the discrete health evidence that becomes a disk
 // risk. Counter values at zero disable that rule; the endurance percentages
-// use the same convention. Temperature remains a separate metric threshold.
+// use the same convention.
+//
+// Disk risk never judges temperature. Heat is a metric judged by the alert
+// disk temperature policy (alerts.Manager.DiskTemperatureThreshold), which
+// users tune per disk type and per host. Risk is rebuilt by registries that
+// cannot see that configuration, so a heat rule here would disagree with it.
 type SMARTThresholds struct {
 	HealthFailure        bool
 	ReallocatedSectors   int64
@@ -61,7 +65,6 @@ func DefaultSMARTThresholds() SMARTThresholds {
 type Sample struct {
 	Model                string
 	Health               string
-	Temperature          int
 	Wearout              int
 	WearoutKnown         bool
 	PowerOnHours         int64
@@ -77,29 +80,10 @@ type Sample struct {
 	UnsafeShutdowns      int64
 }
 
-// CollectedTemperature returns a disk temperature only when its collection
-// state marks it as observed now. Normalization may keep the last known value
-// when the current observation is not available, such as a disk in standby or
-// a host agent past its reporting lease. That retained value is history, not
-// evidence that the disk is hot now, so risk must not judge it. A source that
-// predates collection state counts as collected.
-func CollectedTemperature(temperature int, collection *diskinventory.CollectionStatus) int {
-	if collection == nil {
-		return temperature
-	}
-	switch collection.Temperature.State {
-	case "", diskinventory.FieldAvailable:
-		return temperature
-	default:
-		return 0
-	}
-}
-
 func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 	sample := Sample{
 		Model:        disk.Model,
 		Health:       disk.Health,
-		Temperature:  CollectedTemperature(disk.Temperature, disk.Collection),
 		Wearout:      disk.Wearout,
 		WearoutKnown: WearoutReported(disk.Wearout, disk.Type),
 	}
@@ -113,10 +97,9 @@ func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
 
 func AssessHostSMARTDiskWithThresholds(disk models.HostDiskSMART, thresholds SMARTThresholds) Assessment {
 	sample := Sample{
-		Model:       disk.Model,
-		Health:      disk.Health,
-		Temperature: CollectedTemperature(disk.Temperature, disk.Collection),
-		Wearout:     -1,
+		Model:   disk.Model,
+		Health:  disk.Health,
+		Wearout: -1,
 	}
 	applySMARTAttributes(&sample, disk.Attributes)
 	return AssessSampleWithThresholds(sample, thresholds)
@@ -215,11 +198,6 @@ func AssessSampleWithThresholds(sample Sample, thresholds SMARTThresholds) Asses
 		addReason("nvme_percentage_used_high", RiskCritical, fmt.Sprintf("NVMe endurance used is %d%%", sample.PercentageUsed))
 	} else if percentageWarning {
 		addReason("nvme_percentage_used_high", RiskWarning, fmt.Sprintf("NVMe endurance used is %d%%", sample.PercentageUsed))
-	}
-	if sample.Temperature >= 70 {
-		addReason("temperature_high", RiskCritical, fmt.Sprintf("Disk temperature is %dC", sample.Temperature))
-	} else if sample.Temperature >= 60 {
-		addReason("temperature_high", RiskWarning, fmt.Sprintf("Disk temperature is %dC", sample.Temperature))
 	}
 	if thresholds.ReallocatedSectors > 0 && sample.ReallocatedSectors >= thresholds.ReallocatedSectors {
 		addReason("reallocated_sectors", RiskWarning, fmt.Sprintf("Reallocated sectors detected (%d)", sample.ReallocatedSectors))

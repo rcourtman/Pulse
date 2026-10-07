@@ -90,7 +90,7 @@ func TestBroadcastMetricsSnapshotConnectedContent(t *testing.T) {
 		if freshness := latestUnifiedResourceLastSeen(adapter.GetAll()); !freshness.IsZero() {
 			want.LastUpdate = freshness.UnixMilli()
 		}
-		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(graph.State, func() time.Time { return evaluationTime })
+		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(graph.State, m.mockModeFence.begin(), func() time.Time { return evaluationTime })
 		wantJSON, err := json.Marshal(want)
 		if err != nil {
 			t.Fatal(err)
@@ -142,7 +142,7 @@ func TestBroadcastMetricsSnapshotHealthClockBoundary(t *testing.T) {
 		detail string
 	}{{59 * time.Second, "0m"}, {61 * time.Second, "1m"}} {
 		calls := 0
-		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), func() time.Time {
+		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), m.mockModeFence.begin(), func() time.Time {
 			calls++
 			return original.Add(tc.age)
 		})
@@ -301,7 +301,7 @@ func BenchmarkBroadcastMetricsSnapshot(b *testing.B) {
 							b.StartTimer()
 						}
 						if bulk {
-							completeProjectionSink = m.buildBroadcastFrontendStateFromSnapshot(graph.State)
+							completeProjectionSink = m.buildBroadcastFrontendStateFromSnapshot(graph.State, m.mockModeFence.begin())
 						} else {
 							completeProjectionSink = parentFrontendProjectionForTest(m, graph.State, adapter.GetAll(), adapter, time.Now().UTC())
 						}

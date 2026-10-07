@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -51,6 +52,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 	urp := s.unifiedResourceProvider
 	ap := s.alertProvider
 	agentServer := s.agentServer
+	thresholdProvider := s.thresholdProvider
 	s.mu.RUnlock()
 
 	if urp != nil {
@@ -407,14 +409,17 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 
 			if len(physicalDisks) > 0 {
 				attention := make([]unifiedresources.Resource, 0)
+				owners := physicalDiskOwnerIndex(urp)
 				for _, disk := range physicalDisks {
 					health := ""
-					temperature := 0
+					hot := false
 					if disk.PhysicalDisk != nil {
 						health = strings.ToUpper(strings.TrimSpace(disk.PhysicalDisk.Health))
-						temperature = disk.PhysicalDisk.Temperature
+						// A retained last-known reading is not current heat.
+						collected := tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Collected
+						hot = diskTemperatureLimitsFor(thresholdProvider, physicalDiskTemperatureHost(disk, owners), disk.PhysicalDisk.DiskType).hot(collected)
 					}
-					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || temperature >= 50 {
+					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || hot {
 						attention = append(attention, disk)
 					}
 				}
@@ -431,8 +436,8 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 							if value := strings.TrimSpace(disk.PhysicalDisk.Health); value != "" {
 								health = value
 							}
-							if disk.PhysicalDisk.Temperature > 0 {
-								temperature = fmt.Sprintf(", Temp: %dC", disk.PhysicalDisk.Temperature)
+							if text := tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Format("C"); text != "" {
+								temperature = ", Temp: " + text
 							}
 						}
 						healthSummary := ""

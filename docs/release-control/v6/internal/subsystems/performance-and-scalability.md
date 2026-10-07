@@ -488,7 +488,6 @@ in-place click and chevron activation over a selection.
 64. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
 65. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
 66. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
-76. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
 77. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 78. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
 79. `frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx`
@@ -550,7 +549,6 @@ at desktop and phone widths; this is presentation proof, not native collection
 or a measured fleet performance improvement.
 
 
-1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `frontend-primitives`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
 12. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `frontend-primitives`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
@@ -673,7 +671,18 @@ the store with reference-stable untouched items so the per-tick deep walk of
 the whole projection is gone. Active alerts travel the same keyed transport
 (`activeAlertsDelta`, replacing the ~37KB whole-array re-ship whenever any
 alert changed) while their application stays immediate per the alerts
-subsystem boundary. These projection baselines are socket-owned: an oversized
+subsystem boundary. Each committed alert is reconciled in place against its
+copy in the keyed active-alert store, so a reader of an unchanged alert there,
+or of an unchanged nested value such as its live `metricStatus` or `metadata`,
+is not notified although every commit carries freshly parsed objects; omitted
+fields are deleted rather than shallow-merged. The `state.activeAlerts` array
+is still replaced on every alert commit. A pending acknowledgement hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active` (reusing a
+recovery already in flight, and fetching again if that one applies nothing)
+rather than waiting for an alert delta a quiet estate may never send. A local
+acknowledgement write that overlaps a recovery discards its response and
+fetches once more. These projection baselines are
+socket-owned: an oversized
 frame invalidates resources, connected infrastructure, and active alerts
 together, while REST recovery hydrates display state only. A later keyed delta
 without a socket baseline requests the throttled recovery path instead of
@@ -1060,6 +1069,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    scope must be applied before deriving host, Kubernetes context/namespace,
    and container runtime facet options so embedded pages do not pay for or
    display unrelated platform options.
+   Net I/O and Disk I/O outlier statistics (median, MAD, p97, p99) are built
+   from guest throughput by `computeWorkloadIOEmphasis(...)` in
+   `workloadSelectors.ts`, which produces the stats that
+   `getOutlierEmphasis(...)` in `guestRowModel.tsx` reads; that math must not
+   move back behind a `Resource`-shaped infrastructure selector cast.
    Workloads source-health messaging must derive from the viewer-safe
    `/api/runtime/inventory-sources` projection through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
@@ -1189,6 +1203,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Saves run one metadata write per changed link, then dispatch the
     metadata-changed events together so whole-snapshot listeners coalesce
     onto one in-flight refetch instead of refetching per link.
+    The drawer overview lazy-loads `GuestPhysicalDisks.tsx` under a local
+    `Suspense`, so the physical-disk presentation module
+    (`diskPresentation.ts`) loads with an open agent guest's drawer instead
+    of joining the WorkloadsSurface chunk.
+    `WorkloadsSurface.performance.contract.test.tsx` pins the dynamic import.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
@@ -1927,9 +1946,17 @@ internal persistent signal so the toggle and the hosts-table render
 stay in lockstep. The history range remains inline in both display modes because
 the default bars mode uses it for the intent-driven guest-row history lens.
 Embedded sibling tables that opt into sparklines
-re-instantiate `useWorkloadTableMetricHistory`; the cache key matches
-the workloads-table reader so both readers dedupe their fetches and
-the canonical Workloads hot-path budget is preserved. Standalone
+re-instantiate `useWorkloadTableMetricHistory` and name the rows they draw
+through its required `series` option. The Proxmox nodes table passes
+`'nodes'` and polls only the infrastructure summary; the WorkloadsSurface
+reader passes `'guests'` and polls only the workloads history. Two readers
+on one page do not share reads: each forwards its own abort signal, which
+bypasses the summary caches' in-flight dedupe, and retained query values
+seed matching mounts and source changes without deduplicating requests. A
+reader therefore must not poll a summary its rows do not render. In Trends
+the vSphere overview polls only the workloads history, and the Proxmox
+overview polls the workloads history and the infrastructure summary once
+each. Standalone
 WorkloadsSurface callers (no override props) keep the original
 persistent-signal-backed behavior.
 Every toolbar that controls a `WorkloadsSurface` consumes
@@ -1938,6 +1965,15 @@ mode, row-hover mode, history range, and first-use hint on the same state owner
 for the generic surface and the Proxmox and vSphere platform compositions;
 provider pages must not recreate a partial metric prop list that can enable
 prefetching without exposing the matching control or discovery state.
+That first-use hint clears while the pointer is over a guest row, because the
+first populated preview marks it seen. Clearing it must not unmount it or
+change the toolbar height: wherever the hint wraps the action row onto its own
+line, removing it moved the table up under the pointer and the history lens
+retargeted the next guest. `WorkloadsFilter.tsx` therefore keeps the cleared
+hint mounted but `invisible` wherever the desktop History controls render,
+for as long as row hover stays in bars + history mode. Leaving that mode or
+remounting the filter releases the box. `WorkloadsFilter.test.tsx` pins the
+retained node and its release on a switch to Trends.
 
 The alert-bridge patrol-trigger callback wired in `internal/api/router.go` now
 short-circuits before queuing a scoped patrol when a firing alert does not meet
@@ -1955,22 +1991,20 @@ query persistence once per resource, or run on the steady-state alert hot path;
 ancestor lookup remains bounded by canonical hierarchy depth for each active
 alert actually evaluated.
 
-The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
-`frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
-platform pages owning their own hosts table (Proxmox overview today) set
-to strip per-host metric cells out of the `NodeGroupHeader` rows in
-grouped mode. The flag is threaded through
-`frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`,
-`frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and
-`frontend-modern/src/components/Workloads/WorkloadPanel.tsx`; when set,
-`WorkloadPanel` calls `NodeGroupHeader` without `columns` /
-`renderColumnCell` so the existing colspan layout renders just the
-status dot, linked node name, cluster badge, and agent badge — the
-duplicate CPU / Memory / Disk / uptime / temperature / version stats
-the top-of-page hosts table already owns are dropped. New embedded
-platform-page consumers that render their own hosts summary must set
-this flag; standalone Workloads surfaces (no top hosts table) keep the
-original verbose group rows by default.
+Grouped host rows in the embedded WorkloadsSurface are identity-only
+dividers. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
+renders each grouped node through `NodeGroupHeader` as one cell spanning
+the table: status dot, linked node name, cluster badge, and agent badge.
+Per-host CPU, memory, disk, network and disk I/O, uptime, temperature,
+and version stats belong to the platform page's own hosts table (the
+Proxmox nodes table today), so the workloads table must not render them
+per column or inline in the group row. The former `compactGroupHeaders`
+option and the per-column node metric cells it switched off were removed
+because both remaining production mounts (Proxmox and vSphere overview)
+set it unconditionally, so the non-compact path no longer rendered
+anywhere. A new embedded consumer that needs host
+stats beside its workloads must render its own hosts table rather than
+re-growing metric cells in the shared group row.
 
 WorkloadsSurface stays monitoring-first. It must not render a persistent
 aggregate banner just because running VMs or system containers lack an
@@ -2005,14 +2039,20 @@ The Workloads table metric display mode is part of the protected Workloads
 hot path. Default bar mode keeps compact current-value bars at rest and swaps
 only the active fine-pointer or keyboard-focused guest row to the original
 sparklines; persistent Trends mode keeps sparklines visible for every rendered
-row. Bar mode does not hydrate estate history at rest: the selected range is
-local state until a row is active, then one centralized query reads only that
-guest's canonical metrics target from `/api/metrics-store/history`, capped at
-36 points. Equivalent live guest snapshots must not restart that request, and
-leaving the row disables it; per-row query owners, fan-out, and polling remain
-forbidden. Persistent Trends retains the shared, cache-keyed
-`fetchWorkloadsSummaryAndCache` / `fetchInfrastructureSummaryAndCache` reader
-for all rendered rows. Range-sensitive readers clear prior-range data when no
+row. Bar mode does not hydrate estate history at rest. With the history lens
+on, one centralized queue warms a bounded window instead: up to the first six
+guests of the mounted table window at rest, then the active guest first plus
+its next four and previous one, with at most four reads in flight and 18 cached rows. Each read
+targets one guest's canonical metrics target on `/api/metrics-store/history`,
+is capped at 36 points, and is never polled. Equivalent live guest snapshots
+must not restart a read. A range change or leaving the lens mode cancels
+pending and in-flight reads, while leaving a row lets its read settle into the
+bounded cache. Per-row query owners, estate-wide fan-out, and polling remain
+forbidden. Persistent Trends retains one cache-keyed
+`fetchWorkloadsSummaryAndCache` reader for all rendered guest rows. Grouped
+host rows render no metric cells, so the WorkloadsSurface reader never polls
+`fetchInfrastructureSummaryAndCache`; node series belong to the page's hosts
+table reader. Range-sensitive readers clear prior-range data when no
 exact cache entry exists and forward cancellation so superseded range work
 does not continue occupying browser connections. Sparkline ranges must stay
 bounded to the governed compact table windows. Expanded history belongs in the existing guest drawer chart
@@ -2051,6 +2091,18 @@ render those sensor values already present on the selected resource payload,
 but it must not add host powercap reads, sensor-specific history reads,
 per-row polling, browser-side command assumptions, or table-wide aggregation
 work.
+Host-agent SMART disk rows in `resourceDetailMappers.ts` mark a retained
+temperature "(last known)", with its collection reason as the title, from the
+payload's own `collection.temperature` state, through `getPhysicalDiskTemperaturePresentation`
+in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`.
+That module stays separate from `diskPresentation.ts` so the drawer and
+Machines chunks take the decision without the Storage presenter, and the rows
+add no reads, polling or aggregation work.
+A silent host agent's other Thermals rows (pressure, limits, GPU, temperatures,
+additional sensors, fans, power) take the same "(last known)" suffix and reason
+title. `buildTemperatureRows` gets them through its `lastKnownReason` option,
+which the drawer sets from the resource's own `agent.stale`, so the drawer
+still reads nothing extra.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
@@ -2548,26 +2600,29 @@ across provider-backed history. Row hover and focus plus top-card isolation on
 workload surfaces must resolve against the same canonical workload ID even
 when the backing history is stored under a provider metrics target, so
 provider-backed VM rows do not silently drop out of summary emphasis.
-The shared infrastructure table hot path now also treats operator-facing
-resource identity as a protected boundary: sorting, searching, summary-series
-matching, and row titles on the infrastructure page must use the canonical
-local instance identity rather than governed AI-summary text, so performance
-work cannot “optimize” the table into ambiguous labels that collapse multiple
-resources into the same visible name.
-The same protected table path treats the visible system column as
-identity-first presentation over canonical merged-source data. Sort derivation
-for that column must use the same displayed system identity as the render path,
-while the render path may keep full merged-source detail in tooltips. When a
-row contains both `agent` and a provider/API platform such as Proxmox, the table
-must render the provider platform as the compact visible badge rather than
-adding extra Agent badge width or sorting primarily by the telemetry method.
-When a row is only known through an agent or container runtime, the table must
-prefer reported OS/appliance identity before falling back to Docker/runtime
-capability labels.
-When the displayed system badge already includes the platform version, row title
-metadata must not spend extra badge/title budget repeating that same platform as
-an unversioned source; it may keep non-duplicate collection context such as
-Pulse Agent.
+Platform-table hot paths treat operator-facing resource identity as a
+protected boundary: sorting, searching, summary-series matching, and row
+titles must use the canonical local instance identity (the resource's own name or
+`getPreferredInfrastructureDisplayName(...)`) rather than governed AI-summary
+text, so performance work cannot “optimize” a table into ambiguous labels that
+collapse multiple resources into the same visible name.
+A visible system column is identity-first presentation over canonical
+merged-source data. The Docker hosts table's System column is the live
+instance: `frontend-modern/src/features/docker/DockerHostsTable.tsx` sorts and
+renders the same `getDockerHostSystemBadge(...)` result, and the render path
+may keep full merged-source detail in tooltips. When a row contains both
+`agent` and a provider/API platform such as Proxmox, the system badge must show
+the provider platform rather than adding extra Agent badge width or sorting
+primarily by the telemetry method. When a row is only known through an agent or
+container runtime, the shared resolver prefers reported OS/appliance identity
+before falling back to Docker/runtime capability labels; the Docker hosts
+column drops that runtime-only fallback, since every row there is a Docker
+host, and shows `—` instead.
+A surface that shows source badges beside a versioned system badge must not
+spend extra badge/title budget repeating that same platform as an unversioned
+source; it may keep non-duplicate collection context such as Pulse Agent. The
+resource drawer header avoids the repeat by showing system identity badges in
+place of source badges.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and
@@ -2899,12 +2954,12 @@ history into equal-time summary buckets before it reaches the shell/runtime
 owners, so long-range cards do not bunch recent higher-resolution samples at
 the right edge.
 Compact resource-facet summary chips render through the shared
-`ResourceFacetSummary` component, whose production consumer is the detail
-drawer's change history. A table-row use must set an explicit visible chip
-limit with overflow disclosure instead of letting mock-rich rows wrap an
-unbounded badge list, and must stay within the table's bounded windowing and
-mounted-row budget rather than forking separate table-only presentation
-logic. That component now also
+`ResourceFacetSummary` component, whose only production consumer is the
+detail drawer's change history, so it renders every chip. A table-row use must
+first give that shared component a visible chip limit with overflow disclosure
+instead of letting mock-rich rows wrap an unbounded badge list, and must stay
+within the table's bounded windowing and mounted-row budget rather than forking
+separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
@@ -2931,40 +2986,30 @@ history overview down to timeline counts and timeline-summary chips, so the
 performance-sensitive shared presentation path stays aligned with the
 investigation-first product contract instead of rendering low-signal generic
 facet sections by default.
-Governance metadata such as sensitivity and routing scope may be visible in
-the table, but it must remain on the same bounded row-windowing and mounted-row
-budget rather than creating a separate unbounded rendering path for
-policy-rich fleets.
-The detail drawer now also renders governed resource labels through the
-shared identity/display contract, which routes policy-aware resources through
-the canonical policy-aware helper and suppresses the raw alternate name when
-policy requires governed handling. That keeps the policy-aware label path
-inside the same rendering budget instead of adding a second display branch for
-redacted fleets.
+Governance metadata such as sensitivity and routing scope shown in a table
+must remain on the same bounded row-windowing and mounted-row budget rather
+than creating a separate unbounded rendering path for policy-rich fleets.
+The detail drawer's governance summary resolves governed resources through the
+canonical policy-aware `getResourcePolicyGovernedSummary(...)` helper. That
+keeps the policy-aware label path inside the same rendering budget instead of
+adding a second display branch for redacted fleets.
 Platform tables pass the canonical resource-label resolver into the detail
 drawer through `PlatformResourceDetailTableRow` so related-resource chips in
 the timeline/history path can resolve through the canonical catalog without adding a separate
 detail-only lookup branch to the hot-row path.
 The same detail drawer also uses that resolver for correlation dependency and
-dependent chips, so the investigation path does not fall back to raw IDs in
-the drawer while the AI page keeps its broader no-catalog fallback.
-The shared infrastructure selector search path now also routes through that
-same preferred resource display contract, so governed resources do not
-reappear via raw-name search candidates while the selector stays on the same
-hot-path budget.
-The shared workloads-link helper used by the resource drawer and table now
-also routes its Kubernetes-cluster fallback through the same preferred
-resource display contract, so navigation context does not leak raw
-`displayName` values for governed clusters.
-That same workloads-link path and the workload projection now also
-share the canonical cluster-name helpers in the shared agent-resource layer,
-so route labels, pod grouping, and cluster-name fetch keys keep using the
-same source of truth instead of rebuilding the `clusterName`/`context`/
-`clusterId` prefix locally.
-The infrastructure host-table hot path now also suppresses the default
-`Internal` + `Cloud Summary` policy pair in row chrome. That baseline posture
-still belongs to the canonical policy contract, but repeating it on every host
-burns row-density budget without adding operator-grade signal.
+dependent chips, so the investigation path shows catalog labels in the drawer
+and keeps the raw ID only when the catalog cannot resolve one.
+The workload projection and the resource drawer share the canonical
+cluster-name helpers in `frontend-modern/src/utils/agentResources.ts`, so pod
+grouping and the drawer's cluster-name fetch keys keep using the same source
+of truth instead of rebuilding the `clusterName`/`context`/`clusterId` prefix
+locally.
+A platform table that adds policy chips to row chrome must suppress the
+default `Internal` + `Cloud Summary` policy pair. That baseline posture still
+belongs to the canonical policy contract, but repeating it on every row burns
+row-density budget without adding operator-grade signal. No platform table
+renders policy chips today.
 The shared node adapter also uses that same cluster-name helper for the
 infrastructure summary surface, so Proxmox node projections stay aligned with
 the same canonical cluster label instead of carrying a raw adapter-local
@@ -3016,17 +3061,6 @@ bytes-per-second formatter shared by workload and infrastructure summary
 cards. Future throughput wording or workload-summary hot-path changes must
 extend these performance-owned surfaces instead of leaving the formatter or
 summary shell unowned in registry coverage.
-
-Infrastructure selector status ordering must now tolerate arbitrary filter-set
-strings without widening the canonical hot-path order tuple. Unknown statuses
-must sort after the governed status order instead of forcing the selector path
-to abandon the typed canonical order used by the infrastructure table and its
-performance proof surface.
-
-The Infrastructure page now also normalizes source filter keys through the
-shared `frontend-modern/src/utils/sourcePlatforms.ts` helper directly, so the
-selector boundary keeps using the canonical source-platform contract instead of
-maintaining a local source-normalization alias.
 
 Resource detail mappers now also use the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
@@ -3414,6 +3448,10 @@ whole-estate physical-disk work to Workloads. The guest's existing agent RAID
 snapshot remains local to the opened drawer; an empty or failed child query
 must not imply that host disks belong to the guest. Focused hook and drawer
 tests pin the query and no-data/error presentations.
+The drawer judges those disks' heat under the guest agent's alert overrides:
+its `agentId`, which `useWorkloads` copies from `resource.agent.agentId` onto
+the workload row, then the guest's own override keys. That reads the alert
+configuration already loaded and adds no query, poll or per-row work.
 
 ### Configuration transfer authorization stays off persistence hot paths
 

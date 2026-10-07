@@ -823,9 +823,9 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 	kept := models.Host{ID: "host-linux-1", Hostname: "apollo-114", Status: "online", Memory: memory}
 	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", Status: "online", Memory: memory}
 
-	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil)
+	monitor.evaluateMockHostAgents(monitor.mockModeFence.begin(), []models.Host{kept, departed}, nil)
 	// A runtime mock config change rebuilt the estate without pve9.
-	monitor.evaluateMockHostAgents([]models.Host{kept}, nil)
+	monitor.evaluateMockHostAgents(monitor.mockModeFence.begin(), []models.Host{kept}, nil)
 
 	keptAlert := false
 	for _, alert := range manager.GetActiveAlerts() {

@@ -3745,17 +3745,50 @@ func appendRecentChangeResourceCondition(conditions []string, args []any, canoni
 		args = append(args, id)
 	}
 	inClause := "(" + strings.Join(placeholders, ", ") + ")"
-	if !includeRelated {
-		return append(conditions, "canonical_id IN "+inClause), args
-	}
-	for _, id := range canonicalIDs {
-		args = append(args, id)
-	}
-	return append(conditions, `(canonical_id IN `+inClause+` OR EXISTS (
+	condition := "canonical_id IN " + inClause
+	if includeRelated {
+		for _, id := range canonicalIDs {
+			args = append(args, id)
+		}
+		condition = `(canonical_id IN ` + inClause + ` OR EXISTS (
 			SELECT 1
 			FROM json_each(CASE WHEN json_valid(resource_changes.related_resources) THEN resource_changes.related_resources ELSE '[]' END)
-			WHERE TRIM(json_each.value) IN `+inClause+`
-		))`), args
+			WHERE TRIM(json_each.value) IN ` + inClause + `
+		))`
+	}
+	if owned, ownedArgs := ownedAlertRowsCondition(canonicalIDs); owned != "" {
+		condition = "(" + condition + " OR " + owned + ")"
+		args = append(args, ownedArgs...)
+	}
+	return append(conditions, condition), args
+}
+
+// ownedAlertRowsCondition matches the lifecycle rows hardware ownership wrote
+// away from a PVE disk alert reference in the read's identity set. It filters
+// on the indexed alert identifier first, then on the reference each owned row
+// records, so a read by the reference returns exactly the rows journaled
+// under it before.
+func ownedAlertRowsCondition(canonicalIDs []string) (string, []any) {
+	metadata := "CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END"
+	var terms []string
+	var args []any
+	for _, id := range canonicalIDs {
+		identifiers := ProxmoxPhysicalDiskAlertIdentifiers(id)
+		if len(identifiers) == 0 {
+			continue
+		}
+		for _, identifier := range identifiers {
+			args = append(args, identifier)
+		}
+		args = append(args, id)
+		terms = append(terms, "(json_type("+metadata+", '$.alert_identifier') = 'text' AND "+resourceChangesAlertIdentifierExpr()+
+			" IN ("+strings.TrimSuffix(strings.Repeat("?, ", len(identifiers)), ", ")+") AND json_extract("+metadata+", '$."+
+			MetadataAlertResourceID+"') = ?)")
+	}
+	if len(terms) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(terms, " OR ") + ")", args
 }
 
 func changeMatchesResource(change ResourceChange, canonicalIDs []string, includeRelated bool) bool {
@@ -3769,6 +3802,9 @@ func changeMatchesResource(change ResourceChange, canonicalIDs []string, include
 		return false
 	}
 	if matches(change.ResourceID) {
+		return true
+	}
+	if ref := OwnedAlertReference(change); ref != "" && matches(ref) {
 		return true
 	}
 	if !includeRelated {

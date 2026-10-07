@@ -5,9 +5,13 @@ import {
   extractPhysicalDiskPresentationData,
   getPhysicalDiskHealthStatus,
 } from '@/features/storageBackups/diskPresentation';
+import {
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+  getPhysicalDiskTemperaturePresentation,
+} from '@/features/storageBackups/diskTemperaturePresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
-import { formatTemperature } from '@/utils/temperature';
 
 // SMART history and chart controls are only needed after a disk row is opened.
 // Keep their Storage detail module out of the initial Workloads surface.
@@ -15,10 +19,17 @@ const LazyDiskDetail = lazy(() =>
   import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
 );
 
-const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
+const GuestPhysicalDiskRow: Component<{ disk: Resource; alertResourceIds: string[] }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
-  const data = () => extractPhysicalDiskPresentationData(props.disk);
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
+  const data = () =>
+    extractPhysicalDiskPresentationData(
+      props.disk,
+      getDiskTemperatureThresholds,
+      props.alertResourceIds,
+    );
   const health = () => getPhysicalDiskHealthStatus(data());
+  const temperature = () => getPhysicalDiskTemperaturePresentation(data());
   const label = () => data().model || data().devPath || props.disk.name;
 
   return (
@@ -35,8 +46,19 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
         <span class={health().tone} title={health().summary}>
           {health().label}
         </span>
-        <Show when={data().temperature > 0}>
-          <span class="text-muted">{formatTemperature(data().temperature)}</span>
+        <Show when={temperature()}>
+          {(reading) => (
+            <span
+              class={reading().current ? 'text-muted' : PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}
+              title={reading().title}
+              data-temperature-reading={reading().current ? 'current' : 'last-known'}
+            >
+              {reading().label}
+              <Show when={!reading().current}>
+                <span class="sr-only">, last known</span>
+              </Show>
+            </span>
+          )}
         </Show>
         <Show when={data().size > 0}>
           <span class="text-muted">{formatBytes(data().size)}</span>
@@ -51,7 +73,11 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
               </p>
             }
           >
-            <LazyDiskDetail disk={props.disk} nodes={[]} />
+            <LazyDiskDetail
+              disk={props.disk}
+              nodes={[]}
+              alertResourceIds={props.alertResourceIds}
+            />
           </Suspense>
         </div>
       </Show>
@@ -59,7 +85,15 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
   );
 };
 
-export const GuestPhysicalDisks: Component<{ parentId: string }> = (props) => {
+export const GuestPhysicalDisks: Component<{
+  parentId: string;
+  /**
+   * Alert override keys judging these disks' heat, in the order the backend
+   * reads them: the guest's own agent reports them, so its Disk Temp override
+   * applies, then the guest's canonical ID and override keys.
+   */
+  alertResourceIds?: string[];
+}> = (props) => {
   // The Proxmox Overview snapshot deliberately excludes physical disks. Query
   // only the open guest's direct children rather than hydrating every disk in
   // a large estate (or mistaking the VMID-based table key for the resource ID).
@@ -87,7 +121,11 @@ export const GuestPhysicalDisks: Component<{ parentId: string }> = (props) => {
             Physical Disks &amp; SMART ({disks().length})
           </h3>
           <div class="space-y-2">
-            <For each={disks()}>{(disk) => <GuestPhysicalDiskRow disk={disk} />}</For>
+            <For each={disks()}>
+              {(disk) => (
+                <GuestPhysicalDiskRow disk={disk} alertResourceIds={props.alertResourceIds ?? []} />
+              )}
+            </For>
           </div>
         </InfoCardFrame>
       </Show>

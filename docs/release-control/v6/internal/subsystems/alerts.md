@@ -32,6 +32,23 @@ day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
 
+### Alert card and open incident lead with the live reading — issue #2068
+
+The Alerts overview card leads an open threshold alert with the presentation's
+summary and clear rule, keeps the last breach as the summary's hover text, and
+labels the alert and clear levels in the status's unit (temperatures follow
+the viewer's °C/°F preference, as every frontend reading does). Without a live
+status it keeps the message and labels an alert level only for metric types
+whose unit is known; other thresholds (queue ages, counts) are stated in their
+own message, so the card never guesses a percent. The resource incident panel
+describes only the open occurrence whose `alertIdentifier` and `openedAt`
+match an active alert's id and `startTime` (the incident store's occurrence
+key), from that alert's live status, rechecked on the shared relative-time
+clock so it turns stale when evaluations stop; closed occurrences keep their
+recorded message. Every disk alert on a guest carries the guest's name, so the
+presentation names the disk from `metadata.label`, as the per-disk message
+does.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state
@@ -390,9 +407,10 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
-Proxmox wearout recovery requires three consecutive reported readings of at
-least 10% remaining life. An absent reading does not prove recovery, and a
-new low reading resets the recovery run; until recovery is confirmed the
+Proxmox wearout recovery requires three consecutive reported readings above
+10% remaining life; a reading of exactly 10% still matches the alert. An
+absent reading does not prove recovery, and a new low reading resets the
+recovery run; until recovery is confirmed the
 existing alert retains its low-life value and occurrence. This bounds the
 resolved-then-refired notification loop when endurance data briefly looks
 healthy (#2112), while a sustained replacement/corrected reading can still
@@ -400,6 +418,23 @@ resolve. `TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications` and
 `TestCheckDiskHealthWearoutRecoveryAlertCleared` pin dispatch/history
 deduplication and confirmed recovery. This is synthetic source proof, not a
 claim that the reporter's installed image has been repaired.
+
+The Proxmox wearout value is percent life remaining, so its alert message names
+it that way (`SSD life remaining is 7%`), matching the host-agent SMART
+`wearout_low` summary; the threshold travels in the alert's `Threshold` field,
+which the Alerts card and notifications render beside the message. Calling the
+number "wearout" read as 7% worn and contradicted the low-life warning.
+`CheckDiskHealth` logs a failed disk at error and a worn disk at warn only on
+the evaluation that opens the alert (the canonical `activated` transition);
+later polls that still find the disk failed or at or below the wearout
+threshold, including mock mode's per-tick evaluation, log at debug. Logging on
+every evaluation repeated one failed disk's error on every poll for as long as
+it stayed failed. `TestCheckDiskHealthLowWearoutCreatesAlert` pins the message
+and `TestCheckDiskHealthLogsAlertOpeningOnce` pins the log-once boundary at the
+threshold, including a fresh error when a recovered disk fails again. That test
+captures logs through a hook installed in the package `TestMain`, because
+assigning `log.Logger` inside a test races with managers earlier tests left
+running.
 
 Host SMART counter growth is an event boundary rather than a warning on every
 historical non-zero value. For an agent-only disk, the first reported UDMA CRC
@@ -787,6 +822,34 @@ that fast path entirely: active-alert and resolved-alert stores keep their
 own commit path, resource `alerts` facets are not in the fast-path
 allow-list, and a row whose patch touches alert-relevant structure always
 takes the full canonical merge.
+That commit path replaces each stored alert with the server's payload for its
+id instead of merging into it. A field the server omits is removed from the
+store, whether the payload came from a socket snapshot, a keyed delta, or REST
+recovery: a threshold alert restored after a restart carries no `metricStatus`
+until its next evaluation, so the previous live reading must not keep reading
+as "now"; an unacknowledge from another session clears `ackTime` and
+`ackUser`; a dropped `nodeDisplayName` or `metadata` disappears. Resolved
+alerts follow the same rule. The pending acknowledgement hold still skips a
+payload that contradicts an unconfirmed local acknowledge or unacknowledge,
+and the confirming payload then replaces the optimistic copy. Because a
+replacement reconciles the stored alert in place, local optimistic updates are
+stored as copies, so it never rewrites a record a caller keeps for rollback.
+The store's `updateAlert` holds the only optimistic copy of an acknowledgement.
+`useAlertAcknowledgementState` writes through it and keeps no override of its
+own, so once the server confirms it, a later server change such as an
+unacknowledge from another session reaches the open tab. When no hold is
+pending and the stored alert already shows the local acknowledge or
+unacknowledge, the store sets no hold and keeps the server's `ackTime` and
+`ackUser`: the request's own broadcast can reach the socket before its HTTP
+response, and a hold would then wait for a second confirmation and skip the
+next real change. Every local acknowledgement write supersedes a REST recovery
+in flight: the store discards that response, which the server may have built
+before accepting the write, and fetches again once it settles. A hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active`, waiting for a
+recovery already in flight and fetching again if that one applies nothing,
+because the payloads the hold skipped may not be followed by another alert
+change. `websocket-unified.test.ts`, `useAlertAcknowledgementState.test.tsx`
+and `useAlertOverviewState.test.tsx` pin these paths.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.
@@ -1477,6 +1540,45 @@ short-ID, unified-hash, and slash-tail forms as trailing lookup candidates).
 Container override work must not reintroduce a runtime-container-ID
 persistence key.
 
+Docker alert references come only from the builders in
+`internal/alerts/docker.go`: a host's own alert `docker:<host ID>`
+(`DockerHostResourceID`, used only by its connectivity alert), a container
+`docker:<host ID>/<container ID>` (`DockerContainerResourceID`), and a Swarm
+service `docker:<host ID>/service/<service ID>` (`DockerServiceResourceID`).
+A container or service reported without an ID alerts under its name, marked in
+the ID position (`docker:<host ID>/name:<name>`,
+`docker:<host ID>/service/name:<normalized name>`). Docker and Swarm IDs never
+contain a colon, so a name reference never takes its host's reference or
+another service's ID reference, and one with neither an ID nor a name raises
+no alert. Report cleanup, host removal and the host's offline alert firing
+clear children by the `docker:<host ID>/` prefix; the container and service
+policy switches classify by the first path segment after the host
+(`dockerAlertResourcePath`), so a container name containing `/service/` stays
+a container; and Patrol's scope aliases and resource history parse the same
+forms. Service overrides key on the same reference, so an override written for
+a service without an ID under its old unmarked name no longer applies. A
+reference can contain the canonical state separator (a Docker host
+disambiguated as `<base>::<suffix>`), so `splitCanonicalStateID` splits a
+state ID before the alert's recorded spec ID, or else after its resource ID,
+and only without either at the first `::`. Splitting at the first `::` gave
+such a host's alerts the reference of the host named `<base>`; an alert saved
+that way recovers its reference on restore because its spec ID is intact.
+Before name references existed, a container without an ID alerted under its
+host's reference. Only the connectivity alert belongs there, so the host's
+next report, or its offline alert firing, clears any such alert
+left active whose recorded host matches and whose container ID is empty. A
+pending image update recorded there keeps its age under the container's new
+reference when that first report still shows the update pending; a first
+report with missing or failed update evidence clears it, and the delay starts
+again on the next positive report. Proof:
+`TestDockerAlertsWithoutIDsUseTheirOwnReferences`,
+`TestDockerHostIDWithSeparatorKeepsItsAlertReferences`,
+`TestDockerAlertsRestoredWithCutShortReferencesRecover`,
+`TestDockerContainerWithoutIDKeepsPendingUpdateAgeAcrossUpgrade` and
+`TestDockerContainerResourceID` in `internal/alerts/alerts_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 Backup orphan evaluation is also inventory-scoped. The alerts runtime may
 evaluate recovery rollups for backup age, but unresolved Proxmox PVE backup
 subjects must not be treated as orphaned until monitoring has supplied the
@@ -1681,6 +1783,47 @@ an alert the next evaluation raises again.
 `TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType` and
 `TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
 `internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
+
+### The disk temperature policy decides disk heat
+
+The policy `CheckHost` applies to a SMART disk (the agent Disk Temp default,
+refined by the disk type's `DiskTempByType` entry, and switched off for every
+type when that default is off) is the canonical answer to "is this disk too
+hot". `diskTemperatureThresholdForType` in `internal/alerts/host.go` holds it.
+`Manager.HostDiskTemperatureThreshold(host, diskType)` resolves it for the host
+agent that reports a disk exactly as `CheckHost` does: an explicit Disk Temp
+override on that host, or one inherited from its linked node or guest, replaces
+the per-type entry, the first override in that chain decides even when it sets
+no Disk Temp, and an override that switches the host's alerts off leaves no
+threshold. `TestHostDiskTemperatureThresholdMatchesCheckHostOverrides` pins each
+case against what `CheckHost` fires, including an override under the canonical
+resource the agent ID resolves to and one inherited from a linked guest. `Manager.DiskTemperatureThreshold(diskType)`
+is the hostless case. Patrol reads the policy through
+`AlertThresholdAdapter.GetDiskTemperatureThreshold`.
+`DefaultDiskTemperatureThreshold` serves callers with no manager. Disk risk
+(`internal/storagehealth`) judges no temperature. The Physical Disks Temp cell
+and Health verdict mirror the policy in `resolveDiskTemperatureDisplayThresholds`
+under the override keys of the machine whose agent reports the disk, in the
+order `CheckHost` reads them as far as the browser can see that chain
+(`storage-recovery.md` lists where it cannot). That resolver returns null when the agent Disk
+Temp default is off or an override or agent default switches the host's alerts
+off. The global alerts switch and the agent alert-type switch stop `CheckHost`
+without changing the policy.
+The displays that read it treat null as off: no threshold colour
+(`getTemperatureTextClass` with `diskTemperature`) and never hot. A
+`DiskTempByType` entry cannot be switched off on its own, because
+normalization restores a non-positive entry to its default.
+A disk is hot from its trigger. Alerts and Patrol findings stay open until the
+reading falls to the clear value, or under the trigger when there is no band
+below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
+current reading against the trigger. PDF reports colour disk temperatures by
+the same thresholds. Judges that still differ: TrueNAS disk temperature alerts
+use `TrueNASDiskDefaults.Temperature` (a flat 55/50), and the TrueNAS disk
+drawer tones the reading from a fixed 55C.
+`TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
+`internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
+NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
+the nil manager.
 
 ### Agent disk temperature alerts clear when their disk leaves the report
 
@@ -2055,6 +2198,17 @@ wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
 the persisted identity shape; monitoring's registry-backed
 `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
 path. These are source invariants, not evidence of installed field relief.
+Each PVE disk alert records the evaluated disk's serial and WWN
+(`unifiedresources.MetadataDiskSerial`, `MetadataDiskWWN`), and resource
+history owns each lifecycle row by that identity rather than by the path. A
+row without a usable serial or WWN names only an identity-less disk at its
+path, and a row whose identity is ambiguous, or names no disk but one another
+resource already holds, stays under the path reference.
+Reads by the path reference find those rows through the alert identifiers
+`ProxmoxPhysicalDiskAlertIdentifiers` lists, so spec IDs and occurrence IDs
+must keep matching it;
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pins both.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert

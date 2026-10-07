@@ -2,8 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AlertsAPI } from '@/api/alerts';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import { DiskList } from '@/components/Storage/DiskList';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
 
 vi.mock('@/components/Storage/DiskDetail', () => ({
   DiskDetail: (props: { disk: Resource }) => <div data-testid="disk-detail">{props.disk.id}</div>,
@@ -65,12 +69,14 @@ describe('DiskList', () => {
     nodes: Resource[];
     selectedNode: string | null;
     searchTerm: string;
+    getDiskAlertResourceIds?: (disk: Resource) => string[];
   }) =>
     render(() => {
       const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
       return (
         <DiskList
           disks={props.disks}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           nodes={props.nodes}
           selectedNode={props.selectedNode}
           searchTerm={props.searchTerm}
@@ -341,6 +347,176 @@ describe('DiskList', () => {
       'title',
       'Pending sectors detected.',
     );
+  });
+
+  it('says a disk that is only hot is running hot, not due for replacement', () => {
+    const view = renderDiskList({
+      disks: [
+        buildDisk('sda', 'pve3', {
+          model: 'Crucial MX500 2TB',
+          diskType: 'sata',
+          wearout: 95,
+          temperature: 56,
+        }),
+        buildDisk('sdb', 'pve3', {
+          temperature: 72,
+          smart: { pendingSectors: 2 },
+          risk: {
+            level: 'critical',
+            reasons: [
+              {
+                code: 'pending_sectors',
+                severity: 'critical',
+                summary: 'Pending sectors detected (2)',
+              },
+            ],
+          },
+        }),
+        buildDisk('nvme0n1', 'pve3', {
+          model: 'Samsung 990 PRO',
+          diskType: 'nvme',
+          temperature: 63,
+        }),
+      ],
+      nodes: [buildNode('node-pve3', 'pve3')],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    const rows = Array.from(view.container.querySelectorAll('[data-row-id]'));
+    // The disk that needs replacing sorts above the one that needs cooling.
+    expect(rows.map((row) => row.getAttribute('data-row-id'))).toEqual(['sdb', 'sda', 'nvme0n1']);
+    const hotRow = within(rows[1] as HTMLElement);
+    expect(hotRow.queryByText('Replace Now')).not.toBeInTheDocument();
+    expect(hotRow.getByText('Running Hot')).toHaveClass(
+      'platform-table-label-full',
+      'text-red-700',
+    );
+    expect(hotRow.getByText('Running Hot')).toHaveAttribute(
+      'title',
+      'Disk temperature is 56°C, at or above its 55°C alert threshold.',
+    );
+    expect(hotRow.getByText('Hot')).toHaveClass('platform-table-label-compact', 'text-red-700');
+    // The Temp cell beside it reads red too: the same SATA alert trigger.
+    expect(hotRow.getByText('56°C')).toHaveClass('text-red-600');
+    const failingRow = within(rows[0] as HTMLElement);
+    expect(failingRow.getByText('Replace Now')).toHaveAttribute(
+      'title',
+      'Pending sectors detected (2)',
+    );
+    // An NVMe at 63C is under its 70C trigger and its 65C warning colour.
+    const nvmeRow = within(rows[2] as HTMLElement);
+    expect(nvmeRow.getByText('Healthy')).toBeInTheDocument();
+    expect(nvmeRow.getByText('63°C')).toHaveClass('text-green-600');
+  });
+
+  it('follows a disk from warm to hot and back to healthy', async () => {
+    const [disks, setDisks] = createStore({
+      items: [buildDisk('sda', 'pve3', { temperature: 52 })],
+    });
+    const [healthFilter, setHealthFilter] = createSignal<'all' | 'critical'>('all');
+    const view = render(() => (
+      <DiskList
+        disks={disks.items}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        healthFilter={healthFilter()}
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const row = () => view.container.querySelector('[data-row-id="sda"]') as HTMLElement | null;
+    // Warm: the Temp cell warns in amber, the verdict stays Healthy.
+    expect(within(row()!).getByText('52°C')).toHaveClass('text-amber-600');
+    expect(within(row()!).getByText('Healthy')).toBeInTheDocument();
+    setHealthFilter('critical');
+    await waitFor(() => expect(row()).toBeNull());
+
+    setDisks('items', reconcile([buildDisk('sda', 'pve3', { temperature: 56 })]));
+    await waitFor(() => expect(row()).not.toBeNull());
+    expect(within(row()!).getByText('Running Hot')).toHaveClass('text-red-700');
+
+    setHealthFilter('all');
+    setDisks('items', reconcile([buildDisk('sda', 'pve3', { temperature: 41 })]));
+    await waitFor(() => expect(within(row()!).getByText('Healthy')).toBeInTheDocument());
+    expect(within(row()!).queryByText('Running Hot')).not.toBeInTheDocument();
+  });
+
+  it('judges heat by the NVMe trigger the user raised in Alerts', async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: {
+        nvme: { trigger: 75, clear: 70 },
+        sas: { trigger: 65, clear: 60 },
+        sata: { trigger: 55, clear: 50 },
+      },
+    } as unknown as AlertConfig);
+    try {
+      const view = renderDiskList({
+        disks: [buildDisk('nvme0n1', 'pve3', { diskType: 'nvme', temperature: 72 })],
+        nodes: [],
+        selectedNode: null,
+        searchTerm: '',
+      });
+      const row = () =>
+        within(view.container.querySelector('[data-row-id="nvme0n1"]') as HTMLElement);
+      // Factory thresholds until the user's configuration loads: 72C passes
+      // the 70C NVMe trigger.
+      expect(row().getByText('Running Hot')).toBeInTheDocument();
+      expect(row().getByText('72°C')).toHaveClass('text-red-600');
+
+      await useAlertsActivation().refreshConfig();
+      await waitFor(() => expect(row().getByText('Healthy')).toBeInTheDocument());
+      expect(row().getByText('72°C')).toHaveClass('text-amber-600');
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
+  });
+
+  it('judges each disk by the Disk Temp override of the machine that reports it', async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+      overrides: {
+        'host-pve3': { diskTemperature: { trigger: 80, clear: 75 } },
+        'host-pve5': { disabled: true },
+      },
+    } as unknown as AlertConfig);
+    try {
+      const view = renderDiskList({
+        disks: [
+          buildDisk('nvme-pve3', 'pve3', { diskType: 'nvme', temperature: 72 }),
+          buildDisk('nvme-pve4', 'pve4', { diskType: 'nvme', temperature: 72 }),
+          buildDisk('nvme-pve5', 'pve5', { diskType: 'nvme', temperature: 72 }),
+        ],
+        nodes: [],
+        selectedNode: null,
+        searchTerm: '',
+        getDiskAlertResourceIds: (disk) => [`host-${disk.parentId?.replace('node-', '')}`],
+      });
+      const row = (id: string) =>
+        within(view.container.querySelector(`[data-row-id="${id}"]`) as HTMLElement);
+
+      await useAlertsActivation().refreshConfig();
+      // pve3's 80C override puts 72C under its warning band: healthy and green.
+      await waitFor(() => expect(row('nvme-pve3').getByText('Healthy')).toBeInTheDocument());
+      expect(row('nvme-pve3').getByText('72°C')).toHaveClass('text-green-600');
+      // pve4 has no override, so the 70C NVMe trigger judges its disk.
+      expect(row('nvme-pve4').getByText('Running Hot')).toBeInTheDocument();
+      expect(row('nvme-pve4').getByText('72°C')).toHaveClass('text-red-600');
+      // pve5's alerts are switched off, so its disk is never judged hot.
+      expect(row('nvme-pve5').queryByText('Running Hot')).not.toBeInTheDocument();
+      expect(row('nvme-pve5').getByText('Healthy')).toBeInTheDocument();
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
   });
 
   it('renders SSD life and falls back to the Proxmox usage string for Belongs', () => {

@@ -3,6 +3,8 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -533,10 +536,10 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 	}}}})
 
 	reporting := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{proxmoxDisk}, nodes, state.GetHosts())[0]
-	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(hostAgentLegacySource) {
+	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(diskinventory.LegacyHostAgentSource) {
 		t.Fatalf("legacy agent temperature not recorded as collected: temp=%d collection=%+v", reporting.Temperature, reporting.Collection)
 	}
-	if !diskTemperatureCollected(reporting.Temperature, reporting.Collection) {
+	if !diskinventory.TemperatureCollected(reporting.Temperature, reporting.Collection) {
 		t.Fatal("a reporting legacy agent's temperature must reach history")
 	}
 
@@ -549,9 +552,75 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		if got.Temperature != 38 || got.Collection.Temperature.State != diskinventory.FieldUnavailable {
 			t.Fatalf("%s: silent legacy agent temperature presented as collected: temp=%d collection=%+v", name, got.Temperature, got.Collection)
 		}
-		if diskTemperatureCollected(got.Temperature, got.Collection) {
+		if diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
 			t.Fatalf("%s: a silent legacy agent's retained temperature must not reach history", name)
 		}
+	}
+}
+
+// A legacy agent (before collection provenance) withdraws its readings without
+// a source when its lease expires, while monitoring stamps its reading copied
+// onto the Proxmox disk with the legacy agent source. When no disk poll
+// refreshes that copy (the host is down), the canonical disk merged from the
+// agent's row and the Proxmox row must still follow the agent's withdrawal,
+// and collect the reading again once the agent reports.
+func TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		LastSeen: time.Now(), LinkedAgentID: "agent-1",
+	}})
+	report := func(seen time.Time) {
+		state.UpsertHost(models.Host{
+			ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online",
+			IntervalSeconds: 30, LastSeen: seen,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sdb", Serial: "LEGACY2", Type: "sata", Health: "PASSED", Temperature: 38,
+			}}},
+		})
+	}
+	lastReport := time.Now()
+	report(lastReport)
+	inventory := models.PhysicalDisk{
+		ID: "pve1-node1-sdb", Node: "node1", Instance: "pve1", DevPath: "/dev/sdb", Serial: "LEGACY2",
+		Type: "sata", Health: "PASSED", Wearout: -1, LastChecked: time.Now(),
+		Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature"),
+		},
+	}
+	// The disk poll while the agent reported is the copy the Proxmox row
+	// keeps once its host stops being polled.
+	state.UpdatePhysicalDisks("pve1", mergeHostAgentSMARTIntoDisks(
+		[]models.PhysicalDisk{inventory}, state.GetSnapshot().Nodes, state.GetHosts()))
+	canonical := func() (int, *diskinventory.CollectionStatus) {
+		t.Helper()
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		disks := adapter.PhysicalDisks()
+		if len(disks) != 1 || disks[0].Serial() != "LEGACY2" {
+			t.Fatalf("canonical disks = %d, want the agent and Proxmox rows merged into one", len(disks))
+		}
+		return disks[0].Temperature(), disks[0].Collection()
+	}
+
+	if temperature, collection := canonical(); temperature != 38 || !diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("reporting legacy agent: temperature=%d collection=%+v, want 38 collected", temperature, collection)
+	}
+
+	if _, expired := state.ExpireHostTelemetry("agent-1", lastReport); !expired {
+		t.Fatal("the agent's lease did not expire")
+	}
+	temperature, collection := canonical()
+	if temperature != 38 || diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("silent legacy agent: temperature=%d collection=%+v, want the retained 38 not collected", temperature, collection)
+	}
+	if collection.Temperature.Reason != models.HostAgentStoppedReportingReason {
+		t.Fatalf("silent legacy agent: temperature state %+v, want the agent's own withdrawal", collection.Temperature)
+	}
+
+	report(time.Now())
+	if temperature, collection := canonical(); temperature != 38 || !diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("resumed legacy agent: temperature=%d collection=%+v, want 38 collected again", temperature, collection)
 	}
 }
 
@@ -715,5 +784,340 @@ func TestSilentUnraidAgentDiskTemperatureIsRetainedButNotCollected(t *testing.T)
 		if status != collected[serial] {
 			t.Fatalf("resumed agent: disk %s temperature status = %+v, want collected again (%+v)", serial, status, collected[serial])
 		}
+	}
+}
+
+type slotDiskPVEClient struct {
+	fakeStorageClient
+	mu   sync.Mutex
+	disk proxmox.Disk
+}
+
+func (client *slotDiskPVEClient) setDisk(disk proxmox.Disk) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.disk = disk
+}
+
+func (client *slotDiskPVEClient) GetDisks(context.Context, string) ([]proxmox.Disk, error) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return []proxmox.Disk{client.disk}, nil
+}
+
+// A disk swapped into the same slot keeps the Proxmox source ID, which is
+// path-shaped. When a disk record arrives with the replacement's WWN but an
+// empty serial, the poller must not copy the previous occupant's serial onto
+// it: the registry keys the disk on that serial, so the replacement would take
+// over the old disk's canonical resource, and every later poll would copy the
+// borrowed serial forward again. Current Proxmox spells a missing serial as
+// "unknown", which the poller records as reported; an empty serial comes from
+// producers that omit the field, such as the host-agent fallback rows. The
+// fake client below stands in for any of them.
+func TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	const (
+		oldSerial = "ZR5OLD0001"
+		oldWWN    = "0x5000c500aaaa0001"
+		newWWN    = "0x5000c500bbbb0002"
+	)
+	type pollResult struct {
+		disk models.PhysicalDisk
+		view *unifiedresources.PhysicalDiskView
+	}
+	newHarness := func(t *testing.T) (*slotDiskPVEClient, func() pollResult) {
+		t.Helper()
+		state := models.NewState()
+		state.UpdateNodesForInstance("pve1", []models.Node{{
+			ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: time.Now(),
+		}})
+		alertManager := alerts.NewManager()
+		t.Cleanup(alertManager.Stop)
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		m := &Monitor{
+			state: state, resourceStore: adapter, alertManager: alertManager,
+			startTime: time.Now().Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+		}
+		client := &slotDiskPVEClient{}
+		poll := func() pollResult {
+			t.Helper()
+			adapter.PopulateFromSnapshot(state.GetSnapshot())
+			started := time.Now()
+			delete(m.lastPhysicalDiskPoll, "pve1")
+			m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client,
+				[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+			deadline := time.Now().Add(3 * time.Second)
+			for {
+				if disks := state.GetSnapshot().PhysicalDisks; len(disks) == 1 && !disks[0].LastChecked.Before(started) {
+					adapter.PopulateFromSnapshot(state.GetSnapshot())
+					views := adapter.PhysicalDisks()
+					if len(views) != 1 {
+						t.Fatalf("canonical physical disks = %d, want one", len(views))
+					}
+					return pollResult{disk: disks[0], view: views[0]}
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("physical disk poll did not land in state")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+		return client, poll
+	}
+	pveDisk := func(serial, wwn string) proxmox.Disk {
+		return proxmox.Disk{
+			DevPath: "/dev/sdb", Model: "ST4000NM000A", Serial: serial, WWN: wwn,
+			Type: "hdd", Health: "PASSED", Wearout: 100, Size: 4000787030016,
+		}
+	}
+
+	t.Run("replacement reporting a different WWN", func(t *testing.T) {
+		client, poll := newHarness(t)
+		client.setDisk(pveDisk(oldSerial, oldWWN))
+		first := poll()
+		if first.disk.Serial != oldSerial || first.view.Serial() != oldSerial {
+			t.Fatalf("original disk serial: state %q, canonical %q", first.disk.Serial, first.view.Serial())
+		}
+
+		client.setDisk(pveDisk("", newWWN))
+		for round := 1; round <= 2; round++ {
+			got := poll()
+			if got.disk.Serial != "" || got.view.Serial() != "" {
+				t.Fatalf("poll %d: replacement inherited serial: state %q, canonical %q", round, got.disk.Serial, got.view.Serial())
+			}
+			if got.disk.WWN != newWWN {
+				t.Fatalf("poll %d: replacement WWN = %q, want %q", round, got.disk.WWN, newWWN)
+			}
+			if got.view.ID() == first.view.ID() {
+				t.Fatalf("poll %d: replacement took over the old disk's canonical resource %q", round, got.view.ID())
+			}
+			if got.disk.Collection == nil || got.disk.Collection.Serial.State != diskinventory.FieldMissing {
+				t.Fatalf("poll %d: replacement serial collection = %+v, want missing", round, got.disk.Collection)
+			}
+		}
+	})
+
+	t.Run("same disk keeps its serial while Proxmox omits it", func(t *testing.T) {
+		for name, missing := range map[string]proxmox.Disk{
+			"WWN still reported": pveDisk("", oldWWN),
+			"no identity at all": pveDisk("", ""),
+		} {
+			t.Run(name, func(t *testing.T) {
+				client, poll := newHarness(t)
+				client.setDisk(pveDisk(oldSerial, oldWWN))
+				first := poll()
+
+				client.setDisk(missing)
+				for round := 1; round <= 2; round++ {
+					got := poll()
+					if got.disk.Serial != oldSerial || got.view.ID() != first.view.ID() {
+						t.Fatalf("poll %d: same disk lost its identity: serial %q, resource %q (was %q)",
+							round, got.disk.Serial, got.view.ID(), first.view.ID())
+					}
+					if got.disk.Collection == nil || got.disk.Collection.Serial.State != diskinventory.FieldMissing {
+						t.Fatalf("poll %d: retained serial presented as collected: %+v", round, got.disk.Collection)
+					}
+				}
+			})
+		}
+	})
+}
+
+// Previous evidence matches a disk by stable hardware identity first and by
+// slot (source ID, then device token) only when no reported serial or WWN
+// says the slot now holds a different disk. The earlier record is the
+// registry's merged view, which keeps a linked agent's WWN spelling; Proxmox
+// reports a missing serial or WWN as the literal "unknown".
+func TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity(t *testing.T) {
+	const slotID = "pve1-node1--dev-sdb"
+	previous := models.PhysicalDisk{
+		ID: slotID, Instance: "pve1", Node: "node1", DevPath: "/dev/sdb",
+		Serial: "ZR5OLD0001", WWN: "5-c50-aaaa0001", Temperature: 38, StorageGroup: "tank",
+	}
+	// Identity cases sit on another device path, so only identity can match.
+	moved := func(serial, wwn string) models.PhysicalDisk {
+		return models.PhysicalDisk{ID: "pve1-node1--dev-sdc", DevPath: "/dev/sdc", Serial: serial, WWN: wwn}
+	}
+	inSlot := func(serial, wwn string) models.PhysicalDisk {
+		return models.PhysicalDisk{ID: slotID, DevPath: "/dev/sdb", Serial: serial, WWN: wwn}
+	}
+	for _, tc := range []struct {
+		name       string
+		current    models.PhysicalDisk
+		want       bool
+		wantSerial string
+	}{
+		{"renamed device, same serial", moved("ZR5OLD0001", "unknown"), true, "ZR5OLD0001"},
+		{"renamed device, PVE spelling of the agent WWN", moved("unknown", "0x5000c500aaaa0001"), true, "unknown"},
+		{"renamed device, old serial reported as WWN", moved("", "ZR5OLD0001"), true, "ZR5OLD0001"},
+		{"renamed device, different disk", moved("ZR5NEW0002", "0x5000c500bbbb0002"), false, ""},
+		{"same slot, PVE spelling of the agent WWN", inSlot("unknown", "0x5000c500aaaa0001"), true, "unknown"},
+		{"same slot, SAS address serial with matching WWN", inSlot("5000c500aaaa0003", "0x5000c500aaaa0001"), true, "5000c500aaaa0003"},
+		{"same slot, identity unreported", inSlot("unknown", "unknown"), true, "unknown"},
+		{"same slot, serial omitted by producer", inSlot("", ""), true, "ZR5OLD0001"},
+		{"same slot, placeholder WWN", inSlot("", "0x0000000000000000"), true, "ZR5OLD0001"},
+		{"same slot, different WWN", inSlot("", "0x5000c500bbbb0002"), false, ""},
+		{"same slot, different serial", inSlot("ZR5NEW0002", "unknown"), false, ""},
+		{"device token only, different WWN", models.PhysicalDisk{ID: "agent-fallback-id", DevPath: "/dev/sdb", WWN: "0x5000c500bbbb0002"}, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			current := tc.current
+			current.Instance, current.Node = "pve1", "node1"
+			current.Collection = &diskinventory.CollectionStatus{
+				Serial:      diskinventory.Missing("proxmox_disks", "disk serial was not reported"),
+				Temperature: diskinventory.Unsupported("proxmox_disks", "no temperature"),
+				Pool:        diskinventory.Unavailable("proxmox_zfs", "query failed"),
+			}
+			matched, ok := previousPhysicalDiskEvidence(current, []models.PhysicalDisk{previous})
+			if ok != tc.want {
+				t.Fatalf("previous evidence match = %v, want %v", ok, tc.want)
+			}
+			if !ok {
+				return
+			}
+			got := preserveUnavailablePhysicalDiskEvidence(current, matched)
+			if got.Serial != tc.wantSerial || got.Temperature != previous.Temperature || got.StorageGroup != previous.StorageGroup {
+				t.Fatalf("same disk evidence: serial %q (want %q), temperature %d, pool %q", got.Serial, tc.wantSerial, got.Temperature, got.StorageGroup)
+			}
+		})
+	}
+}
+
+// QEMU gives a virtual disk without a configured serial a default one built
+// from its drive ID or a per-VM counter, so every VM built the same way
+// reports the same value. Proxmox's disks/list serial is udev's
+// ID_SERIAL_SHORT, which for a nested Proxmox node's first SCSI disk is
+// "drive-scsi0" on every node. Treated as hardware identity, the registry
+// minted one canonical disk for the whole cluster and every node but one lost
+// its disk from inventory.
+func TestNestedProxmoxDefaultQEMUSerialsStayPerNode(t *testing.T) {
+	now := time.Now()
+	snapshot := models.StateSnapshot{}
+	for _, node := range []string{"pve1", "pve2", "pve3"} {
+		snapshot.Nodes = append(snapshot.Nodes, models.Node{
+			ID: "lab-" + node, Name: node, Instance: "lab", Status: "online", LastSeen: now,
+		})
+		for _, disk := range []struct{ devPath, serial string }{
+			{"/dev/sda", "drive-scsi0"},
+			{"/dev/sdb", "QM00005"},
+			{"/dev/sdc", "drive-scsi0-0-0-1"},
+		} {
+			snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+				ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("lab", node, disk.devPath, "", ""),
+				Instance: "lab", Node: node, DevPath: disk.devPath, Model: "QEMU HARDDISK",
+				Serial: disk.serial, Type: "hdd", Health: "PASSED", Size: 34359738368, LastChecked: now,
+			})
+		}
+	}
+
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(snapshot)
+	views := adapter.PhysicalDisks()
+	if len(views) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical physical disks = %d, want %d (one per node and device)", len(views), len(snapshot.PhysicalDisks))
+	}
+	seenSlots := make(map[string]bool, len(views))
+	seenMetricIDs := make(map[string]bool, len(views))
+	for _, view := range views {
+		seenSlots[view.Node()+":"+view.DevPath()] = true
+		seenMetricIDs[view.MetricResourceID()] = true
+	}
+	if len(seenSlots) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical disks cover %d node/device slots, want %d: %v", len(seenSlots), len(snapshot.PhysicalDisks), seenSlots)
+	}
+	if len(seenMetricIDs) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical disks resolve %d metric keys, want one per disk: %v", len(seenMetricIDs), seenMetricIDs)
+	}
+	writerIDs := make(map[string]bool, len(snapshot.PhysicalDisks))
+	for _, disk := range snapshot.PhysicalDisks {
+		writerIDs[unifiedresources.PhysicalDiskMetricID(disk)] = true
+	}
+	if len(writerIDs) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("SMART metric series = %d, want one per disk: %v", len(writerIDs), writerIDs)
+	}
+	for writerID := range writerIDs {
+		if !seenMetricIDs[writerID] {
+			t.Fatalf("SMART writer key %q is not a key readers resolve: %v", writerID, seenMetricIDs)
+		}
+	}
+
+	// The host agent inside each nested node reads the same ATA default
+	// through smartctl.
+	agentIDs := make(map[string]bool, 3)
+	for _, host := range []string{"agent-pve1", "agent-pve2", "agent-pve3"} {
+		agentIDs[unifiedresources.HostSMARTDiskSourceID(models.Host{ID: host}, models.HostDiskSMART{Device: "sdb", Serial: "QM00005"})] = true
+	}
+	if len(agentIDs) != 3 {
+		t.Fatalf("host agent disk source IDs = %v, want one per host", agentIDs)
+	}
+}
+
+// A TrueNAS VM's virtual disks report QEMU's default serial, the same on
+// every appliance built the same way, and other appliances report "UNKNOWN".
+// Neither may merge disks across appliances, and the SMART writer must file
+// history under the key the chart reader resolves, the disk's source ID,
+// rather than under the canonical resource ID.
+func TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	collectedAt := time.Now().UTC().Truncate(time.Second)
+	var records []unifiedresources.IngestRecord
+	diskCount := 0
+	for _, hostname := range []string{"truenas-a", "truenas-b"} {
+		fixtures := truenas.DefaultFixtures()
+		fixtures.CollectedAt = collectedAt
+		fixtures.System.CollectedAt = collectedAt
+		fixtures.System.Hostname = hostname
+		fixtures.System.MachineID = hostname + "-machine-id"
+		for i := range fixtures.Disks {
+			fixtures.Disks[i].Serial = "drive-scsi" + strconv.Itoa(i)
+		}
+		fixtures.Disks[0].Serial = "UNKNOWN"
+		diskCount += len(fixtures.Disks)
+		records = append(records, truenas.NewProvider(fixtures).Records()...)
+	}
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: records,
+	})
+	monitor := &Monitor{resourceStore: resourceStore, metricsStore: store}
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+
+	disks := 0
+	keys := make(map[string]string, diskCount)
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
+			continue
+		}
+		disks++
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "disk" || target.ResourceID == "" {
+			t.Fatalf("disk %s metrics target = %+v", resource.ID, target)
+		}
+		if other, shared := keys[target.ResourceID]; shared {
+			t.Fatalf("disks %s and %s share metric key %q", other, resource.ID, target.ResourceID)
+		}
+		keys[target.ResourceID] = resource.ID
+		if resource.PhysicalDisk.Temperature <= 0 {
+			continue
+		}
+		points, err := store.Query("disk", target.ResourceID, "smart_temp", collectedAt.Add(-time.Minute), time.Now().Add(time.Minute), 0)
+		if err != nil {
+			t.Fatalf("store.Query(%q) error = %v", target.ResourceID, err)
+		}
+		if len(points) == 0 {
+			t.Fatalf("disk %s (serial %q): no SMART history under the reader's key %q", resource.ID, resource.PhysicalDisk.Serial, target.ResourceID)
+		}
+	}
+	if disks != diskCount {
+		t.Fatalf("canonical TrueNAS disks = %d, want %d (one per appliance and device)", disks, diskCount)
 	}
 }

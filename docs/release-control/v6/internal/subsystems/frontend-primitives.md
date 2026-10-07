@@ -30,6 +30,19 @@ and `title`, and `getTemperatureTextClass` treats an open alert's severity as
 a floor: a reading that has dipped under an open alert's trigger keeps the
 alert's tone, while the reading still wins when it is worse.
 
+### Alert card and incident panel format held alerts through one helper — issue #2068
+
+`AlertOverviewAlertCard` and `AlertResourceIncidentsPanel` describe an open
+threshold alert through `features/alerts/metricAlertPresentation.ts`
+(summary, clear rule, `alertLevel` and `clearLevel`) instead of their own unit
+guesses or the breach message. `useAlertHistoryState` exposes its active-alert
+accessor so the incident panel matches its open occurrence to the live alert
+without a second store read, and the panel reads `useRelativeTimeNow` so a
+reading that stops updating turns stale on screen. From the `sm` breakpoint the
+card's left column (status icon and text) keeps a 16rem floor and the text
+breaks long words, so the action buttons wrap instead of squeezing the reading
+to its longest word beside them.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time
@@ -412,6 +425,14 @@ disk header and tooltips. Structured ZFS scan activity supplies a compact badge
 only during reported rebuild activity; its complete provider summary remains
 available. Stable disk History catalog/organisation/access ownership is unchanged.
 
+The physical-disk verdict words and their phone forms are `Needs Attention`
+(`Attention`), `Running Hot` (`Hot`) and `Replace Now` (`Replace`), all from
+`getPhysicalDiskHealthCompactLabel` in `diskPresentation.ts`. `Running Hot` is
+red and starts at the disk's alert trigger, from the same thresholds object
+that colours its Temp cell (`getPhysicalDiskTemperatureThresholds`). Callers
+pass the override keys of the machine that reports the disk, so that machine's
+Disk Temp override sets those thresholds.
+
 Controller expansions carry the supplied kind-specific targets, absolute times,
 duration and cluster/namespace when the phone row omits those columns. Proxmox
 coverage distinguishes independent backups from guest-local snapshots; By date
@@ -506,6 +527,44 @@ boundary is local to DisksCard, not a global scrollbar styling requirement.
 SharedPrimitives.guardrails.test.ts protects this composition; component tests
 preserve mount counts and totals. The disk-mounts qualification fixture checks
 short/long lists, themes and keyboard reachability with production CSS.
+
+### Retained disk usage
+
+DisksCard takes an optional `lastKnownReason` for usage figures that are
+retained rather than current. The machine drawer passes the host-agent
+stopped-reporting reason when `agent.stale` is set, the same signal that marks
+its Thermals rows "(last known)". The card keeps every figure, because a disk
+that filled before the machine went quiet is evidence. The total and each mount
+read "Last known N%" with used and total bytes, in muted text titled "Last known
+reading, not current: <reason>". Threshold text colour, the aggregate
+`StackedDiskBar` and the per-mount bars are dropped, as the guest drawer does
+for retained filesystem rows. Mount rows may wrap, with the label capped at the
+row width, so on a phone a long mountpoint takes its own line instead of
+squeezing the figures out of the card. `DisksCard.test.tsx` covers both
+readings and SharedPrimitives.guardrails.test.ts pins the branch and the drawer
+wiring.
+
+### Retained RAID state
+
+RaidCard takes the same optional `lastKnownReason`, and the machine drawer
+passes it on the same signal as the Disks card. The card keeps every array and
+member state, because an array that degraded before the machine went quiet is
+evidence. Each state reads "<state> (last known)" in muted text beside a muted
+dot, titled "Last known reading, not current: <reason>". A rebuild figure is
+not progress once the agent is silent, so where the card shows one (above 0 and
+below 100%) it reads "Rebuild was at N%" without the rebuild speed. Member
+badges drop their status colour, so a member that was not healthy names its
+state in the badge ("/dev/sdb2 · faulty"). The Machines table's RAID column
+applies the same rule from `agent.stale` to what it shows: a muted summary and
+a tooltip headed "RAID Arrays (last known)" without the rebuild bar or speed.
+The array header row wraps, so on a phone the longer state takes its own line
+instead of truncating the array name. The card's empty guard is tracked, so a
+drawer opened before the first RAID report shows the card once arrays arrive.
+`raidPresentation.ts` owns member health: mdadm's healthy "active sync"
+members read healthy, where they used to take the amber warning badge.
+`RaidCard.test.tsx`, `raidPresentation.test.ts` and
+`AgentsMachinesTable.test.tsx` cover both readings and the transitions between
+them, and SharedPrimitives.guardrails.test.ts pins the branch and both wirings.
 
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
@@ -688,11 +747,13 @@ same relative point in the selected history range. Leaving the row clears the
 cursor and restores the bars and I/O readouts together. The lens mounts with a short
 reduced-motion-safe fade and must not leave both bar and chart semantics in the
 accessibility tree simultaneously.
-Bar mode resolves history only for that active guest through its canonical
-metrics target and the selected compact range; it must not start an
-estate-wide chart request merely because the range changes. The active request
-key is stable across equivalent live guest snapshots, and leaving the row or
-selecting another range aborts superseded browser work. Persistent Trends may
+Bar mode resolves history per guest through each guest's canonical metrics
+target and the selected compact range, warming only a bounded window of
+mounted and adjacent rows with the active guest first; it must not start an
+estate-wide chart request merely because the range changes. The request key is
+stable across equivalent live guest snapshots, and selecting another range
+aborts superseded browser work. Leaving a row does not cancel its read, which
+settles into the bounded row cache. Persistent Trends may
 retain the shared estate reader, but range changes must clear prior-range data
 unless an exact-key cache entry exists.
 
@@ -2911,9 +2972,9 @@ Agent`), with the plain-language source phrase available through accessible
    `pveVersion` or a Pulse Agent report whose OS identity resolves to Unraid or
    Proxmox VE. They must omit the version rather than showing unrelated
    collector OS versions, such as Debian 12, beside an API-backed PVE badge.
-   Shared row primitives that render Proxmox node identity, including
-   `frontend-modern/src/components/shared/NodeGroupHeader.tsx`, must route raw
-   PVE manager payloads through
+   Surfaces that render Proxmox node versions, including the Proxmox page
+   model at `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`, must
+   route raw PVE manager payloads through
    `frontend-modern/src/utils/proxmoxVersion.ts` rather than inlining
    page-local parsing or falling back to unrelated agent OS versions.
    System title metadata must apply the same identity rule: once the primary
@@ -4395,12 +4456,14 @@ The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
 That slot belongs to the table header band and must not reintroduce nested
 cards or page-local toolbar wrappers inside `TableCard`. Proxmox host grouping
-also extends the shared `NodeGroupHeader` row pattern: host metrics may align
-with workload table columns, but the shared primitive owns the header/table
-shell boundary rather than platform pages copying their own card headers.
-Compact PVE version text in that header must come from the shared Proxmox
-version formatter so raw `pve-manager/...` payloads and platform-page host
-version cells stay consistent.
+also extends the shared `NodeGroupHeader` row pattern, which owns the
+header/table shell boundary rather than platform pages copying their own card
+headers. `frontend-modern/src/components/shared/NodeGroupHeader.tsx` renders
+node identity only (status dot, linked name, cluster and agent badges); in
+table-row mode that identity sits in one cell spanning the table. It carries no
+per-column cell renderer and no inline
+version, temperature, or uptime facts: host metrics and versions belong to the
+platform page's host table, so a group row must not duplicate them.
 Mobile navigation now recognizes `proxmox` as a first-class platform tab in
 the shared priority model so app-shell ordering remains centralized.
 
@@ -5329,6 +5392,18 @@ That tooltip owner now also holds the CSP-safe hover contract: chart tooltips
 must render inside the chart surface with model-owned layout and SVG/attribute
 positioning, not through fixed portals or inline `left`/`top` style attributes
 that violate the public demo CSP.
+The same CSP rule binds every runtime component, not only these owners. Solid
+compiles a static `style` value (a `style="..."` string, or any literal entry
+of a `style={{ ... }}` object) into the element's template HTML, and the
+production `style-src 'self' 'nonce-...'` policy reports each one as a
+`style-src-attr` violation when that template is parsed. Static styling must be
+a class: a Tailwind utility, or an arbitrary property such as the
+`[overflow-anchor:none]` on drawer tab panels. Only dynamic values may use
+`style`, because Solid applies those through CSSOM.
+`frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+compiles every runtime `.tsx` that mentions `style` with the client-build Solid
+preset and fails on any `style` attribute or `<style>` element in the
+resulting templates, including nested `<template>` content.
 Tooltip shell chrome must follow semantic surface, text, and border tokens
 rather than hardcoded dark palette utilities so light and dark themes share one
 primitive-owned contrast contract.
@@ -5591,6 +5666,14 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+A row whose status indicator is `danger` (offline) blanks every reading from
+its last report, not only the metric bars. Proxmox node rows already gate
+uptime and temperature on online. The Machines table gates its Uptime and
+Temperature cells, and the Docker hosts table its temperature cell, on the same
+check. A machine another source keeps up stays rendered, since its cell may
+carry that source's current reading. Numeric cells keep their own
+right-aligned empty dash; the centred `PlatformTableMetricFallback` marker
+stays specific to metric-bar cells.
 Platform table metric severity coloring is alert-backed, not hardcoded. The
 Docker host and container, Proxmox node, Kubernetes cluster and node, TrueNAS
 system and app, and vSphere host tables must resolve display thresholds
@@ -6406,6 +6489,11 @@ rebuilding it per surface. The overview shell must compose
 acknowledge/restore behavior rather than keeping duplicate API and notification
 logic inline in `useAlertOverviewState.ts` or a revived dashboard recent-alert
 panel.
+That hook takes the shared alert store's required `updateAlert` and keeps no
+acknowledgement override: the store holds the optimistic state until the server
+confirms it, while a second copy in the hook outlived that confirmation and hid
+a later unacknowledge from another session until reload. Snooze state reads the
+same store alerts.
 The same feature-owner rule now applies to the alert scheduling surface:
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
 schedule render shell, while
@@ -7143,6 +7231,12 @@ row carries the account in the badge title and the phone card renders it under
 the message, while `getAlertHistoryStatusPresentation` and
 `getAlertResolutionDetail` in `utils/alertIncidentPresentation.ts` own the
 wording.
+Resource-change readers follow the same split: `getResourceChangePresentation`
+and `formatResourceChangeHeadline` in `utils/resourceChangePresentation.ts`
+own the `Alert moved` label, its neutral-blue tone and the summary headline
+for an `alert_resolved` change with `alert_resolution` metadata, and the
+Patrol assessment handoff consumes that headline instead of composing its own
+kind prefix.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it
@@ -7803,6 +7897,16 @@ never through the threshold colour classes, so a retained reading cannot look
 hot or healthy. Table, drawer and pool surfaces share that one decision in
 `frontend-modern/src/features/storageBackups/diskPresentation.ts` rather than
 each re-reading `collection.temperature`.
+That decision and its class now live in the small
+`frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+module, which `diskPresentation.ts` re-exports, so the Machines table and the
+machine drawer's Thermals rows apply the same treatment without pulling the
+Storage presenter into their chunks. Those surfaces and the guest drawer's
+Physical Disks card import it directly.
+When the cell's value is a retained host-agent SMART temperature, it renders
+muted with a dotted underline and screen-reader "last known", as does a
+retained value in the guest card. Tooltip and Thermals rows say "(last known)",
+and the Thermals row carries the collection reason as its title.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
@@ -7980,6 +8084,15 @@ Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
+
+### The Proxmox nodes table reads node history only
+
+`frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx` draws its Trends
+sparklines through `useWorkloadTableMetricHistory` with `series: 'nodes'`, so
+it polls the infrastructure summary and no guest history. The embedded
+workloads table below it owns guest history and passes `series: 'guests'`.
+`ProxmoxNodesTable.test.tsx` pins the option; the per-page polling budget
+belongs to performance-and-scalability.
 
 ### Proxmox Storage reuses the shared product-family source scope
 

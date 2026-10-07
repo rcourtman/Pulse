@@ -119,37 +119,24 @@ func defaultTrueNASConnectionFixture(fixtures PlatformFixtures) TrueNASConnectio
 	}
 }
 
+// SupplementalRecords serves the fixture graph's provider-backed records while
+// mock mode is on and nothing once it is off. The router's mock adapters stay
+// registered for a moment after leaving mock mode, and a live refresh that
+// still reached them must not ingest and alert on fixture resources.
 func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
-	if IsMockEnabled() {
-		return CurrentFixtureGraph().SupplementalRecords(source)
-	}
-
-	platformFixtures := defaultPlatformFixtures()
-	now := time.Now().UTC()
-	switch normalizeSupplementalSource(source) {
-	case unifiedresources.SourceTrueNAS:
-		return truenas.FixtureRecords(platformFixtures.TrueNAS)
-	case unifiedresources.SourceVMware:
-		return vmware.FixtureRecords(platformFixtures.VMware)
-	case unifiedresources.SourceAvailability:
-		return availabilityFixtureRecords(defaultAvailabilityFixtures(now), now)
-	default:
+	if !IsMockEnabled() {
 		return nil
 	}
+	return CurrentFixtureGraph().SupplementalRecords(source)
 }
 
+// SupplementalChanges serves the fixture graph's provider activity while mock
+// mode is on and nothing once it is off, for the same reason.
 func SupplementalChanges(source unifiedresources.DataSource) []unifiedresources.ResourceChange {
-	if IsMockEnabled() {
-		return CurrentFixtureGraph().SupplementalChanges(source)
-	}
-
-	platformFixtures := defaultPlatformFixtures()
-	switch normalizeSupplementalSource(source) {
-	case unifiedresources.SourceVMware:
-		return vmware.FixtureActivityChanges(platformFixtures.VMware)
-	default:
+	if !IsMockEnabled() {
 		return nil
 	}
+	return CurrentFixtureGraph().SupplementalChanges(source)
 }
 
 func SupplementalOwnedSources() []unifiedresources.DataSource {

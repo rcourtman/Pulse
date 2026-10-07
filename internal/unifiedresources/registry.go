@@ -809,6 +809,16 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 				}
 			}
 		}
+		// Source verdicts are unexported, so a serialized copy arrives with
+		// none; an in-memory clone keeps them, and a facet sighting may lack
+		// one on purpose. Only a copy that lost them all takes its stored
+		// status as each source's verdict.
+		if !sourceVerdictsRecorded(resource.SourceStatus) && resource.Status != "" && resource.Status != StatusUnknown {
+			for source, status := range resource.SourceStatus {
+				status.reported = resource.Status
+				resource.SourceStatus[source] = status
+			}
+		}
 
 		rr.mu.Lock()
 		rr.canonicalIdentityIndex = nil
@@ -1754,6 +1764,15 @@ func sourceSightingStatus(lastSeen time.Time) string {
 		return "unknown"
 	}
 	return "online"
+}
+
+func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
+	for _, sighting := range sightings {
+		if sighting.reported != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
@@ -2848,6 +2867,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	sighting := resource.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(resource.LastSeen)
 	sighting.LastSeen = resource.LastSeen
+	sighting.reported = resource.Status
 	resource.SourceStatus = map[DataSource]SourceStatus{source: sighting}
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
@@ -2871,7 +2891,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			if onlyMissing {
 				return ""
 			}
-			rr.mergeInto(existing, resource, source)
+			rr.mergeInto(existing, resource, source, sourceID)
 			return existing.ID
 		}
 	}
@@ -2883,7 +2903,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			if onlyMissing {
 				return ""
 			}
-			rr.mergeInto(existing, resource, source)
+			rr.mergeInto(existing, resource, source, sourceID)
 			rr.bySource[source][sourceID] = existing.ID
 			return existing.ID
 		}
@@ -2898,7 +2918,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 				if onlyMissing {
 					return ""
 				}
-				rr.mergeInto(existing, resource, source)
+				rr.mergeInto(existing, resource, source, sourceID)
 				rr.bySource[source][sourceID] = existing.ID
 				return existing.ID
 			}
@@ -2907,6 +2927,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			if onlyMissing && rr.resources[resource.ID] != nil {
 				return ""
 			}
+			stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 			rr.resources[resource.ID] = &resource
 			rr.bySource[source][sourceID] = resource.ID
 			rr.matcher.Add(resource.ID, identity)
@@ -2920,11 +2941,12 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		if onlyMissing {
 			return ""
 		}
-		rr.mergeInto(existing, resource, source)
+		rr.mergeInto(existing, resource, source, sourceID)
 		rr.bySource[source][sourceID] = existing.ID
 		rr.matcher.Add(existing.ID, existing.Identity)
 		return existing.ID
 	}
+	stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 	rr.resources[resource.ID] = &resource
 	rr.bySource[source][sourceID] = resource.ID
 	rr.matcher.Add(resource.ID, identity)
@@ -3107,7 +3129,7 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 	resource.Identity = identity
 	resource.Type = CanonicalResourceType(resource.Type)
 
-	rr.mergeInto(existing, resource, SourceK8s)
+	rr.mergeInto(existing, resource, SourceK8s, sourceID)
 	rr.bySource[SourceK8s][sourceID] = existing.ID
 	rr.matcher.Add(existing.ID, existing.Identity)
 	return true
@@ -3670,7 +3692,7 @@ func identitiesShareHostname(a, b ResourceIdentity) bool {
 	return false
 }
 
-func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, source DataSource) {
+func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, source DataSource, sourceID string) {
 	if existing == nil {
 		return
 	}
@@ -3687,6 +3709,12 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	mergedPhysicalDisk := incoming.PhysicalDisk != nil
 	if mergedPhysicalDisk {
 		previous := existing.PhysicalDisk
+		incomingReading := physicalDiskRowTemperatureReading(incoming.PhysicalDisk, source, sourceID)
+		readings := withPhysicalDiskTemperatureReading(
+			physicalDiskTemperatureReadingsOf(previous, existing.Sources),
+			incomingReading,
+		)
+		kept := keptPhysicalDiskTemperature(previous, incomingReading)
 		existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
 		if source == SourceProxmox && previous != nil && hasDataSource(existing.Sources, SourceAgent) {
 			if diskinventory.IsUsableHardwareID(previous.Serial) &&
@@ -3732,7 +3760,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 				incoming.PhysicalDisk.Collection,
 			)
 		}
-		pairPhysicalDiskTemperatureState(existing.PhysicalDisk, previous, incoming.PhysicalDisk)
+		pairPhysicalDiskTemperatureState(existing.PhysicalDisk, readings, kept)
 	}
 	if existing.PhysicalDisk != nil && (mergedPhysicalDisk || len(incoming.Incidents) > 0) {
 		existing.PhysicalDisk.Risk = physicalDiskRiskFromMeta(existing.PhysicalDisk, existing.Incidents)
@@ -3788,6 +3816,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	sighting := incoming.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(incoming.LastSeen)
 	sighting.LastSeen = incoming.LastSeen
+	sighting.reported = incoming.Status
 	existing.SourceStatus[source] = sighting
 
 	if incoming.LastSeen.After(existing.LastSeen) {
@@ -4007,37 +4036,270 @@ func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData
 	return &merged
 }
 
-// pairPhysicalDiskTemperatureState stops one merge step presenting the shown
-// temperature under the other row's availability. The merge rules choose the
-// value by source preference and merge field states separately, so when the
-// two rows carry different temperatures the shown value can sit under the
-// other row's "available" state: a silent agent's retained reading beside a
-// Proxmox row that collected its own reading now, for example. When the
-// merged state says collected but the row the shown value came from says it
-// was not, the merged state becomes that row's own. Values never change, and a
-// state is only ever withdrawn here, never granted. previous may already be an
-// earlier step's merge, whose single state per field stands in for its rows.
-func pairPhysicalDiskTemperatureState(merged, previous, incoming *PhysicalDiskMeta) {
-	if merged == nil || previous == nil || incoming == nil || previous.Temperature == incoming.Temperature ||
-		!diskinventory.TemperatureCollected(merged.Temperature, merged.Collection) {
+// physicalDiskTemperatureReadings records, for one merged disk, the
+// temperature reading each of its rows reported with that row's own
+// collection state. The merge chooses the shown value by source preference
+// and merges field states separately, and with three or more rows one merged
+// state per field cannot say whose reading the value is, so the registry keeps
+// every row's reading and derives the state of the shown value from them
+// (pairPhysicalDiskTemperatureState). It is merge-time state, never
+// serialized: a disk read back from JSON starts again from its presented value
+// and state. A record is never mutated once built, so clones share it, and a
+// seeded disk continues from it only while it still presents the value and
+// state the record was built for. A disk that enters the registry as a new row
+// is that row alone, whatever record it carries.
+type physicalDiskTemperatureReadings struct {
+	// value and state are what the disk presented when this record was
+	// built. A disk that no longer presents them does not trust the record.
+	value int
+	state diskinventory.FieldStatus
+	// row is the row whose reading the presented state belongs to, empty
+	// when the state is not a reading's.
+	row string
+	// rows holds each row's current reading, sorted by row.
+	rows []physicalDiskTemperatureReading
+}
+
+type physicalDiskTemperatureReading struct {
+	// row identifies the reporting row (source and source ID), so that the
+	// row's next report replaces its reading. It is empty for a reading that
+	// stands in for a disk the registry did not merge itself.
+	row   string
+	value int
+	state diskinventory.FieldStatus
+	// withdraws is set when a state on this reading saying it is not collected
+	// is the agent's own word on that source. A host agent's own row is the
+	// later word on the fields it supplied.
+	withdraws bool
+	// copied is set when a state on this reading from an agent source may be
+	// a copy of an earlier agent report, which the agent's own withdrawal of
+	// that source supersedes: true for every reading but the agent's own row.
+	copied bool
+}
+
+// physicalDiskRowTemperatureReading is one ingested row's own reading.
+func physicalDiskRowTemperatureReading(meta *PhysicalDiskMeta, source DataSource, sourceID string) physicalDiskTemperatureReading {
+	reading := physicalDiskTemperatureReading{
+		row:       string(source) + "\x00" + normalizeSourceID(sourceID),
+		withdraws: source == SourceAgent,
+		copied:    source != SourceAgent,
+	}
+	if meta != nil {
+		reading.value = meta.Temperature
+		reading.state = physicalDiskTemperatureState(meta)
+	}
+	return reading
+}
+
+// physicalDiskTemperatureReadingsOf returns the readings behind a disk's
+// presented temperature. A disk the registry has not merged itself stands as
+// one reading of its presented value and state whose rows are unknown, so it
+// is taken conservatively both ways: an incoming agent row's withdrawal
+// supersedes the state it presents, and when the agent is among its sources
+// its own withdrawal still supersedes an incoming copy.
+func physicalDiskTemperatureReadingsOf(meta *PhysicalDiskMeta, sources []DataSource) []physicalDiskTemperatureReading {
+	if meta == nil {
+		return nil
+	}
+	if record := physicalDiskTemperatureRecord(meta); record != nil {
+		return record.rows
+	}
+	return []physicalDiskTemperatureReading{{
+		value:     meta.Temperature,
+		state:     physicalDiskTemperatureState(meta),
+		withdraws: hasDataSource(sources, SourceAgent),
+		copied:    true,
+	}}
+}
+
+// withPhysicalDiskTemperatureReading returns rows with reading in place of
+// any earlier reading from the same row, sorted by row, in a new slice.
+func withPhysicalDiskTemperatureReading(
+	rows []physicalDiskTemperatureReading,
+	reading physicalDiskTemperatureReading,
+) []physicalDiskTemperatureReading {
+	out := make([]physicalDiskTemperatureReading, 0, len(rows)+1)
+	for _, existing := range rows {
+		if existing.row != reading.row {
+			out = append(out, existing)
+		}
+	}
+	out = append(out, reading)
+	sort.Slice(out, func(i, j int) bool { return out[i].row < out[j].row })
+	return out
+}
+
+// physicalDiskTemperatureRecord returns the disk's readings record while the
+// disk still presents the value and state it was built for.
+func physicalDiskTemperatureRecord(meta *PhysicalDiskMeta) *physicalDiskTemperatureReadings {
+	if meta == nil {
+		return nil
+	}
+	record := meta.temperatureReadings
+	if record == nil || record.value != meta.Temperature || record.state != physicalDiskTemperatureState(meta) {
+		return nil
+	}
+	return record
+}
+
+// keptPhysicalDiskTemperature is the reading behind a value source preference
+// keeps showing after the row that reported it has reported again (an agent
+// row going into standby reports no temperature, a row without SMART
+// attributes cannot displace one with them). The kept value is always the
+// previously presented one, so it keeps the state it was presented with and
+// the row that state belonged to, under that row's new withdrawal when it
+// reports one. It counts as a copy: the agent's withdrawal of its source still
+// supersedes it.
+func keptPhysicalDiskTemperature(previous *PhysicalDiskMeta, incoming physicalDiskTemperatureReading) physicalDiskTemperatureReading {
+	kept := physicalDiskTemperatureReading{copied: true}
+	if previous == nil {
+		return kept
+	}
+	kept.value = previous.Temperature
+	kept.state = physicalDiskTemperatureState(previous)
+	if record := physicalDiskTemperatureRecord(previous); record != nil {
+		kept.row = record.row
+	}
+	if kept.row != "" && kept.row == incoming.row &&
+		incoming.state.State != "" && incoming.state.State != diskinventory.FieldAvailable {
+		kept.state = incoming.state
+	}
+	return kept
+}
+
+// stampPhysicalDiskTemperatureReading gives a disk entering the registry
+// without a merge the record of its own row's reading.
+func stampPhysicalDiskTemperatureReading(resource *Resource, source DataSource, sourceID string) {
+	if resource == nil || resource.PhysicalDisk == nil {
 		return
 	}
-	var shown *PhysicalDiskMeta
-	switch merged.Temperature {
-	case incoming.Temperature:
-		shown = incoming
-	case previous.Temperature:
-		shown = previous
-	default:
+	meta := *resource.PhysicalDisk
+	reading := physicalDiskRowTemperatureReading(&meta, source, sourceID)
+	meta.temperatureReadings = &physicalDiskTemperatureReadings{
+		value: meta.Temperature,
+		state: physicalDiskTemperatureState(&meta),
+		row:   reading.row,
+		rows:  []physicalDiskTemperatureReading{reading},
+	}
+	resource.PhysicalDisk = &meta
+}
+
+func physicalDiskTemperatureState(meta *PhysicalDiskMeta) diskinventory.FieldStatus {
+	if meta == nil || meta.Collection == nil {
+		return diskinventory.FieldStatus{}
+	}
+	return meta.Collection.Temperature
+}
+
+// physicalDiskTemperatureSourceKey normalizes the source of a temperature
+// state for matching an agent's withdrawal to another row's copy of it. A
+// host agent from before collection provenance withdraws its readings without
+// a source, while monitoring stamps its readings copied onto a Proxmox row
+// with the legacy agent source; diskinventory.LegacyHostAgentStatus is that
+// one rule, applied to the agent's own word.
+func physicalDiskTemperatureSourceKey(status diskinventory.FieldStatus, agentWord bool) string {
+	if agentWord {
+		status = diskinventory.LegacyHostAgentStatus(status, false)
+	}
+	return strings.ToLower(strings.TrimSpace(status.Source))
+}
+
+// pairPhysicalDiskTemperatureState presents the merged disk's shown
+// temperature under a state that belongs to it, and records the readings for
+// the next merge step. Among the readings of the shown value, each counts its
+// own state, except that a state another row copied from an agent source
+// gives way to the agent's own withdrawal of that source (a lease expiry, a
+// standby): the agent's own row is the later word on its sources, so neither
+// a copied "available" nor a copied older withdrawal stands against it. That
+// withdrawal is the only state taken from a reading of another value; it is
+// never "available", so availability is never borrowed. A collected reading
+// is presented over one that is not, an agent's own report over a copy, and a
+// reported row over a disk's stand-in, so for the same shown value and the
+// same row reports, the order in which different rows arrive does not change
+// the state. Source preference still chooses the value
+// (mergePhysicalDiskData and the Proxmox carry in mergeInto); this never
+// changes it. A value no current reading holds is the kept one
+// (keptPhysicalDiskTemperature). With no temperature shown the merged state
+// stays as the field-state rules left it.
+func pairPhysicalDiskTemperatureState(
+	merged *PhysicalDiskMeta,
+	rows []physicalDiskTemperatureReading,
+	kept physicalDiskTemperatureReading,
+) {
+	if merged == nil {
 		return
 	}
-	if diskinventory.TemperatureCollected(shown.Temperature, shown.Collection) {
+	owner := ""
+	defer func() {
+		merged.temperatureReadings = &physicalDiskTemperatureReadings{
+			value: merged.Temperature,
+			state: physicalDiskTemperatureState(merged),
+			row:   owner,
+			rows:  rows,
+		}
+	}()
+	if merged.Temperature <= 0 {
 		return
 	}
-	if merged.Collection == nil {
-		merged.Collection = &diskinventory.CollectionStatus{}
+	// A reported row's withdrawal is later than the one a stand-in presents.
+	type withdrawal struct {
+		state   diskinventory.FieldStatus
+		standIn bool
 	}
-	merged.Collection.Temperature = shown.Collection.Temperature
+	withdrawn := make(map[string]withdrawal)
+	for _, row := range rows {
+		key := physicalDiskTemperatureSourceKey(row.state, row.withdraws)
+		if !row.withdraws || key == "" || row.state.State == "" || row.state.State == diskinventory.FieldAvailable {
+			continue
+		}
+		if current, seen := withdrawn[key]; !seen || current.standIn {
+			withdrawn[key] = withdrawal{state: row.state, standIn: row.row == ""}
+		}
+	}
+	rank := func(row physicalDiskTemperatureReading, state diskinventory.FieldStatus) int {
+		score := 0
+		if !diskinventory.TemperatureCollected(row.value, &diskinventory.CollectionStatus{Temperature: state}) {
+			score += 4
+		}
+		if row.copied {
+			score += 2
+		}
+		if row.row == "" {
+			score++
+		}
+		return score
+	}
+	effective := func(row physicalDiskTemperatureReading) diskinventory.FieldStatus {
+		if row.copied && row.state.State != "" {
+			if agentWord, ok := withdrawn[physicalDiskTemperatureSourceKey(row.state, row.withdraws)]; ok {
+				return agentWord.state
+			}
+		}
+		return row.state
+	}
+	found, bestRank := false, 0
+	var state diskinventory.FieldStatus
+	for _, row := range rows {
+		if row.value != merged.Temperature {
+			continue
+		}
+		rowState := effective(row)
+		if rowRank := rank(row, rowState); !found || rowRank < bestRank {
+			found, bestRank, state, owner = true, rowRank, rowState, row.row
+		}
+	}
+	if !found && kept.value == merged.Temperature {
+		found, state, owner = true, effective(kept), kept.row
+	}
+	if !found || (merged.Collection == nil && state == (diskinventory.FieldStatus{})) {
+		return
+	}
+	collection := diskinventory.CloneStatus(merged.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	collection.Temperature = state
+	merged.Collection = collection
 }
 
 func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMeta) *PhysicalDiskMeta {
@@ -4459,6 +4721,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.SourceStatus = make(map[DataSource]SourceStatus)
 	}
 	for source, status := range other.SourceStatus {
+		// Linked resources can share a source, such as an agent reinstalled
+		// under a new id. Keep the fresher sighting so a stale or expired one
+		// cannot override a reporter that is still live.
+		if current, ok := primary.SourceStatus[source]; ok && current.LastSeen.After(status.LastSeen) {
+			continue
+		}
 		primary.SourceStatus[source] = status
 	}
 	if other.LastSeen.After(primary.LastSeen) {
@@ -5818,31 +6086,54 @@ func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataS
 	return incoming
 }
 
+// aggregateStatus derives a resource's status from its source sightings. A
+// sighting's Status only says whether the source delivered recently; the
+// status the source reported is its verdict. While any source with a verdict
+// is current, only the current sources decide, in chooseStatus's priority
+// order: the highest-priority verdict, the best of equal ones. A source that
+// went quiet drops out of that decision, so a node the cluster reports
+// offline stays offline when its linked agent falls silent. A current facet
+// sighting without a verdict (the PBS association, an availability check)
+// counts as online only when no current source has one. Once every source is
+// quiet, an offline verdict survives (a node the poller expired, an agent past
+// its lease) and any other reads as warning; the best of those wins.
 func aggregateStatus(resource *Resource) ResourceStatus {
-	statusPriority := map[string]int{
-		"online":  3,
-		"stale":   2,
-		"offline": 1,
-	}
-	best := StatusUnknown
-	bestScore := 0
-	for _, status := range resource.SourceStatus {
-		score := statusPriority[strings.ToLower(status.Status)]
-		if score > bestScore {
-			bestScore = score
-			if status.Status == "online" {
-				best = StatusOnline
-			} else if status.Status == "stale" {
-				best = StatusWarning
-			} else if status.Status == "offline" {
-				best = StatusOffline
+	var current, quiet ResourceStatus
+	currentPriority := -1
+	deliveredWithoutVerdict := false
+	for source, sighting := range resource.SourceStatus {
+		switch strings.ToLower(strings.TrimSpace(sighting.Status)) {
+		case "online":
+			switch sighting.reported {
+			case "":
+				deliveredWithoutVerdict = true
+				continue
+			case StatusUnknown:
+				continue
 			}
+			if priority := sourcePriority(source); priority > currentPriority {
+				current, currentPriority = sighting.reported, priority
+			} else if priority == currentPriority {
+				current = betterPresentationStatus(current, sighting.reported)
+			}
+		case "stale", "offline":
+			verdict := StatusWarning
+			if sighting.reported == StatusOffline || strings.EqualFold(strings.TrimSpace(sighting.Status), "offline") {
+				verdict = StatusOffline
+			}
+			quiet = betterPresentationStatus(quiet, verdict)
 		}
 	}
-	if best == "" {
+	switch {
+	case currentPriority >= 0:
+		return current
+	case deliveredWithoutVerdict:
+		return StatusOnline
+	case quiet != "":
+		return quiet
+	default:
 		return StatusUnknown
 	}
-	return best
 }
 
 func (rr *ResourceRegistry) isExcluded(a, b string) bool {

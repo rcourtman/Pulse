@@ -28,12 +28,14 @@ import {
 import { alertTypeDisplayLabel } from './helpers';
 import { describeAlertDeliveryStatus } from './deliveryDiagnosisPresentation';
 import { getCanonicalAlertId } from './identity';
+import { getMetricAlertPresentation } from './metricAlertPresentation';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
 import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction';
 import { AlertSnoozeAction } from './AlertSnoozeAction';
 import { isAlertSnoozed } from './useAlertSnoozeState';
 import { isPulseSystemAlert } from '@/utils/alertScope';
+import { formatTemperature } from '@/utils/temperature';
 import {
   normalizeSourcePlatformQueryValue,
   resolvePlatformTypeFromSources,
@@ -82,6 +84,23 @@ const PLATFORM_PAGE_PATHS: Record<PrimaryPlatformNavId, string> = {
   standalone: buildStandalonePath(),
 };
 
+// Units of the threshold metrics, matching the evaluator's metric status unit.
+const THRESHOLD_UNIT_BY_ALERT_TYPE: Record<string, string> = {
+  cpu: '%',
+  memory: '%',
+  disk: '%',
+  'disk-usage': '%',
+  usage: '%',
+  temperature: '°C',
+  disk_temperature: '°C',
+  diskTemperature: '°C',
+  diskRead: ' MB/s',
+  diskWrite: ' MB/s',
+  networkIn: ' MB/s',
+  networkOut: ' MB/s',
+  'disk-wearout': '%',
+};
+
 const platformPagePath = (platform: string | undefined): string | undefined => {
   if (!platform) return undefined;
   const navId = PRIMARY_PLATFORM_NAV_IDS.find((id) =>
@@ -116,8 +135,35 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     return describeAlertDeliveryStatus(diagnosis, props.alert.acknowledged);
   };
   const [moreOpen, setMoreOpen] = createSignal(false);
+  // A threshold alert can stay open below its trigger, so the card leads with
+  // the reading Pulse is evaluating now; the message keeps the last breach.
+  const metricPresentation = () =>
+    isPulseSystemAlert(props.alert)
+      ? null
+      : getMetricAlertPresentation(props.alert, props.state.tick());
+  const alertLevels = (): { alert: string; clear?: string } | null => {
+    const presentation = metricPresentation();
+    if (presentation) {
+      return {
+        alert: presentation.alertLevel,
+        clear:
+          presentation.clearLevel !== presentation.alertLevel ? presentation.clearLevel : undefined,
+      };
+    }
+    if (isPulseSystemAlert(props.alert) || !(props.alert.threshold > 0)) return null;
+    // Without a live status only the metric types carry a known unit; other
+    // thresholds (queue ages, counts) are stated in their own message.
+    const unit = THRESHOLD_UNIT_BY_ALERT_TYPE[props.alert.type];
+    if (!unit) return null;
+    return {
+      alert:
+        unit === '°C'
+          ? formatTemperature(props.alert.threshold)
+          : `${props.alert.threshold}${unit}`,
+    };
+  };
   const hasMetaLine = () =>
-    (!isPulseSystemAlert(props.alert) && props.alert.threshold > 0) ||
+    Boolean(alertLevels()) ||
     Boolean(deliveryStatusLine()) ||
     (isAlertSnoozed(props.alert) && Boolean(props.alert.operationalRecord?.suppression?.expiresAt));
   const timelineOpen = () => props.timelineState.expandedIncidents().has(alertKey());
@@ -203,7 +249,9 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   return (
     <div id={`alert-${alertKey()}`} class={alertCardPresentation().cardClassName}>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
-        <div class="flex items-start flex-1">
+        {/* Without a floor the text column shrinks to its longest word and the
+            actions keep one row, squeezing the reading to ~110px beside them. */}
+        <div class="flex items-start flex-1 sm:min-w-64">
           <div class={alertCardPresentation().iconClassName}>
             {props.alert.acknowledged ? (
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,7 +273,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               </svg>
             )}
           </div>
-          <div class="flex-1 min-w-0">
+          <div class="flex-1 min-w-0 wrap-anywhere">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <Show
                 when={hasResource()}
@@ -273,16 +321,37 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 {formatAlertOverviewStartedAgo(props.alert.startTime, props.state.tick())}
               </span>
             </div>
-            <p class="text-sm text-base-content mt-0.5 wrap-break-word">{props.alert.message}</p>
+            <Show
+              when={metricPresentation()}
+              fallback={
+                <p class="text-sm text-base-content mt-0.5 wrap-break-word">
+                  {props.alert.message}
+                </p>
+              }
+            >
+              {(presentation) => (
+                <>
+                  <p
+                    class="text-sm text-base-content mt-0.5 wrap-break-word"
+                    title={presentation().lastBreach}
+                  >
+                    {presentation().summary}
+                  </p>
+                  <p class="text-xs text-muted wrap-break-word">{presentation().detail}</p>
+                </>
+              )}
+            </Show>
             <Show when={hasMetaLine()}>
               <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                <Show when={!isPulseSystemAlert(props.alert) && props.alert.threshold > 0}>
-                  <span class="text-xs text-muted">
-                    limit: {props.alert.threshold}
-                    {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
-                      ? '°C'
-                      : '%'}
-                  </span>
+                <Show when={alertLevels()}>
+                  {(levels) => (
+                    <>
+                      <span class="text-xs text-muted">Alert level {levels().alert}</span>
+                      <Show when={levels().clear}>
+                        <span class="text-xs text-muted">Clear level {levels().clear}</span>
+                      </Show>
+                    </>
+                  )}
                 </Show>
                 <Show when={deliveryStatusLine()}>
                   <span

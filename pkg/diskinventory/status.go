@@ -15,6 +15,29 @@ const (
 	FieldMissing     FieldState = "missing"
 )
 
+// LegacyHostAgentSource is the provenance recorded for a host agent field
+// reported before collection provenance existed (agents before 6.2). Those
+// agents send only readings they collected.
+const LegacyHostAgentSource = "host_agent"
+
+// LegacyHostAgentStatus returns a host agent field's collection state with
+// the legacy agent's provenance filled in. A report from before collection
+// provenance carries no state, so a present reading was collected from
+// LegacyHostAgentSource, and a state recorded for such a report without a
+// source (its lease-expiry withdrawal) is that source's too. Monitoring
+// stamps the legacy source on the Proxmox disk's copy of the reading and the
+// unified-resources registry matches the agent's withdrawal to that copy, so
+// both apply this one rule.
+func LegacyHostAgentStatus(status FieldStatus, hasReading bool) FieldStatus {
+	switch {
+	case status.State == "" && hasReading:
+		return Available(LegacyHostAgentSource)
+	case status.State != "" && strings.TrimSpace(status.Source) == "":
+		status.Source = LegacyHostAgentSource
+	}
+	return status
+}
+
 // FieldStatus carries collection state and provenance for one disk signal.
 type FieldStatus struct {
 	State  FieldState `json:"state"`

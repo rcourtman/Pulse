@@ -744,6 +744,16 @@ through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
 contract); it must not route through a full state snapshot, which copied every
 guest on each agent report.
 
+The mock toggle keeps the same boundary for evaluations already in flight.
+`SetMockMode` ends the mock-mode epoch before it clears alerts and forgets the
+fixture agents (see the monitoring contract), so a fixture agent pass that read
+the estate before the toggle cannot reopen the agent's alerts or re-register
+its hostname deduplication afterwards. The toggle waits for the
+alert-manager calls already running, not for whole passes. Report admission is
+not fenced: a live report already past its mock-mode check when mock mode is
+switched on can still be evaluated after the clear, and its alerts can persist
+until mock mode is left.
+
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
@@ -755,19 +765,32 @@ agent's SMART temperature and I/O counters as last-known values but marks them
 report replaces them. Expiry is compare-and-set on the report time the offline
 sweep judged stale, so a report admitted between that judgement and the expiry
 is never expired.
+A legacy agent's report carries no collection state, so its expiry records
+`unavailable` without a source; monitoring's Proxmox-disk copy and the
+unified-resources registry both read that through
+`diskinventory.LegacyHostAgentStatus` (the `host_agent` source), so the
+withdrawal still supersedes the copy a Proxmox disk keeps once its host stops
+being polled.
 Unraid array-inventory temperatures follow the same lease: while the host is
 offline the unified-resources adapter reports them `unavailable` with the same
 reason (`models.HostAgentStoppedReportingReason`) and leaves them out of the
 disk's risk, and the metrics-history API does not return any such retained
 disk temperature as a live point.
+Downstream readers keep that distinction too. The disk temperature charts do
+not pad a series to now with the retained value. The AI chat context, Patrol and
+the AI disk tools present it only as a last-known value with its reason. The
+performance report and the reporting runtime snapshot leave it out of their
+disk tables. The performance report colours a collected reading by the
+tenant's alert disk temperature thresholds for the disk type, not a fixed line.
 The same lease bounds the host row's other readings in that API: once the
 host reads `offline`, an empty `agent` range returns no live CPU, memory, disk
 or sensor temperature point from the host row the expiry kept. An agent linked
 to a Proxmox node answers from that node row instead, under the node row's own
 checks. A Docker host that `evaluateDockerAgents` marks offline likewise stops
-answering with live points for itself and its containers, except that a Docker
-row merged with a reporting host agent shows the agent's status until its
-Docker sighting goes stale. The retained values stay last-known context.
+answering with live points for itself and its containers; a Docker row merged
+with a reporting host agent keeps the agent's status, so its live points end
+only when its Docker sighting goes stale. The retained values stay last-known
+context.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment
@@ -2766,6 +2789,11 @@ agent inventory, registration state, or command-channel readiness.
    enrollment, and reporting freshness flows may coexist with generated
    reports, but workspace logo material remains API/security/reporting
    ownership and must not become agent credential, install-token, or fleet
+   lifecycle state.
+   Report alert rows built there carry an alert's handover resolution, so a
+   node alert that moved to its linked Pulse agent reads as moved, not
+   recovered. That is report presentation only: the report never decides
+   agent linkage, ownership of a metric, or agent freshness, and it adds no
    lifecycle state.
    The same isolation rule applies to Patrol investigation-record propagation
    through shared AI intelligence handlers and `internal/api/router.go`:
@@ -8733,6 +8761,24 @@ admission, token binding or removal-block behaviour. Focused proof lives in
 `internal/monitoring/physical_disk_roundtrip_test.go`
 (`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
 `TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`).
+
+### QEMU default disk serials are not agent disk identity
+
+`internal/monitoring/monitor.go` changed only so the unified physical-disk
+metric sync, which writes SMART history for disks without a native writer such
+as TrueNAS disks, always writes under the disk's resolved metrics target. It
+previously did so only for an empty serial, so a non-empty serial that was
+already rejected as a placeholder, such as `UNKNOWN`, sent the samples to the
+canonical resource ID that no reader resolves. The same change makes
+`diskinventory.IsUsableHardwareID` reject QEMU's default disk serials
+(`drive-scsi0`, `scsi0-hd0`, `none0`, `QM00001`), so a host agent inside a
+QEMU VM that reports one of them now keys that disk on its host and device
+through `HostSMARTDiskSourceID` instead of on a serial every such VM shares.
+Those disks change source ID and SMART metric key once. Agent registration,
+enrolment, install, update, removal and report identity are unchanged.
+Focused proof lives in `internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestNestedProxmoxDefaultQEMUSerialsStayPerNode` and
+`TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey`).
 
 ### Windows braced MachineGuid does not abort agent startup
 
