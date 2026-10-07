@@ -11,11 +11,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// UpdateConfig updates the alert configuration.
+// UpdateConfig applies an owned copy of the alert configuration. The caller
+// retains its maps, slices and thresholds for encoding or further edits; only
+// another explicit update may change the running alert policy.
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.updateConfigLocked(config)
+	m.updateConfigLocked(config.Clone())
 }
 
 // ErrConfigSnapshot reports an update that was applied but could not be copied

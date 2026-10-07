@@ -1,6 +1,9 @@
 package alerts
 
 import (
+	"encoding/json"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -279,5 +282,117 @@ func TestApplyConfigUpdateKeepsConcurrentPartialUpdates(t *testing.T) {
 			t.Fatalf("round %d: flapping=%v maxAlertAgeDays=%d, want both concurrent updates kept",
 				round, got.FlappingEnabled, got.MaxAlertAgeDays)
 		}
+	}
+}
+
+func inputOwnershipConfig(m *Manager) AlertConfig {
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	cfg.TimeThresholds = map[string]int{"guest": 0}
+	cfg.Overrides = map[string]ThresholdConfig{"ownership-guest": {CPU: &HysteresisThreshold{Trigger: 80, Clear: 75}}}
+	cfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"cpu": 0}}
+	cfg.MetricEvaluationWindows = map[string]map[string]int{"guest": {"cpu": 0}}
+	cfg.IgnoredGuestPrefixes = []string{"ignored-"}
+	cfg.Schedule.QuietHours.Days = map[string]bool{"monday": true}
+	cfg.Schedule.Escalation.Levels = []EscalationLevel{{After: 10, Notify: "all", DestinationIDs: []string{"webhook:original"}}}
+	return cfg
+}
+
+func TestUpdateConfigDoesNotNormalizeCallerInput(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
+	cfg := inputOwnershipConfig(m)
+	// Invalid hysteresis and delays must still be normalised in the manager,
+	// without rewriting the caller's pointers or maps.
+	cfg.GuestDefaults.CPU.Clear = 90
+	cfg.TimeThresholds["guest"] = -1
+	before := cfg.Clone()
+	m.UpdateConfig(cfg)
+	if !reflect.DeepEqual(cfg, before) {
+		t.Error("applying a config rewrote caller-owned configuration")
+	}
+	live := m.GetConfig()
+	if live.GuestDefaults.CPU.Clear != 75 || live.Overrides["ownership-guest"].CPU.Clear != 75 || live.TimeThresholds["guest"] < 0 {
+		t.Fatalf("owned config did not retain normalisation: guest=%+v override=%+v delay=%d", live.GuestDefaults.CPU, live.Overrides["ownership-guest"].CPU, live.TimeThresholds["guest"])
+	}
+}
+
+func TestUpdateConfigCallerEditsDoNotChangeAppliedPolicy(t *testing.T) {
+	cases := map[string]func(*AlertConfig){
+		"threshold-pointer": func(c *AlertConfig) { c.GuestDefaults.CPU.Trigger = 0 },
+		"override-map":      func(c *AlertConfig) { c.Overrides["ownership-guest"] = ThresholdConfig{Disabled: true} },
+		"override-pointer":  func(c *AlertConfig) { c.Overrides["ownership-guest"].CPU.Trigger = 0 },
+		"delay-map":         func(c *AlertConfig) { c.TimeThresholds["guest"] = 3600 },
+		"nested-delay-map":  func(c *AlertConfig) { c.MetricTimeThresholds["guest"]["cpu"] = 3600 },
+		"window-map":        func(c *AlertConfig) { c.MetricEvaluationWindows["guest"]["cpu"] = 3600 },
+		"prefix-slice":      func(c *AlertConfig) { c.IgnoredGuestPrefixes[0] = "ownership-" },
+		"schedule-map":      func(c *AlertConfig) { c.Schedule.QuietHours.Days["monday"] = false },
+		"destination-slice": func(c *AlertConfig) { c.Schedule.Escalation.Levels[0].DestinationIDs[0] = "webhook:changed" },
+	}
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			m := NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(m.Stop)
+			cfg := inputOwnershipConfig(m)
+			m.UpdateConfig(cfg)
+			applied := m.GetConfig()
+			edit(&cfg)
+			if got := m.GetConfig(); !reflect.DeepEqual(got, applied) {
+				t.Error("editing the submitted config changed live policy without an update")
+			}
+			guest := models.VM{ID: "ownership-guest", Name: "ownership-guest", Status: "running", CPU: .95}
+			m.CheckGuest(guest, "ownership")
+			found := false
+			for _, alert := range m.GetActiveAlerts() {
+				if alert.ResourceID == guest.ID && alert.Type == "cpu" {
+					found = true
+				}
+			}
+			if !found {
+				t.Error("submitted-config edit prevented the ordinary CPU alert")
+			}
+			// An intentional resubmission still applies the changed setting.
+			m.UpdateConfig(cfg)
+			expected := m.GetConfig()
+			if reflect.DeepEqual(expected, applied) {
+				t.Error("explicit resubmission did not apply the edit")
+			}
+		})
+	}
+}
+
+func TestUpdateConfigInputCanBeEncodedDuringLaterUpdates(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
+	cfg := inputOwnershipConfig(m)
+	m.UpdateConfig(cfg)
+	before := cfg.Clone()
+	// A caller may retain an applied snapshot for a response or persistence.
+	// Later policy reconciliation must not write its override map while it is
+	// being encoded. Exercise this under -race, using actual manager updates.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			if _, err := json.Marshal(cfg); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			// An alias of an already applied config is legal sequential input. The
+			// manager owns normalisation; neither call transfers caller ownership.
+			m.UpdateConfig(cfg)
+			m.CheckGuest(models.VM{ID: "ownership-guest", Status: "running", CPU: .2, LastSeen: time.Now()}, "ownership")
+		}
+	}()
+	wg.Wait()
+	if !reflect.DeepEqual(cfg, before) {
+		t.Error("later updates modified retained input")
 	}
 }
