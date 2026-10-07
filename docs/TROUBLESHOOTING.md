@@ -622,8 +622,17 @@ without exhausting the retry budget; waiting alone will not resend it. See
 [webhook retry behaviour](WEBHOOKS.md#-delivery-contract) for HTTP exceptions,
 transient failures and the normal queued attempt limit.
 
-**Recent delivery activity** includes safely redacted provider errors;
-completed attempts remain for 7 days and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+**Recent delivery activity** masks recognised credentials in URLs, **not all
+private information**. Provider error text can still include email addresses,
+private destinations or credentials echoed outside a URL; alert identifiers and
+resource names can also identify your infrastructure. Keep full entries, copied
+responses and screenshots private. A `REDACTED` marker does not make the rest
+safe to share. For a public report, extract only the relevant timestamp,
+delivery method, failure class, HTTP status or SMTP error code and a manually
+redacted error. See [notification log precautions](#inspect-notification-logs).
+
+Completed attempts remain for 7 days and dead-letter attempts for 30 days.
+Start with the failure class and timestamp:
 
 | Failure | Check before retrying |
 | --- | --- |
