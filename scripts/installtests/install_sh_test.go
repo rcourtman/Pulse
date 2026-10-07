@@ -1,6 +1,7 @@
 package installtests
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -8036,5 +8037,61 @@ grep -qx 'saved installer' "$PWD/state/install.sh"
 	cmd.Dir = t.TempDir()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("lifecycle ownership: %v\n%s", err, out)
+	}
+}
+
+func agentIDRecoveryShell(t *testing.T, binaryPath, root, path string) string {
+	t.Helper()
+	return `
+        set -euo pipefail
+        COLLECTOR_LIFECYCLE_BINARY_PATH="` + binaryPath + `"
+        INSTALL_DIR="` + root + `"
+        BINARY_NAME="absent-legacy-agent"
+        LEAST_PRIVILEGE_USER="pulse-agent-test-missing"
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+` + extractInstallShellFunction(t, "read_agent_id_file_safely") + `
+        read_agent_id_file_safely "` + path + `"
+    `
+}
+
+func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		name string
+		body []byte
+		want string
+	}{
+		{"newline", []byte("agent-safe-123\n"), "agent-safe-123"},
+		{"no-newline", []byte("agent-safe-123"), "agent-safe-123"},
+		{"maximum", []byte(strings.Repeat("a", 128) + "\n"), strings.Repeat("a", 128)},
+		{"oversized-valid-prefix", []byte("agent-safe-123\n" + strings.Repeat("a", 5000)), ""},
+		{"second-identity", []byte("agent-safe-123\nother-agent\n"), ""},
+		{"nul-with-newline", []byte("agent-safe-123\x00\n"), ""},
+		{"nul-without-newline", []byte("agent-safe-123\x00"), ""},
+		{"carriage-return", []byte("agent-safe-123\r\n"), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(root, tc.name)
+			if err := os.WriteFile(path, tc.body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", agentIDRecoveryShell(t, "", root, path))
+			cmd.WaitDelay = time.Second
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("legacy recovery deadline expired: %v exit=%v", ctx.Err(), err)
+			}
+			if tc.want != "" {
+				if err != nil || string(out) != tc.want+"\n" {
+					t.Fatalf("valid legacy identity rejected: %v output=%q", err, out)
+				}
+			} else if err == nil || len(out) != 0 {
+				t.Fatalf("legacy recovery accepted or disclosed corrupt state: %v output=%q", err, out)
+			}
+		})
 	}
 }

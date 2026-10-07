@@ -4924,6 +4924,8 @@ read_agent_id_file_safely() {
     local lifecycle_binary=""
     local collector_uid=""
     local identity=""
+    local identity_size=""
+    local consumed_bytes=0
     local -a identity_args
 
     [[ -e "$aid_path" || -L "$aid_path" || -p "$aid_path" ]] || return 1
@@ -4944,7 +4946,17 @@ read_agent_id_file_safely() {
     # command. Their parent and file are not writable by the runtime, so a
     # bounded shell read remains a boundary-only compatibility path.
     if trusted_lifecycle_regular_file "$aid_path" 600; then
-        IFS= read -r identity < "$aid_path" || true
+        identity_size=$(stat -c '%s' "$aid_path" 2>/dev/null || stat -f '%z' "$aid_path" 2>/dev/null) || return 1
+        [[ "$identity_size" =~ ^[0-9]+$ && "$identity_size" -ge 1 && "$identity_size" -le 129 ]] || return 1
+        # Accept exactly one bounded ID, with or without its final newline.
+        # Bash read discards NUL bytes and otherwise only reads the first line;
+        # matching all file bytes prevents either from hiding corrupt state.
+        if IFS= read -r -n 130 identity < "$aid_path"; then
+            consumed_bytes=$((${#identity} + 1))
+        else
+            consumed_bytes=${#identity}
+        fi
+        [[ "$identity_size" -eq "$consumed_bytes" ]] || return 1
         if [[ ${#identity} -ge 1 && ${#identity} -le 128 && "$identity" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]]; then
             printf '%s\n' "$identity"
             return 0
