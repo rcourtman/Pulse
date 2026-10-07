@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createComputed, createRoot } from 'solid-js';
 
 // Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024;
@@ -1289,6 +1289,325 @@ describe('websocket store unified resource contract', () => {
     } finally {
       dispose();
     }
+  });
+
+  describe('active alert payloads replace the stored alert', () => {
+    // A threshold alert held below its trigger, as the socket sends it: the
+    // breach stays in value/message and the reading evaluated now rides in
+    // metricStatus.
+    const heldTemperatureAlert = (): Record<string, unknown> => ({
+      id: 'pve2-temperature',
+      type: 'temperature',
+      level: 'warning',
+      resourceId: 'node:pve2',
+      resourceName: 'pve2',
+      node: 'pve2',
+      nodeDisplayName: 'PVE Two',
+      instance: 'pve2',
+      message: 'Node temperature at 95°C',
+      value: 95,
+      threshold: 80,
+      startTime: '2026-10-06T10:00:00Z',
+      acknowledged: false,
+      metadata: { resourceType: 'Node', unit: '°C', probe: 'cpu.package' },
+      metricStatus: {
+        phase: 'latched',
+        value: 78,
+        observedAt: '2026-10-06T10:05:00Z',
+        trigger: 80,
+        recovery: 75,
+        unit: '°C',
+      },
+    });
+
+    // The same alert as the backend restores it after a restart: no live
+    // status until the next evaluation.
+    const restoredTemperatureAlert = (): Record<string, unknown> => {
+      const alert = heldTemperatureAlert();
+      delete alert.metricStatus;
+      return alert;
+    };
+
+    const emitActiveAlerts = (lastUpdate: number, activeAlerts: unknown[]) =>
+      emitMessage({ type: 'rawData', data: { lastUpdate, activeAlerts } });
+
+    const emitInitialAlerts = (activeAlerts: unknown[]) =>
+      emitMessage({
+        type: 'initialState',
+        data: { resources: [], lastUpdate: 100, activeAlerts, recentlyResolved: [] },
+      });
+
+    it('drops a live status, display name and metadata that a snapshot omits', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        emitInitialAlerts([heldTemperatureAlert()]);
+        expect(store.activeAlerts['pve2-temperature']?.metricStatus?.value).toBe(78);
+
+        emitActiveAlerts(200, [restoredTemperatureAlert()]);
+        const restored = store.activeAlerts['pve2-temperature'];
+        expect(restored).not.toHaveProperty('metricStatus');
+        expect(restored?.value).toBe(95);
+        expect(store.state.activeAlerts[0]).not.toHaveProperty('metricStatus');
+
+        const renamed = restoredTemperatureAlert();
+        delete renamed.nodeDisplayName;
+        renamed.metadata = { resourceType: 'Node', unit: '°C' };
+        emitActiveAlerts(300, [renamed]);
+        expect(store.activeAlerts['pve2-temperature']).not.toHaveProperty('nodeDisplayName');
+        expect(store.activeAlerts['pve2-temperature']?.metadata).toEqual({
+          resourceType: 'Node',
+          unit: '°C',
+        });
+
+        delete renamed.metadata;
+        emitActiveAlerts(400, [renamed]);
+        expect(store.activeAlerts['pve2-temperature']).not.toHaveProperty('metadata');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('drops a live status that a keyed delta deletes', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        emitInitialAlerts([heldTemperatureAlert()]);
+
+        emitMessage({
+          type: 'rawData',
+          data: {
+            lastUpdate: 200,
+            activeAlertsDelta: {
+              upserts: [{ id: 'pve2-temperature', metricStatus: null, nodeDisplayName: null }],
+            },
+          },
+        });
+        const stored = store.activeAlerts['pve2-temperature'];
+        expect(stored).not.toHaveProperty('metricStatus');
+        expect(stored).not.toHaveProperty('nodeDisplayName');
+        expect(stored?.message).toBe('Node temperature at 95°C');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('drops a live status that REST recovery omits', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        emitInitialAlerts([heldTemperatureAlert()]);
+
+        apiFetchJSONMock.mockResolvedValueOnce([restoredTemperatureAlert()]);
+        await expect(store.refreshActiveAlerts()).resolves.toBe(true);
+        expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/alerts/active');
+        expect(store.activeAlerts['pve2-temperature']).not.toHaveProperty('metricStatus');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('clears acknowledgement fields when the server reports an unacknowledge', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        emitInitialAlerts([
+          {
+            ...restoredTemperatureAlert(),
+            acknowledged: true,
+            ackTime: '2026-10-06T10:06:00Z',
+            ackUser: 'admin',
+          },
+        ]);
+        expect(store.activeAlerts['pve2-temperature']?.ackUser).toBe('admin');
+
+        // Unacknowledged from another session: the payload omits both fields.
+        emitActiveAlerts(200, [restoredTemperatureAlert()]);
+        const stored = store.activeAlerts['pve2-temperature'];
+        expect(stored?.acknowledged).toBe(false);
+        expect(stored).not.toHaveProperty('ackTime');
+        expect(stored).not.toHaveProperty('ackUser');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('holds a local acknowledge and unacknowledge until the server confirms each', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        const acknowledged = {
+          ...restoredTemperatureAlert(),
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:01Z',
+          ackUser: 'admin',
+        };
+        emitInitialAlerts([restoredTemperatureAlert()]);
+
+        store.updateAlert(id, {
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:00Z',
+          ackUser: undefined,
+        });
+        emitActiveAlerts(200, [restoredTemperatureAlert()]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(true);
+
+        emitActiveAlerts(300, [acknowledged]);
+        expect(store.activeAlerts[id]).toMatchObject({
+          acknowledged: true,
+          ackTime: '2026-10-06T10:06:01Z',
+          ackUser: 'admin',
+        });
+
+        store.updateAlert(id, { acknowledged: false, ackTime: undefined, ackUser: undefined });
+        emitActiveAlerts(400, [acknowledged]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+        expect(store.activeAlerts[id]).not.toHaveProperty('ackUser');
+
+        emitActiveAlerts(500, [restoredTemperatureAlert()]);
+        expect(store.activeAlerts[id]?.acknowledged).toBe(false);
+        expect(store.activeAlerts[id]).not.toHaveProperty('ackTime');
+        expect(store.activeAlerts[id]).not.toHaveProperty('ackUser');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('keeps the record a local update replaced intact for rollback', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const id = 'pve2-temperature';
+        const record = {
+          id: 'alert:pve2-temperature',
+          canonicalSpecId: 'temperature',
+          subjectResourceId: 'node:pve2',
+          state: 'open',
+          severity: 'warning',
+          firstObservedAt: '2026-10-06T10:00:00Z',
+          lastObservedAt: '2026-10-06T10:05:00Z',
+          stateChangedAt: '2026-10-06T10:00:00Z',
+          acknowledgement: { at: '2026-10-06T10:01:00Z', by: 'admin' },
+          evidenceIds: ['evidence-1'],
+          causeKey: 'pve2-temperature',
+          relatedResourceIds: [],
+        };
+        emitInitialAlerts([{ ...restoredTemperatureAlert(), operationalRecord: record }]);
+
+        // As a snooze does: the optimistic record reuses nested values of the
+        // record it keeps for rollback.
+        const previous = store.activeAlerts[id]?.operationalRecord;
+        if (!previous) throw new Error('expected an operational record');
+        store.updateAlert(id, {
+          operationalRecord: {
+            ...previous,
+            state: 'suppressed',
+            suppression: {
+              at: '2026-10-06T10:06:00Z',
+              by: 'current-user',
+              reason: 'user_snooze',
+              expiresAt: '2026-10-06T11:06:00Z',
+            },
+          },
+        });
+
+        emitActiveAlerts(200, [
+          {
+            ...restoredTemperatureAlert(),
+            operationalRecord: {
+              ...record,
+              acknowledgement: { at: '2026-10-06T10:07:00Z', by: 'operator' },
+              evidenceIds: ['evidence-1', 'evidence-2'],
+            },
+          },
+        ]);
+        expect(store.activeAlerts[id]?.operationalRecord?.acknowledgement?.by).toBe('operator');
+        expect(previous.acknowledgement).toEqual({ at: '2026-10-06T10:01:00Z', by: 'admin' });
+        expect([...previous.evidenceIds]).toEqual(['evidence-1']);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('leaves unchanged alerts and unchanged nested fields quiet', async () => {
+      const { store, dispose } = await createStoreHarness();
+      let disposeTracking = () => {};
+      try {
+        await waitForOpenTick();
+        const cpuAlert = (): Record<string, unknown> => ({
+          ...heldTemperatureAlert(),
+          id: 'pve1-cpu',
+          type: 'cpu',
+          resourceId: 'node:pve1',
+          metricStatus: {
+            phase: 'breaching',
+            value: 93,
+            observedAt: '2026-10-06T10:05:00Z',
+            trigger: 90,
+            recovery: 85,
+          },
+        });
+        emitInitialAlerts([heldTemperatureAlert(), cpuAlert()]);
+
+        let temperatureRuns = 0;
+        let cpuRuns = 0;
+        createRoot((d) => {
+          disposeTracking = d;
+          createComputed(() => {
+            void store.activeAlerts['pve2-temperature']?.metricStatus?.value;
+            temperatureRuns += 1;
+          });
+          createComputed(() => {
+            void store.activeAlerts['pve1-cpu']?.metricStatus?.value;
+            cpuRuns += 1;
+          });
+        });
+        const cpuBefore = store.activeAlerts['pve1-cpu'];
+        const cpuStatusBefore = cpuBefore?.metricStatus;
+
+        const cooler = heldTemperatureAlert();
+        cooler.metricStatus = { ...(cooler.metricStatus as object), value: 77 };
+        emitActiveAlerts(200, [cooler, cpuAlert()]);
+
+        expect(store.activeAlerts['pve2-temperature']?.metricStatus?.value).toBe(77);
+        expect(temperatureRuns).toBe(2);
+        expect(cpuRuns).toBe(1);
+        expect(store.activeAlerts['pve1-cpu']).toBe(cpuBefore);
+        expect(store.activeAlerts['pve1-cpu']?.metricStatus).toBe(cpuStatusBefore);
+      } finally {
+        disposeTracking();
+        dispose();
+      }
+    });
+
+    it('drops fields a recently resolved alert payload omits', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+        const resolved = {
+          ...restoredTemperatureAlert(),
+          resolvedTime: '2026-10-06T10:10:00Z',
+        };
+        emitMessage({
+          type: 'initialState',
+          data: {
+            resources: [],
+            lastUpdate: 100,
+            activeAlerts: [],
+            recentlyResolved: [{ ...resolved, nodeDisplayName: 'PVE Two' }],
+          },
+        });
+        expect(store.recentlyResolved['pve2-temperature']?.nodeDisplayName).toBe('PVE Two');
+
+        const renamed: Record<string, unknown> = { ...resolved };
+        delete renamed.nodeDisplayName;
+        emitMessage({ type: 'rawData', data: { lastUpdate: 200, recentlyResolved: [renamed] } });
+        expect(store.recentlyResolved['pve2-temperature']).not.toHaveProperty('nodeDisplayName');
+      } finally {
+        dispose();
+      }
+    });
   });
 
   it('drops scroll-queued deltas when a full snapshot supersedes their baseline', async () => {
