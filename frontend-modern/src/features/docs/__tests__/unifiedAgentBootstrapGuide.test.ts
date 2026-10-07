@@ -56,6 +56,8 @@ describe('Unified Agent private-file setup help', () => {
 
   it('keeps the existing profile link and ships an identical public help asset', () => {
     expect(setupSection().querySelector('a[href="#installation-options"]')).not.toBeNull();
-    expect(readFileSync(path.join(frontendRoot, 'public/docs/UNIFIED_AGENT.md'), 'utf8')).toBe(source);
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/UNIFIED_AGENT.md'), 'utf8')).toBe(
+      source,
+    );
   });
 });
