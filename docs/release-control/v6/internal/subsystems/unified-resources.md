@@ -833,7 +833,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 48. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 50. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
-    50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 57. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
 58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
 59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
@@ -2372,12 +2371,13 @@ provider identity or governed safe-summary posture when that context helps
 an operator, but the rendered labels must stay product-neutral and use
 `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
 generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
-shell. 15. Keep shared policy-posture framing on the unified-resource card owner.
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-may accept caller-owned subtitle or resource-count wording when Patrol or
-another shared surface needs to explain how the same governed policy counts
-should be read, but those framing lines must extend the shared card API
-rather than spawning page-local policy summary shells. 16. Keep platform/runtime top-level route paths on the canonical resource-link
+shell. 15. Keep governed policy-posture wording on the unified-resource
+presentation owner. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
+owns the canonical sensitivity, routing, and redaction labels and their
+orderings. No shared card renders policy-posture counts today; if one
+returns, caller-owned framing such as subtitle or resource-count wording must
+extend that one card's API rather than spawning page-local policy summary
+shells. 16. Keep platform/runtime top-level route paths on the canonical resource-link
 helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
 `STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
 `VMWARE_PATH`, `PATROL_PATH`, `PATROL_CONTROL_ANCHOR`,
@@ -5346,17 +5346,14 @@ labels, relationship labels, headline formatting, summary wording, and canonical
 relationship/correlation ordering. Correlation and relationship badge text must
 preserve the formatter's human-readable title case instead of forcing visual
 uppercase over enum-like payloads such as `ALERT → ALERT`.
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-is the canonical shared card for governed policy-posture counts, while
 `frontend-modern/src/utils/resourcePolicyPresentation.ts` owns the canonical
-sensitivity, routing, and redaction labels and aggregate count summaries.
-That shared policy card also owns caller-supplied framing lines such as
-subtitle and resource-count wording, so Patrol or other shared surfaces may
-clarify whether the same governed counts read as policy-covered-resource
-context without rebuilding their own policy-posture card shell. New
-shared-surface framing needs such as Patrol's `policy-covered resources`
-count label or explanatory subtitle should extend that card API instead of
-forking a second page-local policy summary.
+sensitivity, routing, and redaction labels and their orderings for governed
+policy posture. No shared unified-resource card renders policy-posture counts
+today: the card that once did lost its last mount on the Patrol page and was
+removed together with its aggregate count-summary helpers. If a shared
+posture card returns, caller-supplied framing such as a subtitle or a
+resource-count label must extend that one card's API instead of forking a
+page-local policy summary.
 Future correlation or policy-posture wording changes should extend those
 unified-resource owners instead of drifting into page-local loops in AI,
 Patrol, or infrastructure surfaces.
@@ -5784,8 +5781,8 @@ projection, so the AI summary and any other backend policy posture surface do
 not re-sort redaction labels locally.
 They also own the canonical sensitivity and routing order used to format
 policy-posture count summaries with human-readable labels, so the AI summary
-and frontend policy card both read the same presentation sequence from the
-shared resource model.
+and any frontend posture presentation read the same presentation sequence
+from the shared resource model.
 Canonical resources now carry first-class relationship, capability, and
 timeline fields: `Capabilities` (bounded action definitions with approval
 levels), `Relationships` (typed inter-resource links with direction and

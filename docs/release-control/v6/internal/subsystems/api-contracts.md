@@ -3307,7 +3307,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
-   and the shared `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx` card, so the AI summary page renders the governed policy-posture counts while the resource drawer stays on per-resource policy lines instead of carrying duplicate posture UI loops
+   and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
    and that same Patrol investigation-context owner, so the current Patrol
@@ -7326,11 +7326,12 @@ transport or settings failures as stale-data state rather than throwing through
 the route: the page stays mounted, preserves any last-known Patrol evidence,
 and exposes a retry affordance while backend/API failures remain available to
 debug logging and API-level diagnostics.
-The AI summary page now also renders the canonical
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-card for policy posture, so sensitivity, routing, and redaction counts are
-presented through one governed frontend component while the resource drawer
-keeps only the per-resource policy lines.
+No frontend surface currently renders the AI summary's `policy_posture`
+counts; the shared posture card the Patrol page once mounted has been removed.
+A surface that shows those counts again must present sensitivity, routing,
+and redaction counts through one governed shared component fed by that
+canonical payload, while the resource drawer keeps only the per-resource
+policy lines.
 The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history

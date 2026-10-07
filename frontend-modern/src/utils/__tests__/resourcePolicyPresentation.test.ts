@@ -7,9 +7,6 @@ import {
   hasDefaultResourcePolicyPosture,
   getResourcePolicyGovernedSummary,
   getResourcePolicyDisplayLabel,
-  getResourcePolicyRedactionSummaries,
-  getResourcePolicyRoutingSummaries,
-  getResourcePolicySensitivitySummaries,
   getResourcePolicyRedactionLabels,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
@@ -121,56 +118,6 @@ describe('resourcePolicyPresentation utils', () => {
     ).toBe(
       'backup server resource; status online; sources pbs; 1 child resources; redacted for cloud summary',
     );
-  });
-
-  it('formats canonical policy count summaries', () => {
-    expect(
-      getResourcePolicySensitivitySummaries({
-        total_resources: 3,
-        sensitivity_counts: {
-          public: 1,
-          internal: 2,
-        },
-        routing_counts: {},
-      }),
-    ).toEqual([
-      { label: 'Public', count: 1 },
-      { label: 'Internal', count: 2 },
-      { label: 'Sensitive', count: 0 },
-      { label: 'Restricted', count: 0 },
-    ]);
-
-    expect(
-      getResourcePolicyRoutingSummaries({
-        total_resources: 3,
-        sensitivity_counts: {},
-        routing_counts: {
-          'cloud-summary': 1,
-          'local-first': 2,
-        },
-      }),
-    ).toEqual([
-      { label: 'Cloud Summary', count: 1 },
-      { label: 'Local First', count: 2 },
-      { label: 'Local Only', count: 0 },
-    ]);
-
-    expect(
-      getResourcePolicyRedactionSummaries({
-        total_resources: 3,
-        sensitivity_counts: {},
-        routing_counts: {
-          'cloud-summary': 1,
-        },
-        redaction_counts: {
-          hostname: 2,
-          path: 1,
-        },
-      }),
-    ).toEqual([
-      { label: 'Hostname', count: 2 },
-      { label: 'Path', count: 1 },
-    ]);
   });
 
   it('exports canonical policy ordering', () => {
