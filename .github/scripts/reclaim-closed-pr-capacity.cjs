@@ -69,7 +69,12 @@ async function cancelClosedPullRequestRuns({ github, context, core }) {
       core.info(`Requested cancellation of ${run.name} run ${run.id} (${run.status}).`);
     } catch (error) {
       // Completion can race cancellation. Suppress only that proven terminal
-      // race; authentication and API failures stay visible.
+      // conflict; a later completed run cannot clear a refusal, rate limit,
+      // transport error or unknown cancellation result. Stop without another
+      // API call for those errors, even if the run has since completed.
+      if (error?.status !== 409) {
+        throw error;
+      }
       const refreshed = await github.rest.actions.getWorkflowRun({
         owner,
         repo,
