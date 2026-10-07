@@ -32,7 +32,7 @@ function replicationSection(): HTMLElement {
   return section;
 }
 
-const prose = (section: HTMLElement): string =>
+const prose = (section: Element): string =>
   (section.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('shipped Proxmox replication disagreement guidance', () => {
