@@ -2088,6 +2088,20 @@ payload shape change when the portal presents compact client rows.
     index; clients must treat the endpoint's `accepted:true` as inbox
     receipt, not delivery. Browser clients must use the shared
     `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
+    Every Assistant session mutation sub-resource under
+    `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
+    `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
+    handler returns `405` with `Allow: POST` through
+    `requireAssistantSessionMutationMethod` in `internal/api/ai_handler.go`,
+    before the session service is resolved (earlier layers still answer
+    first: `Router.ServeHTTP` returns `200` for `OPTIONS` preflight, and
+    auth, scope, CSRF, and demo-mode guards keep their own refusals). The
+    session router dispatches these sub-resources by path alone, and the
+    demo-mode read-only guard and the CSRF check both treat `GET` and `HEAD`
+    as reads, so the method contract belongs to the mutating handler rather
+    than to its callers. `GET /api/ai/sessions/{id}/messages` stays the read
+    path, and the unsupported `/diff`, `/revert`, and `/unrevert` handlers
+    keep answering `501` for every method that reaches them.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed

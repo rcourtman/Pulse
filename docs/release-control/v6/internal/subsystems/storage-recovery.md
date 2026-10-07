@@ -1404,6 +1404,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+The POST-only guard on Assistant session mutations (`/abort`,
+`/summarize`, `/fork`, `/undo`, `/redo`, `/steer`; `405` with `Allow: POST`
+for any other method that reaches the handler) is transport hardening in
+`internal/api/ai_handler.go`.
+It opens no storage, backup, or recovery read or write path, and a rejected
+request never reaches session state.
 Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
 is also adjacent API/AI action plumbing for storage/recovery consumers.
 `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already

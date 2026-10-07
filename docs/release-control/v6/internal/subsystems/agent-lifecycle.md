@@ -4703,6 +4703,12 @@ agent-lifecycle operations. If those routes are called directly, the API must
 fail them as unsupported rather than presenting file diffs or reverts as
 agent command rollback, enrollment repair, update rollback, or fleet-control
 authority.
+Assistant session mutations (`/abort`, `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer` under `/api/ai/sessions/{id}`) accept only `POST`; any other
+method that reaches those handlers gets `405` before touching session state.
+That method guard
+is AI-runtime transport hardening in `internal/api/ai_handler.go`; it adds no
+agent command, enrollment, update, or fleet-control path.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,
