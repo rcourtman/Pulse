@@ -247,12 +247,52 @@ Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp
 3. Ensure you have the latest frontend loaded (hard refresh)
 
 ### Update failed
-1. Check the error message in the progress modal
-2. Review logs: `journalctl -u pulse -n 100` or `/var/log/pulse/update-<timestamp>.log`
-3. Verify disk space is available for both the extracted release payload and a rollback snapshot of your current install
-4. Check network connectivity to GitHub
+
+First identify what was updated: this guide covers the **Pulse server**.
+An installed agent has its [own update path](UNIFIED_AGENT.md#auto-update).
+For a monitored Docker workload, use the [failed or pending workload checks](DOCKER.md#check-a-failed-or-pending-workload-update)
+on that workload's host, not inside Pulse.
+
+Keep the original target version, attempt time, last displayed step and redacted
+error from the progress modal or updater log. If Pulse still opens, check
+**Settings → System → Updates** for its running version and retain the existing
+**Update History** entry when available. Check the ordinary UI and monitoring
+freshness too. A failed updater exit, disconnected progress stream or stuck
+modal does not establish which version is running or whether rollback succeeded.
+Do not rerun an update, restart or reinstall merely to obtain evidence.
+
+For server logs, use the [bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs)
+for the actual deployment. Run them on the Pulse host, or inside the Pulse LXC,
+not on a monitored guest. They have a deadline as well as time and record limits;
+do not substitute a log-follow command or an unbounded reader if they fail.
+Inspect the relevant part of the original `/var/log/pulse/update-<timestamp>.log`
+privately when that systemd/LXC update produced one; a server journal alone may
+not contain the installer failure. Missing logs are unavailable evidence, not
+proof that no change occurred. Do not enable Debug or repeat the failing action.
+
+If the error names disk space, check headroom on the actual staging, installation
+and data filesystems before planning another attempt; the release payload and
+rollback snapshot both need space. Do not delete configuration backups, keys or
+history to clear the error. A download error needs its original HTTP, connectivity
+or certificate evidence; do not disable TLS verification or switch a paid Pro
+installation to the public Community runtime as a workaround.
+
+Share only the relevant times, versions, failed step and redacted error. Keep
+full logs, service environments, configuration, credentials and private backup
+paths out of public reports.
 
 ### Service won't restart after update
-1. Check systemd status: `systemctl status pulse`
-2. View recent logs: `journalctl -u pulse -f`
-3. Manually restore from backup if needed
+
+Distinguish the **Pulse service** from the separate updater service: a failed
+`pulse-update.service` is not proof that `pulse` is stopped. Use the read-only
+service discovery in [Manual Rollback](#manual-rollback), substituting the actual
+service name (`pulse-backend` on some older installs), and the bounded log readers
+above. For Docker, use the [current container-state and image checks](DOCKER.md#check-a-failed-or-pending-workload-update)
+with the Pulse server's container name. A running process or container alone is
+not proof that the UI, saved connections and history are healthy.
+
+If recovery is needed, follow [Manual Rollback](#manual-rollback): preserve the
+failed state, verify the intended backup's version and complete scope, and use
+the stopped-service recovery procedure. An absent or partial backup is a reason
+to stop, not to overwrite live data, create an empty data directory or retry the
+update. Do not restore a guessed snapshot just because the progress modal failed.

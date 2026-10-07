@@ -245,6 +245,47 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         self.assertIn("Check for receipt", ui)
         self.assertIn("refreshReceipt()", ui)
 
+    def test_update_failure_entry_reuses_bounded_readers_before_any_recovery(self):
+        text = " ".join(section("AUTO_UPDATE", "Update failed", "###").split())
+        for phrase in ("**Pulse server**", "UNIFIED_AGENT.md#auto-update",
+                       "DOCKER.md#check-a-failed-or-pending-workload-update",
+                       "target version, attempt time, last displayed step",
+                       "**Update History**", "running version", "monitoring freshness",
+                       "TROUBLESHOOTING.md#inspect-notification-logs",
+                       "deadline as well as time and record limits",
+                       "Do not rerun an update, restart or reinstall",
+                       "server journal alone may not contain the installer failure",
+                       "not proof that no change occurred",
+                       "Do not delete configuration backups, keys or history",
+                       "do not disable TLS verification",
+                       "public Community runtime", "out of public reports"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"journalctl\b|docker logs\b|```")
+
+    def test_restart_failure_entry_distinguishes_updater_and_requires_matched_backup(self):
+        text = " ".join(section("AUTO_UPDATE", "Service won't restart after update", "###").split())
+        for phrase in ("`pulse-update.service` is not proof that `pulse` is stopped",
+                       "read-only service discovery", "[Manual Rollback](#manual-rollback)",
+                       "actual service name", "Pulse server's container name",
+                       "not proof that the UI, saved connections and history are healthy",
+                       "preserve the failed state", "backup's version and complete scope",
+                       "stopped-service recovery procedure", "absent or partial backup",
+                       "not to overwrite live data", "Do not restore a guessed snapshot"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"journalctl\b|systemctl status\b|docker logs\b|```")
+
+    def test_docker_log_entry_reaches_the_same_deadline_bounded_server_reader(self):
+        text = section("DOCKER", "🛠️ Troubleshooting").split("- **Logs**\n", 1)[1].split(
+            "- **Shell Access**", 1)[0]
+        text = " ".join(text.split())
+        for phrase in ("TROUBLESHOOTING.md#inspect-notification-logs",
+                       "host running the Pulse server", "actual container name",
+                       "both output streams", "deadline, time window and record limit",
+                       "failed read is not an empty log", "Review the excerpt privately",
+                       "Do not follow logs indefinitely or repeat a failed update"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"docker logs\b|```")
+
 
 if __name__ == "__main__":
     unittest.main()
