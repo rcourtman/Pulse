@@ -14,7 +14,10 @@ function renderGuide(name: string): HTMLElement {
     process.env.PULSE_REPLICATION_GUIDE_INPUT_DIRECTORY ??
     path.join(repoRoot, 'frontend-modern/public/docs');
   const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(readFileSync(path.join(directory, `${name}.md`), 'utf8'), name);
+  article.innerHTML = renderDocMarkdown(
+    readFileSync(path.join(directory, `${name}.md`), 'utf8'),
+    name,
+  );
   return article;
 }
 
@@ -96,7 +99,9 @@ describe('shipped Proxmox replication disagreement guidance', () => {
       'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
     );
     expect(link?.textContent).toBe('backup safety procedure');
-    expect(renderGuide('VM_DISK_MONITORING').querySelector(new URL(link!.href).hash)).not.toBeNull();
+    expect(
+      renderGuide('VM_DISK_MONITORING').querySelector(new URL(link!.href).hash),
+    ).not.toBeNull();
   });
 
   it('rejects disruptive diagnostics, broad permissions and live reenactment', () => {
