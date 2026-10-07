@@ -2600,26 +2600,29 @@ across provider-backed history. Row hover and focus plus top-card isolation on
 workload surfaces must resolve against the same canonical workload ID even
 when the backing history is stored under a provider metrics target, so
 provider-backed VM rows do not silently drop out of summary emphasis.
-The shared infrastructure table hot path now also treats operator-facing
-resource identity as a protected boundary: sorting, searching, summary-series
-matching, and row titles on the infrastructure page must use the canonical
-local instance identity rather than governed AI-summary text, so performance
-work cannot “optimize” the table into ambiguous labels that collapse multiple
-resources into the same visible name.
-The same protected table path treats the visible system column as
-identity-first presentation over canonical merged-source data. Sort derivation
-for that column must use the same displayed system identity as the render path,
-while the render path may keep full merged-source detail in tooltips. When a
-row contains both `agent` and a provider/API platform such as Proxmox, the table
-must render the provider platform as the compact visible badge rather than
-adding extra Agent badge width or sorting primarily by the telemetry method.
-When a row is only known through an agent or container runtime, the table must
-prefer reported OS/appliance identity before falling back to Docker/runtime
-capability labels.
-When the displayed system badge already includes the platform version, row title
-metadata must not spend extra badge/title budget repeating that same platform as
-an unversioned source; it may keep non-duplicate collection context such as
-Pulse Agent.
+Platform-table hot paths treat operator-facing resource identity as a
+protected boundary: sorting, searching, summary-series matching, and row
+titles must use the canonical local instance identity (the resource's own name or
+`getPreferredInfrastructureDisplayName(...)`) rather than governed AI-summary
+text, so performance work cannot “optimize” a table into ambiguous labels that
+collapse multiple resources into the same visible name.
+A visible system column is identity-first presentation over canonical
+merged-source data. The Docker hosts table's System column is the live
+instance: `frontend-modern/src/features/docker/DockerHostsTable.tsx` sorts and
+renders the same `getDockerHostSystemBadge(...)` result, and the render path
+may keep full merged-source detail in tooltips. When a row contains both
+`agent` and a provider/API platform such as Proxmox, the system badge must show
+the provider platform rather than adding extra Agent badge width or sorting
+primarily by the telemetry method. When a row is only known through an agent or
+container runtime, the shared resolver prefers reported OS/appliance identity
+before falling back to Docker/runtime capability labels; the Docker hosts
+column drops that runtime-only fallback, since every row there is a Docker
+host, and shows `—` instead.
+A surface that shows source badges beside a versioned system badge must not
+spend extra badge/title budget repeating that same platform as an unversioned
+source; it may keep non-duplicate collection context such as Pulse Agent. The
+resource drawer header avoids the repeat by showing system identity badges in
+place of source badges.
 That derived workload owner now also routes grouped row windowing through
 `frontend-modern/src/components/Workloads/useGroupedTableWindowing.ts`, which
 owns row-window thresholds, overscan behavior, reveal-index clamping, and
@@ -2996,17 +2999,17 @@ the timeline/history path can resolve through the canonical catalog without addi
 detail-only lookup branch to the hot-row path.
 The same detail drawer also uses that resolver for correlation dependency and
 dependent chips, so the investigation path shows catalog labels in the drawer
-and keeps the raw ID only when the catalog cannot resolve one, while the AI
-page keeps its broader no-catalog fallback.
-That same workloads-link path and the workload projection now also
-share the canonical cluster-name helpers in the shared agent-resource layer,
-so route labels, pod grouping, and cluster-name fetch keys keep using the
-same source of truth instead of rebuilding the `clusterName`/`context`/
-`clusterId` prefix locally.
-The infrastructure host-table hot path now also suppresses the default
-`Internal` + `Cloud Summary` policy pair in row chrome. That baseline posture
-still belongs to the canonical policy contract, but repeating it on every host
-burns row-density budget without adding operator-grade signal.
+and keeps the raw ID only when the catalog cannot resolve one.
+The workload projection and the resource drawer share the canonical
+cluster-name helpers in `frontend-modern/src/utils/agentResources.ts`, so pod
+grouping and the drawer's cluster-name fetch keys keep using the same source
+of truth instead of rebuilding the `clusterName`/`context`/`clusterId` prefix
+locally.
+A platform table that adds policy chips to row chrome must suppress the
+default `Internal` + `Cloud Summary` policy pair. That baseline posture still
+belongs to the canonical policy contract, but repeating it on every row burns
+row-density budget without adding operator-grade signal. No platform table
+renders policy chips today.
 The shared node adapter also uses that same cluster-name helper for the
 infrastructure summary surface, so Proxmox node projections stay aligned with
 the same canonical cluster label instead of carrying a raw adapter-local

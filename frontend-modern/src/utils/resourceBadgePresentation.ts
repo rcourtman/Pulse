@@ -159,20 +159,6 @@ const withBadgeVersion = (badge: ResourceBadge, version: string): ResourceBadge 
   };
 };
 
-const VERSIONED_BADGE_SUFFIX_PATTERN = /\s+v?\d+(?:[._-]\d+)*(?:[-+~:][0-9a-z][0-9a-z._:+~-]*)?$/i;
-
-const normalizeBadgeIdentityLabel = (value: string): string =>
-  value.trim().toLowerCase().replace(VERSIONED_BADGE_SUFFIX_PATTERN, '').trim();
-
-const badgeIdentityLabels = (badge: ResourceBadge): string[] =>
-  Array.from(
-    new Set(
-      [badge.label, badge.title]
-        .map((value) => (value ? normalizeBadgeIdentityLabel(value) : ''))
-        .filter(Boolean),
-    ),
-  );
-
 const normalizeUnifiedSourceKeys = (sources?: string[] | null): KnownSourcePlatform[] => {
   if (!sources || sources.length === 0) return [];
   const normalized = sources
@@ -695,15 +681,6 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
   return getInfrastructurePlatformBadges(rawSources);
 }
 
-export function getInfrastructureSystemIdentitySortLabel(resource: Resource): string {
-  return (
-    getInfrastructureSystemIdentityBadges(resource)[0]?.label ||
-    getPlatformBadge(resource.platformType)?.label ||
-    resource.platformType ||
-    ''
-  );
-}
-
 export function dedupeResourceBadges(
   badges: Array<ResourceBadge | null | undefined>,
 ): ResourceBadge[] {
@@ -715,19 +692,6 @@ export function dedupeResourceBadges(
     seen.add(normalizedLabel);
     return true;
   });
-}
-
-export function getInfrastructureSystemTitleBadges(
-  systemBadges: ResourceBadge[],
-  sourceBadges: ResourceBadge[],
-): ResourceBadge[] {
-  const systemIdentities = new Set(systemBadges.flatMap(badgeIdentityLabels));
-  return dedupeResourceBadges([
-    ...systemBadges,
-    ...sourceBadges.filter((badge) =>
-      badgeIdentityLabels(badge).every((identity) => !systemIdentities.has(identity)),
-    ),
-  ]);
 }
 
 const getContainerRuntimeLabel = (runtime?: string | null): string => {
