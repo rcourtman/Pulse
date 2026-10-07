@@ -901,6 +901,51 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 }
 
+// A guest that drops its last tag leaves none on its open alerts. Config-save
+// reevaluation reads pulse-relaxed back from alert metadata, so a removed tag
+// left behind judged the alert by the relaxed trigger: the save resolved a
+// reading still over the guest's own trigger, and the next poll raised it
+// again.
+func TestCheckGuestDropsRemovedTagsFromOpenAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 102)
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     102,
+		Name:     "app02",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.97,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	alertID := canonicalMetricStateID(guestID, "cpu")
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected CPU alert %q over the relaxed trigger", alertID)
+	}
+
+	vm.Tags = nil
+	vm.CPU = 0.90
+	m.CheckGuest(vm, "pve1")
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RLock()
+	tags, hasTags := alert.Metadata["tags"]
+	m.mu.RUnlock()
+	if hasTags {
+		t.Fatalf("alert metadata tags = %v, want none once the guest dropped them", tags)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected a config save to keep a CPU alert over the guest's own trigger after pulse-relaxed is removed")
+	}
+}
+
 func TestCheckGuestPerDiskCleansUpRemovedDiskAlerts(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

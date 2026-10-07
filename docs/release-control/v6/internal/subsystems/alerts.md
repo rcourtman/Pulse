@@ -1452,7 +1452,8 @@ That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
 guest snapshot and route threshold resolution through the shared
-guest-defaults → filter-driven custom rules → guest-override chain.
+guest-defaults → filter-driven custom rules → guest-override → `pulse-relaxed`
+chain.
 That canonical guest context must preserve the live guest name and tags for
 snapshot and backup posture evaluation. Ignored prefixes, `pulse-no-alerts`,
 configured ignored tags, and required-tag filtering must resolve through the
@@ -1462,6 +1463,27 @@ operator's suppression policy.
 Passing `nil` guest context or resolving only overrides/defaults is forbidden
 because it silently bypasses custom guest rules and makes guest lifecycle
 alerting diverge from running-guest metric truth.
+The `pulse-relaxed` step lives in `effectiveAlertPolicyNoLock`, not in
+`CheckGuest`, so polling and config-save reevaluation judge a relaxed guest's
+alert by one threshold. Reevaluation rebuilds the guest from alert metadata,
+so `guestSnapshotFromAlert` reads back the `tags` the evaluator recorded
+(`[]string` live, `[]interface{}` after a restart). Without them a save judged
+the alert by unrelaxed thresholds, resolved one raised under an unset
+threshold's relaxed floor with a recovery notification, and the next poll
+raised it again. Those tags must stay current: `metricOptionsWithTags` drops
+the key from an open alert once its resource has no tags, or a removed
+`pulse-relaxed` would keep judging the alert by the relaxed trigger. The tag
+lifts CPU, memory and disk triggers to a 95/92/95 floor and gives an unset
+threshold that floor, but an Off threshold (trigger <= 0) stays Off: relaxing
+a guest must never raise an alert its config turned off. A filesystem's own
+override still replaces the relaxed guest disk threshold for that filesystem,
+on save as while polling. Proof:
+`TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds`,
+`TestConfigSaveKeepsRelaxedGuestFilesystemOverride`,
+`TestPulseRelaxedKeepsOffGuestThresholdOff` and the Off case of
+`TestApplyRelaxedGuestThresholds` in `internal/alerts/alerts_test.go`, and
+`TestCheckGuestDropsRemovedTagsFromOpenAlerts` in
+`internal/alerts/unified_eval_test.go`.
 That same guest-alert owner also has to retire per-disk guest alerts when the
 guest stops, disk alerting is disabled, or the reported disk set changes.
 Canonical guest disk identity is only valid while the guest still exposes that

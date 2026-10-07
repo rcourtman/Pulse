@@ -784,6 +784,137 @@ func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
 	}
 }
 
+// pulse-relaxed lifted an Off trigger to its floor like any low trigger, so a
+// relaxed guest with disk alerts off raised one at 96%. A config save then
+// re-judged it by the Off threshold and resolved it, and the next poll raised
+// it again. Relaxing a guest must not raise an alert its config turned off.
+func TestPulseRelaxedKeepsOffGuestThresholdOff(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+		Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/105",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 96},
+		Tags:     []string{"pulse-relaxed"},
+	}
+
+	m.CheckGuest(vm, "inst")
+	if testHasActiveAlert(t, m, canonicalMetricStateID(vm.ID, "disk")) {
+		t.Fatalf("expected no disk alert on a relaxed guest whose disk threshold is off")
+	}
+}
+
+// A config save re-judges a relaxed guest's alert by the thresholds CheckGuest
+// raised it under. Reevaluation rebuilt the guest from alert metadata without
+// its tags, so an unset memory threshold, which pulse-relaxed sets to 92, read
+// as no threshold there: the save resolved the alert with a recovery
+// notification and the next poll raised it again. The tags are read back in
+// the shape a restart restores them.
+func TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/106",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 95},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	memoryAlertID := canonicalMetricStateID(vm.ID, "memory")
+
+	m.CheckGuest(vm, "inst")
+	alert := testRequireActiveAlert(t, m, memoryAlertID)
+	if alert.Threshold != 92 {
+		t.Fatalf("memory alert threshold = %v, want the relaxed 92", alert.Threshold)
+	}
+
+	m.mu.Lock()
+	raw, err := json.Marshal(alert.Metadata)
+	if err != nil {
+		m.mu.Unlock()
+		t.Fatalf("marshal metadata: %v", err)
+	}
+	var restored map[string]interface{}
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		m.mu.Unlock()
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	alert.Metadata = restored
+	m.mu.Unlock()
+	if _, ok := restored["tags"].([]interface{}); !ok {
+		t.Fatalf("restored tags = %T, want []interface{}", restored["tags"])
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, memoryAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's memory alert over its relaxed trigger")
+	}
+}
+
+// pulse-relaxed lifts a guest's disk threshold, but a filesystem's own
+// override still decides that filesystem, while polling and on a config save.
+// Judged by the guest's relaxed floor on save, a filesystem alert over its
+// lower override resolved and the next poll raised it again.
+func TestConfigSaveKeepsRelaxedGuestFilesystemOverride(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 108)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 90, Clear: 85},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-disk:guest:pve1:108/disk:boot-dev-vda1": {
+			Disk: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     108,
+		Name:     "relaxed-fs",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks: []models.Disk{
+			{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 92, Total: 100, Used: 92, Free: 8},
+		},
+		Tags: []string{"pulse-relaxed"},
+	}
+	bootAlertID := canonicalMetricStateID(guestID+"-disk-boot-dev-vda1", "disk")
+
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a /boot alert over its 85%% override on a relaxed guest")
+	}
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's /boot alert over its own 85%% override")
+	}
+}
+
 func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -6346,6 +6477,22 @@ func TestApplyRelaxedGuestThresholds(t *testing.T) {
 		}
 		if result.CPU.Clear != 3 {
 			t.Errorf("CPU.Clear = %v, want 3 (unchanged since < Trigger)", result.CPU.Clear)
+		}
+	})
+
+	t.Run("off thresholds stay off", func(t *testing.T) {
+		cfg := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 0, Clear: 0},
+			Memory: &HysteresisThreshold{Trigger: -1, Clear: -1},
+			Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		for name, th := range map[string]*HysteresisThreshold{"CPU": result.CPU, "Memory": result.Memory, "Disk": result.Disk} {
+			if th == nil || th.Trigger > 0 {
+				t.Errorf("%s = %+v, want it to stay off", name, th)
+			}
 		}
 	})
 

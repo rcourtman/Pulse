@@ -305,14 +305,18 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 	}
 }
 
+// metricOptionsWithTags records a resource's tags on its metric alerts. With
+// no tags it drops any an open alert still carries: config-save reevaluation
+// reads pulse-relaxed back from them, and a removed tag left behind judged
+// the alert by thresholds the evaluator no longer applies.
 func metricOptionsWithTags(opts *metricOptions, tags []string) *metricOptions {
-	if len(tags) == 0 {
-		return opts
-	}
-
 	merged := metricOptions{}
 	if opts != nil {
 		merged = *opts
+	}
+	if len(tags) == 0 {
+		merged.RemoveMetadata = append(append([]string(nil), merged.RemoveMetadata...), "tags")
+		return &merged
 	}
 	metadata := make(map[string]interface{}, len(merged.Metadata)+1)
 	for key, value := range merged.Metadata {
