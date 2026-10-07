@@ -5186,6 +5186,26 @@ curl configuration and have five-second connect/twenty-second overall bounds.
 `scripts/installtests/pulse_auto_update_test.go` own this proof. Signature,
 edition, consent, backup, service-restoration and installation gates remain
 separate and unchanged.
+### Manual update channel admission (7 October 2026)
+
+The installed `update` helper selects a saved release channel only from one
+complete `system.json` object and its top-level `updateChannel`. Missing, null
+or empty channels retain the stable default; recognised strings are trimmed
+and case-normalised. Nested or quoted settings cannot opt into RC. Malformed,
+multiple, non-object or unknown-channel configuration, a non-regular path or
+missing jq stops before downloading or executing the installer, with explicit
+`--stable`/`--rc` recovery guidance and no configuration rewrite. A missing file
+retains the default. Explicit existing selectors (including `--prerelease`)
+and the existing source-build marker keep precedence over saved configuration.
+
+`TestManualUpdateChannelAdmission` generates and executes the actual helper
+against local transport fixtures and genuinely signed installer/sidecar bytes.
+It checks final arguments, pre-download refusal, configuration preservation,
+selector/marker precedence and signature rejection. This is bounded source
+acceptance, not installed upgrade, native service restoration or published
+release acceptance. The installer, archive, signing, rollback and service gates
+remain unchanged.
+
 That same boundary also owns operator-facing management entry points for
 existing self-hosted installs: the installer's printed update/reset/uninstall
 commands and the active install or upgrade docs must route supported
@@ -7084,3 +7104,4 @@ contract checks the helper staging, unchanged cache/graph inputs and bounded
 command. These are offline command proofs, not a hosted Docker build, public
 proxy recovery, E2E acceptance or installed customer result. The hosted checks
 still have to build the image and execute the unchanged suites.
+
