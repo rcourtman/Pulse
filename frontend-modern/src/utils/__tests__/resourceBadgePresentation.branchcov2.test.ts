@@ -3,7 +3,6 @@ import {
   getContainerRuntimeBadgeForRuntime,
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
-  getInfrastructureSystemIdentitySortLabel,
   getPlatformBadge,
   getTypeBadge,
   getUnifiedSourceBadges,
@@ -498,7 +497,7 @@ describe('getVersionedSourceBadge via getInfrastructureSystemIdentityBadges (bra
   });
 });
 
-describe('getInfrastructureSystemIdentityBadges and getInfrastructureSystemIdentitySortLabel (branch coverage)', () => {
+describe('getInfrastructureSystemIdentityBadges fallbacks (branch coverage)', () => {
   it('falls back to the platform badge for a bare agent resource with no other identity', () => {
     const resource = makeResource({
       type: 'agent',
@@ -507,10 +506,9 @@ describe('getInfrastructureSystemIdentityBadges and getInfrastructureSystemIdent
       sources: [],
     });
     expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['Agent']);
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('Agent');
   });
 
-  it('returns an empty badge set and empty sort label when nothing resolves', () => {
+  it('returns an empty badge set when nothing resolves', () => {
     const resource = makeResource({
       id: 'lonely',
       name: 'lonely',
@@ -520,6 +518,5 @@ describe('getInfrastructureSystemIdentityBadges and getInfrastructureSystemIdent
       sources: [],
     });
     expect(getInfrastructureSystemIdentityBadges(resource)).toEqual([]);
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('');
   });
 });
