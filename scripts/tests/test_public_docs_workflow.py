@@ -25,6 +25,7 @@ SAFETY_STEP = "Exercise backup safety and diagnostic recipes"
 TESTS = (
     "test_production_rollout_docs.py",
     "test_pmg_docs.py",
+    "test_agent_profile_docs.py",
     "test_pve_backup_troubleshooting_docs.py",
     "test_vm_disk_diagnostics.py",
     "test_memory_troubleshooting_docs.py",

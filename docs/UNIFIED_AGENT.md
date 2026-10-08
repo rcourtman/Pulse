@@ -857,7 +857,13 @@ Pro, legacy Pro+, and Cloud can push centralized settings to agents via Agent Pr
 Behavior:
 - The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
-- Profile changes take effect on the next agent restart.
+- With the host module running, current agents refresh about once a minute.
+  Host `interval`, `report_ip` and `disable_ceph` settings can apply live; other
+  profile keys require a successful startup fetch. A refresh is not an
+  all-module live reload, and a saved assignment is not applied-state proof.
+- Removing an assignment does not undo settings already applied to a running
+  process, revoke its token or stop monitoring. Keep incident recovery separate
+  from profile rollout; do not restart or re-enrol solely to diagnose a reading.
 - Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
