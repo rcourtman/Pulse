@@ -1796,9 +1796,12 @@ func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
 					host.Unraid.Disks = []models.HostUnraidDisk{disk}
 				case "type-off":
 					cfg := m.GetConfig()
-					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
 					m.UpdateConfig(cfg)
-					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 80, Clear: 70}}
+					if threshold := m.DiskTemperatureThreshold("custom"); threshold != nil && threshold.Trigger > 0 {
+						t.Fatalf("type-off fixture did not disable temperature alerts: %+v", threshold)
+					}
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
 					m.UpdateConfig(cfg)
 				}
 				elapsed.Store(int64(time.Minute))
