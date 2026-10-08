@@ -290,7 +290,7 @@ func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
 					for rebuild := 1; rebuild <= rebuilds; rebuild++ {
 						adapter.PopulateFromSnapshot(snapshot)
 						listed := adapter.GetAll()
-						broadcast, ok := adapter.CoalesceForPresentation(listed)
+						broadcast, ok := adapter.CoalesceForPresentation(listed, nil)
 						if !ok {
 							t.Fatal("store-backed adapter did not coalesce with its exclusions")
 						}
