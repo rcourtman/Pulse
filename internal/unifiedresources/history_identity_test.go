@@ -858,3 +858,53 @@ func TestProxmoxPhysicalDiskAlertReferenceShape(t *testing.T) {
 		require.Nil(t, ProxmoxPhysicalDiskAlertIdentifiers(ref), ref)
 	}
 }
+
+func TestAlertResourceReferenceRequiresCurrentDurableOwner(t *testing.T) {
+	snapshot := models.StateSnapshot{Hosts: []models.Host{{ID: "host-source", Hostname: "display-name", MachineID: "machine"}}}
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	_, ownerID, found := registry.GetByReference("host-source")
+	if !found {
+		t.Fatal("fixture owner missing")
+	}
+	for _, resolver := range []AlertResourceReferenceResolver{registry, NewUnifiedAIAdapter(registry), NewMonitorAdapter(registry)} {
+		binding, claimed := resolver.ResolveAlertResourceReference("agent:host-source/disk:docker-data")
+		if !claimed || binding.ResourceID != ownerID || binding.ResourceType != ResourceTypeAgent || len(binding.SourceTargets) == 0 {
+			t.Fatalf("lost canonical owner/source: %+v, claimed=%v", binding, claimed)
+		}
+		for _, ref := range []string{"agent:display-name/disk:docker-data", "agent:host-source/disk:", "agent:host-source/disk:data/nested", "agent:host-source/service:sshd", "agent:removed/disk:data"} {
+			if binding, _ := resolver.ResolveAlertResourceReference(ref); binding.ResourceID != "" {
+				t.Fatalf("bound untrusted reference %q: %+v", ref, binding)
+			}
+		}
+	}
+	// A fresh collection without the owner cannot borrow retained history.
+	removed := NewRegistry(nil)
+	if binding, _ := removed.ResolveAlertResourceReference("agent:host-source/disk:docker-data"); binding.ResourceID != "" {
+		t.Fatalf("removed owner resolved: %+v", binding)
+	}
+}
+
+func TestHistoryIdentityLinkedAgentDiskUsesCanonicalOwner(t *testing.T) {
+	store := NewMemoryStore()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{ID: "host-source", MachineID: "machine"}},
+		VMs:   []models.VM{{ID: "vm-source", VMID: 101, Instance: "pve", Node: "node"}},
+	}
+	registry := NewRegistry(store)
+	registry.IngestSnapshot(snapshot)
+	_, hostID, hostFound := registry.GetByReference("host-source")
+	_, vmID, vmFound := registry.GetByReference("vm-source")
+	require.True(t, hostFound)
+	require.True(t, vmFound)
+	require.NoError(t, store.AddLink(ResourceLink{ResourceA: hostID, ResourceB: vmID, PrimaryID: vmID}))
+	registry = NewRegistry(store)
+	registry.IngestSnapshot(snapshot)
+	ownerID, claimed := registry.resolveHistoryReference("agent:host-source/disk:data")
+	require.True(t, claimed)
+	require.Equal(t, vmID, ownerID)
+	for _, ref := range []string{"agent:host-source/disk:data/nested", "agent:missing/disk:data"} {
+		ownerID, _ := registry.resolveHistoryReference(ref)
+		require.Empty(t, ownerID, ref)
+	}
+}
