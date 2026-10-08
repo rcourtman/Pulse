@@ -493,6 +493,18 @@ async function journey(
           await page.waitForFunction(
             () => document.querySelector('[aria-label="Rule scope and reason"]').scrollTop > 0,
           );
+          // A positive offset is the beginning of native keyboard scrolling,
+          // not its completion. Do not send Home while PageDown still moves
+          // the region. Observe settled frames; retain the exact return-to-zero
+          // assertion below rather than hiding a failed keyboard return.
+          await page.waitForFunction(() => {
+            const region = document.querySelector('[aria-label="Rule scope and reason"]');
+            const top = region.scrollTop;
+            const previous = window.__patrolReasonScroll;
+            const stable = previous?.top === top ? previous.stable + 1 : 0;
+            window.__patrolReasonScroll = { top, stable };
+            return stable >= 8;
+          });
           const scrolled = await region.evaluate((e) => e.scrollTop);
           await capture('long-reason-scrolled');
           const footerAfter = await dialog
@@ -509,6 +521,7 @@ async function journey(
             scrollInput: input,
             scrollPosition: scrolled,
             keyboardHomeReturned: true,
+            pageDownSettledBeforeHome: true,
             stableFooter: true,
           };
           result.checks.push(
