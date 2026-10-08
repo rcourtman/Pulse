@@ -2475,3 +2475,39 @@ func TestVMViewDiskFromLinkedAgentFollowsSelectedMetricSource(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestViewGovernanceIdentity(t *testing.T) {
+	for _, kind := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
+		first := &Resource{ID: "first", Name: "duplicate", Type: kind, Tags: []string{"customer-data"}, Proxmox: &ProxmoxData{VMID: 105, Instance: "first", NodeName: "a"}}
+		second := &Resource{ID: "second", Name: "duplicate", Type: kind, Proxmox: &ProxmoxData{VMID: 105, Instance: "second", NodeName: "b"}}
+		metadata := func(resource *Resource) (*ResourcePolicy, string) {
+			if kind == ResourceTypeVM {
+				return NewVMView(resource).GovernanceMetadata()
+			}
+			return NewContainerView(resource).GovernanceMetadata()
+		}
+		firstPolicy, _ := metadata(first)
+		secondPolicy, _ := metadata(second)
+		if firstPolicy.Sensitivity == secondPolicy.Sensitivity {
+			t.Fatal("fixture does not distinguish same-name guest policies")
+		}
+		for _, resource := range []*Resource{first, second} {
+			wantPolicy, wantSummary := CanonicalGovernanceMetadata(resource)
+			gotPolicy, gotSummary := metadata(resource)
+			if !reflect.DeepEqual(gotPolicy, wantPolicy) || gotSummary != wantSummary {
+				t.Fatal("metadata did not belong to the selected view")
+			}
+			gotPolicy.Sensitivity = ResourceSensitivityPublic
+			if len(gotPolicy.Routing.Redact) > 0 {
+				gotPolicy.Routing.Redact[0] = "changed"
+			}
+			again, _ := metadata(resource)
+			if !reflect.DeepEqual(again, wantPolicy) {
+				t.Fatal("returned policy aliases the canonical guest")
+			}
+		}
+		if policy, summary := metadata(nil); policy != nil || summary != "" {
+			t.Fatal("nil view created policy evidence")
+		}
+	}
+}

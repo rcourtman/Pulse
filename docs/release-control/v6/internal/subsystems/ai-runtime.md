@@ -25,6 +25,22 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Guest-config tools require an unambiguous resource identity
+
+The existing VM/system-container configuration tool selects an exact canonical
+resource ID before considering a name or bare VMID. A name/VMID matching more
+than one guest or a target lacking complete provider placement returns a useful
+error without invoking the config provider. Successful configuration and its
+governance metadata come directly from the selected typed guest view, never a
+second name-based resolution. Unique aliases remain supported; app-container configuration,
+command authority and provider permissions are unchanged.
+
+`TestGuestConfigToolIdentity` covers both inventory orders, shared names/VMIDs,
+canonical-ID/name collisions, unique aliases and missing/invalid placement at
+the actual tool/provider boundary. It checks config attribution and no provider
+read on refusal. Source controls are not installed multi-instance recovery.
+
+
 ### Permanent suppression rules remain reversible — issue #2528
 
 The existing manual suppression API/store semantics remain unchanged. Patrol

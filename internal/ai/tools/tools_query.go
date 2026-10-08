@@ -5254,44 +5254,34 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 		return NewTextResult("Guest configuration not available."), nil
 	}
 
-	var (
-		guestType string
-		vmID      int
-		name      string
-		node      string
-		instance  string
-	)
-	var err error
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewTextResult("State information not available."), nil
 	}
-	governance := newGovernedQueryMetadataResolver(rs)
-	guestType, vmID, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
+	target, err := resolveGuestFromReadState(rs, resourceType, resourceID)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
-
 	// Normalize semantic type to provider-level type for guest config lookup.
 	// GetGuestConfig expects "container" or "vm", not "system-container".
-	configType := guestType
+	configType := target.kind
 	if configType == "system-container" {
 		configType = "container"
 	}
-	rawConfig, err := e.guestConfigProvider.GetGuestConfig(configType, instance, node, vmID)
+	rawConfig, err := e.guestConfigProvider.GetGuestConfig(configType, target.instance, target.node, target.vmid)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
 
 	response := EmptyGuestConfigResponse()
-	response.GovernedResourceMetadata = governance.Resolve(name, fmt.Sprintf("%d", vmID))
-	response.GuestType = guestType
-	response.VMID = vmID
-	response.Name = name
-	response.Node = node
-	response.Instance = instance
+	response.GovernedResourceMetadata = target.metadata
+	response.GuestType = target.kind
+	response.VMID = target.vmid
+	response.Name = target.name
+	response.Node = target.node
+	response.Instance = target.instance
 
-	switch guestType {
+	switch target.kind {
 	case "system-container":
 		hostname, osType, onboot, rootfs, mounts := parseContainerConfig(rawConfig)
 		response.Hostname = hostname
@@ -5305,7 +5295,7 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 		response.Onboot = onboot
 		response.Disks = disks
 	default:
-		return NewErrorResult(fmt.Errorf("unsupported guest type: %s", guestType)), nil
+		return NewErrorResult(fmt.Errorf("unsupported guest type: %s", target.kind)), nil
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
@@ -5428,31 +5418,68 @@ func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context,
 	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
-func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmID int, name, node, instance string, err error) {
+type guestConfigTarget struct {
+	id, kind, name, node, instance string
+	vmid                           int
+	metadata                       GovernedResourceMetadata
+}
+
+func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestConfigTarget, error) {
 	resourceType = canonicalQueryResourceType(resourceType)
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType == "" || resourceID == "" {
-		return "", 0, "", "", "", fmt.Errorf("resource_type and resource_id are required")
+		return guestConfigTarget{}, fmt.Errorf("resource_type and resource_id are required")
 	}
 
+	// A canonical ID wins over another guest's coincidentally matching name.
+	// Names and bare VMIDs remain convenient only when they identify one guest.
+	var exact, aliases []guestConfigTarget
+	type metadataView interface {
+		GovernanceMetadata() (*unifiedresources.ResourcePolicy, string)
+	}
+	add := func(target guestConfigTarget, view metadataView) {
+		if target.id != resourceID && strconv.Itoa(target.vmid) != resourceID && target.name != resourceID {
+			return
+		}
+		policy, summary := view.GovernanceMetadata()
+		target.metadata = GovernedResourceMetadata{Policy: policy, AISafeSummary: summary}
+		if target.id == resourceID {
+			exact = append(exact, target)
+		} else {
+			aliases = append(aliases, target)
+		}
+	}
 	switch resourceType {
 	case "system-container":
 		for _, ct := range rs.Containers() {
-			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
-				return "system-container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
+			if ct != nil {
+				add(guestConfigTarget{id: ct.ID(), kind: resourceType, name: ct.Name(), node: ct.Node(), instance: ct.Instance(), vmid: ct.VMID()}, ct)
 			}
 		}
-		return "", 0, "", "", "", fmt.Errorf("system-container not found: %s", resourceID)
 	case "vm":
 		for _, vm := range rs.VMs() {
-			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
-				return "vm", vm.VMID(), vm.Name(), vm.Node(), vm.Instance(), nil
+			if vm != nil {
+				add(guestConfigTarget{id: vm.ID(), kind: resourceType, name: vm.Name(), node: vm.Node(), instance: vm.Instance(), vmid: vm.VMID()}, vm)
 			}
 		}
-		return "", 0, "", "", "", fmt.Errorf("vm not found: %s", resourceID)
 	default:
-		return "", 0, "", "", "", fmt.Errorf("invalid resource_type: %s. Use vm or system-container", resourceType)
+		return guestConfigTarget{}, fmt.Errorf("invalid resource_type: %s. Use vm or system-container", resourceType)
 	}
+	matches := aliases
+	if len(exact) > 0 {
+		matches = exact
+	}
+	if len(matches) == 0 {
+		return guestConfigTarget{}, fmt.Errorf("%s not found: %s", resourceType, resourceID)
+	}
+	if len(matches) > 1 {
+		return guestConfigTarget{}, fmt.Errorf("%s reference is ambiguous: %s; use the canonical resource ID", resourceType, resourceID)
+	}
+	target := matches[0]
+	if target.vmid <= 0 || target.node == "" || target.instance == "" {
+		return guestConfigTarget{}, fmt.Errorf("guest placement is unavailable; refresh the resource inventory")
+	}
+	return target, nil
 }
 
 func parseContainerConfig(config map[string]interface{}) (hostname, osType string, onboot *bool, rootfs string, mounts []GuestMountConfig) {

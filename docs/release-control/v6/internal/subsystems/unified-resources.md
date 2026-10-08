@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest views retain exact governance identity for configuration reads
+
+VM and system-container views expose cloned canonical policy/AI-safe metadata
+for their own resource. This lets guest-config reads retain the chosen identity
+when names repeat across installations without a second name-based resolution.
+The accessor exposes no raw resource or mutation; classification/redaction rules
+are unchanged. `TestGuestViewGovernanceIdentity` checks distinct same-name guests,
+policy cloning and nil-view handling. Tool controls check its use at the provider
+boundary; these are not native installation recovery.
+
+
 ### Native guest admission replaces the previous canonical facet
 
 A complete native Proxmox guest observation (non-zero VMID) owns its filesystem
