@@ -9010,3 +9010,17 @@ passive steps, evidence distinctions, safety link/target, disclosure and exact
 shipped mirror. Exact-parent controls reject the old guide. This is safe help
 maintenance, not a collector/classifier repair, browser acceptance, native
 backup/recovery proof or published availability.
+
+### TrueNAS heat uses the configured disk policy (8 October 2026)
+
+The production TrueNAS storage table and inline resource drawer pass each
+disk's canonical resource ID through the alerts store. Type defaults, a
+TrueNAS-wide value and the disk override produce one consistent status/reason
+and temperature tone; retained values stay muted and unjudged. The existing
+keyboard disclosure and phone table layouts are preserved.
+
+Verification: `TrueNASStorageTopologyTable.test.tsx`, the drawer model tests,
+and `browser-tests/truenas-disk-thresholds.cjs` exercise desktop Chromium and
+phone WebKit, config refresh, Attention filtering and keyboard disclosure.
+The fixture imports the production store/table/drawer/CSS but uses synthetic
+HTTP and readings; it is not full-shell, appliance or published acceptance.

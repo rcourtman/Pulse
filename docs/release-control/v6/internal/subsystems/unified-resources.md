@@ -7367,3 +7367,17 @@ system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
 sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
 keeps the handler on the registry's fold record.
+
+### TrueNAS disk-specific heat presentation (8 October 2026)
+
+`TrueNASDiskTemperatureThresholdResolver` receives the disk resource (including
+its canonical ID), not just a disk type. The table's status dot, reason,
+Attention filter/count and drawer temperature row use the same resolved tiers.
+A retained temperature is not current heat under any override. Changing alert
+configuration updates those judgments without changing inventory identity.
+
+Verification: `truenasPageModel.test.ts`,
+`resourceDetailDrawerTrueNASModel.coverage2.test.ts` and
+`browser-tests/truenas-disk-thresholds.cjs` cover disk overrides, TrueNAS-wide
+limits, Off and last-known readings. Synthetic browser observations do not
+establish sustained native metrics, History, revocation or release availability.
