@@ -302,14 +302,89 @@ actions. Do not cause a production outage or notification storm for this test.
 
 ## 🧾 Audit Webhooks (Pro/legacy Pro+/Cloud)
 
-Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
+Audit webhooks forward recorded security events, such as logins and settings
+changes, to an authorised receiver. They are separate from **Alerts →
+Notifications**: alert templates, signing secrets, retry policies and delivery
+activity do not configure or describe this sender.
+
+Delivery requires the `audit_logging` capability and a supporting runtime. An
+active licence on the public Community runtime does not enable these hooks;
+if the panel says **Pulse Pro runtime required**, follow **Download Pulse Pro**
+for that deployment. Do not buy another licence or reset data to clear the gate.
 
 ### Setup
-1. Go to **Settings → Security → Audit Webhooks**.
-2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
+1. Sign in as an administrator and open **Settings → Security → Audit Webhooks**
+   in the intended organisation. Configuration is organisation-scoped.
+2. Add a receiver you control, using HTTPS with valid certificate trust, for
+   example `https://audit.example.com/ingest/pulse`. This is a placeholder, not
+   a destination to send real events to. Audit delivery blocks loopback,
+   private/reserved IPs, internal hostnames and public names resolving to those
+   addresses. The alert-webhook private-network setting does not relax this
+   audit restriction. Do not bypass it by changing DNS, TLS verification or
+   network isolation; a private-only SIEM needs a separately secured, authorised
+   ingress design, not the `.local` URL previously shown here.
+3. Saving the URL is configuration acceptance, not a delivery test. Check the
+   receiver against an already-recorded event during normal operation. Do not
+   create failed logins, change roles or trigger an alert just to test delivery.
+
+The API configuration route is `/api/admin/webhooks/audit`; it requires
+administrator access and the same licence capability, with `settings:read`
+for GET and `settings:write` for updates. Its write body is a **complete URL
+list**, not an append operation. Prefer the signed-in UI; do not copy bearer
+tokens or session cookies into commands, URLs or reports.
+
+### Delivery and missing events
+
+Audit forwarding is **best effort**, not guaranteed delivery of every event.
+Its in-memory queue holds at most 1,000 events and drops new events when full.
+A restart does not replay that queue from stored history. Each destination gets
+up to four attempts (the initial request plus three retries), with waits of
+1, 5 and 30 seconds and a 30-second request timeout. These bounds are not a
+total delivery deadline. Only an HTTP 2xx response counts as send success; it
+does not prove the receiver verified or durably stored the event.
+
+Three workers can deliver concurrently, so receivers must tolerate duplicates
+and out-of-order arrival. After the attempts are exhausted there is **no audit
+dead-letter queue or automatic history replay**. Alert **Recent delivery
+activity**, **Dismiss** and **Retry** do not recover audit deliveries. Removing
+an endpoint changes future routing; it is not a guaranteed cancellation of a
+request already in flight.
+
+For a missing event, reconcile the intended organisation's retained audit
+history, a bounded local sender error and the receiver's own record. Absence at
+the receiver is not proof that the action was never recorded. A history query
+error is not an empty history. Use [private, filtered audit reads and exports](AUDIT_LOGGING.md#viewing-audit-events)
+when authorised, not a broad export or a production replay. Preserve keys and
+history; do not restart or clear data to make the discrepancy disappear.
 
 ### Security
-Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.
+The POST envelope contains `event` (`audit.` plus the event type), `timestamp`
+and `data` (the recorded event). Its event ID is `data.id`, also sent as
+`X-Pulse-Event-ID`; keep receiver deduplication scoped to the originating
+instance/organisation. Event IDs and headers alone do not authenticate a sender.
+
+When signing was available at capture, the signature is **`data.signature`**,
+not a top-level payload field. It authenticates the signer's canonical event
+fields, **not the raw POST body**; the alert webhook `X-Pulse-Signature`
+timestamp/body verifier above is not an audit verifier. Events captured without
+signing can omit this field. Retain unsigned, failed or unknown verification
+outcomes rather than treating them as authenticated events or as proof of
+tampering. A valid signature does not establish complete history, freshness or
+freedom from replay. Use the [stored-event verification guidance](AUDIT_LOGGING.md#tamper-detection)
+and the signature format supported by the originating version before a receiver
+acts on an event.
+
+The default encrypted key is at **`audit/.audit-signing.key`** relative to the
+instance or organisation data directory, alongside the audit store, and needs
+its matching `.encryption.key`. A runtime can use a different audit directory
+or a managed signing key; follow [its actual storage configuration](AUDIT_LOGGING.md#storage),
+not a guessed root path. Do not copy an encrypted key into a raw-body HMAC
+recipe, disclose keys or reset them to fix delivery. There is no
+`PULSE_AUDIT_SIGNING_KEY` override.
+
+Audit events can contain users, IPs, paths and private details; endpoint URLs
+and sender errors can contain ingest secrets. Keep raw payloads, full URLs,
+headers and logs private. Share only a locally reviewed, redacted excerpt.
 
 ## 🏢 Provider-hosted MSP webhooks
 
