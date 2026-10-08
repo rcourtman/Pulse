@@ -3009,6 +3009,59 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Registered Windows native-exit completion proof (8 October 2026)
+
+The workflow's seven immediate native exit checks and the lifecycle harness's
+five checks are verified from `scripts/installtests/install_ps1_test.go`, the
+registry-named completion proof for this boundary. The existing assertion
+methods have moved there unchanged from `native_windows_exit_test.go`; the
+shared parsers and native PowerShell execution controls remain in that file.
+Each removed guard and either `continue-on-error` mutation must still be
+rejected. No registry relaxation or runtime command change is made. Offline
+Linux source proof must retain PowerShell-unavailable skips; actual native
+Windows service lifecycle and exit propagation remain hosted CI obligations.
+
+
+### Server reset observes every writer before deleting configuration (8 October 2026)
+
+The root installer's existing `--reset` intent retains the binary and unit
+files. Before changing services or data it records bounded, usable load,
+active and enablement states for its timers, in-flight updaters and servers.
+Default historical `pulse`/`pulse-backend` writers sharing configuration are
+included; an explicit custom instance affects only its selected units.
+Missing optional units are inert; a missing selected server, failed/empty
+query, unknown or transitioning state refuses reset before any mutation.
+
+Timers stop before updaters, which stop before servers. Only enabled timers
+are temporarily disabled, preserving persistent versus runtime enablement;
+server/updater enablement is never changed. Roles are recorded explicitly, not
+inferred from service-name suffixes: a custom server named `*-update` is still
+a server and must regain prior liveness. Stop/disable results require
+readback and every writer is reconciled again immediately before deletion.
+A failed stop, changed unit identity, reactivation or enablement drift preserves
+configuration, reports incomplete reset and never attempts automatic restart.
+A failed deletion leaves services/timers stopped for manual reconciliation.
+
+After deletion only prior-active servers are restarted, with observed active
+state and unchanged load/enablement required before timers are restored.
+Prior-inactive/failed servers stay stopped. Timers regain their recorded
+active and enabled states, with final readback required for completion. An
+interrupted updater is deliberately **not replayed**, and this is reported.
+Any restoration failure is an incomplete action, not success. This is bounded
+quiescence, not an exclusive lock against an independent administrator starting
+a unit after observation; concurrent manual lifecycle operations remain unsafe.
+
+`server_reset_safety_test.go` executes the actual sourced reset path against
+stateful on-disk systemctl doubles and fixture-only deletion. It covers all
+writer observations, ignored stops/disablement, readback failure, reactivation,
+prior state/runtime enablement, updater non-replay, restoration/deletion failures,
+optional-unit absence, mixed idle-server/active-timer restoration and custom-instance
+isolation. Stalled observation and stop controls exercise the real timeout deadline.
+The root installer test
+also pins bounds on every systemd call. These are offline source controls, not
+native systemd, signed-installer or installed reset acceptance.
+
+
 The helper remains network-isolated on all targets, and restart activates the installer-owned replacement rather than retaining old code after reload. Published security guidance discloses the PVE IPC limitation and partial-result semantics. This is not a published release or installed PVE acceptance.
 
 ### Demo runtime footprint qualification
@@ -7210,3 +7263,4 @@ contract checks the helper staging, unchanged cache/graph inputs and bounded
 command. These are offline command proofs, not a hosted Docker build, public
 proxy recovery, E2E acceptance or installed customer result. The hosted checks
 still have to build the image and execute the unchanged suites.
+

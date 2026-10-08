@@ -3773,6 +3773,19 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Registered Windows native-exit completion proof (8 October 2026)
+
+The workflow's seven immediate native exit checks and the lifecycle harness's
+five checks are verified from `scripts/installtests/install_ps1_test.go`, the
+registry-named completion proof for this boundary. The existing assertion
+methods have moved there unchanged from `native_windows_exit_test.go`; the
+shared parsers and native PowerShell execution controls remain in that file.
+Each removed guard and either `continue-on-error` mutation must still be
+rejected. No registry relaxation or runtime command change is made. Offline
+Linux source proof must retain PowerShell-unavailable skips; actual native
+Windows service lifecycle and exit propagation remain hosted CI obligations.
+
+
 Notification destination edits in the shared `internal/api/` subtree preserve
 only submitted masked values, honour neighbouring explicit map edits/removals
 and reject unrecoverable masks before publication. Restored custom-field

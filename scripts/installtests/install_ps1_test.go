@@ -549,3 +549,58 @@ func TestInstallPS1RequiresPinnedSignatureVerificationForReleaseDownloads(t *tes
 		}
 	}
 }
+
+// These native exit checks live with the registry-named Windows lifecycle
+// completion proof. Their shared parsers and native execution controls remain
+// in native_windows_exit_test.go; no check or adverse control is removed.
+func TestWindowsAgentLifecycleWorkflowChecksEveryNativeExit(t *testing.T) {
+	steps := nativeWindowsExitSteps(t)
+	guards, err := nativeWindowsExitGuards(steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, guard := range guards {
+		t.Run(guard, func(t *testing.T) {
+			changed := append([]nativeWindowsExitStep(nil), steps...)
+			for i := range changed {
+				// Reproduce the parent's unchecked command at each boundary.
+				changed[i].Run = strings.Replace(changed[i].Run, guard, "", 1)
+			}
+			if _, err := nativeWindowsExitGuards(changed); err == nil {
+				t.Fatal("accepted a native failure that a later successful command could hide")
+			}
+		})
+	}
+	for _, stepName := range []string{"Build and execute native Windows agent", "Exercise native Windows service lifecycle"} {
+		t.Run(stepName+" cannot tolerate failure", func(t *testing.T) {
+			changed := append([]nativeWindowsExitStep(nil), steps...)
+			for i := range changed {
+				if changed[i].Name == stepName {
+					changed[i].ContinueOnError = true
+				}
+			}
+			if _, err := nativeWindowsExitGuards(changed); err == nil {
+				t.Fatal("accepted a continue-on-error native Windows proof")
+			}
+		})
+	}
+}
+
+func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guards, err := nativeWindowsHarnessExitGuards(string(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, guard := range guards {
+		t.Run(guard, func(t *testing.T) {
+			changed := strings.Replace(string(content), guard, "", 1)
+			if _, err := nativeWindowsHarnessExitGuards(changed); err == nil {
+				t.Fatal("accepted failed version/installer/service query evidence")
+			}
+		})
+	}
+}
