@@ -339,7 +339,9 @@ async function journey(
       );
       await page.screenshot({
         path: file,
-        fullPage: !visualOnly,
+        // Full-page capture can move a fixed overlay outside the expanded
+        // phone image. Capture the real viewport whenever a dialog is open.
+        fullPage: !visualOnly && (await page.getByRole('dialog').count()) === 0,
         animations: visualOnly ? 'disabled' : 'allow',
       });
       report.captures.push({ path: file.replace('/workspace/', ''), sha256: hash(file) });
