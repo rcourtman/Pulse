@@ -381,6 +381,48 @@ planned maintenance window, preserving the deployment's settings and data.
   pre-pause states are not permission to start them. **Pulse monitoring and
   alerts are unavailable while stopped**; arrange independent outage coverage.
 
+#### Backup-age alerts were not evaluated
+
+The **Pulse** warning “Backup-age alerts were not evaluated because recovery
+data could not be read” means that Pulse could not complete that backup-age
+check. It is a monitoring failure, **not evidence that a backup failed**.
+Existing backup-age alerts are kept during the failed read; they are not a
+fresh assessment, and the absence of a new age alert does not establish that
+backups are current. A working connection or a visible backup row does not
+prove that age evaluation completed.
+
+Use the owning Proxmox/PBS installation's existing backup records and your
+established backup checks while evaluation is unavailable. Compare the same
+installation, guest type/ID, datastore, namespace and backup time; a matching
+VMID in another installation is not the same guest. For a separate Coverage
+disagreement, use the [backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected).
+
+Keep the warning's original time and message. On the actual Pulse server,
+use the existing [bounded log reader](#inspect-notification-logs) for the
+incident window, with the matching systemd or Docker deployment. The log
+message **Failed to list recovery rollups for backup alerts** can identify a
+failed evaluation read; a timeout does not by itself establish its cause.
+A failed log read is unavailable, not an empty successful search. Share only
+the running Pulse version, affected time window, warning and relevant manually
+redacted error. Keep credentials, private paths/hostnames, full logs, API
+responses and database files out of public reports.
+
+**A disappearing warning alone is not recovery.** Disabling alerts or backup-age
+checks, or setting both age thresholds to zero, can clear it without a
+successful evaluation. Keep the intended policy unchanged and observe ordinary
+polling; do not disable protection just to clear the warning. A successful age
+evaluation still does not establish backup completeness, verification, restore
+readiness or guest thaw.
+
+Do not restart or reinstall Pulse, clear History, delete/prune backup records,
+change database schema or increase timeouts just to diagnose this warning. Do
+not run a new backup, verification, restore, live diagnostics or guest-agent
+probe as a test. An OK backup task does not prove guest thaw; a frozen or
+unresponsive guest needs the separate [backup safety procedure](VM_DISK_MONITORING.md#backup-safety),
+including independent post-backup thaw, successful writes to every covered
+filesystem and workload liveness before restoring only previously active
+monitoring.
+
 #### Backup health disagrees with PBS
 
 A visible or Verified PBS backup is not the same reading as a workload's
