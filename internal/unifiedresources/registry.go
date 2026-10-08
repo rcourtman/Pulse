@@ -111,6 +111,12 @@ type ResourceRegistry struct {
 	// writes these instead of the merged projection, so a link never lends
 	// one machine's identity keys to another resource's durable pin.
 	linkOwnPins map[string]*ResourceIdentityPin
+	// linkHolds maps a resource that exists only through saved-host
+	// continuity, and that an operator link would otherwise fold away, to
+	// the link's primary (holdLinkedResourceLocked). Both rows stay listed
+	// with their own telemetry; references to the held row resolve to the
+	// primary. Every link pass recomputes it.
+	linkHolds map[string]string
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -695,11 +701,12 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	// Snapshot and resource ingest apply the links, so record ingest must too,
 	// or the monitor's rebuilt registry keeps both rows while REST, which
 	// seeds from that registry, shows them merged. Continuity records only
-	// fill absent machines: a saved enrollment joined to its linked guest
-	// would lend the guest its offline verdict and old agent payload.
-	if !onlyMissing {
-		rr.applyManualLinks(thresholds)
-	}
+	// fill absent machines and never merge into a link (a saved enrollment
+	// joined to its linked guest would lend the guest its offline verdict
+	// and old agent payload), but the link still names their identity: the
+	// pass holds them beside the primary and resolves references to them
+	// there.
+	rr.applyManualLinks(thresholds)
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -1584,8 +1591,18 @@ func (rr *ResourceRegistry) ResolveReferenceID(ref string) (string, bool) {
 }
 
 // The second result requests a one-time alias-index build after the read lock
-// is released. Exact and source references never pay that cost.
+// is released. Exact and source references never pay that cost. A reference
+// to a saved link member held beside its primary resolves to the primary,
+// as one to a folded member does: the operator's link names one identity.
 func (rr *ResourceRegistry) resolveReferenceIDLocked(ref string) (string, bool) {
+	resolvedID, needsAliasIndex := rr.resolveReferenceRowIDLocked(ref)
+	if resolvedID == "" {
+		return "", needsAliasIndex
+	}
+	return rr.linkHoldTargetLocked(resolvedID), false
+}
+
+func (rr *ResourceRegistry) resolveReferenceRowIDLocked(ref string) (string, bool) {
 	if ref == "" {
 		return "", false
 	}
@@ -1645,7 +1662,7 @@ func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) 
 	matches := map[string]struct{}{}
 	for resourceID, resource := range rr.resources {
 		if resourceMatchesCanonicalIdentityReference(resource, ref) {
-			matches[resourceID] = struct{}{}
+			matches[rr.linkHoldTargetLocked(resourceID)] = struct{}{}
 		}
 	}
 	return uniqueResourceIDMatch(matches)
@@ -3069,6 +3086,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			if onlyMissing && rr.resources[resource.ID] != nil {
 				return ""
 			}
+			resource.continuityOnly = onlyMissing
 			stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 			rr.resources[resource.ID] = &resource
 			rr.indexPhysicalDiskHardwareLocked(&resource)
@@ -3095,6 +3113,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		rr.matcher.Add(existing.ID, existing.Identity)
 		return existing.ID
 	}
+	resource.continuityOnly = onlyMissing
 	stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 	rr.resources[resource.ID] = &resource
 	rr.indexPhysicalDiskHardwareLocked(&resource)
@@ -3671,7 +3690,8 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	exactID := CanonicalResourceID(ref)
 	if existing := rr.resources[exactID]; existing != nil {
 		if !isAvailabilityOwnedResource(*existing) {
-			return exactID
+			// A saved link member held beside its primary answers there.
+			return rr.linkHoldTargetLocked(exactID)
 		}
 		return ""
 	}
@@ -3684,6 +3704,9 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	// fail-closed.
 	eligible := func(candidateID string) string {
 		candidateID = CanonicalResourceID(candidateID)
+		if candidateID != "" {
+			candidateID = rr.linkHoldTargetLocked(candidateID)
+		}
 		existing := rr.resources[candidateID]
 		if existing != nil && !isAvailabilityOwnedResource(*existing) {
 			return candidateID
@@ -3909,6 +3932,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	if existing == nil {
 		return
 	}
+	// A source reported this row, so it is an observation again.
+	existing.continuityOnly = false
 
 	rr.setSourceParent(existing, source, incoming.ParentID)
 
@@ -4871,6 +4896,10 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 }
 
 func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Duration) {
+	if rr.linkHolds != nil {
+		rr.linkHolds = nil
+		rr.canonicalIdentityIndex = nil
+	}
 	if len(rr.links) == 0 {
 		return
 	}
@@ -4920,6 +4949,10 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			primary, other = other, primary
 			primaryID, otherID = otherID, primaryID
 		}
+		if primary.continuityOnly || other.continuityOnly {
+			rr.holdLinkedResourceLocked(primaryID, otherID, other)
+			continue
+		}
 
 		rr.recordLinkOwnPin(primaryID, primary)
 		rr.recordLinkOwnPin(otherID, other)
@@ -4950,6 +4983,69 @@ func (rr *ResourceRegistry) recordLinkOwnPin(id string, resource *Resource) {
 		return
 	}
 	rr.linkOwnPins[id] = nil
+}
+
+// holdLinkedResourceLocked keeps a link whose member exists only through
+// saved-host continuity out of the fold. A saved enrollment is not an
+// observation: folded into a live resource it would lend that resource its
+// offline verdict and old payload, and a live resource folded into it would
+// hide live telemetry behind it. The link still names one identity, so a
+// saved member the fold would have taken in answers to the primary,
+// as a folded one does. A live member keeps its own references even when the
+// saved member is the primary: a live row never resolves to a saved one. The
+// first link to claim a member holds it, as the first fold takes it in.
+func (rr *ResourceRegistry) holdLinkedResourceLocked(primaryID, otherID string, other *Resource) {
+	if !other.continuityOnly {
+		return
+	}
+	if _, held := rr.linkHolds[otherID]; held {
+		return
+	}
+	if rr.linkHolds == nil {
+		rr.linkHolds = make(map[string]string)
+	}
+	rr.linkHolds[otherID] = primaryID
+	rr.canonicalIdentityIndex = nil
+}
+
+// linkHoldPrimaryLocked returns the row a held link member's references
+// resolve to: its primary, followed through a later fold of the primary into
+// another resource and through further holds (a saved primary held under
+// another link). Empty when the row is not held or the chain does not end on
+// a listed row.
+func (rr *ResourceRegistry) linkHoldPrimaryLocked(resourceID string) string {
+	primaryID, held := rr.linkHolds[resourceID]
+	if !held {
+		return ""
+	}
+	seen := map[string]struct{}{resourceID: {}}
+	for {
+		if rr.resources[primaryID] == nil {
+			holderID, _ := rr.linkFoldHolderLocked(primaryID)
+			if holderID == "" {
+				return ""
+			}
+			primaryID = holderID
+		}
+		next, held := rr.linkHolds[primaryID]
+		if !held {
+			return primaryID
+		}
+		if _, cycle := seen[primaryID]; cycle {
+			return ""
+		}
+		seen[primaryID] = struct{}{}
+		primaryID = next
+	}
+}
+
+// linkHoldTargetLocked maps a resolved row to the row its references answer
+// to: the hold primary for a held link member, the row itself otherwise.
+func (rr *ResourceRegistry) linkHoldTargetLocked(resourceID string) string {
+	if primaryID := rr.linkHoldPrimaryLocked(resourceID); primaryID != "" {
+		return primaryID
+	}
+	return resourceID
 }
 
 func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {
@@ -5455,6 +5551,9 @@ func (rr *ResourceRegistry) buildCanonicalIdentityIndexLocked() {
 		if resource.Canonical == nil {
 			continue
 		}
+		// A saved link member held beside its primary shares the primary's
+		// identity, so an alias both carry (a hostname) stays unambiguous.
+		resourceID = rr.linkHoldTargetLocked(resourceID)
 		indexCandidate(resource.Canonical.PrimaryID, resourceID)
 		indexCandidate(resource.Canonical.PlatformID, resourceID)
 		for _, alias := range resource.Canonical.Aliases {

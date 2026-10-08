@@ -5688,17 +5688,21 @@ reference it cannot place is read as given. Resolving first is what
 keeps Patrol on the row the resources API writes for the same
 reference: an exact read first would let a row left under a folded
 ID, even a default-valued one, hide the maintenance window the
-operator then set on the merged resource. Three cases still resolve
+operator then set on the merged resource. A saved host that has not
+reported since a restart but is linked into a live resource resolves
+alike everywhere: the read state keeps it as its own offline row, so its
+saved telemetry never reaches the resource, but holds it under the
+link's primary, and the resources API's registry, seeded from that
+listing, holds it the same way instead of folding it. A finding, an
+alert and an operator-state write naming the saved agent by its
+canonical ID or `agent:<host ID>` therefore all reach the resource the
+agent was folded into before the restart. Only when the saved agent is
+itself the link's primary and the resource is not its guest does each
+keep its own identity until the agent reports. Two cases still resolve
 differently in the resources API, whose registry re-ingests that
 listing: references to records it replays from supplemental providers
-on top of the listing; manual links in mock mode, whose view applies
-none; and a saved host that has not reported since a restart but is
-linked into a live resource. The read state keeps that host as its own
-offline row, because continuity records never join links, while the
-resources API's ingest re-applies the link and folds it, so Patrol
-reads the saved agent's own row there, as alert intent does for that
-agent's canonical ID, and state set only on the link primary does not
-reach the agent's findings until it reports again. The read
+on top of the listing, and manual links in mock mode, whose view
+applies none. The read
 state answers from a registry it keeps (a continuity overlay is shared
 and reused for up to two seconds while the published registry and the
 saved hosts are unchanged), so findings do not each clone the unified
@@ -5707,7 +5711,9 @@ left without a resource store, which the router never does, builds a
 snapshot registry per call. Pinned by
 `TestPatrolFindingOperatorStateFollowsLinkFoldedReference` and
 `TestPatrolFindingOperatorStateResolvesContinuityBackedHost` in
-`internal/api/ai_handlers_more_test.go` and
+`internal/api/ai_handlers_more_test.go`,
+`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest` in
+`internal/api/resources_link_continuity_test.go` and
 `TestContract_FindingsResourceOperatorStateProviderIsWired` in
 `internal/api/contract_test.go`.
 

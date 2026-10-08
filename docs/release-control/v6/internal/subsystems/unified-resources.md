@@ -6664,10 +6664,46 @@ separate.
   supplemental refresh, overlay, node with auto-linked agent),
   `TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds` and
   `TestMetricMergeFreshnessMatchesTheStalePass`.
-- Continuity records are the one record ingest that never joins links. A
-  saved enrollment only fills an absent machine, so it stays its own row
-  instead of lending its linked guest an offline verdict and an old agent
-  payload.
+- Continuity records never merge into a link. A saved enrollment only fills
+  an absent machine, so it stays its own row instead of lending its linked
+  guest an offline verdict and an old agent payload. The link still names one
+  identity, so the pass holds the saved row beside the primary
+  (`holdLinkedResourceLocked`): every reference that resolves to the saved
+  row (its canonical ID, `agent:<host ID>`, its machine ID or an alias it
+  shares with the primary) resolves to the primary instead, through
+  `ResolveReferenceID`, `GetByReference` and the alias index, as a
+  reference to a folded resource does. An availability check resolved after
+  the hold, as the resources API replays checks onto its seed, attaches to
+  the primary too; the monitor's read state does not re-resolve checks after
+  continuity, so a check naming the saved agent stays as the published
+  registry left it. Reference lookups by the saved agent's ID (a resource
+  detail read, the agent resource context), operator-state reads and writes
+  through the resources API, Patrol's finding projection and alert intent
+  therefore all reach the guest the agent was folded into before the
+  restart, while each row keeps its own telemetry. Saved rows carry an
+  in-memory marker (`Resource.continuityOnly`) that rides clones, so the
+  resources API, which
+  seeds a registry from the monitor's read state and re-applies the links,
+  holds them too instead of merging the saved agent into the guest; an
+  observation that later merges into the row clears it. A live member never
+  resolves to a saved one: when the saved row is the link's primary (a link
+  made from an agent's page to a resource that is not its guest), both rows
+  answer for themselves until the agent reports and the link folds them, so
+  intent set on the pair under the agent's ID does not reach the live
+  member's references in that window. Holds are recomputed on every link
+  pass; a hold whose primary a later link folds follows the fold, a saved
+  row held under a saved primary follows that primary's hold, and a cycle of
+  saved rows resolves each to itself. Exact reads are untouched: `Get` still
+  returns the saved row, so the saved agent's own drawer reads its own facet
+  bundle and history, while its operator-state section reads and writes the
+  guest's state.
+- Holds cover a link whose two members are both listed. A saved member
+  whose partner an earlier link already folded into a third resource, such
+  as an agent linked into a VM that is itself linked into another resource,
+  is not held: the monitor's published registry folds the VM before
+  continuity adds the agent, so the agent answers for itself until it
+  reports. Live chains already depend on the order their links are stored
+  in, which this does not change.
 - A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
   an agent chosen as primary over a TrueNAS system still carries the
   system's facet, and the system's pools re-parent to the merged row.
@@ -6740,9 +6776,8 @@ separate.
   state before it reads, so a finding raised before the link reads the
   merged row's maintenance and monitoring mode, not an operator-state
   row left under the folded ID, whenever that read state folds the
-  agent. A saved agent that has not reported since a restart is not
-  folded there (continuity records never join links), so its findings
-  read its own row until it reports again. History does
+  agent, or holds the saved agent beside the guest after a restart
+  (above). History does
   not follow the fold: a history binding persists, and
   `expandHistoryAliases` walks bindings in both directions, so binding a
   folded ID would join the two journals for good. Folded IDs are never
@@ -6797,7 +6832,22 @@ thresholds on the rebuild, supplemental and overlay paths, and
 `internal/monitoring/issue1913_host_continuity_test.go`
 (`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins the
 published inventory with no continuity, an unrelated absent machine and the
-linked agent's own saved enrollment.
+linked agent's own saved enrollment, and in each case that the read state,
+alert intent and a registry seeded from the read state resolve the agent to
+the guest without merging the saved agent into it.
+`resolve_test.go` pins the hold in the read state and the
+resources-API registry, the fold once the agent reports
+(`TestContinuityAgentLinkedIntoLiveGuestAnswersToTheGuest`), a saved primary
+that leaves the live member its own identity
+(`TestContinuityPrimaryLeavesLiveLinkMemberItsOwnIdentity`), an observation
+merging into a saved row (`TestObservationMergedIntoASavedRowLetsItsLinkFold`)
+and holds through later folds, saved primaries and cycles
+(`TestLinkHoldsFollowTheirPrimaryThroughThePass`); `clone_test.go`
+(`TestCloneResourceKeepsContinuityMarker`) pins the marker riding clones and
+resource seeding.
+`internal/api/resources_link_continuity_test.go`
+(`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest`) pins the
+resources API's write and Patrol's read on the same store.
 
 ### Provider link network corroboration
 

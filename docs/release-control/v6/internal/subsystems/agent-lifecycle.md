@@ -4482,9 +4482,10 @@ row's state while the read state folds the agent, as the resources API
 does. A finding naming a saved host that has not reported since a
 restart by its agent reference reads the row stored under that host's
 canonical ID, because the read state overlays host continuity as the
-resources API listing does; a saved host joined to its guest by a link
-stays its own row there, so its findings read the agent's own state
-until it reports again. The
+resources API listing does. A saved host joined to its guest by a link
+stays its own row there, without lending the guest its saved payload,
+but the registry holds it under the guest, so its findings read the
+guest's state, as they did before the restart. The
 resolution only reads identity. It does not treat the folded agent as
 removed, offline or unenrolled, does not turn a continuity-only host
 into a live sighting, and grants no heartbeat, command, install or

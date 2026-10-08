@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -300,5 +302,152 @@ func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
 	}
 	if status.Phase != models.MetricAlertPhaseLatched || status.Value != 78 || status.Recovery != 75 {
 		t.Fatalf("live status = %+v, want latched at 78 clearing at 75", status)
+	}
+}
+
+// After a restart, a host that has not reported again exists only through
+// saved-host continuity, and the host-offline alert continuity raises names it
+// as agent:<host ID>. Intent the operator set on the saved host's row must
+// reach that alert, as it does for Patrol findings and resources API reads,
+// although the published registry alone does not know the host.
+func TestOperatorIntentReachesSavedHostAlertsAfterRestart(t *testing.T) {
+	now := time.Now().UTC()
+	saved := config.HostContinuityEntry{
+		HostID: "host-retired", MachineID: "machine-retired", Hostname: "retired",
+		Platform: "linux", LastSeen: now.Add(-10 * time.Minute),
+	}
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(saved); err != nil {
+		t.Fatal(err)
+	}
+	store := unifiedresources.NewMemoryStore()
+	savedID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, saved.MachineID)
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID: savedID, IntentionallyOffline: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now})
+	if _, ok := adapter.ResolveCanonicalResourceID("agent:" + saved.HostID); ok {
+		t.Fatal("published registry already knows the saved host; the case needs it absent")
+	}
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	m := &Monitor{state: models.NewState(), alertManager: manager, hostContinuityStore: continuity}
+	m.SetResourceStore(adapter)
+
+	preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "agent:" + saved.HostID, ResourceType: "agent",
+		Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_expected_offline" {
+		t.Fatalf("saved host offline alert intent = %+v, want the intentionally-offline state set on %s", preview, savedID)
+	}
+
+	// The saved host reports again: the published registry knows it, and its
+	// alerts keep reading the same row.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID: saved.HostID, MachineID: saved.MachineID, Hostname: saved.Hostname,
+			Platform: "linux", Status: "online", LastSeen: now, IntervalSeconds: 30,
+		}},
+		LastUpdate: now.Add(time.Second),
+	})
+	m.state.Hosts = []models.Host{{ID: saved.HostID, MachineID: saved.MachineID, Hostname: saved.Hostname, Status: "online", LastSeen: now}}
+	preview, err = manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+		ResourceID: "agent:" + saved.HostID, ResourceType: "agent",
+		Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Reason != "operator_expected_offline" {
+		t.Fatalf("reporting host offline alert intent = %+v, want the same intentionally-offline state", preview)
+	}
+}
+
+// Alert intent keeps one saved-host overlay per published generation, so
+// lookups made under the alert manager's lock reuse what publication built.
+// A new publication replaces it even when it shares the last one's timestamp
+// or is stamped earlier, and mock mode answers from the published registry
+// and drops the real-mode overlay.
+func TestOperatorIntentIdentityKeepsOneOverlayPerGeneration(t *testing.T) {
+	now := time.Now().UTC()
+	saved := config.HostContinuityEntry{
+		HostID: "host-retired", MachineID: "machine-retired", Hostname: "retired",
+		Platform: "linux", LastSeen: now.Add(-10 * time.Minute),
+	}
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(saved); err != nil {
+		t.Fatal(err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore()))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now.Add(time.Hour)})
+	m := &Monitor{state: models.NewState(), hostContinuityStore: continuity}
+	identity := m.newOperatorIntentIdentity(adapter)
+	if identity == nil {
+		t.Fatal("monitor adapter offers no operator intent identity")
+	}
+	resolvesSavedHost := func(readState any) bool {
+		_, ok := readState.(resourceIntentIdentityReader).ResolveCanonicalResourceID("agent:" + saved.HostID)
+		return ok
+	}
+
+	identity.refresh()
+	first := identity.current()
+	if first == any(adapter) || !resolvesSavedHost(first) {
+		t.Fatal("refresh did not build the saved-host overlay")
+	}
+	if again := identity.current(); again != first {
+		t.Fatal("lookup rebuilt the overlay within one generation")
+	}
+
+	// A rebuild of a snapshot stamped in the future keeps its time, so two
+	// publications can share a timestamp.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now.Add(time.Hour)})
+	identity.refresh()
+	sameStamp := identity.current()
+	if sameStamp == first || !resolvesSavedHost(sameStamp) {
+		t.Fatal("a publication sharing the last one's timestamp kept its overlay")
+	}
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now})
+	identity.refresh()
+	second := identity.current()
+	if second == sameStamp || !resolvesSavedHost(second) {
+		t.Fatal("an earlier-stamped generation kept the previous overlay")
+	}
+	if again := identity.current(); again != second {
+		t.Fatal("lookups rebuild the overlay after an earlier-stamped generation")
+	}
+
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+	if got := identity.current(); got != any(adapter) {
+		t.Fatal("mock mode resolved through the real-mode saved-host overlay")
+	}
+	identity.refresh()
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	// Alert evaluation resolves from inside an admitted mock-mode fence call,
+	// so the rebuild's own fenced store nests in it.
+	var third any
+	if !m.mockModeFence.begin().run(func() { third = identity.current() }) {
+		t.Fatal("fence refused the lookup")
+	}
+	if third == any(adapter) || !resolvesSavedHost(third) {
+		t.Fatal("leaving mock mode kept answering from the published registry alone")
+	}
+	if again := identity.current(); again != third {
+		t.Fatal("the rebuild made inside a fenced call was not kept")
 	}
 }

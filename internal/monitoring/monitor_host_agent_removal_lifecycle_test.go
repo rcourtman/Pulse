@@ -619,6 +619,35 @@ func TestHostAgentRemovalLifecycleKeepsOfflineRowRemovableAfterRestart(t *testin
 	}
 }
 
+// After a restart a host that has not reported again exists only as its saved
+// continuity row, and its offline alert names it agent:<host ID>. The intent
+// the operator set on that row must still hold the alert back: alert intent
+// resolves through the read state that overlays saved hosts, not through the
+// published registry alone, which no longer lists the host.
+func TestHostAgentRemovalLifecycleHonorsSavedHostIntentAfterRestart(t *testing.T) {
+	dataPath := t.TempDir()
+	now := time.Now().UTC()
+	token := &config.APITokenRecord{ID: "intent-restart-token", CreatedAt: now.Add(-time.Hour)}
+	report := hostRemovalLifecycleReport("intent-restart-host", "intent-restart-machine", "intent-restart-agent", "intent-restart.local", "linux", now)
+	if _, err := newHostRemovalLifecycleMonitor(t, dataPath).ApplyHostReport(report, token); err != nil {
+		t.Fatalf("initial ApplyHostReport: %v", err)
+	}
+
+	restarted := newHostRemovalLifecycleMonitor(t, dataPath)
+	store := unifiedresources.NewMemoryStore()
+	savedID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, "intent-restart-machine")
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{CanonicalID: savedID, IntentionallyOffline: true}); err != nil {
+		t.Fatalf("set saved host intent: %v", err)
+	}
+	restarted.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)))
+	for i := 0; i < 3; i++ {
+		restarted.evaluateHostAgents(now.Add(10*time.Minute + time.Duration(i)*time.Second))
+	}
+	if alerts := restarted.alertManager.GetActiveAlerts(); len(alerts) != 0 {
+		t.Fatalf("intentionally offline saved host raised %+v after restart, want no alert", alerts)
+	}
+}
+
 func TestHostAgentRemovalLifecycleDoesNotPoisonDuplicateActiveIdentity(t *testing.T) {
 	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
 	now := time.Now().UTC()
