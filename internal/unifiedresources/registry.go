@@ -92,7 +92,9 @@ type ResourceRegistry struct {
 	matcher      *IdentityMatcher
 	store        ResourceStore
 	links        []ResourceLink
-	exclusions   map[string]struct{}
+	exclusions   map[string]time.Time // exclusionKey -> when the operator last split the pair
+	linksByID    map[string][]ResourceLink
+	splitAgents  map[string]nodeAgentLinkSide // node source ID -> the linked agent the operator split it from
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
 	// linkMergedIDs holds the resources a manual link folded into their
@@ -202,7 +204,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 		bySource:               make(map[DataSource]map[string]string),
 		matcher:                NewIdentityMatcher(),
 		store:                  store,
-		exclusions:             make(map[string]struct{}),
+		exclusions:             make(map[string]time.Time),
 		canonicalMetadataDirty: true,
 	}
 
@@ -236,9 +238,12 @@ func (rr *ResourceRegistry) loadOverrides() {
 		// An unlink or link landing between the two reads would load both
 		// decisions for its pair (manual_link_decisions.go).
 		rr.links, exclusions = effectiveManualPairDecisions(rr.links, exclusions)
+		rr.linksByID = indexLinksByID(rr.links)
 		for _, exclusion := range exclusions {
 			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
-			rr.exclusions[key] = struct{}{}
+			if at, ok := rr.exclusions[key]; !ok || exclusion.CreatedAt.After(at) {
+				rr.exclusions[key] = exclusion.CreatedAt
+			}
 		}
 	} else {
 		log.Printf("unifiedresources: failed to load manual exclusions from store: %v", err)
@@ -292,7 +297,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 				}
 			}
 		}
-		rr.ingestProxmoxNode(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)])
+		rr.ingestProxmoxNode(rr.splitProxmoxNodeLink(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)]))
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHost(host)
@@ -3336,12 +3341,17 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 					return ""
 				}
 				linkedNodeID := strings.TrimSpace(existing.Agent.LinkedNodeID)
-				if linkedNodeID == sourceID {
-					return id
+				if linkedNodeID != sourceID &&
+					(linkedNodeID != "" || !identitiesShareHostname(existing.Identity, resource.Identity)) {
+					return ""
 				}
-				if linkedNodeID == "" && identitiesShareHostname(existing.Identity, resource.Identity) {
-					return id
+				if rr.proxmoxNodeAgentSplitLocked(
+					nodeAgentLinkSide{sourceID: sourceID, identity: resource.Identity},
+					nodeAgentLinkSide{sourceID: strings.TrimSpace(resource.Proxmox.LinkedAgentID), identity: existing.Identity, heldID: id},
+				) {
+					return ""
 				}
+				return id
 			}
 		}
 	case SourceAgent:
@@ -3353,6 +3363,12 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 				}
 				linkedHostID := strings.TrimSpace(existing.Proxmox.LinkedAgentID)
 				if linkedHostID == "" || linkedHostID != sourceID {
+					return ""
+				}
+				if rr.proxmoxNodeAgentSplitLocked(
+					nodeAgentLinkSide{sourceID: strings.TrimSpace(resource.Agent.LinkedNodeID), identity: existing.Identity, heldID: id},
+					nodeAgentLinkSide{sourceID: sourceID, identity: resource.Identity},
+				) {
 					return ""
 				}
 				return id
@@ -3784,7 +3800,8 @@ func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(
 	}
 
 	matchID := ""
-	for _, resourceID := range rr.bySource[SourceProxmox] {
+	var matchNodeIDs []string
+	for nodeID, resourceID := range rr.bySource[SourceProxmox] {
 		existing := rr.resources[resourceID]
 		if existing == nil || existing.Proxmox == nil {
 			continue
@@ -3799,6 +3816,15 @@ func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(
 			return ""
 		}
 		matchID = resourceID
+		matchNodeIDs = append(matchNodeIDs, nodeID)
+	}
+	for _, nodeID := range matchNodeIDs {
+		if rr.proxmoxNodeAgentSplitLocked(
+			nodeAgentLinkSide{sourceID: nodeID, identity: rr.resources[matchID].Identity, heldID: matchID},
+			nodeAgentLinkSide{sourceID: hostAgentID, identity: identity},
+		) {
+			return ""
+		}
 	}
 
 	return matchID
@@ -4816,6 +4842,17 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			otherID = link.ResourceA
 		}
 		other := rr.resources[otherID]
+		if other == nil && otherID != primaryID && rr.joinedPairOwnsIDLocked(primary, otherID) {
+			// A relink of a split node and its agent names the two rows,
+			// and the declared link folds one of them into the other's ID
+			// once the relink rejoins them. Treat the ID as folded by this
+			// link so pin succession keeps the link rather than re-keying
+			// it onto the joined ID, which would let the split decide again.
+			if rr.linkMergedIDs == nil {
+				rr.linkMergedIDs = make(map[string]struct{})
+			}
+			rr.linkMergedIDs[otherID] = struct{}{}
+		}
 		if other == nil || otherID == primaryID {
 			continue
 		}
@@ -4823,6 +4860,12 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		// operator links them to another resource. Correlation is represented
 		// by RelChecks plus the additive facet projection.
 		if isAvailabilityOwnedResource(*primary) || isAvailabilityOwnedResource(*other) {
+			continue
+		}
+		// A link between a Proxmox node and an agent loses to a newer split
+		// of the two read across their IDs: report-merge cannot delete a
+		// link naming the rows an earlier split left (nodeAgentSplit).
+		if rr.nodeAgentRowsSplit(rr.operatorPairDecisionsLocked(), primary, other) {
 			continue
 		}
 
