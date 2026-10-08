@@ -2544,6 +2544,19 @@ service-history reads plus denial/recovery without fabricated samples.
    poll interval and passed into the unified-resource adapter. New pollers or
    config paths that change source cadence must update that derivation instead
    of hard-coding stale windows inside registry or API code.
+   Non-default tenant monitors poll against a detached config copy (#1619), so
+   a system-settings save reaches them only as PBS and PMG runtime polling
+   overrides. Under fixed-cadence scheduling, `Monitor.resourceStaleThresholds`
+   reads those overrides through the same clamped setting readers as the
+   scheduler, so a saved interval moves the monitor's resource freshness and
+   polling together. An adaptive scheduler selects its own intervals and
+   ignores those overrides, so freshness there keeps deriving from the
+   configured per-platform intervals. A PVE interval save reloads every
+   monitor from saved config instead. `ResourceStaleThresholdsForConfig` stays
+   the config-only derivation for callers without a live monitor, such as
+   adapter construction. Regression coverage:
+   `TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides` in
+   `internal/monitoring/canonical_guardrails_test.go`.
    Periodic out-of-scheduler platform pollers (TrueNAS, VMware) share their
    lifecycle and config-resolution scaffold through
    `internal/monitoring/platform_poller_shared.go`: `startPollerLoop` owns

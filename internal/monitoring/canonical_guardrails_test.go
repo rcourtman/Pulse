@@ -2874,6 +2874,140 @@ func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
 	}
 }
 
+// Non-default tenant monitors poll against a detached config copy (#1619), so
+// a saved PBS or PMG interval reaches them only as a runtime override. The
+// freshness thresholds the monitor publishes must follow the cadence its
+// scheduler polls at, or PBS and PMG rows read stale between real polls.
+func TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides(t *testing.T) {
+	cases := []struct {
+		name          string
+		configured    time.Duration
+		override      time.Duration
+		wantThreshold time.Duration
+		wantStatus    unifiedresources.ResourceStatus
+	}{
+		{
+			name:          "raised interval keeps a sighting inside the new cadence online",
+			configured:    time.Minute,
+			override:      5 * time.Minute,
+			wantThreshold: 10 * time.Minute,
+			wantStatus:    unifiedresources.StatusOnline,
+		},
+		{
+			name:          "lowered interval judges the same sighting stale",
+			configured:    5 * time.Minute,
+			override:      time.Minute,
+			wantThreshold: 2 * time.Minute,
+			wantStatus:    unifiedresources.StatusWarning,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sighting := time.Now().UTC().Add(-3 * time.Minute)
+			state := models.NewState()
+			state.UpdatePBSInstances([]models.PBSInstance{{
+				ID:               "pbs-main",
+				Name:             "pbs-main",
+				Host:             "https://pbs.lab.local:8007",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         sighting,
+			}})
+			state.UpdatePMGInstances([]models.PMGInstance{{
+				ID:               "pmg-main",
+				Name:             "pmg-main",
+				Host:             "https://pmg.lab.local:8006",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         sighting,
+				LastUpdated:      sighting,
+			}})
+
+			base := &config.Config{
+				PVEPollingInterval: 10 * time.Second,
+				PBSPollingInterval: tc.configured,
+				PMGPollingInterval: tc.configured,
+			}
+			monitor := &Monitor{state: state, config: base.DeepCopy()}
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			monitor.SetResourceStore(adapter)
+			monitor.SetPBSPollingInterval(tc.override)
+			monitor.SetPMGPollingInterval(tc.override)
+
+			if got := monitor.baseIntervalForInstanceType(InstanceTypePBS); got != tc.override {
+				t.Fatalf("PBS scheduler interval = %v, want override %v", got, tc.override)
+			}
+			thresholds := monitor.resourceStaleThresholds()
+			for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG} {
+				if got := thresholds[source]; got != tc.wantThreshold {
+					t.Errorf("%s threshold = %v, want %v from the %v runtime interval", source, got, tc.wantThreshold, tc.override)
+				}
+			}
+			if got := thresholds[unifiedresources.SourceProxmox]; got != 60*time.Second {
+				t.Errorf("Proxmox threshold = %v, want the unchanged %v floor", got, 60*time.Second)
+			}
+
+			monitor.updateResourceStore(state.GetSnapshot(), monitor.mockModeFence.begin())
+
+			pbs := adapter.PBSInstances()
+			if len(pbs) != 1 {
+				t.Fatalf("PBS instances = %d, want 1", len(pbs))
+			}
+			if got := pbs[0].Status(); got != tc.wantStatus {
+				t.Fatalf("PBS status = %q, want %q for a 3m-old sighting on a %v cadence", got, tc.wantStatus, tc.override)
+			}
+			pmg := adapter.PMGInstances()
+			if len(pmg) != 1 {
+				t.Fatalf("PMG instances = %d, want 1", len(pmg))
+			}
+			if got := pmg[0].Status(); got != tc.wantStatus {
+				t.Fatalf("PMG status = %q, want %q for a 3m-old sighting on a %v cadence", got, tc.wantStatus, tc.override)
+			}
+		})
+	}
+
+	t.Run("freshness reads the scheduler's clamped interval", func(t *testing.T) {
+		for _, override := range []time.Duration{5 * time.Second, 90 * time.Second, 2 * time.Hour} {
+			base := &config.Config{PBSPollingInterval: time.Minute, PMGPollingInterval: time.Minute}
+			monitor := &Monitor{config: base.DeepCopy()}
+			monitor.SetPBSPollingInterval(override)
+			monitor.SetPMGPollingInterval(override)
+			thresholds := monitor.resourceStaleThresholds()
+			for instanceType, source := range map[InstanceType]unifiedresources.DataSource{
+				InstanceTypePBS: unifiedresources.SourcePBS,
+				InstanceTypePMG: unifiedresources.SourcePMG,
+			} {
+				scheduled := monitor.baseIntervalForInstanceType(instanceType)
+				want := resourceStaleThresholdForPollInterval(scheduled, defaultPlatformResourceStaleThreshold)
+				if got := thresholds[source]; got != want {
+					t.Errorf("%s threshold = %v for override %v, want %v from the scheduler's %v", source, got, override, want, scheduled)
+				}
+			}
+		}
+	})
+
+	// The adaptive scheduler picks intervals from its own bounds and never
+	// reads the per-platform overrides, so a save must not move freshness
+	// there; following adaptive cadence is a separate derivation.
+	t.Run("adaptive scheduling ignores per-platform overrides", func(t *testing.T) {
+		base := &config.Config{PBSPollingInterval: 5 * time.Minute, PMGPollingInterval: 5 * time.Minute}
+		monitor := &Monitor{
+			config:    base.DeepCopy(),
+			scheduler: NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil),
+		}
+		before := monitor.resourceStaleThresholds()
+		monitor.SetPBSPollingInterval(time.Minute)
+		monitor.SetPMGPollingInterval(time.Minute)
+		after := monitor.resourceStaleThresholds()
+		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG} {
+			if before[source] != 10*time.Minute || after[source] != before[source] {
+				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v throughout",
+					source, before[source], after[source], 10*time.Minute)
+			}
+		}
+	})
+}
+
 // Mock history is seeded for a bounded window, so chart ranges longer than the
 // seed fall through to the synthetic generator. That generator must still carry
 // the host-relative `memoryused` byte series, or the workloads memory column in
