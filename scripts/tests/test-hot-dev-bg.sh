@@ -205,9 +205,27 @@ EOF
   assert_contains "default verify proof runs from integration harness" "${output}" "cwd=${ROOT_DIR}/tests/integration"
   assert_contains "default verify proof runs through the dedicated Playwright harness" "${output}" "args=./scripts/run-playwright.mjs"
   assert_contains "default verify proof includes dev runtime recovery spec" "${output}" "tests/16-dev-runtime-recovery.spec.ts"
-  assert_contains "default verify proof includes recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "default verify proof includes Proxmox backups layout spec" "${output}" "tests/17-proxmox-backups-layout.spec.ts"
   assert_contains "default verify proof includes patrol runtime-state spec" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_contains "default verify proof keeps chromium project pin" "${output}" "--project=chromium"
+
+  # Playwright treats each spec path as a filter and runs whatever still
+  # matches, so a retired spec drops out of dev:verify without failing it.
+  local verify_cwd verify_args arg checked_specs=0 missing_specs=""
+  verify_cwd="$(printf '%s\n' "${output}" | sed -n 's/^cwd=//p')"
+  verify_args="$(printf '%s\n' "${output}" | sed -n 's/^args=//p')"
+  for arg in ${verify_args}; do
+    [[ "${arg}" == *.spec.ts ]] || continue
+    checked_specs=$((checked_specs + 1))
+    [[ -f "${verify_cwd}/${arg}" ]] || missing_specs+=" ${arg}"
+  done
+  if (( checked_specs > 0 )) && [[ -z "${missing_specs}" ]]; then
+    echo "[PASS] default verify proof names only specs that exist"
+  else
+    echo "[FAIL] default verify proof names only specs that exist" >&2
+    echo "Missing under ${verify_cwd}:${missing_specs:- no spec arguments found}" >&2
+    ((failures++))
+  fi
 }
 
 test_managed_wrapper_defaults_to_local_only_runtime() {
@@ -1156,7 +1174,8 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_contains "integration readme documents managed backend restart wrapper" "${output}" "npm run dev:backend-restart"
   assert_contains "integration readme documents owner-process recovery proof" "${output}" "kills the supervised"
   assert_contains "integration readme names the owner process" "${output}" "owner process"
-  assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
+  assert_contains "integration readme documents Proxmox backups layout proof" "${output}" "tests/17-proxmox-backups-layout.spec.ts"
+  assert_not_contains "integration readme drops the retired recovery layout spec" "${output}" "tests/17-recovery-layout.spec.ts"
   assert_contains "integration readme documents patrol runtime-state proof" "${output}" "tests/18-patrol-runtime-state.spec.ts"
   assert_contains "integration readme documents explicit browser override precedence" "${output}" "PLAYWRIGHT_BASE_URL"
   assert_contains "integration readme documents backend base split" "${output}" "backend-oriented base"
