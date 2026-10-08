@@ -2580,6 +2580,17 @@ is outside backup, restore, and recovery, and a missing or corrupt tally must be
 discarded and rebuilt rather than surfaced as a recovery failure. Nothing may
 take a correctness dependency on its contents.
 
+### Bounded audit investigation scope
+
+Audit list/export/summary consumers must not mistake a malformed time bound
+for an unfiltered storage read. `internal/api/activity_audit_handlers.go`
+rejects supplied empty/invalid RFC3339 bounds and equal/reversed windows with
+HTTP 400 before querying; list/export also validate literal success booleans.
+Absent filters and existing export/summary non-pagination remain supported.
+This boundary adds no database/schema, retention, signing, quota or recovery
+change. Fake persistent-logger controls in
+`internal/api/audit_filter_validation_test.go` prove rejection without a store.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner

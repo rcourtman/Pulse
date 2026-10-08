@@ -809,6 +809,16 @@ func TestHandleExportAuditEvents(t *testing.T) {
 		h.HandleExportAuditEvents(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "test", logger.lastQuery.EventType)
+		assert.Equal(t, "admin", logger.lastQuery.User)
+		assert.NotNil(t, logger.lastQuery.StartTime)
+		assert.NotNil(t, logger.lastQuery.EndTime)
+		assert.Equal(t, 0, logger.lastQuery.Limit)
+		assert.Equal(t, 0, logger.lastQuery.Offset)
+		assert.NotNil(t, logger.lastQuery.Success)
+		if logger.lastQuery.Success != nil {
+			assert.True(t, *logger.lastQuery.Success)
+		}
 	})
 
 	t.Run("Method not allowed", func(t *testing.T) {
@@ -865,6 +875,12 @@ func TestHandleAuditSummary(t *testing.T) {
 		h.HandleAuditSummary(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "login", logger.lastQuery.EventType)
+		assert.Equal(t, "admin", logger.lastQuery.User)
+		assert.NotNil(t, logger.lastQuery.StartTime)
+		assert.NotNil(t, logger.lastQuery.EndTime)
+		assert.Equal(t, 0, logger.lastQuery.Limit)
+		assert.Equal(t, 0, logger.lastQuery.Offset)
 	})
 
 	t.Run("Method not allowed", func(t *testing.T) {

@@ -3354,6 +3354,16 @@ token rotation, or removal state, and it records nothing about agents. Node
 connection tests target Proxmox, PBS, and PMG endpoints directly and never
 traverse an agent.
 
+### Audit reads during agent investigation
+
+The shared `internal/api/` audit read boundary rejects malformed or empty
+supplied RFC3339 start/end filters and non-increasing windows before reading
+agent-related events. List/export reject non-literal success booleans. It
+preserves absent filters, tenant selection, method/access/licence gates and
+existing export/summary non-pagination semantics. This changes only audit
+request validation, not agent identity, enrolment, collection or recovery.
+Fake-logger handler controls live in `internal/api/audit_filter_validation_test.go`.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
