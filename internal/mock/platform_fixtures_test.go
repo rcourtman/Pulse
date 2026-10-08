@@ -459,6 +459,103 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	}
 }
 
+// TestFixtureGraphAppliesManualLinksAtEachIngestStage pins the linked build
+// behind the mock-mode unified view. Folding the curated Docker service into a
+// VM must move its availability check onto the VM, as the live rebuild's
+// availability ingest resolves the check's source reference through the fold;
+// folding the finished list dropped the facet with the folded row.
+func TestFixtureGraphAppliesManualLinksAtEachIngestStage(t *testing.T) {
+	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(DefaultConfig, now)
+	unlinked, _ := graph.UnifiedResourceSnapshot()
+
+	const checkID = "mock-availability-docker-frontend-service"
+	var serviceID, vmID string
+	for _, resource := range unlinked {
+		switch {
+		case resource.Type == unifiedresources.ResourceTypeDockerService && resource.Availability != nil &&
+			resource.Availability.TargetID == checkID:
+			serviceID = resource.ID
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Proxmox != nil:
+			vmID = resource.ID
+		}
+	}
+	if serviceID == "" || vmID == "" {
+		t.Fatalf("fixture graph needs the checked Docker service and a Proxmox VM, got service=%q vm=%q", serviceID, vmID)
+	}
+
+	links := []unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: serviceID, PrimaryID: vmID}}
+	linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+	var vm, endpoint *unifiedresources.Resource
+	for i := range linked {
+		switch {
+		case linked[i].ID == serviceID:
+			t.Fatalf("linked build still lists the folded Docker service %s", serviceID)
+		case linked[i].ID == vmID:
+			vm = &linked[i]
+		case linked[i].Type == unifiedresources.ResourceTypeNetworkEndpoint && linked[i].Availability != nil &&
+			linked[i].Availability.TargetID == checkID:
+			endpoint = &linked[i]
+		}
+	}
+	if vm == nil || vm.Docker == nil {
+		t.Fatalf("linked VM %s = %+v, want it to carry the folded service's Docker facet", vmID, vm)
+	}
+	if vm.Availability == nil || vm.Availability.TargetID != checkID {
+		t.Fatalf("linked VM availability = %+v, want the folded service's check projected onto it", vm.Availability)
+	}
+	if !hasChecksEdgeTo(endpoint, vmID) {
+		t.Fatalf("check relationships = %+v, want the checks edge to follow the fold to %s", endpoint, vmID)
+	}
+}
+
+// TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked pins the
+// memo boundary: a linked build belongs to its caller (one tenant's links),
+// and the memoized snapshot every other reader shares stays unlinked.
+func TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked(t *testing.T) {
+	previous := IsMockEnabled()
+	previousConfig := GetConfig()
+	if previous {
+		mustSetEnabled(t, false)
+	}
+	testConfig := previousConfig
+	testConfig.UpdateInterval = 5 * time.Minute
+	SetMockConfig(testConfig)
+	mustSetEnabled(t, true)
+	t.Cleanup(func() {
+		mustSetEnabled(t, false)
+		SetMockConfig(previousConfig)
+		mustSetEnabled(t, previous)
+	})
+
+	shared, _ := UnifiedResourceSnapshot()
+	if same, _ := UnifiedResourceSnapshotWithLinks(nil); len(same) == 0 || &same[0] != &shared[0] {
+		t.Fatal("UnifiedResourceSnapshotWithLinks without links must serve the memoized snapshot")
+	}
+	var vmID, agentID string
+	for _, resource := range shared {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+
+	linked, _ := UnifiedResourceSnapshotWithLinks([]unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}})
+	if slices.ContainsFunc(linked, func(r unifiedresources.Resource) bool { return r.ID == agentID }) {
+		t.Fatalf("linked build still lists the folded agent %s", agentID)
+	}
+	again, _ := UnifiedResourceSnapshot()
+	if !slices.ContainsFunc(again, func(r unifiedresources.Resource) bool { return r.ID == agentID }) {
+		t.Fatalf("the shared snapshot lost the agent %s after a linked build", agentID)
+	}
+}
+
 // hasChecksEdgeTo reports whether the source-owned check row carries the
 // outgoing checks relationship to the resource it matched. The check row owns
 // that edge; the matched resource carries only the projected facet.

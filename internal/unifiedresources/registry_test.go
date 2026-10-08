@@ -2238,6 +2238,69 @@ func TestResourceRegistry_ManualNodeMergeRewritesProxmoxGuestParentAndActionAgen
 	}
 }
 
+// TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry pins the
+// store-less registry the mock-mode unified view seeds: given the links an
+// adapter generation loaded, it folds already-unified resources exactly as a
+// registry backed by the link store does. The adapter reports the links of its
+// current generation and picks up a new one on its next rebuild.
+func TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	resources := []Resource{
+		{
+			ID:       "vm-checkout",
+			Type:     ResourceTypeVM,
+			Name:     "checkout-web-01",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			Proxmox:  &ProxmoxData{SourceID: "pve:node1:101", NodeName: "node1", Instance: "pve", VMID: 101},
+		},
+		{
+			ID:       "agent-apollo",
+			Type:     ResourceTypeAgent,
+			Name:     "apollo-114",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: "agent-apollo", Hostname: "apollo-114"},
+		},
+	}
+	link := ResourceLink{ResourceA: "vm-checkout", ResourceB: "agent-apollo", PrimaryID: "vm-checkout"}
+
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	if err := store.AddLink(link); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	if got := adapter.ManualLinks(); len(got) != 0 {
+		t.Fatalf("ManualLinks before a rebuild = %+v, want the generation's empty set", got)
+	}
+	adapter.PopulateFromSnapshot(models.StateSnapshot{})
+	links := adapter.ManualLinks()
+	if len(links) != 1 || links[0].ResourceA != link.ResourceA || links[0].ResourceB != link.ResourceB || links[0].PrimaryID != link.PrimaryID {
+		t.Fatalf("ManualLinks after a rebuild = %+v, want %+v", links, link)
+	}
+	links[0].PrimaryID = "agent-apollo"
+	if got := adapter.ManualLinks(); got[0].PrimaryID != "vm-checkout" {
+		t.Fatalf("ManualLinks handed out the registry's own slice: %+v", got)
+	}
+	links[0].PrimaryID = "vm-checkout"
+
+	storeBacked := NewRegistry(store)
+	storeBacked.IngestResources(resources)
+	storeLess := NewRegistryWithManualLinks(links)
+	// The registry keeps its own copy of the caller's links.
+	links[0].ResourceB = "agent-other"
+	storeLess.IngestResources(resources)
+
+	for name, rr := range map[string]*ResourceRegistry{"store-backed": storeBacked, "store-less": storeLess} {
+		got := rr.List()
+		if len(got) != 1 || got[0].ID != "vm-checkout" || got[0].Agent == nil || got[0].Proxmox == nil {
+			t.Fatalf("%s registry listed %v, want the VM carrying the linked agent", name, resourceIDs(got))
+		}
+	}
+}
+
 func TestResourceRegistry_ProxmoxGuestParentPrefersAgentBackedNodeDuplicate(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
