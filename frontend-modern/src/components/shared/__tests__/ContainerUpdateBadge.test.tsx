@@ -163,11 +163,11 @@ describe('ContainerUpdateBadge', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.getByText('Update available')).toBeInTheDocument();
-    expect(screen.getByText('Apply on host')).toBeInTheDocument();
     const status = screen.getByLabelText(/Pulse cannot apply it/);
     expect(status.getAttribute('aria-label')).toContain(
       'The Pulse agent on this host is still on an older version.',
     );
+    expect(status.getAttribute('aria-label')).toContain('container manager on the host');
     fireEvent.click(status);
     expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
   });

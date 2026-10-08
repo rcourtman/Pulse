@@ -1,4 +1,5 @@
 import { Component, Match, Show, Switch } from 'solid-js';
+import LockIcon from 'lucide-solid/icons/lock';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import {
@@ -308,7 +309,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
           }
         >
           <span
-            class="inline-flex flex-col items-center gap-0.5 text-[11px] text-muted cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             tabindex="0"
             aria-label={readOnlyUpdateExplanation()}
             data-prevent-toggle
@@ -324,11 +325,8 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
               if (event.key === 'Escape') hideTooltip();
             }}
           >
-            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-surface-alt px-1.5 py-0.5 font-medium">
-              <ErrorIndicatorIcon class="h-3 w-3" />
-              <span>Update available</span>
-            </span>
-            <span>Apply on host</span>
+            <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>Update available</span>
           </span>
         </Show>
       </Show>
