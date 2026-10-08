@@ -730,8 +730,8 @@ history, and must not discard the saved note.
 Platform-owned workload controls extend the shared `WorkloadsFilter` view
 options rather than creating page-local toolbar shells. Persistent presentation
 choices compose the shared `ViewOptionsDisclosure` instead of occupying the
-primary filter rail: layout, metric style, chart visibility, memory basis, and
-columns remain discoverable behind one `View` trigger. The history range stays
+primary filter rail: layout, metric style, row hover, memory basis, inventory
+totals, and columns remain discoverable behind one `View` trigger. The history range stays
 inline in both metric modes because bars now expose an intent-driven row
 history lens and Trends keeps the same charts persistent. In Bars the range
 renders only at desktop widths while Row hover is set to `History`, the mode
@@ -2655,12 +2655,17 @@ not a replacement status card, CTA band, or page-local nested card.
    breakpoint, so Workloads, Storage, Infrastructure, and
    future dense toolbars do not strand Filter/Columns/Reset actions as an
    isolated second-row fragment. Shared `FilterToolbarPanel` owns
-   default filter-popover geometry, and `FilterToolbar` owns the shared chart
-   visibility display action: Workloads, Storage, Infrastructure, and future
-   summary-bearing pages must use `ChartVisibilityToggleButton` so the
-   affordance exposes one `Show charts` / `Hide charts` pressed-state contract
-   instead of rebuilding a one-option segmented control or an in-summary
-   collapse chevron page by page. Feature state hooks under
+   default filter-popover geometry. The workload summary chart section that the
+   shared chart show/hide action toggled is deleted and no other page exposes
+   one, so the shared toolbar carries no chart show/hide action: the
+   `ChartVisibilityToggleButton` primitive, its
+   `chart-visibility-toggle-button` rule, and its
+   `chart-visibility-local-toggle-labels` pattern guard are retired, and
+   `SharedPrimitives.guardrails.test.ts` keeps them out. A summary section that
+   returns through a governed product decision must register one shared
+   show/hide primitive with an explicit pressed state rather than a page-local
+   one-option segmented control or in-summary collapse chevron.
+   Feature state hooks under
    `frontend-modern/src/features/` own route-backed query state, selected item
    state, and data-window selection for their product surfaces; shared
    primitives and reusable presentation helpers may own viewport-safe chrome,
@@ -5821,11 +5826,6 @@ compose that primitive instead of copying rounded-full active selector styling.
 `ResourcePicker` report-domain filters are part of that boundary: the picker
 owns the reportable resource categories and labels, but the type selector shell
 must come from `FilterButtonGroup`.
-Chart visibility display actions are registry-backed too.
-`ChartVisibilityToggleButton` owns the `Show charts` / `Hide charts` label,
-pressed-state, title, icon, and toolbar action styling for summary-bearing
-filter surfaces. Pages must compose that primitive instead of recreating local
-chart visibility buttons or one-option segmented controls.
 Column visibility controls are registry-backed too. `ColumnPicker` owns the
 column chooser trigger, panel title, reset action, empty-state copy, hidden
 count badge, dropdown width, and outside-click lifecycle through the shared
@@ -6015,7 +6015,7 @@ of `PageControls`. Each page declares a `FilterDef[]` catalog (label, options,
 value, defaultValue, group); `FilterBar` renders chips for active filters and
 exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
 and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
-(grouping segmented control, charts toggle, columns picker, sort key) compose
+(grouping segmented control, columns picker, sort key) compose
 the shared `ViewOptionsDisclosure` through `FilterBar`'s `viewOptions` prop
 instead of remaining as permanent toolbar controls. `FilterBar` owns the View
 trigger and inline disclosure; feature consumers pass only panel content and
