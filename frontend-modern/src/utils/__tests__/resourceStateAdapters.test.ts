@@ -1706,6 +1706,82 @@ describe('fast merge path for metrics-only delta patches', () => {
     }
   });
 
+  it("lets a linked agent's filesystems and freshness replace withdrawn ones", () => {
+    const raw = createPveGuestRaw();
+    raw.sources = ['proxmox-pve', 'agent'] as Resource['sources'];
+    raw.platformData = { ...raw.platformData, sources: ['proxmox-pve', 'agent'] };
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'available',
+      disks: [{ mountpoint: '/', total: 2048, used: 512 }],
+    };
+    raw.agent = {
+      agentId: 'agent-in-vm',
+      stale: true,
+      disks: [{ mountpoint: '/', total: 4096, used: 1024 }],
+    } as Resource['agent'];
+    raw.platformData = { ...raw.platformData, agent: raw.agent };
+    const previous = seedDisplayRows([raw]);
+    // The guest agent stopped, so Proxmox withdraws its filesystems, and the
+    // linked Pulse agent reports again with an explicit stale=false.
+    const incoming = structuredClone(raw);
+    incoming.proxmox = {
+      vmid: 100,
+      nodeName: 'pve-node-1',
+      runtimeStatus: 'running',
+      guestAgentStatus: 'expected-unreachable',
+      diskStatusReason: 'agent-not-running',
+    };
+    incoming.agent = { ...raw.agent, stale: false } as Resource['agent'];
+    incoming.platformData = { ...incoming.platformData, agent: incoming.agent };
+    const changed = new Set([raw.id]);
+    const full = mergeCanonicalResourceSnapshot([incoming], previous);
+    const delta = mergeCanonicalResourceDeltaSnapshot([incoming], previous, changed);
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [incoming],
+      previous,
+      changed,
+      new Map([[raw.id, ['proxmox', 'agent']]]),
+    );
+    for (const [merged] of [full, delta, fast]) {
+      expect(merged.proxmox?.disks).toBeUndefined();
+      expect(merged.proxmox?.diskStatusReason).toBe('agent-not-running');
+      expect(merged.agent?.stale).toBe(false);
+      expect(merged.agent?.disks).toEqual(raw.agent?.disks);
+    }
+
+    // A partial facet without a native outcome keeps the prior filesystems.
+    const partial = { ...raw, proxmox: { vmid: 100, uptime: 1001 } } as Resource;
+    const [kept] = mergeCanonicalResourceSnapshot([partial], previous);
+    expect(kept.proxmox?.disks).toEqual(raw.proxmox?.disks);
+
+    // A native agent report (it always carries stale) without disks has
+    // withdrawn them; a legacy facet without stale keeps the prior list.
+    const withdrawn = structuredClone(raw);
+    withdrawn.agent = { agentId: 'agent-in-vm', stale: false } as Resource['agent'];
+    withdrawn.platformData = { ...withdrawn.platformData, agent: withdrawn.agent };
+    for (const [merged] of [
+      mergeCanonicalResourceSnapshot([withdrawn], previous),
+      mergeCanonicalResourceDeltaSnapshot([withdrawn], previous, changed),
+      mergeCanonicalResourceDeltaSnapshot(
+        [withdrawn],
+        previous,
+        changed,
+        new Map([[raw.id, ['agent']]]),
+      ),
+    ]) {
+      expect(merged.agent?.disks).toBeUndefined();
+      expect(merged.agent?.stale).toBe(false);
+      // The compatibility mirror that host threshold rows read drops them too.
+      const mirror = (merged.platformData as { agent?: { disks?: unknown } } | undefined)?.agent;
+      expect(mirror?.disks).toBeUndefined();
+    }
+    const legacy = { ...raw, agent: { agentId: 'agent-in-vm' } } as Resource;
+    const [legacyKept] = mergeCanonicalResourceSnapshot([legacy], previous);
+    expect(legacyKept.agent?.disks).toEqual(raw.agent?.disks);
+  });
+
   it('keeps explicit lock and deferral evidence on a new outcome, including false expected', () => {
     const raw = createPveGuestRaw();
     raw.proxmox = {

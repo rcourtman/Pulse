@@ -135,7 +135,7 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 	cloned := NewRegistry(registry.store)
 	thresholds := adapter.currentStaleThresholds()
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
-	cloned.ingestRecords(source, records, onlyMissing)
+	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
 	if keyed {
 		adapter.overlays.store(registry, rebuiltAt, key, now, overlay)
@@ -372,6 +372,30 @@ func (a *MonitorAdapter) LastRebuiltAt() time.Time {
 	return a.lastRebuiltAt
 }
 
+// RegistryGeneration identifies one generation a MonitorAdapter published:
+// the registry it serves and when that registry last changed. LastRebuiltAt
+// alone does not, since two rebuilds of a snapshot stamped in the future
+// share its time; a rebuild swaps the registry and an incremental update
+// restamps it.
+type RegistryGeneration struct {
+	registry  *ResourceRegistry
+	rebuiltAt int64
+}
+
+// Generation returns the generation the adapter currently publishes.
+func (a *MonitorAdapter) Generation() RegistryGeneration {
+	if a == nil {
+		return RegistryGeneration{}
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	generation := RegistryGeneration{registry: a.registry}
+	if !a.lastRebuiltAt.IsZero() {
+		generation.rebuiltAt = a.lastRebuiltAt.UnixNano()
+	}
+	return generation
+}
+
 // TryReplaceRegistryForRead rebuilds the registry on behalf of a read path
 // (/api/state, websocket hydrate). Unlike the ingest-driven populate methods
 // it never queues behind an in-flight rebuild and skips entirely while the
@@ -450,7 +474,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
 		}
-		rebuilt.IngestRecords(source, records)
+		rebuilt.IngestRecordsWithStaleThresholds(source, records, staleThresholds)
 	}
 	// IngestSnapshot runs its stale pass before the record sources above are
 	// ingested, so record-sourced resources would otherwise keep their
@@ -665,7 +689,7 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 		return
 	}
 	before := registry.List()
-	registry.IngestRecords(source, records)
+	registry.IngestRecordsWithStaleThresholds(source, records, a.currentStaleThresholds())
 	rebuiltAt := time.Now().UTC()
 	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	registry.PersistIdentityPins()

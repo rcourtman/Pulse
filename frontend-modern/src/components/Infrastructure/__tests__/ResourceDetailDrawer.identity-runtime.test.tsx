@@ -906,6 +906,8 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(inlineAliases.closest('summary')).toBeNull();
     expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
+    // A long alias wraps inside the drawer cell instead of spilling past it.
+    expect(inlineRender.getByText('agent-inline-1')).toHaveClass('max-w-full', 'wrap-anywhere');
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 
     const overflowResource = baseResource({

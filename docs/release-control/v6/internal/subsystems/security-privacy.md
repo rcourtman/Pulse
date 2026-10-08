@@ -2021,7 +2021,7 @@ Assistant handoff context may hydrate those normalized action-audit facts for
 review, but that read is still model-only context: it must remain org-scoped,
 must not expose raw command text or raw execution output, and must not grant
 approval or execution authority.
-Scoped Assistant `handoff_actions` from Patrol assessment handoffs may carry
+Scoped Assistant `handoff_actions` from Patrol finding and attention handoffs may carry
 only safe approval/action metadata for model-only refresh, including approval
 IDs, action IDs, policy, expiry, dry-run posture, and proposed-fix labels; they
 must not expose raw command or execution payloads or become an approval bypass.
@@ -2845,6 +2845,11 @@ the tenant resource store. Runtime reconciliation may visit every live monitor,
 but each alert manager resolves policy through its own tenant-scoped store, so a
 matching provider ID in another organization cannot import the mutation. The
 existing route scopes and authenticated actor attribution remain unchanged.
+Patrol's finding operator-state provider follows the same rule: it resolves a
+finding's reference through the read state of that organization's own monitor
+(`resolveMonitorForOrg`) and then reads that organization's store, so a
+source-native or link-folded reference never resolves through another tenant's
+registry.
 
 ### Secret-bearing configuration transfer fails closed before data access
 
@@ -3024,6 +3029,18 @@ symlink checks and expose no enumeration, sampling or writing capability.
 Removing the disconnected recorder does not alter alert, action approval or
 operator authority. An unrelated organization receives no default archive
 fallback.
+
+### Report GETs cannot spend AI budget
+
+`Router.wireReportingAIResolvers` in `internal/api/router.go` wires a second
+reporting resolver, `SetExistingFindingsResolver`, backed by
+`AISettingsHandler.ExistingAIService`.
+A `GET /api/admin/reports/generate` uses only that resolver and the
+deterministic narrator, so it makes no AI provider call, writes no cost-ledger
+entry and never constructs a tenant AI service. GET passes the demo-mode guard
+and the CSRF check, and a SameSite=Lax session cookie rides a cross-site
+top-level navigation, so AI narration of a single-resource report now requires
+a CSRF-checked `POST`. No authentication, scope or session rule changed.
 
 ### Node setup action v7 compatibility
 

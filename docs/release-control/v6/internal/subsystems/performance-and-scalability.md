@@ -1092,11 +1092,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    mounted, report errors out of band, and must not rely on Solid
    `createResource` in a way that can bubble into the route-level Suspense
    fallback or the setup/welcome shell.
-   Workload row drawer expansion, local row focus, and summary group pinning
-   are local interaction state. Inbound Workloads deep links may hydrate
-   `resource` and `summaryGroup` into the focused row or group, but opening,
-   closing, or clearing an inline drawer must not write those params back to
-   route state, schedule router navigation, or trip the app-shell fallback.
+   Workload row drawer expansion and local row focus are local interaction
+   state. Inbound Workloads deep links may hydrate `resource` into the focused
+   row, but opening, closing, or clearing an inline drawer must not write that
+   param back to route state, schedule router navigation, or trip the
+   app-shell fallback. Workloads has no group focus, so it reads no
+   `summaryGroup` param: row expansion stopped writing it and no link builder
+   passes one, so its hydration was removed with the group pin.
    URL synchronization for Workloads stays limited to filter-owned scope in
    `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`.
    The Workloads page may show a bounded partial-inventory banner when a
@@ -1125,6 +1127,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Guest metric thresholds read the guest's alert policy tags through one
+    `getWorkloadAlertPolicyTags` memo per row and per drawer, beside the
+    existing scope and override-candidate memos, so `pulse-relaxed` bar
+    colouring adds no per-render tag parsing and no extra store reads.
     On coarse-pointer touch layouts, those cell details must not spawn floating
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability
@@ -1473,13 +1479,16 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     `TableCardHeader` inside both the populated and filtered-empty table card.
     A platform page must not place a parallel floating title above its filters;
     the title/count band belongs to the same framed table surface as the rows.
-    `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
-    clicking a grouped host row while a guest drawer is open must clear the
-    selected guest and keep/focus the host summary group so the node drawer can
-    replace the guest drawer. Platform pages that render a dedicated host
-    table above an embedded Workloads table may disable the grouped host drawer
-    through the explicit Workloads surface option, but standalone Workloads
-    must keep the inline grouped-row drawer as the default.
+    `WorkloadPanel` renders only the guest drawer. Grouped host rows are
+    static dividers: no click handler, hover preview, group pin, or inline
+    node drawer. They keep `data-summary-group-id` so a click on a divider
+    does not clear an open guest drawer. Host details open from the platform
+    page's own hosts table (`ProxmoxNodesTable` mounts `NodeDrawer`;
+    `VsphereHostsTable` owns its detail row). The former
+    `groupNodeDrawerMode` option defaulted to an inline grouped-row drawer
+    that only the retired standalone Workloads page used; both production
+    mounts passed `disabled`, so the option, the inline `NodeDrawer` mount
+    and the Workloads group hover/pin scope were removed.
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the
@@ -1507,7 +1516,6 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     default filter-option labels must flow through the shared all-option
     presentation helper via the workload filter config model instead of the
     hot-path shell hard-coding local `All ...` strings.
-28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When
     `internal/api/router.go`, `internal/api/router_routes_cloud.go`, or
@@ -1529,7 +1537,8 @@ them with new hot-path fetches. Node rows that draw infrastructure history
 must read the canonical infrastructure-summary route owned by
 `internal/api/router_routes_monitoring.go` and `internal/api/router.go`, today
 through `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`;
-storage summary cards must use the storage summary cache owners. The authenticated
+the storage pool Growth column must read through the storage summary cache
+owners (`useStorageSummaryCharts.ts` and `storageSummaryCache.ts`). The authenticated
 root path in `frontend-modern/src/App.tsx` must not prewarm a deleted
 dashboard-specific overview, trend, or summary transport.
     The same hot path must keep mock/demo chart identity on the canonical
@@ -1691,18 +1700,26 @@ shell clickable behind another overlay.
     scoped table metric-history interaction that requested them. Platform
     landing should stay route-module warm and data-light until the selected
     platform page owns its normal resource/table query.
-    Platform pages that embed `WorkloadsSurface` reuse the canonical
-    workloads filter toolbar through the `showFilterToolbar` +
-    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
-    keeps `tableOnly` to hide the dashboard cards and summary strip but
-    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
-    `ColumnPicker`, status/type chips, and search-history primitives that
-    the global Workloads page renders, so platform operators get
-    dense-table search, sort, grouping, view, status, and column controls
-    on every embedded workloads tab without spawning a forked toolbar.
-    The platform scope flows through `forcedPlatform` as a typed page
-    input; `suppressPlatformFilter` drops the now-redundant Platform chip
-    from the rendered toolbar so the user never sees a removable lock.
+    Two platform pages embed `WorkloadsSurface`: the Proxmox and vSphere
+    Overview tabs (`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
+    builds the workloads state itself with `useWorkloadsState`, renders the
+    one shared `WorkloadsFilter` toolbar (search, status filter, a type
+    filter that vSphere suppresses, and the View options for grouping, metric display, and columns on the
+    shared `FilterBar`) from that state, and hands the same state to `WorkloadsSurface` through its
+    `state` prop with `suppressFilterToolbar`, so the surface skips its own
+    filter row and the page never stacks two toolbars wired to one state.
+    Proxmox also passes that state's search, plus its page-owned metric mode
+    and history range, to the nodes table above the guests, so one toolbar
+    drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
+    `showFilterToolbar` prop, and no dashboard cards or summary strip to
+    hide: it renders its filter row (unless suppressed or in kiosk mode), the
+    workloads table, or an empty-state table card. The platform scope flows
+    through `forcedPlatform` as a typed page input to `useWorkloadsState`,
+    the toolbar, and the surface. `suppressPlatformFilter: true` makes the
+    state expose no Platform filter config and both pages pass
+    `platformFilter={undefined}` to the toolbar, so the user never sees the
+    locked platform as a removable chip.
 
 ### Navigation resolves from a bounded request
 
@@ -1787,6 +1804,22 @@ This correctness proof does not close the large-estate performance gap. The
 final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
+
+### Window resize listeners do not grow with rows
+
+Table rows must not each register a window `resize` listener.
+`frontend-modern/src/hooks/useBreakpoint.ts` keeps one module-level width
+signal, fed by a single rAF-debounced listener while at least one caller is
+mounted, and a new caller starts from the live `innerWidth`. Shared tooltip
+state in `frontend-modern/src/components/shared/useTooltipState.ts` listens
+only while its tooltip is visible. Measured on 2026-10-07 on a mock-mode
+`/proxmox` page with 140 workload rows at 1440 px, the active listener count
+fell from 859 (699 tooltip instances, 156 breakpoint callers) to 5; at 390 px
+with 36 rows it fell from 203 to 5. An open tooltip adds one listener and
+removes it on close, and crossing the phone breakpoint in either direction
+still switches the workload table and row layout. `useBreakpoint.test.ts`
+proves one listener for 50 callers, that back-to-back resizes leave one pending
+frame, and that every caller crosses a breakpoint when that frame runs.
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -2003,7 +2036,10 @@ because both remaining production mounts (Proxmox and vSphere overview)
 set it unconditionally, so the non-compact path no longer rendered
 anywhere. A new embedded consumer that needs host
 stats beside its workloads must render its own hosts table rather than
-re-growing metric cells in the shared group row.
+re-growing metric cells in the shared group row. The same applies to host
+interaction: the group row has no drawer, hover preview, or pin, and the
+Workloads state no longer builds per-group summary scopes for every
+filtered-guest change.
 
 WorkloadsSurface stays monitoring-first. It must not render a persistent
 aggregate banner just because running VMs or system containers lack an
@@ -2066,7 +2102,7 @@ the hovered timestamp, so density does not remove point-in-time metric detail.
 Proxmox node thermals follow that same drawer-only rule: temperature remains a
 node-context metric, not a universal Workloads table column, and the node detail
 drawer may add one compact `Thermals` history group beside utilization and I/O
-only after a grouped node row is selected. Host-agent CPU temperature must be
+only after a node's drawer is opened from the Proxmox nodes table. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature displayed only as a drawer-local current reading
 while history is still accumulating; it must not become a synthetic history
@@ -2106,7 +2142,7 @@ still reads nothing extra.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
-repeating the metric cells already visible in the grouped table row.
+repeating the metric cells already visible in the Proxmox nodes table row.
 Object drawers across workload, node, Docker, and unified-resource surfaces
 must keep their default render bounded to active attention plus a small
 additive context projection. Full provider-specific support workflows remain
@@ -2262,22 +2298,11 @@ Route-backed workload `resource` focus on that hot path is contextual state
 only, not inferred filter state: opening or closing an inline drawer must not
 invent, retain, or clear `agent` or node-scope filters unless those filters
 were already explicit in the managed workload URL.
-That same hot-path ownership now covers top-of-page summary emphasis: infrastructure
-and workloads summary cards must treat row hover, chart hover, and route focus
-as one shared active-series contract so time-range switches, row scrubbing, and
-chart cross-highlighting reuse one existing chart path instead of repainting
-page-local “selected row” overlays on top of already downsampled summary
-history. Hovering a sparkline or density map for one entity must promote that
-entity into the shared active series so sibling cards highlight the same object
-at once rather than maintaining chart-local hover state, and the synchronized
-hover timestamp must remain visible across those sibling cards even when the
-active entity has no samples for one metric in the current range. Those
-sibling cards should expose the synchronized value through one compact
-header-level readout, not by spawning duplicate floating tooltips on every
-chart.
-Infrastructure cluster-header hover now belongs to that same bounded hot path:
-hovering a grouped infrastructure header must scope the top cards to that
-cluster's unified-resource members through the shared group/entity interaction
+That same hot-path ownership covers summary emphasis. No top-of-page summary
+cards render on infrastructure or workloads today; if they return, row hover,
+chart hover, and route focus must stay one shared active-series contract that
+reuses one existing chart path instead of repainting page-local “selected row”
+overlays on top of already downsampled summary history.
 That same hot path now also owns dashboard freshness discipline. Supported
 unified-resource dashboard reads may hydrate from REST for first paint, but
 once websocket `state.resources` is available they must consume that canonical
@@ -2414,36 +2439,37 @@ must not tighten physical retention until the durable downgrade state reaches
 its governed day-60 purge timestamp. Re-upgrade clears that ceiling before the
 next retention run. The ceiling may only reduce configured retention; it must
 never expand an operator's shorter storage policy.
-contract instead of inventing an infrastructure-local summary filter branch.
-For shared line charts on that hot path, the shared sparkline primitive may
-isolate the selected series inside the existing render budget, but that
-isolation must still reuse the same summary series set and timeline data rather
-than triggering a second page-local chart recomputation.
-That same hot-path rule now covers contextual row focus on those pages.
-That same hot-path ownership now also forbids hover-driven table movement.
-When a summary chart promotes one active entity, the matching row may highlight
-in place if it is already mounted and visible, but the hot path must not
-auto-scroll the page or rebuild the table into a one-row filtered view on
-transient hover. Off-screen reveal must stay behind an explicit `Jump to row`
-action routed through the shared summary-table focus bridge.
-That same hot-path contract also owns the row-emphasis paint. Dashboard guest
-rows and infrastructure resource rows must expose summary-linked activity
-through the shared `data-summary-row-active` marker and let the shared frontend
+That same hot-path ownership forbids hover-driven table movement on the
+workloads and storage tables. Row hover may highlight the matching row in
+place, but the hot path must not auto-scroll the page or rebuild the table
+into a one-row filtered view on transient hover; only a deliberate row focus
+may reveal an off-screen row, through the shared summary-table focus bridge.
+The bridge measures row position only inside that deliberate reveal. It must
+not keep window-level scroll or resize listeners, or re-measure the hovered
+row on every hover change and scroll frame, for an off-screen affordance that
+nothing renders: the retired `Jump to row` visibility check did exactly that,
+costing 128 `getComputedStyle` calls across eight row hovers and 320 across
+ten scroll steps on the 12-node mock storage table, and none once removed.
+That same hot-path contract also owns the row-emphasis paint. Workload guest
+rows and storage pool, group, and disk rows must expose
+summary-linked activity through the shared `data-summary-row-active` marker and let the shared frontend
 primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
-`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` must
-write workload selection back into the workloads route through the shared
-same-path route-state scheduler, but the actual shell-position handoff for
-query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
-plus the root `frontend-modern/src/App.tsx` shell so opening a focused
-workload does not look like a full page reload, and the governed infrastructure and
-workloads summary surfaces must keep the summary page-scoped while that focus
-reuses the shared highlight contract; density maps may retain page-level
-context, but they must now also surface focused-entity detail inside the same
-card instead of dimming the rest of the map into unusable background noise or
-swapping the hot path into a transient single-series chart. Line-card
-isolation must still flow through the shared sparkline runtime instead of a
-page-local focus overlay. The shared same-path scheduler must also own cleanup
+`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` keeps
+workload selection local and never writes it back into the route; an inbound
+`resource` link only hydrates it. Local row focus keeps the scroll position
+through `preserveScrollableAncestorVerticalOffset` in
+`frontend-modern/src/components/shared/contextualFocus.ts` and reveals the
+opened detail through `summaryTableFocus.ts`, so opening a focused workload
+does not look like a full page reload. The root `frontend-modern/src/App.tsx`
+shell applies a pending `frontend-modern/src/utils/appShellScrollRestoration.ts`
+restore on the next route change, whatever caused it, so only the shared
+same-path route-state scheduler may stage one, from the shell position at the
+moment it navigates. Local row focus stages none: a position staged without a
+navigation waits for an unrelated one, and before this rule a Type filter
+change made at the top of the Proxmox overview jumped the shell back down to
+the row toggled earlier, because the scheduler stages nothing from scrollTop 0.
+The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2452,27 +2478,28 @@ focus may mount drawer-local facet and intelligence fetches, but those
 requests must retain the mounted page shell through the shared non-suspending
 query helper instead of bubbling a transient `Loading view...` fallback through
 `AppLayout.tsx` when an inline infrastructure drawer opens.
-That same hot-path rule now has one shared runtime boundary. Interactive-series
-filtering, active-series derivation, focused-label lookup, and local
-scroll-preserving row focus must extend
-`frontend-modern/src/components/shared/contextualFocus.ts` instead of
-rebuilding page-local `Set` scans or scroll repair logic in dashboard,
-infrastructure, or workloads hot paths.
+That same hot-path rule now has one shared runtime boundary. Local
+scroll-preserving row focus and inline-detail reveal must extend
+`frontend-modern/src/components/shared/contextualFocus.ts`, and active-series
+derivation must stay in
+`frontend-modern/src/components/shared/summaryCardInteraction.ts` behind
+`summaryTableFocus.ts`, instead of rebuilding page-local `Set` scans or scroll
+repair logic in workloads, storage, or platform-table hot paths.
 That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
 must still flow through the shared contextual-focus and summary-table helpers.
-Direct row toggles that already have the row in view must capture the current
-app-shell scroll position before the focus write and let the remounted root
-shell restore that position, so the interaction stays anchored instead of
-looking like a full refresh. Once the drawer is mounted, the shared reveal
+Direct row toggles that already have the row in view stay anchored through
+that contextual-focus offset preservation, not through a staged app-shell
+restore, so the interaction does not look like a full refresh. Once the drawer is mounted, the shared reveal
 helper must still take over whenever the opened detail would land below the
 fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the
 top of the detail visible instead of hard-centering every expansion.
 That same hot-path ownership now includes summary cache invalidation. A
-summary chart cache that hydrates charts for fast remounts, today the storage
-page's module-scoped `frontend-modern/src/utils/storageSummaryCache.ts`, must
+summary history cache that hydrates fast remounts, today the storage page's
+module-scoped `frontend-modern/src/utils/storageSummaryCache.ts` behind the
+pool Growth column and its sort, must
 carry the chart contract version in its key and advance it when the summary
 chart timeline contract changes, so a hot-reloaded or long-lived browser tab
 cannot rehydrate an older series set before the next live fetch completes.
@@ -2735,15 +2762,33 @@ unavailable once the guest is stopped, whether its status or the Proxmox
 `vm-stopped` reason says so, and Proxmox's own guest filesystems keep their
 Proxmox read state. The two flags ride the existing row mapping and
 add no query or poll; `GuestDrawer.test.tsx` and `useWorkloads.test.ts` pin
-both sources. The workload table's disk cell and the drawer History still read
-the aggregate disk metric and the Proxmox reason, and the agent's OS, addresses
-and physical disk health carry no stale cue yet.
+both sources. The workload table's disk cell (`useGuestRowState.ts`,
+`GuestRow.tsx`) and the drawer History (`guestDrawerModel.ts`) judge the same
+guest through the drawer rows' rule, `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts`: a silent agent's bars carry the Last known
+label, a live agent's bars stay current under Proxmox `agent-not-running`, and
+History reads the aggregate disk metric as current, last known or unavailable
+the same way. The rule covers the aggregate because Proxmox records no guest
+disk usage without guest filesystems, so a manually linked guest then keeps the
+agent's disk metric, and the poller no longer carries that agent reading
+forward as Proxmox's own `prev-` read (see the monitoring contract).
+`TestResourceRegistry_ManualGuestAgentLinkDiskMetricFollowsProxmoxGuestFilesystems`
+pins that merge; `GuestRow.test.tsx` and `GuestDrawer.test.tsx` pin the cell and
+History. On the websocket path (`resourceStateAdapters.ts`) a native Proxmox VM
+facet's new guest-read outcome drops filesystems it no longer reports, a native
+agent facet without `disks` drops the agent's, and the agent facet always
+carries `stale`, so the rows switch source and lose the Last known label when
+the agent resumes, without a reload. A stale Proxmox source
+can still lose the aggregate to a live agent while its own filesystem rows
+remain; such a guest stays on the Proxmox rule. The agent's OS, addresses and
+physical disk health carry no stale cue yet.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
-boundary for collapse: Workloads owns which inline row is selected and the
-close handler, while
+boundary for collapse: the owning table (Workloads for guests, the Proxmox
+nodes table for nodes, the Docker hosts table for Docker hosts) owns which
+inline row is selected and the close handler, while
 `frontend-modern/src/components/shared/ObjectDrawerHeader.tsx` owns the
 full-width semantic header button, phone target height, focus treatment, and
-collapse chevron. `WorkloadPanel` must pass the grouped node close handler into
+collapse chevron. `ProxmoxNodesTable` must pass its node close handler into
 `NodeDrawer`, the Docker hosts table must pass its close handler into
 `DockerHostDrawer`, and those shells must not fall back to a small icon-only
 collapse target or wrap interactive header actions inside a local button.
@@ -2785,7 +2830,7 @@ the filter and presentation rails wrap-capable instead of forcing a single
 no-wrap row that clips trailing actions. The workload shell leaves Type,
 Status, dynamic scope, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
-bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
+bars/trends, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
 wrapping `ViewOptionsDisclosure` in the workload feature or rendering as
 equally prominent filter toggles. The shared FilterBar owns the inline View
@@ -2801,17 +2846,23 @@ counts wrap independently so a narrow toolbar cannot strand View on a line by
 itself or force page-level horizontal overflow. The compact Add filter control
 joins that cluster only in the default state where no active menu chip,
 contextual Clear action, or leading action needs its own filter row; active
-scope editing keeps Add filter beside the chips. The sparkline range remains
-inline only while trends are active because it is the frequently changed
-analytical window, and its compact control must include a visible `Trend range`
-label so the values are not an orphaned set of durations. Columns must expand
+scope editing keeps Add filter beside the chips. The sparkline range is a
+trailing inline control, not a View option, because it is the frequently
+changed analytical window. `WorkloadsFilter` renders it whenever the metric
+mode is Trends, and in Bars only at desktop widths while Row hover is `History`
+(the default); Bars with `Details` hover, or Bars below the 768px `isMobile`
+breakpoint, hides it. Its compact control carries the visible `History` label
+so the values are not an orphaned set of durations. Columns must expand
 as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory
-column header after the View disclosure closes. Workload chart
-visibility remains a display preference: its menu action must expose explicit
-`Show charts` / `Hide charts` pressed state, and hiding charts must remove the
-summary section rather than leaving an empty collapsed summary band on screen.
+column header after the View disclosure closes. No workload summary chart
+section renders today, and `WorkloadsFilter` carries no chart-visibility
+control or `onChartsToggle` / `chartsCollapsed` props. A summary section that
+returns through a governed product decision must bring its own visibility
+control with explicit `Show charts` / `Hide charts` pressed state, and hiding
+charts must remove the summary section rather than leaving an empty collapsed
+summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of

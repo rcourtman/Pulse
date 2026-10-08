@@ -491,19 +491,23 @@ func TestBranchCovNormalizeDiskFillByType(t *testing.T) {
 		}
 	})
 
-	t.Run("positive trigger with non-positive clear resets to default", func(t *testing.T) {
+	t.Run("positive trigger with non-positive clear keeps trigger and derives clear", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			DiskFillByType: map[string]alertconfig.HysteresisThreshold{
 				"sata": {Trigger: 88, Clear: 0},
 				"hdd":  {Trigger: 80, Clear: -3},
+				"nvme": {Trigger: 0, Clear: 0},
 			},
 		}
 		alertconfig.NormalizeDiskFillByType(cfg)
-		if sata := cfg.DiskFillByType["sata"]; !htEq(sata, alertconfig.HysteresisThreshold{Trigger: 90, Clear: 85}) {
-			t.Fatalf("sata = %+v, want default {90 85}", sata)
+		if sata := cfg.DiskFillByType["sata"]; !htEq(sata, alertconfig.HysteresisThreshold{Trigger: 88, Clear: 83}) {
+			t.Fatalf("sata = %+v, want {88 83}", sata)
 		}
-		if hdd := cfg.DiskFillByType["hdd"]; !htEq(hdd, alertconfig.HysteresisThreshold{Trigger: 85, Clear: 80}) {
-			t.Fatalf("hdd = %+v, want default {85 80}", hdd)
+		if hdd := cfg.DiskFillByType["hdd"]; !htEq(hdd, alertconfig.HysteresisThreshold{Trigger: 80, Clear: 75}) {
+			t.Fatalf("hdd = %+v, want {80 75}", hdd)
+		}
+		if nvme := cfg.DiskFillByType["nvme"]; !htEq(nvme, alertconfig.HysteresisThreshold{Trigger: 92, Clear: 87}) {
+			t.Fatalf("nvme = %+v, want default {92 87}", nvme)
 		}
 	})
 

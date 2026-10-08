@@ -50,12 +50,13 @@ describe('explicit issue explanations', () => {
     });
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
     expect(send).toHaveBeenCalledWith(EXPLAIN_SELECTED_ISSUE_PROMPT, 'finding-1', {
-      autonomousMode: false,
       handoffContext: 'Current finding evidence',
       handoffResources: resources,
       handoffActions: actions,
       handoffMetadata: { kind: 'patrol_finding' },
     });
+    // The drawer still discloses the approval-required posture the server sets.
+    expect(aiChatStore.context.autonomousMode).toBe(false);
     aiChatStore.close();
     aiChatStore.open();
     await Promise.resolve();

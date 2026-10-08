@@ -931,37 +931,6 @@ describe('WorkloadsFilter', () => {
     });
   });
 
-  describe('charts toggle', () => {
-    it('renders the Charts button when onChartsToggle is provided', () => {
-      render(() => (
-        <WorkloadsFilter
-          {...makeProps({
-            chartsCollapsed: vi.fn(() => false),
-            onChartsToggle: vi.fn(),
-          })}
-        />
-      ));
-      expect(screen.queryByRole('button', { name: 'Hide charts' })).not.toBeInTheDocument();
-      expect(
-        within(openViewPreferences()).getByRole('button', { name: 'Hide charts' }),
-      ).toBeInTheDocument();
-    });
-
-    it('labels the Charts button as a show action when charts are collapsed', () => {
-      render(() => (
-        <WorkloadsFilter
-          {...makeProps({
-            chartsCollapsed: vi.fn(() => true),
-            onChartsToggle: vi.fn(),
-          })}
-        />
-      ));
-      expect(
-        within(openViewPreferences()).getByRole('button', { name: 'Show charts' }),
-      ).toBeInTheDocument();
-    });
-  });
-
   describe('column picker', () => {
     it('renders ColumnPicker when columnVisibility is provided', () => {
       render(() => (

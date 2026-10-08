@@ -103,6 +103,11 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 		return
 	}
 
+	// Alert intent resolves through the published registry with saved hosts
+	// overlaid, under the alert manager's lock. Build that overlay for the new
+	// generation here, outside the lock, so its lookups need not.
+	m.operatorIntentIdentity.Load().refresh()
+
 	// Resource publication can make persisted canonical policy resolvable for
 	// restored native-ID alerts that preceded the first observation at startup.
 	scope.run(func() { m.alertManager.ReconcileOperatorIntentState() })

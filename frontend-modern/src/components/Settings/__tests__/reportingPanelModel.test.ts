@@ -14,6 +14,7 @@ const performanceDefinition: ReportingPerformanceReportDefinition = {
   title: 'Performance Reports',
   description: 'Historical performance reporting',
   singleResourceEndpoint: '/api/admin/reports/generate',
+  singleResourceMethod: 'POST',
   multiResourceEndpoint: '/api/admin/reports/generate-multi',
   singleFilenamePrefix: 'report',
   singleFilenameSubject: 'resource_id',
@@ -75,12 +76,52 @@ describe('reporting panel model', () => {
     );
 
     expect(request.filename).toBe('report-agent-1-20260320.pdf');
+    // POST, never GET: only POST may narrate the PDF with Pulse Assistant.
+    expect(request.request.url).toBe('/api/admin/reports/generate');
+    expect(request.request.init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(JSON.parse(String(request.request.init?.body))).toEqual({
+      resourceType: 'agent',
+      resourceId: 'agent-1',
+      format: 'pdf',
+      start: '2026-03-19T12:34:56.000Z',
+      end: now.toISOString(),
+      metricType: 'cpu',
+    });
+  });
+
+  it('keeps the query-string GET transport for backends whose catalog names GET', () => {
+    const now = new Date('2026-03-20T12:34:56.000Z');
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'csv',
+        metricType: 'cpu',
+        now,
+        resources: [{ id: 'vm-1', type: 'vm', name: 'vm-a' }],
+        start: '2026-03-19T12:34:56.000Z',
+        title: '',
+      },
+      {
+        ...performanceDefinition,
+        singleResourceEndpoint: '/api/reporting',
+        singleResourceMethod: 'GET',
+      },
+    );
+
     expect(request.request.init).toBeUndefined();
-    expect(request.request.url).toContain('/api/admin/reports/generate?');
-    expect(request.request.url).toContain('resourceType=agent');
-    expect(request.request.url).toContain('resourceId=agent-1');
-    expect(request.request.url).toContain('metricType=cpu');
-    expect(request.request.url).not.toContain('title=');
+    const url = new URL(request.request.url, 'http://pulse.local');
+    expect(url.pathname).toBe('/api/reporting');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      resourceType: 'vm',
+      resourceId: 'vm-1',
+      format: 'csv',
+      start: '2026-03-19T12:34:56.000Z',
+      end: now.toISOString(),
+      metricType: 'cpu',
+    });
   });
 
   it('builds a fleet reporting request body and filename', () => {
@@ -158,9 +199,9 @@ describe('reporting panel model', () => {
       },
     );
 
-    expect(request.request.url).not.toContain('title=');
-    expect(request.request.url).not.toContain('metricType=');
-    expect(request.request.url).not.toContain('Custom+fleet+title');
+    const body = JSON.parse(String(request.request.init?.body));
+    expect(body).not.toHaveProperty('title');
+    expect(body).not.toHaveProperty('metricType');
   });
 
   it('passes through explicit custom titles without inventing defaults', () => {
@@ -186,7 +227,7 @@ describe('reporting panel model', () => {
       performanceDefinition,
     );
 
-    expect(request.request.url).toContain('title=Custom+report+title');
+    expect(JSON.parse(String(request.request.init?.body)).title).toBe('Custom report title');
   });
 
   it('derives canonical range starts from the selected preset', () => {

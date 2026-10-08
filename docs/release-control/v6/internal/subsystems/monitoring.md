@@ -1825,6 +1825,29 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
+`checkPhysicalDiskAlerts` also hands each disk's temperature to
+`CheckProxmoxDiskTemperature`, so a Proxmox disk that only the node's sensors
+report alerts under the disk temperature policy, as its Running Hot verdict
+already says it should. It passes the reading only when this poll collected it
+(`collectedPhysicalDiskTemperature`, `diskinventory.TemperatureCollected`), so
+a retained last-known value holds the alert rather than judging it, and it
+passes `AgentSMARTReported`, which `mergeHostAgentSMARTIntoDisks` sets on a
+disk a still-reporting linked agent lists in its SMART report (disks built
+from that report when the Proxmox query fails go through the same merge). A
+disk the agent lists is the agent's: `CheckHost` raises its temperature
+alert, and the PVE disk check closes its own as moved to the agent, so no
+disk alerts twice. Once the agent's lease lapses (`ExpireHostTelemetry` marks
+the host offline) its retained rows still enrich the disk, but ownership
+returns to the PVE check, which judges the node's own current readings; an
+agent newly linked to a disk with an open PVE alert takes it over on the next
+disk poll. An excluded device closes its temperature
+alert with the health and wearout ones. Fixture disks carry no agent SMART
+merge, so on a mock estate every hot disk on an online node alerts.
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` and
+`TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
+the collected reading, agent ownership and exclusion.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection
@@ -2676,7 +2699,18 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     ingestion so canonical host IDs stay stable across restarts (see the
     unified-resources contract's durable identity-pin obligation). Rebuild
     paths added to the adapter must keep that persistence step; ephemeral
-    snapshot-bridge adapters stay read-only.
+    snapshot-bridge adapters stay read-only. The rebuild, the live
+    supplemental refresh and the read-state overlay ingest records with the
+    adapter's configured stale thresholds, because record ingest joins
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go` and
+    `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
+    `internal/monitoring/issue1913_host_continuity_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
@@ -4104,6 +4138,14 @@ ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
 shape, while multiple controller members behind one block path add their
 controller target to the fallback identity. Per-member I/O must never inherit
 an aggregate controller counter.
+A linked node's agent with no SMART reading for a device, such as a member's
+standby row, files that device's I/O under the Proxmox disk's metrics target
+(`proxmoxPhysicalDiskMatchesForLinkedNode` reads `MetricResourceID`). For a
+member merged with its Proxmox row that target is the member's own SMART key,
+scoped to the member once (`PhysicalDiskMetaMetricID`), so its SMART and I/O
+history share one series. The target used to carry the member topology twice,
+and I/O already stored under that doubled key is left to age out rather than
+migrated. Proof: `TestIdentitylessControllerMembersReadTheirWritersHistory`.
 The same rules apply to SATA and NVMe inventory: direct-disk source IDs keep
 their historical shape, controller-member IDs add their member target, and
 cross-source correlation is scoped to the canonical parent node. A successful
@@ -4483,6 +4525,13 @@ disk usage when the last VM snapshot is still recent guest-agent truth rather
 than an already carried-forward fallback. That keeps transient guest-agent or
 status-call failures from regressing a VM back to misleading allocated-disk
 data while still avoiding indefinite replay of stale disk summaries.
+The previous VM that `previousVMFromView` builds from the unified read state
+carries disk usage only when it is Proxmox's own reading. When a manually
+linked Pulse agent's disk filled in because Proxmox had no guest filesystems
+(`VMView.DiskFromLinkedAgent`), carrying it would relabel the agent's value as
+a Proxmox `prev-` read, and with Proxmox outranking the agent on guests that
+copy would then freeze over the agent's live disk.
+`TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry` pins both owners.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
@@ -4790,6 +4839,37 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+The SMART-resolved id is the serial the disk resource carries: when a SMART row
+reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
+reports for that disk, as the unified-resources adapter does, unless the Unraid
+row does not describe the disk (`unraidDiskDescribesSMARTRow`: a controller
+member, or several SMART rows on the disk's device path), and
+`hostDiskIOMetricResourceID` keys
+a device with no non-standby SMART row by its Unraid serial
+(`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
+before the linked Proxmox node's disks and the `<host>:<device>` fallback.
+Controller members sharing a device path keep distinct keys, so the I/O
+writer's aggregate-device guard, which compares every row on the path by its
+own identity (standby rows and legacy `sdc [sat]` labels included), files
+their counter under no member.
+Proof:
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
+`TestHostDiskIOMetricResourceIDFallbacks`.
+The agent's `smart_temp` series holds the reading the disk resource shows,
+not only the SMART row's own. `writeHostSMARTMetrics` writes
+`HostSMARTDiskTemperature`, which falls back to the host's Unraid inventory
+reading when the row has none, and `writeHostUnraidDiskTemperatures` writes
+`HostUnraidDiskTemperature` under `HostUnraidDiskMetricID` for each Unraid row
+whose key is not one of the host's SMART rows' keys, such as a `--disk-exclude`
+member, so an Unraid reading never overwrites a SMART row's own at the same
+timestamp.
+Unraid rows sharing a key are one disk in the registry, which shows the latest
+of their readings, so the last row with a reading decides that key's single
+sample. `diskinventory.TemperatureCollected` keeps a spun-down disk's or an
+expired host's leftover reading out of history.
+Proof:
+`TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared
@@ -5306,6 +5386,42 @@ canonical aliases retain their precedence and ambiguous aliases remain
 unresolved. This avoids cloning a full resource for every policy lookup while
 keeping alert intent tied to the same identity rules as resource reads.
 
+Alert intent resolves references and ancestors through the read state Patrol
+resolves through and the resources API seeds from: the published registry with
+saved hosts that have not reported since a restart overlaid
+(`operatorIntentIdentity`). A saved host exists only there, so against the
+published registry alone its alerts (`agent:<host ID>`) read their literal
+reference after a restart and missed intent set on the host, and, when an
+operator link joins it to a live resource, intent set on the link primary that
+the registry now resolves the saved host to. Alerts resolve under the alert
+manager's lock, once per metric check, so the overlay is kept for the published
+registry generation it was built from. Publication builds it before alert
+evaluation, outside that lock; a lookup that races ahead of publication, or the
+first one after leaving mock mode, builds it under the lock. A generation is
+the registry the adapter publishes and when it last changed
+(`MonitorAdapter.Generation`), since two publications can share a
+`LastRebuiltAt`. A finished build is stored only if that generation is still
+the published one and the mock-mode epoch it started in is current, checked and
+stored inside the mock-mode fence, so a build that overlapped a mode switch is
+discarded. A lookup made while mock mode is on drops the stored overlay; a
+switch to mock and back with no lookup in between keeps it, since it still
+describes the published generation. A saved-host change that arrives without a
+new generation shows on the next one. Mock mode carries no saved hosts: lookups
+then resolve against the published registry as before.
+`monitor_alert_intent_test.go`
+(`TestOperatorIntentIdentityKeepsOneOverlayPerGeneration`,
+`TestOperatorIntentReachesSavedHostAlertsAfterRestart`) pins the reuse, a
+generation sharing or preceding the last one's timestamp, the mock switch, a
+rebuild made from inside an admitted fence call, and an unlinked saved host's
+intent reaching its offline alert.
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins a saved
+agent's offline alert reading maintenance set on the guest it is linked into,
+and `monitor_host_agent_removal_lifecycle_test.go`
+(`TestHostAgentRemovalLifecycleHonorsSavedHostIntentAfterRestart`) pins the
+restarted monitor's own host-offline check raising no alert for a saved host
+the operator marked intentionally offline.
+
 Alert restore precedes resource-store attachment during startup. Once the
 adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
 to reconcile the restored set and refreshes shared alert state if it changed.
@@ -5746,3 +5862,24 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Broadcast host coalescing honours operator splits
+
+The websocket broadcast coalesced top-level host views with
+`CoalescePresentationHostResources`, which applies no merge exclusions, while
+the resources API's `ResourceRegistry.ListForPresentation` applies the
+registry's. A host pair the operator split (unlink or report-merge) could
+therefore be one broadcast row and two REST rows.
+`Monitor.buildBroadcastFrontendStateFromSnapshotWithClock` now calls
+`coalesceResourcesForPresentation`, which asks the view's read state for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh), and otherwise the resource store's adapter: the
+mock-mode view lists through a store-less registry that carries no operator
+decisions. Both surfaces share `presentationExclusionFilter`. Polling, rebuild cadence,
+alert evaluation and the broadcast payload shape are unchanged.
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` compares broadcast
+and REST row counts with and without the split, and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
+listing read state over an older store generation and the store's exclusions
+for a mock-style view.

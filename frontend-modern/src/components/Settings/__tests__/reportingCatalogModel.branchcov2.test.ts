@@ -42,6 +42,7 @@ const basePerformanceReport = () => ({
   title: 'Performance Reports',
   description: 'Historical performance reporting',
   singleResourceEndpoint: '/api/admin/reports/generate',
+  singleResourceMethod: 'POST',
   multiResourceEndpoint: '/api/admin/reports/generate-multi',
   singleFilenamePrefix: 'report',
   singleFilenameSubject: 'resource_id',
@@ -451,6 +452,19 @@ describe('parseReportingPerformanceReportDefinition (via catalog.performanceRepo
       ...baseCatalog(),
       performanceReport: { ...basePerformanceReport(), singleResourceEndpoint: 3 },
     });
+  });
+
+  it('throws when singleResourceMethod is neither GET nor POST', () => {
+    expectInvalid({
+      ...baseCatalog(),
+      performanceReport: { ...basePerformanceReport(), singleResourceMethod: 'PUT' },
+    });
+  });
+
+  it('reads a missing singleResourceMethod as GET, the only method older backends accept', () => {
+    const { singleResourceMethod: _omitted, ...withoutMethod } = basePerformanceReport();
+    const parsed = parseReportingCatalog({ ...baseCatalog(), performanceReport: withoutMethod });
+    expect(parsed.performanceReport.singleResourceMethod).toBe('GET');
   });
 
   it('throws when multiResourceEndpoint is not a string', () => {

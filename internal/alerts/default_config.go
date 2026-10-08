@@ -150,6 +150,7 @@ func defaultAlertConfig() AlertConfig {
 			"truenas-pool":     5,
 			"truenas-dataset":  5,
 			"truenas-disk":     5,
+			"proxmox-disk":     5,
 			"vmware-host":      5,
 			"vmware-vm":        5,
 			"vmware-datastore": 5,

@@ -440,17 +440,6 @@ export class ChartsAPI {
   }
 
   /**
-   * @deprecated Use getInfrastructureSummaryCharts.
-   */
-  static async getInfrastructureCharts(
-    range: TimeRange = '1h',
-    signal?: AbortSignal,
-    options?: { nodeId?: string | null },
-  ): Promise<InfrastructureChartsResponse> {
-    return this.getInfrastructureSummaryCharts(range, signal, options);
-  }
-
-  /**
    * Fetch persistent metrics history for a specific resource
    * This uses the SQLite-backed store with longer retention (up to 90 days)
    * @param params Query parameters

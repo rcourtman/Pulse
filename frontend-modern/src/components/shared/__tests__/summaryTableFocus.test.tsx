@@ -1,4 +1,4 @@
-import { renderHook } from '@solidjs/testing-library';
+import { renderHook, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
@@ -30,8 +30,8 @@ describe('useSummaryPageInteractionState', () => {
     vi.unstubAllGlobals();
   });
 
-  it('prefers chart hover over row hover and route focus for the active series id', () => {
-    const [hoveredSeriesId] = createSignal<string | null>('row-hovered');
+  it('prefers row hover over route focus for the active series id', () => {
+    const [hoveredSeriesId, setHoveredSeriesId] = createSignal<string | null>('row-hovered');
     const [focusedSeriesId] = createSignal<string | null>('route-focused');
 
     const { result } = renderHook(() =>
@@ -43,80 +43,72 @@ describe('useSummaryPageInteractionState', () => {
 
     expect(result.activeSeriesId()).toBe('row-hovered');
 
-    result.setChartHoverSync({
-      sourceKey: 'cpu',
-      seriesId: 'chart-hovered',
-      timestamp: 123,
-    });
+    setHoveredSeriesId(null);
 
-    expect(result.activeSeriesId()).toBe('chart-hovered');
+    expect(result.activeSeriesId()).toBe('route-focused');
   });
 
-  it('shows a jump affordance when the active row is mounted but outside the viewport', () => {
+  it('does not subscribe to window scroll or resize', () => {
+    const addEventListener = vi.spyOn(window, 'addEventListener');
     const [hoveredSeriesId] = createSignal<string | null>('workload-a');
-    const scrollIntoView = vi.fn();
+    const [focusedSeriesId] = createSignal<string | null>('workload-b');
     const root = document.createElement('div');
-    const row = document.createElement('div');
-    row.setAttribute('data-summary-series-id', 'workload-a');
-    Object.defineProperty(row, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => buildRect(1200),
-    });
-    Object.defineProperty(row, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    });
-    root.appendChild(row);
     document.body.appendChild(root);
 
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
         hoveredSeriesId,
+        focusedSeriesId,
       }),
     );
 
     result.setTableRootRef(root);
 
-    expect(result.shouldShowJumpToActiveRow()).toBe(true);
-
-    result.jumpToActiveRow();
-
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    const subscribed = addEventListener.mock.calls.map(([type]) => type);
+    addEventListener.mockRestore();
+    expect(subscribed).not.toContain('scroll');
+    expect(subscribed).not.toContain('resize');
   });
 
-  it('reveals an unmapped row before attempting to scroll to it', () => {
-    const [hoveredSeriesId] = createSignal<string | null>('pool-alpha');
-    const scrollIntoView = vi.fn();
+  it('reveals a focused row that only mounts once its owning view opens', async () => {
+    const [focusedSeriesId] = createSignal<string | null>('pool-alpha');
+    const scrollTo = vi.fn();
     const root = document.createElement('div');
     const row = document.createElement('div');
-    row.setAttribute('data-summary-series-id', 'pool-alpha');
-    Object.defineProperty(row, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => buildRect(64),
-    });
-    Object.defineProperty(row, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    });
+    const detail = document.createElement('div');
 
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+    vi.stubGlobal('scrollY', 0);
+
+    row.setAttribute('data-summary-series-id', 'pool-alpha');
+    row.getBoundingClientRect = vi.fn(() => buildRect(680, 40));
+    detail.setAttribute('data-inline-detail-for', 'pool-alpha');
+    detail.getBoundingClientRect = vi.fn(() => buildRect(724, 220));
+    document.body.appendChild(root);
+
+    // The owning view renders the row after the reveal request returns, so the
+    // bridge must pick it up through its mutation observer.
     const revealActiveSeries = vi.fn(() => {
-      root.appendChild(row);
+      window.setTimeout(() => root.append(row, detail), 0);
     });
 
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
-        hoveredSeriesId,
+        focusedSeriesId,
         revealActiveSeries,
       }),
     );
 
     result.setTableRootRef(root);
-    expect(result.shouldShowJumpToActiveRow()).toBe(true);
-
-    result.jumpToActiveRow();
 
     expect(revealActiveSeries).toHaveBeenCalledWith('pool-alpha');
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    expect(scrollTo).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
+    });
   });
 
   it('reveals focused inline detail without hard-centering the row', () => {
@@ -151,6 +143,96 @@ describe('useSummaryPageInteractionState', () => {
 
     expect(revealActiveSeries).toHaveBeenCalledWith('workload-a');
     expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
+  });
+
+  it('reveals once per focus change, not when state its reveal callback reads changes', () => {
+    const [focusedSeriesId, setFocusedSeriesId] = createSignal<string | null>('pool-alpha');
+    const groupKeyEntries: Array<[string, string]> = [
+      ['pool-alpha', 'node-a'],
+      ['pool-beta', 'node-b'],
+    ];
+    const [groupKeys, setGroupKeys] = createSignal(new Map(groupKeyEntries));
+    const [expandedGroups, setExpandedGroups] = createSignal(new Set(['node-a']));
+    const scrollTo = vi.fn();
+    const root = document.createElement('div');
+
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+    vi.stubGlobal('scrollY', 0);
+
+    for (const [index, id] of ['pool-alpha', 'pool-beta'].entries()) {
+      const row = document.createElement('div');
+      const detail = document.createElement('div');
+      row.setAttribute('data-summary-series-id', id);
+      row.getBoundingClientRect = vi.fn(() => buildRect(680 + index * 300, 40));
+      detail.setAttribute('data-inline-detail-for', id);
+      detail.getBoundingClientRect = vi.fn(() => buildRect(724 + index * 300, 220));
+      root.append(row, detail);
+    }
+    document.body.appendChild(root);
+
+    // Mirrors Storage: reopen the focused row's collapsed group.
+    const revealActiveSeries = vi.fn((seriesId: string) => {
+      const groupKey = groupKeys().get(seriesId);
+      if (groupKey && !expandedGroups().has(groupKey)) {
+        setExpandedGroups((current) => new Set(current).add(groupKey));
+      }
+    });
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+        revealActiveSeries,
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    const scrollsAfterFocus = scrollTo.mock.calls.length;
+    expect(scrollsAfterFocus).toBeGreaterThan(0);
+
+    // A live update rebuilds the lookup the callback read; focus is unchanged.
+    setGroupKeys(new Map(groupKeyEntries));
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledTimes(scrollsAfterFocus);
+
+    // The operator collapses the focused row's group, and it stays collapsed.
+    setExpandedGroups(new Set<string>());
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    expect(expandedGroups().has('node-a')).toBe(false);
+
+    setFocusedSeriesId('pool-beta');
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(2);
+    expect(revealActiveSeries).toHaveBeenLastCalledWith('pool-beta');
+    expect(expandedGroups().has('node-b')).toBe(true);
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(scrollsAfterFocus);
+  });
+
+  it('does not re-reveal when a derived focus accessor recomputes the same id', () => {
+    const [metricIds, setMetricIds] = createSignal(new Map([['row-a', 'pool-alpha']]));
+    const revealActiveSeries = vi.fn();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId: () => metricIds().get('row-a') ?? null,
+        revealActiveSeries,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+
+    setMetricIds(new Map([['row-a', 'pool-alpha']]));
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
   });
 
   it('clears pinned scope when operators click table whitespace on a clear surface', () => {

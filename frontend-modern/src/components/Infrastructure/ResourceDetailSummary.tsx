@@ -2,6 +2,7 @@ import { For, Show, type Component, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -234,12 +235,9 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
             <div class="flex flex-wrap gap-1">
               <For each={props.drawer.identityIpValues()}>
                 {(ip) => (
-                  <span
-                    class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/25 dark:text-blue-200"
-                    title={ip}
-                  >
+                  <MetadataBadge tone="info" size="xs" shape="rounded" wrap title={ip}>
                     {ip}
-                  </span>
+                  </MetadataBadge>
                 )}
               </For>
             </div>,
@@ -259,20 +257,17 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
             <div class="flex flex-wrap gap-1">
               <For each={props.drawer.aliasPreviewValues()}>
                 {(value) => (
-                  <span
-                    class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]"
-                    title={value}
-                  >
+                  <MetadataBadge size="xs" shape="rounded" wrap title={value}>
                     {value}
-                  </span>
+                  </MetadataBadge>
                 )}
               </For>
               <Show when={props.drawer.hasAliasOverflow()}>
-                <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                <MetadataBadge tone="muted" size="xs" shape="rounded">
                   +
                   {props.drawer.identityAliasValues().length -
                     props.drawer.aliasPreviewValues().length}
-                </span>
+                </MetadataBadge>
               </Show>
             </div>,
           )

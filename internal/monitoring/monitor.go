@@ -513,6 +513,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
+	reportingNodeNames := make(map[string]bool)
 	for _, node := range nodes {
 		if node.LinkedAgentID == "" {
 			continue
@@ -522,6 +523,11 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
+		// Only an agent still reporting owns its disks' temperature alerts;
+		// a silent one's retained rows still enrich the disk.
+		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			reportingNodeNames[node.Name] = true
+		}
 		log.Debug().
 			Str("nodeName", node.Name).
 			Str("hostAgentID", node.LinkedAgentID).
@@ -608,6 +614,11 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		if matched == nil {
 			continue
 		}
+		// The linked agent reports this disk, so while it keeps reporting its
+		// CheckHost owns the disk's temperature alert and the PVE disk check
+		// stands aside. Once its lease lapses, CheckHost no longer alerts on
+		// the disk and the PVE check judges the node's own readings again.
+		updated[i].AgentSMARTReported = reportingNodeNames[updated[i].Node]
 
 		if strings.TrimSpace(updated[i].Model) == "" && strings.TrimSpace(matched.Model) != "" {
 			updated[i].Model = strings.TrimSpace(matched.Model)
@@ -1238,6 +1249,7 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
+	operatorIntentIdentity     atomic.Pointer[operatorIntentIdentity] // read state alert intent resolves through (monitor_alert_intent.go)
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
 	alertPushCallback          func(*alerts.Alert)
@@ -4467,7 +4479,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 	if metricsTargetResolver == nil {
 		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
 	}
-	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
+	broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
@@ -4488,6 +4500,39 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}
 	return frontendState
+}
+
+// presentationCoalescingResourceStore is implemented by resource stores whose
+// registry can hold the operator's merge exclusions (MonitorAdapter).
+type presentationCoalescingResourceStore interface {
+	CoalesceForPresentation(resources []unifiedresources.Resource) ([]unifiedresources.Resource, bool)
+}
+
+// coalesceResourcesForPresentation applies the presentation host coalesce with
+// the operator's merge exclusions, which the resources API's
+// ListForPresentation honours too: a host pair the operator split must not
+// show as one broadcast row while REST lists two. The read state that listed
+// the rows supplies them when its registry is store-backed, as the resource
+// store's adapter and a host-continuity overlay are; the mock view and other
+// views built from an unified list carry none, so the resource store's
+// adapter supplies them instead.
+func (m *Monitor) coalesceResourcesForPresentation(readState unifiedresources.ReadState, resources []unifiedresources.Resource) []unifiedresources.Resource {
+	if coalescer, ok := readState.(presentationCoalescingResourceStore); ok {
+		if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+			return coalesced
+		}
+	}
+	if m != nil {
+		m.mu.RLock()
+		store := m.resourceStore
+		m.mu.RUnlock()
+		if coalescer, ok := store.(presentationCoalescingResourceStore); ok {
+			if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+				return coalesced
+			}
+		}
+	}
+	return unifiedresources.CoalescePresentationHostResources(resources)
 }
 
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without

@@ -165,6 +165,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     setExpandedPoolId: setExpandedPoolIdRaw,
     toggleGroup,
   } = useStorageExpansionState({
+    groupBy,
     groupedKeys: () => groupedRecords().map((group) => group.key),
     view,
   });
@@ -208,13 +209,6 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
       }
     }
     return keys;
-  });
-  const physicalDiskSeriesIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const disk of physicalDisks()) {
-      ids.add(resolvePhysicalDiskMetricResourceId(disk));
-    }
-    return ids;
   });
   const storageSummaryGroupScopes = createMemo<Map<string, SummarySeriesGroupScope>>(() => {
     if (view() !== 'pools' || groupBy() === 'none') {
@@ -409,21 +403,13 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     focusedSeriesId: focusedStorageResourceId,
     onEscapeClear: clearAllPageStateOnEscape,
     revealActiveSeries: (seriesId) => {
-      if (physicalDiskSeriesIds().has(seriesId)) {
-        if (view() !== 'disks') {
-          setView('disks');
-        }
-        return;
-      }
-
-      const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
-      if (!groupKey) {
-        return;
-      }
+      // Focus only ever names a row in the active view, so reveal never
+      // switches views; it reopens a focused pool's collapsed group.
       if (view() !== 'pools') {
-        setView('pools');
+        return;
       }
-      if (!expandedGroups().has(groupKey)) {
+      const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
+      if (groupKey && !expandedGroups().has(groupKey)) {
         toggleGroup(groupKey);
       }
     },

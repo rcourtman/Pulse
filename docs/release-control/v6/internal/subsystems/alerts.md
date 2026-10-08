@@ -525,7 +525,7 @@ active-state and intent-policy linkage while persisting through the stable
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
 `internal/alerts/config_runtime.go`), not a display convention: `-1` is the
-value Pulse writes, and `0` disables the metric just as completely because
+value the editors stage, and `0` disables the metric just as completely because
 earlier builds advertised `0` as the disable value and those overrides are still
 on disk. Every threshold editor reads that same `<= 0` rule through
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts` rather than
@@ -543,7 +543,28 @@ the metric's enabled default instead, and only clears the override when the
 inherited default is already enabled. Editors must also not manufacture an off
 state out of an empty input: a cleared box is mid-edit, and coercing it to `0`
 disabled the metric in the engine while the row still showed On. Disabling is
-the toggle's job, and the toggle writes the canonical `-1`.
+the toggle's job, and the toggle stages the canonical `-1`.
+
+The save path writes the backend's default contract, not the editors' sentinel.
+Alert config normalization reads a negative trigger on a global default as
+unset and restores the factory threshold, so `buildAlertsConfigurationPayload`
+in `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` writes
+every Off global default as trigger `0`. Sending the staged `-1` through made
+every Off default with a positive factory threshold come back On at that
+threshold after save and reload; only guest and node CPU, memory and disk
+escaped, because normalization leaves them alone. Overrides keep `-1`, which
+the override path stores as written. Because `-1` and `0` are the same
+setting, the Global Defaults "Custom" badge compares Off values as equal
+rather than by raw number, so the factory `-1` I/O defaults do not read
+Custom against a saved `0`. An unset factory value stays distinct from Off,
+since unset can mean the default follows another setting. A row's
+custom-threshold marker keeps comparing raw values: it drives the row's revert
+control and override removal, so an explicit `-1` override must stay visible
+against an Off default even though both alert the same way.
+`frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts`
+pins the payload for every section, and
+`internal/alerts/config_defaults_off_test.go` pins that a zero default stays
+off through `UpdateConfig` and raises no alert.
 
 External availability-probe reporting loss owns one canonical
 `external-probe-unavailable` alert per assigned agent, not one alert per target.
@@ -1093,6 +1114,43 @@ history and affirmative recovery. This is source-fixture lifecycle proof, not
 an installed registry/destination result or a diagnosis of a reporter's daily
 resolve/reopen cycle.
 
+### A settings save keeps the alert settings it did not send
+
+`PUT /api/alerts/config` applies the body to the stored configuration through
+`Manager.ApplyConfigUpdate` and `ApplyAlertConfigUpdate` in
+`internal/alerts/config/update.go`: a top-level key the client sent replaces
+that setting whole, a key it left out keeps the stored value, and the result
+is normalized as any update is. The thresholds page has no control for
+flapping detection (`flappingEnabled` and its window, threshold and cooldown),
+alert TTL cleanup (`maxAlertAgeDays`, `maxAcknowledgedAgeDays`,
+`autoAcknowledgeAfterHours`) or `customRules`, so it never sends them. The
+handler used to decode the body into a zero `AlertConfig`, so every thresholds
+save turned flapping detection and TTL cleanup off, reset the flapping tuning
+to its defaults, dropped custom rules, and persisted that. The page's
+`flapping`, `aggregation` and `ioNormalization` payload objects are not
+`AlertConfig` fields and never enabled anything. A stored config keeps what it
+holds, including values an earlier save zeroed; nothing rewrites them.
+
+The body is decoded on its own, so sent keys mean exactly what the decoder
+makes of them, duplicates and case-folded keys included. Unsent fields are
+copied from a JSON round trip of the stored config, so the result shares no
+maps or slices with it. `ApplyConfigUpdate` reads, merges and applies under
+the manager lock, so two concurrent partial saves cannot revert each other in
+memory, and returns a JSON-cloned snapshot so that persistence, which
+normalizes the config it is handed in place, never writes into the live
+config's maps.
+
+`internal/alerts/config/update_test.go` covers unsent, explicit-off,
+case-folded, duplicate-key, malformed and full-body updates, a sent object
+replacing its stored value whole (a sent `truenasDiskDefaults: {}` does not
+inherit the stored temperature) and the no-sharing rule.
+`TestUpdateConfigKeepsSettingsAThresholdsSaveDidNotSend` and
+`TestApplyConfigUpdateKeepsConcurrentPartialUpdates` in
+`config_validation_test.go` run saves through the manager, and
+`TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys` in
+`internal/api/alerting/alerts_test.go` drives the handler against a real
+manager.
+
 ### Confirmed empty storage is recovery evidence
 
 Static storage capacity evaluation must admit a zero usage observation when
@@ -1452,7 +1510,8 @@ That same guest-threshold owner also governs guest-derived lifecycle and
 posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
 guest snapshot and route threshold resolution through the shared
-guest-defaults → filter-driven custom rules → guest-override chain.
+guest-defaults → filter-driven custom rules → guest-override → `pulse-relaxed`
+chain.
 That canonical guest context must preserve the live guest name and tags for
 snapshot and backup posture evaluation. Ignored prefixes, `pulse-no-alerts`,
 configured ignored tags, and required-tag filtering must resolve through the
@@ -1462,6 +1521,27 @@ operator's suppression policy.
 Passing `nil` guest context or resolving only overrides/defaults is forbidden
 because it silently bypasses custom guest rules and makes guest lifecycle
 alerting diverge from running-guest metric truth.
+The `pulse-relaxed` step lives in `effectiveAlertPolicyNoLock`, not in
+`CheckGuest`, so polling and config-save reevaluation judge a relaxed guest's
+alert by one threshold. Reevaluation rebuilds the guest from alert metadata,
+so `guestSnapshotFromAlert` reads back the `tags` the evaluator recorded
+(`[]string` live, `[]interface{}` after a restart). Without them a save judged
+the alert by unrelaxed thresholds, resolved one raised under an unset
+threshold's relaxed floor with a recovery notification, and the next poll
+raised it again. Those tags must stay current: `metricOptionsWithTags` drops
+the key from an open alert once its resource has no tags, or a removed
+`pulse-relaxed` would keep judging the alert by the relaxed trigger. The tag
+lifts CPU, memory and disk triggers to a 95/92/95 floor and gives an unset
+threshold that floor, but an Off threshold (trigger <= 0) stays Off: relaxing
+a guest must never raise an alert its config turned off. A filesystem's own
+override still replaces the relaxed guest disk threshold for that filesystem,
+on save as while polling. Proof:
+`TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds`,
+`TestConfigSaveKeepsRelaxedGuestFilesystemOverride`,
+`TestPulseRelaxedKeepsOffGuestThresholdOff` and the Off case of
+`TestApplyRelaxedGuestThresholds` in `internal/alerts/alerts_test.go`, and
+`TestCheckGuestDropsRemovedTagsFromOpenAlerts` in
+`internal/alerts/unified_eval_test.go`.
 That same guest-alert owner also has to retire per-disk guest alerts when the
 guest stops, disk alerting is disabled, or the reported disk set changes.
 Canonical guest disk identity is only valid while the guest still exposes that
@@ -1529,6 +1609,34 @@ resolve overrides through the shared
 candidate set `buildProjectedOverrides` indexes platform alert rows under).
 Static metric-color defaults are only fallback presentation behavior for
 callers that do not have alert configuration in scope.
+Guest bars follow `pulse-relaxed` the same way. `resolveMetricDisplayThresholds`
+takes the tags the engine reads for a guest-scope resource and, when they
+include `pulse-relaxed`, applies the `applyRelaxedGuestThresholds` step to
+CPU, memory and disk before mapping to display thresholds: an unset threshold
+gets the 95/92/95 floor with a clear five below it, a lower trigger is raised
+to the floor and keeps its own clear point (a missing one filled five below,
+as `ensureHysteresisThreshold` does) unless the raised trigger reaches it, and
+an Off threshold stays Off. A relaxed guest's bar therefore turns critical
+where its alert fires; 88% memory reads warning, not critical, under the
+relaxed 92% trigger. The display resolver does not read filter-driven custom
+rules, which the engine folds in before the override, so a guest a custom
+rule matches can still colour by thresholds the engine does not use, relaxed
+or not. Only Proxmox VMs and LXCs carry their tags into alert
+policy, so `getWorkloadAlertPolicyTags` in
+`frontend-modern/src/components/Workloads/workloadTopology.ts` passes tags for
+those guests alone, and a vSphere VM or a container keeps its thresholds
+whatever it is tagged. The Alerts thresholds row for a relaxed Proxmox guest
+keeps showing the configured values its editor changes and adds one line
+naming the tag and the thresholds it raises
+(`getAlertResourceRelaxedTriggerSummary` in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, fed by
+`pulseRelaxed` from `useThresholdsGuestData`); before it, the tag overrode
+those settings with no visible sign in the UI (issue #863). Proof: the
+pulse-relaxed cases in `frontend-modern/src/utils/__tests__/metricThresholds.test.ts`,
+the alert policy tag cases in
+`frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`,
+and the pulse-relaxed guest cases in
+`frontend-modern/src/components/Alerts/ResourceTable.test.tsx`.
 
 Docker container image-update alerts are lifecycle-governed by the alerts
 runtime. Disabling Docker update alerts globally, disabling alerts for a
@@ -1896,6 +2004,38 @@ The `resolveTrueNASDiskTemperatureDisplayThresholds` cases in
 `TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
 saved-config migration.
 
+Proxmox physical disks alert on temperature under the same policy.
+`CheckProxmoxDiskTemperature` (`internal/alerts/proxmox_disk_temperature.go`)
+raises a `diskTemperature` metric alert under the disk's PVE alert reference
+(`ProxmoxPhysicalDiskAlertResourceID`, resource type `proxmox-disk`), judged by
+`proxmoxDiskTemperatureThresholdNoLock`: the disk type's `DiskTempByType` entry
+under the agent Disk Temp default, which switches it off for every type. It
+carries the disk's serial, WWN and `diskType` like the health and wearout
+alerts, so `ProxmoxPhysicalDiskAlertIdentifiers` lists its
+`<reference>::metric-threshold:diskTemperature` identifier for history
+ownership, and `reevaluateActiveAlertsLocked` re-judges it per disk type (the
+lowest per-type trigger when the type was never recorded) instead of falling
+through to guest thresholds that have no disk temperature. A disk a
+still-reporting linked agent lists in its SMART report is the agent's: its
+alert closes with the `moved_to_agent` resolution and `CheckHost` raises the
+agent's own. The handover happens on the next disk poll, so for that one
+interval an agent newly linked to a disk with an open PVE alert can hold its
+own alert beside it. A lapsed agent owns nothing, so the node's own readings
+keep alerting while its agent is silent. An
+excluded disk, or a policy switched off, closes the alert; a poll without a
+current reading holds it. Like the health and wearout alerts, a disk that
+leaves the inventory keeps its alert until the 24-hour stale sweep. The
+`proxmox-disk` alert delay defaults to the factory 5 seconds, so a warning
+waits out the same 300-second noisy-gauge stability window agent and TrueNAS
+disk temperature warnings do, and a critical reading bypasses it.
+`TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy`,
+`TestProxmoxDiskTemperatureAlertOwnershipAndHolds`,
+`TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow`,
+`TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pin the policy, ownership, holds, re-judging
+and identifiers.
+
 ### Agent disk temperature alerts clear when their disk leaves the report
 
 `CheckHost` also clears a disk temperature alert, and drops its pending
@@ -1942,6 +2082,61 @@ alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
 `internal/alerts/alerts_test.go` pins both signals, and its
 sibling pins that a guest alert on a removed Proxmox node is still removed.
 
+### Agent disk temperature alerts judge the reading the disk shows
+
+`CheckHost` judges each agent disk on the temperature, collection state and
+disk type the disk shows, read by `unifiedresources.HostDiskTemperatureReadings`
+from the same adapters the registry builds the disks with. A SMART row shows its
+own reading or, when the agent's probe returned none, the one the host's Unraid
+inventory reports for that disk (`HostSMARTDiskTemperature`), and keeps its
+`agent:<host>/disk_temp:<device>` resource. An Unraid inventory row whose disk
+key no SMART row carries, a disk only the inventory lists, shows that row's
+reading (`HostUnraidDiskTemperature`) and its own transport as disk type, under
+its kernel block device token, the resource a plain Linux SMART row for the
+same device uses. A SMART row and an Unraid row with one key are one registry
+disk even under different device labels, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`), and alert once, under the
+SMART row's resource. When smartctl and Unraid name
+one device with different serials the registry shows two disks on it, and the
+device's one alert judges the reading that stands highest against its own disk
+type's threshold (`judgedHostDiskTemperature`): over its trigger first, then
+inside its recovery band, then the larger margin over the trigger, with a tie
+keeping the reading listed first.
+Before this `CheckHost` read only the SMART row's own field, while the Physical
+Disks Temp cell, the Running Hot verdict ("at or above its alert threshold")
+and Patrol judged the Unraid reading against the same trigger, so such a disk
+could read as at its alert threshold with no alert. Unraid's own warning and
+critical disk temperature notifications do not make this redundant: Pulse
+already alerts on the smartctl readings and array state of the same hosts,
+which Unraid also notifies on, and a user who routes alerts through Pulse sets
+these thresholds here.
+
+Only a reading collected now fires or resolves
+(`HostDiskTemperatureReading.Collected`: no standby row, and
+`diskinventory.TemperatureCollected`), so a spun-down disk holds the alert
+like a listed disk without a temperature. A disk only the
+inventory lists whose device matches the agent's `--disk-exclude` patterns
+(`fsfilters.MatchesDeviceExclude`) raises nothing, and an alert it raised before
+the exclusion resolves on the next report (`clearHostDiskTemperatureResources`),
+whatever the SMART list holds, unless another listed reading uses the same
+resource: `docs/UNIFIED_AGENT.md` documents exclusion as
+removing the disk from monitoring, and linked Proxmox hosts already judge an
+excluded disk healthy. A disk only the inventory lists is also judged in a
+report whose SMART list is empty, because the disk shows the inventory's
+reading in that report. The absence cleanup above still runs only on a
+non-empty SMART list, and such a report neither counts toward nor restarts a
+disk's three, so a disk that leaves the inventory while every report's SMART
+list stays empty keeps its alert until the 24-hour stale-alert sweep.
+`TestCheckHostJudgesTheUnraidTemperatureADiskShows` and
+`TestCheckHostHoldsUnraidDiskTemperatureAlertUntilAReadingOrDeparture` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin the fallback, the
+inventory-only disk, the empty SMART list, two disks on one device (also of
+different types), a controller member under another device label, standby,
+exclusion, the disk type
+and host override thresholds, the holds, the handover to a SMART reading,
+departure, and the exclusion clear with and without SMART rows and beside a
+listed SMART row. `TestJudgedHostDiskTemperatureOutranks` pins the ranking.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
@@ -1968,6 +2163,42 @@ acknowledge or change the identity of an active alert. The cleanup regression
 controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
 drained and retained windows, dispatch callbacks and delivery diagnosis. These
 modeled-time controls are not installed notification-destination acceptance.
+
+### Default thresholds keep a positive trigger's clear below it
+
+PBS, node temperature, agent, Kubernetes, TrueNAS and vSphere global defaults
+go through `normalizeThresholdPointer` in `internal/alerts/config/normalize.go`
+from `UpdateConfig`. The shared persistence normalization in
+`internal/config/persistence.go` applies the same normalizer, through
+`NormalizeHysteresisThreshold`, to the agent, node temperature and storage
+pairs. A missing or negative threshold takes the factory default and a zero
+trigger is off. A positive trigger always keeps a clear below it: a missing
+clear sits five points under the trigger, floored at 0, and a clear at or
+above the trigger is repaired. Guest and node usage, storage and Docker
+defaults hold the same bound through `EnsureValidHysteresis` in
+`ValidateHysteresisThresholds`, `NormalizeStorageDefaults` and
+`NormalizeDockerThreshold`. The canonical per-type entries (`nvme`, `sata` and
+`hdd` in `DiskFillByType`; `nvme`, `sas` and `sata` in `DiskTempByType`, the
+types the thresholds page edits) keep a positive trigger and follow the same
+clear rule; a non-positive trigger resets the entry to its type default,
+because the page cannot switch a type off on its own. Other per-type keys are
+stored as written.
+
+The thresholds page sends `max(0, trigger - 5)`, so a 1-5% default arrives
+with clear 0 and must not fall back to the factory clear. Agent defaults used
+to do that, storing `{trigger: 1, clear: 75}` for a 1% Machines CPU default,
+and per-type disk entries replaced the whole pair, trigger included. The
+evaluator already ignored a clear at or above the trigger
+(`buildCanonicalMetricSpec` drops it and the reducer then clears at the
+trigger), so those alerts fired and resolved the same way; `/api/alerts/config`
+served the factory clear and firing alerts reported it as `clearThreshold`. A
+repaired pair above the margin, such as `{50, 80}` written through the API,
+now has a real recovery band at 45 where it used to clear at the trigger.
+`internal/alerts/config/normalize_low_trigger_clear_test.go` pins every
+default family and both per-type maps, `TestUpdateConfigKeepsLowTriggerClearBelowTrigger` in
+`internal/alerts/config_validation_test.go` pins the saved config and the
+firing alert's clear level, and the low-trigger and stored-clear tests in
+`internal/config/persistence_test.go` pin the written file and load repair.
 
 ### Monitor-only delivery is terminal
 
@@ -2459,7 +2690,7 @@ table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
 `AlertResourceTableDesktop` must route their date/resource group bands through
 `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
 of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
-consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+consistent with Infrastructure, Workloads, and Storage tables.
 Alert history table shells must also rely on the shared `TableCard` frame and
 the shared `Table` primitive for horizontal overflow rather than adding
 alert-local bordered or `overflow-x-auto` wrappers inside the history section.
@@ -2672,8 +2903,10 @@ Metric enablement is an explicit On/Off interaction in row, global-default,
 mobile, and bulk editors. Enabled numeric inputs accept positive trigger values
 only and user-facing copy must not expose the persisted disable sentinel.
 Internally, the canonical `<= 0` read rule remains intact for legacy data, while
-new Off actions write `-1`, so existing configuration and the API contract
-continue to round-trip without making `0` a second customer-facing disable path.
+new Off actions stage `-1` (saved as trigger `0` on global defaults, which the
+backend otherwise resets to factory), so existing configuration and the API
+contract continue to round-trip without making `0` a second customer-facing
+disable path.
 Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
@@ -2951,21 +3184,22 @@ issue sequential route writes. That reset removes all three query parameters
 in one navigation and clears any transient chart-bucket selection, so a
 search-only result set remains visibly resettable and an older URL write
 cannot resurrect another filter.
-That same history surface now also owns the canonical resource-incident
-handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
-must treat the selected incident resource as a unified-resource consumer,
-linking back into canonical infrastructure/resource detail first and then into
-shared workloads, storage, and recovery surfaces through
-`frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
-as a dead-end investigation card or rebuilding provider-local route strings for
-platforms such as TrueNAS.
-That same alert handoff must now stay on the shared resolved-resource link
-builder. `AlertResourceIncidentsPanel.tsx` must resolve its chip set through
-`buildResolvedResourceSurfaceLinks(...)`, which owns exact unified-resource
-handoffs plus the infrastructure fallback when alert history still references a
-resource ID before the backing unified record has hydrated. Future incident-link
-work must not reintroduce local infrastructure-link assembly, local dedupe, or
-provider-local route strings inside the alert feature shell.
+That same history surface also owns the resource-incident panel, and the panel
+links nowhere. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+names the selected resource through the unified-resource lookup it is given
+(`getResource`, falling back to the history state's lookup) and
+`getPreferredInfrastructureDisplayName`, and shows the resource name the
+selected history row carried while no unified record matches. It imports nothing from
+`frontend-modern/src/routing/resourceLinks.ts`, and it offers no resource
+cross-jump links: investigation continues in place through the incident
+timeline cards or hands off to Pulse Assistant through
+`IncidentAssistantHandoffButton`, as the retired cross-jump chip note above
+describes. Future incident-link work
+must not reintroduce a chip set, local infrastructure-link assembly, or
+provider-local route strings inside the alert feature shell;
+`frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` pins the panel
+free of `buildResolvedResourceSurfaceLinks`, `buildResourceSurfaceLinksForResource`,
+and `buildInfrastructureResourceLink`.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through
@@ -3178,6 +3412,76 @@ whose marker is newer than the running binary is never rewritten. Regression
 ownership is `internal/alerts/alert_identity_migration_test.go`,
 `internal/monitoring/monitor_alert_override_migration_test.go`, and
 `frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.snapshot.test.ts`.
+
+### Alert config snapshots are owned copies
+
+`Manager.GetConfig()` returns `AlertConfig.Clone()`, a typed deep copy that
+shares no map, slice or pointer with the live config (custom rule filter
+values are copied as decoded JSON values). Callers encode, persist
+and edit that snapshot outside `m.mu`: the GET config handler, alert
+activation, the identity migration, backup evaluation and diagnostics. It used
+to be a shallow copy, so `SaveAlertConfig` normalizing it in place, or
+`UpdateConfig` re-normalizing the overrides of a re-applied snapshot, wrote the
+live maps while evaluation or another encoder read them, and Go aborted Pulse
+with a concurrent map write. `SaveAlertConfig` also clones before normalizing,
+because a config just handed to `UpdateConfig` is the live config. Persistence
+keeps an explicit `0` type-level delay as no delay on save and load, matching
+`NormalizeTimeThresholds`. It used to store and load it as the 5-second factory
+delay, which the noisy-gauge rule stretches to 300 seconds for memory and
+temperature, and the shared map write was what made the running manager agree.
+Pulse saves never wrote a `0`, so only a newly sent or hand-edited `0` changes
+meaning. `internal/alerts/config/clone_test.go`
+fills every field and fails when a new reference field is not copied.
+Regression ownership is `internal/alerts/resolved_lock_discipline_test.go` and
+`internal/config/persistence_alert_ownership_test.go`.
+
+### Alert evaluation owns the thresholds it normalizes
+
+Host, guest and Docker container evaluation copy what they read from
+`m.config` while holding `m.mu`, and only then fill in defaults.
+`CheckHost` and `CheckGuest` clone a per-disk
+override's `Disk` threshold before `ensureHysteresisThreshold` sets a missing
+`Clear` to the trigger minus 5. They used to normalize the live override's
+pointer after unlocking, so a `GetConfig()` clone under the read lock raced
+the write, and the saved override changed to whatever the last poll filled in.
+The live override now keeps the clear it was saved with, and the config API
+returns that value. Docker container evaluation resolves its thresholds from
+cloned `DockerDefaults` plus the override under the same lock, and reads the
+restart-loop and memory-limit settings under the lock. It used to point into
+`m.config.DockerDefaults` with no lock while `UpdateConfig` replaced
+`m.config`. The test-only `getThresholdForMetricFromConfig`, which normalized
+in place, is gone. `internal/alerts/alerts_test.go`
+`TestAlertEvaluationLeavesTheLiveConfigToTheLock` runs host, guest and Docker
+evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
+`-race`.
+
+### Config-save reevaluation judges a filesystem alert by its own threshold
+
+`UpdateConfig` re-judges every active alert, and a filesystem usage alert's
+threshold resolves through the same per-filesystem helper its evaluator uses.
+`hostDiskUsageThresholdNoLock` resolves an agent filesystem
+(`agent:<host>/disk:<label>`): its own override, then the `DiskFillByType`
+threshold for a hardware type inferred from the device while the host's disk
+alerting is on, then the host's disk threshold. `guestDiskUsageThresholdNoLock`
+resolves a guest filesystem (`<guestID>-disk-<key>`): its `guest-disk:`
+override, then the guest's disk threshold. `CheckHost` and `CheckGuest` call
+them under the read lock, and `resolveHostAlertThresholdsNoLock` and
+`resolveGuestAlertThresholdsNoLock` call them for reevaluation. Both return an
+override or per-type threshold as an owned copy. A guest filesystem alert
+resolves its guest's threshold, override and identity-based custom rules by the
+canonical `instance:node:vmid` guest ID that `parseGuestAlertIdentity` reads
+from its resource ID. Custom rules that filter on live metrics still see no
+readings there, as for every reevaluated guest alert. Reevaluation used to
+judge agent filesystems by the host threshold, and guest filesystems without
+their `guest-disk:` override or the guest's own override, because the
+filesystem's resource ID names no guest. Any settings save resolved an alert a
+per-disk threshold of 70 raised at 80 under a default of 90, notifying
+recovery, and the next poll raised it again as a new alert.
+`internal/alerts/threshold_resolution_shared_test.go`
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` covers an agent
+filesystem override, an NVMe fill threshold, a guest filesystem override and a
+guest override: an unchanged save must keep the alert, and a save lifting the
+trigger above the reading must resolve it.
 
 ### Versioned alert-intent policy
 

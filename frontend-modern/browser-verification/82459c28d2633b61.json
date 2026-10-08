@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "7eb32f318100fef045d63414fd63304c62acfdef",
+  "verified_at": "2026-10-07T16:47:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/utils/aiFindingPresentation.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "6b50ebbf3bbe24e31eebdb3c8be8ac6ca9c08405352facbfcd294a1361d8a2f5",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "9055b69986cd4d320fd2194dba2819c0643e63326724952fd1021325530e9f5b",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "29e212a8d0aed4c1eb17697bbed86519ed82f64bc2940239db4a79470a23a090",
+    "frontend-modern/src/utils/format.ts": "abaec8a1f40c159e9a58702b726ccaea196bf6b72825c97addbee00af3bd7809"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7793 built from this tree on origin/main 7eb32f3181, Vite :5303 serving it) with Playwright page.clock installed before load and the data held: the /ws proxy dropped every server frame and answered the client heartbeat with a data-free pong, every GET /api/ read was replayed from its cached body (Patrol findings reads left pending), and the clock was moved with setSystemTime plus a 31-second runFor so only the shared 30-second tick fired; one websocket connection and no attention detail re-read for the whole hold",
+    "Unreviewed suppressed issue (ops-prometheus Docker service health, suppressed through the real form for the default 24 hours; the form's duration read 'Return it to active attention after'): Lifecycle reads 'Returns to active attention in 1d.' with hover 'Suppressed until 8 Oct 17:36' and button 'Return to active attention', then 'in 20h.' at +4h, 'in 29m.' at +23h20m (28m at 390) and 'Suppression has ended.' at +25h, at 1440 and 390",
+    "Reviewed then suppressed issue (esxi-07.lab.local VMware host health, Mark reviewed then suppressed for 24 hours from its detail; the form's duration read 'End suppression after'): Lifecycle reads 'Suppression ends in 1d. It stays reviewed.' with button 'End suppression', then 'in 20h' at +4h, 'in 29m' at +23h20m (28m at 390) and 'Suppression has ended.' at +25h, at 1440 and 390",
+    "Patrol activity, Finding options and history, Resolved: mail-gateway-us dismissed through Finding options, Dismiss: Later reads '(will fix later) \u00b7 Reminding in 7d' with hover 'Reminder due 14 Oct 17:36. Pulse brings this finding back on its first reminder check after that.'; at +7d1m it reads 'Reminder overdue' and the 'Overdue commitments (1)' chip appears on that tick with findings reads still pending, and the chip filters to that finding, at 1440 and 390",
+    "Between ticks: page clock set 5 seconds past that reminder's deadline with no timer fired, then switching from Active to Resolved mounts the row reading 'Reminder due' with no Overdue chip; one 31-second runFor later the row reads 'Reminder overdue' and the 'Overdue commitments (1)' chip appears together, at 1440 and 390",
+    "Same list, dr-vault snoozed for 1 hour through POST /api/ai/patrol/snooze (Patrol rows hide the snooze buttons): reads 'snoozed, returns in 49m' with hover 'Snoozed until 7 Oct 18:36', 'in 9m' at +40m (8m at 390) and 'snooze ended' at +70m; after releasing the hold the next findings read lists dr-vault under Active, at 1440 and 390",
+    "No 'just now' on any future time at either viewport (the only 'just now' left is the attention detail's read-time Last seen age)",
+    "Same-session controls under the running Vite: with FindingsPanel.tsx and aiFindingPresentation.ts swapped to the first draft of this change, the between-ticks row read 'Reminder overdue' with no Overdue chip; with FindingsPanel.tsx, PatrolAttentionWorkbench.tsx, aiFindingPresentation.ts and format.ts swapped back to origin/main, the reviewed issue read 'Returns to active attention just now.' before and after +4h, the reminder 'Reminding just now' before and after +7d with no Overdue chip, and the snooze 'snoozed until just now'"
+  ],
+  "interactions": [
+    "Opened a decision by its Patrol attention link, filled the suppression reason and submitted Suppress temporarily with the default 24 hours",
+    "Opened a second decision by its attention link, clicked Mark reviewed, reopened it and suppressed it for 24 hours",
+    "Opened Finding options and history, opened Finding options on a finding, chose Dismiss: Later and Confirm Dismiss",
+    "Opened Reviewed and suppressed, opened each suppressed issue from the list, read the Lifecycle line, its hover title and the early-end button",
+    "Switched the findings filter between Active and Resolved, read reminder and snooze hover titles, stepped the page clock and clicked the Overdue commitments chip",
+    "Released the hold and switched to Active to see the ended snooze re-derived",
+    "Repeated every pass at 1440x900 and 390x844, then reran with the first draft and with origin/main's components as controls"
+  ]
+}

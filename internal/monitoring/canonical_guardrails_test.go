@@ -650,7 +650,8 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	for _, snippet := range []string{
 		"metricsTargetResolver := unifiedView.metricsTargets",
 		"metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)",
-		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
+		"broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources)",
+		"if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {",
 		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)",
 		"attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
@@ -2075,7 +2076,7 @@ func TestHostPhysicalDiskIOMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	requiredSnippets := []string{
 		"m.writeHostPhysicalDiskIOMetrics(host, now)",
 		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {",
-		`resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)`,
+		`resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)`,
 		`m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "disk", busyPct, now)`,

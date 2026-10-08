@@ -76,17 +76,8 @@ func storagePolicyAliases(alert *Alert) []string {
 	if alert == nil {
 		return nil
 	}
-	switch aliases := alert.Metadata[storagePolicyAliasesKey].(type) {
-	case []string:
-		return append([]string(nil), aliases...)
-	case []interface{}:
-		result := make([]string, 0, len(aliases))
-		for _, value := range aliases {
-			if alias, ok := value.(string); ok {
-				result = append(result, alias)
-			}
-		}
-		return result
+	if aliases, ok := metadataStringsValue(alert.Metadata, storagePolicyAliasesKey); ok {
+		return aliases
 	}
 	// Older PBS snapshots predate alias metadata. The poller records the
 	// instance and datastore name separately: only reconstruct an alias when

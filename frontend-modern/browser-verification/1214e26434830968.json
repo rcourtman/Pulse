@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "48c2d6cdce8d019151e3567873de88e21b76bb22",
+  "verified_at": "2026-10-07T19:21:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "1cf03b76a8d8732db0fda9b2ec30c0245c350eadcb36a36909493a9f4d6e7831",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "c7b8bb81f158d8d64195be65fa69b8ee18019414e602043c5413693efc06d1d6",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "a30e4435523c0d30f618eb7f0e803cfba9a3a5203851d642f1d5b25c2f33b10d",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "1c41975ec9447f3657cd4e1cf0e9fc6ce187fdca18e7f050f882ac5d483379c9",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "35e7e01344e2f78cfcf550cc0b277aa06e42c544a110a6c33b054d97d9b16765",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "3d1458ee02891047f722d643e74978fac6ec4edae5a24f5eb1808331de2e3b8d"
+  },
+  "routes": [
+    "/proxmox?q=checkout-web-01",
+    "/proxmox?q=checkout-web-02",
+    "/proxmox?q=analytics-batch-01",
+    "/proxmox?q=checkout-web-193",
+    "/standalone"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, embedded production build of this tree on origin/main dace9295c6, rebased onto 48c2d6cdce which changes none of the verified frontend sources) with a verification-only generator overlay: Proxmox guest filesystems stripped to usage -1 + agent-not-running (or vm-stopped) for checkout-web-01/02/193, and standalone agents Apollo-114 and Meridian-731 held offline from a control file",
+    "Agents linked into VMs through POST /api/resources/{vm}/link: Apollo-114 into checkout-web-01 (silent), Spectrum-709 into checkout-web-02 (live), Meridian-848 into analytics-batch-01 (Proxmox filesystems kept, control), Meridian-731 into stopped checkout-web-193 (silent); /api/resources confirmed agent.stale, agent.disks, absent proxmox.disks and the agent-sourced metrics.disk",
+    "Mock-mode websocket state does not apply manual links (record-ingested resources skip applyManualLinks; chipped separately), so guest passes ran the Proxmox page on the linked REST resources with the websocket held by Playwright routeWebSocket",
+    "Before (main frontend + backend, same data): checkout-web-01 and checkout-web-02 disk cells read '- Unavailable' with 'Guest agent not running' and History deferred the disk on that message at 1440 and 390",
+    "After, live agent (checkout-web-02): agent filesystem bars with no read-status label, nothing deferred in History, drawer filesystem rows current (1440 and 390)",
+    "After, silent agent (checkout-web-01): bars plus 'Last known' (phone 'Prior') with 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.', drawer filesystem rows last known, History disk deferred on the same message (1440 and 390)",
+    "After, stopped guest (checkout-web-193): '- Unavailable' / 'N/A' with the vm-stopped message in cell, drawer and History; analytics-batch-01 with Proxmox filesystems unchanged",
+    "Machines (/standalone at 1920): Apollo-114 held silent read '(stale)' with the stopped-reporting title; after releasing the hold mid-session without a reload, main kept '(stale)' although /api/state had dropped stale, while this build received stale:false and cleared it with metrics resuming",
+    "No page errors or console errors on /proxmox (guest rows, drawers, History) and /standalone, with and without the websocket"
+  ],
+  "interactions": [
+    "Playwright 1440x900 and 390x844: open /proxmox?q=<guest> for four guests, read the disk cell text, read-status notice and bar, open the guest drawer (phone: second visible cell), read the filesystem status line, switch to History and read the disk current/last-known/deferred legends; screenshots of rows and History",
+    "Same pass against a before binary built from main's frontend and backend on the same data dir",
+    "Playwright 1920x1000 on /standalone: watch Apollo-114 while the control file releases its silent hold, polling /api/state for the agent's stale flag and re-reading the row without reloading",
+    "API: GET /api/resources/{vm} and /api/state before and after linking and after backend restarts"
+  ]
+}

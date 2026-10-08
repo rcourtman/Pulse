@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQLiteResourceStoreDoesNotPersistRawOperationReceiptProtocolOrReplayAuthority(t *testing.T) {
@@ -640,6 +641,248 @@ func TestNewSQLiteResourceStore_MigratesLegacyStore(t *testing.T) {
 	}
 	if store.dbPath == legacyPath {
 		t.Fatalf("expected migrated store path to differ from legacy path: %q", store.dbPath)
+	}
+}
+
+func manualDecisionStores(t *testing.T) map[string]ResourceStore {
+	t.Helper()
+	sqlite, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	return map[string]ResourceStore{"sqlite": sqlite, "memory": NewMemoryStore()}
+}
+
+// manualDecisionRows returns the rows a store holds before read resolution,
+// so the tests see what a write replaced rather than what a read hides.
+func manualDecisionRows(t *testing.T, store ResourceStore) ([]ResourceLink, []ResourceExclusion) {
+	t.Helper()
+	switch s := store.(type) {
+	case *SQLiteResourceStore:
+		links, err := s.storedLinks()
+		if err != nil {
+			t.Fatalf("storedLinks: %v", err)
+		}
+		exclusions, err := s.storedExclusions()
+		if err != nil {
+			t.Fatalf("storedExclusions: %v", err)
+		}
+		return links, exclusions
+	case *MemoryStore:
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return append([]ResourceLink(nil), s.links...), append([]ResourceExclusion(nil), s.exclusions...)
+	}
+	t.Fatalf("unexpected store %T", store)
+	return nil, nil
+}
+
+// seedReversedManualRows stores a link and an exclusion for a pair in the
+// order canonical-ID succession can leave, which writes never produce.
+func seedReversedManualRows(t *testing.T, store ResourceStore, a, b string, at time.Time) {
+	t.Helper()
+	switch s := store.(type) {
+	case *SQLiteResourceStore:
+		if _, err := s.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, '', '', ?)`, a, b, a, at); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.db.Exec(`INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at) VALUES (?, ?, '', '', ?)`, a, b, at); err != nil {
+			t.Fatal(err)
+		}
+	case *MemoryStore:
+		s.mu.Lock()
+		s.links = append(s.links, ResourceLink{ResourceA: a, ResourceB: b, PrimaryID: a, CreatedAt: at})
+		s.exclusions = append(s.exclusions, ResourceExclusion{ResourceA: a, ResourceB: b, CreatedAt: at})
+		s.mu.Unlock()
+	default:
+		t.Fatalf("unexpected store %T", store)
+	}
+}
+
+// Unlink records an exclusion; it must also delete the link, or every
+// registry keeps folding the pair. Link must delete an earlier exclusion the
+// same way. The IDs arrive in either order, as the API takes either side as
+// the path, and a row succession stored in the other order is replaced too.
+func TestManualPairDecisionReplacesThePreviousOne(t *testing.T) {
+	for name, store := range manualDecisionStores(t) {
+		t.Run(name, func(t *testing.T) {
+			at := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+			if err := store.AddLink(ResourceLink{ResourceA: "vm-web", ResourceB: "agent-web", PrimaryID: "vm-web", CreatedAt: at}); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: "vm-db", ResourceB: "agent-db", PrimaryID: "vm-db", CreatedAt: at}); err != nil {
+				t.Fatal(err)
+			}
+			if links, exclusions := manualDecisionRows(t, store); len(links) != 2 || len(exclusions) != 0 {
+				t.Fatalf("after links: links=%+v exclusions=%+v", links, exclusions)
+			}
+
+			seedReversedManualRows(t, store, "vm-web", "agent-web", at.Add(-time.Hour))
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "agent-web", ResourceB: "vm-web", CreatedAt: at.Add(time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+			links, exclusions := manualDecisionRows(t, store)
+			if len(links) != 1 || !sameManualPair(links[0].ResourceA, links[0].ResourceB, "vm-db", "agent-db") {
+				t.Fatalf("unlink kept the wrong link rows: %+v", links)
+			}
+			if len(exclusions) != 1 || !exclusions[0].CreatedAt.Equal(at.Add(time.Minute)) {
+				t.Fatalf("unlink left exclusion rows %+v, want only its own", exclusions)
+			}
+
+			seedReversedManualRows(t, store, "vm-web", "agent-web", at.Add(-time.Hour))
+			if err := store.AddLink(ResourceLink{ResourceA: "agent-web", ResourceB: "vm-web", PrimaryID: "vm-web", CreatedAt: at.Add(2 * time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+			links, exclusions = manualDecisionRows(t, store)
+			if len(links) != 2 || len(exclusions) != 0 {
+				t.Fatalf("relink: links=%+v exclusions=%+v, want 2 links and no exclusions", links, exclusions)
+			}
+
+			// Linking a linked pair again replaces its link, primary included.
+			if err := store.AddLink(ResourceLink{ResourceA: "agent-db", ResourceB: "vm-db", PrimaryID: "agent-db", CreatedAt: at.Add(3 * time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+			links, _ = manualDecisionRows(t, store)
+			primaries := map[string]string{}
+			for _, link := range links {
+				primaries[exclusionKey(link.ResourceA, link.ResourceB)] = link.PrimaryID
+			}
+			if len(links) != 2 || primaries[exclusionKey("vm-db", "agent-db")] != "agent-db" {
+				t.Fatalf("relinking kept stale rows: %+v", links)
+			}
+
+			// A decision written without a time is stamped, as SQLite does,
+			// so it can be ordered against later ones.
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-db", ResourceB: "agent-db"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, exclusions = manualDecisionRows(t, store); len(exclusions) != 1 || exclusions[0].CreatedAt.IsZero() {
+				t.Fatalf("unstamped exclusion: %+v", exclusions)
+			}
+		})
+	}
+}
+
+// Stores written before unlink dropped the link still hold both rows for a
+// pair, and canonical-ID succession can rewrite two pairs onto one in either
+// order. Reads decide such a pair by its later write; a tie keeps it apart.
+func TestManualPairDecisionReadsResolveStoredConflictsByRecency(t *testing.T) {
+	sqlite, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	at := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	rows := []struct {
+		table      string
+		a, b       string
+		createdAt  time.Time
+		withPrimID bool
+	}{
+		// Unlinked after linking: the pair stays apart.
+		{"resource_links", "agent-a", "vm-a", at, true},
+		{"resource_exclusions", "agent-a", "vm-a", at.Add(time.Minute), false},
+		// Linked again after an unlink: the pair is linked.
+		{"resource_exclusions", "agent-b", "vm-b", at, false},
+		{"resource_links", "agent-b", "vm-b", at.Add(time.Minute), true},
+		// Same instant: apart.
+		{"resource_links", "agent-c", "vm-c", at, true},
+		{"resource_exclusions", "agent-c", "vm-c", at, false},
+		// Succession stored the link in reverse order.
+		{"resource_links", "vm-d", "agent-d", at, true},
+		{"resource_exclusions", "agent-d", "vm-d", at.Add(time.Minute), false},
+		// Undecided elsewhere: untouched.
+		{"resource_links", "agent-e", "vm-e", at, true},
+		{"resource_exclusions", "agent-f", "vm-f", at, false},
+		// Succession left an older link in the other order: the newer
+		// link, and its primary, decide.
+		{"resource_links", "vm-g", "agent-g", at.Add(time.Minute), true},
+		{"resource_links", "agent-g", "vm-g", at, true},
+	}
+	for _, row := range rows {
+		var err error
+		if row.withPrimID {
+			_, err = sqlite.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, '', '', ?)`, row.a, row.b, row.b, row.createdAt)
+		} else {
+			_, err = sqlite.db.Exec(`INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at) VALUES (?, ?, '', '', ?)`, row.a, row.b, row.createdAt)
+		}
+		if err != nil {
+			t.Fatalf("seed %s %s<->%s: %v", row.table, row.a, row.b, err)
+		}
+	}
+
+	links, err := sqlite.GetLinks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exclusions, err := sqlite.GetExclusions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked := map[string]bool{}
+	for _, link := range links {
+		linked[exclusionKey(link.ResourceA, link.ResourceB)] = true
+	}
+	excluded := map[string]bool{}
+	for _, exclusion := range exclusions {
+		excluded[exclusionKey(exclusion.ResourceA, exclusion.ResourceB)] = true
+	}
+	for _, want := range []struct {
+		pair             string
+		linked, excluded bool
+	}{
+		{"a", false, true},
+		{"b", true, false},
+		{"c", false, true},
+		{"d", false, true},
+		{"e", true, false},
+		{"f", false, true},
+		{"g", true, false},
+	} {
+		key := exclusionKey("agent-"+want.pair, "vm-"+want.pair)
+		if linked[key] != want.linked || excluded[key] != want.excluded {
+			t.Errorf("pair %s: linked=%v excluded=%v, want %v/%v", want.pair, linked[key], excluded[key], want.linked, want.excluded)
+		}
+	}
+	if len(links) != 3 || len(exclusions) != 4 {
+		t.Fatalf("links=%+v exclusions=%+v", links, exclusions)
+	}
+	for _, link := range links {
+		if sameManualPair(link.ResourceA, link.ResourceB, "agent-g", "vm-g") && link.PrimaryID != "agent-g" {
+			t.Fatalf("older reversed link won: %+v", link)
+		}
+	}
+}
+
+// tornDecisionStore answers GetLinks from before an unlink and GetExclusions
+// from after it, as two reads around a concurrent unlink do.
+type tornDecisionStore struct {
+	*MemoryStore
+	staleLinks []ResourceLink
+}
+
+func (s tornDecisionStore) GetLinks() ([]ResourceLink, error) { return s.staleLinks, nil }
+
+// A registry must not load both decisions for a pair when an unlink lands
+// between its two reads: applyManualLinks does not consult exclusions, so the
+// generation would stay merged.
+func TestRegistryResolvesDecisionsAcrossItsTwoReads(t *testing.T) {
+	at := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	store := tornDecisionStore{
+		MemoryStore: NewMemoryStore(),
+		staleLinks:  []ResourceLink{{ResourceA: "vm-web", ResourceB: "agent-web", PrimaryID: "vm-web", CreatedAt: at}},
+	}
+	if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-web", ResourceB: "agent-web", CreatedAt: at.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	registry := NewRegistry(store)
+	registry.IngestResources([]Resource{
+		{ID: "vm-web", Type: ResourceTypeVM, Name: "web", Status: StatusOnline, LastSeen: at, Sources: []DataSource{SourceProxmox}},
+		{ID: "agent-web", Type: ResourceTypeAgent, Name: "web-agent", Status: StatusOnline, LastSeen: at, Sources: []DataSource{SourceAgent}, Agent: &AgentData{AgentID: "agent-web"}},
+	})
+	if got := len(registry.List()); got != 2 {
+		t.Fatalf("registry folded an unlinked pair: %d resources", got)
 	}
 }
 
@@ -2863,6 +3106,66 @@ func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
 	}
 }
 
+// An upsert keeps a stored field the pin leaves empty; a replace writes the
+// pin as the whole row. Both give a strong key to the pin that carries it.
+func TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	wide := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", DMIUUID: "dmi-a", ClusterName: "pool-a", Hostname: "host-a"}
+	narrow := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", Hostname: "host-a.lan"}
+	rival := ResourceIdentityPin{CanonicalID: "agent-b", ResourceType: ResourceTypeAgent, MachineID: "machine-b", ClusterName: "pool-a", Hostname: "host-a"}
+	for name, store := range map[string]ResourceStore{"memory": NewMemoryStore(), "sqlite": sqliteStore} {
+		t.Run(name, func(t *testing.T) {
+			pinFor := func(id string) (ResourceIdentityPin, bool) {
+				t.Helper()
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("list pins: %v", err)
+				}
+				for _, pin := range pins {
+					if pin.CanonicalID == id {
+						return pin, true
+					}
+				}
+				return ResourceIdentityPin{}, false
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("upsert wide pin: %v", err)
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("upsert narrow pin: %v", err)
+			}
+			kept := wide
+			kept.Hostname = narrow.Hostname
+			if got, _ := pinFor("agent-a"); got != kept {
+				t.Fatalf("after upsert: pin = %+v, want stored fields kept %+v", got, kept)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("replace narrow pin: %v", err)
+			}
+			if got, _ := pinFor("agent-a"); got != narrow {
+				t.Fatalf("after replace: pin = %+v, want exactly %+v", got, narrow)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("replace wide pin: %v", err)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{rival}); err != nil {
+				t.Fatalf("replace rival pin: %v", err)
+			}
+			if _, ok := pinFor("agent-a"); ok {
+				t.Fatalf("a replace claiming pool-a/host-a must delete the row holding that key")
+			}
+			if got, _ := pinFor("agent-b"); got != rival {
+				t.Fatalf("rival pin = %+v, want %+v", got, rival)
+			}
+		})
+	}
+}
+
 func TestResourceChangeReadsMergeCanonicalIDEras(t *testing.T) {
 	const machineID = "7d465a78-test-machine-id"
 	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
@@ -3327,4 +3630,33 @@ func TestSuccessionMergesGuestChangeJournalEras(t *testing.T) {
 	if !found {
 		t.Fatalf("legacy-era journal row missing from new-ID read: %+v", changes)
 	}
+}
+
+// A PVE disk temperature alert row is owned by the hardware identity it
+// records, like the health and wearout rows, and a read by the path reference
+// still finds it through ProxmoxPhysicalDiskAlertIdentifiers.
+func TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.PhysicalDisks = []models.PhysicalDisk{pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZA1A2B3C", "", now)}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	diskID, ok := adapter.currentRegistry().ResolveReferenceID(ref)
+	require.True(t, ok)
+
+	change := BuildAlertTimelineChange(ref, ChangeAlertFired, now, "", AlertTimelineChange{
+		AlertIdentifier: ref + "::metric-threshold:diskTemperature", AlertStartedAt: now, AlertType: "diskTemperature",
+		AlertMetadata: map[string]any{"disk_path": "/dev/sda", MetadataDiskSerial: "ZA1A2B3C", MetadataDiskWWN: ""},
+	})
+	change.ID = "temperature"
+	require.NoError(t, adapter.RecordChange(*change))
+
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskID)))
+	byRef := pveDiskHistoryRows(t, store, ref)
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(byRef))
+	require.Equal(t, ref, OwnedAlertReference(byRef["temperature"]))
 }
