@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecoveryOutcome } from '@/types/recovery';
 import {
   getRecoveryOutcomeBadgeClass,
-  getRecoveryOutcomeBarClass,
   getRecoveryOutcomeLabel,
-  getRecoveryOutcomeTextClass,
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 
@@ -91,34 +89,6 @@ describe('recoveryOutcomePresentation — branch coverage (branchcov2)', () => {
       expect(getRecoveryOutcomeBadgeClass(NON_CANONICAL)).toBe(
         `${BADGE_BASE} bg-surface-alt text-muted`,
       );
-    });
-  });
-
-  describe('getRecoveryOutcomeBarClass', () => {
-    it('returns a solid bar color for each canonical outcome', () => {
-      expect(getRecoveryOutcomeBarClass('success')).toBe('bg-emerald-500');
-      expect(getRecoveryOutcomeBarClass('warning')).toBe('bg-amber-400');
-      expect(getRecoveryOutcomeBarClass('failed')).toBe('bg-red-500');
-      expect(getRecoveryOutcomeBarClass('running')).toBe('bg-blue-500');
-    });
-
-    it('falls back to gray for the default arm', () => {
-      expect(getRecoveryOutcomeBarClass('unknown')).toBe('bg-gray-400');
-      expect(getRecoveryOutcomeBarClass(NON_CANONICAL)).toBe('bg-gray-400');
-    });
-  });
-
-  describe('getRecoveryOutcomeTextClass', () => {
-    it('returns a dark-mode-aware text tone for each canonical outcome', () => {
-      expect(getRecoveryOutcomeTextClass('success')).toBe('text-emerald-600 dark:text-emerald-400');
-      expect(getRecoveryOutcomeTextClass('warning')).toBe('text-amber-600 dark:text-amber-400');
-      expect(getRecoveryOutcomeTextClass('failed')).toBe('text-red-600 dark:text-red-400');
-      expect(getRecoveryOutcomeTextClass('running')).toBe('text-blue-600 dark:text-blue-400');
-    });
-
-    it('falls back to text-muted for the default arm', () => {
-      expect(getRecoveryOutcomeTextClass('unknown')).toBe('text-muted');
-      expect(getRecoveryOutcomeTextClass(NON_CANONICAL)).toBe('text-muted');
     });
   });
 });

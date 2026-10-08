@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RECOVERY_OUTCOMES,
-  getRecoveryOutcomeBarClass,
   getRecoveryOutcomeBadgeClass,
   getRecoveryOutcomeLabel,
-  getRecoveryOutcomeTextClass,
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 
 describe('recoveryOutcomePresentation', () => {
-  it('exports the canonical outcome order', () => {
-    expect(RECOVERY_OUTCOMES).toEqual(['success', 'warning', 'failed', 'running', 'unknown']);
-  });
-
   it('normalizes known outcomes', () => {
     expect(normalizeRecoveryOutcome(' Failed ')).toBe('failed');
   });
@@ -35,9 +28,7 @@ describe('recoveryOutcomePresentation', () => {
     expect(getRecoveryOutcomeBadgeClass('running')).toContain('blue-100');
   });
 
-  it('exposes canonical outcome labels and summary tones', () => {
+  it('exposes canonical outcome labels', () => {
     expect(getRecoveryOutcomeLabel('success')).toBe('Healthy');
-    expect(getRecoveryOutcomeBarClass('warning')).toBe('bg-amber-400');
-    expect(getRecoveryOutcomeTextClass('unknown')).toBe('text-muted');
   });
 });

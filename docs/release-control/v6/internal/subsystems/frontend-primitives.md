@@ -6474,23 +6474,27 @@ The Proxmox Backups tab parses `/api/backups/pve` and `/api/backups/pbs`
 inside `ProxmoxBackupsTable.tsx` and reads posture through
 `frontend-modern/src/hooks/useProtectionPostures.ts`. The TrueNAS Protection
 tab reads recovery points, and what binds that path is the decode boundary.
-`frontend-modern/src/utils/recoveryPlatformModel.ts` maps legacy transport
-aliases onto the canonical runtime model: `provider` to `platform`,
+`frontend-modern/src/utils/recoveryPlatformModel.ts` maps the transport
+names onto the canonical runtime model: `provider` to `platform`,
 `subjectResourceId` to `itemResourceId`, `subjectRef` to `itemRef`, and
 `display.subjectLabel` / `display.subjectType` to `display.itemLabel` /
-`display.itemType`. `frontend-modern/src/hooks/useRecoveryPoints.ts`, the
-only recovery-points reader, applies `normalizeRecoveryPointsResponse` to
-every `/api/recovery/points` response, so the TrueNAS Protection tab receives
-platform-first, item-first points. The `display.subjectLabel`,
-`display.subjectType`, and `subjectRef` fallbacks that
-`TrueNASProtectionTable.tsx` and `truenasPageModel.ts` still read are dead on
-that path, because normalized points never carry those fields; new recovery
-code reads the canonical fields only. New recovery filters, links, or view
+`display.itemType`. The points handler sends the item label only as
+`display.subjectLabel`, so that fold is what names TrueNAS Protection rows.
+`frontend-modern/src/hooks/useRecoveryPoints.ts`, the only recovery-points
+reader, applies `normalizeRecoveryPointsResponse` to every
+`/api/recovery/points` response. `frontend-modern/src/types/recovery.ts`
+declares the subject names on the transport types alone
+(`RecoveryPointTransport`, `RecoveryPointDisplayTransport`), so
+`TrueNASProtectionTable.tsx` and `truenasPageModel.ts` label, sort, and search
+rows by `display.itemLabel`, `display.itemType`, and `itemRef`, and a read of
+`subjectRef` or `display.subjectLabel` off a normalized point fails the type
+check. `frontend-modern/src/api/__tests__/recoveryTransport.test.ts` pins the
+type split and the decode that names the rows. New recovery filters, links, or view
 switches belong to the platform tab that owns the rows, on the platform-page primitives, rather than in a revived
 cross-platform recovery shell or a shared recovery serializer in
-`frontend-modern/src/routing/resourceLinks.ts`. The rollup normalizer
-(`normalizeRecoveryRollupsResponse`) has had no production reader since
-`useRecoveryRollups.ts` was deleted.
+`frontend-modern/src/routing/resourceLinks.ts`. The frontend decodes no
+rollups: the rollup normalizer and the rollup, series, and facet types went
+with their last readers.
 The retired dashboard action queue must not be reintroduced as a compact
 Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
 governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their

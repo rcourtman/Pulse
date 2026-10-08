@@ -425,12 +425,13 @@ describe('truenasPageModel coverage2', () => {
   });
 
   describe('sortTrueNASProtectionPoints label-fallback chain', () => {
-    it('uses display.subjectLabel when display.itemLabel is absent', () => {
-      const usesSubject = makeRecoveryPoint({
+    it('uses display.itemLabel ahead of itemRef.name and the id', () => {
+      const usesLabel = makeRecoveryPoint({
         id: 'zzz-id',
         kind: 'snapshot',
         mode: 'snapshot',
-        display: { subjectLabel: 'aaa' },
+        display: { itemLabel: 'aaa' },
+        itemRef: { type: 'truenas-dataset', name: 'zzz' },
       });
       const usesItem = makeRecoveryPoint({
         id: 'mmm-id',
@@ -438,9 +439,9 @@ describe('truenasPageModel coverage2', () => {
         mode: 'snapshot',
         display: { itemLabel: 'zzz' },
       });
-      // Equal timestamps -> label tiebreak. usesSubject's label resolves to
-      // subjectLabel 'aaa' (not its id 'zzz-id'), so it sorts first.
-      expect(sortTrueNASProtectionPoints([usesSubject, usesItem]).map((p) => p.id)).toEqual([
+      // Equal timestamps -> label tiebreak. usesLabel's label resolves to
+      // itemLabel 'aaa' (not its itemRef 'zzz' or id 'zzz-id'), so it sorts first.
+      expect(sortTrueNASProtectionPoints([usesLabel, usesItem]).map((p) => p.id)).toEqual([
         'zzz-id',
         'mmm-id',
       ]);
@@ -459,24 +460,6 @@ describe('truenasPageModel coverage2', () => {
         mode: 'snapshot',
       });
       expect(sortTrueNASProtectionPoints([usesItemRef, fallbackId]).map((p) => p.id)).toEqual([
-        'zzz-id',
-        'mmm-id',
-      ]);
-    });
-
-    it('uses subjectRef.name when display and itemRef are absent', () => {
-      const usesSubjectRef = makeRecoveryPoint({
-        id: 'zzz-id',
-        kind: 'snapshot',
-        mode: 'snapshot',
-        subjectRef: { type: 'truenas-dataset', name: 'aaa' },
-      });
-      const fallbackId = makeRecoveryPoint({
-        id: 'mmm-id',
-        kind: 'snapshot',
-        mode: 'snapshot',
-      });
-      expect(sortTrueNASProtectionPoints([usesSubjectRef, fallbackId]).map((p) => p.id)).toEqual([
         'zzz-id',
         'mmm-id',
       ]);

@@ -1,14 +1,21 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRoot } from 'solid-js';
 
+import {
+  filterTrueNASProtectionPoints,
+  sortTrueNASProtectionPoints,
+} from '@/features/truenas/truenasPageModel';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
-import {
-  normalizeRecoveryPointsResponse,
-  normalizeRecoveryRollupsResponse,
-} from '@/utils/recoveryPlatformModel';
+import type {
+  RecoveryPoint,
+  RecoveryPointDisplay,
+  RecoveryPointDisplayTransport,
+  RecoveryPointTransport,
+} from '@/types/recovery';
+import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
 
 const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: apiFetchJSONMock }));
@@ -54,32 +61,6 @@ describe('recovery transport', () => {
           kind: 'snapshot',
           mode: 'snapshot',
           outcome: 'success',
-          itemResourceId: 'res-1',
-          itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
-        },
-      ],
-      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
-    });
-
-    expect(
-      normalizeRecoveryRollupsResponse({
-        data: [
-          {
-            rollupId: 'rollup-1',
-            lastOutcome: 'success',
-            providers: ['truenas'],
-            subjectResourceId: 'res-1',
-            subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
-          },
-        ],
-        meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
-      }),
-    ).toEqual({
-      data: [
-        {
-          rollupId: 'rollup-1',
-          lastOutcome: 'success',
-          platforms: ['truenas'],
           itemResourceId: 'res-1',
           itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
         },
@@ -144,6 +125,55 @@ describe('recovery transport', () => {
     }
   });
 
+  it('labels, sorts and finds TrueNAS rows by the backend subject label only through the decode', async () => {
+    // The points handler sends the dataset label only as display.subjectLabel.
+    // The TrueNAS Protection tab reads display.itemLabel, never the subject
+    // names, so the fold in recoveryPlatformModel is what names these rows.
+    // Ids sort opposite to labels, so an unlabelled row would sort by id.
+    const backendPoint = (id: string, label: string) => ({
+      id,
+      platform: 'truenas',
+      provider: 'truenas',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      outcome: 'success',
+      completedAt: '2026-10-01T00:00:00Z',
+      display: { subjectLabel: label, subjectType: 'dataset', itemType: 'dataset' },
+    });
+    apiFetchJSONMock.mockResolvedValue({
+      data: [backendPoint('point-a', 'tank/zeta'), backendPoint('point-b', 'tank/alpha')],
+      meta: { page: 1, limit: 200, total: 2, totalPages: 1 },
+    });
+    let dispose = () => {};
+    const points = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return useRecoveryPoints(() => ({ platform: 'truenas', page: 1, limit: 200 })).points;
+    });
+    try {
+      await vi.waitFor(() => expect(points()).toHaveLength(2));
+      expect(sortTrueNASProtectionPoints(points()).map((point) => point.id)).toEqual([
+        'point-b',
+        'point-a',
+      ]);
+      expect(
+        filterTrueNASProtectionPoints(points(), 'zeta', 'all').map((point) => point.id),
+      ).toEqual(['point-a']);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the backend subject names on the transport types only', () => {
+    // Enforced by the frontend type check, not at runtime: a consumer cannot
+    // read subjectRef or display.subjectLabel off a normalized point.
+    expectTypeOf<RecoveryPoint>().not.toHaveProperty('subjectRef');
+    expectTypeOf<RecoveryPointDisplay>().not.toHaveProperty('subjectLabel');
+    expectTypeOf<RecoveryPointDisplay>().not.toHaveProperty('subjectType');
+    expectTypeOf<RecoveryPointTransport>().toHaveProperty('subjectRef');
+    expectTypeOf<RecoveryPointDisplayTransport>().toHaveProperty('subjectLabel');
+    expectTypeOf<RecoveryPointDisplayTransport>().toHaveProperty('subjectType');
+  });
+
   it('keeps useRecoveryPoints the only recovery-points reader', () => {
     // The rollup, facet and series hooks went with the aggregate Recovery
     // page, and the item-type helper with the recovery query serializer that
@@ -160,6 +190,7 @@ describe('recovery transport', () => {
       'src/hooks/useRecoveryPointsFacets.ts',
       'src/hooks/useRecoveryPointsSeries.ts',
       'src/utils/recoveryItemTypePresentation.ts',
+      'src/utils/recoveryArtifactModePresentation.ts',
     ]) {
       expect(existsSync(retired), retired).toBe(false);
     }

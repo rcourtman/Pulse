@@ -5735,8 +5735,14 @@ recovery timeline day, chart range, workspace `view`, inventory `state`,
 Recovery page. The Proxmox Backups tab owns its own day selection through
 `PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
 of `/api/recovery/*` payloads must still prefer canonical `platform` /
-`platforms` response fields over legacy `provider` aliases, which
-`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites at decode time.
+`platforms` response fields over legacy `provider` aliases. The frontend's
+only recovery-points reader is `useRecoveryPoints.ts`, and
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites `provider`,
+`subjectRef`, and `display.subjectLabel` onto `platform`, `itemRef`, and
+`display.itemLabel` at decode time. The TrueNAS Protection tab
+(`TrueNASProtectionTable.tsx`, `truenasPageModel.ts`) reads only those
+canonical fields; the normalized `RecoveryPoint` type does not declare the
+subject names.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request
