@@ -1386,12 +1386,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Workload filter option semantics stay workload-owned, but FilterBar chip
     presentation is frontend-primitives-owned: status and runtime leading dots
     must use `filterChipStatusDot` rather than workload-local span factories.
-    WorkloadsFilter remains the shared interaction shell only; platform-owned
-    embedded Workloads surfaces must pass page-owned aria labels, search
-    placeholders, empty-search copy, status labels, and forced view-mode
-    context into route option derivation so Docker, Kubernetes, TrueNAS,
-    Proxmox, and VMware pages expose filters for the objects visible on that
-    page rather than generic mixed-workload labels.
+    WorkloadsFilter remains the shared interaction shell only. The Proxmox
+    and vSphere overviews, the pages that embed a Workloads surface, pass
+    their own aria label, search placeholder, empty-search copy, and status
+    option labels straight to their page-owned toolbar, and pass forced
+    platform (and, for vSphere, forced view-mode) context into the shared
+    workload state, so each page exposes filters for the objects visible on
+    that page rather than generic mixed-workload labels.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, summary-strategy selection, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`. Compact multi-disk rows default to same-height per-disk lanes so each filesystem has its own visible usage bar without implying the whole host disk state is one max or aggregate percentage; explicit `mode="stacked"` remains the capacity-contribution stack for callers that intentionally need that presentation, and explicit aggregate callers may choose total-capacity or worst-disk summaries when the owning table's operator job needs one compact risk signal, while tooltips continue to carry the full per-disk breakdown.
 21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
@@ -1705,19 +1706,21 @@ shell clickable behind another overlay.
     and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
     builds the workloads state itself with `useWorkloadsState`, renders the
     one shared `WorkloadsFilter` toolbar (search, status filter, a type
-    filter that vSphere suppresses, and the View options for grouping, metric display, and columns on the
-    shared `FilterBar`) from that state, and hands the same state to `WorkloadsSurface` through its
-    `state` prop with `suppressFilterToolbar`, so the surface skips its own
-    filter row and the page never stacks two toolbars wired to one state.
+    filter that vSphere suppresses, and the View options for grouping, metric
+    display, and columns on the shared `FilterBar`) from that state, directly
+    above the surface, and hands the same state to `WorkloadsSurface` through
+    its `state` prop. The surface renders no filter row of its own, so the
+    page never stacks two toolbars wired to one state.
     Proxmox also passes that state's search, plus its page-owned metric mode
     and history range, to the nodes table above the guests, so one toolbar
     drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
-    `showFilterToolbar` prop, and no dashboard cards or summary strip to
-    hide: it renders its filter row (unless suppressed or in kiosk mode), the
-    workloads table, or an empty-state table card. The platform scope flows
-    through `forcedPlatform` as a typed page input to `useWorkloadsState`,
-    the toolbar, and the surface. `suppressPlatformFilter: true` makes the
-    state expose no Platform filter config and both pages pass
+    toolbar prop, and no dashboard cards or summary strip to hide: it renders
+    the workloads table or an empty-state table card, plus a Back to top
+    control while scrolled. The platform scope flows through `forcedPlatform`
+    as a typed page input to `useWorkloadsState`, the toolbar, and the
+    surface. `suppressPlatformFilter: true` makes the state expose no Platform
+    filter config, so a platform the page already fixed never counts as an
+    operator filter in the surface's filtered-empty state, and both pages pass
     `platformFilter={undefined}` to the toolbar, so the user never sees the
     locked platform as a removable chip.
 
@@ -1992,11 +1995,13 @@ each. Standalone
 WorkloadsSurface callers (no override props) keep the original
 persistent-signal-backed behavior.
 Every toolbar that controls a `WorkloadsSurface` consumes
-`getWorkloadsMetricFilterProps` as one atomic binding. This keeps the display
-mode, row-hover mode, history range, and first-use hint on the same state owner
-for the generic surface and the Proxmox and vSphere platform compositions;
-provider pages must not recreate a partial metric prop list that can enable
-prefetching without exposing the matching control or discovery state.
+`getWorkloadsMetricFilterProps` as one atomic binding. Those toolbars are the
+page-owned `WorkloadsFilter` instances on the Proxmox and vSphere overviews,
+since the surface renders none, and the binding keeps the display mode,
+row-hover mode, history range, and first-use hint on the page's one workload
+state owner; provider pages must not recreate a partial metric prop list that
+can enable prefetching without exposing the matching control or discovery
+state.
 That first-use hint clears while the pointer is over a guest row, because the
 first populated preview marks it seen. Clearing it must not unmount it or
 change the toolbar height: wherever the hint wraps the action row onto its own
