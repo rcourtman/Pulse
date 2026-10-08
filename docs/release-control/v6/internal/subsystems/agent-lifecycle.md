@@ -8998,3 +8998,15 @@ No agent registration, enrolment, install, update or removal path changed.
 for every method. No agent route lives under `/debug/`, so agent registration,
 enrolment, install, update, removal, report ingest and `/api/agent/ws`
 handshakes are unchanged on a demo instance.
+
+### Broadcast host coalescing honours operator splits
+
+`internal/monitoring/monitor.go` changed only so the websocket broadcast
+coalesces host views with the operator's merge exclusions
+(`MonitorAdapter.CoalesceForPresentation`), as the resources API's
+`ListForPresentation` already did, so an agent host the operator split from
+a same-named platform view by unlink or report-merge is coalesced on the
+websocket as REST coalesces it (the filter's limits are recorded under
+"Unlink replaces the pair's operator link" in the unified-resources
+contract). Agent registration, enrolment, install, update, removal, report
+identity and continuity are unchanged.
