@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -27,6 +28,8 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 		{"classified member-hostname coincidence", "https://pmx1:8006", true, false},
 		{"unclassified FQDN connection and distinct guest domains", "https://pmx1.remote.example:8006", false, true},
 		{"classified FQDN connection and distinct guest domains", "https://pmx1.remote.example:8006", true, true},
+		{"unclassified FQDN connection and identical short guest names", "https://pmx1.remote.example:8006", false, false},
+		{"classified FQDN connection and identical short guest names", "https://pmx1.remote.example:8006", true, false},
 	} {
 		name, classified := tc.name, tc.classified
 		clusterName := ""
@@ -80,6 +83,45 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 				t.Fatal("initial Docker report absent from read state")
 			}
 			homeCanonicalID := adapter.VMs()[0].ID()
+			initialHosts := m.state.GetSnapshot().Hosts
+			if len(initialHosts) != 1 || initialHosts[0].LinkedVMID != homeGuestID {
+				t.Fatalf("initial automatic guest link = %+v, want %s", initialHosts, homeGuestID)
+			}
+			initialDocker := m.state.GetSnapshot().DockerHosts
+			initialDockerHostID := adapter.DockerHosts()[0].ID()
+			initialWorkloadID := adapter.DockerContainers()[0].ID()
+			assertUnchangedDocker := func(stage string) {
+				t.Helper()
+				// No new Docker report has arrived: a report after link clearing
+				// could restore deleted inventory and hide the actual regression.
+				if got := m.state.GetSnapshot().DockerHosts; !reflect.DeepEqual(got, initialDocker) {
+					t.Fatalf("%s changed the independent Docker snapshot: got %+v, want %+v", stage, got, initialDocker)
+				}
+				if hosts, workloads := adapter.DockerHosts(), adapter.DockerContainers(); len(hosts) != 1 || len(workloads) != 1 ||
+					hosts[0].ID() != initialDockerHostID || workloads[0].ID() != initialWorkloadID {
+					t.Fatalf("%s lost Docker source identities: hosts=%+v workloads=%+v", stage, hosts, workloads)
+				}
+				listed, _, thresholds := adapter.GetAllWithMetricsTargetsAndStaleThresholds()
+				broadcast, ok := adapter.CoalesceForPresentation(listed, thresholds)
+				if !ok {
+					t.Fatal("store-backed Docker presentation was not available")
+				}
+				for surface, resources := range map[string][]unifiedresources.Resource{"API list": listed, "broadcast": broadcast} {
+					var machineID string
+					var workloads []unifiedresources.Resource
+					for _, resource := range resources {
+						if resource.Type == unifiedresources.ResourceTypeAgent && resource.Docker != nil && resource.Docker.HostSourceID == initialDocker[0].ID {
+							machineID = resource.ID
+						}
+						if resource.Type == unifiedresources.ResourceTypeAppContainer && resource.Docker != nil && resource.Docker.ContainerID == "home-workload" {
+							workloads = append(workloads, resource)
+						}
+					}
+					if machineID == "" || len(workloads) != 1 || workloads[0].ID != initialWorkloadID || workloads[0].ParentID == nil || *workloads[0].ParentID != machineID {
+						t.Fatalf("%s %s detached Docker workload from its reporting machine: machine=%s workloads=%+v", stage, surface, machineID, workloads)
+					}
+				}
+			}
 
 			standalone := config.PVEInstance{Name: "Hetzner pmx1", Host: tc.host}
 			m.config.PVEInstances = append(m.config.PVEInstances, standalone)
@@ -100,9 +142,19 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 			// not discard the agent, its Docker inventory, or the original VM's data.
 			hostReport.Timestamp = now.Add(time.Second)
 			dockerReport.Timestamp = now.Add(time.Second)
+			assertUnchangedDocker("provider addition without agent reports")
 			if _, err := m.ApplyHostReport(hostReport, token); err != nil {
 				t.Fatal(err)
 			}
+			hosts := m.state.GetSnapshot().Hosts
+			wantLink := ""
+			if tc.fqdnGuests {
+				wantLink = homeGuestID
+			}
+			if len(hosts) != 1 || hosts[0].LinkedVMID != wantLink || hosts[0].LinkedNodeID != "" || hosts[0].LinkedContainerID != "" {
+				t.Fatalf("post-addition guest link = %+v, want %q with no node/container guess", hosts, wantLink)
+			}
+			assertUnchangedDocker("host-only report after automatic guest-link reconciliation")
 			if _, err := m.ApplyDockerReport(dockerReport, token); err != nil {
 				t.Fatal(err)
 			}
