@@ -9273,7 +9273,7 @@ absence. Failed listener enumeration remains a failure. This changes validation,
 not installer authority, transport, enrolment or host containment.
 
 `TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
-complete supplied parent and eleven removed/changed controls. Native
+complete supplied parent and fourteen removed/changed controls. Native
 `TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
 functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
 the existing real lifecycle job then uses real SCM. Linux skips are explicit and

@@ -71,6 +71,7 @@ func TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence(t *testin
 		`if (-not $script:serverProcess.WaitForExit(5000)) {`,
 		`$listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {`,
 		`foreach ($label in @('uninstall', 'repeated uninstall')) {`,
+		"Assert-LifecycleAgentAbsent\n    $previousDisableAutoUpdate = [Environment]::GetEnvironmentVariable",
 	} {
 		t.Run(needle, func(t *testing.T) {
 			if err := windowsNativeAcceptanceContract(strings.Replace(harness, needle, "", 1), steps); err == nil {
