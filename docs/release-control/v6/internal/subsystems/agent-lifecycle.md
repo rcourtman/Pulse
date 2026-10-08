@@ -2480,12 +2480,13 @@ agent inventory, registration state, or command-channel readiness.
    or fleet-command evidence. Lifecycle flows must not
    recreate the retired Patrol quickstart bootstrap path, mint server-issued
    hosted-model tokens, or derive AI provider state from installation identity.
-   Per-request `/api/ai/chat` execution-mode overrides follow that same
-   boundary: lifecycle-adjacent consumers may rely on Assistant approval
-   semantics, but scoped `autonomous_mode:false` chat requests must not be
-   reinterpreted as agent registration, assignment, installer, or connection
-   lifecycle state. Patrol finding handoffs that force approval-required mode
-   from a non-empty `finding_id` are likewise AI/runtime governance, not an
+   The server-set `/api/ai/chat` execution mode follows that same boundary:
+   lifecycle-adjacent consumers may rely on Assistant approval semantics, but
+   the approval-required mode `HandleChat` installs on every chat request
+   (`ChatRequest` decodes no `autonomous_mode` field) must not be reinterpreted as agent
+   registration, assignment, installer, or connection lifecycle state. Patrol
+   finding handoffs running in that mode from a non-empty `finding_id` are
+   likewise AI/runtime governance, not an
    agent command grant or lifecycle authorization primitive.
    Patrol queued-fix approvals may now seed the shared action-audit store with
    planned and pending lifecycle evidence, but lifecycle surfaces must treat
@@ -4929,8 +4930,8 @@ withheld) is an AI-runtime privacy concern; it is not agent enrollment config,
 installer readiness, command reachability, or any fleet-control capability signal.
 Patrol finding chat handoffs follow the same ownership split: when
 `/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
-resource, or action context, the backend-enforced `autonomous_mode:false`
-clamp is Assistant action-governance, not agent readiness, fleet command
+resource, or action context, the backend-enforced approval-required clamp
+is Assistant action-governance, not agent readiness, fleet command
 reachability, or enrollment health.
 If the same request also carries recognized Patrol product handoff context,
 resources, or action references, the API handler may merge only same-finding
