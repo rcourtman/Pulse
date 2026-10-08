@@ -155,7 +155,7 @@ class PBSDocsTest(unittest.TestCase):
     def test_slow_loading_distinguishes_source_and_failed_evaluation(self):
         guidance = self.slow_loading_guidance()
         for phrase in ("does not establish an encrypted-datastore or PVE-proxy cause",
-                       "**PBS via PVE** means passthrough", "**PBS** means a direct connection already",
+                       "**PBS** means direct PBS inventory", "**PVE file** means PVE storage inventory",
                        "failed monitoring check, not evidence that a backup failed",
                        "does not establish that this separate evaluation recovered"):
             with self.subTest(phrase=phrase):
@@ -186,6 +186,25 @@ class PBSDocsTest(unittest.TestCase):
         self.assertIn("stop and retain the observations already available", guidance)
         self.assertIn("rather than repeatedly refreshing or running diagnostics", guidance)
         self.assertIn("Use the existing native backup records meanwhile", guidance)
+
+    def test_backup_source_help_matches_production_labels_and_read_states(self):
+        guidance = " ".join(DOC.read_text().split("## Data Source Indicator\n")[1].split())
+        presentation = (ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts").read_text()
+        labels = re.findall(r"badgeLabel: '([^']+)'", presentation)
+        self.assertEqual(labels, ["PBS", "PVE file", "Snapshot"])
+        for label in labels:
+            self.assertIn(f"| **{label}** |", guidance)
+        self.assertIn("PBS-backed storage target", guidance)
+        self.assertIn("does not identify the storage type", guidance)
+        self.assertIn("not a separate backup", guidance)
+        self.assertIn("not a protection, verification, restore or thaw result", guidance)
+        self.assertIn("not that missing backups do not exist", guidance)
+        self.assertIn("keep the origin unknown", guidance)
+        self.assertNotIn('**"PBS via PVE"** =', guidance)
+        slow = self.slow_loading_guidance()
+        self.assertIn("counts are incomplete even if the other inventory loaded", slow)
+        self.assertIn("Missing rows do not mean no backups exist", slow)
+        self.assertIn("do not repeatedly press Retry", slow)
 
     def test_every_documented_shell_recipe_parses(self):
         for command in blocks():
