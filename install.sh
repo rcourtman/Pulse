@@ -628,6 +628,90 @@ stop_pulse_for_replacement() {
     esac
 }
 
+# Removal is destructive: neither an is-active error nor a successful stop
+# proves the process is gone. Timers and in-flight updaters must be quiescent
+# too, before deleting their executable or the server's persistent files.
+confirm_pulse_unit_removable() {
+    local unit="$1"
+    local load_state="" active_state="" unit_file_state=""
+    if ! load_state=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! active_state=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot confirm service state ($unit); refusing removal. Files are preserved; reconcile service state before retrying."
+        return 1
+    fi
+    if [[ "$active_state" != "inactive" ]]; then
+        print_error "Unit is not confirmed inactive ($unit); refusing removal. Files are preserved; reconcile service state before retrying."
+        return 1
+    fi
+    [[ "$load_state" == "not-found" ]] && return 0
+    case "$load_state" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); refusing removal"; return 1 ;;
+    esac
+    if ! unit_file_state=$(timeout -k 1 5 systemctl show "$unit" --property=UnitFileState --value 2>/dev/null); then
+        print_error "Cannot confirm unit disabled ($unit); refusing removal"
+        return 1
+    fi
+    case "$unit_file_state" in
+        disabled|static|indirect|masked|masked-runtime) return 0 ;;
+        *) print_error "Unit is not confirmed disabled ($unit); refusing removal"; return 1 ;;
+    esac
+}
+
+stop_pulse_unit_for_removal() {
+    local unit="$1"
+    local load_state="" active_state=""
+    if ! load_state=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! active_state=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot inspect unit ($unit); refusing removal"
+        return 1
+    fi
+    if [[ "$load_state" == "not-found" && "$active_state" == "inactive" ]]; then
+        return 0
+    fi
+    case "$load_state" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); refusing removal"; return 1 ;;
+    esac
+    case "$active_state" in
+        inactive) ;;
+        active|failed)
+            if ! timeout -k 1 5 systemctl stop "$unit"; then
+                print_error "Cannot stop unit ($unit); refusing removal. Reconcile service state before retrying."
+                return 1
+            fi
+            ;;
+        *) print_error "Unsettled unit state ($unit); refusing removal"; return 1 ;;
+    esac
+    if ! timeout -k 1 5 systemctl disable "$unit"; then
+        print_error "Cannot disable unit ($unit); refusing removal"
+        return 1
+    fi
+    confirm_pulse_unit_removable "$unit"
+}
+
+quiesce_pulse_for_removal() {
+    local service_name="$1" unit=""
+    local units=("$UPDATE_TIMER_UNIT" "$UPDATE_SERVICE_UNIT" "${service_name%.service}.service")
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        units+=(pulse.service pulse-backend.service)
+    fi
+    # A full uninstall also removes the local legacy footprint. Refuse before
+    # any server deletion if that footprint cannot be safely quiesced.
+    if local_sensor_proxy_present; then
+        units+=(pulse-sensor-proxy-selfheal.timer pulse-sensor-cleanup.path
+            pulse-sensor-proxy-selfheal.service pulse-sensor-cleanup.service pulse-sensor-proxy.service)
+    fi
+    for unit in "${units[@]}"; do
+        stop_pulse_unit_for_removal "$unit" || return 1
+    done
+    # Reconcile all targets again, not just the last one stopped. An earlier
+    # unit that reactivated/re-enabled during this sequence blocks deletion.
+    for unit in "${units[@]}"; do
+        confirm_pulse_unit_removable "$unit" || return 1
+    done
+}
+
 # Called only after a confirmed stop and a failed atomic rename. The previous
 # executable is still in place. An uncertain stop never reaches this recovery,
 # and an intentionally inactive/failed service must not be started for the user.
@@ -5212,9 +5296,10 @@ main() {
                 exit 0
                 ;;
             remove)
-                # Stop and disable service
-                systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-                systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+                if ! quiesce_pulse_for_removal "$SERVICE_NAME"; then
+                    print_error "Pulse removal is incomplete; no files have been removed. Previously stopped units are not automatically restarted."
+                    return 1
+                fi
                 
                 # Remove service files
                 rm -f "/etc/systemd/system/$SERVICE_NAME.service"
@@ -5373,7 +5458,10 @@ remove_local_sensor_proxy_managed_keys() {
     fi
     chmod --reference="$auth_file" "$tmp_file" 2>/dev/null || chmod 600 "$tmp_file" 2>/dev/null || true
     chown --reference="$auth_file" "$tmp_file" 2>/dev/null || true
-    mv "$tmp_file" "$auth_file"
+    if ! mv "$tmp_file" "$auth_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
     echo "Removed legacy pulse-sensor-proxy SSH key entries from $auth_file"
 }
 
@@ -5389,24 +5477,23 @@ cleanup_local_sensor_proxy() {
         pulse-sensor-proxy-selfheal.service \
         pulse-sensor-cleanup.path \
         pulse-sensor-cleanup.service; do
-        systemctl stop "$unit" >/dev/null 2>&1 || true
-        systemctl disable "$unit" >/dev/null 2>&1 || true
+        stop_pulse_unit_for_removal "$unit" || return 1
     done
 
-    rm -f "$SENSOR_PROXY_BINARY_PATH"
-    rm -f /usr/local/bin/pulse-sensor-cleanup.sh
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path"
-    rm -rf "$SENSOR_PROXY_RUNTIME_DIR"
-    rm -rf "$SENSOR_PROXY_INSTALL_ROOT"
-    rm -rf "$SENSOR_PROXY_WORK_DIR"
-    rm -rf "$SENSOR_PROXY_CONFIG_DIR"
-    rm -rf "$SENSOR_PROXY_LOG_DIR"
+    rm -f "$SENSOR_PROXY_BINARY_PATH" || return 1
+    rm -f /usr/local/bin/pulse-sensor-cleanup.sh || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path" || return 1
+    rm -rf "$SENSOR_PROXY_RUNTIME_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_INSTALL_ROOT" || return 1
+    rm -rf "$SENSOR_PROXY_WORK_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_CONFIG_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_LOG_DIR" || return 1
 
-    remove_local_sensor_proxy_managed_keys
+    remove_local_sensor_proxy_managed_keys || return 1
 
     if id -u "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1; then
         userdel --remove "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || userdel "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || true
@@ -5421,6 +5508,7 @@ cleanup_local_sensor_proxy() {
     echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
 }
 
+
 # Uninstall function
 uninstall_pulse() {
     check_root
@@ -5432,23 +5520,11 @@ uninstall_pulse() {
     local service_name
     service_name=$(detect_service_name)
     
-    # Stop and disable service
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        echo "Stopping $service_name..."
-        systemctl stop "$service_name"
+    if ! quiesce_pulse_for_removal "$service_name"; then
+        print_error "Pulse removal is incomplete; no files have been removed. Previously stopped units are not automatically restarted."
+        return 1
     fi
-    
-    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
-        echo "Disabling $service_name..."
-        systemctl disable "$service_name"
-    fi
-    
-    # Stop and disable auto-update timer if it exists
-    if update_timer_enabled; then
-        echo "Disabling auto-update timer..."
-        systemctl disable --now "$UPDATE_TIMER_UNIT"
-    fi
-    
+
     # Remove files
     echo "Removing Pulse files..."
     rm -rf "$INSTALL_DIR"
@@ -5474,7 +5550,7 @@ uninstall_pulse() {
 
     # Remove any leftover legacy pulse-sensor-proxy footprint on this host so a
     # full uninstall on a v5-upgraded Proxmox host leaves nothing behind.
-    cleanup_local_sensor_proxy
+    cleanup_local_sensor_proxy || return 1
 
     # Reload systemd
     systemctl daemon-reload

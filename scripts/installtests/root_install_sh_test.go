@@ -1022,14 +1022,27 @@ func TestRootInstallUninstallCleansLegacySensorProxy(t *testing.T) {
 		SENSOR_PROXY_LOG_DIR="` + filepath.Join(tmp, "log") + `"
 		SENSOR_PROXY_SERVICE_USER="pulse-sensor-proxy-test"
 		SENSOR_PROXY_AUTHORIZED_KEYS_PATH="` + authKeys + `"
-		systemctl() { return 0; }
+		timeout() { shift 3; "$@"; }
+        systemctl() {
+            if [[ "$1" == "show" ]]; then
+                case "$3" in
+                    --property=LoadState) echo loaded ;;
+                    --property=ActiveState) echo inactive ;;
+                    --property=UnitFileState) echo disabled ;;
+                    *) return 1 ;;
+                esac
+            fi
+        }
 		userdel() { echo "userdel $*" >>"` + marker + `"; return 0; }
 		groupdel() { echo "groupdel $*" >>"` + marker + `"; return 0; }
 		id() { return 0; }
 		getent() { return 0; }
 	`
 
-	funcs := extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
+	funcs := extractRootInstallShellFunction(t, "confirm_pulse_unit_removable") + "\n" +
+		extractRootInstallShellFunction(t, "stop_pulse_unit_for_removal") + "\n" +
+		`print_error() { echo "$*" >&2; }` + "\n" +
+		extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
 		extractRootInstallShellFunction(t, "remove_local_sensor_proxy_managed_keys") + "\n" +
 		extractRootInstallShellFunction(t, "cleanup_local_sensor_proxy")
 
@@ -2500,5 +2513,39 @@ func TestRootInstallPctExecCommandsResolveOnPctExecPath(t *testing.T) {
 			continue
 		}
 		t.Fatalf("install.sh:%d runs %q through pct exec by bare name, which is not on PATH=/sbin:/bin:/usr/sbin:/usr/bin: %s", i+1, command, strings.TrimSpace(line))
+	}
+}
+
+// Failures must propagate even when the cleanup is called from a conditional
+// (where Bash disables errexit); a failed key replacement cannot claim success.
+func TestRootInstallSensorProxyCleanupRejectsFailedKeyReplacement(t *testing.T) {
+	dir := t.TempDir()
+	installer, err := filepath.Abs(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := filepath.Join(dir, "authorized_keys")
+	original := "ssh-ed25519 TEST keep-admin\nssh-ed25519 OLD # pulse-managed-key\n"
+	if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+source "$INSTALLER_UNDER_TEST"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$KEYS_UNDER_TEST"
+mv() { return 1; }
+if remove_local_sensor_proxy_managed_keys; then
+    echo UNEXPECTED_COMPLETION
+    exit 1
+fi
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "INSTALLER_UNDER_TEST="+installer, "KEYS_UNDER_TEST="+keys)
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.Contains(string(out), "Removed legacy") {
+		t.Fatalf("failed replacement was accepted: %v\n%s", err, out)
+	}
+	got, err := os.ReadFile(keys)
+	if err != nil || string(got) != original {
+		t.Fatalf("key replacement failure changed original: %v", err)
 	}
 }
