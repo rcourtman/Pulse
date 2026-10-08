@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -554,6 +555,78 @@ func TestAISettingsHandler_DiscoveryStoreAccessors(t *testing.T) {
 	}
 }
 
+// In DEMO_MODE the demo middleware admits every GET and HEAD as a read, and
+// the CSRF check skips them, so a mutating handler reachable by a safe method
+// is a write any demo visitor can make. These routes dispatch without a mux
+// method pattern, so each handler must refuse GET and HEAD itself.
+func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
+	dataPath := t.TempDir()
+	hashed, err := internalauth.HashPassword("demo-router-test-password")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataPath,
+		ConfigPath: dataPath,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashed,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	handler := router.Handler()
+
+	discovery := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
+	router.SetDiscoveryService(discovery)
+	ageBefore := discovery.GetMaxDiscoveryAge()
+
+	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", `<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`)
+	samlSession := generateSessionToken()
+	GetSessionStore().CreateSAMLSession(samlSession, time.Hour, "agent", "127.0.0.1", "demo", &SAMLTokenInfo{
+		ProviderID:   "okta",
+		NameID:       "name-id",
+		SessionIndex: "sess-1",
+	})
+
+	cases := []struct {
+		path  string
+		body  string
+		allow string
+	}{
+		{path: "/api/discovery/settings", body: `{"max_discovery_age_days":10}`, allow: "PUT, POST"},
+		{path: "/api/saml/okta/logout", allow: http.MethodPost},
+	}
+	for _, tc := range cases {
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			req := httptest.NewRequest(method, tc.path, strings.NewReader(tc.body))
+			req.SetBasicAuth("demo", "demo-router-test-password")
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: samlSession})
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s %s status = %d, want %d: %s", method, tc.path, rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+			}
+			if allow := rec.Header().Get("Allow"); allow != tc.allow {
+				t.Fatalf("%s %s Allow = %q, want %q", method, tc.path, allow, tc.allow)
+			}
+		}
+	}
+
+	if got := discovery.GetMaxDiscoveryAge(); got != ageBefore {
+		t.Fatalf("safe methods changed the max discovery age: %s -> %s", ageBefore, got)
+	}
+	if !ValidateSession(samlSession) {
+		t.Fatal("safe methods cleared the SAML session")
+	}
+}
+
 func TestAISettingsHandler_GetConfig_NonDefaultFallsBackWhenMultiTenantUnavailable(t *testing.T) {
 	handler := newTestAISettingsHandler(&config.Config{APIToken: "token"}, config.NewConfigPersistence(t.TempDir()), nil)
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
@@ -1027,5 +1100,197 @@ func TestDemoModeRouterRejectsAssistantSessionMutationsOverSafeMethods(t *testin
 
 	if rec := serve(http.MethodGet, "/api/ai/sessions/session-1/messages"); rec.Code != http.StatusOK {
 		t.Fatalf("demo GET messages status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+// countingUnifiedSeedProvider serves a unified listing to the resources API
+// and counts the listing clones taken from it.
+type countingUnifiedSeedProvider struct {
+	listing func() ([]unifiedresources.Resource, time.Time)
+	clones  int
+}
+
+func (p *countingUnifiedSeedProvider) ReadSnapshot() models.StateSnapshot {
+	return models.StateSnapshot{}
+}
+
+func (p *countingUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
+	p.clones++
+	return p.listing()
+}
+
+// putOperatorStateThroughAPI writes operator state the way the resource
+// editor does and returns the canonical ID the resources API stored it under.
+func putOperatorStateThroughAPI(t *testing.T, handlers *ResourceHandlers, ref string, body map[string]any) string {
+	t.Helper()
+	payload, _ := json.Marshal(body)
+	rec := httptest.NewRecorder()
+	handlers.HandleResourceOperatorState(rec, httptest.NewRequest(http.MethodPut, "/api/resources/"+ref+"/operator-state", strings.NewReader(string(payload))))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT %s operator state: %d %s", ref, rec.Code, rec.Body.String())
+	}
+	var written resourceOperatorStateAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &written); err != nil {
+		t.Fatalf("decode PUT %s: %v", ref, err)
+	}
+	return written.CanonicalID
+}
+
+func activeMaintenanceBody(now time.Time, reason string) map[string]any {
+	return map[string]any{
+		"monitoringMode":     "normal",
+		"lifecycleState":     "active",
+		"maintenanceStartAt": now.Add(-time.Minute).Format(time.RFC3339),
+		"maintenanceEndAt":   now.Add(time.Hour).Format(time.RFC3339),
+		"maintenanceReason":  reason,
+	}
+}
+
+// A Patrol finding raised before an operator linked its agent into a VM keeps
+// the agent's canonical ID, and Patrol re-projects it with that reference. Its
+// operator state must be the merged VM's, which the resources API writes and
+// alert intent reads for the same reference, even though the agent kept a row
+// of its own from before the link. Resolving finding references must not clone
+// the unified listing.
+func TestPatrolFindingOperatorStateFollowsLinkFoldedReference(t *testing.T) {
+	now := time.Now().UTC()
+	handlers := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	t.Cleanup(func() { _ = handlers.CloseStores() })
+	store, err := handlers.getStore("default")
+	if err != nil {
+		t.Fatalf("resource store: %v", err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(adapter)
+	freshness := now
+	seed := &countingUnifiedSeedProvider{listing: func() ([]unifiedresources.Resource, time.Time) {
+		return adapter.GetAll(), freshness
+	}}
+	handlers.SetStateProvider(seed)
+	router := &Router{monitor: monitor, resourceHandlers: handlers}
+
+	publish := func(at time.Time) {
+		freshness = at
+		adapter.PopulateSnapshotAndSupplemental(models.StateSnapshot{
+			Hosts:      []models.Host{{ID: "host-app-guest", Hostname: "app-guest", MachineID: "machine-app-guest", Status: "online", LastSeen: now}},
+			LastUpdate: at,
+		}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+			unifiedresources.SourceVMware: {{
+				SourceID: "vc-1:vm:vm-42",
+				Resource: unifiedresources.Resource{
+					Type:       unifiedresources.ResourceTypeVM,
+					Technology: "vmware",
+					Name:       "app-guest",
+					Status:     unifiedresources.StatusOnline,
+					LastSeen:   now,
+					VMware:     &unifiedresources.VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+				},
+				Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"app-guest"}},
+			}},
+		})
+	}
+
+	publish(now)
+	agentID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, "machine-app-guest")
+	vmID := ""
+	for _, resource := range adapter.GetAll() {
+		if resource.VMware != nil {
+			vmID = resource.ID
+		}
+	}
+	if vmID == "" {
+		t.Fatal("published estate has no vSphere VM")
+	}
+	// The agent's own row predates the link and holds only defaults.
+	if got := putOperatorStateThroughAPI(t, handlers, agentID, map[string]any{"monitoringMode": "normal", "lifecycleState": "active"}); got != agentID {
+		t.Fatalf("pre-link write landed on %q, want the agent %q", got, agentID)
+	}
+
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	// Identity pins persist on the first rebuild; damage from them shows on the second.
+	publish(now.Add(time.Second))
+	publish(now.Add(2 * time.Second))
+	if resolved, ok := adapter.ResolveCanonicalResourceID(agentID); !ok || resolved != vmID {
+		t.Fatalf("published registry resolves folded agent %s to %q (ok=%v), want VM %s", agentID, resolved, ok, vmID)
+	}
+
+	// The operator puts the merged row into maintenance through the folded ID.
+	if got := putOperatorStateThroughAPI(t, handlers, agentID, activeMaintenanceBody(now, "moving hosts")); got != vmID {
+		t.Fatalf("maintenance written by folded ID landed on %q, want merged VM %q", got, vmID)
+	}
+	// A reference no registry resolves keeps its own row.
+	if got := putOperatorStateThroughAPI(t, handlers, "agent:retired-host", map[string]any{"monitoringMode": "muted", "lifecycleState": "active"}); got != "agent:retired-host" {
+		t.Fatalf("unresolved write landed on %q", got)
+	}
+
+	seed.clones = 0
+	provider := router.patrolResourceOperatorStateProvider("default")
+	for _, ref := range []string{agentID, vmID, "vc-1:vm:vm-42"} {
+		projection, ok := provider.OperatorStateProjection(ref, now)
+		if !ok || projection.MaintenanceWindow == nil || projection.MaintenanceWindow.Reason != "moving hosts" {
+			t.Fatalf("finding on %s projected %+v (ok=%v), want merged VM %s's maintenance window", ref, projection, ok, vmID)
+		}
+	}
+	projection, ok := provider.OperatorStateProjection("agent:retired-host", now)
+	if !ok || projection.MonitoringMode != "muted" {
+		t.Fatalf("unresolved reference projected %+v (ok=%v), want its own muted row", projection, ok)
+	}
+	if seed.clones != 0 {
+		t.Fatalf("finding projection cloned the unified listing %d times; it must resolve through the monitor's read state", seed.clones)
+	}
+}
+
+// After a restart, a host that has not reported again is listed only through
+// saved-host continuity. A Patrol finding naming it by its agent reference
+// must read the operator state the resources API wrote for that reference,
+// still without cloning the unified listing per finding.
+func TestPatrolFindingOperatorStateResolvesContinuityBackedHost(t *testing.T) {
+	now := time.Now().UTC()
+	monitorCfg := &config.Config{DataPath: t.TempDir()}
+	seedMonitor, err := monitoring.New(monitorCfg)
+	if err != nil {
+		t.Fatalf("monitoring.New seed monitor: %v", err)
+	}
+	t.Cleanup(seedMonitor.Stop)
+	if _, err := seedMonitor.ApplyHostReport(agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: "agent-1", Version: "6.0.0-rc.1", IntervalSeconds: 30},
+		Host:      agentshost.HostInfo{ID: "machine-1", MachineID: "machine-1", Hostname: "host-1.local", Platform: "linux"},
+		Timestamp: now,
+	}, &config.APITokenRecord{ID: "token-1", Name: "Token One"}); err != nil {
+		t.Fatalf("ApplyHostReport seed continuity: %v", err)
+	}
+	monitor, err := monitoring.New(monitorCfg)
+	if err != nil {
+		t.Fatalf("monitoring.New restarted monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	handlers := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	t.Cleanup(func() { _ = handlers.CloseStores() })
+	store, err := handlers.getStore("default")
+	if err != nil {
+		t.Fatalf("resource store: %v", err)
+	}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)))
+	seed := &countingUnifiedSeedProvider{listing: monitor.UnifiedResourceSnapshot}
+	handlers.SetStateProvider(seed)
+	router := &Router{monitor: monitor, resourceHandlers: handlers}
+
+	const ref = "agent:machine-1"
+	canonicalID := putOperatorStateThroughAPI(t, handlers, ref, activeMaintenanceBody(now, "disk swap"))
+	if canonicalID == ref {
+		t.Fatalf("resources API did not resolve continuity host reference %s", ref)
+	}
+
+	seed.clones = 0
+	projection, ok := router.patrolResourceOperatorStateProvider("default").OperatorStateProjection(ref, now)
+	if !ok || projection.MaintenanceWindow == nil || projection.MaintenanceWindow.Reason != "disk swap" {
+		t.Fatalf("finding on %s projected %+v (ok=%v), want the maintenance window the API stored on %s", ref, projection, ok, canonicalID)
+	}
+	if seed.clones != 0 {
+		t.Fatalf("finding projection cloned the unified listing %d times; it must resolve through the monitor's read state", seed.clones)
 	}
 }

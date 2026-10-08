@@ -2881,46 +2881,6 @@ func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 	}
 }
 
-func TestContract_StorageSummaryChartsStayAggregateOnly(t *testing.T) {
-	monitor, state, metricsHistory := newTestMonitor(t)
-	now := time.Now().UTC().Truncate(time.Second)
-	state.Storage = []models.Storage{
-		{ID: "store-1", Name: "Store One"},
-		{ID: "store-2", Name: "Store Two"},
-	}
-	metricsHistory.AddStorageMetric("store-1", "used", 400, now)
-	metricsHistory.AddStorageMetric("store-1", "avail", 600, now)
-	metricsHistory.AddStorageMetric("store-1", "total", 1000, now)
-	metricsHistory.AddStorageMetric("store-2", "used", 100, now)
-	metricsHistory.AddStorageMetric("store-2", "avail", 900, now)
-	metricsHistory.AddStorageMetric("store-2", "total", 1000, now)
-	syncTestResourceStore(t, monitor, state)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/storage-summary?range=24h", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleStorageSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded StorageSummaryTrendResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal storage summary response: %v", err)
-	}
-	if len(decoded.Capacity) != 1 {
-		t.Fatalf("expected one aggregate capacity point, got %+v", decoded.Capacity)
-	}
-	if decoded.Capacity[0].Value != 25 {
-		t.Fatalf("expected aggregate capacity of 25%%, got %+v", decoded.Capacity[0])
-	}
-	if decoded.Stats.PointCounts.Total != 1 || decoded.Stats.PointCounts.Storage != 1 {
-		t.Fatalf("expected aggregate-only point counts, got %+v", decoded.Stats.PointCounts)
-	}
-}
-
 func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	setTrueNASFeatureForTest(t, false)
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
@@ -3535,136 +3495,6 @@ func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *t
 	if workloadDecoded.GuestTypes[resourceID] != "vm" {
 		t.Fatalf("expected vm guest type for %q, got %q", resourceID, workloadDecoded.GuestTypes[resourceID])
 	}
-
-	summaryReq := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=1h", nil)
-	summaryRec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(summaryRec, summaryReq)
-
-	if summaryRec.Code != http.StatusOK {
-		t.Fatalf("expected workloads summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
-	}
-
-	var summaryDecoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(summaryRec.Body.Bytes(), &summaryDecoded); err != nil {
-		t.Fatalf("unmarshal workloads summary response: %v", err)
-	}
-	if summaryDecoded.GuestCounts.Total != 1 || summaryDecoded.GuestCounts.Running != 1 {
-		t.Fatalf("expected stable provider-backed guest counts, got %+v", summaryDecoded.GuestCounts)
-	}
-	if len(summaryDecoded.TopContributors.CPU) == 0 {
-		t.Fatal("expected provider-backed cpu top contributor")
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID != resourceID {
-		t.Fatalf("expected workloads summary contributor id %q, got %+v", resourceID, summaryDecoded.TopContributors.CPU[0])
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID == metricID {
-		t.Fatalf("expected workloads summary contributor id to avoid raw metrics target %q", metricID)
-	}
-}
-
-func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testing.T) {
-	store := newTestMetricsStore(t)
-	monitor, state, _ := newTestMonitor(t)
-	setTestUnexportedField(t, monitor, "metricsStore", store)
-
-	state.Nodes = []models.Node{{
-		ID:       "node-contract-1",
-		Name:     "node-contract-1",
-		Instance: "pve1",
-		Status:   "online",
-	}}
-	state.VMs = []models.VM{{
-		ID:         "vm-contract-1",
-		VMID:       101,
-		Name:       "vm-contract-1",
-		Node:       "node-contract-1",
-		Instance:   "pve1",
-		Status:     "running",
-		CPU:        0.75,
-		Memory:     models.Memory{Usage: 42.0},
-		Disk:       models.Disk{Usage: 55.0},
-		NetworkIn:  128,
-		NetworkOut: 256,
-	}}
-	syncTestResourceStore(t, monitor, state)
-
-	readState := monitor.GetUnifiedReadStateOrSnapshot()
-	vms := readState.VMs()
-	if len(vms) != 1 {
-		t.Fatalf("expected 1 vm view, got %d", len(vms))
-	}
-	sourceID := strings.TrimSpace(vms[0].SourceID())
-	if sourceID == "" {
-		t.Fatal("expected vm source ID")
-	}
-
-	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	samples := mixedCadenceLongRangeMetricSamples(now)
-	seed := make([]metrics.WriteMetric, 0, len(samples)*5)
-	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
-		for _, metricType := range []string{"cpu", "memory", "disk"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        percentValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-		for _, metricType := range []string{"netin", "netout"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        rateValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-	}
-	for _, sample := range samples {
-		appendMetric(sample.timestamp, sample.percentValue, sample.rateValue)
-	}
-	store.WriteBatchSync(seed)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=7d", nil)
-	rec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal workloads summary charts response: %v", err)
-	}
-
-	if len(decoded.CPU.P50) == 0 {
-		t.Fatal("expected normalized workload summary p50 series")
-	}
-	if len(decoded.CPU.P50) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p50 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
-	}
-	if len(decoded.CPU.P95) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p95 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
-	}
-	if decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp != now.UnixMilli() {
-		t.Fatalf("expected latest workload summary timestamp %d, got %d", now.UnixMilli(), decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp)
-	}
-
-	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
-	recentCount := 0
-	for _, point := range decoded.CPU.P50 {
-		if point.Timestamp >= recentWindowStart {
-			recentCount++
-		}
-	}
-	if recentCount > 20 {
-		t.Fatalf("expected day-proportional summary buckets, got %d recent p50 points", recentCount)
-	}
 }
 
 func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.T) {
@@ -3684,22 +3514,16 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 		`var workloadChartsBatchWG sync.WaitGroup`,
 		`workloadChartsBatchWG.Add(4)`,
 		`podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)`,
-		`var workloadsSummaryBatchWG sync.WaitGroup`,
-		`workloadsSummaryBatchWG.Add(4)`,
-		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)`,
-		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)`,
-		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)`,
+		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, guestSparklineMetricOrder...)`,
+		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, guestSparklineMetricOrder...)`,
+		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)`,
 		`summaryChartsCacheTTL = 5 * time.Second`,
 		`infrastructureChartsCacheKey(req *http.Request, timeRange string, requestedMetricNames []string) string`,
 		`cachedInfrastructureChartsPayload`,
 		`cacheInfrastructureChartsPayload`,
-		`workloadsSummaryChartsCacheKey`,
-		`cachedWorkloadsSummaryChartsPayload`,
-		`cacheWorkloadsSummaryChartsPayload`,
 		`chartPayloadCacheMaxEntries = 64`,
 		`chartPayloadCacheMaxBytes   = 16 << 20`,
 		`chartPayloads              boundedChartPayloadCache`,
-		`type workloadSummaryMetricBucket struct`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -4447,6 +4271,80 @@ func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+	}
+}
+
+// A SAML provider configured by hand, with the IdP's SSO URL and its PEM
+// signing certificate pasted inline or named by IDPCertFile, verifies the
+// IdP's signatures with that certificate exactly as a provider configured from
+// IdP metadata does: at default settings the ACS accepts the IdP's signed
+// answer to an SP-initiated login and reads the user from it, the IdP's signed
+// answer to an SP-initiated logout completes that logout, and a Response
+// signed by any other key is refused. Manual
+// metadata used to hold the certificate as a PEM block where crewjam/saml
+// base64-decodes DER, so every signature check for these providers failed
+// before reaching the key.
+func TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	impostor := newSAMLManualCertTestIdP(t)
+	certFile := filepath.Join(t.TempDir(), "idp-signing.pem")
+	if err := os.WriteFile(certFile, idp.certPEM, 0o600); err != nil {
+		t.Fatalf("write IdP certificate file: %v", err)
+	}
+	manual := func(inline, file string) *config.SAMLProviderConfig {
+		return &config.SAMLProviderConfig{
+			IDPSSOURL:      "https://idp.example.com/sso",
+			IDPSLOURL:      "https://idp.example.com/slo",
+			IDPEntityID:    samlManualCertTestIdPEntityID,
+			IDPCertificate: inline,
+			IDPCertFile:    file,
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  *config.SAMLProviderConfig
+	}{
+		{name: "IdP metadata", cfg: &config.SAMLProviderConfig{IDPMetadataXML: idp.metadataXML()}},
+		{name: "manual inline certificate", cfg: manual(string(idp.certPEM), "")},
+		{name: "manual certificate file", cfg: manual("", certFile)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service, err := NewSAMLService(context.Background(), "okta", tc.cfg, "https://pulse.example.com")
+			if err != nil {
+				t.Fatalf("NewSAMLService: %v", err)
+			}
+			browserKey := sessionHash("login-token")
+			startLogin := func() string {
+				t.Helper()
+				redirectURL, err := service.MakeAuthRequest("/", browserKey)
+				if err != nil {
+					t.Fatalf("MakeAuthRequest: %v", err)
+				}
+				return samlTestAuthnRequestID(t, redirectURL)
+			}
+
+			result, _, err := service.ProcessResponse(idp.acsPostAnswering(t, service, startLogin()), browserKey)
+			if err != nil {
+				t.Fatalf("ACS refused the configured IdP's signed Response: %s", samlRejectionDetail(err))
+			}
+			if result.Username != "alice" {
+				t.Fatalf("ACS read username %q from the Response, want alice", result.Username)
+			}
+			if _, _, err := service.ProcessResponse(impostor.acsPostAnswering(t, service, startLogin()), browserKey); err == nil {
+				t.Fatal("ACS accepted a Response signed by a key the provider was not given")
+			}
+
+			useSAMLTestAuthStores(t)
+			router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+			router.samlManager.services["okta"] = service
+			requestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "alice"))
+			rec := deliverSAMLTestLogoutResponse(router, idp.slo.redirectQuery(t, requestID), "")
+			if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/?logout=success" {
+				t.Fatalf("SLO refused the configured IdP's signed LogoutResponse: status=%d location=%q body=%q",
+					rec.Code, rec.Header().Get("Location"), rec.Body.String())
+			}
+		})
 	}
 }
 
@@ -14428,6 +14326,79 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 	}
 }
 
+// POST /api/resources/{id}/report-merge keeps its response shape, and on a
+// pair an operator linked it replaces the link: the store no longer holds it
+// and the resource list shows both sides again.
+func TestContract_ResourceReportMergeReplacesOperatorLink(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=vm,agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID string
+	for _, resource := range list() {
+		switch resource.Type {
+		case unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case unifiedresources.ResourceTypeAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture did not list a separate VM and agent: %+v", list())
+	}
+
+	linkRec := httptest.NewRecorder()
+	h.HandleLink(linkRec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/link", strings.NewReader(`{"targetId":"`+agentID+`"}`)))
+	if linkRec.Code != http.StatusOK {
+		t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
+	}
+	if linked := list(); len(linked) != 1 {
+		t.Fatalf("link listed %d resources, want one", len(linked))
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode report-merge: %v", err)
+	}
+	if len(resp) != 3 || resp["status"] != "ok" || resp["message"] != "Merge reported" {
+		t.Fatalf("report-merge response = %#v, want status, message and exclusions", resp)
+	}
+	if exclusions, ok := resp["exclusions"].(float64); !ok || exclusions < 1 {
+		t.Fatalf("report-merge exclusions = %#v, want a positive count", resp["exclusions"])
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if links, err := store.GetLinks(); err != nil || len(links) != 0 {
+		t.Fatalf("report-merge left links %+v (err %v)", links, err)
+	}
+	if split := list(); len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM and the agent apart", len(split))
+	}
+}
+
 func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	now := time.Date(2026, 3, 17, 10, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
@@ -22809,8 +22780,8 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
 		t.Error("router.go must read state from the unified store's canonical accessor")
 	}
-	if !strings.Contains(src, "GetByReference(resourceRef)") {
-		t.Error("router.go must resolve non-canonical finding resource references (Patrol guest rows carry node-scoped source IDs) through the registry before reporting no operator state")
+	if !strings.Contains(src, "resolver.ResolveCanonicalResourceID(resourceRef)") {
+		t.Error("router.go must resolve finding resource references (Patrol guest rows carry node-scoped source IDs; retained findings keep link-folded IDs) through the monitor's published resolver before reading operator state")
 	}
 	if !strings.Contains(src, "IntentionallyOffline: state.IntentionallyOffline") {
 		t.Error("router.go must propagate state.IntentionallyOffline through the projection so the findings runtime sees it")

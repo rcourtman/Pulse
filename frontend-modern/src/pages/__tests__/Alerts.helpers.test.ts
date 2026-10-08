@@ -501,6 +501,7 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).not.toContain('allowInfrastructureFallback');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildResourceSurfaceLinksForResource');
+    expect(alertResourceIncidentsPanelSource).not.toMatch(/from ['"][^'"]*resourceLinks['"]/);
     expect(alertResourceIncidentsPanelSource).not.toContain('{link.compactLabel}');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentAssistantHandoffButton');
     expect(incidentTimelinePanelSource).toContain('IncidentAssistantHandoffButton');

@@ -18,29 +18,21 @@ type WorkloadsTableProps = Pick<
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
   | 'getGroupLabel'
-  | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
   | 'groupedWindowing'
   | 'groupLabelBadges'
   | 'guestMetadata'
   | 'guestParentNodeMap'
-  | 'groupNodeDrawerMode'
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleSort'
   | 'handleTagClick'
-  | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
-  | 'focusedSummaryWorkloadGroupScope'
-  | 'focusedSummaryWorkloadGroupId'
-  | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
   | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
-  | 'setFocusedWorkloadGroupScope'
-  | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
   | 'setTableRootRef'
@@ -133,27 +125,19 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             alertsEnabled={props.alertsEnabled}
             bottomSpacerHeight={props.bottomSpacerHeight}
             getGroupLabel={props.getGroupLabel}
-            getNodeTemperatureThresholds={props.getNodeTemperatureThresholds}
             groupedGuests={props.groupedGuests}
             groupedWindowing={props.groupedWindowing}
             groupLabelBadges={props.groupLabelBadges}
             guestMetadata={props.guestMetadata}
             guestParentNodeMap={props.guestParentNodeMap}
-            groupNodeDrawerMode={props.groupNodeDrawerMode}
             groupingMode={props.groupingMode}
             handleCustomUrlUpdate={props.handleCustomUrlUpdate}
             handleTagClick={props.handleTagClick}
-            activeSummaryWorkloadGroupScope={props.activeSummaryWorkloadGroupScope}
             activeSummaryWorkloadId={props.activeSummaryWorkloadId}
-            focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
-            focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
-            hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
             nestedWorkloadContextByGuestId={props.nestedWorkloadContextByGuestId}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
             selectedGuestId={props.selectedGuestId}
-            setFocusedWorkloadGroupScope={props.setFocusedWorkloadGroupScope}
-            setHoveredWorkloadGroupScope={props.setHoveredWorkloadGroupScope}
             setHoveredWorkloadId={props.setHoveredWorkloadId}
             setSelectedGuestId={props.setSelectedGuestId}
             setTableBodyRef={props.setTableBodyRef}

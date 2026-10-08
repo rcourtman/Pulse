@@ -586,6 +586,82 @@ describe('ResourceTable', () => {
     });
   });
 
+  describe('pulse-relaxed guests', () => {
+    const relaxedGuest = (overrides: Partial<Resource> = {}) =>
+      makeResource({
+        id: 'vm-1',
+        name: 'batch-vm',
+        type: 'guest',
+        pulseRelaxed: true,
+        thresholds: {},
+        defaults: { cpu: 80, memory: 85, disk: 90 },
+        ...overrides,
+      });
+    const renderGrouped = (resource: Resource, overrides: Record<string, any> = {}) =>
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: undefined,
+            groupedResources: { node1: [resource] },
+            columns: ['CPU %', 'Memory %', 'Disk %'],
+            ...overrides,
+          })}
+        />
+      ));
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('states the thresholds the tag raises on the %s row', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      renderGrouped(relaxedGuest());
+
+      const line = screen.getByTestId('alert-resource-relaxed-triggers');
+      expect(line).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at CPU 95% · Memory 92% · Disk 95%',
+      );
+      expect(line.getAttribute('title')).toContain('Remove the tag in Proxmox');
+      // The row keeps showing the configured values the editor changes.
+      expect(screen.getByText('80')).toBeInTheDocument();
+    });
+
+    it('omits metrics the tag leaves alone', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: -1, memory: 96 } }));
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('follows unsaved edits', () => {
+      renderGrouped(relaxedGuest(), {
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: 97, memory: 93, disk: 70 }),
+      });
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('stays hidden when the tag raises nothing or alerts are off', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: 99, memory: 99, disk: 99 } }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ disabled: true }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest(), { globalDisableFlag: () => true });
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ pulseRelaxed: false }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+    });
+  });
+
   describe('metric display values', () => {
     it('shows formatted metric values using formatMetricValue', () => {
       const formatMetricValue = vi.fn((metric: string, value: number | undefined) => {

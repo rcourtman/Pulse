@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "1a094646d7f21217eda051af6ba0252e208f283e",
+  "verified_at": "2026-10-07T23:22:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/storagePageState.ts",
+    "frontend-modern/src/components/Storage/useStorageExpansionState.ts",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/storagePageState.ts": "63b20e139475680eda3e637eedc9ce2628108c6a91d0d2fab7648c67fd679f16",
+    "frontend-modern/src/components/Storage/useStorageExpansionState.ts": "b0b012ef7c386a6377dfe0852b5ed81be056efdc6acd2ab244b2c175bc696605",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "fe35c36b9478d03f1de21427d842b6f6f795b8965fc5293fff12aa4d4dae1431",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts": "8ba44d5fb5d782dd96d1cec8bcb57a6696425d4eb5ab7fd546f77c4a073640d7"
+  },
+  "routes": [
+    "/proxmox/storage",
+    "/proxmox/storage?group=node",
+    "/proxmox/storage?group=type",
+    "/proxmox/storage?tab=disks",
+    "/proxmox/storage?resource=ceph-rbd",
+    "/proxmox/storage?group=node&resource=ceph-rbd",
+    "/proxmox/storage?group=node&summaryGroup=storage:node:West Production F",
+    "/proxmox",
+    "/proxmox?resource=<guest>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private 12-node mock stack (PULSE_MOCK_MODE, live websocket updates) served by Vite from this branch; headless Chromium on pulse-dev through an SSH tunnel, same stack swapped between the PR 2709 code (before) and this change (after)",
+    "Pools view with an open pool after scrolling the app shell to the top: app-shell scrollTop sampled every 500 ms for 12 s. Before: 0, 0, 1008, 1111 and 1111 for the remaining 20 samples (yanked back to the open pool). After: 0 for all 24 samples. Physical Disks view and the Workloads table read 0 for all 24 samples both before and after",
+    "Storage grouped by node with an open pool, its group collapsed by the Collapse button and, separately, by a group-header click: group state sampled every 500 ms. Before: open in all 12 samples (bounced straight back). Bridge fix alone: the header-collapsed group reopened about 1.5 s later and console probes showed the expansion sync re-adding the collapsed key on a live update. After: shut in all 32 samples (16 s) for both paths",
+    "Regrouping after a collapse: node grouping with one group collapsed shows 33 of 35 pool rows; switching to type, then ungrouped, then back to node shows all 35 rows",
+    "Final pass on the rebased tree (PR 2709 merged): the scroll and collapse samples above unchanged, no page errors at either width"
+  ],
+  "interactions": [
+    "Click a lower pool row: inline detail opens, row header and top of the detail in view, then Escape closes it (1440x900 and 390x844)",
+    "Click a lower physical disk row on ?tab=disks: detail opens with the row header and detail top in view (both widths)",
+    "Click a lower Workloads guest row on /proxmox: detail opens in view and Escape closes it; ?resource=<guest> deep link opens the guest detail in view (both widths)",
+    "Load ?resource=ceph-rbd: the Ceph pool detail opens in view (both widths)",
+    "With ?group=node, collapse the shared group with its disclosure button, then navigate in-app to ?group=node&resource=ceph-rbd: the group reopens and the Ceph detail is in view (both widths)",
+    "Load ?group=node&summaryGroup=<last group>: the pinned header scrolls into view and is marked active (scrollTop 1189 desktop and 1103 phone, as before the change)",
+    "Hover eight Storage and Workloads rows: rows mark active with no change in window scroll listeners or style reads versus before",
+    "Known unchanged edge recorded: with a pool already open and its group collapsed, an in-app link to that same pool does not reopen the group, because focus does not change"
+  ]
+}

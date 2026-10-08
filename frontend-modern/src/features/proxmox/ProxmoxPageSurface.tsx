@@ -494,7 +494,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     // surface, so label it with the platform vocabulary instead of 'Info'.
     columnLabelOverrides: { info: 'ID' },
     statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
-    groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,
     metricHistoryRange: props.metricHistoryRange,
@@ -617,12 +616,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
               memoryDisplayBasis={workloadsState.workloadMemoryDisplayBasis}
               setMemoryDisplayBasis={props.setMemoryDisplayBasis}
               forcedPlatform={PROXMOX_PLATFORM_FILTER}
-              pinnedSelectionActive={() =>
-                Boolean(
-                  workloadsState.selectedGuestId() ||
-                  workloadsState.focusedSummaryWorkloadGroupId(),
-                )
-              }
+              pinnedSelectionActive={() => Boolean(workloadsState.selectedGuestId())}
               onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
             />
           </div>
@@ -636,7 +630,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           forcedPlatform={PROXMOX_PLATFORM_FILTER}
           excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}
           showNestedExcludedWorkloads
-          groupNodeDrawerMode="disabled"
           suppressFilterToolbar
           emptyStateTitle="No Proxmox workloads"
           emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."

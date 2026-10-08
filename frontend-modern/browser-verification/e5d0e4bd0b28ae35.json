@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "c5416b6800add376e674ab64292df3e4d8e88f7f",
+  "verified_at": "2026-10-07T22:32:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/aiChat.ts",
+    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts",
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts",
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/AI/Chat/types.ts",
+    "frontend-modern/src/stores/aiChat.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/aiChat.ts": "ed10500c7796f4c860e7d44855e154fca1523faace9e2c56adb50726ea55ad30",
+    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "5c07c9c5811f5171fcc6df6ba74057b6d9646dec10f55cf120265e46715e14e2",
+    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts": "1bcbadf3f89382985272008e354e6608f8afb22a36444d9359df84adc963e421",
+    "frontend-modern/src/components/AI/Chat/index.tsx": "87168e37367850a743d97c2775ef422a2dae7869f6383838382d956627d91b98",
+    "frontend-modern/src/components/AI/Chat/types.ts": "291984a8b043781dd103e252c330f6697421c0c4978209ff61ee729b5e4e6f52",
+    "frontend-modern/src/stores/aiChat.ts": "5954f3bab0f419c8916f1971f0c06464ae68a7e76476cee67a3395239606f6a8"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox overview with the Assistant drawer open from \"Ask Pulse Assistant about Proxmox\": plain chat, saved control level Read-only then Chat actions; pill reads \"Chat: Chat actions\" and the chat actions warning shows, as before",
+    "Plain chat turn sent and answered by the mock Assistant: captured /api/ai/chat body keys are only prompt; no autonomous_mode key",
+    "Patrol inbox issue (ZFS device sdb2 FAULTED) opened with Start review and Evidence and history expanded",
+    "Explain with Assistant scoped handoff with saved control level Chat actions: drawer shows the Pulse Patrol briefing, \"Approval required before any action.\", pill \"Chat: Ask first\", no chat actions warning",
+    "Explain request body keys are handoff_context, handoff_resources (the sdb2 device id), prompt; no autonomous_mode key",
+    "Follow-up turn in the same handoff session: body keys model, prompt, session_id; drawer keeps the approval-required note and Ask first pill",
+    "Same Explain flow at 390x844: identical request keys, approval note, Ask first pill, no warning"
+  ],
+  "interactions": [
+    "Clicked Ask Pulse Assistant about Proxmox to open the drawer",
+    "Switched the drawer chat action mode from Read-only to Chat actions through the mode picker (saved control_level read back as autonomous)",
+    "Typed and sent a plain prompt from the drawer composer with Enter",
+    "Clicked Start review and expanded Evidence and history on the Patrol page",
+    "Clicked Explain with Assistant (aiChatStore.explain path) at 1440x900 and again at 390x844",
+    "Typed and sent a follow-up prompt in the handoff session",
+    "Captured every /api/ai/chat request body with a page-level fetch wrapper and checked its keys"
+  ]
+}

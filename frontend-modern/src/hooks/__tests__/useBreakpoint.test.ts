@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { createRoot } from 'solid-js';
 import {
   BREAKPOINTS,
   PRIORITY_BREAKPOINTS,
+  useBreakpoint,
   type Breakpoint,
   type ColumnPriority,
+  type UseBreakpointReturn,
 } from '../useBreakpoint';
 
 const getBreakpointName = (width: number): Breakpoint => {
@@ -160,5 +163,86 @@ describe('useBreakpoint (pure functions)', () => {
       expect(PRIORITY_BREAKPOINTS.supplementary).toBe('lg');
       expect(PRIORITY_BREAKPOINTS.detailed).toBe('xl');
     });
+  });
+});
+
+describe('useBreakpoint (shared viewport width)', () => {
+  const innerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const setInnerWidth = (value: number) =>
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value, writable: true });
+  const disposers: Array<() => void> = [];
+
+  const mountCallers = (count: number): UseBreakpointReturn[] =>
+    Array.from({ length: count }, () =>
+      createRoot((dispose) => {
+        disposers.push(dispose);
+        return useBreakpoint();
+      }),
+    );
+
+  afterEach(() => {
+    disposers.splice(0).forEach((dispose) => dispose());
+    vi.restoreAllMocks();
+    if (innerWidth) Object.defineProperty(window, 'innerWidth', innerWidth);
+  });
+
+  it('adds one window resize listener however many callers are mounted', () => {
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const resizeCalls = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.filter(([type]) => type === 'resize').length;
+
+    mountCallers(50);
+    expect(resizeCalls(addListener)).toBe(1);
+
+    disposers.splice(0, 49).forEach((dispose) => dispose());
+    expect(resizeCalls(removeListener)).toBe(0);
+
+    disposers.splice(0).forEach((dispose) => dispose());
+    expect(resizeCalls(removeListener)).toBe(1);
+  });
+
+  it('moves every caller across a breakpoint after one debounced frame', () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      nextFrame += 1;
+      frames.set(nextFrame, callback);
+      return nextFrame;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id);
+    });
+
+    setInnerWidth(1440);
+    const callers = mountCallers(3);
+    expect(callers.map((caller) => caller.isDesktop())).toEqual([true, true, true]);
+
+    setInnerWidth(390);
+    window.dispatchEvent(new Event('resize'));
+    expect(frames.size).toBe(1);
+    // A second resize in the same frame replaces the pending update.
+    window.dispatchEvent(new Event('resize'));
+    expect(frames.size).toBe(1);
+    expect(callers.map((caller) => caller.isDesktop())).toEqual([true, true, true]);
+
+    [...frames.values()].forEach((frame) => frame(0));
+    frames.clear();
+
+    expect(callers.map((caller) => caller.isMobile())).toEqual([true, true, true]);
+    expect(callers.map((caller) => caller.breakpoint())).toEqual(['xs', 'xs', 'xs']);
+    expect(callers[0].isVisible('secondary')).toBe(false);
+  });
+
+  it('starts a new caller from the live width after resizes nobody heard', () => {
+    setInnerWidth(1440);
+    const [first] = mountCallers(1);
+    expect(first.width()).toBe(1440);
+    disposers.splice(0).forEach((dispose) => dispose());
+
+    setInnerWidth(700);
+    const [second] = mountCallers(1);
+    expect(second.width()).toBe(700);
+    expect(second.breakpoint()).toBe('sm');
   });
 });

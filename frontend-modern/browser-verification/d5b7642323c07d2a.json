@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "3e6e9c3ffb8762b032efab544fda2f339cdb3d96",
+  "verified_at": "2026-10-07T16:28:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/ai.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/ai.ts": "8ab01c7c5daac6c2088985423d3bb4584561b67ec306331ff92bf32cb9551738",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "dba595d1677002a9c55a31b45b4a4b5c600df7b4866afa8eb6bbe6dafbb75503",
+    "frontend-modern/src/stores/aiIntelligence.ts": "d10124d374625cb4a6b2e5b17a357211f73b724473bba9b7a4d0d0d15ccaf6b8"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history)",
+    "/patrol (Pulse Assistant drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent tree (3e6e9c3ffb, the merge of #2677 into #2695) and this tree, each on a private DEMO_MODE mock stack with a fresh data dir and its own port; the same Playwright script ran against both at both widths.",
+    "Patrol load, tab hide/show, forced stale-data banner and Retry: GET /api/ai/circuit/status goes from 1-2 requests per phase on the parent build to 0 on this build; every other /api endpoint per phase is identical, and neither build logs a console error.",
+    "Served active finding, Activity > Finding options and history, Resolve or dismiss > Open in Assistant: the Pulse Assistant drawer opens with the finding attached on both builds, with identical requests.",
+    "Patrol status forced to runtime_state blocked with blocked_cause circuit_open (page.route): both builds show 'Patrol paused' with 'circuit breaker is open', so breaker state still reaches the page through Patrol status alone.",
+    "Dist proof: 187 files each side; after normalising chunk hashes, SRI strings and short identifiers, only the removed store loader, signal, getter and API client differ in index.js and the removed supporting read in AIIntelligence.js; check-bundle-size.mjs passes."
+  ],
+  "interactions": [
+    "Demo auto sign-in; on /patrol open the Activity tab and 'Finding options and history', expand the served finding, open 'Resolve or dismiss', click 'Open in Assistant', close the drawer.",
+    "Dispatch visibilitychange hidden then visible; reload with GET /api/settings/ai failing, then click Retry with the route restored; reload /patrol with a circuit_open Patrol status.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the Patrol page, Assistant drawer, stale-data banner and paused banner inspected."
+  ]
+}

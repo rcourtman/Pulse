@@ -288,9 +288,9 @@ func TestNormalizeDiskFillByType(t *testing.T) {
 }
 
 func TestDefaultAlertConfigSeedsDiskFillByType(t *testing.T) {
-	cfg := defaultAlertConfig()
+	cfg := DefaultAlertConfig()
 	if cfg.DiskFillByType == nil {
-		t.Fatal("expected defaultAlertConfig to seed DiskFillByType, got nil")
+		t.Fatal("expected DefaultAlertConfig to seed DiskFillByType, got nil")
 	}
 	if nvme, ok := cfg.DiskFillByType["nvme"]; !ok || nvme.Trigger != 92 || nvme.Clear != 87 {
 		t.Fatalf("nvme = %+v ok=%v, want {Trigger:92 Clear:87}", nvme, ok)
@@ -399,9 +399,9 @@ func TestNormalizeDiskTempByType(t *testing.T) {
 }
 
 func TestDefaultAlertConfigSeedsDiskTempByType(t *testing.T) {
-	cfg := defaultAlertConfig()
+	cfg := DefaultAlertConfig()
 	if cfg.DiskTempByType == nil {
-		t.Fatal("expected defaultAlertConfig to seed DiskTempByType, got nil")
+		t.Fatal("expected DefaultAlertConfig to seed DiskTempByType, got nil")
 	}
 	if nvme, ok := cfg.DiskTempByType["nvme"]; !ok || nvme.Trigger != 70 || nvme.Clear != 65 {
 		t.Fatalf("nvme = %+v ok=%v, want {Trigger:70 Clear:65}", nvme, ok)

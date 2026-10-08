@@ -650,7 +650,8 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	for _, snippet := range []string{
 		"metricsTargetResolver := unifiedView.metricsTargets",
 		"metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)",
-		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
+		"broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources)",
+		"if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {",
 		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)",
 		"attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
@@ -2160,7 +2161,6 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"if mock.IsMockEnabled() {",
 				"return nil",
 				"func (m *Monitor) prewarmMockDashboardChartCaches() {",
-				"_, _ = m.mockStorageSummaryCapacityTrendCached(24 * time.Hour)",
 			},
 		},
 		{
@@ -2169,7 +2169,6 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {",
 				"values := canonicalMetricSeries(resourceType, resourceID, metricType, timestamps)",
 				"return lttb(points, chartDownsampleTarget)",
-				"func (m *Monitor) mockStorageSummaryCapacityTrend(duration time.Duration) []MetricPoint {",
 				`usageValues := canonicalMetricSeries("storage", storageID, "usage", timestamps)`,
 			},
 		},

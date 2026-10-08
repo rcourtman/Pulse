@@ -730,15 +730,6 @@ async function routePatrolSupport(
       },
     });
   });
-  await page.route("**/api/ai/circuit/status", async (route) => {
-    await fulfillJSON(route, {
-      state: "closed",
-      can_patrol: true,
-      consecutive_failures: 0,
-      total_successes: 1,
-      total_failures: 0,
-    });
-  });
   await page.route("**/api/ai/approvals", async (route) => {
     await fulfillJSON(route, { approvals: [] });
   });

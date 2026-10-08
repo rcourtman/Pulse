@@ -41,7 +41,6 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
   },
   intelligenceState: {
     findings: [] as Array<Record<string, unknown>>,
-    circuitBreakerStatus: null as { state: string; consecutive_failures: number } | null,
     summary: null as {
       timestamp: string;
       overall_health: {
@@ -254,13 +253,11 @@ vi.mock('@/stores/aiIntelligence', () => {
     loadFindings: vi.fn().mockResolvedValue(undefined),
     loadPatrolFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
-    loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
     loadDashboardData: vi.fn().mockImplementation(async () => {
       await Promise.all([
         store.loadFindings(),
         store.loadIntelligenceSummary(),
-        store.loadCircuitBreakerStatus(),
         store.loadPendingApprovals(),
       ]);
     }),
@@ -272,9 +269,6 @@ vi.mock('@/stores/aiIntelligence', () => {
     },
     get intelligenceSummary() {
       return intelligenceState.summary;
-    },
-    get circuitBreakerStatus() {
-      return intelligenceState.circuitBreakerStatus;
     },
     get patrolPendingApprovals() {
       return [];
@@ -568,8 +562,8 @@ async function openPatrolActivityMode() {
 
 describe('AIIntelligence entitlement gating', () => {
   it('keeps Patrol page data sync bounded without making it a primary action', () => {
-    expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
-    expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
+    expect(patrolIntelligenceStateSource).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
+    expect(patrolIntelligenceStateSource).toContain('requestId === manualRefreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('isManualRefreshRunning');
     expect(patrolIntelligenceStateSource).toContain('handleRefreshPatrol');
@@ -631,7 +625,6 @@ describe('AIIntelligence entitlement gating', () => {
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.findings = [];
-    intelligenceState.circuitBreakerStatus = null;
     intelligenceState.summary = null;
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
@@ -1248,6 +1241,49 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.queryByText(/Pulse Pro runtime/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Install the Pulse Pro runtime/)).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Open Pro downloads' })).not.toBeInTheDocument();
+    });
+
+    it('saves only Watch only, without an unlock field, while governed fixes are locked', async () => {
+      useLicensedCommunityRuntime();
+      // A previous entitlement left a paid mode and the compatibility unlock in memory.
+      getPatrolAutonomySettingsMock.mockResolvedValue(
+        defaultPatrolAutonomySettings({
+          autonomy_level: 'assisted',
+          requested_autonomy_level: 'assisted',
+          effective_autonomy_level: 'assisted',
+          full_mode_unlocked: true,
+        }),
+      );
+
+      render(() => <AIIntelligence />);
+
+      const modes = within(await screen.findByRole('group', { name: 'Patrol mode' }));
+      await waitFor(() => expect(getPatrolAutonomySettingsMock).toHaveBeenCalled());
+      await getPatrolAutonomySettingsMock.mock.results[0]?.value;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(modes.getByRole('button', { name: 'Watch only' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      for (const paidMode of ['Ask first', 'Safe auto-fix', 'Autopilot']) {
+        expect(modes.getByRole('button', { name: paidMode })).toBeDisabled();
+        fireEvent.click(modes.getByRole('button', { name: paidMode }));
+      }
+      expect(screen.queryByRole('dialog', { name: 'Activate Autopilot' })).toBeNull();
+      expect(updatePatrolAutonomySettingsMock).not.toHaveBeenCalled();
+
+      fireEvent.click(modes.getByRole('button', { name: 'Watch only' }));
+
+      // The browser sends no full_mode_unlocked field; the API clears stale
+      // unlock and Autopilot activation state on every non-Autopilot save.
+      await waitFor(() => {
+        expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledTimes(1);
+      });
+      expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith({
+        autonomy_level: 'monitor',
+        investigation_budget: 15,
+        investigation_timeout_sec: 300,
+      });
     });
   });
 
