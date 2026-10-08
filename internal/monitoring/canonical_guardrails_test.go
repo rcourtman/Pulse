@@ -2006,7 +2006,7 @@ func TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph(t *testing.T) {
 	requiredSnippets := []string{
 		"version := mock.FixtureDataVersion()",
 		"m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version",
-		"resources, freshness := mock.UnifiedResourceSnapshot()",
+		"resources, freshness := mock.UnifiedResourceSnapshotWithLinks(links)",
 		"view := monitorUnifiedStateViewFromResources(resources, freshness)",
 		"m.mockUnifiedView = view",
 		"m.mockUnifiedViewVersion = version",
