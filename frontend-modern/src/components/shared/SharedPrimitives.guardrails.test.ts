@@ -1365,6 +1365,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
+    expect(summaryTableFocusSource).toContain(
+      'untrack(() => revealFocusedSeries(root, focusedId))',
+    );
     expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
     expect(summaryTableFocusSource).toContain('onEscapeClear?: () => void;');
     expect(summaryTableFocusSource).toContain('setClearSurfaceRootRef');
@@ -1570,56 +1573,25 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('HEADER_SORT_BUTTON');
   });
 
-  it('keeps chart visibility display actions on the shared toolbar toggle', () => {
+  it('keeps the retired summary chart-visibility toggle out of the shared toolbar', () => {
+    // The workload summary chart section this toggle controlled is deleted and
+    // no other page exposes a chart show/hide control. A returning summary
+    // section is a governed product decision that must register its own
+    // primitive.
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
-      rules?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        requiredConsumers?: Array<{ path?: string }>;
-      }>;
-      patternGuards?: Array<{
-        id: string;
-        canonical?: { path?: string; export?: string };
-        allPatterns?: string[];
-        scopes?: string[];
-        pathIncludes?: string[];
-        pathExcludes?: string[];
-        allowedPaths?: string[];
-        ignoredPaths?: string[];
-      }>;
+      rules?: Array<{ id: string; canonical?: { export?: string } }>;
+      patternGuards?: Array<{ id: string; canonical?: { export?: string } }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'chart-visibility-toggle-button',
-    );
-    const registeredGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'chart-visibility-local-toggle-labels',
-    );
+    const retiredIds = ['chart-visibility-toggle-button', 'chart-visibility-local-toggle-labels'];
+    for (const entry of [...(registry.rules ?? []), ...(registry.patternGuards ?? [])]) {
+      expect(retiredIds).not.toContain(entry.id);
+      expect(entry.canonical?.export).not.toBe('ChartVisibilityToggleButton');
+    }
 
-    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredRule?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Workloads/WorkloadsFilter.tsx',
-    ]);
-    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
-    expect(registeredGuard?.canonical?.export).toBe('ChartVisibilityToggleButton');
-    expect(registeredGuard?.allPatterns).toEqual(['Show charts', 'Hide charts']);
-    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(registeredGuard?.ignoredPaths).toEqual([
-      'src/components/Workloads/__tests__/WorkloadsFilter.test.tsx',
-    ]);
-    expect(registeredGuard?.scopes).toEqual(
-      expect.arrayContaining(['src/components/Workloads', 'src/features', 'src/pages']),
-    );
-
-    expect(filterToolbarSource).toContain('export const ChartVisibilityToggleButton');
-    expect(filterToolbarSource).toContain("local.collapsed ? 'Show charts' : 'Hide charts'");
-    expect(filterToolbarSource).toContain('active={!local.collapsed}');
-    expect(filterToolbarSource).toContain('aria-pressed={!local.collapsed}');
-    expect(filterToolbarSource).toContain('title={label()}');
-
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
-    expect(workloadsFilterSource).not.toContain('Show charts');
-    expect(workloadsFilterSource).not.toContain('Hide charts');
+    expect(filterToolbarSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('onChartsToggle');
+    expect(workloadsFilterSource).not.toContain('chartsCollapsed');
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {
@@ -2617,6 +2589,7 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/RunToolCallTrace.tsx',
       'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
+      'src/components/Infrastructure/ResourceDetailSummary.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
     expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
@@ -2684,6 +2657,18 @@ describe('shared primitive guardrails', () => {
     expect(metadataBadgeSource).toContain("muted: 'bg-surface-alt text-muted'");
     expect(metadataBadgeSource).toContain("warning: 'bg-amber-100 text-amber-800");
     expect(metadataBadgeSource).not.toContain(["muted: 'bg", 'slate', '100'].join('-'));
+    // Drawer identity values differ at their ends and a phone has no hover to
+    // show a title, so they wrap inside the drawer cell instead of spilling
+    // past the drawer edge, where the content shell clips them.
+    expect(metadataBadgeSource).toContain(
+      "METADATA_BADGE_WRAP_CLASS = 'min-w-0 max-w-full whitespace-normal wrap-anywhere text-left'",
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge tone="info" size="xs" shape="rounded" wrap title={ip}>',
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge size="xs" shape="rounded" wrap title={value}>',
+    );
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
     expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');
@@ -8407,6 +8392,11 @@ describe('shared primitive guardrails', () => {
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipStateSource).toContain('sanitizeTooltipContent');
     expect(tooltipStateSource).toContain('supportsHoverTooltips');
+    // Hidden tooltips sit on every table row; only an open one may hold a
+    // window resize listener (TooltipPortal.test.tsx proves the behaviour).
+    expect(tooltipStateSource).toMatch(
+      /if \(typeof window === 'undefined' \|\| !options\.visible\(\)\) return;\s*updateViewport\(\);\s*const handleResize/,
+    );
 
     expect(sharedTooltipHookSource).toContain('supportsHoverTooltips');
     expect(hoverCapabilitySource).toContain('(hover: hover) and (pointer: fine)');
@@ -8663,7 +8653,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).toContain('trailingControls={');
     expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
     expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
-    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).toContain('<ColumnPicker');
     expect(workloadsFilterSource).toContain('onClearAll={handleClearAll}');
     expect(workloadsFilterSource).toContain('showClearAll={showClearAll}');

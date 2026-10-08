@@ -1609,6 +1609,34 @@ resolve overrides through the shared
 candidate set `buildProjectedOverrides` indexes platform alert rows under).
 Static metric-color defaults are only fallback presentation behavior for
 callers that do not have alert configuration in scope.
+Guest bars follow `pulse-relaxed` the same way. `resolveMetricDisplayThresholds`
+takes the tags the engine reads for a guest-scope resource and, when they
+include `pulse-relaxed`, applies the `applyRelaxedGuestThresholds` step to
+CPU, memory and disk before mapping to display thresholds: an unset threshold
+gets the 95/92/95 floor with a clear five below it, a lower trigger is raised
+to the floor and keeps its own clear point (a missing one filled five below,
+as `ensureHysteresisThreshold` does) unless the raised trigger reaches it, and
+an Off threshold stays Off. A relaxed guest's bar therefore turns critical
+where its alert fires; 88% memory reads warning, not critical, under the
+relaxed 92% trigger. The display resolver does not read filter-driven custom
+rules, which the engine folds in before the override, so a guest a custom
+rule matches can still colour by thresholds the engine does not use, relaxed
+or not. Only Proxmox VMs and LXCs carry their tags into alert
+policy, so `getWorkloadAlertPolicyTags` in
+`frontend-modern/src/components/Workloads/workloadTopology.ts` passes tags for
+those guests alone, and a vSphere VM or a container keeps its thresholds
+whatever it is tagged. The Alerts thresholds row for a relaxed Proxmox guest
+keeps showing the configured values its editor changes and adds one line
+naming the tag and the thresholds it raises
+(`getAlertResourceRelaxedTriggerSummary` in
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts`, fed by
+`pulseRelaxed` from `useThresholdsGuestData`); before it, the tag overrode
+those settings with no visible sign in the UI (issue #863). Proof: the
+pulse-relaxed cases in `frontend-modern/src/utils/__tests__/metricThresholds.test.ts`,
+the alert policy tag cases in
+`frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`,
+and the pulse-relaxed guest cases in
+`frontend-modern/src/components/Alerts/ResourceTable.test.tsx`.
 
 Docker container image-update alerts are lifecycle-governed by the alerts
 runtime. Disabling Docker update alerts globally, disabling alerts for a
@@ -1826,8 +1854,8 @@ compatibility aliases and wrapper functions for the leaf config package,
 `model.go` owns alert runtime data structures and clone semantics,
 `constants.go` owns package-wide cleanup and storage constants,
 `metric_hooks.go` owns Prometheus integration callbacks, `manager.go` owns
-Manager state and construction, `default_config.go` owns the default runtime
-configuration literal, `lifecycle.go` owns shutdown, and `escalation.go` owns
+Manager state and construction, `default_config.go` owns the factory runtime
+configuration (`DefaultAlertConfig`), `lifecycle.go` owns shutdown, and `escalation.go` owns
 the escalation loop and escalation state mutation. Future changes must extend
 the owning file rather than reintroducing a central catch-all manager file.
 Alert notification policy now lives in `internal/alerts/notification_policy.go`.
@@ -1836,6 +1864,34 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Fresh installs load the factory alert configuration
+
+`DefaultAlertConfig` in `internal/alerts/default_config.go` is the only
+declaration of factory alert settings. A new Manager starts from it, and
+`LoadAlertConfig` in `internal/config/persistence.go` returns it while
+`alerts.json` does not exist; persistence must not declare a second copy. The
+copy it used to return left out `DockerDefaults`, a value struct, so a fresh
+install loaded container CPU, memory and disk as trigger 0, `UpdateConfig`
+kept that as a deliberate Off, the thresholds page called the container Global
+Defaults Custom, and the startup identity migration wrote those zeros to
+`alerts.json` within a second of first boot. The missing-file config carries
+no activation state, because activation is a stored decision: node updates and
+imports reapply `LoadAlertConfig`, and `UpdateConfig` then keeps a running
+manager's state, while a new manager starts pending review. An existing
+`alerts.json` is never rewritten to factory values, because a stored trigger 0
+is how a saved Off looks. The factory leaves `AutoAcknowledgeAfterHours` at 0: no settings
+control shows it, and the 24 hours it used to declare never reached an
+install. It leaves the quiet-hours timezone empty so the settings page offers
+the viewer's browser zone. Flapping detection and alert TTL cleanup are on in
+the factory and now reach fresh installs; a thresholds-page save still sends
+neither field, so it turns them off. `TestLoadAlertConfigFreshInstallUsesFactoryConfig`,
+`TestLoadAlertConfigMissingFileKeepsRunningActivation` and
+`TestLoadAlertConfigKeepsStoredDockerDefaultsOff` in
+`internal/config/persistence_alert_fresh_install_test.go`, plus
+`TestDefaultAlertConfigLeavesFiringAlertsUnacknowledged` and
+`TestDefaultAlertConfigLeavesQuietHoursTimezoneUnset` in
+`internal/alerts/alerts_test.go`, pin this.
 
 ### Agent disk temperature alerts clear when their threshold is off
 
@@ -2642,7 +2698,7 @@ table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
 `AlertResourceTableDesktop` must route their date/resource group bands through
 `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
 of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
-consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+consistent with Infrastructure, Workloads, and Storage tables.
 Alert history table shells must also rely on the shared `TableCard` frame and
 the shared `Table` primitive for horizontal overflow rather than adding
 alert-local bordered or `overflow-x-auto` wrappers inside the history section.
@@ -3136,21 +3192,22 @@ issue sequential route writes. That reset removes all three query parameters
 in one navigation and clears any transient chart-bucket selection, so a
 search-only result set remains visibly resettable and an older URL write
 cannot resurrect another filter.
-That same history surface now also owns the canonical resource-incident
-handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
-must treat the selected incident resource as a unified-resource consumer,
-linking back into canonical infrastructure/resource detail first and then into
-shared workloads, storage, and recovery surfaces through
-`frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
-as a dead-end investigation card or rebuilding provider-local route strings for
-platforms such as TrueNAS.
-That same alert handoff must now stay on the shared resolved-resource link
-builder. `AlertResourceIncidentsPanel.tsx` must resolve its chip set through
-`buildResolvedResourceSurfaceLinks(...)`, which owns exact unified-resource
-handoffs plus the infrastructure fallback when alert history still references a
-resource ID before the backing unified record has hydrated. Future incident-link
-work must not reintroduce local infrastructure-link assembly, local dedupe, or
-provider-local route strings inside the alert feature shell.
+That same history surface also owns the resource-incident panel, and the panel
+links nowhere. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+names the selected resource through the unified-resource lookup it is given
+(`getResource`, falling back to the history state's lookup) and
+`getPreferredInfrastructureDisplayName`, and shows the resource name the
+selected history row carried while no unified record matches. It imports nothing from
+`frontend-modern/src/routing/resourceLinks.ts`, and it offers no resource
+cross-jump links: investigation continues in place through the incident
+timeline cards or hands off to Pulse Assistant through
+`IncidentAssistantHandoffButton`, as the retired cross-jump chip note above
+describes. Future incident-link work
+must not reintroduce a chip set, local infrastructure-link assembly, or
+provider-local route strings inside the alert feature shell;
+`frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` pins the panel
+free of `buildResolvedResourceSurfaceLinks`, `buildResourceSurfaceLinksForResource`,
+and `buildInfrastructureResourceLink`.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through

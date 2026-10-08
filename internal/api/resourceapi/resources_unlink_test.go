@@ -99,9 +99,15 @@ func TestResourceUnlinkSplitsManuallyLinkedPair(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: VM %s missing from REST", step, vmID)
 		}
-		_, agentListed := get(agentID)
+		// A lookup by the folded agent's ID answers with the row holding it,
+		// so the agent is listed only when its own row answers.
+		byAgentID, found := get(agentID)
+		agentListed := found && byAgentID.ID == agentID
 		if wantLinked && (vm.Agent == nil || agentListed) {
 			t.Fatalf("%s: want agent folded into the VM, VM agent facet=%v agent row listed=%v", step, vm.Agent != nil, agentListed)
+		}
+		if wantLinked && byAgentID.ID != vmID {
+			t.Fatalf("%s: lookup by folded agent %s answered %q (found %v), want the VM %s", step, agentID, byAgentID.ID, found, vmID)
 		}
 		if !wantLinked && (vm.Agent != nil || !agentListed) {
 			t.Fatalf("%s: want VM and agent apart, VM agent facet=%v agent row listed=%v", step, vm.Agent != nil, agentListed)

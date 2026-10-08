@@ -86,14 +86,15 @@ function useTooltipLayoutState(options: TooltipLayoutStateOptions): {
     });
   };
 
+  // Only an open tooltip follows the viewport. Hidden instances (one per metric
+  // bar or sparkline on every table row) hold no window listener; the viewport
+  // is re-read when they open.
   createEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !options.visible()) return;
     updateViewport();
     const handleResize = () => {
       updateViewport();
-      if (options.visible()) {
-        schedulePositionUpdate();
-      }
+      schedulePositionUpdate();
     };
     window.addEventListener('resize', handleResize);
     onCleanup(() => window.removeEventListener('resize', handleResize));
@@ -179,7 +180,8 @@ export function useTooltipPortalState(options: TooltipPortalStateOptions): {
     align: () => options.align,
     direction: () => options.direction,
     maxWidth: () => options.maxWidth ?? 320,
-    visible: () => options.when,
+    // Matches the portal's render gate: a touch device never shows it.
+    visible: () => options.when && supportsHoverTooltips(),
     x: () => options.x,
     y: () => options.y,
   });

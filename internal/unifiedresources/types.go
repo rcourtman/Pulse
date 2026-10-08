@@ -57,6 +57,16 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
+
+	// continuityOnly marks a row saved-host continuity introduced: a machine
+	// no source has reported since a restart. It rides in-memory clones, so
+	// a registry seeded from a continuity read state still holds the row out
+	// of operator-link folds (holdLinkedResourceLocked). An observation that
+	// later merges into the row clears it.
+	continuityOnly bool
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`

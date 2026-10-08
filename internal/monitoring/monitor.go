@@ -1249,6 +1249,7 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
+	operatorIntentIdentity     atomic.Pointer[operatorIntentIdentity] // read state alert intent resolves through (monitor_alert_intent.go)
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
 	alertPushCallback          func(*alerts.Alert)

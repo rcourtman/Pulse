@@ -881,7 +881,12 @@ func (h *DiscoveryHandlers) HandleRunDiscovery(w http.ResponseWriter, r *http.Re
 
 // HandleUpdateSettings handles PUT /api/discovery/settings
 // Allows updating discovery settings like the staleness threshold.
+// PUT is the documented method. POST stays accepted because the route took any
+// method before; GET and HEAD are refused so a read can never write.
 func (h *DiscoveryHandlers) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	if !requireRequestMethod(w, r, http.MethodPut, http.MethodPost) {
+		return
+	}
 	if h.service == nil {
 		writeDiscoveryError(w, http.StatusServiceUnavailable, "discovery service not configured")
 		return

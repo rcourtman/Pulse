@@ -3742,19 +3742,18 @@ sampler generation instead of regenerating or re-downsampling the same seeded
 timeline on every endpoint hit. When seeded mock history is rebuilt or a live
 mock tick advances, monitoring must invalidate that cache so preview charts
 stay current without paying repeated per-request synthesis cost.
-That same sampler-owned cache contract also covers compact summary reads after
-the dashboard overview retirement. When live mock ticks advance, monitoring
-must repopulate the canonical 24-hour aggregate `/api/charts/storage-summary`
-cache inside the sampler path instead of leaving the first operator request
-after each tick to rebuild per-pool mock storage charts on demand.
-The same mock sampler path must also prewarm the default Workloads guest-chart
+The mock sampler path must prewarm the default Workloads guest-chart
 cache through `GetGuestMetricsForChartBatch`, using canonical `ReadState`
 workload identities for VMs, system containers, Kubernetes pods, and app
-containers so `/api/charts/workloads` and `/api/charts/workloads-summary` do
-not rebuild every guest sparkline on the first post-tick request.
+containers so `/api/charts/workloads` does not rebuild every guest sparkline
+on the first post-tick request. The retired aggregate
+`/api/charts/storage-summary` trend is no longer prewarmed; its route,
+`GetStorageSummaryCapacityTrend` and the mock aggregate cache went with it,
+and sampler ticks must not regain an aggregate storage synthesis step
+without a live consumer.
 That same metrics-hot-path ownership also includes metric-type selection for
-compact summary reads. When infrastructure or storage summary routes request
-only a subset of canonical chart series,
+compact chart reads. When chart routes such as `/api/charts/infrastructure` or
+`/api/charts/workloads` request only a subset of canonical chart series,
 `internal/monitoring/monitor_metrics.go` must preserve that narrowed metric
 set through the batch store fallback path instead of querying every metric type
 for each resource and discarding most of the payload afterward.
@@ -5385,6 +5384,42 @@ resolving an alert reference. Exact IDs, superseded IDs, source IDs and
 canonical aliases retain their precedence and ambiguous aliases remain
 unresolved. This avoids cloning a full resource for every policy lookup while
 keeping alert intent tied to the same identity rules as resource reads.
+
+Alert intent resolves references and ancestors through the read state Patrol
+resolves through and the resources API seeds from: the published registry with
+saved hosts that have not reported since a restart overlaid
+(`operatorIntentIdentity`). A saved host exists only there, so against the
+published registry alone its alerts (`agent:<host ID>`) read their literal
+reference after a restart and missed intent set on the host, and, when an
+operator link joins it to a live resource, intent set on the link primary that
+the registry now resolves the saved host to. Alerts resolve under the alert
+manager's lock, once per metric check, so the overlay is kept for the published
+registry generation it was built from. Publication builds it before alert
+evaluation, outside that lock; a lookup that races ahead of publication, or the
+first one after leaving mock mode, builds it under the lock. A generation is
+the registry the adapter publishes and when it last changed
+(`MonitorAdapter.Generation`), since two publications can share a
+`LastRebuiltAt`. A finished build is stored only if that generation is still
+the published one and the mock-mode epoch it started in is current, checked and
+stored inside the mock-mode fence, so a build that overlapped a mode switch is
+discarded. A lookup made while mock mode is on drops the stored overlay; a
+switch to mock and back with no lookup in between keeps it, since it still
+describes the published generation. A saved-host change that arrives without a
+new generation shows on the next one. Mock mode carries no saved hosts: lookups
+then resolve against the published registry as before.
+`monitor_alert_intent_test.go`
+(`TestOperatorIntentIdentityKeepsOneOverlayPerGeneration`,
+`TestOperatorIntentReachesSavedHostAlertsAfterRestart`) pins the reuse, a
+generation sharing or preceding the last one's timestamp, the mock switch, a
+rebuild made from inside an admitted fence call, and an unlinked saved host's
+intent reaching its offline alert.
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins a saved
+agent's offline alert reading maintenance set on the guest it is linked into,
+and `monitor_host_agent_removal_lifecycle_test.go`
+(`TestHostAgentRemovalLifecycleHonorsSavedHostIntentAfterRestart`) pins the
+restarted monitor's own host-offline check raising no alert for a saved host
+the operator marked intentionally offline.
 
 Alert restore precedes resource-store attachment during startup. Once the
 adapter attaches the persisted operator-policy resolver, monitoring asks Alerts

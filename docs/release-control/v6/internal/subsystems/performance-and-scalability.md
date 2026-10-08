@@ -1127,6 +1127,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Guest metric thresholds read the guest's alert policy tags through one
+    `getWorkloadAlertPolicyTags` memo per row and per drawer, beside the
+    existing scope and override-candidate memos, so `pulse-relaxed` bar
+    colouring adds no per-render tag parsing and no extra store reads.
     On coarse-pointer touch layouts, those cell details must not spawn floating
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability
@@ -1696,18 +1700,26 @@ shell clickable behind another overlay.
     scoped table metric-history interaction that requested them. Platform
     landing should stay route-module warm and data-light until the selected
     platform page owns its normal resource/table query.
-    Platform pages that embed `WorkloadsSurface` reuse the canonical
-    workloads filter toolbar through the `showFilterToolbar` +
-    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
-    keeps `tableOnly` to hide the dashboard cards and summary strip but
-    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
-    `ColumnPicker`, status/type chips, and search-history primitives that
-    the global Workloads page renders, so platform operators get
-    dense-table search, sort, grouping, view, status, and column controls
-    on every embedded workloads tab without spawning a forked toolbar.
-    The platform scope flows through `forcedPlatform` as a typed page
-    input; `suppressPlatformFilter` drops the now-redundant Platform chip
-    from the rendered toolbar so the user never sees a removable lock.
+    Two platform pages embed `WorkloadsSurface`: the Proxmox and vSphere
+    Overview tabs (`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
+    builds the workloads state itself with `useWorkloadsState`, renders the
+    one shared `WorkloadsFilter` toolbar (search, status filter, a type
+    filter that vSphere suppresses, and the View options for grouping, metric display, and columns on the
+    shared `FilterBar`) from that state, and hands the same state to `WorkloadsSurface` through its
+    `state` prop with `suppressFilterToolbar`, so the surface skips its own
+    filter row and the page never stacks two toolbars wired to one state.
+    Proxmox also passes that state's search, plus its page-owned metric mode
+    and history range, to the nodes table above the guests, so one toolbar
+    drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
+    `showFilterToolbar` prop, and no dashboard cards or summary strip to
+    hide: it renders its filter row (unless suppressed or in kiosk mode), the
+    workloads table, or an empty-state table card. The platform scope flows
+    through `forcedPlatform` as a typed page input to `useWorkloadsState`,
+    the toolbar, and the surface. `suppressPlatformFilter: true` makes the
+    state expose no Platform filter config and both pages pass
+    `platformFilter={undefined}` to the toolbar, so the user never sees the
+    locked platform as a removable chip.
 
 ### Navigation resolves from a bounded request
 
@@ -1792,6 +1804,22 @@ This correctness proof does not close the large-estate performance gap. The
 final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
+
+### Window resize listeners do not grow with rows
+
+Table rows must not each register a window `resize` listener.
+`frontend-modern/src/hooks/useBreakpoint.ts` keeps one module-level width
+signal, fed by a single rAF-debounced listener while at least one caller is
+mounted, and a new caller starts from the live `innerWidth`. Shared tooltip
+state in `frontend-modern/src/components/shared/useTooltipState.ts` listens
+only while its tooltip is visible. Measured on 2026-10-07 on a mock-mode
+`/proxmox` page with 140 workload rows at 1440 px, the active listener count
+fell from 859 (699 tooltip instances, 156 breakpoint callers) to 5; at 390 px
+with 36 rows it fell from 203 to 5. An open tooltip adds one listener and
+removes it on close, and crossing the phone breakpoint in either direction
+still switches the workload table and row layout. `useBreakpoint.test.ts`
+proves one listener for 50 callers, that back-to-back resizes leave one pending
+frame, and that every caller crosses a breakpoint when that frame runs.
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -2296,21 +2324,22 @@ queries. Compact route consumers that request only CPU/memory or only storage
 `pkg/metrics/store.go` instead of fetching every series for every resource and
 discarding the extra payload in higher layers.
 That same protected workload-chart hot path now also owns rendered-metric
-budgeting. `internal/api/router.go` may parallelize VM, container, pod, and
-docker-container workload batch reads, but `/api/charts/workloads` and
-`/api/charts/workloads-summary` must request only the canonical five workload
-metrics they actually render instead of widening back to disk read/write or
-fetch-all history queries.
+budgeting. `internal/api/chartapi/service.go` may parallelize VM, container,
+pod, and docker-container workload batch reads, but `/api/charts/workloads`
+must request only the metric set it serializes for each workload type (the
+guest sparkline set for VMs and system containers, the infrastructure set for
+app containers, the five-metric set for Kubernetes pods) instead of widening
+back to fetch-all history queries.
 That same chart-batch hot path now also owns long-range in-memory coverage.
 `internal/monitoring/monitor_metrics.go` may skip SQLite for guest and node
 chart batches when `metrics_history` can prove the requested window is
 already covered in memory, and performance work must preserve that
 coverage-gated fast path rather than treating every long-duration request as
 store-backed by default.
-That same hot path now also covers mock-mode cache warmth. The canonical
-24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
-across live mock sampler ticks so the first dashboard request after a refresh
-does not pay the full aggregate-storage synthesis cost on the operator path.
+That same hot path now also covers mock-mode cache warmth: live mock sampler
+ticks prewarm only the Workloads guest-chart cache. The retired aggregate
+`/api/charts/storage-summary` trend is no longer synthesized or prewarmed, so
+no sampler tick pays for an aggregate nothing reads.
 That same chart-client hot path also owns canonical Kubernetes target typing.
 `frontend-modern/src/api/charts.ts` may normalize Kubernetes history requests
 onto the shared backend `resourceType=k8s` transport, but it must preserve the
@@ -2435,7 +2464,13 @@ through `preserveScrollableAncestorVerticalOffset` in
 opened detail through `summaryTableFocus.ts`, so opening a focused workload
 does not look like a full page reload. The root `frontend-modern/src/App.tsx`
 shell applies a pending `frontend-modern/src/utils/appShellScrollRestoration.ts`
-restore only when the route itself changes. The shared same-path scheduler must also own cleanup
+restore on the next route change, whatever caused it, so only the shared
+same-path route-state scheduler may stage one, from the shell position at the
+moment it navigates. Local row focus stages none: a position staged without a
+navigation waits for an unrelated one, and before this rule a Type filter
+change made at the top of the Proxmox overview jumped the shell back down to
+the row toggled earlier, because the scheduler stages nothing from scrollTop 0.
+The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2455,10 +2490,9 @@ That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
 must still flow through the shared contextual-focus and summary-table helpers.
-Direct row toggles that already have the row in view must capture the current
-app-shell scroll position before the focus write and let the remounted root
-shell restore that position, so the interaction stays anchored instead of
-looking like a full refresh. Once the drawer is mounted, the shared reveal
+Direct row toggles that already have the row in view stay anchored through
+that contextual-focus offset preservation, not through a staged app-shell
+restore, so the interaction does not look like a full refresh. Once the drawer is mounted, the shared reveal
 helper must still take over whenever the opened detail would land below the
 fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the
@@ -2481,12 +2515,10 @@ workloads and 0.9 MB of infrastructure JSON per 30-second poll) only to write
 it to browser storage, or drop it when over the size cap, with nothing reading
 it.
 That same protected hot path keeps storage trend loading route-owned after the
-dashboard overview retirement. `internal/api/router.go` must continue serving
-the compact `/api/charts/storage-summary` request backed by
-`GetStorageMetricsForChartBatch(...)` for the surfaces that still own storage
-summary presentation, but no deleted dashboard trend hook may reopen the full
-storage-page `/api/storage-charts` payload or an N+1 per-pool
-`/api/metrics-store/history` fan-out.
+dashboard overview retirement. The compact `/api/charts/storage-summary` route
+is retired after its last reader was deleted, and no deleted dashboard trend hook may
+reopen it, the full storage-page `/api/storage-charts` payload, or an N+1
+per-pool `/api/metrics-store/history` fan-out.
 That same Workloads shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`. When the
 Workloads route has no connected infrastructure sources, the CTA must hand
@@ -2824,12 +2856,12 @@ as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory
 column header after the View disclosure closes. No workload summary chart
-section renders today, so the chart-visibility control in
-`frontend-modern/src/components/Workloads/WorkloadsFilter.tsx` stays hidden
-(no surface passes `onChartsToggle`). If a summary section returns, that
-control must expose explicit `Show charts` / `Hide charts` pressed state, and
-hiding charts must remove the summary section rather than leaving an empty
-collapsed summary band on screen.
+section renders today, and `WorkloadsFilter` carries no chart-visibility
+control or `onChartsToggle` / `chartsCollapsed` props. A summary section that
+returns through a governed product decision must bring its own visibility
+control with explicit `Show charts` / `Hide charts` pressed state, and hiding
+charts must remove the summary section rather than leaving an empty collapsed
+summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of
@@ -3051,19 +3083,15 @@ The unified-resource projection also uses that same helper for Kubernetes
 `clusterId`, so the shared store, dashboard grouping, and detail-navigation
 surfaces all see the same cluster-context prefix before any surface-specific
 fallback applies.
-The aggregate `/api/charts/workloads-summary` endpoint now also has its own
-explicit API p95 budget constant, aligned with the per-workload charts budget,
-and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
-store-backed mixed-workload benchmark coverage drifts.
-The infrastructure and workload-summary chart endpoints may keep a short
-backend response cache for identical org/range/metric-scope summary requests,
-but only as presentation hot-path protection for repeated summary polling and
-remounts. The cached payloads must still be built from the canonical
+The infrastructure summary and per-workload chart endpoints may keep a short
+backend response cache for identical org/range/metric-scope or
+org/range/node/point-count requests, but only as presentation hot-path
+protection for repeated polling and remounts. The cached payloads must still be built from the canonical
 store-backed/read-state sources, must remain isolated by organization and
 explicit chart scope, and must not become telemetry freshness, lifecycle,
 recovery, or persistence authority.
-Those summary caches and the per-workload chart cache share one process-local
-retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
+The infrastructure summary cache and the per-workload chart cache share one
+process-local retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
 variants and evicts oldest payloads at either bound, so raw range, node,
 metric-order, or point-count variants cannot turn a short TTL into unbounded
 steady-state memory. Responses larger than the byte budget remain uncached

@@ -47,14 +47,6 @@ type VersionResponse struct {
 type ChartResponse = chartapi.ChartResponse
 type InfrastructureChartsResponse = chartapi.InfrastructureChartsResponse
 type WorkloadChartsResponse = chartapi.WorkloadChartsResponse
-type WorkloadsSummaryMetricData = chartapi.WorkloadsSummaryMetricData
-type WorkloadsGuestCounts = chartapi.WorkloadsGuestCounts
-type WorkloadsSummaryContributor = chartapi.WorkloadsSummaryContributor
-type WorkloadsSummaryContributors = chartapi.WorkloadsSummaryContributors
-type WorkloadsSummaryBlastRadius = chartapi.WorkloadsSummaryBlastRadius
-type WorkloadsSummaryBlastRadiusGroup = chartapi.WorkloadsSummaryBlastRadiusGroup
-type WorkloadsSummaryChartsResponse = chartapi.WorkloadsSummaryChartsResponse
-type StorageSummaryTrendResponse = chartapi.StorageSummaryTrendResponse
 type ChartStats = chartapi.ChartStats
 type ChartPointCounts = chartapi.ChartPointCounts
 type VMChartData = chartapi.VMChartData
@@ -71,12 +63,6 @@ func EmptyInfrastructureChartsResponse() InfrastructureChartsResponse {
 }
 func EmptyWorkloadChartsResponse() WorkloadChartsResponse {
 	return chartapi.EmptyWorkloadChartsResponse()
-}
-func EmptyWorkloadsSummaryChartsResponse() WorkloadsSummaryChartsResponse {
-	return chartapi.EmptyWorkloadsSummaryChartsResponse()
-}
-func EmptyStorageSummaryTrendResponse() StorageSummaryTrendResponse {
-	return chartapi.EmptyStorageSummaryTrendResponse()
 }
 func EmptyStorageChartsResponse() StorageChartsResponse { return chartapi.EmptyStorageChartsResponse() }
 

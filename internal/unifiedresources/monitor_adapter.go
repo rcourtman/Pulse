@@ -372,6 +372,30 @@ func (a *MonitorAdapter) LastRebuiltAt() time.Time {
 	return a.lastRebuiltAt
 }
 
+// RegistryGeneration identifies one generation a MonitorAdapter published:
+// the registry it serves and when that registry last changed. LastRebuiltAt
+// alone does not, since two rebuilds of a snapshot stamped in the future
+// share its time; a rebuild swaps the registry and an incremental update
+// restamps it.
+type RegistryGeneration struct {
+	registry  *ResourceRegistry
+	rebuiltAt int64
+}
+
+// Generation returns the generation the adapter currently publishes.
+func (a *MonitorAdapter) Generation() RegistryGeneration {
+	if a == nil {
+		return RegistryGeneration{}
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	generation := RegistryGeneration{registry: a.registry}
+	if !a.lastRebuiltAt.IsZero() {
+		generation.rebuiltAt = a.lastRebuiltAt.UnixNano()
+	}
+	return generation
+}
+
 // TryReplaceRegistryForRead rebuilds the registry on behalf of a read path
 // (/api/state, websocket hydrate). Unlike the ingest-driven populate methods
 // it never queues behind an in-flight rebuild and skips entirely while the
