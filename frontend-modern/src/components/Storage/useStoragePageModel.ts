@@ -165,6 +165,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     setExpandedPoolId: setExpandedPoolIdRaw,
     toggleGroup,
   } = useStorageExpansionState({
+    groupBy,
     groupedKeys: () => groupedRecords().map((group) => group.key),
     view,
   });

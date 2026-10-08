@@ -1558,8 +1558,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageResourceHighlightSource).toContain('export const useStorageResourceHighlight');
     expect(storageResourceHighlightSource).toContain('findHighlightedStorageRecord');
     expect(storageExpansionStateSource).toContain('export const useStorageExpansionState');
-    expect(storageExpansionStateSource).toContain('syncExpandedStorageGroups');
-    expect(storageExpansionStateSource).toContain('toggleExpandedStorageGroup');
+    expect(storageExpansionStateSource).toContain('resolveExpandedStorageGroups');
+    expect(storageExpansionStateSource).toContain('toggleCollapsedStorageGroup');
     expect(storagePageSource).not.toContain('const rowClass = createMemo(() => {');
     expect(storagePageSource).not.toContain('const rowStyle = createMemo(() => {');
     expect(storagePageSource).not.toContain('const isWaitingForData = createMemo(');
@@ -1847,8 +1847,8 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageStateSource).toContain('export const buildStorageNodeOptions');
     expect(storagePageStateSource).toContain('export const filterStorageDiskNodeOptions');
     expect(storagePageStateSource).toContain('export const buildStorageNodeOnlineByLabel');
-    expect(storagePageStateSource).toContain('export const syncExpandedStorageGroups');
-    expect(storagePageStateSource).toContain('export const toggleExpandedStorageGroup');
+    expect(storagePageStateSource).toContain('export const resolveExpandedStorageGroups');
+    expect(storagePageStateSource).toContain('export const toggleCollapsedStorageGroup');
     expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SELECTED_NODE_ID');
     expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SORT_OPTIONS');
     expect(storagePageStateSource).toContain('export const STORAGE_STATUS_FILTER_OPTIONS');

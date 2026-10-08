@@ -1,21 +1,32 @@
-import { createEffect, createSignal, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import {
-  syncExpandedStorageGroups,
-  toggleExpandedStorageGroup,
+  haveSameStorageGroups,
+  resolveExpandedStorageGroups,
+  toggleCollapsedStorageGroup,
   type StorageView,
 } from './storagePageState';
+import type { StorageGroupKey } from './useStorageModel';
 
 type UseStorageExpansionStateOptions = {
+  groupBy: Accessor<StorageGroupKey>;
   groupedKeys: Accessor<string[]>;
   view: Accessor<StorageView>;
 };
 
 export const useStorageExpansionState = (options: UseStorageExpansionStateOptions) => {
-  const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(new Set());
   const [expandedPoolId, setExpandedPoolId] = createSignal<string | null>(null);
+  const expandedGroups = createMemo(
+    () => resolveExpandedStorageGroups(options.groupedKeys(), collapsedGroups()),
+    undefined,
+    { equals: haveSameStorageGroups },
+  );
 
+  // Group keys are bare labels, so collapse state belongs to one grouping:
+  // regrouping opens every group, including the headerless ungrouped one.
   createEffect(() => {
-    setExpandedGroups((prev) => syncExpandedStorageGroups(prev, options.groupedKeys()));
+    options.groupBy();
+    setCollapsedGroups(new Set<string>());
   });
 
   createEffect(() => {
@@ -25,7 +36,7 @@ export const useStorageExpansionState = (options: UseStorageExpansionStateOption
   });
 
   const toggleGroup = (key: string) => {
-    setExpandedGroups((prev) => toggleExpandedStorageGroup(prev, key));
+    setCollapsedGroups((prev) => toggleCollapsedStorageGroup(prev, key));
   };
 
   return {
