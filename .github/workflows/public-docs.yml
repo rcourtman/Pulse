@@ -12,6 +12,7 @@ on:
       - "scripts/readme_entrypoints_test.py"
       - "scripts/tests/run.sh"
       - "scripts/tests/test_public_docs_workflow.py"
+      - "scripts/tests/test_production_rollout_docs.py"
       - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
       - "scripts/tests/test_vm_disk_diagnostics.py"
       - "scripts/tests/test_memory_troubleshooting_docs.py"
@@ -32,6 +33,7 @@ on:
       - "scripts/readme_entrypoints_test.py"
       - "scripts/tests/run.sh"
       - "scripts/tests/test_public_docs_workflow.py"
+      - "scripts/tests/test_production_rollout_docs.py"
       - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
       - "scripts/tests/test_vm_disk_diagnostics.py"
       - "scripts/tests/test_memory_troubleshooting_docs.py"
@@ -75,6 +77,7 @@ jobs:
       - name: Exercise backup safety and diagnostic recipes
         run: |
           scripts/tests/run.sh \
+            test_production_rollout_docs.py \
             test_pve_backup_troubleshooting_docs.py \
             test_vm_disk_diagnostics.py \
             test_memory_troubleshooting_docs.py \

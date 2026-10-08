@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/public-docs.yml"
 SAFETY_STEP = "Exercise backup safety and diagnostic recipes"
 TESTS = (
+    "test_production_rollout_docs.py",
     "test_pve_backup_troubleshooting_docs.py",
     "test_vm_disk_diagnostics.py",
     "test_memory_troubleshooting_docs.py",
@@ -119,7 +120,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
         result, calls = self.run_adapters()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(calls, list(TESTS))
-        self.assertIn("Summary: 5/5 passed", result.stdout)
+        self.assertIn(f"Summary: {len(TESTS)}/{len(TESTS)} passed", result.stdout)
 
     def test_each_failed_suite_is_a_failed_workflow_command(self):
         for failing in TESTS:
@@ -127,7 +128,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                 result, calls = self.run_adapters(failing)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(calls, list(TESTS))
-                self.assertIn("Summary: 4/5 passed", result.stdout)
+                self.assertIn(f"Summary: {len(TESTS)-1}/{len(TESTS)} passed", result.stdout)
                 self.assertIn("Failures: 1", result.stdout)
 
 
