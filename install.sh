@@ -5560,34 +5560,171 @@ uninstall_pulse() {
     exit 0
 }
 
-# Reset function
+# Reset retains the install and unit files. Observe every possible writer before
+# mutation; only timers lose enablement temporarily. Never replay an interrupted
+# updater, or restart services after an uncertain stop/deletion.
+read_pulse_reset_unit_state() {
+    local unit="$1"
+    PULSE_RESET_LOAD="" PULSE_RESET_ACTIVE="" PULSE_RESET_ENABLED=""
+    if ! PULSE_RESET_LOAD=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! PULSE_RESET_ACTIVE=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot observe unit ($unit); reset incomplete. No automatic recovery will be attempted; reconcile service state before retrying."
+        return 1
+    fi
+    if [[ "$PULSE_RESET_LOAD" == "not-found" && "$PULSE_RESET_ACTIVE" == "inactive" ]]; then
+        return 0
+    fi
+    case "$PULSE_RESET_LOAD" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); reset incomplete"; return 1 ;;
+    esac
+    case "$PULSE_RESET_ACTIVE" in
+        active|inactive|failed) ;;
+        *) print_error "Unsettled unit state ($unit); reset incomplete"; return 1 ;;
+    esac
+    if ! PULSE_RESET_ENABLED=$(timeout -k 1 5 systemctl show "$unit" --property=UnitFileState --value 2>/dev/null); then
+        print_error "Cannot observe unit enablement ($unit); reset incomplete"
+        return 1
+    fi
+    case "$PULSE_RESET_ENABLED" in
+        enabled|enabled-runtime|disabled|static|indirect|masked|masked-runtime|linked|linked-runtime) ;;
+        *) print_error "Unknown unit enablement ($unit); reset incomplete"; return 1 ;;
+    esac
+}
+
+confirm_pulse_reset_unit_stopped() {
+    local unit="$1" expected_load="$2" expected_enabled="$3"
+    read_pulse_reset_unit_state "$unit" || return 1
+    if [[ "$PULSE_RESET_ACTIVE" != "inactive" || "$PULSE_RESET_LOAD" != "$expected_load" || "$PULSE_RESET_ENABLED" != "$expected_enabled" ]]; then
+        print_error "Unit quiescence changed or is unconfirmed ($unit); reset incomplete. Files are preserved; no services will be restarted. Reconcile service state before retrying."
+        return 1
+    fi
+}
+
+# Reset function: the caller's existing --reset intent is unchanged.
 reset_pulse() {
     check_root
     print_header
     echo -e "\033[0;33mResetting Pulse configuration...\033[0m"
     echo
-    
-    # Detect service name
-    local service_name
+
+    local service_name unit i prior_enabled
     service_name=$(detect_service_name)
-    
-    # Stop service
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        echo "Stopping $service_name..."
-        systemctl stop "$service_name"
+    service_name="${service_name%.service}.service"
+    local units=("$UPDATE_TIMER_UNIT") roles=(timer)
+    # Historical default aliases share the same configuration. Custom instances
+    # must not stop, enable or restart another installation's units.
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" && "$UPDATE_TIMER_UNIT" != "pulse-backend-update.timer" ]]; then
+        units+=(pulse-backend-update.timer); roles+=(timer)
     fi
-    
-    # Remove config but keep binary
+    units+=("$UPDATE_SERVICE_UNIT"); roles+=(updater)
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" && "$UPDATE_SERVICE_UNIT" != "pulse-backend-update.service" ]]; then
+        units+=(pulse-backend-update.service); roles+=(updater)
+    fi
+    units+=("$service_name"); roles+=(server)
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        if [[ "$service_name" != "pulse.service" ]]; then units+=(pulse.service); roles+=(server); fi
+        if [[ "$service_name" != "pulse-backend.service" ]]; then units+=(pulse-backend.service); roles+=(server); fi
+    fi
+    local loads=() active_states=() enabled_states=() stopped_enabled_states=()
+    # A failed observation anywhere must precede every stop and deletion.
+    for unit in "${units[@]}"; do
+        read_pulse_reset_unit_state "$unit" || return 1
+        if [[ "$unit" == "$service_name" && "$PULSE_RESET_LOAD" == "not-found" ]]; then
+            print_error "Pulse service is missing ($unit); refusing configuration reset"
+            return 1
+        fi
+        loads+=("$PULSE_RESET_LOAD")
+        active_states+=("$PULSE_RESET_ACTIVE")
+        enabled_states+=("$PULSE_RESET_ENABLED")
+        stopped_enabled_states+=("$PULSE_RESET_ENABLED")
+    done
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        if [[ "${active_states[$i]}" != "inactive" ]]; then
+            if ! timeout -k 1 5 systemctl stop "$unit"; then
+                print_error "Cannot stop unit ($unit); reset incomplete. Configuration is preserved; no services will be restarted. Reconcile service state before retrying."
+                return 1
+            fi
+        fi
+        prior_enabled="${enabled_states[$i]}"
+        if [[ "${roles[$i]}" == timer ]]; then
+            case "$prior_enabled" in
+                enabled)
+                    if ! timeout -k 1 5 systemctl disable "$unit"; then
+                        print_error "Cannot disable timer ($unit); reset incomplete; configuration is preserved"
+                        return 1
+                    fi
+                    stopped_enabled_states[$i]=disabled
+                    ;;
+                enabled-runtime)
+                    if ! timeout -k 1 5 systemctl disable --runtime "$unit"; then
+                        print_error "Cannot disable runtime timer ($unit); reset incomplete; configuration is preserved"
+                        return 1
+                    fi
+                    stopped_enabled_states[$i]=disabled
+                    ;;
+            esac
+        fi
+        confirm_pulse_reset_unit_stopped "$unit" "${loads[$i]}" "${stopped_enabled_states[$i]}" || return 1
+    done
+    # Recheck ALL writers immediately before deletion, including an earlier timer
+    # that reactivated or an updater that appeared while the server was stopping.
+    for i in "${!units[@]}"; do
+        confirm_pulse_reset_unit_stopped "${units[$i]}" "${loads[$i]}" "${stopped_enabled_states[$i]}" || return 1
+    done
+
     echo "Removing configuration and data..."
-    rm -rf "$CONFIG_DIR"/*
-    
-    # Restart service
-    echo "Starting $service_name with fresh configuration..."
-    systemctl start "$service_name"
-    
+    if ! rm -rf -- "$CONFIG_DIR"/*; then
+        print_error "Configuration deletion failed; reset incomplete. Services and timers remain stopped; inspect retained data before recovery."
+        return 1
+    fi
+
+    # Restore only previously active servers. A prior inactive/failed service is
+    # not consent to start it. Interrupted updater jobs are deliberately not replayed.
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        [[ "${roles[$i]}" == server ]] || continue
+        if [[ "${active_states[$i]}" == "active" ]]; then
+            if ! timeout -k 1 5 systemctl start "$unit"; then
+                print_error "Cannot restart prior-active Pulse ($unit); reset incomplete. Timers remain stopped; reconcile service state before recovery."
+                return 1
+            fi
+            read_pulse_reset_unit_state "$unit" || return 1
+            if [[ "$PULSE_RESET_ACTIVE" != "active" || "$PULSE_RESET_LOAD" != "${loads[$i]}" || "$PULSE_RESET_ENABLED" != "${enabled_states[$i]}" ]]; then
+                print_error "Prior-active Pulse restoration is unconfirmed ($unit); reset incomplete. Timers remain stopped."
+                return 1
+            fi
+        fi
+    done
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        [[ "${roles[$i]}" == timer ]] || continue
+        case "${enabled_states[$i]}" in
+            enabled) timeout -k 1 5 systemctl enable "$unit" || { print_error "Timer enablement restoration failed ($unit); reset incomplete"; return 1; } ;;
+            enabled-runtime) timeout -k 1 5 systemctl enable --runtime "$unit" || { print_error "Runtime timer enablement restoration failed ($unit); reset incomplete"; return 1; } ;;
+        esac
+        confirm_pulse_reset_unit_stopped "$unit" "${loads[$i]}" "${enabled_states[$i]}" || return 1
+        if [[ "${active_states[$i]}" == "active" ]]; then
+            timeout -k 1 5 systemctl start "$unit" || { print_error "Timer restart failed ($unit); reset incomplete"; return 1; }
+        fi
+    done
+    # Completion requires actual readback, not successful start/enable commands.
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        read_pulse_reset_unit_state "$unit" || return 1
+        local expected_active="${active_states[$i]}"
+        [[ "${roles[$i]}" != updater && "$expected_active" != "failed" ]] || expected_active=inactive
+        if [[ "$PULSE_RESET_ACTIVE" != "$expected_active" || "$PULSE_RESET_LOAD" != "${loads[$i]}" || "$PULSE_RESET_ENABLED" != "${enabled_states[$i]}" ]]; then
+            print_error "Final unit restoration is unconfirmed ($unit); reset incomplete. Reconcile service state before recovery."
+            return 1
+        fi
+        if [[ "${roles[$i]}" == updater && "${active_states[$i]}" == "active" ]]; then
+            print_info "Interrupted updater ($unit) remains stopped and was not replayed."
+        fi
+    done
     echo
-    echo -e "\033[0;32m✓ Pulse has been reset to fresh configuration\033[0m"
-    echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):$(current_frontend_port)"
+    echo -e "\033[0;32m✓ Pulse configuration has been reset; prior-active server and timer states are restored\033[0m"
     exit 0
 }
 

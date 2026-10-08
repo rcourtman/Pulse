@@ -2549,3 +2549,14 @@ fi
 		t.Fatalf("key replacement failure changed original: %v", err)
 	}
 }
+
+func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) {
+	for _, name := range []string{"reset_pulse", "read_pulse_reset_unit_state", "confirm_pulse_reset_unit_stopped"} {
+		body := extractRootInstallShellFunction(t, name)
+		for _, line := range strings.Split(body, "\n") {
+			if strings.Contains(line, "systemctl ") && !strings.Contains(line, "timeout -k 1 5 systemctl ") {
+				t.Fatalf("%s has unbounded systemctl call: %s", name, line)
+			}
+		}
+	}
+}
