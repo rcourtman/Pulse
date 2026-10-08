@@ -4195,10 +4195,14 @@ resolve canonical/source IDs and unique aliases before collection, reject
    human-facing labels in the settings payload must frame the operator boundary
    as Patrol mode rather than Patrol configuration.
    Monitor-only Patrol autonomy saves are part of the same runtime gate:
-   when the safe-remediation extension or entitlement is unavailable, both the
-   browser state owner and `internal/api/ai_handlers.go` must clear stale
-   full-mode unlock state while clamping autonomy back to `monitor`, so paid
-   remediation permission cannot survive through a free runtime save.
+   when the safe-remediation extension or entitlement is unavailable, the
+   API must clear stale full-mode unlock and Autopilot activation state while
+   clamping autonomy back to `monitor` (the monitor-only handler in
+   `internal/api/ai_handlers.go` without the extension, the
+   `SaveAutonomySettings` adapter in `internal/api/router_routes_ai_relay.go`
+   behind the paid handler), and the browser state owner must refuse a paid
+   level when a save starts, so paid remediation permission cannot survive
+   through a free runtime save.
    Event-triggered Patrol runtime policy is also part of this gate: when local
    development background automation or another runtime policy pauses automatic
    alert/anomaly-triggered checks, `internal/ai` must expose an explicit

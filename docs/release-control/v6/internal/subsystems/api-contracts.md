@@ -3347,8 +3347,8 @@ a new API state machine, queue contract, or verification-accounting field.
    and the Patrol runtime-remediation destination shared with the AI settings endpoint, so run-history runtime-failure actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
-   and the Patrol mode selector boundary, so the default header and the
-   Patrol mode dialog compose the shared
+   and the Patrol mode selector boundary, so the header's `Mode and automation`
+   disclosure composes the shared
    `frontend-modern/src/components/shared/FilterButtonGroup.tsx` primitive for
    the visible `Watch only` / `Ask first` / `Safe auto-fix` /
    `Autopilot` presentation while the API contract remains the sole owner of
@@ -4028,14 +4028,20 @@ the authoritative analysis outcome.
    self-hosted v6 GA UI
    and the Patrol autonomy save contract, so Community/free runtime payloads
    may persist only `monitor` autonomy settings through
-   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
-   the canonical license-required response instead of a generic save failure,
-   and Patrol frontend state owners must clamp stale paid autonomy to `monitor`
-   and send `full_mode_unlocked:false` before submitting that endpoint when the
-   safe-remediation entitlement is not effective. The monitor-only backend path
-   must likewise clear stale full-mode unlock state in its response and
-   persistence layer instead of preserving paid remediation state through a free
-   configuration save
+   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and an
+   acknowledged `full` return the canonical license-required response instead
+   of a generic save failure (the shared acknowledgement gate refuses a `full`
+   request without a current Autopilot acknowledgement first, for example with
+   `409 acknowledgement_required` when it carries none), and the Patrol
+   frontend state owner must
+   refuse any level other than `monitor` when a save starts while the
+   safe-remediation entitlement is not effective; its payload carries only
+   `autonomy_level`, the investigation budget and timeout, and (for Autopilot)
+   `acknowledgement_id`, never `full_mode_unlocked`. The monitor-only backend
+   path owns the unlock clamp:
+   it must clear stale full-mode unlock and Autopilot activation state in its
+   response and persistence layer instead of preserving paid remediation state
+   through a free configuration save
    and the Patrol settings-save readiness contract, so
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
@@ -9641,19 +9647,22 @@ configuration from paid remediation autonomy. `GET /api/ai/patrol/autonomy`
 continues to clamp effective Community autonomy to `monitor`, and
 `PUT /api/ai/patrol/autonomy` in the open-source/free adapter must accept and
 persist only `monitor` settings while returning the canonical license-required
-payload for investigation or remediation autonomy levels. Frontend Patrol state
-owners must not rely on that 402 as normal control flow for stale local state:
-when the current entitlement locks safe remediation, they submit `monitor` even
-if older persisted settings or a previous entitlement left `approval`,
-`assisted`, or `full` in memory.
+payload for investigation or remediation autonomy levels (a `full` request
+reaches that adapter only with a current Autopilot acknowledgement; otherwise
+the shared acknowledgement gate refuses it first, for example with
+`409 acknowledgement_required` when it carries none). Frontend Patrol
+state owners must not rely on that 402 as normal control flow for stale local
+state: when the current entitlement locks safe remediation, the Patrol header
+presents `monitor` as the effective mode and the state owner starts no save but
+an explicit `monitor` choice, even if older persisted settings or a previous
+entitlement left `approval`, `assisted`, or `full` in memory.
 After a successful persisted update whose effective mode actually crosses from
 `monitor` to `approval`, `assisted`, or eligible `full`, the shared API mutation
 boundary invokes the bounded Patrol actionable-finding reconciliation pass.
 The pass runs only after `ApplyPatrolAutonomyConfig` has published the new
 runtime authority; failed writes, Community clamps, repeated paid-mode saves,
 budget-only edits, and demotions must not start backlog work.
-The Patrol header and configuration-dialog presentation for that API boundary
-must compose the shared
+The Patrol header presentation for that API boundary must compose the shared
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` selector: the
 endpoint contract still owns the accepted autonomy values and license-required
 response shape, while the frontend owns only the option mapping,

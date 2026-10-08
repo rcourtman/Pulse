@@ -3185,9 +3185,13 @@ Agent`), with the plain-language source phrase available through accessible
     configuration issue rather than a failed save. An Assistant handoff from it
     must send a source-named, model-only briefing and close the popover so the
     shared Assistant drawer is not visually hidden behind feature chrome. When
-    governed fixes are locked, the Patrol state owner must clear stale
-    full-mode unlock state before persisting the monitor-only autonomy payload,
-    so disabled paid controls cannot leak stale permission into a save. When a
+    governed fixes are locked, the Patrol header presents `Watch only` as the
+    effective mode with no enabled paid choice, and the Patrol state owner
+    refuses any other level when a save starts. Its autonomy payload
+    never carries `full_mode_unlocked`: `PUT /api/ai/patrol/autonomy` itself
+    clears stale full-mode unlock and Autopilot activation state on every save
+    below Autopilot, so disabled paid controls cannot leak stale permission
+    into a save. When a
     restored Patrol assessment session is attached, the shared Assistant drawer
     empty state must
     stay aligned with that source-named briefing and must not render generic

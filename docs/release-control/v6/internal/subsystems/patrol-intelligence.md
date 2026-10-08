@@ -1631,12 +1631,14 @@ after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must
 return the structured readiness reason if a stale UI still submits, and
 scheduled or scoped alert/anomaly runs must skip before calling the model while
-preserving the blocked reason and cause in Patrol status. The Patrol
-control state owner must also clamp stale investigation/remediation
-autonomy back to findings-only `monitor` and clear stale full-mode unlock state
-before persisting Patrol control when the safe-remediation entitlement is not
-effective, so an expired or downgraded plan cannot turn a recoverable control
-review into a Pro-only save failure. Patrol renders no inline error
+preserving the blocked reason and cause in Patrol status. When the
+safe-remediation entitlement is not effective, the Patrol header must present
+findings-only `monitor` as the effective mode and the Patrol control state
+owner must refuse any investigation/remediation level when a save starts;
+the `monitor` save it does send is accepted without the entitlement, and the
+API clears stale full-mode unlock and Autopilot activation state on it, so an
+expired or downgraded plan cannot turn a recoverable control review into a
+Pro-only save failure. Patrol renders no inline error
 surface for these failures today: switching Patrol on or off while it is not
 ready raises a fixed warning notification, a failed Patrol mode save raises an error
 notification, and neither offers an Assistant handoff. A provider or model save
@@ -1651,8 +1653,10 @@ prominent layout so all four mode labels remain readable without inventing a
 Patrol-local selector. Patrol owns the default visible four-level
 policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
 `Autopilot`), entitlement locks, and the rule that choosing the highest
-Autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
-acknowledgement. The shared primitive owns pressed-state semantics,
+Autopilot level opens the acknowledgement dialog and saves `full` only with a
+recorded `acknowledgement_id` (the API derives the compatibility
+`full_mode_unlocked` value itself), while saving any lower level lets the API
+clear the Autopilot activation. The shared primitive owns pressed-state semantics,
 disabled-option behavior, and active/inactive selector styling.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
