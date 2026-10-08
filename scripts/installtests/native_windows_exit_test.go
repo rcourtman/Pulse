@@ -50,7 +50,11 @@ func nativeWindowsExitGuards(steps []nativeWindowsExitStep) ([]string, error) {
 		if !ok {
 			continue
 		}
-		if step.If != "${{ !matrix.unix }}" || step.Shell != "pwsh" || step.ContinueOnError {
+		shell := "pwsh"
+		if step.Name == "Exercise native Windows service lifecycle" {
+			shell = "powershell"
+		}
+		if step.If != "${{ !matrix.unix }}" || step.Shell != shell || step.ContinueOnError {
 			return nil, fmt.Errorf("%s must be a required native Windows PowerShell step", step.Name)
 		}
 		found := 0
@@ -117,19 +121,7 @@ func nativeWindowsHarnessExitGuards(script string) ([]string, error) {
 }
 
 func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T) {
-	shell := "pwsh"
-	if runtime.GOOS == "windows" {
-		// Prove the guards on Windows PowerShell 5.1 too, without installing an
-		// agent or touching service state. The workflow uses pwsh.
-		shell = "powershell.exe"
-	}
-	powerShell, err := exec.LookPath(shell)
-	if err != nil {
-		if runtime.GOOS == "windows" {
-			t.Fatal("native Windows exit regression requires Windows PowerShell")
-		}
-		t.Skip("PowerShell unavailable; native exit execution remains a Windows CI obligation")
-	}
+	powerShell := nativeInstallerPowerShell(t)
 	guards, err := nativeWindowsExitGuards(nativeWindowsExitSteps(t))
 	if err != nil {
 		t.Fatal(err)

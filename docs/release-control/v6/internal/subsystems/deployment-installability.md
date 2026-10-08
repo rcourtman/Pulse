@@ -7281,3 +7281,28 @@ contract checks the helper staging, unchanged cache/graph inputs and bounded
 command. These are offline command proofs, not a hosted Docker build, public
 proxy recovery, E2E acceptance or installed customer result. The hosted checks
 still have to build the image and execute the unchanged suites.
+
+### Windows installer acceptance engine and absence (8 October 2026)
+
+Native installer parsing, service-removal failure controls and actual lifecycle
+execution use Windows PowerShell 5.1, never a PowerShell 7 substitute. A missing
+or mismatched engine on Windows fails rather than skips. The dedicated runner
+rejects pre-existing or unknown service/state instead of deleting it before the
+proof. Both first and repeated uninstall require independent SCM, binary, state
+and listener absence; only the exact SCM not-found identity/category proves
+absence. Failed listener enumeration remains a failure. This changes validation,
+not installer authority, transport, enrolment or host containment.
+
+`TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
+complete supplied parent and eleven removed/changed controls. Native
+`TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
+functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
+the existing real lifecycle job then uses real SCM. Linux skips are explicit and
+do not establish a Windows parser, native runtime, reboot or installed result.
+
+Clean-runner admission checks service, binary, state and listener absence before
+machine-environment mutation. A rejected admission cannot clear a pre-existing
+machine setting. Cleanup restores only the captured prior setting, even when
+owned server teardown fails; an unconfirmed stop fails and retains the handle
+rather than reporting clean teardown. Real Windows execution and full terminal
+cleanup evidence still have to be returned by the existing native CI job.

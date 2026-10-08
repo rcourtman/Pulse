@@ -9,11 +9,35 @@ import (
 	"testing"
 )
 
-func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
-	if err != nil {
-		t.Skip("pwsh not installed")
+// Windows proof is specifically the supported legacy engine. Missing or newer
+// PowerShell must not silently skip (or stand in for) Windows PowerShell 5.1.
+func nativeInstallerPowerShell(t *testing.T) string {
+	t.Helper()
+	binary := "pwsh"
+	if runtime.GOOS == "windows" {
+		binary = "powershell.exe"
 	}
+	powerShell, err := exec.LookPath(binary)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatal("native Windows installer proof requires Windows PowerShell 5.1")
+		}
+		t.Skip("PowerShell unavailable; native Windows installer proof remains unexecuted")
+	}
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+			`if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; Write-Output $PSVersionTable.PSVersion.ToString()`)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("Windows installer proof selected the wrong engine: %v\n%s", err, output)
+		}
+		t.Logf("Windows PowerShell %s", strings.TrimSpace(string(output)))
+	}
+	return powerShell
+}
+
+func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
+	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "install.ps1")
 	cmd := exec.Command(pwsh,
@@ -60,10 +84,7 @@ func TestInstallPS1KeepsTLS13OptionalOnLegacyWindowsPowerShell(t *testing.T) {
 }
 
 func TestWindowsAgentLifecycleHarnessParsesWithPowerShell(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
-	if err != nil {
-		t.Skip("pwsh not installed")
-	}
+	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1")
 	cmd := exec.Command(pwsh,
@@ -117,15 +138,17 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
 		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,
 		`--self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile`,
-		`Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue`,
-		`$lifecycleStateDir = Join-Path $env:ProgramData 'Pulse'`,
-		`Remove-Item -Path $lifecycleStateDir -Recurse -Force`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("native Windows workflow must keep its governed lifecycle proof intact: %s", needle)
 		}
 	}
+	if strings.Contains(workflow, "Remove-Item -Path $lifecycleStateDir") ||
+		strings.Contains(workflow, "Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue") {
+		t.Fatal("native proof must reject pre-existing or unknown state, not erase it")
+	}
+
 }
 
 func TestNativeWindowsExecutesGeneratedInstallCommand(t *testing.T) {
@@ -611,14 +634,7 @@ func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
 // model. The Linux proof's missing runtime remains an explicit skip; the
 // existing Windows native workflow selects these tests and uses PowerShell 5.1.
 func TestInstallPS1ServiceRemovalRuntime(t *testing.T) {
-	binary := "pwsh"
-	if runtime.GOOS == "windows" {
-		binary = "powershell.exe"
-	}
-	powerShell, err := exec.LookPath(binary)
-	if err != nil {
-		t.Skipf("%s not installed; native service-removal controls remain unexecuted", binary)
-	}
+	powerShell := nativeInstallerPowerShell(t)
 	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
 		repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"),
 		"-InstallerPath", repoFile("scripts", "install.ps1"))
