@@ -148,6 +148,45 @@ class PBSDocsTest(unittest.TestCase):
         self.assertNotIn("completed request with `metric=cpu`", history)
         self.assertIn("does\n   not prove there is no data under another target", history)
 
+    def slow_loading_guidance(self):
+        return " ".join(DOC.read_text().split("### Slow Backup Loading\n")[1]
+                        .split("\n### ")[0].split())
+
+    def test_slow_loading_distinguishes_source_and_failed_evaluation(self):
+        guidance = self.slow_loading_guidance()
+        for phrase in ("does not establish an encrypted-datastore or PVE-proxy cause",
+                       "**PBS via PVE** means passthrough", "**PBS** means a direct connection already",
+                       "failed monitoring check, not evidence that a backup failed",
+                       "does not establish that this separate evaluation recovered"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guidance)
+        self.assertIn("TROUBLESHOOTING.md#backup-age-alerts-were-not-evaluated", guidance)
+        self.assertIn("#backups-are-visible-but-coverage-says-unprotected", guidance)
+        self.assertIn("TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations", guidance)
+
+    def test_slow_loading_does_not_prescribe_a_connection_as_a_fix(self):
+        guidance = self.slow_loading_guidance()
+        self.assertIn("optional planned setup change", guidance)
+        self.assertIn("only through PVE passthrough", guidance)
+        self.assertIn("not a guaranteed performance or evaluation fix", guidance)
+        self.assertIn("Check for an existing direct connection first", guidance)
+        self.assertIn("certificate verification and privilege separation enabled", guidance)
+        self.assertNotIn("The fix is to add PBS directly", guidance)
+        self.assertIn("Do not add or recreate connections, install an agent, restart Pulse, clear History", guidance)
+        self.assertIn("change retention/polling limits", guidance)
+        self.assertIn("or run a backup, verification or restore", guidance)
+        self.assertIn("not proof of restore readiness or guest thaw", guidance)
+
+    def test_slow_loading_evidence_is_bounded_private_and_passive(self):
+        guidance = self.slow_loading_guidance()
+        self.assertIn("Pulse version, affected view, source indicator, observed loading duration", guidance)
+        self.assertIn("relevant existing redacted error", guidance)
+        self.assertIn("consistent placeholders", guidance)
+        self.assertIn("do not share full responses, HAR exports or credentials", guidance)
+        self.assertIn("stop and retain the observations already available", guidance)
+        self.assertIn("rather than repeatedly refreshing or running diagnostics", guidance)
+        self.assertIn("Use the existing native backup records meanwhile", guidance)
+
     def test_every_documented_shell_recipe_parses(self):
         for command in blocks():
             with self.subTest(command=command):

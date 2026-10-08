@@ -410,10 +410,41 @@ separate symptom is missing filesystem information in a PVE VM row.
 
 ### Slow Backup Loading
 
-If you notice slow loading for PBS storage accessed via PVE:
-- This often happens with encrypted PBS datastores
-- The fix is to add PBS directly (this guide)
-- Direct PBS connections bypass the slow PVE content listing
+A slow backup list does not establish an encrypted-datastore or PVE-proxy
+cause. First distinguish the affected reading, without changing the setup:
+
+- **Slow Proxmox → Backups list:** note the source indicator on an existing
+  affected row. **PBS via PVE** means passthrough; **PBS** means a direct
+  connection already supplies that observation. A loaded row does not prove
+  that every backup, job or History reading is current.
+- **“Backup-age alerts were not evaluated” warning:** this is a failed monitoring
+  check, not evidence that a backup failed. Follow the
+  [evaluation warning checks](TROUBLESHOOTING.md#backup-age-alerts-were-not-evaluated).
+  Adding a connection or making the list load does not establish that this
+  separate evaluation recovered.
+- **Wrong installation, overlapping guest IDs or conflicting Coverage:** use
+  the [backup health checks](#backups-are-visible-but-coverage-says-unprotected)
+  and [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+  Keep the existing connections and records while comparing their origin.
+
+For a report, retain the Pulse version, affected view, source indicator,
+observed loading duration and relevant existing redacted error. Use consistent
+placeholders for private server, datastore, namespace and guest identities;
+do not share full responses, HAR exports or credentials. If loading makes
+Pulse unresponsive, stop and retain the observations already available, rather
+than repeatedly refreshing or running diagnostics.
+
+A direct PBS connection is an optional planned setup change when backups are
+currently available only through PVE passthrough and you need the additional
+API-backed readings described above. It bypasses PVE's proxy listing for those
+direct observations; it is **not a guaranteed performance or evaluation fix**.
+Check for an existing direct connection first and verify the owning PBS server
+before adding anything. Keep certificate verification and privilege separation
+enabled, and confirm the expected datastores and readings after normal polling.
+Do not add or recreate connections, install an agent, restart Pulse, clear
+History, change retention/polling limits, or run a backup, verification or restore
+just to diagnose slow loading. Use the existing native backup records meanwhile;
+a loaded list or an OK task is not proof of restore readiness or guest thaw.
 
 ### Duplicate Backups
 
