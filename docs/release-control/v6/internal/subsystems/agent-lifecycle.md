@@ -9010,3 +9010,12 @@ websocket as REST coalesces it (the filter's limits are recorded under
 "Unlink replaces the pair's operator link" in the unified-resources
 contract). Agent registration, enrolment, install, update, removal, report
 identity and continuity are unchanged.
+
+### Report-merge splits a linked agent
+
+`internal/api/resourceapi/resources.go` changed only so report-merge on a
+resource an operator linked an agent into (a VM, a node or a Docker host)
+replaces that link, splitting the agent back out as unlink does. Agent
+registration, enrolment, install, update, removal, report identity and
+continuity are unchanged, and an agent's own declared node link still
+ignores exclusions.

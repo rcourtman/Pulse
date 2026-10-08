@@ -57,6 +57,9 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`

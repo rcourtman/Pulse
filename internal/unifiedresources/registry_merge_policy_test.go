@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -859,6 +860,144 @@ func TestManualLinkKeepsProviderPayloadsThePrimaryLacks(t *testing.T) {
 	}
 	if host, _ := rr.Get("agent-esxi"); host.VMware == nil || host.Agent == nil {
 		t.Fatalf("linked vSphere host vmware=%t agent=%t, want both payloads", host.VMware != nil, host.Agent != nil)
+	}
+}
+
+// Each operator link folded into a resource is recorded with the link row's
+// own pair, also along a chain (a Docker host linked to an agent, the agent
+// linked into a VM), and the record rides the monitor's listing into a
+// registry seeded from it, which never holds the folded rows.
+func TestManualLinkFoldsNameEachLinkPairAlongAChain(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	snapshot := models.StateSnapshot{
+		LastUpdate:  now,
+		VMs:         []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:       []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "docker-box", Hostname: "dock-box", Status: "online", LastSeen: now}},
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	var vmID, agentID, dockerID string
+	for _, resource := range adapter.GetAll() {
+		switch {
+		case resource.Type == ResourceTypeVM:
+			vmID = resource.ID
+		case resource.Agent != nil:
+			agentID = resource.ID
+		case resource.Docker != nil:
+			dockerID = resource.ID
+		}
+		if len(resource.linkFolds) != 0 {
+			t.Fatalf("unlinked resource %s carries link folds %+v", resource.ID, resource.linkFolds)
+		}
+	}
+	if vmID == "" || agentID == "" || dockerID == "" || len(adapter.GetAll()) != 3 {
+		t.Fatalf("fixture did not produce a separate VM, agent and Docker host: %+v", adapter.GetAll())
+	}
+
+	// Links apply in store order, so the agent takes in the Docker host before
+	// the VM takes in the agent.
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: dockerID, PrimaryID: agentID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: agentID, CreatedAt: now.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	adapter.PopulateFromSnapshot(snapshot)
+	merged := adapter.GetAll()
+	if len(merged) != 1 || merged[0].ID != vmID {
+		t.Fatalf("links did not fold the chain into the VM: %+v", merged)
+	}
+
+	// The agent linked from its own side still folds into the guest it runs
+	// in, and the fold names the link's pair either way.
+	want := []ManualLinkFold{
+		{HolderID: agentID, FoldedID: dockerID, Sources: []DataSource{SourceDocker}},
+		{HolderID: vmID, FoldedID: agentID, Sources: []DataSource{SourceAgent, SourceDocker}},
+	}
+	if got := adapter.currentRegistry().ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("monitor folds = %+v, want %+v", got, want)
+	}
+
+	seeded := NewRegistry(store)
+	seeded.IngestResources(adapter.GetAll())
+	if got := seeded.ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("seeded registry folds = %+v, want %+v", got, want)
+	}
+	if got := seeded.ManualLinkFolds(agentID); got != nil {
+		t.Fatalf("folded agent ID reports folds %+v", got)
+	}
+}
+
+// Record ingest recreates a folded side whose source mapping points at a
+// holder of another type (an agent-type TrueNAS record linked into a VM) and
+// the record-ingest epilogue folds it again, so the pair must be recorded
+// once however often the records arrive.
+func TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+	}
+	records := []IngestRecord{{
+		SourceID: "nas-1",
+		Resource: Resource{Type: ResourceTypeAgent, Name: "nas-1", Status: StatusOnline, LastSeen: now},
+		Identity: ResourceIdentity{MachineID: "abcdef0123456789"},
+	}}
+	probe := NewRegistry(store)
+	probe.IngestSnapshot(snapshot)
+	probe.IngestRecords(SourceTrueNAS, records)
+	var vmID, systemID string
+	for _, resource := range probe.List() {
+		switch resource.Type {
+		case ResourceTypeVM:
+			vmID = resource.ID
+		case ResourceTypeAgent:
+			systemID = resource.ID
+		}
+	}
+	if vmID == "" || systemID == "" {
+		t.Fatalf("fixture did not produce a separate VM and TrueNAS system: %+v", probe.List())
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: vmID, ResourceB: systemID, PrimaryID: vmID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := NewRegistry(store)
+	rr.IngestSnapshot(snapshot)
+	for i := 0; i < 3; i++ {
+		rr.IngestRecords(SourceTrueNAS, records)
+	}
+	if listed := rr.List(); len(listed) != 1 {
+		t.Fatalf("link did not fold the TrueNAS system into the VM: %+v", listed)
+	}
+	want := []ManualLinkFold{{HolderID: vmID, FoldedID: systemID, Sources: []DataSource{SourceTrueNAS}}}
+	if got := rr.ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
+		t.Fatalf("folds after repeated record ingests = %+v, want %+v", got, want)
+	}
+}
+
+// A folded side recreated with fewer sources than it brought before (one of
+// an identity-merged agent's records replayed) folds again; the holder still
+// carries everything the earlier fold brought, so the fold keeps every
+// source and a report naming any of them still selects the link.
+func TestManualLinkFoldRepeatedPairKeepsEarlierSources(t *testing.T) {
+	holder := &Resource{ID: "vm-1"}
+	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker}}, "agent-1")
+	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent}}, "agent-1")
+	want := []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker}}}
+	if !reflect.DeepEqual(holder.linkFolds, want) {
+		t.Fatalf("folds = %+v, want %+v", holder.linkFolds, want)
 	}
 }
 

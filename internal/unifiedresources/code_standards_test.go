@@ -729,6 +729,28 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 }
 
+// Report-merge undoes an operator link through the registry's fold record. A
+// candidate ID derived from the merged resource's type names neither side of
+// a link, and the resources API's registry, seeded from the monitor's
+// already-linked listing, never holds the folded row to derive one from.
+func TestResourceAPIReportMergeExcludesRegistryLinkFolds(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"linkFolds := registry.ManualLinkFolds(path)",
+		"if len(resource.Sources) < 2 && len(linkFolds) == 0 {",
+		"pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resourceapi/resources.go report-merge must contain %q", snippet)
+		}
+	}
+}
+
 func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "config", "availability.go"): {

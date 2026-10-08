@@ -69,6 +69,7 @@ func cloneResourceData(in *Resource) Resource {
 	out.Metrics = cloneResourceMetrics(in.Metrics)
 	out.ParentID = cloneStringPtr(in.ParentID)
 	out.parentBySource = cloneParentBySourceMap(in.parentBySource)
+	out.linkFolds = cloneManualLinkFolds(in.linkFolds)
 	out.Tags = cloneStringSlice(in.Tags)
 	out.Incidents = cloneResourceIncidentSlice(in.Incidents)
 	out.Relationships = cloneResourceRelationshipSlice(in.Relationships)

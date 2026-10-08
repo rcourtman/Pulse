@@ -6925,3 +6925,13 @@ or recovery path is added or moved.
 hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
 `404`. That removes a diagnostic read surface on demo instances only; no
 storage, retention, backup, migration or recovery path is added or moved.
+
+### Report-merge link folds
+
+`internal/unifiedresources/types.go` adds an unexported, in-memory
+`linkFolds` record of the operator links a resource absorbed, and
+`internal/api/resourceapi/resources.go` makes report-merge exclude those
+links' pairs, which deletes the pair's link row in the resource store as an
+unlink does. Nothing new is persisted: the record is rebuilt with each
+registry generation, and no schema, backup, retention, migration or
+recovery path is added or moved.

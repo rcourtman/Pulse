@@ -4794,8 +4794,13 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		return
 	}
 	for _, link := range rr.links {
+		// A link joins only the pair its row names. Canonical-ID succession
+		// can leave a row whose endpoint re-key collided with the successor's
+		// own row while its primary moved on to the successor; honouring that
+		// primary merged the successor through a row naming a retired ID, which
+		// an unlink or report-merge of the merged pair leaves behind.
 		primaryID := link.PrimaryID
-		if primaryID == "" {
+		if primaryID != link.ResourceA && primaryID != link.ResourceB {
 			primaryID = link.ResourceA
 		}
 		primary := rr.resources[primaryID]
@@ -4836,6 +4841,7 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		}
 
 		rr.mergeResourceData(primary, other, thresholds)
+		recordManualLinkFold(primary, primaryID, other, otherID)
 		delete(rr.resources, otherID)
 		if rr.linkMergedIDs == nil {
 			rr.linkMergedIDs = make(map[string]struct{})

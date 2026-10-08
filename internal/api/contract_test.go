@@ -14428,6 +14428,79 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 	}
 }
 
+// POST /api/resources/{id}/report-merge keeps its response shape, and on a
+// pair an operator linked it replaces the link: the store no longer holds it
+// and the resource list shows both sides again.
+func TestContract_ResourceReportMergeReplacesOperatorLink(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=vm,agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID string
+	for _, resource := range list() {
+		switch resource.Type {
+		case unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case unifiedresources.ResourceTypeAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture did not list a separate VM and agent: %+v", list())
+	}
+
+	linkRec := httptest.NewRecorder()
+	h.HandleLink(linkRec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/link", strings.NewReader(`{"targetId":"`+agentID+`"}`)))
+	if linkRec.Code != http.StatusOK {
+		t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
+	}
+	if linked := list(); len(linked) != 1 {
+		t.Fatalf("link listed %d resources, want one", len(linked))
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode report-merge: %v", err)
+	}
+	if len(resp) != 3 || resp["status"] != "ok" || resp["message"] != "Merge reported" {
+		t.Fatalf("report-merge response = %#v, want status, message and exclusions", resp)
+	}
+	if exclusions, ok := resp["exclusions"].(float64); !ok || exclusions < 1 {
+		t.Fatalf("report-merge exclusions = %#v, want a positive count", resp["exclusions"])
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if links, err := store.GetLinks(); err != nil || len(links) != 0 {
+		t.Fatalf("report-merge left links %+v (err %v)", links, err)
+	}
+	if split := list(); len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM and the agent apart", len(split))
+	}
+}
+
 func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	now := time.Date(2026, 3, 17, 10, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})

@@ -964,13 +964,16 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if len(resource.Sources) < 2 {
+	// Two resources an operator linked can share every source (two agents),
+	// so an applied link marks a merge too.
+	linkFolds := registry.ManualLinkFolds(path)
+	if len(resource.Sources) < 2 && len(linkFolds) == 0 {
 		http.Error(w, "Resource is not merged", http.StatusBadRequest)
 		return
 	}
 
 	sourceTargets := registry.SourceTargets(path)
-	if len(sourceTargets) == 0 {
+	if len(sourceTargets) == 0 && len(linkFolds) == 0 {
 		http.Error(w, "No source targets found", http.StatusBadRequest)
 		return
 	}
@@ -979,31 +982,56 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 	for _, source := range payload.Sources {
 		filteredSources[strings.ToLower(strings.TrimSpace(source))] = struct{}{}
 	}
+	selected := func(sources ...unified.DataSource) bool {
+		if len(filteredSources) == 0 {
+			return true
+		}
+		for _, source := range sources {
+			if _, ok := filteredSources[strings.ToLower(string(source))]; ok {
+				return true
+			}
+		}
+		return false
+	}
 
 	reason := strings.TrimSpace(payload.Notes)
 	if reason == "" {
 		reason = "reported_incorrect_merge"
 	}
 
-	exclusionsAdded := 0
-	seen := make(map[string]struct{})
-	for _, target := range sourceTargets {
-		if len(filteredSources) > 0 {
-			if _, ok := filteredSources[strings.ToLower(string(target.Source))]; !ok {
-				continue
-			}
+	// An operator link that brought a reported source in is undone by
+	// excluding the link's own pair, which replaces the link in the store.
+	// Identity merges are kept apart by excluding the candidate ID each
+	// source's record takes when no match is allowed; for a linked source that
+	// candidate names neither side of the link.
+	type exclusionPair struct{ a, b string }
+	pairs := make([]exclusionPair, 0, len(linkFolds)+len(sourceTargets))
+	for _, fold := range linkFolds {
+		if selected(fold.Sources...) {
+			pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})
 		}
-		if target.CandidateID == "" || target.CandidateID == path {
+	}
+	for _, target := range sourceTargets {
+		if !selected(target.Source) || target.CandidateID == "" || target.CandidateID == path {
 			continue
 		}
-		key := target.CandidateID
+		pairs = append(pairs, exclusionPair{path, target.CandidateID})
+	}
+
+	exclusionsAdded := 0
+	seen := make(map[string]struct{})
+	for _, pair := range pairs {
+		key := pair.a + "|" + pair.b
+		if pair.b < pair.a {
+			key = pair.b + "|" + pair.a
+		}
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
 		exclusion := unified.ResourceExclusion{
-			ResourceA: path,
-			ResourceB: target.CandidateID,
+			ResourceA: pair.a,
+			ResourceB: pair.b,
 			Reason:    reason,
 			CreatedBy: getUserID(r),
 			CreatedAt: time.Now().UTC(),
@@ -1013,7 +1041,8 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 				Err(err).
 				Str("orgID", orgID).
 				Str("resourceID", path).
-				Str("candidateID", target.CandidateID).
+				Str("resourceA", pair.a).
+				Str("resourceB", pair.b).
 				Msg("Failed to add resource merge exclusion")
 			http.Error(w, sanitizeError(err, "Internal server error"), http.StatusInternalServerError)
 			return

@@ -6922,10 +6922,9 @@ as SQLite does. Reads keep the newest link per pair, so an older reversed copy
 cannot win with its primary, and drop exclusions older than it; duplicate
 exclusions already stored stay, which changes no decision. A registry resolves its `GetLinks` and `GetExclusions` results
 together in `loadOverrides`, so an unlink committed between the two reads
-cannot load both decisions for one generation. Report-merge still records
-exclusions against candidate IDs derived from the merged resource's type,
-which do not name the folded side of a cross-type manual link, so it does not
-undo such a link; unlink does. `TestManualPairDecisionReplacesThePreviousOne` and
+cannot load both decisions for one generation. Report-merge undoes a link
+the same way (see "Report-merge splits operator-linked resources" below).
+`TestManualPairDecisionReplacesThePreviousOne` and
 `TestManualPairDecisionReadsResolveStoredConflictsByRecency` pin the store
 rule on SQLite and the in-memory store,
 `TestUnlinkSplitsHostPairWhosePinTookTheOtherSidesKey` links and unlinks
@@ -6939,3 +6938,69 @@ and `TestMonitorAdapterCoalesceForPresentationHonoursExclusions`,
 `TestBroadcastPresentationCoalesceHonoursMergeExclusions` and
 `TestBroadcastPresentationCoalescePrefersTheListingReadState` pin broadcast
 and REST row counts for a split host pair.
+
+### Report-merge splits operator-linked resources
+
+`POST /api/resources/{id}/report-merge` records exclusions for the reported
+sources. For each reported source mapped to the merged resource it excludes
+the merged resource's ID and the candidate ID that source's record takes when
+no match is allowed (`ResourceRegistry.SourceTargets`), as before, which
+keeps an identity match apart. That candidate is derived from the merged
+resource's type, so for a source an operator link brought in it named
+neither side of the link: an agent linked into a VM got a `vm-`
+candidate, and an agent linked with a node or a Docker host keyed by its
+machine ID got a source-specific one. No link row matched, the link stayed
+applied, and the API answered "Merge reported" while the drawer's Split
+dialog toasted "Resource split applied". Two linked agents share their only
+source, so the API refused them as "Resource is not merged"; an applied link
+now marks a merge as well (the drawer still offers Split only for a resource
+listing two sources).
+
+`applyManualLinks` now records each link it applies on the merged resource
+(`recordManualLinkFold`): the link row's own pair, the resource that took the
+other in and the one folded into it, plus the sources the folded side
+brought, including anything links had already folded into it, so every link
+along a chain keeps its own pair. A pair is recorded once, since record
+ingest can recreate a folded side whose source mapping points at a holder of
+another type and fold it again, so a repeated pair adds its sources to the
+fold already recorded (the holder still carries what the earlier fold
+brought). The record is unexported and rides in-memory
+clones, so it reaches the resources API's registry, which seeds from the
+monitor's already-linked listing and never holds the folded row.
+Report-merge excludes the pair of every link whose folded side brought a
+reported source category (`ResourceRegistry.ManualLinkFolds`), and the
+store's one-decision-per-pair rule deletes that link row, so the pair splits
+on every surface from the monitor's next rebuild, as with unlink. The drawer
+reports every merged source. Categories are not attributed to individual
+contributors: naming one that some folded side carried undoes that link even
+where the holder carries it too, and a source that arrived along a chain of
+links undoes every link on its way to the merged resource.
+
+A link joins only the pair its row names. Canonical-ID succession re-keys
+link endpoints with `UPDATE OR IGNORE` but moves `primary_id`
+unconditionally, so a row whose re-key collided with the successor's own row
+kept the retired endpoint and took the successor as its primary.
+`applyManualLinks` honoured that primary and merged the successor through a
+row no exclusion of the merged pair removes, so an unlink or report-merge of
+that pair came back on the next rebuild. A primary that names neither side
+of its row now falls back to the row's first side, which leaves such a row
+inert while the retired ID is gone.
+
+`TestResourceReportMergeSplitsOperatorLinkedPair` links and reports through
+the API handlers against a monitor adapter on the same SQLite store, rebuilt
+three times per step, for VM/agent, node/agent and agent/Docker pairs linked
+from either side and for two linked agents. Every two-source case but a node
+linked from its agent fails with the previous handler, whose candidate for
+that node happened to be the node's own source-specific ID.
+`TestResourceReportMergeSplitsPairBehindASuccessionShadowedRow` reports a
+pair that a shadowed row also named,
+`TestResourceReportMergeSourceFilterSelectsLinks` pins the source filter,
+`TestResourceReportMergeSplitsIdentityMergedPair` keeps an identity-merged
+agent and Docker host apart through the rebuilds,
+`TestManualLinkFoldsNameEachLinkPairAlongAChain` pins a chain's pairs on the
+monitor's registry and on one seeded from its listing, and
+`TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests` folds a TrueNAS
+system into a VM across repeated record ingests, and
+`TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
+sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
+keeps the handler on the registry's fold record.

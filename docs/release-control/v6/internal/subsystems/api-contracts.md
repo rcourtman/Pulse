@@ -11493,3 +11493,17 @@ Router's or the package-global limiters. Limits, windows, tenant selection,
 revocation and response payloads are unchanged. The connected lifetime and
 ownership controls are in `router_limiter_lifecycle_test.go`; the integration
 fixture's cleanup also runs on a failed listener/request assertion.
+
+### Report-merge undoes operator links
+
+`POST /api/resources/{id}/report-merge` keeps its request, status codes and
+response shape. For a reported source that an operator link brought in, it
+now records the exclusion against the link's own pair instead of a candidate
+ID derived from the merged resource's type, so the store replaces the link
+and the pair splits as after unlink (contract under "Report-merge splits
+operator-linked resources" in unified-resources). `exclusions` counts those
+pairs with the identity-match exclusions. `400 Resource is not merged` and
+`400 No source targets found` now also need a resource with no applied link,
+so two linked agents, which share their only source, can be reported.
+`TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
+shape and the link's removal for a VM and the agent linked into it.
