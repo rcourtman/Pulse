@@ -1,4 +1,5 @@
 import { Component, Match, Show, Switch } from 'solid-js';
+import LockIcon from 'lucide-solid/icons/lock';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import {
@@ -215,11 +216,21 @@ export const UpdateIcon: Component<UpdateIconProps> = (props) => {
  */
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
+  const readOnlyUpdateExplanation = () =>
+    `Update available. Pulse cannot apply it: ${state.updateUnavailableReason()}\nApply this update using your container manager on the host.`;
+  const showReadOnlyUpdateExplanation = (target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    showTooltip(readOnlyUpdateExplanation(), rect.left + rect.width / 2, rect.top, {
+      align: 'center',
+      direction: 'up',
+    });
+  };
   const shouldRenderReadOnlyStatus = () =>
     state.currentState() === 'idle' &&
     (hasContainerUpdateError(props.updateStatus) ||
       hasContainerUpdateCurrent(props.updateStatus) ||
       isContainerUpdatePinned(props.updateStatus) ||
+      state.isUpdateUnavailable() ||
       (state.settingsLoaded() && state.shouldHideButton()));
 
   return (
@@ -287,11 +298,37 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
           </div>
         }
       >
-        <ContainerUpdateBadge
-          updateStatus={props.updateStatus}
-          compact={props.compact}
-          showCurrent={true}
-        />
+        <Show
+          when={hasContainerUpdate(props.updateStatus) && state.isUpdateUnavailable()}
+          fallback={
+            <ContainerUpdateBadge
+              updateStatus={props.updateStatus}
+              compact={props.compact}
+              showCurrent={true}
+            />
+          }
+        >
+          <span
+            class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            tabindex="0"
+            aria-label={readOnlyUpdateExplanation()}
+            data-prevent-toggle
+            onClick={(event) => {
+              event.stopPropagation();
+              showReadOnlyUpdateExplanation(event.currentTarget);
+            }}
+            onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+            onMouseLeave={() => hideTooltip()}
+            onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+            onBlur={() => hideTooltip()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') hideTooltip();
+            }}
+          >
+            <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>Update available</span>
+          </span>
+        </Show>
       </Show>
     </Show>
   );
