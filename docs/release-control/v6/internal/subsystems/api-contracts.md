@@ -3954,6 +3954,20 @@ deliberately not instrumented, because instrumenting both endpoints would
 double-count a single operator action and corrupt the failure share the
 counters exist to measure.
 
+### Audit investigation filter rejection
+
+The existing GET `/api/audit`, `/api/audit/export` and `/api/audit/summary`
+validate every supplied `startTime` and `endTime` as RFC3339 and reject empty,
+malformed, equal or reversed bounds with HTTP 400 before querying events.
+List and export likewise reject supplied `success` values other than literal
+`true` or `false`. Absence remains unfiltered; event/user filters, tenant,
+licence, role and method boundaries, formats and signature verification remain.
+Export/summary do not inherit list pagination, and summary has no success
+filter. No export quota or new endpoint is introduced. Actual handlers and
+exporter are pinned by `internal/api/audit_filter_validation_test.go` with
+fake persistent loggers, including query non-execution and tenant isolation;
+`internal/api/audit_handlers_test.go` pins valid export/summary filter payloads.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test

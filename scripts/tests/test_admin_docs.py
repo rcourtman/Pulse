@@ -105,7 +105,7 @@ class AdminDocsTest(unittest.TestCase):
         audit = (DOCS / "AUDIT_LOGGING.md").read_text()
         for boundary in ("audit:read", "audit_logging", "private directory", "redacted excerpt", "does not reuse filters",
                          "in the same Bash session", "not an installed Pulse command", "not list pagination",
-                         "ignores malformed time filters", "partial file", "does not follow redirects or retry"):
+                         "reject malformed or empty supplied", "before reading events", "not `success` or list", "partial file", "does not follow redirects or retry"):
             self.assertIn(boundary, audit)
         org = (DOCS / "MULTI_TENANT.md").read_text()
         for boundary in ("session-based user authentication", "403 session_required", "CSRF", "settings:read", "organization binding", "pending invitation", "accept the share", "accessRole"):
