@@ -27030,3 +27030,46 @@ func TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport(t
 		t.Fatalf("runtime role after reduction = %q, want %q", got, agenttokens.CredentialKindMonitoringCollector)
 	}
 }
+
+func TestContract_PMGUncollectedDatasetsRemainAbsent(t *testing.T) {
+	source := models.PMGInstance{ID: "pmg-scope", Name: "gateway", Status: "online", ConnectionHealth: "healthy", Nodes: []models.PMGNodeStatus{{Name: "one", Status: "online"}}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{source}})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+	router := &Router{monitor: monitor}
+	rec := httptest.NewRecorder()
+	router.handleListPMGInstances(rec, httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-scope", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp PMGInstancesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("data=%+v", resp.Data)
+	}
+	got := resp.Data[0]
+	if got.Status != "online" || got.ConnectionHealth != "healthy" || got.MailStats != nil || got.Quarantine != nil || len(got.Nodes) != 1 || got.Nodes[0].QueueStatus != nil || len(got.MailCount) != 0 || len(got.DomainStats) != 0 {
+		t.Fatalf("missing dataset became zero/healthy data: %+v", got)
+	}
+}
+
+func TestContract_PMGFalseScopeIsExplicitOnWire(t *testing.T) {
+	node := configapi.NodeResponse{ID: "pmg-0", Type: "pmg", Name: "gateway"}
+	raw, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"monitorMailStats", "monitorQueues", "monitorQuarantine", "monitorDomainStats"} {
+		value, exists := payload[key]
+		if !exists || string(value) != "false" {
+			t.Fatalf("saved opt-out omitted/changed %s: %s", key, raw)
+		}
+	}
+}

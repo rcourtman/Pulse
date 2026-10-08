@@ -263,6 +263,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
+	var pendingPMG []config.PMGInstance
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode add node request")
@@ -736,21 +737,32 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TokenValue:                   pmgTokenValue,
 			Fingerprint:                  req.Fingerprint,
 			VerifySSL:                    verifySSL,
+			MonitoringConfigured:         true,
 			MonitorMailStats:             monitorMailStats,
 			MonitorQueues:                monitorQueues,
 			MonitorQuarantine:            monitorQuarantine,
 			MonitorDomainStats:           monitorDomainStats,
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
-		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances, pmgInstance)
+		pendingPMG = append(append([]config.PMGInstance(nil), h.getConfig(r.Context()).PMGInstances...), pmgInstance)
 	}
 
 	// Save configuration to disk using our persistence instance
 	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	pmgToSave := h.getConfig(r.Context()).PMGInstances
+	if pendingPMG != nil {
+		pmgToSave = pendingPMG
+	}
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+
+	if pendingPMG != nil {
+		config.Mu.Lock()
+		h.getConfig(r.Context()).PMGInstances = pendingPMG
+		config.Mu.Unlock()
 	}
 
 	// Reload monitor with new configuration
@@ -1418,6 +1430,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Limit request body to 32KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
+	var pendingPMG []config.PMGInstance
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -1618,6 +1631,14 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 		}
+		if req.MonitorMailStats != nil || req.MonitorQueues != nil ||
+			req.MonitorQuarantine != nil || req.MonitorDomainStats != nil {
+			// Materialise the effective legacy default before applying a partial
+			// patch. An unrelated false flag must not silently turn mail stats off.
+			updated.MonitorMailStats = current.MailStatsEnabled()
+			updated.MonitoringConfigured = true
+		}
+
 		if req.MonitorMailStats != nil {
 			updated.MonitorMailStats = *req.MonitorMailStats
 		}
@@ -1637,7 +1658,8 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		*pmgInst = updated
+		pendingPMG = append([]config.PMGInstance(nil), h.getConfig(r.Context()).PMGInstances...)
+		pendingPMG[index] = updated
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
@@ -1645,10 +1667,19 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 
 	// Save configuration to disk using our persistence instance
 	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	pmgToSave := h.getConfig(r.Context()).PMGInstances
+	if pendingPMG != nil {
+		pmgToSave = pendingPMG
+	}
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+	if pendingPMG != nil {
+		config.Mu.Lock()
+		h.getConfig(r.Context()).PMGInstances = pendingPMG
+		config.Mu.Unlock()
 	}
 
 	// IMPORTANT: Preserve alert overrides when updating nodes
@@ -1841,7 +1872,9 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
 		deletedNodeHost = h.getConfig(r.Context()).PMGInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PMG node")
+		config.Mu.Lock()
 		h.getConfig(r.Context()).PMGInstances = append(h.getConfig(r.Context()).PMGInstances[:index], h.getConfig(r.Context()).PMGInstances[index+1:]...)
+		config.Mu.Unlock()
 	} else {
 		log.Warn().
 			Str("nodeID", nodeID).

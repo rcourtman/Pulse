@@ -129,8 +129,13 @@ func TestBranchcov0722PMGConnectionScopeFlags(t *testing.T) {
 		wantOn map[string]bool
 	}{
 		{
+			name:   "legacy_default",
+			inst:   config.PMGInstance{Name: "m", Host: "h.lan"},
+			wantOn: map[string]bool{"mailStats": true, "queues": false, "quarantine": false, "domainStats": false},
+		},
+		{
 			name: "all_flags_off",
-			inst: config.PMGInstance{Name: "m", Host: "h.lan"},
+			inst: config.PMGInstance{Name: "m", Host: "h.lan", MonitoringConfigured: true},
 			wantOn: map[string]bool{
 				"mailStats": false, "queues": false, "quarantine": false, "domainStats": false,
 			},

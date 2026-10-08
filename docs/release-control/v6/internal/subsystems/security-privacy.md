@@ -18,6 +18,19 @@
 
 ## Purpose
 
+### Existing PMG collection choices constrain provider reads
+
+The owning PMG collector honours the saved mail, queue, quarantine and domain
+switches at its read boundary. `PMGInstance.MonitoringConfigured` distinguishes
+new explicit all-off choices from old configurations that stored only zero
+booleans: those old ambiguous entries retain the existing mail-statistics
+default until a collection option is saved. This is not retrospective proof of
+intent or privacy. The discriminator survives encrypted node persistence and
+reload, covered in `TestPMGCollectionPersistenceDefaults` in `config_load_test.go`.
+Scope changes apply to subsequent polls, not requests already in flight;
+pausing remains the boundary for all ordinary reads. Authentication, TLS and
+permissions are unchanged, and no live mail/privacy acceptance is claimed.
+
 ### Removing browser-origin trust is a durable explicit patch
 
 The system settings handler accepts an explicit empty string for

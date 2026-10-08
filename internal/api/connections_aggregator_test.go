@@ -1450,3 +1450,22 @@ func TestBuildConnections_ScalesStaleThresholdWithPollingIntervals(t *testing.T)
 		t.Fatalf("pbs state = %q, want stale under the floor threshold", state)
 	}
 }
+
+func TestPMGCollectionConnectionScopeMatchesLegacyAndExplicitDefaults(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		cfg      config.PMGInstance
+		wantMail bool
+	}{
+		{"legacy", config.PMGInstance{Name: "gateway"}, true},
+		{"explicit-off", config.PMGInstance{Name: "gateway", MonitoringConfigured: true}, false},
+		{"queues-only", config.PMGInstance{Name: "gateway", MonitorQueues: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildPMGConnection(tc.cfg, nil, time.Now(), time.Minute)
+			if got.Scope["mailStats"] != tc.wantMail || got.Scope["queues"] != tc.cfg.MonitorQueues {
+				t.Fatalf("connection scope=%v", got.Scope)
+			}
+		})
+	}
+}

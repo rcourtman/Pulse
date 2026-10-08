@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### PMG scope persistence does not change agent authority
+
+PMG scope booleans remain explicit when false in shared settings readback,
+so the existing PMG form does not re-enable collection through an omission.
+These dataset options still grant no agent or command authority.
+
+Shared node-settings and connection API code now preserves explicit PMG
+collection choices via the internal saved-scope discriminator and effective
+legacy default. This affects PMG API reads only: no agent enrolment, credential,
+command, install or helper lifecycle policy changes. PMG failed-save and scope
+readback controls live in `internal/api/configapi/pmg_scope_test.go`; installed
+agent acceptance remains independent.
+
 ### Installer identity recovery accounts for the whole legacy file
 
 The descriptor-safe collector command remains the primary agent-ID reader. Its
