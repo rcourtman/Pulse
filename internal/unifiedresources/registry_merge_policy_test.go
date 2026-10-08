@@ -763,6 +763,463 @@ func TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence(t *testing.T) 
 	}
 }
 
+// pinCountingStore counts identity pin writes, so tests can tell a
+// steady-state rebuild (no writes) from one that rewrites a row every tick.
+type pinCountingStore struct {
+	*MemoryStore
+	pinWrites int
+}
+
+func (s *pinCountingStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	s.pinWrites++
+	return s.MemoryStore.UpsertResourceIdentityPins(pins)
+}
+
+func (s *pinCountingStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	s.pinWrites++
+	return s.MemoryStore.ReplaceResourceIdentityPins(pins)
+}
+
+// manualLinkPinSnapshot is a Proxmox node and an unrelated host agent. With a
+// cluster name the node is a cluster member whose instance names the cluster,
+// so its identity carries the cluster.
+func manualLinkPinSnapshot(now time.Time, clusterName string) models.StateSnapshot {
+	instance := "lab"
+	if clusterName != "" {
+		instance = clusterName
+	}
+	return models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: instance + "-pve1", Name: "pve1", Instance: instance, ClusterName: clusterName, IsClusterMember: clusterName != "",
+			Host: "https://pve1.example.test:8006", Status: "online", LastSeen: now,
+		}},
+		Hosts: []models.Host{{
+			ID: "host-box", Hostname: "box-x", MachineID: "machine-box", Status: "online", LastSeen: now,
+		}},
+		LastUpdate: now,
+	}
+}
+
+// A manual link joins two resources for display; it does not make them one
+// machine, so each side keeps pinning its own identity. A Proxmox node whose
+// configured endpoint is a qualified name pins that name. Pinned with the
+// linked agent's machine key instead, the node's next rebuild completed that
+// key, minted the agent's machine-derived ID and merged with the agent before
+// the link applied, and removing the link could not separate them.
+func TestManualLinkPinsEachSideFromItsOwnIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		clusterName string
+		nodePrimary bool
+	}{
+		{name: "standalone node primary", nodePrimary: true},
+		{name: "standalone agent primary"},
+		{name: "cluster node primary", clusterName: "lab-cluster", nodePrimary: true},
+		{name: "cluster agent primary", clusterName: "lab-cluster"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			snapshot := manualLinkPinSnapshot(now, tc.clusterName)
+			store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			rebuild := func(step int) {
+				next := snapshot
+				next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+				adapter.PopulateSnapshotAndSupplemental(next, nil)
+			}
+			rebuild(0)
+			var nodeID, agentID string
+			for _, resource := range adapter.GetAll() {
+				if resource.Proxmox != nil {
+					nodeID = resource.ID
+				} else if resource.Agent != nil {
+					agentID = resource.ID
+				}
+			}
+			if nodeID == "" || agentID != MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box") || nodeID == agentID {
+				t.Fatalf("unlinked estate = %v, want a node and the machine-keyed agent", resourceIDs(adapter.GetAll()))
+			}
+			assertOwnPins := func(step string) {
+				t.Helper()
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("%s: list identity pins: %v", step, err)
+				}
+				agentPinned, nodePinned := false, false
+				for _, pin := range pins {
+					switch pin.CanonicalID {
+					case agentID:
+						if pin.MachineID != "machine-box" || pin.Hostname != "box-x" || pin.ClusterName != "" {
+							t.Fatalf("%s: agent pin = %+v, want its own machine key and hostname", step, pin)
+						}
+						agentPinned = true
+					case nodeID:
+						if pin.MachineID != "" || pin.ClusterName != tc.clusterName || pin.Hostname != "pve1.example.test" {
+							t.Fatalf("%s: node pin = %+v, want only its own cluster and endpoint", step, pin)
+						}
+						nodePinned = true
+					default:
+						t.Fatalf("%s: unexpected pin %+v", step, pin)
+					}
+				}
+				if !agentPinned {
+					t.Fatalf("%s: pins = %+v, want the agent's own machine-keyed pin", step, pins)
+				}
+				if tc.clusterName != "" && !nodePinned {
+					t.Fatalf("%s: pins = %+v, want the cluster node's own pin", step, pins)
+				}
+			}
+			assertOwnPins("unlinked")
+
+			primaryID, otherID := agentID, nodeID
+			if tc.nodePrimary {
+				primaryID, otherID = nodeID, agentID
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: primaryID, ResourceB: otherID, PrimaryID: primaryID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			for step := 1; step <= 3; step++ {
+				writesBefore := store.pinWrites
+				rebuild(step)
+				if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{primaryID}) {
+					t.Fatalf("rebuild %d: resources = %v, want only the linked primary %s", step, got, primaryID)
+				}
+				links, err := store.GetLinks()
+				if err != nil {
+					t.Fatalf("get links: %v", err)
+				}
+				if len(links) != 1 || links[0].ResourceA != primaryID || links[0].ResourceB != otherID {
+					t.Fatalf("rebuild %d: links = %+v, want %s -> %s kept", step, links, primaryID, otherID)
+				}
+				assertOwnPins("linked rebuild")
+				if step > 1 && store.pinWrites != writesBefore {
+					t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", step, store.pinWrites-writesBefore)
+				}
+			}
+
+			// Removing the link separates the pair on the next rebuild:
+			// nothing the link lent either side may outlive it.
+			store.mu.Lock()
+			store.links = nil
+			store.mu.Unlock()
+			rebuild(4)
+			if got, want := resourceIDs(adapter.GetAll()), resourceIDs([]Resource{{ID: nodeID}, {ID: agentID}}); !slices.Equal(got, want) {
+				t.Fatalf("after unlink: resources = %v, want %v", got, want)
+			}
+			for _, resource := range adapter.GetAll() {
+				if resource.ID == nodeID && (resource.Agent != nil || resource.Identity.MachineID != "") {
+					t.Fatalf("after unlink: node = %+v, want no agent payload or borrowed machine key", resource)
+				}
+			}
+			assertOwnPins("after unlink")
+		})
+	}
+}
+
+// Earlier releases pinned a link's primary with the merged identity, so an
+// agent primary's row can still hold the linked node's cluster. No resource
+// holds that cluster with the agent's hostname, so the row keeps it, as an
+// upsert keeps any stored field, and is not rewritten on every rebuild.
+func TestManualLinkSideKeepsAnUnclaimedStoredField(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := manualLinkPinSnapshot(now, "lab-cluster")
+	snapshot.Nodes[0].Host = "https://192.0.2.10:8006"
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box")
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	widened := ResourceIdentityPin{
+		CanonicalID: agentID, ResourceType: ResourceTypeAgent,
+		MachineID: "machine-box", ClusterName: "lab-cluster", Hostname: "box-x",
+	}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{widened}); err != nil {
+		t.Fatalf("seed widened pin: %v", err)
+	}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		}
+	}
+	if nodeID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node beside agent %s", resourceIDs(unlinked.GetAll()), agentID)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: agentID, ResourceB: nodeID, PrimaryID: agentID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	for step := 0; step < 3; step++ {
+		writesBefore := store.pinWrites
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{agentID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked agent %s", step, got, agentID)
+		}
+		if step > 0 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", step, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		for _, pin := range pins {
+			if pin.CanonicalID == agentID && pin != widened {
+				t.Fatalf("rebuild %d: agent pin = %+v, want the stored row kept %+v", step, pin, widened)
+			}
+		}
+	}
+}
+
+// The store gives each strong key one owner. Two hosts can keep separate
+// machine IDs yet share a pool name and hostname (an old and a replacement
+// enrollment); linked, the live primary keeps that key and the folded side
+// keeps only its machine key, rather than the two taking the pool from each
+// other every rebuild. A key the primary's row only kept from an earlier
+// release's merged pin goes to the folded side that reports it.
+func TestManualLinkFoldedSideNeverTakesALiveResourcesKey(t *testing.T) {
+	newPin := ResourceIdentityPin{CanonicalID: "agent-new", ResourceType: ResourceTypeAgent, MachineID: "machine-new", ClusterName: "pool-a", Hostname: "xcp1"}
+	oldPin := ResourceIdentityPin{CanonicalID: "agent-old", ResourceType: ResourceTypeAgent, MachineID: "machine-old", ClusterName: "pool-a", Hostname: "xcp1"}
+	ownNewPin, ownOldPin := newPin, oldPin
+	ownNewPin.ClusterName, ownOldPin.ClusterName = "", ""
+	for _, tc := range []struct {
+		name        string
+		primaryPool string
+		seed        []ResourceIdentityPin
+		want        []ResourceIdentityPin
+	}{
+		{name: "both report the pool", primaryPool: "pool-a", want: []ResourceIdentityPin{newPin, ownOldPin}},
+		{name: "primary row borrowed the pool", seed: []ResourceIdentityPin{newPin}, want: []ResourceIdentityPin{ownNewPin, oldPin}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			host := func(id, machineID, pool string) Resource {
+				return Resource{
+					ID: id, Type: ResourceTypeAgent, Name: "xcp1", Status: StatusOnline, LastSeen: now,
+					Sources:  []DataSource{SourceAgent},
+					Agent:    &AgentData{AgentID: id, Hostname: "xcp1"},
+					Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{"xcp1"}},
+				}
+			}
+			store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+			if err := store.UpsertResourceIdentityPins(tc.seed); err != nil {
+				t.Fatalf("seed pins: %v", err)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: "agent-new", ResourceB: "agent-old", PrimaryID: "agent-new"}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			for rebuild := 1; rebuild <= 3; rebuild++ {
+				writesBefore := store.pinWrites
+				registry := NewRegistry(store)
+				registry.IngestResources([]Resource{host("agent-new", "machine-new", tc.primaryPool), host("agent-old", "machine-old", "pool-a")})
+				registry.PersistIdentityPins()
+				if rebuild > 1 && store.pinWrites != writesBefore {
+					t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+				}
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("list identity pins: %v", err)
+				}
+				slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+				if !slices.Equal(pins, tc.want) {
+					t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// Two hosts can share a cloned machine ID while an exclusion keeps them
+// apart. A folded side whose machine key the other host holds writes no pin
+// rather than a cluster-only one: cluster-slot succession treats a
+// machine-keyless row as a host a later machine in that slot may absorb.
+func TestManualLinkFoldedSideWritesNoPinWithoutItsMachineKey(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool, hostname string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: hostname, Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id, Hostname: hostname},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{hostname}},
+		}
+	}
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-primary", ResourceB: "agent-clone", PrimaryID: "agent-primary"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	registry := NewRegistry(store)
+	registry.IngestResources([]Resource{
+		host("agent-original", "machine-cloned", "", "swarm-a"),
+		host("agent-clone", "machine-cloned", "swarm", "swarm-b"),
+		host("agent-primary", "machine-primary", "", "primary"),
+	})
+	registry.PersistIdentityPins()
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("list identity pins: %v", err)
+	}
+	for _, pin := range pins {
+		if pin.CanonicalID == "agent-clone" {
+			t.Fatalf("folded clone pinned as %+v, want no pin without its machine key", pin)
+		}
+	}
+	if len(pins) != 2 {
+		t.Fatalf("pins = %+v, want the original's and the primary's", pins)
+	}
+}
+
+// A link side's row keeps a stored hostname its own pin lacks, but never
+// where that hostname would complete a cluster key another resource holds:
+// the store would delete that resource's whole row.
+func TestManualLinkSideKeepsNoHostnameThatCompletesAHeldClusterKey(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool string, hostnames ...string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: id, Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: hostnames},
+		}
+	}
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", ClusterName: "pool-d", Hostname: "h1",
+	}}); err != nil {
+		t.Fatalf("seed pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-a", ResourceB: "agent-f", PrimaryID: "agent-a"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	want := []ResourceIdentityPin{
+		{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", ClusterName: "pool-c"},
+		{CanonicalID: "agent-b", ResourceType: ResourceTypeAgent, MachineID: "machine-b", ClusterName: "pool-c", Hostname: "h1"},
+		{CanonicalID: "agent-f", ResourceType: ResourceTypeAgent, MachineID: "machine-f", Hostname: "f1"},
+	}
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		writesBefore := store.pinWrites
+		registry := NewRegistry(store)
+		registry.IngestResources([]Resource{
+			host("agent-a", "machine-a", "pool-c"),
+			host("agent-b", "machine-b", "pool-c", "h1"),
+			host("agent-f", "machine-f", "", "f1"),
+		})
+		registry.PersistIdentityPins()
+		if rebuild > 1 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+		if !slices.Equal(pins, want) {
+			t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, want)
+		}
+	}
+}
+
+// A folded side's own pin can be narrower than a row an earlier release
+// widened with a pool its primary now reports. The primary's new pin claims
+// that pool and hostname, so the store deletes the folded side's whole row;
+// the folded side's own pin is written after it, so the side stays pinned.
+func TestManualLinkFoldedSideKeepsItsPinWhenAPrimaryClaimsItsWiderRow(t *testing.T) {
+	now := time.Now().UTC()
+	host := func(id, machineID, pool string) Resource {
+		return Resource{
+			ID: id, Type: ResourceTypeAgent, Name: "xcp1", Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Agent:    &AgentData{AgentID: id, Hostname: "xcp1"},
+			Identity: ResourceIdentity{MachineID: machineID, ClusterName: pool, Hostnames: []string{"xcp1"}},
+		}
+	}
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: "agent-old", ResourceType: ResourceTypeAgent,
+		MachineID: "machine-old", ClusterName: "pool-a", Hostname: "xcp1",
+	}}); err != nil {
+		t.Fatalf("seed widened pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: "agent-new", ResourceB: "agent-old", PrimaryID: "agent-new"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	want := []ResourceIdentityPin{
+		{CanonicalID: "agent-new", ResourceType: ResourceTypeAgent, MachineID: "machine-new", ClusterName: "pool-a", Hostname: "xcp1"},
+		{CanonicalID: "agent-old", ResourceType: ResourceTypeAgent, MachineID: "machine-old", Hostname: "xcp1"},
+	}
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		writesBefore := store.pinWrites
+		registry := NewRegistry(store)
+		registry.IngestResources([]Resource{host("agent-new", "machine-new", "pool-a"), host("agent-old", "machine-old", "")})
+		registry.PersistIdentityPins()
+		if rebuild > 1 && store.pinWrites != writesBefore {
+			t.Fatalf("rebuild %d: wrote identity pins %d time(s), want none in steady state", rebuild, store.pinWrites-writesBefore)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		slices.SortFunc(pins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+		if !slices.Equal(pins, want) {
+			t.Fatalf("rebuild %d: pins = %+v, want %+v", rebuild, pins, want)
+		}
+	}
+}
+
+// An earlier release pinned a linked node primary with the agent's machine
+// key and dropped the agent's own pin. The node has nothing of its own to
+// pin, so the agent's own pin takes the key back on the next rebuild.
+func TestManualLinkReturnsABorrowedMachineKeyToItsAgent(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := manualLinkPinSnapshot(now, "")
+	snapshot.Nodes[0].Host = "https://192.0.2.10:8006"
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		}
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-box")
+	if nodeID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node beside agent %s", resourceIDs(unlinked.GetAll()), agentID)
+	}
+
+	store := &pinCountingStore{MemoryStore: NewMemoryStore()}
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID: nodeID, ResourceType: ResourceTypeAgent, MachineID: "machine-box", Hostname: "pve1",
+	}}); err != nil {
+		t.Fatalf("seed borrowed pin: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: nodeID, ResourceB: agentID, PrimaryID: nodeID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	for step := 0; step < 2; step++ {
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(step) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{nodeID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked node %s", step, got, nodeID)
+		}
+		pins, err := store.ListResourceIdentityPins()
+		if err != nil {
+			t.Fatalf("list identity pins: %v", err)
+		}
+		if len(pins) != 1 || pins[0].CanonicalID != agentID || pins[0].MachineID != "machine-box" || pins[0].Hostname != "box-x" {
+			t.Fatalf("rebuild %d: pins = %+v, want only the agent's own pin", step, pins)
+		}
+	}
+	links, err := store.GetLinks()
+	if err != nil {
+		t.Fatalf("get links: %v", err)
+	}
+	if len(links) != 1 || links[0].ResourceA != nodeID || links[0].ResourceB != agentID {
+		t.Fatalf("links = %+v, want %s -> %s kept", links, nodeID, agentID)
+	}
+}
+
 // A record may name an older canonical ID as superseded on every ingest. When
 // that ID belongs to a resource a manual link folded into the record's own
 // resource, it is still observed: succeeding it on a later refresh would

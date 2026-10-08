@@ -29,6 +29,10 @@ type ResourceStore interface {
 	// Identity pins keep canonical IDs for merged-source hosts stable across
 	// restarts. See ResourceIdentityPin.
 	UpsertResourceIdentityPins(pins []ResourceIdentityPin) error
+	// ReplaceResourceIdentityPins writes each pin as its row's whole
+	// content, clearing fields the pin leaves empty, where an upsert keeps
+	// them. Strong-key conflicts resolve as for an upsert.
+	ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error
 	ListResourceIdentityPins() ([]ResourceIdentityPin, error)
 	RecordChange(change ResourceChange) error
 	ResourceHistoryIDs(resourceID string) ([]string, error)
@@ -1521,8 +1525,38 @@ func (s *SQLiteResourceStore) Close() error {
 }
 
 func (s *SQLiteResourceStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return s.writeResourceIdentityPins(pins, false)
+}
+
+func (s *SQLiteResourceStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return s.writeResourceIdentityPins(pins, true)
+}
+
+// writeResourceIdentityPins upserts pins. An upsert keeps a stored field the
+// pin leaves empty; a replace writes the pin as the whole row.
+func (s *SQLiteResourceStore) writeResourceIdentityPins(pins []ResourceIdentityPin, replace bool) error {
 	if len(pins) == 0 {
 		return nil
+	}
+	write := `INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(canonical_id) DO UPDATE SET
+				resource_type = excluded.resource_type,
+				machine_id = COALESCE(excluded.machine_id, resource_identities.machine_id),
+				dmi_uuid = COALESCE(excluded.dmi_uuid, resource_identities.dmi_uuid),
+				cluster_name = COALESCE(NULLIF(excluded.cluster_name, ''), resource_identities.cluster_name),
+				primary_hostname = COALESCE(NULLIF(excluded.primary_hostname, ''), resource_identities.primary_hostname),
+				updated_at = CURRENT_TIMESTAMP`
+	if replace {
+		write = `INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(canonical_id) DO UPDATE SET
+				resource_type = excluded.resource_type,
+				machine_id = excluded.machine_id,
+				dmi_uuid = excluded.dmi_uuid,
+				cluster_name = excluded.cluster_name,
+				primary_hostname = excluded.primary_hostname,
+				updated_at = CURRENT_TIMESTAMP`
 	}
 
 	s.mu.Lock()
@@ -1560,15 +1594,7 @@ func (s *SQLiteResourceStore) UpsertResourceIdentityPins(pins []ResourceIdentity
 		); err != nil {
 			return fmt.Errorf("clear conflicting identity pins for %q: %w", pin.CanonicalID, err)
 		}
-		if _, err := tx.Exec(`INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
-			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(canonical_id) DO UPDATE SET
-				resource_type = excluded.resource_type,
-				machine_id = COALESCE(excluded.machine_id, resource_identities.machine_id),
-				dmi_uuid = COALESCE(excluded.dmi_uuid, resource_identities.dmi_uuid),
-				cluster_name = COALESCE(NULLIF(excluded.cluster_name, ''), resource_identities.cluster_name),
-				primary_hostname = COALESCE(NULLIF(excluded.primary_hostname, ''), resource_identities.primary_hostname),
-				updated_at = CURRENT_TIMESTAMP`,
+		if _, err := tx.Exec(write,
 			pin.CanonicalID,
 			string(pin.ResourceType),
 			nullIfEmptyArg(pin.MachineID),
@@ -3413,6 +3439,14 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (m *MemoryStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return m.writeResourceIdentityPins(pins, false)
+}
+
+func (m *MemoryStore) ReplaceResourceIdentityPins(pins []ResourceIdentityPin) error {
+	return m.writeResourceIdentityPins(pins, true)
+}
+
+func (m *MemoryStore) writeResourceIdentityPins(pins []ResourceIdentityPin, replace bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, pin := range pins {
@@ -3432,7 +3466,7 @@ func (m *MemoryStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) err
 				delete(m.identityPins, canonicalID)
 			}
 		}
-		if existing, ok := m.identityPins[pin.CanonicalID]; ok {
+		if existing, ok := m.identityPins[pin.CanonicalID]; ok && !replace {
 			if pin.MachineID == "" {
 				pin.MachineID = existing.MachineID
 			}

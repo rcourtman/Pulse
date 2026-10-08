@@ -99,6 +99,12 @@ type ResourceRegistry struct {
 	// primary. They are still observed, so identity succession treats them
 	// as live.
 	linkMergedIDs map[string]struct{}
+	// linkOwnPins holds the identity pin each side of a manual link derives
+	// from its own sources, captured before the link merged them. A nil
+	// value records a side with no pinnable identity. PersistIdentityPins
+	// writes these instead of the merged projection, so a link never lends
+	// one machine's identity keys to another resource's durable pin.
+	linkOwnPins map[string]*ResourceIdentityPin
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -4848,6 +4854,8 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			primaryID, otherID = otherID, primaryID
 		}
 
+		rr.recordLinkOwnPin(primaryID, primary)
+		rr.recordLinkOwnPin(otherID, other)
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
 		if rr.linkMergedIDs == nil {
@@ -4856,6 +4864,24 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		rr.linkMergedIDs[otherID] = struct{}{}
 		rr.updateSourceMappings(otherID, primaryID)
 	}
+}
+
+// recordLinkOwnPin captures the identity pin a manual-link side derives from
+// its own sources, before the link merge projects the other side's identity
+// onto the primary. The first capture in a registry generation wins, so a
+// primary that absorbs several links keeps the pin it had before any of them.
+func (rr *ResourceRegistry) recordLinkOwnPin(id string, resource *Resource) {
+	if _, recorded := rr.linkOwnPins[id]; recorded {
+		return
+	}
+	if rr.linkOwnPins == nil {
+		rr.linkOwnPins = make(map[string]*ResourceIdentityPin)
+	}
+	if pin, ok := identityPinForResource(resource); ok {
+		rr.linkOwnPins[id] = &pin
+		return
+	}
+	rr.linkOwnPins[id] = nil
 }
 
 func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {
