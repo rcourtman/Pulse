@@ -136,6 +136,12 @@ func (v VMView) ID() string {
 	return v.r.ID
 }
 
+// GovernanceMetadata reads policy from this exact canonical guest rather
+// than resolving a potentially shared name in another installation.
+func (v VMView) GovernanceMetadata() (*ResourcePolicy, string) {
+	return CanonicalGovernanceMetadata(v.r)
+}
+
 func (v VMView) Name() string {
 	if v.r == nil {
 		return ""
@@ -458,6 +464,12 @@ func (v ContainerView) ID() string {
 		return ""
 	}
 	return v.r.ID
+}
+
+// GovernanceMetadata reads policy from this exact canonical guest rather
+// than resolving a potentially shared name in another installation.
+func (v ContainerView) GovernanceMetadata() (*ResourcePolicy, string) {
+	return CanonicalGovernanceMetadata(v.r)
 }
 
 func (v ContainerView) Name() string {

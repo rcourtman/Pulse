@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Guest configuration reads preserve installation and node identity
+
+Resolving omitted placement for the existing guest-config read honours every
+supplied instance/node constraint and requires one distinct current placement.
+A bare VMID or node/VMID shared by installations or missing placement returns an error without reading a provider. Current canonical
+inventory, including an empty inventory, takes precedence over stale state.
+Explicit complete placement still reads that exact provider and preserves its
+original error. This read neither dispatches QGA nor changes operation locks,
+backup policy, guest-command admission or permissions.
+
+`TestGuestConfigPlacement*` in `monitor_additional_test.go` verifies VM/LXC
+placement constraints, both inventory orders, zero-provider ambiguous/missing
+reads, canonical versus stale state, direct/provider-failure preservation and
+concurrent snapshot publication. These are synthetic config-read controls, not
+native recovery or a diagnosis of #2681.
+
+
 ### Automatic system-mount exclusions respect directory boundaries
 
 The shared filesystem filter excludes a named system directory and its
