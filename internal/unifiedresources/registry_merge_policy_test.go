@@ -144,6 +144,391 @@ func onlyResourceOfType(t *testing.T, rr *ResourceRegistry, resourceType Resourc
 	return resources[0]
 }
 
+// An operator who splits a Proxmox node from the pulse-agent Pulse linked it
+// to (the drawer's report-merge, or unlink naming the node's side) must see
+// the split on every monitor rebuild and in the resources API. The
+// node<->agent link merged the pair in resolveLinkedResource before
+// findMatch, and the linked node had already taken the agent's machine
+// identity, so the pair stayed merged although the request answered 200.
+// Each step is judged over three rebuilds of a store-backed adapter (pins
+// persist on one rebuild and steer the next) and in every view: the
+// monitor's listing, the broadcast coalesce, and the resources API's
+// registry seeded from that listing or from the snapshot.
+func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
+	now := time.Now().UTC()
+	for _, link := range []struct {
+		name          string
+		nodeLinked    bool
+		agentLinked   bool
+		cluster       string
+		agentHostname string
+		machineID     string
+	}{
+		{"declared-both-ways", true, true, "", "pve1", "0123456789abcdef"},
+		// A node-side link the agent does not declare joins only when the
+		// two share a hostname (findCorroboratedOneSidedProxmoxLink).
+		{"node-side-only", true, false, "", "pve1", "0123456789abcdef"},
+		{"agent-side-only", false, true, "", "pve1", "0123456789abcdef"},
+		// A clustered node's own ID is cluster-derived, not one the
+		// candidate exclusions name, and its identity pin is found by
+		// cluster and hostname, carrying the agent's machine key.
+		{"clustered-node", true, true, "lab", "pve1", "0123456789abcdef"},
+		{"clustered-agent-side-only", false, true, "lab", "pve1", "0123456789abcdef"},
+		// The joined row's first hostname is the agent's when the agent
+		// is ingested first.
+		{"clustered-agent-fqdn", true, true, "lab", "pve1.example", "0123456789abcdef"},
+		// An agent reporting no machine key joins under the node's own ID.
+		{"clustered-machine-keyless-agent", true, true, "lab", "pve1", ""},
+	} {
+		for _, request := range []struct {
+			name string
+			// exclusions returns the pairs the request records.
+			exclusions func(ids splitRequestIDs) [][2]string
+			split      func(ids splitRequestIDs) bool
+		}{
+			{"report-merge", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}, {ids.merged, ids.agentCandidate}}
+			}, splitAlways},
+			{"unlink-naming-node", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}}
+			}, splitAlways},
+			// The ID the node row holds once split (cluster-derived for a
+			// clustered node), as an unlink of the two rows records it.
+			{"unlink-naming-node-row", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.nodeOwn, ids.agentOwn}}
+			}, func(ids splitRequestIDs) bool { return ids.nodeOwn != ids.agentOwn }},
+			// Neither row's ID: a relink of the rows replaces no exclusion
+			// row, so the newer decision across the pair's IDs must decide.
+			{"unlink-naming-both-candidates", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.agentCandidate, ids.nodeCandidate}}
+			}, splitAlways},
+			// The agent's candidate against the agent's machine-derived ID,
+			// under which the pair merged, is also what report-merge records
+			// when it splits another source (a Docker host, say) off the
+			// agent, so it does not split the node from the agent. Merged
+			// under the node's own ID, it splits the agent off the node.
+			{"exclusion-naming-only-the-agent", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}}
+			}, func(ids splitRequestIDs) bool { return ids.merged == ids.nodeOwn }},
+			{"unrelated-exclusion", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, "agent-00000000deadbeef"}}
+			}, func(splitRequestIDs) bool { return false }},
+		} {
+			t.Run(link.name+"/"+request.name, func(t *testing.T) {
+				store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+
+				node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: link.cluster, Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now}
+				host := models.Host{
+					ID:        "host-pve1",
+					Hostname:  link.agentHostname,
+					MachineID: link.machineID,
+					Status:    "online",
+					LastSeen:  now,
+					// The node's endpoint address and a MAC: what a correct
+					// link shares, and enough for identity matching to merge
+					// the pair again if the node kept the agent's identity.
+					NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", MAC: "aa:bb:cc:dd:ee:01", Addresses: []string{"10.0.0.5/24"}}},
+				}
+				if link.nodeLinked {
+					node.LinkedAgentID = host.ID
+				}
+				if link.agentLinked {
+					host.LinkedNodeID = node.ID
+				}
+				snapshot := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host}}
+				// The IDs each side holds on its own, with nothing to link to.
+				alone := NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+				nodeAlone := hostRowsByFacet(t, alone.List()).node
+				alone = NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Hosts: []models.Host{host}})
+				agentAlone := hostRowsByFacet(t, alone.List()).agent
+				adapter := NewMonitorAdapter(NewRegistry(store))
+
+				adapter.PopulateFromSnapshot(snapshot)
+				merged := hostRowsByFacet(t, adapter.GetAll())
+				if merged.joined == "" || nodeAlone == "" || agentAlone == "" {
+					t.Fatalf("fixture did not link the node and the agent: %+v (alone: node %q, agent %q)", merged, nodeAlone, agentAlone)
+				}
+				reportMerge := func(mergedID string) (nodeCandidate, agentCandidate string) {
+					t.Helper()
+					for _, target := range adapter.currentRegistry().SourceTargets(mergedID) {
+						switch target.Source {
+						case SourceProxmox:
+							nodeCandidate = target.CandidateID
+						case SourceAgent:
+							agentCandidate = target.CandidateID
+						}
+					}
+					if nodeCandidate == "" || agentCandidate == "" || nodeCandidate == mergedID || agentCandidate == mergedID {
+						t.Fatalf("merged %s lists candidates node=%q agent=%q", mergedID, nodeCandidate, agentCandidate)
+					}
+					return nodeCandidate, agentCandidate
+				}
+				nodeCandidate, agentCandidate := reportMerge(merged.joined)
+				ids := splitRequestIDs{merged: merged.joined, nodeCandidate: nodeCandidate, agentCandidate: agentCandidate, nodeOwn: nodeAlone, agentOwn: agentAlone}
+				for _, pair := range request.exclusions(ids) {
+					if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				// Split, each side returns to the ID it holds alone (for an
+				// agent reporting a machine key, the ID the pair merged
+				// under); otherwise the pair stays merged under its ID.
+				split := request.split(ids)
+				want := nodeAgentRows{joined: merged.joined}
+				if split {
+					want = nodeAgentRows{node: nodeAlone, agent: agentAlone}
+				}
+				assertViews := func(step string, rebuilds int, want nodeAgentRows) {
+					t.Helper()
+					for rebuild := 1; rebuild <= rebuilds; rebuild++ {
+						adapter.PopulateFromSnapshot(snapshot)
+						listed, _, thresholds := adapter.GetAllWithMetricsTargetsAndStaleThresholds()
+						broadcast, ok := adapter.CoalesceForPresentation(listed, thresholds)
+						if !ok {
+							t.Fatal("store-backed adapter did not coalesce with its exclusions")
+						}
+						rest := NewRegistry(store)
+						rest.IngestResources(listed)
+						restFromSnapshot := NewRegistry(store)
+						restFromSnapshot.IngestSnapshot(snapshot)
+						for view, resources := range map[string][]Resource{
+							"monitor":                    listed,
+							"broadcast":                  broadcast,
+							"rest":                       rest.List(),
+							"rest presentation":          rest.ListForPresentation(),
+							"rest from snapshot":         restFromSnapshot.List(),
+							"rest presentation snapshot": restFromSnapshot.ListForPresentation(),
+						} {
+							if got := hostRowsByFacet(t, resources); got != want {
+								t.Fatalf("%s rebuild %d %s: got %+v, want %+v", step, rebuild, view, got, want)
+							}
+						}
+					}
+				}
+				// Snapshots ingest nodes first. A registry that meets the agent
+				// first, which already holds its machine-derived ID, splits the
+				// same way, also when the snapshot then lacks the host: before
+				// any split rebuild rewrites the pins, the node's pin from the
+				// joined era alone carries the agent's machine key.
+				if split {
+					withoutHost := snapshot
+					withoutHost.Hosts = nil
+					for name, nodes := range map[string]models.StateSnapshot{"with host": snapshot, "without host": withoutHost} {
+						agentFirst := NewRegistry(store)
+						agentFirst.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host)})
+						agentFirst.IngestSnapshot(nodes)
+						for view, resources := range map[string][]Resource{"list": agentFirst.List(), "presentation": agentFirst.ListForPresentation()} {
+							if got := hostRowsByFacet(t, resources); got != want {
+								t.Fatalf("agent ingested first, snapshot %s, %s: got %+v, want %+v", name, view, got, want)
+							}
+						}
+					}
+				}
+				assertViews("after the request", 3, want)
+				if !split {
+					return
+				}
+				// The split node names the agent only where the monitor's own
+				// node record does: guest actions, deploy and service
+				// discovery act on a node's linked agent.
+				for _, resource := range adapter.GetAll() {
+					if resource.ID == want.node && resource.Proxmox.LinkedAgentID != node.LinkedAgentID {
+						t.Fatalf("split node links agent %q, its record links %q", resource.Proxmox.LinkedAgentID, node.LinkedAgentID)
+					}
+				}
+
+				// Linking the rows the split left joins the pair again, although
+				// report-merge recorded exclusions against other IDs.
+				if err := store.AddLink(ResourceLink{ResourceA: want.agent, ResourceB: want.node, PrimaryID: want.agent, CreatedAt: time.Now().UTC()}); err != nil {
+					t.Fatal(err)
+				}
+				assertViews("after relink", 2, nodeAgentRows{joined: merged.joined})
+				// The inferred join can consume the node row before manual
+				// links run. Its fold must still reach current succession and
+				// the API seed, rather than an obsolete registry-wide ID set.
+				seeded := NewRegistry(store)
+				seeded.IngestResources(adapter.GetAll())
+				for name, registry := range map[string]*ResourceRegistry{"monitor": adapter.currentRegistry(), "API seed": seeded} {
+					found := false
+					for _, fold := range registry.ManualLinkFolds(merged.joined) {
+						nodeFold := fold.HolderID == want.agent && fold.FoldedID == want.node && slices.Contains(fold.Sources, SourceProxmox)
+						agentFold := fold.HolderID == want.node && fold.FoldedID == want.agent && slices.Contains(fold.Sources, SourceAgent)
+						// A machine-keyless agent rejoins under the node's ID,
+						// so the same pair is folded in the opposite direction.
+						if nodeFold || agentFold {
+							found = true
+						}
+					}
+					if !found {
+						t.Fatalf("%s lost the relink's pair fold: %+v", name, registry.ManualLinkFolds(merged.joined))
+					}
+				}
+				// A rebuild that meets the agent first orders the joined row's
+				// hostnames the agent's way; persisting its pins must not
+				// re-key the relink onto the joined ID either.
+				reordered := NewRegistry(store)
+				reordered.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host)})
+				reordered.IngestSnapshot(snapshot)
+				reordered.PersistIdentityPins()
+				assertViews("after an agent-first rebuild persisted its pins", 2, nodeAgentRows{joined: merged.joined})
+
+				// The same request after that relink splits them again. Where
+				// it names a pair other than the relinked rows, the store keeps
+				// the older link, which must lose to the newer split.
+				nodeCandidate, agentCandidate = reportMerge(merged.joined)
+				ids = splitRequestIDs{merged: merged.joined, nodeCandidate: nodeCandidate, agentCandidate: agentCandidate, nodeOwn: nodeAlone, agentOwn: agentAlone}
+				for _, pair := range request.exclusions(ids) {
+					if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				assertViews("after splitting again", 2, want)
+			})
+		}
+	}
+}
+
+// A node split from one agent keeps another agent's pin. The node links
+// agent A, whose joined-era pin carries A's machine key for the node's
+// cluster and hostname; while A is missing from a rebuild, agent B declares
+// the node, and the operator has split the node from B. The pin is A's, so
+// the node still completes A's key and keeps the ID it holds with A, as any
+// boot window before A checks in does.
+func TestOperatorSplitFromOneAgentKeepsAnotherAgentsPin(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-a"}
+	agentA := models.Host{ID: "host-a", Hostname: "pve1", MachineID: "aaaaaaaaaaaaaaaa", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+	agentB := models.Host{ID: "host-b", Hostname: "pve1", MachineID: "bbbbbbbbbbbbbbbb", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agentA, agentB}})
+	var joinedWithA string
+	for _, resource := range adapter.GetAll() {
+		if resource.Proxmox != nil && resource.Agent != nil && resource.Agent.AgentID == agentA.ID {
+			joinedWithA = resource.ID
+		}
+	}
+	if joinedWithA == "" {
+		t.Fatalf("fixture did not join the node with agent A: %+v", adapter.GetAll())
+	}
+	splitFromB := ResourceExclusion{
+		ResourceA: SourceSpecificID(ResourceTypeAgent, SourceProxmox, node.ID),
+		ResourceB: SourceSpecificID(ResourceTypeAgent, SourceAgent, agentB.ID),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.AddExclusion(splitFromB); err != nil {
+		t.Fatal(err)
+	}
+
+	withoutA := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agentB}}
+	rebuilt := NewRegistry(store)
+	rebuilt.IngestSnapshot(withoutA)
+	for _, resource := range rebuilt.List() {
+		if resource.Proxmox == nil {
+			continue
+		}
+		if resource.ID != joinedWithA {
+			t.Fatalf("node took %s while agent A was missing, want %s from A's pin", resource.ID, joinedWithA)
+		}
+		if resource.Agent != nil && resource.Agent.AgentID == agentB.ID {
+			t.Fatalf("node joined agent B, which the operator split it from")
+		}
+	}
+}
+
+// An agent that stops reporting its machine ID stays split from the node.
+// The joined-era pin carries the agent's old machine key for the clustered
+// node's cluster and hostname, and the node record names no agent (only the
+// agent declares the node), so nothing but the split drop ties the pin to
+// the agent: its keyless report must not count as another agent's.
+func TestOperatorSplitHoldsWhenTheAgentStopsReportingItsMachineID(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now}
+	agent := models.Host{ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", LinkedNodeID: node.ID, Status: "online", LastSeen: now}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agent}})
+	merged := hostRowsByFacet(t, adapter.GetAll())
+	if merged.joined == "" {
+		t.Fatalf("fixture did not join the node and the agent: %+v", merged)
+	}
+	alone := NewRegistry(nil)
+	alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+	nodeAlone := hostRowsByFacet(t, alone.List()).node
+	if err := store.AddExclusion(ResourceExclusion{
+		ResourceA: SourceSpecificID(ResourceTypeAgent, SourceProxmox, node.ID),
+		ResourceB: SourceSpecificID(ResourceTypeAgent, SourceAgent, agent.ID),
+		CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	agent.MachineID = ""
+	rebuilt := NewRegistry(store)
+	rebuilt.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{agent}})
+	got := hostRowsByFacet(t, rebuilt.List())
+	if got.joined != "" || got.node != nodeAlone || got.agent == "" {
+		t.Fatalf("keyless agent rebuild: got %+v, want the node apart on %s", got, nodeAlone)
+	}
+}
+
+// splitRequestIDs are the IDs an unlink or report-merge of a joined node and
+// agent can name: the merged row, its SourceTargets candidates, and the IDs
+// the two rows hold once split.
+type splitRequestIDs struct {
+	merged, nodeCandidate, agentCandidate, nodeOwn, agentOwn string
+}
+
+func splitAlways(splitRequestIDs) bool { return true }
+
+type nodeAgentRows struct {
+	node   string // a row with the Proxmox facet only
+	agent  string // a row with the agent facet only
+	joined string // a row with both
+}
+
+func hostRowsByFacet(t *testing.T, resources []Resource) nodeAgentRows {
+	t.Helper()
+	var rows nodeAgentRows
+	set := func(slot *string, id string) {
+		if *slot != "" {
+			t.Fatalf("two host rows of one kind: %s and %s", *slot, id)
+		}
+		*slot = id
+	}
+	for _, resource := range resources {
+		if resource.Type != ResourceTypeAgent {
+			continue
+		}
+		switch {
+		case resource.Proxmox != nil && resource.Agent != nil:
+			set(&rows.joined, resource.ID)
+		case resource.Proxmox != nil:
+			set(&rows.node, resource.ID)
+		case resource.Agent != nil:
+			set(&rows.agent, resource.ID)
+		}
+	}
+	return rows
+}
+
 // A host agent past its reporting lease is offline. Its source sighting is
 // stale too, and the stale pass used to rank that above offline, so the
 // machine reached the frontend as a warning with its last report rendered

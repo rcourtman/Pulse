@@ -6683,9 +6683,9 @@ snapshot and resource ingest applied links, the rebuilt registry behind the
 websocket broadcast and `/api/state` kept both rows. The resources API, which
 seeds through resource ingest, showed them merged, and so did the published
 inventory whenever an unrelated absent machine made continuity hydration
-clone the registry. Mock mode builds its unified view from fixtures without
-the link store, so links do not reach the mock broadcast; that boundary is
-separate.
+clone the registry. Mock mode builds its unified view from fixtures and
+applies the same links there ("Mock-mode unified view applies operator
+links" below).
 
 - The monitor adapter passes its configured stale thresholds to record
   ingest, so a link joined there judges each side's metrics the way a
@@ -6888,6 +6888,67 @@ resource seeding.
 `internal/api/resources_link_continuity_test.go`
 (`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest`) pins the
 resources API's write and Patrol's read on the same store.
+
+### Mock-mode unified view applies operator links
+
+In mock mode the websocket broadcast, `/api/state`, and the monitor's
+`GetUnifiedReadStateOrSnapshot` and `UnifiedResourceSnapshot` readers serve a
+view of the fixture graph, not the monitor's resource store, and the fixture
+graph was built without the link store. The resources API seeds its registry
+from that same list through a registry backed by the link store, so a manual
+link showed merged there while the broadcast kept both rows. The fixture graph
+is now built with the links the monitor adapter's current registry generation
+loaded from its store (`MonitorAdapter.ManualLinks`), in a registry that has
+no store at all (`NewRegistryWithManualLinks`,
+`mock.UnifiedResourceSnapshotWithLinks`). Nothing that build ingests can write
+identity pins, canonical-ID successions or change records, and the view's read
+state forwards no history to the operator's store, so fixture data stays out
+of durable state through it.
+
+- The links apply at each ingest stage, as in the live rebuild: the snapshot,
+  then the TrueNAS and vSphere records, then availability. An availability
+  check that names the folded resource by source reference resolves through
+  the fold and projects onto the primary. Folding the finished list instead
+  dropped the check with the folded row. A check that names the folded
+  resource by canonical ID still loses its target, as live (fold history
+  above).
+- A link reaches the view when the adapter's next rebuild loads it, the same
+  point at which the live broadcast picks it up. The view's cache is keyed on
+  the fixture data version and on the links' resource pairs and primaries, so
+  a link change rebuilds it without waiting for a fixture tick. Freshness is
+  assigned in publication order: a view built from the same fixture
+  freshness and links as the one it replaces keeps its freshness, and any
+  other view gets a later one than every view published before it, even when
+  a slower build publishes after a newer one. The resources API reuses its
+  registry while that freshness is unchanged, so it follows the published
+  view and does not keep a list other links folded, for example after a
+  link's primary is reversed. Fixture freshness stands in for the fixture
+  data, as it already did for that cache.
+- Without links the view is built from the shared memoized fixture snapshot,
+  as before. With links each monitor builds its own linked snapshot whenever
+  the fixture data or links change (concurrent cache misses can each build
+  one).
+- Exclusions are not carried by the fixture registry, as before. The
+  broadcast's presentation coalescing consults the monitor adapter's
+  exclusions, while the resources API's `ListForPresentation` consults its
+  own store-backed registry's exclusions. Neither can undo an automatic
+  identity merge already made inside the store-free fixture graph.
+- An agent linked into a guest leaves the agent listings (`Hosts()` lists
+  agent-type rows only) and the guest carries its facet, as in live mode.
+
+`TestMockUnifiedViewAppliesOperatorManualLinks` in
+`internal/monitoring/monitor_host_agents_test.go` pins the broadcast payload,
+the rebuild and freshness advance on a link change with the fixture data
+version held, the cached build afterwards, the same rows as a store-backed
+registry seeded through resource ingest the way the resources API seeds, and
+no change rows reaching the store through the view.
+`TestFixtureGraphAppliesManualLinksAtEachIngestStage` and
+`TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
+`internal/mock/platform_fixtures_test.go` pin the staged availability
+projection and the untouched shared snapshot, and
+`TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry` in
+`internal/unifiedresources/registry_test.go` pins the store-less registry
+against the store-backed one and the per-generation `ManualLinks` snapshot.
 
 ### Provider link network corroboration
 
@@ -7114,18 +7175,138 @@ folded into the agent by ID, a path no exclusion check sees, so the pair
 stayed merged with the link row gone. A pin whose canonical ID the operator
 excluded from the ID the record takes without the pin (its `chooseNewID` or
 source-specific ID) now completes nothing. This covers pins already written
-that way, not only new ones. Merges through an agent's own declared node link
-(`resolveLinkedResource`) still ignore exclusions.
+that way, not only new ones. A Proxmox node's link to an agent honours the
+split as well; the next paragraphs cover it.
+
+An operator's split overrides a Proxmox node's link to a pulse-agent. That
+link is normally Pulse's own inference rather than a resource-store
+decision: monitoring links a node to the one agent whose endpoint address or
+hostname matches it (the agents API can also set it by hand), and the
+registry joined the pair in `resolveLinkedResource` (a link both sides
+declare, or a node-side link the agent's hostname corroborates) before
+`findMatch` ran. The linked node had already taken the agent's identity in
+`resourceFromProxmoxNode`, and with an agent reporting a machine key it
+minted the agent's machine-derived canonical ID before the agent was
+ingested. Neither path read exclusions, so the drawer's Split merged
+resource (report-merge) on a node and its agent answered "Resource split
+applied" and left the pair merged on every rebuild, in the monitor and in
+the resources API. Cloned machines and reused short hostnames are where that
+link is wrong, and report-merge exists for wrong merges, so the split wins.
+
+`nodeAgentSplit` (`proxmox_node_links.go`) decides the pair: the operator
+split the node off when an exclusion names one of the node's own IDs (its
+source-specific ID, or the ID its identity derives without a machine key,
+which a Proxmox node never reports itself) against one of the agent's (its
+source-specific ID, the ID its identity derives, the ID it holds, or the ID
+the joined pair derives). Unlink and report-merge name the merged ID and the
+`SourceTargets` candidate IDs, and the split node can hold an ID it did not
+hold while joined, so the decision is read across those sets, not one exact
+pair. Where the pair merged under the agent's machine-derived ID, an
+exclusion naming only the agent's candidate against that ID does not count:
+report-merge records the same pair when it splits another source, such as a
+Docker host, off the agent. Where it merged under the node's own ID (an agent
+reporting no machine key), that exclusion splits the agent off the node.
+`splitProxmoxNodeLink` keeps a split node from taking the agent's identity in
+`ingestSnapshot` and remembers the agent for identity-pin completion, which
+refuses the agent's machine key from a pin written while they were joined
+when the node is split from the agent its own link or an agent row holding
+the pin's ID names, or from the remembered agent where the pin can be that
+agent's (no machine key or DMI UUID both report differs), so also while the
+agent is missing from the snapshot or stops reporting its machine ID;
+`resolveLinkedResource` refuses the link from either side. The registry adds
+no `LinkedAgentID` to the node: guests, agent deployment and service
+discovery act on a node's linked agent. The node then holds the ID its own
+identity derives, with only its hostname and endpoint address, which
+identity matching scores at 0.80 at most, under the 0.85 auto-merge floor.
+The agent holds the ID its own identity derives once pins complete it (its
+machine-derived ID when it has a machine key).
+
+The latest decision across the two sets wins, so a link between them that
+postdates the newest exclusion joins the pair again even where it names
+another pair than the exclusions do, as a relink of the two rows a
+report-merge left does (a registry now keeps each exclusion's `CreatedAt`);
+a tie keeps the pair apart. Once a relink rejoins them, the declared link
+folds one of the rows it names into the other's ID, and `applyManualLinks`
+records that ID with the IDs manual links fold (it recognises the node's own
+IDs from the joined row's Proxmox facet, and the agent's source-specific
+ID), so pin succession keeps the link instead of re-keying it onto the
+joined ID and handing the decision back to the older exclusions. The paths
+that join rows after ingest apply the same decision: `applyManualLinks`
+skips a link between a node row and an agent row split after it, and the
+presentation filter (`ListForPresentation` and the broadcast) keeps such
+rows apart when no single exclusion names their IDs; an exclusion naming
+the two rows exactly keeps them apart there even against a newer link
+across the sets, which only a listing older than the registry's rebuild can
+present as two rows. It shares the
+presentation limit the broadcast paragraph below names: a third same-host
+row (another agent reporting no machine ID, say) that merges with one side
+first carries the pair into one row. `TestOperatorSplitOverridesProxmoxNodeAgentLink`
+pins report-merge, unlink naming the node's candidate or the split rows, an
+exclusion between the two candidates and one naming only the agent's
+candidate, for seven link shapes (declared both ways, node-side only and
+agent-side only, unclustered and clustered, an agent hostname in a different
+form, and an agent reporting no machine key), through three rebuilds of a
+SQLite-backed monitor adapter in the monitor listing, the broadcast coalesce
+and the resources API's registry seeded from the listing or the snapshot,
+after agent-first ingests (with and without the host in the snapshot) taken
+while the joined-era pins still stand; then a relink of the rows (also
+followed by an agent-first rebuild that persists its pins) and the same
+request again. An exclusion naming the merged ID
+against an unrelated ID leaves the pair merged, and the split node names the
+agent only where its monitor record does.
+`TestOperatorSplitFromOneAgentKeepsAnotherAgentsPin` keeps a node's own
+agent's pin while another agent it was split from declares it, and
+`TestOperatorSplitHoldsWhenTheAgentStopsReportingItsMachineID` keeps a split
+whose agent comes back without its machine ID.
+
+What the split does not reach: the agents API's node link
+(`/api/agents/agent/link`) records a monitor-side link intent, not a store
+decision, so it does not override a resource split; rejoin through
+`POST /api/resources/{id}/link`. The monitor's own node record keeps its
+link where it has one, so what reads it still follows the agent: the
+agent's SMART inventory as the node's disk fallback when the Proxmox disk
+query fails, the agent's disk-exclude patterns on the node's disks, and the
+node's linked agent that guest discovery, agent deployment and service
+discovery act on.
+Physical disks inside one host still join through
+`resolveLinkedPhysicalDisk` without reading exclusions; a node split puts the
+two sides' disks under different parents, so they no longer meet there.
+Cluster- and hostname-derived IDs carry no source, so an exclusion recorded
+against another resource that derives the node's own ID (a Docker Swarm host
+reporting no machine key, named like the node in a swarm named like its
+cluster) also splits that node from its agent, and one splitting the node's
+candidate off its own ID while another source was merged there (a Docker
+host linked into it) also splits it from a later agent reporting no machine
+key, which joins under that ID. A rebuild that sees the agent in neither the
+snapshot nor the registry, with no node link naming it, cannot tie an
+exclusion naming the agent only by its candidate ID to the agent's key on a
+joined-era pin, so until the agent reports again the node takes that key
+and the agent's ID. The other way round, a node split from an agent that
+reports no machine key and declares it refuses any joined-era pin while its
+own linked agent is missing, keeping its own ID until that agent reports. An exclusion keyed by the
+agent's machine-derived ID stops naming the agent if the agent's effective
+canonical key changes (it stops reporting a machine ID and no pin restores
+it), as every exclusion keyed by a canonical ID does. The browser's realtime
+coalesce (`mergeCanonicalResourceSnapshot` in `resourceStateAdapters.ts`,
+used by the websocket store and `useUnifiedResources`) receives no
+exclusions and joins a Proxmox-only row and an agent-only row that share a
+hostname unless their machine IDs or DMI UUIDs disagree, their Proxmox
+facets name different clusters or provider scopes, or several Proxmox nodes
+share the hostname and the node does not name the agent, so the UI still
+renders such a split pair, from this change or from an identity-match split,
+as one row.
 
 The resources API seeds its registry from the monitor's listing, which
 already has the link applied, so it cannot split the pair itself: an unlink
 shows on REST, `/api/state` and the websocket from the monitor's next
 registry rebuild, the same generation in which a new link reaches the
 broadcast. REST applies a new link at once, because its own registry applies
-the store's links on top of the seed. The mock-mode view applies no operator
-links, so in mock mode REST splits a manually linked pair as soon as the
-unlink is recorded. Mock fixtures that identity matching merged stay merged
-on every surface: the fixture graph is built without the store's exclusions.
+the store's links on top of the seed. The mock-mode view now applies the
+current monitor generation's operator links too ("Mock-mode unified view
+applies operator links" above), so a mock unlink likewise needs that
+monitor rebuild to remove the fold from the seed. Mock fixtures that identity
+matching merged stay merged on every surface: the fixture graph is built
+without the store's exclusions.
 
 The websocket broadcast coalesced host views with
 `CoalescePresentationHostResources`, which honours no exclusions, while the
@@ -7234,3 +7415,14 @@ system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
 sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
 keeps the handler on the registry's fold record.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.

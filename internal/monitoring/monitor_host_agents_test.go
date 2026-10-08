@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -5792,6 +5793,202 @@ func TestMockModeDropsRealHostContinuity(t *testing.T) {
 	hosts := m.HostsSnapshot()
 	if len(hosts) != 1 || hosts[0].Hostname != "real-machine.lan" {
 		t.Fatalf("real mode must still restore continuity-backed hosts, got %#v", hosts)
+	}
+}
+
+// TestMockUnifiedViewAppliesOperatorManualLinks pins operator links on the
+// mock-mode unified view. The fixture graph is built without the link store,
+// so a standalone agent linked into a VM showed merged in the resources API,
+// which re-seeds through the store-backed registry, but stayed a separate row
+// in the websocket broadcast and /api/state. The view applies the links the
+// monitor's resource store last loaded, rebuilds when they change without
+// waiting for a fixture tick, and never forwards fixture data to the store.
+func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	if previous {
+		mustSetMockEnabled(t, false)
+	}
+	// Hold the fixture graph still, so only the link can change the view.
+	testConfig := previousConfig
+	testConfig.UpdateInterval = 5 * time.Minute
+	mock.SetMockConfig(testConfig)
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		mustSetMockEnabled(t, previous)
+	})
+
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	unlinked := m.currentUnifiedStateView()
+	var vmID, agentID string
+	for _, resource := range unlinked.resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	version := mock.FixtureDataVersion()
+
+	// The broadcast's read-path refresh rebuilds the resource store, which
+	// loads the link; the mock view must follow it within the same build.
+	frontend := m.BuildBroadcastFrontendState()
+	if got := mock.FixtureDataVersion(); got != version {
+		t.Fatalf("fixture data version moved from %d to %d; the link alone must refresh the view", version, got)
+	}
+	var vmRow *models.ResourceFrontend
+	for i := range frontend.Resources {
+		switch frontend.Resources[i].ID {
+		case vmID:
+			vmRow = &frontend.Resources[i]
+		case agentID:
+			t.Fatalf("broadcast still lists the linked agent %s as its own row", agentID)
+		}
+	}
+	if vmRow == nil || len(vmRow.Agent) == 0 {
+		t.Fatalf("broadcast VM row %s = %+v, want it to carry the linked agent's facet", vmID, vmRow)
+	}
+
+	linked := m.currentUnifiedStateView()
+	if linked.readState == unlinked.readState {
+		t.Fatal("expected the view to rebuild when the operator links changed")
+	}
+	// The resources API keys its registry cache on this freshness, so a
+	// link change must advance it even though no fixture tick did.
+	if !linked.freshness.After(unlinked.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on the link change", linked.freshness, unlinked.freshness)
+	}
+	if again := m.currentUnifiedStateView(); again.readState != linked.readState {
+		t.Fatal("expected the linked view to stay cached while neither the fixtures nor the links change")
+	}
+
+	// The resources API re-seeds the same snapshot through a registry backed
+	// by the link store. Both payloads must list the same rows.
+	seed, _ := m.UnifiedResourceSnapshot()
+	rest := unifiedresources.NewRegistry(store)
+	rest.IngestResources(seed)
+	viewIDs := make([]string, 0, len(linked.resources))
+	for _, resource := range linked.resources {
+		viewIDs = append(viewIDs, resource.ID)
+	}
+	restIDs := make([]string, 0, len(seed))
+	for _, resource := range rest.List() {
+		restIDs = append(restIDs, resource.ID)
+	}
+	slices.Sort(viewIDs)
+	slices.Sort(restIDs)
+	if !slices.Equal(viewIDs, restIDs) {
+		t.Fatalf("mock view and resources API disagree:\nview %v\nrest %v", viewIDs, restIDs)
+	}
+
+	// The view's registry has no store: history recorded through the read
+	// state it hands out must not land fixture rows in the operator's store.
+	recorder, ok := linked.readState.(interface {
+		RecordChange(unifiedresources.ResourceChange) error
+	})
+	if !ok {
+		t.Fatalf("mock view read state %T does not record changes", linked.readState)
+	}
+	before, err := store.GetRecentChanges(vmID, time.Time{}, 1000)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if err := recorder.RecordChange(unifiedresources.ResourceChange{
+		ID:         "mock-view-probe",
+		ObservedAt: time.Now().UTC(),
+		ResourceID: vmID,
+		Kind:       unifiedresources.ChangeStateTransition,
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+	after, err := store.GetRecentChanges(vmID, time.Time{}, 1000)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("mock view wrote %d change rows into the durable store", len(after)-len(before))
+	}
+
+	// Reconcile the mock link proposal with the current latest-decision
+	// rule: a fresh monitor must restore the link, and unlink/relink must
+	// invalidate the seed cache without a fixture tick. Mock seeds retain
+	// their own default thresholds, not the live adapter's configured ones.
+	restarted := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(restarted.alertManager.Stop)
+	adapter := restarted.resourceStore.(*unifiedresources.MonitorAdapter)
+	assertMockLink := func(wantLinked bool) time.Time {
+		t.Helper()
+		frontend := restarted.BuildBroadcastFrontendState()
+		var vmFound, agentFound, vmHasAgent bool
+		for _, resource := range frontend.Resources {
+			if resource.ID == vmID {
+				vmFound, vmHasAgent = true, len(resource.Agent) > 0
+			}
+			if resource.ID == agentID {
+				agentFound = true
+			}
+		}
+		if !vmFound || vmHasAgent != wantLinked || agentFound == wantLinked {
+			t.Fatalf("mock link=%t: vm=%t vmAgent=%t standaloneAgent=%t", wantLinked, vmFound, vmHasAgent, agentFound)
+		}
+		seed, freshness, thresholds := restarted.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(thresholds) != 0 {
+			t.Fatalf("mock seed borrowed live thresholds: %v", thresholds)
+		}
+		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+			t.Fatalf("live adapter threshold = %v, want configured four minutes", got)
+		}
+		rest := unifiedresources.NewRegistryWithStaleThresholds(store, thresholds)
+		rest.IngestResources(seed)
+		_, hasStandaloneAgent := rest.Get(agentID)
+		if hasStandaloneAgent == wantLinked {
+			t.Fatalf("REST seed link=%t: standalone agent=%t", wantLinked, hasStandaloneAgent)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture version moved from %d to %d during operator lifecycle", version, got)
+		}
+		return freshness
+	}
+	restartFreshness := assertMockLink(true)
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: vmID, ResourceB: agentID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	// Reads deliberately reuse a generation younger than two seconds.
+	// Apply the owning ingest/rebuild boundary instead of waiting for that
+	// throttle or claiming a recorded decision changes a previous listing.
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	unlinkFreshness := assertMockLink(false)
+	if !unlinkFreshness.After(restartFreshness) {
+		t.Fatal("unlink must advance the mock seed's freshness")
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	if relinkFreshness := assertMockLink(true); !relinkFreshness.After(unlinkFreshness) {
+		t.Fatal("relink must advance the mock seed's freshness")
 	}
 }
 

@@ -189,8 +189,30 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	return resources, freshness
 }
 
+// UnifiedResourceSnapshotWithLinks returns the current mock world as unified
+// resources with the operator's manual links applied at each ingest stage, as
+// the live monitor's registry rebuild applies them: a link whose side arrives
+// as a supplemental record, or whose folded side an availability check names
+// by source, folds as it would live. Folding the finished list instead loses
+// both. The registry has no store, so nothing the fixtures ingest is
+// persisted. Without links this is UnifiedResourceSnapshot; with links it
+// builds afresh on every call, so callers cache it per fixture data version
+// and link set, and its result is the caller's own.
+func UnifiedResourceSnapshotWithLinks(links []unifiedresources.ResourceLink) ([]unifiedresources.Resource, time.Time) {
+	if len(links) == 0 {
+		return UnifiedResourceSnapshot()
+	}
+	if !IsMockEnabled() {
+		return nil, time.Time{}
+	}
+	return CurrentFixtureGraph().unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+}
+
 func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	registry := unifiedresources.NewRegistry(nil)
+	return g.unifiedResourceSnapshot(unifiedresources.NewRegistry(nil))
+}
+
+func (g FixtureGraph) unifiedResourceSnapshot(registry *unifiedresources.ResourceRegistry) ([]unifiedresources.Resource, time.Time) {
 	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, SupplementalOwnedSources()))
 
 	for _, source := range SupplementalOwnedSources() {
