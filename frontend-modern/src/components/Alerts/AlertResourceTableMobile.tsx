@@ -26,7 +26,6 @@ import {
   ALERT_RESOURCE_METRIC_OFF_VALUE,
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
-  getAlertResourceEnabledDefault,
   getAlertResourceLabel,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
@@ -34,6 +33,7 @@ import {
   isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
+  resolveAlertResourceGlobalDefaultCell,
   resolveAlertResourceMetricEnableValue,
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
@@ -212,10 +212,14 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
               {(column) => {
                 const metric = normalizeAlertResourceMetricKey(column);
                 const bounds = getAlertResourceMetricBounds(metric);
-                const value = () => props.table.globalDefaults?.[metric] ?? 0;
+                const value = () => props.table.globalDefaults?.[metric];
+                const fallback = () => props.table.globalDefaultFallbacks?.[metric];
                 // An unset default and a stored 0 are both disabled to the alert
-                // engine, so neither may render as On.
-                const isOff = () => isAlertResourceMetricOff(value());
+                // engine, so neither may render as On, unless the metric's unset
+                // default follows another setting.
+                const cell = () =>
+                  resolveAlertResourceGlobalDefaultCell(metric, value(), fallback());
+                const isOff = () => cell().isOff;
 
                 return (
                   <div class="p-2 bg-surface rounded-sm border border-border-subtle flex flex-col gap-1">
@@ -227,8 +231,13 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           min={bounds.min}
                           max={bounds.max}
                           step={getAlertResourceMetricStep(metric)}
-                          value={isOff() ? '' : value()}
-                          placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
+                          value={isOff() || cell().follows ? '' : (value() ?? '')}
+                          placeholder={
+                            cell().follows && !isOff()
+                              ? fallback()?.label
+                              : getAlertResourceTableMetricPlaceholder(isOff())
+                          }
+                          title={cell().follows ? fallback()?.title : undefined}
                           disabled={isOff()}
                           class={`min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0 ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
                           onInput={(e) => {
@@ -257,7 +266,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             onClick={() => {
                               props.table.setGlobalDefaults?.((prev) => ({
                                 ...prev,
-                                [metric]: getAlertResourceEnabledDefault(metric),
+                                [metric]: cell().enableValue,
                               }));
                               props.table.setHasUnsavedChanges?.(true);
                             }}
@@ -271,7 +280,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           props.table.setGlobalDefaults?.((prev) => ({
                             ...prev,
                             [metric]: isOff()
-                              ? getAlertResourceEnabledDefault(metric)
+                              ? cell().enableValue
                               : ALERT_RESOURCE_METRIC_OFF_VALUE,
                           }));
                           props.table.setHasUnsavedChanges?.(true);

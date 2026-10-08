@@ -8,6 +8,9 @@ import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { getDiskTemperatureByTypeItems } from '@/features/alerts/thresholds/trueNASDiskTemperature';
+import { FACTORY_AGENT_DEFAULTS } from '@/utils/alertThresholdDefaults';
+import type { AlertResourceGlobalDefaultFallback } from './alertResourceTableModel';
 import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
 
 const TRUENAS_SYSTEM_COLUMNS = [
@@ -22,6 +25,7 @@ const TRUENAS_SYSTEM_COLUMNS = [
 ];
 const TRUENAS_STORAGE_COLUMNS = ['Usage %'];
 const TRUENAS_DISK_COLUMNS = ['Temp °C'];
+const TRUENAS_DISK_COLUMN_TOOLTIPS = { 'Temp °C': 'Disk temperature that raises an alert.' };
 
 function TrueNASResourceSection(
   props: ThresholdsTableSectionProps & {
@@ -39,6 +43,10 @@ function TrueNASResourceSection(
         | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
     ) => void;
     onResetDefaults?: () => void;
+    defaultsSummary?: string;
+    globalDefaultFallbacks?: Record<string, AlertResourceGlobalDefaultFallback>;
+    columnTooltips?: Record<string, string>;
+    note?: string;
   },
 ) {
   const { state, tableProps } = props;
@@ -48,7 +56,9 @@ function TrueNASResourceSection(
       <CollapsibleSection
         id={props.id}
         title={props.title}
-        defaultsSummary={getAlertThresholdsDefaultsSummary(props.columns, props.defaults)}
+        defaultsSummary={
+          props.defaultsSummary ?? getAlertThresholdsDefaultsSummary(props.columns, props.defaults)
+        }
         resourceCount={props.resources().length}
         collapsed={state.isCollapsed(props.id)}
         onToggle={() => state.toggleSection(props.id)}
@@ -57,6 +67,9 @@ function TrueNASResourceSection(
         emptyMessage="No TrueNAS alert targets match the current filters."
       >
         <div ref={state.registerSection(props.id)} class="scroll-mt-24">
+          <Show when={props.note}>
+            <p class="mb-3 text-xs text-muted">{props.note}</p>
+          </Show>
           <ResourceTable
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
@@ -79,6 +92,8 @@ function TrueNASResourceSection(
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
             globalDefaults={props.defaults}
+            globalDefaultFallbacks={props.globalDefaultFallbacks}
+            columnTooltips={props.columnTooltips}
             setGlobalDefaults={props.setGlobalDefaults}
             setHasUnsavedChanges={tableProps.setHasUnsavedChanges}
             globalDisableFlag={tableProps.disableAllTrueNAS}
@@ -104,6 +119,38 @@ export function ThresholdsTableTrueNASTab(props: ThresholdsTableSectionProps) {
   const trueNASDefaults = () => props.tableProps.trueNASDefaults ?? {};
   const trueNASStorageDefaults = () => ({ usage: trueNASDefaults().usage ?? 85 });
   const trueNASDiskDefaults = () => props.tableProps.trueNASDiskDefaults ?? {};
+  const diskTemperatureByType = () =>
+    getDiskTemperatureByTypeItems({
+      agentDiskTemperature: props.tableProps.agentDefaults.diskTemperature,
+      diskTempByType: props.tableProps.diskTempByType,
+    });
+  // Unset, TrueNAS disks follow Disk temperature by type, so the header names
+  // the per-type triggers rather than one number.
+  const trueNASDiskDefaultsSummary = () => {
+    if (trueNASDiskDefaults().temperature !== undefined) return undefined;
+    return getAlertThresholdsDefaultsSummary(
+      TRUENAS_DISK_COLUMNS,
+      diskTemperatureByType().length > 0 ? {} : { temperature: 0 },
+      { ruleItems: diskTemperatureByType() },
+    );
+  };
+  // When the agent Disk Temp default is off, Disk temperature by type is off
+  // too, so the unset cell reads Off and switching it on stages a TrueNAS-wide
+  // value at the factory disk temperature trigger.
+  const trueNASDiskTemperatureFallback = (): Record<string, AlertResourceGlobalDefaultFallback> => {
+    const items = diskTemperatureByType();
+    return {
+      temperature: {
+        label: 'By type',
+        title:
+          items.length > 0
+            ? `Follows Disk temperature by type under Agents: ${items.join(', ')}. Enter a value to use one temperature for every TrueNAS disk.`
+            : 'Off because the agent Disk Temp default under Agents is off. Turn it on here to alert on TrueNAS disks anyway.',
+        off: items.length === 0,
+        enableValue: FACTORY_AGENT_DEFAULTS.diskTemperature,
+      },
+    };
+  };
 
   return (
     <>
@@ -175,6 +222,10 @@ export function ThresholdsTableTrueNASTab(props: ThresholdsTableSectionProps) {
         icon={<HardDrive class="w-5 h-5" />}
         typeKey="truenas-disk"
         defaults={trueNASDiskDefaults()}
+        defaultsSummary={trueNASDiskDefaultsSummary()}
+        globalDefaultFallbacks={trueNASDiskTemperatureFallback()}
+        columnTooltips={TRUENAS_DISK_COLUMN_TOOLTIPS}
+        note="Unless set here, each disk alerts at Disk temperature by type, set under Agents."
         factoryDefaults={props.tableProps.factoryTrueNASDiskDefaults}
         setGlobalDefaults={props.tableProps.setTrueNASDiskDefaults}
         onResetDefaults={props.tableProps.resetTrueNASDiskDefaults}

@@ -1413,6 +1413,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+The POST-only guard on Assistant session mutations (`/abort`,
+`/summarize`, `/fork`, `/undo`, `/redo`, `/steer`; `405` with `Allow: POST`
+for any other method that reaches the handler) is transport hardening in
+`internal/api/ai_handler.go`.
+It opens no storage, backup, or recovery read or write path, and a rejected
+request never reaches session state.
 Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
 is also adjacent API/AI action plumbing for storage/recovery consumers.
 `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already
@@ -2430,11 +2436,13 @@ recovery scope, or a storage/recovery-owned secret source.
     Storage and recovery UI must keep sourcing those signals from their
     existing canonical page models instead of polling the connections
     ledger for per-datastore or per-backup truth.
-    Platform-first top-level pages may embed `StorageSurface` and
-    `RecoverySurface` with `embedded tableOnly` and forced source or
-    platform filters (e.g. `forcedSourceFilter`, `forcedPlatformFilter`)
-    so platform-scoped storage and recovery rows render through the same
-    canonical surfaces rather than a forked per-platform table.
+    Platform-first top-level pages may embed `StorageSurface`
+    (`frontend-modern/src/components/Storage/Storage.tsx`) with a forced
+    source filter (`forcedSourceFilter`) so platform-scoped storage rows
+    render through the same canonical surface rather than a forked
+    per-platform table. The surface has no `embedded` or `tableOnly` mode
+    and no `forcedPlatformFilter`, and no `RecoverySurface` component
+    exists to embed alongside it.
     `frontend-modern/src/App.tsx` may carry the platform-page route
     registrations that mount those embedded canonical surfaces, but the
     routes themselves must derive their paths from the canonical builders
@@ -2444,22 +2452,30 @@ recovery scope, or a storage/recovery-owned secret source.
     canonical surface that actually populates. The canonical TrueNAS
     adapter already emits the top-level TrueNAS system as a unified
     `agent` row tagged with the `truenas` platform, so the platform
-    page defaults to `/truenas/overview` (the Systems sub-tab) and the
-    embedded `StorageSurface` lives at `/truenas/storage`. The Source
-    filter chip in `StoragePageControls` is also suppressed when a
-    platform page locks source scope through `forcedSourceFilter` (via
-    `suppressSourceFilter`, auto-applied whenever `forcedSourceFilter`
-    is set), so the user never sees the platform's name pinned as a
-    removable filter chip inside the embedded surface.
-    Platform pages that embed `StorageSurface` reuse the canonical
-    `StoragePageControls` toolbar through the `showFilterToolbar` prop on
-    `StorageProps`. The page keeps `tableOnly` to hide the storage summary
-    section but opts in to the shared search, status, grouping, sort,
-    node, view, and chart-collapse controls so platform operators get
-    dense-table storage controls on every embedded storage tab without
-    forking the toolbar. The source scope flows through
-    `forcedSourceFilter` as a typed page input; the source filter remains
-    available in the toolbar only when not forced. The seven-state Storage
+    page defaults to `/truenas/overview`, whose Overview sub-tab lists
+    those systems. `/truenas/storage` renders the TrueNAS-owned
+    `TrueNASStorageTopologyTable`, not `StorageSurface`; the Proxmox
+    Storage tab in `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    is the only page that embeds `StorageSurface` today.
+    An embedding page gets the canonical `StoragePageControls` toolbar
+    without opting in: `Storage.tsx` always renders it (only kiosk mode
+    hides it), there is no `showFilterToolbar` prop, and there is no storage
+    summary section to hide. The Proxmox embed passes `forcedSourceFilter`,
+    its own `resourceSource`, `suppressNodeFilter`, `filterAriaLabel`, and
+    Proxmox search placeholder and empty-history copy. It passes no
+    `forcedView`, so the Storage / Physical Disks view tabs stay.
+    `forcedSourceFilter` is a typed page input that the route state reads
+    as the source value and never writes back to the URL, and `Storage.tsx`
+    sets `suppressSourceFilter` whenever it is present. `StoragePageControls`
+    then drops the Source chip, so the user never sees the platform's name
+    pinned as a removable filter chip, and the locked source does not count
+    as an active filter that surfaces the toolbar's clear action.
+    `suppressNodeFilter` drops the Node chip so search carries host and
+    node scoping, and `Storage.tsx` resets any selected node to all nodes
+    while it is set. The embedded toolbar otherwise keeps search, the
+    Status filter on the Storage view (Role and Group filters on Physical
+    Disks once there is more than one choice), and the View popover's
+    grouping and sort; it has no chart-collapse control. The seven-state Storage
     status catalog stays in the shared Add filter menu instead of occupying a
     permanent segmented rail; a non-default status surfaces through the
     canonical FilterBar chip. Grouping and sort remain durable presentation
@@ -3001,6 +3017,15 @@ Expiry-index pruning forgets only suppression state, never audit rows or
 recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
+
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
 
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
@@ -4356,10 +4381,13 @@ one that returns must stay page-scoped instead of collapsing to the expanded
 row or replacing the page overview with row-local empty states.
 That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
-auto-scroll the table. Reveal belongs only to deliberate focus: a focused
-pool or disk row may switch to the owning view or expand the owning group
-through the bridge's `revealActiveSeries` callback, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge.
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group, and a pinned pool-group
+header that sits off-screen scrolls into view through the same bridge. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
@@ -6247,6 +6275,19 @@ is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
 
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
@@ -6879,6 +6920,15 @@ The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
 
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
@@ -6889,3 +6939,11 @@ allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
 includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
 are `GET` requests and still connect. No storage, retention, backup, migration
 or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.

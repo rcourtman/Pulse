@@ -457,6 +457,25 @@ describe('ThresholdsTable navigation and redirection', () => {
     });
   });
 
+  it('says Disk temperature by type covers agent, TrueNAS and Proxmox disks', async () => {
+    setPathname('/alerts/thresholds/systems');
+    const host: Agent = {
+      id: 'legacy-h1',
+      hostname: 'legacy-host',
+      displayName: 'Legacy Host',
+      status: 'online',
+      lastSeen: 123,
+      memory: { total: 100, used: 50, free: 50, usage: 50 },
+    };
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
+
+    const heading = await screen.findByText('Disk temperature by type');
+    expect(heading.parentElement?.textContent).toContain(
+      'for each disk type, for agent, TrueNAS and Proxmox disks',
+    );
+  });
+
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 

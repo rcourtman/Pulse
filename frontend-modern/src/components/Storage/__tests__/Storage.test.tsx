@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
@@ -57,6 +58,9 @@ if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
 
 let mockLocationSearch = '';
 let mockLocationPath = '/proxmox/storage';
+// Most tests read a location snapshot; set liveLocation to follow in-app navigation.
+let liveLocation = false;
+const [locationVersion, setLocationVersion] = createSignal(0);
 const navigateSpy = vi.fn();
 
 let wsConnected = true;
@@ -296,7 +300,19 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
-    useLocation: () => ({ pathname: mockLocationPath, search: mockLocationSearch }),
+    useLocation: () =>
+      liveLocation
+        ? {
+            get pathname() {
+              locationVersion();
+              return mockLocationPath;
+            },
+            get search() {
+              locationVersion();
+              return mockLocationSearch;
+            },
+          }
+        : { pathname: mockLocationPath, search: mockLocationSearch },
     useNavigate: () => navigateSpy,
   };
 });
@@ -388,6 +404,7 @@ describe('Storage', () => {
     fetchMock.mockClear();
     mockLocationPath = '/proxmox/storage';
     mockLocationSearch = '';
+    liveLocation = false;
     navigateSpy.mockReset();
 
     wsConnected = true;
@@ -462,6 +479,65 @@ describe('Storage', () => {
 
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
+  });
+
+  it('gives a platform embed the canonical toolbar with source and node scope locked', async () => {
+    mockLocationSearch = '?node=node-2&source=truenas';
+    hookResources = [
+      buildStorageResource('storage-1', 'Local-LVM-PVE1', 'pve1', {
+        parentId: 'node-1',
+        parentName: 'pve1',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-2', 'Local-LVM-PVE2', 'pve2', {
+        parentId: 'node-2',
+        parentName: 'pve2',
+        includePlatformNode: false,
+      }),
+      buildStorageResource('storage-3', 'Tank-TrueNAS', 'truenas-1', {
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+      }),
+    ];
+
+    render(() => (
+      <Storage
+        forcedSourceFilter="proxmox-all"
+        suppressNodeFilter
+        filterAriaLabel="Proxmox storage filters"
+        filterSearchPlaceholder="Search Proxmox storage by pool, datastore, node, or device"
+      />
+    ));
+
+    // No prop opts the embed into the toolbar or keeps it out of the view tabs.
+    expect(screen.getByRole('group', { name: 'Proxmox storage filters' })).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search Proxmox storage by pool, datastore, node, or device'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Storage view' })).toBeInTheDocument();
+
+    // The forced source outranks the URL source, and the URL node resets to all.
+    await waitFor(() => {
+      expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
+      expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Tank-TrueNAS')).not.toBeInTheDocument();
+    expect(navigateSpy.mock.calls.some(([path]) => String(path).includes('source='))).toBe(false);
+
+    // Neither lock surfaces as a chip, an Add filter option, or a clear action.
+    expect(queryStorageChip('Source')).toBeNull();
+    expect(queryStorageChip('Node')).toBeNull();
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    expect(within(addFilter).getByRole('option', { name: 'Status: Warning' })).toBeInTheDocument();
+    expect(
+      within(addFilter).queryByRole('option', { name: /^(Source|Node):/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /charts/i })).not.toBeInTheDocument();
+
+    const viewOptions = openStorageViewOptions();
+    expect(within(viewOptions).getByLabelText('Group by')).toBeInTheDocument();
+    expect(within(viewOptions).getByLabelText('Sort by')).toBeInTheDocument();
   });
 
   it('renders per-pool growth from the shared storage summary history contract', async () => {
@@ -823,6 +899,41 @@ describe('Storage', () => {
     expect(
       screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('reopens the collapsed group of a pool focused by an in-app storage link', async () => {
+    liveLocation = true;
+    hookResources = [
+      buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
+        storageType: 'cephfs',
+      }),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Collapse pve1' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Ceph-Link-Store')).not.toBeInTheDocument();
+    });
+
+    mockLocationSearch = '?group=node&resource=storage-ceph-link';
+    setLocationVersion((version) => version + 1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
+      const poolRow = screen.getByText('Ceph-Link-Store').closest('tr[data-summary-series-id]');
+      expect(
+        document
+          .querySelector('tr[data-inline-detail-for]')
+          ?.getAttribute('data-inline-detail-for'),
+      ).toBe(poolRow?.getAttribute('data-summary-series-id'));
+    });
+    expect(screen.getAllByRole('tab', { name: 'Storage' })[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('clears pinned storage group scope from the content-card header action', async () => {
@@ -1343,7 +1454,7 @@ describe('Storage', () => {
     );
   });
 
-  it('keeps the storage view selector available in table-only embedding', async () => {
+  it('keeps the storage view selector available in a platform-page embed', async () => {
     mockLocationPath = '/proxmox/storage';
     hookResources = [
       buildPhysicalDiskResource('sda', 'node-1', 'pve1'),

@@ -3025,6 +3025,18 @@ Removing the disconnected recorder does not alter alert, action approval or
 operator authority. An unrelated organization receives no default archive
 fallback.
 
+### Report GETs cannot spend AI budget
+
+`Router.wireReportingAIResolvers` in `internal/api/router.go` wires a second
+reporting resolver, `SetExistingFindingsResolver`, backed by
+`AISettingsHandler.ExistingAIService`.
+A `GET /api/admin/reports/generate` uses only that resolver and the
+deterministic narrator, so it makes no AI provider call, writes no cost-ledger
+entry and never constructs a tenant AI service. GET passes the demo-mode guard
+and the CSRF check, and a SameSite=Lax session cookie rides a cross-site
+top-level navigation, so AI narration of a single-resource report now requires
+a CSRF-checked `POST`. No authentication, scope or session rule changed.
+
 ### Node setup action v7 compatibility
 
 Workflow consumers pin `actions/setup-node` to

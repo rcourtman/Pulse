@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "8e1a564d7e229bda51c021c7e6bde920e0ca0596",
+  "verified_at": "2026-10-07T14:35:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx": "3052a190a76e885e98ed6601b3e83c8959e1c656d12270b87e074fffa95860ac"
+  },
+  "routes": [
+    "/alerts/thresholds/systems",
+    "/alerts/overview",
+    "/proxmox/storage?tab=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (8 PVE nodes) on this branch with a local-only generator overlay pinning PVE disks: pve1 NVMe 63C, pve2 SATA 56C, pve3 NVMe 72C, pve3 SAS 63C, pve3 SATA 66C",
+    "Alerts > Thresholds > Systems (Agents section): 'Disk temperature by type' card reads 'Alert trigger in \u00b0C for each disk type, for agent, TrueNAS and Proxmox disks. ... a TrueNAS Disks value replaces them for TrueNAS disks.' at 1366, and at 375 the card spans 34-341px with no horizontal overflow",
+    "Alerts overview: 'Samsung 870 EVO 1TB (/dev/nvme2) (Temperature) CRITICAL on West Production C \u2014 Temperature 66\u00b0C, above the 55\u00b0C alert level; Clears once it drops to 50\u00b0C or lower and stays there for 5 minutes', Alert level 55\u00b0C, Clear level 50\u00b0C",
+    "Warning-level PVE disk temperature alerts (SATA 56C trigger 55, NVMe 72C trigger 70) appear after the 300s stability window (first breach 15:26:32, firing by 15:31:46); the critical 66C fires at once; none for NVMe 63C or SAS 63C",
+    "Physical Disks filtered to West Production: exactly the three alerting disks read Running Hot (Crucial MX500 56\u00b0C, WD Black SN850X 72\u00b0C, Samsung 870 EVO 66\u00b0C); the 870 EVO drawer reads 'Running Hot \u2014 Disk temperature is 66\u00b0C, at or above its 55\u00b0C alert threshold.'"
+  ],
+  "interactions": [
+    "Opened Alerts overview and read the PVE disk temperature alert card",
+    "Filtered Physical Disks by 'West Production C', expanded the Samsung 870 EVO row",
+    "Opened Thresholds > Systems, read the Disk temperature by type card at 1366 and at 375"
+  ]
+}

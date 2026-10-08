@@ -1350,6 +1350,123 @@ func TestGuestFilesystemEvidenceSuppressesDuplicateAggregateAlert(t *testing.T) 
 	}
 }
 
+// A config save re-judges every active alert. A filesystem alert must be judged
+// by the threshold its evaluator used for that filesystem, not the host or guest
+// default: saving any unrelated setting used to resolve an alert a per-disk
+// threshold of 70 raised at 80 under a default of 90, notifying recovery, and
+// the next poll raised it again as a new alert.
+func TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold(t *testing.T) {
+	perDisk := func() *HysteresisThreshold { return &HysteresisThreshold{Trigger: 70, Clear: 65} }
+	abovePerDisk := func() *HysteresisThreshold { return &HysteresisThreshold{Trigger: 85, Clear: 80} }
+
+	agentHost := func(device string) models.Host {
+		return models.Host{
+			ID: "host-fs", Hostname: "host-fs", Platform: "linux", Status: "online",
+			IntervalSeconds: 30, LastSeen: time.Now(),
+			Disks: []models.Disk{{Mountpoint: "/data", Device: device, Usage: 80, Total: 100, Used: 80, Free: 20}},
+		}
+	}
+	guestID := BuildGuestKey("pve1", "node1", 101)
+	guestVM := models.VM{
+		ID: guestID, VMID: 101, Name: "db", Node: "node1", Instance: "pve1", Status: "running",
+		Disks: []models.Disk{{Mountpoint: "/data", Device: "/dev/vdb1", Usage: 80, Total: 100, Used: 80, Free: 20}},
+	}
+	guestAlertID := canonicalMetricStateID(guestID+"-disk-data-dev-vdb1", "disk")
+
+	type diskCase struct {
+		name      string
+		alertID   string
+		configure func(cfg *AlertConfig)
+		evaluate  func(m *Manager)
+		// raise lifts the threshold that judges this filesystem above its reading.
+		raise func(cfg *AlertConfig)
+	}
+
+	agentDiskID, _ := hostDiskResourceID(agentHost("/dev/sdb1"), agentHost("/dev/sdb1").Disks[0])
+	guestDiskOverrideID := guestDiskOverrideKey(guestVM, guestID, "/data-/dev/vdb1")
+	guestOverrideID := guestOverridePrimaryKey(guestVM, guestID)
+
+	cases := []diskCase{
+		{
+			name:    "agent filesystem override",
+			alertID: canonicalMetricStateID(agentDiskID, "disk"),
+			configure: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{agentDiskID: {Disk: perDisk()}}
+			},
+			evaluate: func(m *Manager) { m.CheckHost(agentHost("/dev/sdb1")) },
+			raise: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{agentDiskID: {Disk: abovePerDisk()}}
+			},
+		},
+		{
+			name:    "agent disk fill by hardware type",
+			alertID: canonicalMetricStateID(agentDiskID, "disk"),
+			configure: func(cfg *AlertConfig) {
+				cfg.DiskFillByType["nvme"] = *perDisk()
+			},
+			evaluate: func(m *Manager) { m.CheckHost(agentHost("/dev/nvme0n1p1")) },
+			raise: func(cfg *AlertConfig) {
+				cfg.DiskFillByType["nvme"] = *abovePerDisk()
+			},
+		},
+		{
+			name:    "guest filesystem override",
+			alertID: guestAlertID,
+			configure: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{guestDiskOverrideID: {Disk: perDisk()}}
+			},
+			evaluate: func(m *Manager) { m.CheckGuest(guestVM, "pve1") },
+			raise: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{guestDiskOverrideID: {Disk: abovePerDisk()}}
+			},
+		},
+		{
+			name:    "guest override on a filesystem alert",
+			alertID: guestAlertID,
+			configure: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{guestOverrideID: {Disk: perDisk()}}
+			},
+			evaluate: func(m *Manager) { m.CheckGuest(guestVM, "pve1") },
+			raise: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{guestOverrideID: {Disk: abovePerDisk()}}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.Enabled = true
+			// UpdateConfig fills missing delays with 5s; zero fires at once.
+			cfg.TimeThresholds = map[string]int{"agent": 0, "guest": 0}
+			cfg.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+			cfg.GuestDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+			tc.configure(&cfg)
+			m.UpdateConfig(cfg)
+
+			tc.evaluate(m)
+			startedAt := testRequireActiveAlert(t, m, tc.alertID).StartTime
+
+			m.UpdateConfig(m.GetConfig())
+			if !testHasActiveAlert(t, m, tc.alertID) {
+				t.Fatalf("an unchanged config save resolved %q, which its own threshold of 70 still holds at 80", tc.alertID)
+			}
+			tc.evaluate(m)
+			if got := testRequireActiveAlert(t, m, tc.alertID).StartTime; !got.Equal(startedAt) {
+				t.Fatalf("alert %q was raised again after the save: started %v, want %v", tc.alertID, got, startedAt)
+			}
+
+			cfg = m.GetConfig()
+			tc.raise(&cfg)
+			m.UpdateConfig(cfg)
+			if testHasActiveAlert(t, m, tc.alertID) {
+				t.Fatalf("a save lifting %q's own trigger above its reading kept the alert", tc.alertID)
+			}
+		})
+	}
+}
+
 // Regression: checkMetric stores canonical-identity alerts under the
 // canonical state key, so hysteresis resolution must not remove only the
 // unregistered legacy "<resourceID>-<metric>" ID.

@@ -6,6 +6,7 @@ import {
 export type ReportingFormat = 'pdf' | 'csv';
 export type ReportingFilenameDateStyle = 'utc_yyyymmdd';
 export type ReportingFilenameSubject = 'resource_id';
+export type ReportingSingleResourceMethod = 'GET' | 'POST';
 
 export interface ReportingFormatDefinition {
   value: ReportingFormat;
@@ -24,6 +25,7 @@ export interface ReportingPerformanceReportDefinition {
   title: string;
   description: string;
   singleResourceEndpoint: string;
+  singleResourceMethod: ReportingSingleResourceMethod;
   multiResourceEndpoint: string;
   singleFilenamePrefix: string;
   singleFilenameSubject: ReportingFilenameSubject;
@@ -85,6 +87,7 @@ export function buildLegacyReportingCatalogFallback(): ReportingCatalog {
       description:
         'Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.',
       singleResourceEndpoint: '/api/reporting',
+      singleResourceMethod: 'GET',
       multiResourceEndpoint: '/api/reporting/generate-multi',
       singleFilenamePrefix: 'report',
       singleFilenameSubject: 'resource_id',
@@ -176,6 +179,9 @@ function parseReportingPerformanceReportDefinition(
     typeof candidate.title !== 'string' ||
     typeof candidate.description !== 'string' ||
     typeof candidate.singleResourceEndpoint !== 'string' ||
+    (candidate.singleResourceMethod !== undefined &&
+      candidate.singleResourceMethod !== 'GET' &&
+      candidate.singleResourceMethod !== 'POST') ||
     typeof candidate.multiResourceEndpoint !== 'string' ||
     typeof candidate.singleFilenamePrefix !== 'string' ||
     candidate.singleFilenameSubject !== 'resource_id' ||
@@ -211,6 +217,8 @@ function parseReportingPerformanceReportDefinition(
     title: candidate.title,
     description: candidate.description,
     singleResourceEndpoint: candidate.singleResourceEndpoint,
+    // Backends that predate the field accept only GET.
+    singleResourceMethod: candidate.singleResourceMethod ?? 'GET',
     multiResourceEndpoint: candidate.multiResourceEndpoint,
     singleFilenamePrefix: candidate.singleFilenamePrefix,
     singleFilenameSubject: candidate.singleFilenameSubject,

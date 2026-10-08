@@ -2857,6 +2857,101 @@ func TestResourceRegistry_IngestSnapshotCreatesUnraidDisksWithoutSMART(t *testin
 	}
 }
 
+func TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	host := models.Host{
+		ID:       "host-tower",
+		Hostname: "tower",
+		Status:   "online",
+		LastSeen: now,
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				// smartctl read this disk itself.
+				{Device: "sda", Model: "WDC A", Serial: "SER-A", Type: "sata", Temperature: 38},
+				// smartctl returned no temperature; Unraid read one.
+				{Device: "sdb", Model: "WDC B", Serial: "SER-B", Type: "sata"},
+				// smartctl and Unraid name this device with different serials.
+				{Device: "sde", Model: "Bridge E", Serial: "SER-E1", Type: "sata", Temperature: 41},
+				// The registry ingests no virtual device.
+				{Device: "zram0", Temperature: 70},
+				// A controller member Unraid lists under its block device.
+				{Device: "0 [megaraid,0]", Model: "Seagate F", Serial: "SER-F", Type: "sata", Controller: "0", Target: "megaraid,0", Temperature: 44},
+			},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			Disks: []models.HostUnraidDisk{
+				{Name: "disk1", Device: "/dev/sda", Role: "data", Status: "online", Serial: "SER-A", Transport: "sata", Temperature: 36},
+				{Name: "disk2", Device: "/dev/sdb", Role: "data", Status: "online", Serial: "SER-B", Transport: "sata", Temperature: 47},
+				// No SMART row, as for a --disk-exclude match.
+				{Name: "disk3", Device: "/dev/nvme0n1", Role: "data", Status: "online", Model: "Samsung C", Serial: "SER-C", Transport: "nvme", Temperature: 52},
+				{Name: "disk4", Device: "/dev/sdd", Role: "data", Status: "online", Model: "WDC D", Serial: "SER-D", Transport: "sata", Temperature: 30, SpunDown: true},
+				{Name: "disk5", Device: "/dev/sde", Role: "data", Status: "online", Model: "WDC E", Serial: "SER-E2", Transport: "sata", Temperature: 43},
+				{Name: "disk7", Device: "/dev/sdf", Role: "data", Status: "online", Model: "Seagate F", Serial: "SER-F", Transport: "sata", Temperature: 44},
+				// An empty slot: the registry ingests no disk for it.
+				{Name: "disk6", Role: "data", Status: "missing"},
+			},
+		},
+	}
+
+	type want struct {
+		device      string
+		diskType    string
+		temperature int
+		collected   bool
+		unraidOnly  bool
+	}
+	wants := map[string]want{
+		"SER-A":  {device: "sda", diskType: "sata", temperature: 38, collected: true},
+		"SER-B":  {device: "sdb", diskType: "sata", temperature: 47, collected: true},
+		"SER-E1": {device: "sde", diskType: "sata", temperature: 41, collected: true},
+		"SER-F":  {device: "0 [megaraid,0]", diskType: "sata", temperature: 44, collected: true},
+		"SER-C":  {device: "nvme0n1", diskType: "nvme", temperature: 52, collected: true, unraidOnly: true},
+		"SER-D":  {device: "sdd", diskType: "sata", temperature: 30, unraidOnly: true},
+		"SER-E2": {device: "sde", diskType: "sata", temperature: 43, collected: true, unraidOnly: true},
+	}
+
+	readings := HostDiskTemperatureReadings(host)
+	if len(readings) != len(wants) {
+		t.Fatalf("expected %d readings, got %d: %+v", len(wants), len(readings), readings)
+	}
+	byKey := make(map[string]HostDiskTemperatureReading, len(readings))
+	for _, reading := range readings {
+		w, ok := wants[reading.MetricID]
+		if !ok {
+			t.Fatalf("unexpected reading %+v", reading)
+		}
+		if reading.Device != w.device || reading.DiskType != w.diskType || reading.Temperature != w.temperature ||
+			reading.Collected() != w.collected || reading.UnraidOnly != w.unraidOnly {
+			t.Fatalf("reading for %s = %+v (collected %v), want %+v", reading.MetricID, reading, reading.Collected(), w)
+		}
+		byKey[reading.MetricID] = reading
+	}
+
+	// The readings are the ones the disks the registry builds show, one each.
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != len(wants) {
+		t.Fatalf("expected %d physical disks, got %d: %+v", len(wants), len(disks), disks)
+	}
+	for _, disk := range disks {
+		meta := disk.PhysicalDisk
+		if meta == nil {
+			t.Fatalf("physical disk without meta: %+v", disk)
+		}
+		reading, ok := byKey[meta.Serial]
+		if !ok {
+			t.Fatalf("registry disk %q has no reading", meta.Serial)
+		}
+		if meta.Temperature != reading.Temperature || meta.DiskType != reading.DiskType ||
+			diskinventory.TemperatureCollected(meta.Temperature, meta.Collection) != diskinventory.TemperatureCollected(reading.Temperature, reading.Collection) {
+			t.Fatalf("registry disk %q shows %dC %q (collection %+v), reading %+v", meta.Serial, meta.Temperature, meta.DiskType, meta.Collection, reading)
+		}
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotCreatesUnraidStorageResource(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -5135,6 +5230,118 @@ func TestResourceRegistry_ManualGuestAgentLinkUsesAgentCPUOnlyWhenPlatformHasNoC
 	}
 	if got.Metrics.CPU.Percent != 33 || got.Metrics.CPU.Source != SourceAgent {
 		t.Fatalf("CPU = %+v, want agent fallback when platform observation is absent", got.Metrics.CPU)
+	}
+}
+
+// The workload table, guest drawer and History judge a guest's disk reading by
+// the linked agent's freshness when the agent's filesystems fill in for
+// Proxmox's (useWorkloads disksFromAgent). That needs the registry to keep the
+// agent's disk metric while Proxmox has no guest disk usage, also once the
+// agent is silent, and Proxmox's own fresh reading otherwise.
+func TestResourceRegistry_ManualGuestAgentLinkDiskMetricFollowsProxmoxGuestFilesystems(t *testing.T) {
+	now := time.Now().UTC()
+	agentDisks := []models.Disk{{Total: 1000, Used: 400, Free: 600, Usage: 40, Mountpoint: "/"}}
+	cases := []struct {
+		name          string
+		vmDisk        models.Disk
+		vmDisks       []models.Disk
+		reason        string
+		agentStatus   string
+		agentLastSeen time.Time
+		wantSource    DataSource
+		wantPercent   float64
+		wantStale     bool
+	}{
+		{
+			name:          "no proxmox filesystems, live agent",
+			vmDisk:        models.Disk{Total: 32 << 30, Usage: -1},
+			reason:        "agent-not-running",
+			agentStatus:   "online",
+			agentLastSeen: now,
+			wantSource:    SourceAgent,
+			wantPercent:   40,
+		},
+		{
+			name:          "no proxmox filesystems, silent agent keeps its last disk",
+			vmDisk:        models.Disk{Total: 32 << 30, Usage: -1},
+			reason:        "agent-not-running",
+			agentStatus:   "offline",
+			agentLastSeen: now.Add(-10 * time.Minute),
+			wantSource:    SourceAgent,
+			wantPercent:   40,
+			wantStale:     true,
+		},
+		{
+			name:          "proxmox guest filesystems keep proxmox disk",
+			vmDisk:        models.Disk{Total: 1000, Used: 700, Free: 300, Usage: 70},
+			vmDisks:       []models.Disk{{Total: 1000, Used: 700, Free: 300, Usage: 70, Mountpoint: "/"}},
+			agentStatus:   "online",
+			agentLastSeen: now,
+			wantSource:    SourceProxmox,
+			wantPercent:   70,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := models.StateSnapshot{
+				VMs: []models.VM{{
+					ID:               "pve-a:node-1:402",
+					VMID:             402,
+					Name:             "vm-402",
+					Node:             "node-1",
+					Instance:         "pve-a",
+					Type:             "qemu",
+					Status:           "running",
+					LastSeen:         now,
+					Disk:             tc.vmDisk,
+					Disks:            tc.vmDisks,
+					DiskStatusReason: tc.reason,
+				}},
+				Hosts: []models.Host{{
+					ID:       "agent-402",
+					Hostname: "guest-402",
+					Status:   tc.agentStatus,
+					LastSeen: tc.agentLastSeen,
+					Disks:    agentDisks,
+				}},
+			}
+			store := NewMemoryStore()
+			unlinked := NewRegistry(store)
+			unlinked.IngestSnapshot(snapshot)
+			var vmID, agentID string
+			for _, resource := range unlinked.List() {
+				switch resource.Type {
+				case ResourceTypeVM:
+					vmID = resource.ID
+				case ResourceTypeAgent:
+					agentID = resource.ID
+				}
+			}
+			if vmID == "" || agentID == "" {
+				t.Fatalf("vm %q / agent %q not ingested", vmID, agentID)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+
+			rr := NewRegistry(store)
+			rr.IngestSnapshot(snapshot)
+			got, ok := rr.Get(vmID)
+			if !ok || got.Metrics == nil || got.Metrics.Disk == nil {
+				t.Fatalf("linked guest lost its disk metric: %+v", got)
+			}
+			if got.Metrics.Disk.Source != tc.wantSource || got.Metrics.Disk.Percent != tc.wantPercent {
+				t.Fatalf("disk = %+v, want %s at %.0f%%", got.Metrics.Disk, tc.wantSource, tc.wantPercent)
+			}
+			agentFilesystemsFillIn := got.Proxmox != nil && len(got.Proxmox.Disks) == 0 &&
+				got.Agent != nil && len(got.Agent.Disks) > 0
+			if agentFilesystemsFillIn != (tc.wantSource == SourceAgent) {
+				t.Fatalf("agent filesystems fill in = %v, disk metric source %s", agentFilesystemsFillIn, tc.wantSource)
+			}
+			if got.Agent == nil || got.Agent.Stale != tc.wantStale {
+				t.Fatalf("agent stale = %+v, want %v", got.Agent, tc.wantStale)
+			}
+		})
 	}
 }
 

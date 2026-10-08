@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PATROL_MANUAL_SYNC_TIMEOUT_MS,
   PATROL_REFRESH_TIMEOUT_MS,
-  buildPatrolSettingsReadinessFailure,
+  getPatrolSavedReadinessWarning,
   openPatrolAssistantWorkflowHandoff,
   patrolStartFailureMessage,
   recordPatrolControlStarterActivity,
@@ -338,24 +338,25 @@ describe('usePatrolIntelligenceState', () => {
     });
   });
 
-  describe('buildPatrolSettingsReadinessFailure', () => {
-    it('ignores settings snapshots that do not block Patrol readiness', () => {
+  describe('getPatrolSavedReadinessWarning', () => {
+    it('stays quiet when the saved settings do not block Patrol readiness', () => {
+      expect(getPatrolSavedReadinessWarning(null)).toBeNull();
       expect(
-        buildPatrolSettingsReadinessFailure({
-          settings: settingsWithReadiness({
+        getPatrolSavedReadinessWarning(
+          settingsWithReadiness({
             status: 'warning',
             ready: true,
             summary: 'Patrol can run with reduced confidence.',
             checks: [],
           }),
-        }),
+        ),
       ).toBeNull();
     });
 
-    it('builds a saved configuration issue from a not-ready settings response', () => {
+    it('warns that a not-ready Patrol setting was still saved', () => {
       expect(
-        buildPatrolSettingsReadinessFailure({
-          settings: settingsWithReadiness({
+        getPatrolSavedReadinessWarning(
+          settingsWithReadiness({
             status: 'not_ready',
             ready: false,
             cause: 'model_unsupported_tools',
@@ -364,40 +365,8 @@ describe('usePatrolIntelligenceState', () => {
             model: 'ollama:deepseek-r1:7b',
             checks: [],
           }),
-          autonomyLevel: 'monitor',
-          fullModeUnlocked: false,
-          investigationBudget: 15,
-          investigationTimeoutSec: 300,
-          runtimeState: 'blocked',
-          blockedReason: 'Connect a tool-capable Patrol model.',
-        }),
-      ).toEqual({
-        message: 'The selected model cannot run Patrol tools.',
-        code: 'patrol_readiness_not_ready',
-        status: 409,
-        saved: true,
-        details: {
-          status: 'not_ready',
-          cause: 'model_unsupported_tools',
-          summary: 'The selected model cannot run Patrol tools.',
-          provider: 'ollama',
-          model: 'ollama:deepseek-r1:7b',
-        },
-        autonomyLevel: 'monitor',
-        fullModeUnlocked: false,
-        investigationBudget: 15,
-        investigationTimeoutSec: 300,
-        readiness: {
-          status: 'not_ready',
-          cause: 'model_unsupported_tools',
-          summary: 'The selected model cannot run Patrol tools.',
-          provider: 'ollama',
-          model: 'ollama:deepseek-r1:7b',
-        },
-        runtimeState: 'blocked',
-        blockedReason: 'Connect a tool-capable Patrol model.',
-        blockedCause: undefined,
-      });
+        ),
+      ).toBe('Patrol setting was saved, but Patrol is not ready to run.');
     });
   });
 
@@ -410,6 +379,8 @@ describe('usePatrolIntelligenceState', () => {
       'provider_not_configured',
     );
     expect(resolvePatrolBlockedActionCause('', '')).toBeUndefined();
-    expect(patrolIntelligenceStateSource).toContain('blockedCause: patrolStatus()?.blocked_cause');
+    expect(patrolIntelligenceStateSource).toContain(
+      'const blockedCause = createMemo(() => patrolStatus()?.blocked_cause);',
+    );
   });
 });

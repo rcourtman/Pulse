@@ -260,10 +260,12 @@ Each client runtime (or organization) generates its own reports, scoped to
 that client's resources:
 
 - **UI**: Settings → Data & Reports.
-- **API**: `GET /api/admin/reports/generate` (single resource) and
+- **API**: `POST /api/admin/reports/generate` (single resource) and
   `POST /api/admin/reports/generate-multi` (up to 50 resources per report),
   returning PDF or CSV. In shared-process mode, scope with `X-Pulse-Org-ID`
-  or an org-bound token.
+  or an org-bound token. `GET /api/admin/reports/generate` with query
+  parameters still returns a single-resource report, but never adds the
+  Pulse Assistant narrative.
 - **Schedules**: `GET`/`POST /api/admin/reports/schedules`,
   `PUT`/`DELETE /api/admin/reports/schedules/{id}`, and
   `POST /api/admin/reports/schedules/{id}/run`. Schedules can target explicit

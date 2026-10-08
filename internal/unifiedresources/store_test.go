@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSQLiteResourceStoreDoesNotPersistRawOperationReceiptProtocolOrReplayAuthority(t *testing.T) {
@@ -2863,6 +2864,66 @@ func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
 	}
 }
 
+// An upsert keeps a stored field the pin leaves empty; a replace writes the
+// pin as the whole row. Both give a strong key to the pin that carries it.
+func TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	wide := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", DMIUUID: "dmi-a", ClusterName: "pool-a", Hostname: "host-a"}
+	narrow := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", Hostname: "host-a.lan"}
+	rival := ResourceIdentityPin{CanonicalID: "agent-b", ResourceType: ResourceTypeAgent, MachineID: "machine-b", ClusterName: "pool-a", Hostname: "host-a"}
+	for name, store := range map[string]ResourceStore{"memory": NewMemoryStore(), "sqlite": sqliteStore} {
+		t.Run(name, func(t *testing.T) {
+			pinFor := func(id string) (ResourceIdentityPin, bool) {
+				t.Helper()
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("list pins: %v", err)
+				}
+				for _, pin := range pins {
+					if pin.CanonicalID == id {
+						return pin, true
+					}
+				}
+				return ResourceIdentityPin{}, false
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("upsert wide pin: %v", err)
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("upsert narrow pin: %v", err)
+			}
+			kept := wide
+			kept.Hostname = narrow.Hostname
+			if got, _ := pinFor("agent-a"); got != kept {
+				t.Fatalf("after upsert: pin = %+v, want stored fields kept %+v", got, kept)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("replace narrow pin: %v", err)
+			}
+			if got, _ := pinFor("agent-a"); got != narrow {
+				t.Fatalf("after replace: pin = %+v, want exactly %+v", got, narrow)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("replace wide pin: %v", err)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{rival}); err != nil {
+				t.Fatalf("replace rival pin: %v", err)
+			}
+			if _, ok := pinFor("agent-a"); ok {
+				t.Fatalf("a replace claiming pool-a/host-a must delete the row holding that key")
+			}
+			if got, _ := pinFor("agent-b"); got != rival {
+				t.Fatalf("rival pin = %+v, want %+v", got, rival)
+			}
+		})
+	}
+}
+
 func TestResourceChangeReadsMergeCanonicalIDEras(t *testing.T) {
 	const machineID = "7d465a78-test-machine-id"
 	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
@@ -3327,4 +3388,33 @@ func TestSuccessionMergesGuestChangeJournalEras(t *testing.T) {
 	if !found {
 		t.Fatalf("legacy-era journal row missing from new-ID read: %+v", changes)
 	}
+}
+
+// A PVE disk temperature alert row is owned by the hardware identity it
+// records, like the health and wearout rows, and a read by the path reference
+// still finds it through ProxmoxPhysicalDiskAlertIdentifiers.
+func TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.PhysicalDisks = []models.PhysicalDisk{pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZA1A2B3C", "", now)}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	diskID, ok := adapter.currentRegistry().ResolveReferenceID(ref)
+	require.True(t, ok)
+
+	change := BuildAlertTimelineChange(ref, ChangeAlertFired, now, "", AlertTimelineChange{
+		AlertIdentifier: ref + "::metric-threshold:diskTemperature", AlertStartedAt: now, AlertType: "diskTemperature",
+		AlertMetadata: map[string]any{"disk_path": "/dev/sda", MetadataDiskSerial: "ZA1A2B3C", MetadataDiskWWN: ""},
+	})
+	change.ID = "temperature"
+	require.NoError(t, adapter.RecordChange(*change))
+
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskID)))
+	byRef := pveDiskHistoryRows(t, store, ref)
+	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(byRef))
+	require.Equal(t, ref, OwnedAlertReference(byRef["temperature"]))
 }

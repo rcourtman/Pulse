@@ -25,14 +25,6 @@ describe('summaryCardInteraction', () => {
   it('prefers hovered series ids and falls back to focused ids', () => {
     expect(
       resolveSummaryActiveSeriesId({
-        chartHoveredSeriesId: 'gamma',
-        hoveredSeriesId: 'beta',
-        focusedSeriesId: 'alpha',
-      }),
-    ).toBe('gamma');
-
-    expect(
-      resolveSummaryActiveSeriesId({
         hoveredSeriesId: 'beta',
         focusedSeriesId: 'alpha',
       }),
@@ -71,8 +63,7 @@ describe('summaryCardInteraction', () => {
 
     expect(
       resolveSummaryScopeState({
-        chartHoveredSeriesId: 'beta',
-        hoveredSeriesId: 'alpha',
+        hoveredSeriesId: 'beta',
         focusedSeriesId: 'alpha',
         hoveredGroupScope: groupScope,
         focusedGroupScope: groupScope,

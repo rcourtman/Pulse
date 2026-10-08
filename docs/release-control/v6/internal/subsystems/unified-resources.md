@@ -1609,7 +1609,12 @@ Source freshness is a separate unified-resource status input, not a fixed
 global health timer. Snapshot rebuilds, resource seeding, supplemental record
 overlays, and cloned read-state overlays must preserve the monitoring-provided
 stale thresholds for Proxmox, PBS, and PMG sources so resources do not flap to
-warning/degraded between successful configured poll cycles.
+warning/degraded between successful configured poll cycles. A source merge
+into an existing row judges metric freshness by the ingest's thresholds and
+the stale pass's own threshold rule, so the merge's freshness gate never
+calls a source current that the stale pass marks stale, or the reverse. The
+gate decides only where no stronger rule does: a hypervisor-managed guest
+keeps its platform CPU even while that source is stale.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a
@@ -2303,6 +2308,16 @@ evidence of what the array was doing when the agent went quiet, but without
 live status colour. Where a retained rebuild percentage is shown, it reads
 "Rebuild was at N%" with no speed or progress bar, and a member that was not
 healthy names its state in its badge.
+A Pulse agent manually linked into a guest carries the same signal there.
+`AgentData.Stale` is always on the wire, because browsers merge agent facets
+field by field (`resourceStateAdapters.ts`) and would keep a resumed agent's
+omitted false as true; `TestAgentDataAlwaysSendsStale` pins it. That always
+present `stale` also marks a native agent facet, so one without `disks` has
+withdrawn them, and a native Proxmox VM facet's new guest-read outcome likewise
+drops `disks` it no longer reports; either way the other source's filesystems
+take over without a reload (`resourceStateAdapters.test.ts`). `VMView.DiskFromLinkedAgent` names the agent
+as the owner of a guest's selected disk metric, which the monitoring poller
+reads before it carries a Proxmox disk reading forward.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
@@ -2752,7 +2767,7 @@ application resource-provider or WebSocket lifecycle.
     (`canonical_id` ↔ machine ID / DMI UUID / cluster / hostname) in the
     `resource_identities` table (`ResourceStore.UpsertResourceIdentityPins`
     / `ListResourceIdentityPins`, written diff-aware after monitor-adapter
-    rebuilds) and completes weak incoming identities from those pins
+    rebuilds; manual-link sides write through `ReplaceResourceIdentityPins`) and completes weak incoming identities from those pins
     before matching and ID derivation
     (`internal/unifiedresources/canonical_id_pins.go`). Persisted primary
     hostnames preserve their normalized dotted form. The pin index resolves
@@ -2768,7 +2783,15 @@ application resource-provider or WebSocket lifecycle.
     must not mint host canonical IDs from snapshot-content-dependent
     identity subsets without consulting the pins, and pin writes stay on
     the durable store-backed registry (ephemeral per-request registries
-    consult, never write). Pinned hostnames preserve the full dotted name
+    consult, never write). A pin records the identity a resource derives
+    from its own sources rather than a manual link's merged projection:
+    each side of a link writes the pin captured before the link merged
+    them, keeping its row's other fields unless another resource holds that
+    key, and a pinnable folded side keeps its pin under its own canonical
+    ID, less any strong key a live resource or an earlier folded side
+    holds. Capture follows pin completion, so a key an earlier release
+    borrowed into a side's row can still reach the capture (see "Operator
+    links reach record-ingested resources"). Pinned hostnames preserve the full dotted name
     (`NormalizeFullHostname`): distinct machines that share a short
     hostname (`cloud.rnd-lax1` vs `cloud.gce-or1`) must keep distinct
     pins, distinct pin-index buckets, and distinct presentation host rows.
@@ -5467,6 +5490,43 @@ A row's own serial is kept even when it is a placeholder, as the
 adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
 `TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
 `TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
+The adapters' disk temperature rule is shared with the agent disk history
+writer. `HostSMARTDiskTemperature` returns the temperature and collection state
+a SMART row's disk shows: the row's own reading, or, when it has none, its
+Unraid row's under `unraidDiskTemperatureStatus`. `matchUnraidDisk` finds that
+Unraid row by the SMART row's usable serial anywhere in the inventory before
+any device path, and a placeholder serial matches nothing. The fallback, like
+the serial a row without one takes (`hostSMARTDiskSerial`), comes only from an
+Unraid row that describes the row's disk (`unraidDiskDescribesSMARTRow`): one
+carrying the row's usable serial, or one naming the row's device path when the
+row is that whole kernel block device. A controller member, even the only one
+reported, and a row sharing its path with other SMART rows are not, because
+the Unraid row describes the block device as a whole. `HostUnraidDiskTemperature`
+returns what a disk built from an Unraid row alone shows, and
+`HostUnraidDiskMetricID` returns the key that disk's metrics target reads: its
+usable serial, else its `HostUnraidDiskSourceID`, and nothing for a row without
+a device, which is not ingested. The writer used to take only the SMART row's
+own reading, so a temperature shown from the Unraid inventory, for a disk whose
+SMART probe returned none or one excluded from SMART collection, was never
+charted. Proof: `TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget`.
+`HostDiskTemperatureReadings` lists the reading each disk of a host agent shows
+for consumers that judge disk heat, the agent disk temperature alerts in
+`CheckHost`: one per SMART row the registry ingests (no virtual block device),
+then one per Unraid row whose disk key (`HostUnraidDiskMetricID`) no SMART row's
+`HostSMARTDiskMetricID` equals, the history writer's rule, with a row without a
+device skipped as the registry skips it. Rows with one key are one registry
+disk whatever device labels they carry, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`). When smartctl and Unraid
+report different usable serials for one device the registry shows both disks,
+and both are listed. Each reading is taken from the disk resource
+`resourceFromHostSMARTDisk` or `resourceFromHostUnraidPhysicalDisk` builds, so
+its temperature, collection state and disk type are the ones that row's disk
+shows. Unraid rows on different devices that share a key and no SMART row are
+one registry disk but keep a reading each, since alerts are keyed by device.
+Proof: `TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows` compares
+each reading with the ingested disk, including two disks on one device and a
+controller member Unraid lists under its block device.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
@@ -5583,12 +5643,14 @@ wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
 Platform tables supply the resource-label resolver to the resource drawer
 through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
 in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
@@ -6079,7 +6141,12 @@ the reference and is never retried. An owned row records its alert's
 reference as `alert_resource_id`. A read by the reference returns the rows
 journaled under it plus the rows owned away from it, matched through the
 indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
-recorded reference, and every count uses the same predicate. The Alerts
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
 history Resource action therefore still lists every occurrence raised under
 the path, across the disks that held it, and alert-centric reads keep their
 occurrences (see the AI runtime contract's incident-history queries). Rows
@@ -6235,6 +6302,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
+The TrueNAS physical-disk drawer judges a current temperature reading by the
+disk temperature policy, like the TrueNAS storage table:
+`useResourceDetailDrawerDerivedState.ts` passes the alerts store's
+`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
+Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
+says the reading reached its disk type's alert trigger. A retained reading
+keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must
 keep canonical sources such as `truenas` and `availability` present in their
@@ -6556,8 +6630,21 @@ separate.
 
 - The monitor adapter passes its configured stale thresholds to record
   ingest, so a link joined there judges each side's metrics the way a
-  snapshot-time link does. Ordinary source merges into an existing row still
-  use the default thresholds on every ingest path.
+  snapshot-time link does. Ordinary source merges into an existing row use
+  the same thresholds on every ingest path: snapshot and record ingest hold
+  the caller's thresholds while they run, and `mergeInto` judges each
+  metric's freshness with them through `sourceStaleThreshold`, the rule the
+  stale pass reads. Before this, those merges used the defaults, so a
+  Proxmox node polled every two minutes showed a silent auto-linked agent's
+  readings while the stale pass called the node's poll current, and a
+  supplemental refresh of a linked vSphere VM kept the agent's memory over
+  vSphere's current reading. Outside mock mode the monitor configures only
+  Proxmox, PBS and PMG; mock mode also configures TrueNAS, vSphere and
+  availability. Regression coverage:
+  `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` (rebuild,
+  supplemental refresh, overlay, node with auto-linked agent),
+  `TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds` and
+  `TestMetricMergeFreshnessMatchesTheStalePass`.
 - Continuity records are the one record ingest that never joins links. A
   saved enrollment only fills an absent machine, so it stays its own row
   instead of lending its linked guest an offline verdict and an old agent
@@ -6567,11 +6654,50 @@ separate.
   system's facet, and the system's pools re-parent to the merged row.
 - The registry remembers each resource a manual link folded into its
   primary. A folded resource is still observed, so neither pin-driven nor
-  record-declared succession may succeed its ID. An agent-type primary
-  carries the folded resource's machine keys and is pinned with them, and
-  succeeding the folded ID re-keyed the link onto the primary itself, which
-  split the pair on the next rebuild. That already broke snapshot links whose
-  primary is a machine-keyless agent-type row, such as a Proxmox node.
+  record-declared succession may succeed its ID: that re-keyed the link onto
+  the primary itself, which split the pair on the next rebuild, and already
+  broke snapshot links whose primary is a machine-keyless agent-type row,
+  such as a Proxmox node.
+- Each side of a link is pinned only from its own identity, captured when
+  the link first joins it in a rebuild (`recordLinkOwnPin`). A side with no
+  pinnable identity (not agent-shaped, or no strong key) writes no pin, and
+  a pinnable folded side keeps its pin under its own canonical ID. The merged
+  primary used to be pinned with both sides' keys, and the store's
+  one-owner-per-key rule then deleted the folded side's pin. A Proxmox node's
+  pin records its qualified endpoint as the hostname, so the node's next
+  rebuild completed the linked agent's machine key from that merged pin,
+  minted the agent's machine-derived ID and merged with the agent by ID
+  before the link applied. With the node as primary, succession then
+  rewrote the link into a self-link on the agent's ID; in either direction,
+  removing the link left the pair merged.
+- A link side rewrites its whole row (`ReplaceResourceIdentityPins`)
+  instead of upserting it. Like an upsert it keeps the stored fields its
+  own pin leaves empty, so evidence from an earlier observation survives a
+  weaker one, but it never keeps a machine, DMI or cluster-and-hostname key
+  another resource holds this rebuild, including a cluster key a kept
+  hostname would complete. That is how a key an earlier release borrowed
+  into the row from the merged identity leaves it; a key a resource reports
+  now also beats one a link side's row only kept, as the store already
+  hands a moved key to the new pin. The store gives each strong key one
+  owner and deletes any other row holding a key a written pin carries, so a
+  folded side drops each own key held by a live non-link resource's
+  upserted row (an upsert cannot drop a field), a live link side's own pin,
+  or a folded side earlier in canonical-ID order. It writes no pin when no
+  strong key is left, or when it would lose the machine or DMI key it
+  reports: a cluster-only row reads as a machine-keyless host's, which
+  cluster-slot succession lets a later machine in that slot absorb. A row kept for a side that writes no pin goes
+  when another written pin carries one of its keys, such as the folded
+  agent's own pin carrying the machine key an earlier release borrowed into
+  a Proxmox node's row. That hand-back only reaches a row the node cannot
+  complete from: while the node's qualified endpoint, or its cluster and
+  name, still resolve to that row, completion supplies the borrowed key
+  before any link applies, so the pair merges by ID and succession rewrites
+  the link into a self-link, as it did before this change. A link side whose
+  row loses a borrowed machine key becomes a machine-keyless row, open to
+  the cluster-slot succession any machine-keyless host gets. Two live resources that share a strong key
+  still take it from each other on alternate rebuilds, as before. Evidence
+  a later record pass of the same rebuild merges into an already-joined row
+  reaches neither side's pin.
 - A folded resource's canonical ID resolves to the primary holding it. The
   merged resource carries its folded IDs in memory, including IDs folded
   into those along a chain of links, and resource seeding indexes them. The
@@ -6614,6 +6740,25 @@ resources API seeds, lists the same rows
 pins the node case (`TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence`),
 record-declared succession (`TestRecordDeclaredSuccessionSparesALinkFoldedResource`)
 and both payloads (`TestManualLinkKeepsProviderPayloadsThePrimaryLacks`).
+It also pins each side's own pin for a qualified-endpoint node linked to an
+agent, standalone and clustered, in both directions, through three rebuilds
+with no steady-state pin writes and a separate pair once the link is removed
+(`TestManualLinkPinsEachSideFromItsOwnIdentity`), an unclaimed stored field
+kept without a rewrite every rebuild
+(`TestManualLinkSideKeepsAnUnclaimedStoredField`), a shared
+cluster-and-hostname key kept by the live primary while the folded side keeps
+its machine key, and handed to the folded side when the primary's row only
+kept it (`TestManualLinkFoldedSideNeverTakesALiveResourcesKey`), a kept
+hostname refused where it would complete another resource's cluster key
+(`TestManualLinkSideKeepsNoHostnameThatCompletesAHeldClusterKey`), no pin for a
+folded side whose machine key another host holds
+(`TestManualLinkFoldedSideWritesNoPinWithoutItsMachineKey`), a folded side
+re-pinned after the primary's new pin deletes its widened row
+(`TestManualLinkFoldedSideKeepsItsPinWhenAPrimaryClaimsItsWiderRow`), and the
+agent's own pin taking back the machine key an earlier release borrowed into
+a node's row (`TestManualLinkReturnsABorrowedMachineKeyToItsAgent`).
+`store_test.go` (`TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps`) pins
+replace against upsert on both stores.
 `monitor_adapter_read_state_test.go`
 (`TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds`) pins the
 thresholds on the rebuild, supplemental and overlay paths, and

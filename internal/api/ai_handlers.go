@@ -385,6 +385,25 @@ func (h *AISettingsHandler) loadAIConfig(ctx context.Context) (*config.AIConfig,
 }
 
 // GetAIService returns the underlying AI service
+// ExistingAIService returns the org's AI service only when one already exists
+// and never constructs one. GetAIService builds and configures a tenant service
+// on first use, which can list provider models and start background discovery,
+// so read paths that must not reach an AI provider use this instead.
+func (h *AISettingsHandler) ExistingAIService(ctx context.Context) *ai.Service {
+	if h == nil {
+		return nil
+	}
+	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
+	defaultAIService := h.providerSnapshot().defaultAIService
+	orgID := GetOrgID(ctx)
+	if orgID == "default" || orgID == "" || (mtPersistence == nil && mtMonitor == nil) {
+		return defaultAIService
+	}
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	return h.aiServices[orgID]
+}
+
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	mtPersistence, mtMonitor, _, _, _, _ := h.stateRefs()
 	providers := h.providerSnapshot()

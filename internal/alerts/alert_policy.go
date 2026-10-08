@@ -19,6 +19,8 @@ package alerts
 //	4. the per-resource override, through the identity-aware lookup for
 //	   the kind (guest stable keys, storage aliases, canonical registry
 //	   translation)
+//	5. a guest's pulse-relaxed tag, which lifts its CPU/memory/disk
+//	   triggers to a 95/92/95 floor
 
 // alertPolicyQuery identifies one resource asking for its effective
 // alert policy.
@@ -28,13 +30,20 @@ type alertPolicyQuery struct {
 	TypeKey    string
 	ResourceID string
 	// Guest carries the live guest model when the query is for a guest
-	// kind: filter-scoped custom rules and the clustered override
-	// identity need it. Nil is valid — filter rules then never match and
-	// override lookup falls back to the raw resource ID.
+	// kind: filter-scoped custom rules, the clustered override identity and
+	// the pulse-relaxed tag need it. Nil is valid — filter rules then never
+	// match, override lookup falls back to the raw resource ID, and no tag
+	// relaxes the thresholds.
 	Guest any
 	// StorageAliases are the storage resource's alias IDs, honored by the
 	// storage override lookup.
 	StorageAliases []string
+	// DiskType is a physical disk's type ("nvme", "sas", "sata"), which
+	// picks its disk temperature threshold. DiskTypeUnknown marks a disk
+	// whose type was never recorded, such as an alert persisted before it
+	// carried one; it is judged against the lowest per-type trigger.
+	DiskType        string
+	DiskTypeUnknown bool
 }
 
 // EffectiveAlertPolicy is the resolved policy for one resource.
@@ -47,7 +56,8 @@ type EffectiveAlertPolicy struct {
 	// connectivity opt-outs are Thresholds.DisableConnectivity.
 	OfflineDisabled bool
 	// Thresholds is the folded threshold block: type defaults, then
-	// custom rules, then the per-resource override.
+	// custom rules, then the per-resource override, then a guest's
+	// pulse-relaxed floor.
 	Thresholds ThresholdConfig
 }
 
@@ -116,10 +126,19 @@ func (m *Manager) effectiveAlertPolicyNoLock(q alertPolicyQuery) EffectiveAlertP
 	policy.AllDisabled, policy.OfflineDisabled = m.alertPolicyTypeSwitchesNoLock(q.TypeKey)
 
 	thresholds := m.defaultThresholdsForResourceType(q.TypeKey)
+	if q.TypeKey == "truenas-disk" {
+		thresholds.Temperature = m.trueNASDiskTemperatureDefaultNoLock(q.DiskType, q.DiskTypeUnknown)
+	}
 	switch {
 	case isGuestThresholdResourceType(q.TypeKey):
 		thresholds = m.customRuleThresholdsNoLock(thresholds, q.Guest)
 		thresholds = m.resolveGuestThresholdOverride(thresholds, q.Guest, q.ResourceID)
+		// Polling and config-save reevaluation both resolve through here,
+		// so a relaxed guest's alert is judged by one threshold. Applied
+		// only by CheckGuest, a save re-judged it by the unrelaxed one.
+		if guest, ok := extractGuestSnapshot(q.Guest); ok && parsePulseTags(guest.Tags).Relaxed {
+			thresholds = applyRelaxedGuestThresholds(thresholds)
+		}
 	case q.TypeKey == "storage":
 		thresholds = m.resolveStorageThresholdOverride(thresholds, q.ResourceID, q.StorageAliases)
 	default:

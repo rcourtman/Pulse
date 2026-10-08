@@ -213,7 +213,7 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
-			name: "TimeThresholds defaults",
+			name: "TimeThresholds zero means no delay",
 			input: map[string]interface{}{
 				"timeThreshold": 0,
 				"timeThresholds": map[string]interface{}{
@@ -222,8 +222,9 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 				},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
-				assert.Equal(t, 5, cfg.TimeThresholds["guest"])
-				assert.Equal(t, 5, cfg.TimeThresholds["all"])
+				assert.Equal(t, 0, cfg.TimeThresholds["guest"])
+				assert.Equal(t, 0, cfg.TimeThresholds["all"])
+				assert.Equal(t, 5, cfg.TimeThresholds["node"])
 			},
 		},
 		{
@@ -290,11 +291,13 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 				"timeThresholds": map[string]interface{}{
 					"guest": -1,
 					"pbs":   0,
+					"all":   -1,
 				},
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
 				assert.Equal(t, 5, cfg.TimeThresholds["guest"])
-				assert.Equal(t, 5, cfg.TimeThresholds["pbs"])
+				assert.Equal(t, 0, cfg.TimeThresholds["pbs"])
+				assert.Equal(t, 5, cfg.TimeThresholds["all"])
 			},
 		},
 		{

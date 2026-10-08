@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"log"
 	"net"
+	"slices"
 	"strings"
 )
 
@@ -326,11 +327,105 @@ func (index *identityPinIndex) successionsFor(pin ResourceIdentityPin) []Canonic
 	return successions
 }
 
+// upsertedOnto returns the row UpsertResourceIdentityPins stores when pin is
+// written over existing: an empty field keeps the stored value.
+func (pin ResourceIdentityPin) upsertedOnto(existing ResourceIdentityPin) ResourceIdentityPin {
+	if pin.MachineID == "" {
+		pin.MachineID = existing.MachineID
+	}
+	if pin.DMIUUID == "" {
+		pin.DMIUUID = existing.DMIUUID
+	}
+	if pin.ClusterName == "" {
+		pin.ClusterName = existing.ClusterName
+	}
+	if pin.Hostname == "" {
+		pin.Hostname = existing.Hostname
+	}
+	return pin
+}
+
+// keptOver returns the row a manual-link side writes over existing: like an
+// upsert it keeps the stored fields its own pin leaves empty, so evidence
+// from earlier observations survives a weaker one, but it never keeps a
+// strong key another resource holds. Earlier releases pinned a link's
+// primary with the merged identity, so such a key may be the other side's,
+// and a key a resource reports now beats one a row only kept, as the store
+// already hands a moved key to the new pin.
+func (pin ResourceIdentityPin) keptOver(existing ResourceIdentityPin, held map[string]string) ResourceIdentityPin {
+	if pin.Hostname == "" && (pin.ClusterName == "" || !heldByOther(held, clusterPinKey(pin.ClusterName, existing.Hostname), pin.CanonicalID)) {
+		pin.Hostname = existing.Hostname
+	}
+	if pin.MachineID == "" && existing.MachineID != "" && !heldByOther(held, machinePinKey(existing.MachineID), pin.CanonicalID) {
+		pin.MachineID = existing.MachineID
+	}
+	if pin.DMIUUID == "" && existing.DMIUUID != "" && !heldByOther(held, dmiPinKey(existing.DMIUUID), pin.CanonicalID) {
+		pin.DMIUUID = existing.DMIUUID
+	}
+	if pin.ClusterName == "" && existing.ClusterName != "" && !heldByOther(held, clusterPinKey(existing.ClusterName, pin.Hostname), pin.CanonicalID) {
+		pin.ClusterName = existing.ClusterName
+	}
+	return pin
+}
+
+// withoutKeysHeldElsewhere drops the strong keys another resource holds.
+func (pin ResourceIdentityPin) withoutKeysHeldElsewhere(held map[string]string) ResourceIdentityPin {
+	if pin.MachineID != "" && heldByOther(held, machinePinKey(pin.MachineID), pin.CanonicalID) {
+		pin.MachineID = ""
+	}
+	if pin.DMIUUID != "" && heldByOther(held, dmiPinKey(pin.DMIUUID), pin.CanonicalID) {
+		pin.DMIUUID = ""
+	}
+	if pin.ClusterName != "" && heldByOther(held, clusterPinKey(pin.ClusterName, pin.Hostname), pin.CanonicalID) {
+		pin.ClusterName = ""
+	}
+	return pin
+}
+
+func heldByOther(held map[string]string, key, canonicalID string) bool {
+	owner, taken := held[key]
+	return taken && owner != canonicalID
+}
+
+// ownerKeys lists the strong keys the store lets only one pin hold, matching
+// the conflict rule in UpsertResourceIdentityPins.
+func (pin ResourceIdentityPin) ownerKeys() []string {
+	var keys []string
+	if pin.MachineID != "" {
+		keys = append(keys, machinePinKey(pin.MachineID))
+	}
+	if pin.DMIUUID != "" {
+		keys = append(keys, dmiPinKey(pin.DMIUUID))
+	}
+	if pin.ClusterName != "" {
+		keys = append(keys, clusterPinKey(pin.ClusterName, pin.Hostname))
+	}
+	return keys
+}
+
+func machinePinKey(machineID string) string { return "machine:" + machineID }
+
+func dmiPinKey(dmiUUID string) string { return "dmi:" + dmiUUID }
+
+func clusterPinKey(clusterName, hostname string) string {
+	return "cluster:" + clusterName + "\x00" + hostname
+}
+
 // PersistIdentityPins writes the identity pins for the registry's current
 // host resources into the resource store. Only new or changed pins are
 // written, so steady-state rebuild ticks cost no writes. Call this after a
 // rebuild on the durable store-backed registry; ephemeral per-request
 // registries consult pins but do not write them.
+//
+// Each resource is pinned from its own sources. Both sides of a manual link
+// are pinned from the identity captured before the link merged them
+// (recordLinkOwnPin), and a pinnable folded side keeps its pin under its own
+// canonical ID: a link is display intent, so the merged identity must not
+// lend one machine's keys to the other's pin, or a later rebuild would
+// complete those keys, mint the same canonical ID for both sides and keep
+// them merged after the link is gone. A link side's row is rewritten whole
+// (see keptOver), because an upsert would keep a key an earlier release
+// borrowed into it from the merged identity.
 //
 // When a new pin supersedes an earlier era's pin for the same physical host
 // (see successionsFor), the store re-keys the host's operator-owned rows to
@@ -347,31 +442,93 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 	}
 
 	rr.mu.RLock()
-	var pins []ResourceIdentityPin
-	var successions []CanonicalIDSuccession
-	for _, resource := range rr.resources {
+	// held maps each strong key to the resource that holds it this rebuild:
+	// a live resource's row (an upsert only ever widens it), each link
+	// side's own pin, and then the keys link sides keep from their rows.
+	held := make(map[string]string)
+	hold := func(pin ResourceIdentityPin) {
+		for _, key := range pin.ownerKeys() {
+			if _, taken := held[key]; !taken {
+				held[key] = pin.CanonicalID
+			}
+		}
+	}
+	var pins, linkPins []ResourceIdentityPin
+	for id, resource := range rr.resources {
+		if own, linked := rr.linkOwnPins[id]; linked {
+			if own != nil {
+				hold(*own)
+				linkPins = append(linkPins, *own)
+			}
+			continue
+		}
 		pin, ok := identityPinForResource(resource)
 		if !ok {
 			continue
 		}
-		if existing, known := rr.identityPins.byCanonicalID[pin.CanonicalID]; known && existing == pin {
-			continue
+		effective := pin
+		if existing, known := rr.identityPins.byCanonicalID[pin.CanonicalID]; known {
+			effective = pin.upsertedOnto(existing)
 		}
+		hold(effective)
 		pins = append(pins, pin)
-		for _, succession := range rr.identityPins.successionsFor(pin) {
-			// A primary that absorbed a linked resource also carries its
-			// machine keys. That resource is still observed, and succeeding
-			// it would re-key the link onto the primary itself, splitting
-			// the pair again on the next rebuild.
-			if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
-				continue
-			}
-			successions = append(successions, succession)
+	}
+	folded := make([]string, 0, len(rr.linkOwnPins))
+	for id, own := range rr.linkOwnPins {
+		if _, live := rr.resources[id]; !live && own != nil {
+			folded = append(folded, id)
 		}
 	}
+	slices.Sort(folded)
+	for _, id := range folded {
+		// The store gives each strong key one owner. A folded side drops a
+		// key a live resource, or an earlier folded side, already holds
+		// rather than taking it back on every other rebuild. A live non-link
+		// row is upserted, which cannot drop a field, so its kept fields
+		// hold their keys here. A side that would lose its machine evidence
+		// writes no pin: a cluster-only row reads as a machine-keyless
+		// host's, which cluster-slot succession lets a later machine absorb.
+		own := *rr.linkOwnPins[id]
+		pin := own.withoutKeysHeldElsewhere(held)
+		if !pin.hasStrongKey() || (pin.MachineID == "" && pin.DMIUUID == "" && (own.MachineID != "" || own.DMIUUID != "")) {
+			continue
+		}
+		hold(pin)
+		linkPins = append(linkPins, pin)
+	}
+	slices.SortFunc(linkPins, func(a, b ResourceIdentityPin) int { return strings.Compare(a.CanonicalID, b.CanonicalID) })
+	for i, pin := range linkPins {
+		if existing, known := rr.identityPins.byCanonicalID[pin.CanonicalID]; known {
+			linkPins[i] = pin.keptOver(existing, held)
+			hold(linkPins[i])
+		}
+	}
+
+	var successions []CanonicalIDSuccession
+	changed := func(batch []ResourceIdentityPin) []ResourceIdentityPin {
+		var out []ResourceIdentityPin
+		for _, pin := range batch {
+			if existing, known := rr.identityPins.byCanonicalID[pin.CanonicalID]; known && existing == pin {
+				continue
+			}
+			out = append(out, pin)
+			for _, succession := range rr.identityPins.successionsFor(pin) {
+				// A resource a manual link folded into its primary is still
+				// observed. Succeeding it would re-key the link onto the
+				// primary itself, splitting the pair on the next rebuild.
+				if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
+					continue
+				}
+				successions = append(successions, succession)
+			}
+		}
+		return out
+	}
+	pins = changed(pins)
+	linkPins = changed(linkPins)
 	rr.mu.RUnlock()
 
-	if len(pins) == 0 {
+	if len(pins) == 0 && len(linkPins) == 0 {
 		return
 	}
 	if len(successions) > 0 {
@@ -381,9 +538,20 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 			}
 		}
 	}
-	if err := rr.store.UpsertResourceIdentityPins(pins); err != nil {
-		log.Printf("unifiedresources: failed to persist identity pins: %v", err)
-		return
+	// Upserts go first: one that deletes a link side's old row, which still
+	// held a key the side has now dropped, is then followed by the side's
+	// replace, which writes the row again.
+	if len(pins) > 0 {
+		if err := rr.store.UpsertResourceIdentityPins(pins); err != nil {
+			log.Printf("unifiedresources: failed to persist identity pins: %v", err)
+			return
+		}
+	}
+	if len(linkPins) > 0 {
+		if err := rr.store.ReplaceResourceIdentityPins(linkPins); err != nil {
+			log.Printf("unifiedresources: failed to persist manual-link identity pins: %v", err)
+			return
+		}
 	}
 	refreshed, err := rr.store.ListResourceIdentityPins()
 	if err != nil {

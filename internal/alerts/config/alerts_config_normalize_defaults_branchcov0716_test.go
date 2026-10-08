@@ -794,7 +794,6 @@ func TestBranchCovNormalizeTrueNASDefaults(t *testing.T) {
 			{"DiskWrite", t1.DiskWrite, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
 			{"NetworkIn", t1.NetworkIn, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
 			{"NetworkOut", t1.NetworkOut, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
-			{"Disk.Temperature", cfg.TrueNASDiskDefaults.Temperature, alertconfig.HysteresisThreshold{Trigger: 55, Clear: 50}},
 		} {
 			if f.got == nil {
 				t.Fatalf("%s is nil, want non-nil", f.name)
@@ -802,6 +801,11 @@ func TestBranchCovNormalizeTrueNASDefaults(t *testing.T) {
 			if !htEq(*f.got, f.want) {
 				t.Fatalf("%s = %+v, want %+v", f.name, *f.got, f.want)
 			}
+		}
+		// TrueNAS disks follow the disk temperature policy until the user
+		// saves a TrueNAS-wide value.
+		if cfg.TrueNASDiskDefaults.Temperature != nil {
+			t.Fatalf("Disk.Temperature = %+v, want unset", *cfg.TrueNASDiskDefaults.Temperature)
 		}
 	})
 

@@ -1825,6 +1825,29 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
+`checkPhysicalDiskAlerts` also hands each disk's temperature to
+`CheckProxmoxDiskTemperature`, so a Proxmox disk that only the node's sensors
+report alerts under the disk temperature policy, as its Running Hot verdict
+already says it should. It passes the reading only when this poll collected it
+(`collectedPhysicalDiskTemperature`, `diskinventory.TemperatureCollected`), so
+a retained last-known value holds the alert rather than judging it, and it
+passes `AgentSMARTReported`, which `mergeHostAgentSMARTIntoDisks` sets on a
+disk a still-reporting linked agent lists in its SMART report (disks built
+from that report when the Proxmox query fails go through the same merge). A
+disk the agent lists is the agent's: `CheckHost` raises its temperature
+alert, and the PVE disk check closes its own as moved to the agent, so no
+disk alerts twice. Once the agent's lease lapses (`ExpireHostTelemetry` marks
+the host offline) its retained rows still enrich the disk, but ownership
+returns to the PVE check, which judges the node's own current readings; an
+agent newly linked to a disk with an open PVE alert takes it over on the next
+disk poll. An excluded device closes its temperature
+alert with the health and wearout ones. Fixture disks carry no agent SMART
+merge, so on a mock estate every hot disk on an online node alerts.
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` and
+`TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
+the collected reading, agent ownership and exclusion.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection
@@ -2679,10 +2702,12 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     snapshot-bridge adapters stay read-only. The rebuild, the live
     supplemental refresh and the read-state overlay ingest records with the
     adapter's configured stale thresholds, because record ingest joins
-    operator links and a link's metric merge judges each side's freshness
-    by them (unified-resources contract, "Operator links reach
-    record-ingested resources"). Regression coverage:
-    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` in
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
     `internal/unifiedresources/monitor_adapter_read_state_test.go` and
     `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
     `internal/monitoring/issue1913_host_continuity_test.go`.
@@ -4500,6 +4525,13 @@ disk usage when the last VM snapshot is still recent guest-agent truth rather
 than an already carried-forward fallback. That keeps transient guest-agent or
 status-call failures from regressing a VM back to misleading allocated-disk
 data while still avoiding indefinite replay of stale disk summaries.
+The previous VM that `previousVMFromView` builds from the unified read state
+carries disk usage only when it is Proxmox's own reading. When a manually
+linked Pulse agent's disk filled in because Proxmox had no guest filesystems
+(`VMView.DiskFromLinkedAgent`), carrying it would relabel the agent's value as
+a Proxmox `prev-` read, and with Proxmox outranking the agent on guests that
+copy would then freeze over the agent's live disk.
+`TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry` pins both owners.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
@@ -4809,8 +4841,10 @@ timeline instead of creating a second drawer-only or mock-only disk history
 path.
 The SMART-resolved id is the serial the disk resource carries: when a SMART row
 reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
-reports for that disk, as the unified-resources adapter does, unless several
-SMART rows share the disk's device path, and `hostDiskIOMetricResourceID` keys
+reports for that disk, as the unified-resources adapter does, unless the Unraid
+row does not describe the disk (`unraidDiskDescribesSMARTRow`: a controller
+member, or several SMART rows on the disk's device path), and
+`hostDiskIOMetricResourceID` keys
 a device with no non-standby SMART row by its Unraid serial
 (`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
 before the linked Proxmox node's disks and the `<host>:<device>` fallback.
@@ -4821,6 +4855,21 @@ their counter under no member.
 Proof:
 `TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
 `TestHostDiskIOMetricResourceIDFallbacks`.
+The agent's `smart_temp` series holds the reading the disk resource shows,
+not only the SMART row's own. `writeHostSMARTMetrics` writes
+`HostSMARTDiskTemperature`, which falls back to the host's Unraid inventory
+reading when the row has none, and `writeHostUnraidDiskTemperatures` writes
+`HostUnraidDiskTemperature` under `HostUnraidDiskMetricID` for each Unraid row
+whose key is not one of the host's SMART rows' keys, such as a `--disk-exclude`
+member, so an Unraid reading never overwrites a SMART row's own at the same
+timestamp.
+Unraid rows sharing a key are one disk in the registry, which shows the latest
+of their readings, so the last row with a reading decides that key's single
+sample. `diskinventory.TemperatureCollected` keeps a spun-down disk's or an
+expired host's leftover reading out of history.
+Proof:
+`TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared

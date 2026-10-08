@@ -61,15 +61,35 @@ func hostSMARTDiskKey(host models.Host, disk models.HostDiskSMART, serial, wwn s
 // row's own, or, when the row reports none, the one the host's Unraid
 // inventory reports for the disk. smartctl reports no serial for a disk in
 // standby, and the Unraid row still names it. A row without a serial matches
-// its Unraid row by device path alone, so it takes no serial from a path
-// several of the host's rows share: controller members behind one kernel block
-// device, which the Unraid row describes as a whole.
+// its Unraid row by device path alone, so it takes the serial only where that
+// row describes its disk (unraidDiskDescribesSMARTRow).
 func hostSMARTDiskSerial(host models.Host, disk models.HostDiskSMART, unraidDisk *models.HostUnraidDisk) string {
 	serial := strings.TrimSpace(disk.Serial)
-	if serial != "" || unraidDisk == nil || hostSMARTDevicePathShared(host, disk) {
+	if serial != "" || !unraidDiskDescribesSMARTRow(host, disk, unraidDisk) {
 		return serial
 	}
 	return strings.TrimSpace(unraidDisk.Serial)
+}
+
+// unraidDiskDescribesSMARTRow reports whether the Unraid row matched to a SMART
+// row (matchUnraidDisk) describes that row's disk. An Unraid row describes a
+// kernel block device as a whole, so it describes the row when it carries the
+// row's usable serial, or when it names the row's device path and the row is
+// that whole device: not a controller member behind it, even the only one
+// reported, nor one of several rows sharing the path.
+func unraidDiskDescribesSMARTRow(host models.Host, disk models.HostDiskSMART, unraidDisk *models.HostUnraidDisk) bool {
+	if unraidDisk == nil {
+		return false
+	}
+	if serial := strings.TrimSpace(disk.Serial); diskinventory.IsUsableHardwareID(serial) &&
+		strings.EqualFold(serial, strings.TrimSpace(unraidDisk.Serial)) {
+		return true
+	}
+	device := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
+	if device == "" || device != strings.ToLower(normalizePhysicalDiskDeviceToken(unraidDisk.Device)) {
+		return false
+	}
+	return !diskinventory.IsControllerMemberTarget(disk.Target) && !hostSMARTDevicePathShared(host, disk)
 }
 
 // hostSMARTDevicePathShared reports whether more than one of the host's SMART
@@ -128,6 +148,17 @@ func HostUnraidDiskSourceID(host models.Host, disk models.HostUnraidDisk) string
 		return fmt.Sprintf("%s:unraid-slot:%s", strings.TrimSpace(host.ID), name)
 	}
 	return ""
+}
+
+// HostUnraidDiskMetricID returns the history key of the disk resource built
+// from a host's Unraid inventory row: the key its metrics target reads, the
+// row's usable serial or else its source ID. It returns "" for a row the
+// registry does not ingest as a disk, one without a device.
+func HostUnraidDiskMetricID(host models.Host, disk models.HostUnraidDisk) string {
+	if strings.TrimSpace(disk.Device) == "" {
+		return ""
+	}
+	return PreferredPhysicalDiskMetricID(disk.Serial, "", HostUnraidDiskSourceID(host, disk))
 }
 
 const hostPhysicalDiskSourceIDMarker = "/physical-disk:"

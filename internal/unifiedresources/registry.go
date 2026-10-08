@@ -105,6 +105,12 @@ type ResourceRegistry struct {
 	// read (linkFoldHoldersLocked): a holder folded away, replaced or re-keyed
 	// needs no bookkeeping.
 	linkFoldIndex map[string][]*Resource
+	// linkOwnPins holds the identity pin each side of a manual link derives
+	// from its own sources, captured before the link merged them. A nil
+	// value records a side with no pinnable identity. PersistIdentityPins
+	// writes these instead of the merged projection, so a link never lends
+	// one machine's identity keys to another resource's durable pin.
+	linkOwnPins map[string]*ResourceIdentityPin
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -158,6 +164,13 @@ type ResourceRegistry struct {
 	// what the full scan would see; scores stay live through the shared
 	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
+
+	// ingestStaleThresholds holds the caller-owned freshness thresholds of
+	// the snapshot or record ingest in progress, so each source merge into an
+	// existing row judges metric freshness as that ingest's manual links and
+	// stale pass do. nil outside an ingest and for callers without
+	// thresholds, where all three use the defaults.
+	ingestStaleThresholds map[DataSource]time.Duration
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -253,6 +266,10 @@ func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.St
 }
 
 func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
 	for i := range snapshot.Hosts {
 		host := snapshot.Hosts[i]
@@ -616,6 +633,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
@@ -631,6 +649,10 @@ func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, 
 }
 
 func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -683,6 +705,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
@@ -1858,26 +1881,15 @@ func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
-	thresholds = effectiveStaleThresholds(thresholds)
-
 	changed := false
 	for _, resource := range rr.resources {
 		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
-			threshold, ok := thresholds[source]
-			if !ok {
-				threshold = 120 * time.Second
-			}
-			if status.ExpectedUpdateIntervalSeconds > 0 {
-				// Slow inventory polls have their own cadence. A source must miss
-				// two expected intervals before its retained observation is stale.
-				threshold = max(threshold, 2*time.Duration(status.ExpectedUpdateIntervalSeconds)*time.Second)
-			}
 			if status.LastSeen.IsZero() {
 				continue
 			}
-			if now.Sub(status.LastSeen) > threshold {
+			if now.Sub(status.LastSeen) > sourceStaleThreshold(source, status, thresholds) {
 				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
@@ -4031,7 +4043,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source, existing.Sources)
-	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, rr.ingestStaleThresholds)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
 	// Prefer agent naming when available
@@ -4900,6 +4912,8 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			primaryID, otherID = otherID, primaryID
 		}
 
+		rr.recordLinkOwnPin(primaryID, primary)
+		rr.recordLinkOwnPin(otherID, other)
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
 		rr.foldLinkedResourceLocked(primary, otherID, other)
@@ -4915,6 +4929,24 @@ func (rr *ResourceRegistry) foldLinkedResourceLocked(primary *Resource, otherID 
 	folded := append([]string{otherID}, other.linkFoldedIDs...)
 	primary.linkFoldedIDs = uniqueTrimmed(append(append([]string(nil), primary.linkFoldedIDs...), folded...)...)
 	rr.indexLinkFoldedIDsLocked(primary, folded)
+}
+
+// recordLinkOwnPin captures the identity pin a manual-link side derives from
+// its own sources, before the link merge projects the other side's identity
+// onto the primary. The first capture in a registry generation wins, so a
+// primary that absorbs several links keeps the pin it had before any of them.
+func (rr *ResourceRegistry) recordLinkOwnPin(id string, resource *Resource) {
+	if _, recorded := rr.linkOwnPins[id]; recorded {
+		return
+	}
+	if rr.linkOwnPins == nil {
+		rr.linkOwnPins = make(map[string]*ResourceIdentityPin)
+	}
+	if pin, ok := identityPinForResource(resource); ok {
+		rr.linkOwnPins[id] = &pin
+		return
+	}
+	rr.linkOwnPins[id] = nil
 }
 
 func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {
@@ -6392,6 +6424,27 @@ func mergeMetrics(
 	return &merged
 }
 
+// sourceStaleThreshold is how long a source may go without delivering before
+// its sighting is stale: the caller's threshold for the source, else the
+// default. The stale pass and the metric merge's freshness gate both read it,
+// so the gate never calls a source current that the pass marks stale, or the
+// reverse.
+func sourceStaleThreshold(source DataSource, sighting SourceStatus, thresholds map[DataSource]time.Duration) time.Duration {
+	threshold := thresholds[source]
+	if threshold <= 0 {
+		threshold = defaultStaleThresholds[source]
+	}
+	if threshold <= 0 {
+		threshold = 120 * time.Second
+	}
+	if sighting.ExpectedUpdateIntervalSeconds > 0 {
+		// Slow inventory polls have their own cadence. A source must miss
+		// two expected intervals before its retained observation is stale.
+		threshold = max(threshold, 2*time.Duration(sighting.ExpectedUpdateIntervalSeconds)*time.Second)
+	}
+	return threshold
+}
+
 // metricSourceStale reports whether a source's most recent report is older than
 // its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
 // merge never demotes a source on missing information.
@@ -6408,17 +6461,7 @@ func metricSourceStale(
 	if !ok || st.LastSeen.IsZero() {
 		return false
 	}
-	threshold := time.Duration(0)
-	if configured := thresholds[source]; configured > 0 {
-		threshold = configured
-	}
-	if threshold <= 0 {
-		threshold = defaultStaleThresholds[source]
-	}
-	if threshold <= 0 {
-		threshold = 60 * time.Second
-	}
-	return now.Sub(st.LastSeen) > threshold
+	return now.Sub(st.LastSeen) > sourceStaleThreshold(source, st, thresholds)
 }
 
 func mergeMetric(

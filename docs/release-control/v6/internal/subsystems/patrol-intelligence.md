@@ -1581,17 +1581,18 @@ suppress stale healthy summary headlines such as `Health A · 100/100` even if
 the last summary payload still looks healthy. Legacy `/ai` entry points must
 redirect into that same Patrol-owned shell rather than preserving a second
 canonical route.
-That same browser proof now covers the Patrol control and advanced-settings
-split. The advanced Patrol settings drawer must stay within the desktop
-viewport, avoid duplicating the inline Patrol control policy, expose
-provider/model, schedule, trigger, and user-level model checks directly, and surface
-the backend's concrete license/validation reason when a settings change is
-rejected instead of replacing it with a generic `Failed to save advanced
-settings` toast. That inline failure no longer
-opens Assistant. If it does again, the handoff is model-only explanation
-context: raw command, script, credential, and provider-detail payloads stay
-redacted, Assistant opens with `autonomousMode:false`, and the Patrol control
-panel closes so the operator is not left behind an overlapping popover.
+That same browser proof now covers where Patrol settings are saved. The
+Patrol page has no settings drawer or popover: Patrol schedule, triggers, and
+the Patrol model override live on Settings > Pulse Intelligence > Patrol
+(`Save Patrol settings`), and providers and the shared default model on
+Settings > Provider & Models. A rejected save there raises an error
+notification carrying the backend's concrete license/validation reason
+instead of generic fallback copy, and it offers no Assistant handoff. If a
+Patrol settings popover or an Assistant handoff from a settings failure
+returns, the handoff is model-only explanation context: raw command, script,
+credential, and provider-detail payloads stay redacted, Assistant opens with
+`autonomousMode:false`, and the popover closes so the operator is not left
+behind it.
 Patrol-control save-failure sessions saved by earlier builds keep the
 compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
 runtime-failure boolean needed for drawer/session presentation, so they restore
@@ -1637,12 +1638,13 @@ ready raises a fixed warning notification, a failed Patrol mode save raises an e
 notification, and neither offers an Assistant handoff. A provider or model save
 in Settings > Provider & Models reports the readiness summary, provider and
 model in its own save message.
-The Patrol mode selector in that header and configuration dialog must
-compose the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx`
-instead of rebuilding a local active-button group. The wide default Patrol
-header uses the segmented layout; the constrained configuration dialog may use
-the shared prominent layout so all four mode labels remain readable without
-inventing a Patrol-local selector. Patrol owns the default visible four-level
+The Patrol mode selector in that header must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` instead of
+rebuilding a local active-button group. When the header shows Patrol mode
+options, it renders the selector in the segmented layout inside its `Mode and
+automation` disclosure; a constrained surface that hosts it may use the shared
+prominent layout so all four mode labels remain readable without inventing a
+Patrol-local selector. Patrol owns the default visible four-level
 policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
 `Autopilot`), entitlement locks, and the rule that choosing the highest
 Autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
@@ -2692,6 +2694,36 @@ clock while it stays open. Its `Last seen` and flapping window are latest
 readings of a record that may have moved since, so they stay the ages at
 read time, and the queue rows, summary, recent work, run history and digest
 re-derive on their own 30- or 60-second re-reads.
+Future times in Patrol count down instead of reading as ages, because the
+past-only `formatRelativeTime` reads each of them as "just now" for their whole
+duration. The attention detail's suppression line counts down to the expiry
+with the exact time on hover and names the state expiry restores in the
+early-end control's words, from the same
+`getAttentionSuppressionEndPresentation` split on
+`operationalRecord.acknowledgement`: an open issue reads `Returns to active
+attention in 1d.`, one marked reviewed reads `Suppression ends in 1d. It stays
+reviewed.` (expiry restores Acknowledged, which is not active attention), and a
+passed expiry reads `Suppression has ended.`
+(`getAttentionSuppressionExpiryLabel`). The findings list reads `Reminding in
+6d` for a will_fix_later reminder and `snoozed, returns in 3h` for a snooze,
+both through `formatTimeUntil` on the shared clock with the exact time on
+hover. A reminder reads `Reminder overdue` once the panel's overdue id list
+holds it. That list is sampled on the shared clock and is what the Overdue
+commitments chip and filter count, so the label, chip and filter agree: a row
+mounted or re-read between the deadline and the tick that adds it reads
+`Reminder due`, and a row already on screen keeps its last countdown until that
+tick. The list only notifies when its ids change, so a clock tick that moves no
+deadline past now does not rebuild the open Overdue rows. The hourly reminder
+sweep then brings the finding back whether or not it still trips. An ended
+snooze reads `snooze ended` until the next findings re-read drops the snoozed
+status: `GET /api/ai/patrol/findings` sends no status, so the frontend
+`aiIntelligence` store (`normalizeFindingStatus`) derives `snoozed` on each
+read only while `snoozed_until` is ahead, and the finding then shows as Active
+unless it has since resolved or been dismissed.
+`getFindingReminderPresentation` and `getFindingSnoozePresentation` in
+`aiFindingPresentation.ts` own the findings copy.
+`PatrolAttentionWorkbench.test.tsx`, `FindingsPanel.links.test.tsx` and
+`FindingsPanel.test.ts` pin it.
 
 ### This week card answers what Patrol did for the customer
 

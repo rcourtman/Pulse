@@ -10,6 +10,7 @@ import (
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func unifiedEvalBaseConfig() AlertConfig {
@@ -901,6 +902,51 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 }
 
+// A guest that drops its last tag leaves none on its open alerts. Config-save
+// reevaluation reads pulse-relaxed back from alert metadata, so a removed tag
+// left behind judged the alert by the relaxed trigger: the save resolved a
+// reading still over the guest's own trigger, and the next poll raised it
+// again.
+func TestCheckGuestDropsRemovedTagsFromOpenAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 102)
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     102,
+		Name:     "app02",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.97,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	alertID := canonicalMetricStateID(guestID, "cpu")
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected CPU alert %q over the relaxed trigger", alertID)
+	}
+
+	vm.Tags = nil
+	vm.CPU = 0.90
+	m.CheckGuest(vm, "pve1")
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RLock()
+	tags, hasTags := alert.Metadata["tags"]
+	m.mu.RUnlock()
+	if hasTags {
+		t.Fatalf("alert metadata tags = %v, want none once the guest dropped them", tags)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected a config save to keep a CPU alert over the guest's own trigger after pulse-relaxed is removed")
+	}
+}
+
 func TestCheckGuestPerDiskCleansUpRemovedDiskAlerts(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
@@ -1776,5 +1822,169 @@ func TestBuildMetricAlertStatusCarriesWindowAndMonotonicRecovery(t *testing.T) {
 	noClear := buildMetricAlertStatus(metricStatusInput{value: 85, triggered: true, trigger: 80, observedAt: observedAt})
 	if noClear.Recovery != 80 || noClear.RawValue != nil {
 		t.Fatalf("status without clear level = %+v", noClear)
+	}
+}
+
+func trueNASTemperatureDisk(device, diskType string, celsius int) unifiedresources.Resource {
+	return unifiedresources.Resource{
+		ID:         "physical-disk:truenas-main/" + device,
+		Type:       unifiedresources.ResourceTypePhysicalDisk,
+		Name:       device,
+		ParentName: "truenas-main",
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+		PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+			DevPath:     "/dev/" + device,
+			DiskType:    diskType,
+			Temperature: celsius,
+		},
+	}
+}
+
+func trueNASDiskTemperatureAlertID(resource unifiedresources.Resource) string {
+	return canonicalMetricStateID(resource.ID, "temperature")
+}
+
+func checkTrueNASTemperatureDisk(t *testing.T, m *Manager, resource unifiedresources.Resource) {
+	t.Helper()
+	input, ok := UnifiedResourceInputFromResource(resource)
+	if !ok {
+		t.Fatalf("TrueNAS disk %s did not become alert input", resource.ID)
+	}
+	m.CheckUnifiedResource(input)
+}
+
+func trueNASDiskTemperatureAlert(t *testing.T, m *Manager, resource unifiedresources.Resource) (*Alert, bool) {
+	t.Helper()
+	return testLookupActiveAlert(t, m, trueNASDiskTemperatureAlertID(resource))
+}
+
+// TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy pins TrueNAS
+// disk temperature alerts to the disk temperature policy that the TrueNAS
+// storage table, Physical Disks and Patrol judge heat by: per disk type,
+// unless the user saved a TrueNAS-wide value, with a per-disk override first.
+func TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy(t *testing.T) {
+	nvme63 := trueNASTemperatureDisk("nvme0n1", "nvme", 63)
+	nvme72 := trueNASTemperatureDisk("nvme1n1", "nvme", 72)
+	sata56 := trueNASTemperatureDisk("sda", "sata", 56)
+	sata60 := trueNASTemperatureDisk("sdb", "sata", 60)
+
+	tests := []struct {
+		name    string
+		mutate  func(*AlertConfig)
+		disks   []unifiedresources.Resource
+		firing  []unifiedresources.Resource
+		trigger map[string]float64
+	}{
+		{
+			name:    "factory thresholds judge each disk by its type",
+			disks:   []unifiedresources.Resource{nvme63, nvme72, sata56},
+			firing:  []unifiedresources.Resource{nvme72, sata56},
+			trigger: map[string]float64{nvme72.ID: 70, sata56.ID: 55},
+		},
+		{
+			name: "a raised NVMe trigger moves NVMe alerts with it",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 75, Clear: 70}}
+			},
+			disks:  []unifiedresources.Resource{nvme72, sata56},
+			firing: []unifiedresources.Resource{sata56},
+		},
+		{
+			name: "a saved TrueNAS-wide value applies to every TrueNAS disk",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+			},
+			disks:   []unifiedresources.Resource{nvme63, sata60},
+			firing:  []unifiedresources.Resource{nvme63},
+			trigger: map[string]float64{nvme63.ID: 62},
+		},
+		{
+			name: "a per-disk override beats the TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+				cfg.Overrides = map[string]ThresholdConfig{
+					sata56.ID: {Temperature: &HysteresisThreshold{Trigger: 50, Clear: 45}},
+				}
+			},
+			disks:   []unifiedresources.Resource{sata56},
+			firing:  []unifiedresources.Resource{sata56},
+			trigger: map[string]float64{sata56.ID: 50},
+		},
+		{
+			name: "a switched-off agent Disk Temp default switches TrueNAS disks off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+			},
+			disks: []unifiedresources.Resource{nvme72, sata60},
+		},
+		{
+			name: "a saved TrueNAS-wide value still applies when the agent default is off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 58, Clear: 53}
+			},
+			disks:  []unifiedresources.Resource{sata60},
+			firing: []unifiedresources.Resource{sata60},
+		},
+		{
+			name: "a saved TrueNAS-wide off switches TrueNAS disks off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+			},
+			disks: []unifiedresources.Resource{nvme72, sata60},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := unifiedEvalBaseConfig()
+			cfg.TrueNASDiskDefaults = ThresholdConfig{}
+			if tt.mutate != nil {
+				tt.mutate(&cfg)
+			}
+			configureUnifiedEvalManager(t, m, cfg)
+
+			for _, disk := range tt.disks {
+				checkTrueNASTemperatureDisk(t, m, disk)
+			}
+
+			want := make(map[string]bool, len(tt.firing))
+			for _, disk := range tt.firing {
+				want[disk.ID] = true
+			}
+			for _, disk := range tt.disks {
+				alert, firing := trueNASDiskTemperatureAlert(t, m, disk)
+				if firing != want[disk.ID] {
+					t.Fatalf("%s firing = %v, want %v (active: %v)", disk.ID, firing, want[disk.ID], alertKeys(m))
+				}
+				if !firing {
+					continue
+				}
+				if got := alert.Metadata["diskType"]; got != disk.PhysicalDisk.DiskType {
+					t.Fatalf("%s diskType metadata = %v, want %q", disk.ID, got, disk.PhysicalDisk.DiskType)
+				}
+				if trigger, ok := tt.trigger[disk.ID]; ok && alert.Threshold != trigger {
+					t.Fatalf("%s threshold = %v, want %v", disk.ID, alert.Threshold, trigger)
+				}
+			}
+		})
+	}
+}
+
+// A last-known reading the source no longer collects is not evidence of heat.
+func TestTrueNASDiskTemperatureAlertIgnoresRetainedReading(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	disk := trueNASTemperatureDisk("sda", "sata", 80)
+	disk.PhysicalDisk.Collection = &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("truenas", "disk is in standby"),
+	}
+	checkTrueNASTemperatureDisk(t, m, disk)
+	if _, firing := trueNASDiskTemperatureAlert(t, m, disk); firing {
+		t.Fatalf("retained 80C reading raised an alert: %v", alertKeys(m))
 	}
 }
