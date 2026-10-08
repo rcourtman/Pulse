@@ -103,4 +103,4 @@ foreach ($script:scenario in @('server-already-exited', 'server-stopped', 'serve
     if ($script:stops -ne $expectedStops) { throw 'Wrong cleanup stop count' }
     Write-Output "PASS $script:scenario"
 }
-Write-Output 'PASS all 14 lifecycle observation controls; no actual SCM or file mutation' 
+Write-Output 'PASS all 14 lifecycle observation controls; no actual SCM or file mutation'
