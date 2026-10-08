@@ -77,6 +77,7 @@ type patrolRuntimeResourceRecord struct {
 // It intentionally includes only the fields patrol currently consumes, so the
 // subsystem can stop mirroring the full global StateSnapshot shape.
 type patrolRuntimeState struct {
+	alertResourceResolver   unifiedresources.AlertResourceReferenceResolver
 	readState               unifiedresources.ReadState
 	unifiedResourceProvider UnifiedResourceProvider
 	Nodes                   []models.Node
@@ -170,7 +171,39 @@ func (s patrolRuntimeState) withDerivedProvidersAndResources(resources []unified
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(s.resourceSnapshot())
 	if len(resources) > 0 {
-		registry.IngestResources(resources)
+		// Already-unified rows own their source observations. Re-ingesting a
+		// linked agent snapshot without its operator link would invent a second
+		// host beside the canonical guest/node. Keep only supplemental snapshot
+		// rows whose source observations are not already fully represented.
+		resolver := patrolAlertReferenceResolver(s)
+		type sourceKey struct {
+			source unifiedresources.DataSource
+			id     string
+		}
+		covered := make(map[sourceKey]bool)
+		for _, resource := range resources {
+			binding, _ := resolver.ResolveAlertResourceReference(resource.ID)
+			for _, target := range binding.SourceTargets {
+				covered[sourceKey{target.Source, target.SourceID}] = true
+			}
+		}
+		retained := make([]unifiedresources.Resource, 0)
+		bindings := registry.AlertResourceReferences()
+		for _, resource := range registry.List() {
+			targets := bindings[resource.ID].SourceTargets
+			fullyCovered := len(targets) > 0
+			for _, target := range targets {
+				if !covered[sourceKey{target.Source, target.SourceID}] {
+					fullyCovered = false
+					break
+				}
+			}
+			if !fullyCovered {
+				retained = append(retained, resource)
+			}
+		}
+		registry = unifiedresources.NewRegistry(nil)
+		registry.IngestResources(append(retained, resources...))
 	}
 	s.readState = registry
 	s.unifiedResourceProvider = unifiedresources.NewUnifiedAIAdapter(registry)
@@ -540,10 +573,23 @@ func canonicalPatrolRuntimeResourceType(kind patrolRuntimeResourceKind) string {
 // unique known aliases onto the complete identity set for the matching Patrol
 // runtime record. It never fuzzy-matches and refuses ambiguous aliases.
 func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (PatrolScope, PatrolScopeResolution) {
+	if scope.AlertIdentifier != "" {
+		scope.AlertContext = nil
+		state.alertResourceResolver = patrolAlertReferenceResolver(state)
+	}
 	// Recompute private type evidence from the current runtime snapshot on every
 	// resolution pass; callers may synchronously pre-resolve and the accepted run
 	// resolves again to close collection races.
 	scope.resolvedResourceTypes = nil
+	alert := patrolScopeAlert(state, scope)
+	var alertOwner unifiedresources.AlertResourceReference
+	var alertOwnerIDs []string
+	if alert != nil {
+		alertOwner, _ = patrolAlertReferenceResolver(state).ResolveAlertResourceReference(alert.ResourceID)
+		if alertOwner.ResourceID != "" {
+			alertOwnerIDs = patrolAlertOwnerIDs(patrolAlertReferenceResolver(state), alertOwner)
+		}
+	}
 	resolution := PatrolScopeResolution{}
 	for _, requested := range scope.ResourceIDs {
 		if requested = strings.TrimSpace(requested); requested != "" {
@@ -628,21 +674,72 @@ func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (Patro
 				}
 			}
 		}
-		switch len(matches) {
-		case 0:
-			resolution.UnmatchedResourceIDs = append(resolution.UnmatchedResourceIDs, requested)
-		case 1:
-			for _, id := range matches[0].ids {
-				addExpanded(id)
-				addResolved(id)
+		if len(matches) == 0 && alert != nil && alertOwner.ResourceID != "" {
+			requestedAlertIdentity := requested == alert.ResourceID
+			for _, ownerID := range alertOwnerIDs {
+				requestedAlertIdentity = requestedAlertIdentity || requested == ownerID
 			}
-			addResolvedType(matches[0].resourceType)
+			if requestedAlertIdentity {
+				for _, ownerID := range alertOwnerIDs {
+					for _, record := range records {
+						if record.idTokens[canonicalPatrolScopeToken(ownerID)] {
+							matches = append(matches, record)
+						}
+					}
+					if len(matches) > 0 {
+						break
+					}
+				}
+			}
+		}
+		// A linked node may expose both node and host views of one canonical
+		// resource. Only collected-alert ownership can prove those facets are
+		// the same identity; unrelated ID/alias collisions remain ambiguous.
+		sameAlertOwner := alertOwner.ResourceID != "" && len(matches) > 0
+		if sameAlertOwner {
+			for _, record := range matches {
+				owner, _ := patrolAlertReferenceResolver(state).ResolveAlertResourceReference(record.ids[0])
+				if owner.ResourceID != alertOwner.ResourceID {
+					sameAlertOwner = false
+					break
+				}
+			}
+		}
+		switch {
+		case len(matches) == 0:
+			resolution.UnmatchedResourceIDs = append(resolution.UnmatchedResourceIDs, requested)
+		case len(matches) == 1 || sameAlertOwner:
+			for _, record := range matches {
+				for _, id := range record.ids {
+					addExpanded(id)
+					addResolved(id)
+				}
+				addResolvedType(record.resourceType)
+			}
+			if sameAlertOwner {
+				for _, id := range alertOwnerIDs {
+					addExpanded(id)
+					addResolved(id)
+				}
+			}
 		default:
 			resolution.AmbiguousResourceIDs = append(resolution.AmbiguousResourceIDs, requested)
 		}
 	}
 	scope.ResourceIDs = expanded
 	scope.resolvedIdentityOnly = len(expanded) > 0
+	if alert != nil {
+		included := make(map[string]bool, len(expanded))
+		for _, id := range expanded {
+			included[id] = true
+		}
+		if patrolAlertBelongsToScope(state, alert.ResourceID, included) {
+			scope.AlertContext = patrolAlertContext(alert)
+			if scope.alertResourceTypeHint {
+				scope.ResourceTypes = append([]string(nil), scope.resolvedResourceTypes...)
+			}
+		}
+	}
 	if len(expanded) > 0 {
 		filtered := filterPatrolStateByScopeState(state, scope)
 		resolution.EffectiveResourceIDs = patrolRuntimeSortedResourceIDs(filtered)

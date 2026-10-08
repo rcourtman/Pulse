@@ -23,6 +23,21 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Collected alert subjects share current canonical ownership
+
+`AlertResourceReferenceResolver` exposes the current-inventory identity owner
+used by history correlation to runtime consumers. Supported producer child
+references bind through durable source identities only. Resolution reads the
+owner, canonical type and source targets under one registry read lock. It never
+uses display names or retained history aliases to resurrect a removed owner.
+An agent's disk, temperature, RAID and custom observations remain owned when an
+operator link folds the agent into a VM, container or node. The presence of the
+agent facet is required for that cross-type ownership. Patrol can therefore
+select the canonical owner without interpreting alert strings independently.
+`alert_scope_test.go` verifies the registry and both read adapters, rejected
+references and absent current owners. Scoped Patrol tests cover linked owners
+and conflicting unqualified source IDs.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through
