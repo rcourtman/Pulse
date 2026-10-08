@@ -215,11 +215,21 @@ export const UpdateIcon: Component<UpdateIconProps> = (props) => {
  */
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
+  const readOnlyUpdateExplanation = () =>
+    `Update available. Pulse cannot apply it: ${state.updateUnavailableReason()}\nApply this update using your container manager on the host.`;
+  const showReadOnlyUpdateExplanation = (target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    showTooltip(readOnlyUpdateExplanation(), rect.left + rect.width / 2, rect.top, {
+      align: 'center',
+      direction: 'up',
+    });
+  };
   const shouldRenderReadOnlyStatus = () =>
     state.currentState() === 'idle' &&
     (hasContainerUpdateError(props.updateStatus) ||
       hasContainerUpdateCurrent(props.updateStatus) ||
       isContainerUpdatePinned(props.updateStatus) ||
+      state.isUpdateUnavailable() ||
       (state.settingsLoaded() && state.shouldHideButton()));
 
   return (
@@ -287,11 +297,40 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
           </div>
         }
       >
-        <ContainerUpdateBadge
-          updateStatus={props.updateStatus}
-          compact={props.compact}
-          showCurrent={true}
-        />
+        <Show
+          when={hasContainerUpdate(props.updateStatus) && state.isUpdateUnavailable()}
+          fallback={
+            <ContainerUpdateBadge
+              updateStatus={props.updateStatus}
+              compact={props.compact}
+              showCurrent={true}
+            />
+          }
+        >
+          <span
+            class="inline-flex flex-col items-center gap-0.5 text-[11px] text-muted cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            tabindex="0"
+            aria-label={readOnlyUpdateExplanation()}
+            data-prevent-toggle
+            onClick={(event) => {
+              event.stopPropagation();
+              showReadOnlyUpdateExplanation(event.currentTarget);
+            }}
+            onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+            onMouseLeave={() => hideTooltip()}
+            onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+            onBlur={() => hideTooltip()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') hideTooltip();
+            }}
+          >
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-surface-alt px-1.5 py-0.5 font-medium">
+              <ErrorIndicatorIcon class="h-3 w-3" />
+              <span>Update available</span>
+            </span>
+            <span>Apply on host</span>
+          </span>
+        </Show>
       </Show>
     </Show>
   );

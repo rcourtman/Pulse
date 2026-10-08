@@ -2180,6 +2180,12 @@ and status payloads. Those labels are summary context inside the same strip,
 not a replacement status card, CTA band, or page-local nested card.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
+   Container update availability and executability are separate facts. When
+   canonical action readiness refuses an update, the shared update control
+   renders a passive `Update available` status with `Apply on host` guidance,
+   never an Update command button. Its hover and keyboard-focus explanation
+   preserves the server refusal and directs the operator to their container
+   manager. In-flight actions retain their audited progress/review state.
    Filterable table surfaces that separate high-frequency narrowing from
    durable presentation preferences must compose
    `frontend-modern/src/components/shared/FilterBar/ViewOptionsDisclosure.tsx`.

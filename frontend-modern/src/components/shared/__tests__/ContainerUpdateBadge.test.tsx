@@ -137,7 +137,7 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument();
   });
 
-  it('disables the button with the refusal reason when the server refuses the update capability', () => {
+  it('shows update availability and host guidance without an action when the server refuses updates', () => {
     render(() => (
       <UpdateButton
         agentId="agent-1"
@@ -161,11 +161,15 @@ describe('ContainerUpdateBadge', () => {
       />
     ));
 
-    const button = screen.getByRole('button', { name: /update unavailable/i });
-    expect(button).toBeDisabled();
-    expect(button.getAttribute('aria-label')).toContain(
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('Update available')).toBeInTheDocument();
+    expect(screen.getByText('Apply on host')).toBeInTheDocument();
+    const status = screen.getByLabelText(/Pulse cannot apply it/);
+    expect(status.getAttribute('aria-label')).toContain(
       'The Pulse agent on this host is still on an older version.',
     );
+    fireEvent.click(status);
+    expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
   });
 
   it('keeps the button enabled when the update readiness entry is available', () => {
