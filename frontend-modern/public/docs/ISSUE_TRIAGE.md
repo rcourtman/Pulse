@@ -75,6 +75,18 @@ context. Existing reports need no refile. Retain every affected surface (for
 example, node errors, backup status and Docker monitoring); recovery in one does
 not establish recovery in the others.
 
+Keep the connection Host/URL, Pulse display name, native node/guest name and
+agent-reported hostname separate. A full connection hostname does not establish
+that guest or agent names are fully qualified. If the supplied evidence leaves
+that distinction consequential, ask only for the remembered short/full form
+and whether full domain suffixes differ, not the literal names; unknown is valid.
+Retain which guest has an agent and whether it remained connected when its
+Docker inventory disappeared. Only one guest having an agent does not make a
+shared guest name unique across the platform inventory. An ambiguous automatic
+link is not proof that agent reporting stopped. Do not install another agent,
+change a link or recreate the addition just to diagnose it; a repair for distinct
+full hostnames alone does not establish a fix for repeated short names.
+
 Missing readings and an unresponsive workload need different investigation and
 recovery paths. Use the reporter's existing observations of the workload's usual
 UI, not Pulse's displayed connection status, to distinguish them where possible.
