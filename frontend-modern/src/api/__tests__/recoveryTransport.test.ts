@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createRoot } from 'solid-js';
+import { createRoot, type Accessor } from 'solid-js';
 
 import {
   filterTrueNASProtectionPoints,
   sortTrueNASProtectionPoints,
 } from '@/features/truenas/truenasPageModel';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
+import { useRecoveryPoints, type RecoveryPointsQuery } from '@/hooks/useRecoveryPoints';
 import type {
   RecoveryPoint,
   RecoveryPointDisplay,
@@ -125,6 +125,67 @@ describe('recovery transport', () => {
     }
   });
 
+  it('asks /api/recovery/points only for the page, limit and platform it was given', async () => {
+    // The points endpoint accepts more filters, but the only reader sends these
+    // three. A caller that casts extra filters in must not get them on the wire.
+    apiFetchJSONMock.mockResolvedValue({
+      data: [],
+      meta: { page: 2, limit: 200, total: 0, totalPages: 1 },
+    });
+    const smuggled = {
+      platform: ' truenas ',
+      page: 2.7,
+      limit: Number.NaN,
+      rollupId: 'rollup-1',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      outcome: 'failed',
+      itemType: 'dataset',
+      itemResourceId: 'res-1',
+      subjectResourceId: 'res-2',
+      q: 'tank',
+      cluster: 'cluster-1',
+      node: 'node-1',
+      namespace: 'namespace-1',
+      scope: 'workload',
+      verification: 'verified',
+      from: '2026-10-01T00:00:00Z',
+      to: '2026-10-02T00:00:00Z',
+    } as RecoveryPointsQuery;
+    let dispose = () => {};
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      useRecoveryPoints(() => smuggled);
+    });
+    try {
+      await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(1));
+      expect(apiFetchJSONMock).toHaveBeenCalledWith(
+        '/api/recovery/points?page=2&limit=200&platform=truenas',
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('leaves the platform off a blank request and makes no request without a query', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      data: [],
+      meta: { page: 1, limit: 200, total: 0, totalPages: 1 },
+    });
+    let dispose = () => {};
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      useRecoveryPoints(() => null);
+      useRecoveryPoints(() => ({ platform: '   ' }));
+    });
+    try {
+      await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(1));
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/recovery/points?page=1&limit=200');
+    } finally {
+      dispose();
+    }
+  });
+
   it('labels, sorts and finds TrueNAS rows by the backend subject label only through the decode', async () => {
     // The points handler sends the dataset label only as display.subjectLabel.
     // The TrueNAS Protection tab reads display.itemLabel, never the subject
@@ -172,6 +233,21 @@ describe('recovery transport', () => {
     expectTypeOf<RecoveryPointTransport>().toHaveProperty('subjectRef');
     expectTypeOf<RecoveryPointDisplayTransport>().toHaveProperty('subjectLabel');
     expectTypeOf<RecoveryPointDisplayTransport>().toHaveProperty('subjectType');
+  });
+
+  it('keeps the recovery points query and hook result to what the Protection tab reads', () => {
+    // Enforced by the frontend type check, not at runtime. The tab sends
+    // platform, page and limit and reads the points, the loading and error
+    // state and a refetch; the aggregate page's other filters and its meta and
+    // resolvedOnce members went with it.
+    expectTypeOf<keyof RecoveryPointsQuery>().toEqualTypeOf<'page' | 'limit' | 'platform'>();
+    type Result = ReturnType<typeof useRecoveryPoints>;
+    expectTypeOf<keyof Result>().toEqualTypeOf<'response' | 'points' | 'refetch'>();
+    expectTypeOf<Result>().not.toHaveProperty('meta');
+    expectTypeOf<Result>().not.toHaveProperty('resolvedOnce');
+    expectTypeOf<Parameters<typeof useRecoveryPoints>[0]>().toEqualTypeOf<
+      Accessor<RecoveryPointsQuery | null | undefined>
+    >();
   });
 
   it('keeps useRecoveryPoints the only recovery-points reader', () => {
