@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -95,6 +96,27 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// linkFoldIndex maps each canonical ID a manual link folded into another
+	// resource to the rows that took it in (Resource.linkFolds). Folded
+	// resources are still observed, so identity succession treats them as
+	// live, and references to them resolve to the row holding them. Holders
+	// carry their folds, so a registry seeded from another registry's listing
+	// indexes the same ones. Entries are rows, not IDs, and are checked on
+	// read (linkFoldHoldersLocked): a holder folded away, replaced or re-keyed
+	// needs no bookkeeping.
+	linkFoldIndex map[string][]*Resource
+	// linkOwnPins holds the identity pin each side of a manual link derives
+	// from its own sources, captured before the link merged them. A nil
+	// value records a side with no pinnable identity. PersistIdentityPins
+	// writes these instead of the merged projection, so a link never lends
+	// one machine's identity keys to another resource's durable pin.
+	linkOwnPins map[string]*ResourceIdentityPin
+	// linkHolds maps a resource that exists only through saved-host
+	// continuity, and that an operator link would otherwise fold away, to
+	// the link's primary (holdLinkedResourceLocked). Both rows stay listed
+	// with their own telemetry; references to the held row resolve to the
+	// primary. Every link pass recomputes it.
+	linkHolds map[string]string
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -148,6 +170,13 @@ type ResourceRegistry struct {
 	// what the full scan would see; scores stay live through the shared
 	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
+
+	// ingestStaleThresholds holds the caller-owned freshness thresholds of
+	// the snapshot or record ingest in progress, so each source merge into an
+	// existing row judges metric freshness as that ingest's manual links and
+	// stale pass do. nil outside an ingest and for callers without
+	// thresholds, where all three use the defaults.
+	ingestStaleThresholds map[DataSource]time.Duration
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -222,6 +251,9 @@ func (rr *ResourceRegistry) loadOverrides() {
 	}
 	exclusions, err := rr.store.GetExclusions()
 	if err == nil {
+		// An unlink or link landing between the two reads would load both
+		// decisions for its pair (manual_link_decisions.go).
+		rr.links, exclusions = effectiveManualPairDecisions(rr.links, exclusions)
 		for _, exclusion := range exclusions {
 			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
 			rr.exclusions[key] = struct{}{}
@@ -243,6 +275,10 @@ func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.St
 }
 
 func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
 	for i := range snapshot.Hosts {
 		host := snapshot.Hosts[i]
@@ -606,15 +642,26 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
-	rr.ingestRecords(source, records, false)
+	rr.ingestRecords(source, records, false, nil)
 }
 
-func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool) {
+// IngestRecordsWithStaleThresholds ingests normalized records for a single
+// source and merges operator-linked resources with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, records []IngestRecord, thresholds map[DataSource]time.Duration) {
+	rr.ingestRecords(source, records, false, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -649,6 +696,17 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.applyRecordSuccessions(successions)
 
 	rr.mu.Lock()
+	// Either side of an operator link can arrive as a record: a vSphere or
+	// TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host.
+	// Snapshot and resource ingest apply the links, so record ingest must too,
+	// or the monitor's rebuilt registry keeps both rows while REST, which
+	// seeds from that registry, shows them merged. Continuity records only
+	// fill absent machines and never merge into a link (a saved enrollment
+	// joined to its linked guest would lend the guest its offline verdict
+	// and old agent payload), but the link still names their identity: the
+	// pass holds them beside the primary and resolves references to them
+	// there.
+	rr.applyManualLinks(thresholds)
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -657,6 +715,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
@@ -746,12 +805,76 @@ func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string)
 	return uniqueID
 }
 
+// canonicalIDObservedLocked reports whether a canonical ID still names an
+// observed resource: a live row, or one a manual link folded into its primary.
+// Succeeding an observed ID would hand its operator rows, and the link that
+// folded it, to another resource.
+func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
+	if _, live := rr.resources[id]; live {
+		return true
+	}
+	return len(rr.linkFoldHoldersLocked(id)) > 0
+}
+
+// indexLinkFoldsLocked records that holder took in the canonical IDs its
+// link folds name (Resource.linkFolds, recordManualLinkFold).
+func (rr *ResourceRegistry) indexLinkFoldsLocked(holder *Resource) {
+	if holder == nil || len(holder.linkFolds) == 0 {
+		return
+	}
+	if rr.linkFoldIndex == nil {
+		rr.linkFoldIndex = make(map[string][]*Resource)
+	}
+	for _, fold := range holder.linkFolds {
+		if !slices.Contains(rr.linkFoldIndex[fold.FoldedID], holder) {
+			rr.linkFoldIndex[fold.FoldedID] = append(rr.linkFoldIndex[fold.FoldedID], holder)
+		}
+	}
+}
+
+// holdsLinkFold reports whether a resource's link folds name foldedID.
+func holdsLinkFold(resource *Resource, foldedID string) bool {
+	for _, fold := range resource.linkFolds {
+		if fold.FoldedID == foldedID {
+			return true
+		}
+	}
+	return false
+}
+
+// linkFoldHoldersLocked lists the live rows that hold a canonical ID an
+// operator link folded into them. More than one is ambiguous.
+func (rr *ResourceRegistry) linkFoldHoldersLocked(ref string) []string {
+	ref = CanonicalResourceID(ref)
+	var holders []string
+	for _, holder := range rr.linkFoldIndex[ref] {
+		if rr.resources[holder.ID] != holder || !holdsLinkFold(holder, ref) ||
+			slices.Contains(holders, holder.ID) {
+			continue
+		}
+		holders = append(holders, holder.ID)
+	}
+	return holders
+}
+
+// linkFoldHolderLocked resolves a canonical ID an operator link folded into
+// another resource to the row holding it. ambiguous reports two holders: the
+// reference must then resolve to nothing, not fall through to weaker matches.
+func (rr *ResourceRegistry) linkFoldHolderLocked(ref string) (holderID string, ambiguous bool) {
+	holders := rr.linkFoldHoldersLocked(ref)
+	if len(holders) != 1 {
+		return "", len(holders) > 1
+	}
+	return holders[0], false
+}
+
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
 // that ingested records declared superseded (IngestRecord.SupersededCanonicalIDs)
 // onto the records' current canonical IDs. Mirrors the guards of pin-driven
-// successions in PersistIdentityPins: a superseded ID still held by a live
-// resource is skipped so a genuinely distinct sibling never has its rows
-// stolen. Re-runs are cheap no-ops once the old rows are gone.
+// successions in PersistIdentityPins: a superseded ID still observed, live or
+// folded into another resource by a manual link, is skipped so a genuinely
+// distinct sibling never has its rows stolen. Re-runs are cheap no-ops once
+// the old rows are gone.
 func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
 	if len(successions) == 0 || rr.store == nil {
 		return
@@ -764,7 +887,7 @@ func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSucc
 	rr.mu.RLock()
 	kept := make([]CanonicalIDSuccession, 0, len(successions))
 	for _, succession := range successions {
-		if _, live := rr.resources[succession.OldCanonicalID]; live {
+		if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
 			continue
 		}
 		kept = append(kept, succession)
@@ -842,6 +965,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
 		if resource := rr.resources[resourceID]; resource != nil {
 			rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
+			rr.indexLinkFoldsLocked(resource)
 			rr.indexPhysicalDiskHardwareLocked(resource)
 		}
 	}
@@ -950,20 +1074,7 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				}
 			}
 		case ResourceTypePhysicalDisk:
-			if resource.PhysicalDisk == nil {
-				return ""
-			}
-			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
-				return diskinventory.PreferredID(
-					resource.PhysicalDisk.Serial,
-					resource.PhysicalDisk.WWN,
-					parentSourceID,
-					resource.PhysicalDisk.DevPath,
-					resource.PhysicalDisk.Controller,
-					resource.PhysicalDisk.Target,
-				)
-			}
-			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, "")
+			return rr.seedAgentPhysicalDiskSourceIDLocked(resource)
 		}
 	case SourceDocker:
 		if resource.Docker == nil {
@@ -1395,23 +1506,7 @@ func (rr *ResourceRegistry) listMaterialized(withTargets bool) ([]Resource, map[
 // merge exclusions.
 func (rr *ResourceRegistry) ListForPresentation() []Resource {
 	resources := rr.List()
-
-	rr.mu.RLock()
-	exclusions := make(map[string]struct{}, len(rr.exclusions))
-	for key := range rr.exclusions {
-		exclusions[key] = struct{}{}
-	}
-	rr.mu.RUnlock()
-
-	return CoalescePresentationHostResourcesWithExclusions(resources, func(left, right Resource) bool {
-		leftID := CanonicalResourceID(left.ID)
-		rightID := CanonicalResourceID(right.ID)
-		if leftID == "" || rightID == "" {
-			return false
-		}
-		_, ok := exclusions[exclusionKey(leftID, rightID)]
-		return ok
-	})
+	return CoalescePresentationHostResourcesWithExclusions(resources, rr.presentationExclusionFilter())
 }
 
 // ListByType returns all resources of the provided type.
@@ -1496,8 +1591,18 @@ func (rr *ResourceRegistry) ResolveReferenceID(ref string) (string, bool) {
 }
 
 // The second result requests a one-time alias-index build after the read lock
-// is released. Exact and source references never pay that cost.
+// is released. Exact and source references never pay that cost. A reference
+// to a saved link member held beside its primary resolves to the primary,
+// as one to a folded member does: the operator's link names one identity.
 func (rr *ResourceRegistry) resolveReferenceIDLocked(ref string) (string, bool) {
+	resolvedID, needsAliasIndex := rr.resolveReferenceRowIDLocked(ref)
+	if resolvedID == "" {
+		return "", needsAliasIndex
+	}
+	return rr.linkHoldTargetLocked(resolvedID), false
+}
+
+func (rr *ResourceRegistry) resolveReferenceRowIDLocked(ref string) (string, bool) {
 	if ref == "" {
 		return "", false
 	}
@@ -1505,6 +1610,11 @@ func (rr *ResourceRegistry) resolveReferenceIDLocked(ref string) (string, bool) 
 		return ref, false
 	}
 	if resolvedID := rr.supersededResourceIDLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	// A resource an operator link folded into another is that row now, as
+	// its agent alert references ("agent:<host ID>") already are.
+	if resolvedID, ambiguous := rr.linkFoldHolderLocked(ref); resolvedID != "" || ambiguous {
 		return resolvedID, false
 	}
 	if resolvedID := rr.uniqueSourceResourceIDLocked(ref); rr.resources[resolvedID] != nil {
@@ -1552,7 +1662,7 @@ func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) 
 	matches := map[string]struct{}{}
 	for resourceID, resource := range rr.resources {
 		if resourceMatchesCanonicalIdentityReference(resource, ref) {
-			matches[resourceID] = struct{}{}
+			matches[rr.linkHoldTargetLocked(resourceID)] = struct{}{}
 		}
 	}
 	return uniqueResourceIDMatch(matches)
@@ -1785,26 +1895,15 @@ func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
-	thresholds = effectiveStaleThresholds(thresholds)
-
 	changed := false
 	for _, resource := range rr.resources {
 		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
-			threshold, ok := thresholds[source]
-			if !ok {
-				threshold = 120 * time.Second
-			}
-			if status.ExpectedUpdateIntervalSeconds > 0 {
-				// Slow inventory polls have their own cadence. A source must miss
-				// two expected intervals before its retained observation is stale.
-				threshold = max(threshold, 2*time.Duration(status.ExpectedUpdateIntervalSeconds)*time.Second)
-			}
 			if status.LastSeen.IsZero() {
 				continue
 			}
-			if now.Sub(status.LastSeen) > threshold {
+			if now.Sub(status.LastSeen) > sourceStaleThreshold(source, status, thresholds) {
 				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
@@ -2897,7 +2996,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// pulse-agent's pin on a same-named host) completing the identity would
 	// re-merge systems the connection scoping keeps apart.
 	if source != SourceTrueNAS {
-		identity = rr.completeIdentityFromPins(source, resource, identity)
+		identity = rr.completeIdentityFromPins(source, sourceID, resource, identity)
 	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}
@@ -2969,9 +3068,25 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			}
 		} else if excluded {
 			resource.ID = candidateID
+			if resource.Type == ResourceTypePhysicalDisk {
+				// An agent disk's source-specific ID hashes its bare serial
+				// (sourceSpecificIDKey), so another machine's split copy may
+				// hold it, and one machine's observations may meet on it.
+				resource.ID = rr.physicalDiskFallbackIDLocked(candidateID, &resource, source)
+				if existing := rr.resources[resource.ID]; existing != nil && existing.Type == ResourceTypePhysicalDisk {
+					if onlyMissing {
+						return ""
+					}
+					rr.mergeInto(existing, resource, source, sourceID)
+					rr.bySource[source][sourceID] = existing.ID
+					rr.matcher.Add(existing.ID, existing.Identity)
+					return existing.ID
+				}
+			}
 			if onlyMissing && rr.resources[resource.ID] != nil {
 				return ""
 			}
+			resource.continuityOnly = onlyMissing
 			stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 			rr.resources[resource.ID] = &resource
 			rr.indexPhysicalDiskHardwareLocked(&resource)
@@ -2998,6 +3113,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		rr.matcher.Add(existing.ID, existing.Identity)
 		return existing.ID
 	}
+	resource.continuityOnly = onlyMissing
 	stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 	rr.resources[resource.ID] = &resource
 	rr.indexPhysicalDiskHardwareLocked(&resource)
@@ -3574,17 +3690,23 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	exactID := CanonicalResourceID(ref)
 	if existing := rr.resources[exactID]; existing != nil {
 		if !isAvailabilityOwnedResource(*existing) {
-			return exactID
+			// A saved link member held beside its primary answers there.
+			return rr.linkHoldTargetLocked(exactID)
 		}
 		return ""
 	}
 
-	// References persisted under a retired canonical ID or under a
-	// node-scoped guest source ID follow the resource across identity eras
-	// and live migrations. These arms resolve provider-declared persistence
-	// keys, not display aliases, so the explicit link stays fail-closed.
+	// References persisted under a retired canonical ID, under a resource an
+	// operator link folded into another, or under a node-scoped guest source
+	// ID follow the resource across identity eras, links and live
+	// migrations. These arms resolve provider-declared persistence keys and
+	// operator links, not display aliases, so the explicit link stays
+	// fail-closed.
 	eligible := func(candidateID string) string {
 		candidateID = CanonicalResourceID(candidateID)
+		if candidateID != "" {
+			candidateID = rr.linkHoldTargetLocked(candidateID)
+		}
 		existing := rr.resources[candidateID]
 		if existing != nil && !isAvailabilityOwnedResource(*existing) {
 			return candidateID
@@ -3593,6 +3715,9 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	}
 	if candidateID := eligible(rr.supersededResourceIDLocked(exactID)); candidateID != "" {
 		return candidateID
+	}
+	if holderID, ambiguous := rr.linkFoldHolderLocked(exactID); holderID != "" || ambiguous {
+		return eligible(holderID)
 	}
 	if candidateID := eligible(rr.uniqueSourceResourceIDLocked(ref)); candidateID != "" {
 		return candidateID
@@ -3807,6 +3932,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	if existing == nil {
 		return
 	}
+	// A source reported this row, so it is an observation again.
+	existing.continuityOnly = false
 
 	rr.setSourceParent(existing, source, incoming.ParentID)
 
@@ -3938,7 +4065,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source, existing.Sources)
-	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, rr.ingestStaleThresholds)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
 	// Prefer agent naming when available
@@ -4762,12 +4889,21 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 }
 
 func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Duration) {
+	if rr.linkHolds != nil {
+		rr.linkHolds = nil
+		rr.canonicalIdentityIndex = nil
+	}
 	if len(rr.links) == 0 {
 		return
 	}
 	for _, link := range rr.links {
+		// A link joins only the pair its row names. Canonical-ID succession
+		// can leave a row whose endpoint re-key collided with the successor's
+		// own row while its primary moved on to the successor; honouring that
+		// primary merged the successor through a row naming a retired ID, which
+		// an unlink or report-merge of the merged pair leaves behind.
 		primaryID := link.PrimaryID
-		if primaryID == "" {
+		if primaryID != link.ResourceA && primaryID != link.ResourceB {
 			primaryID = link.ResourceA
 		}
 		primary := rr.resources[primaryID]
@@ -4806,11 +4942,103 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			primary, other = other, primary
 			primaryID, otherID = otherID, primaryID
 		}
+		if primary.continuityOnly || other.continuityOnly {
+			rr.holdLinkedResourceLocked(primaryID, otherID, other)
+			continue
+		}
 
+		rr.recordLinkOwnPin(primaryID, primary)
+		rr.recordLinkOwnPin(otherID, other)
 		rr.mergeResourceData(primary, other, thresholds)
+		recordManualLinkFold(primary, primaryID, other, otherID)
 		delete(rr.resources, otherID)
+		// The fold record names every ID along a chain of links, so the chain
+		// resolves to its last primary; the folded row's own index entries
+		// lapse on read now that it has left the registry.
+		rr.indexLinkFoldsLocked(primary)
 		rr.updateSourceMappings(otherID, primaryID)
 	}
+}
+
+// recordLinkOwnPin captures the identity pin a manual-link side derives from
+// its own sources, before the link merge projects the other side's identity
+// onto the primary. The first capture in a registry generation wins, so a
+// primary that absorbs several links keeps the pin it had before any of them.
+func (rr *ResourceRegistry) recordLinkOwnPin(id string, resource *Resource) {
+	if _, recorded := rr.linkOwnPins[id]; recorded {
+		return
+	}
+	if rr.linkOwnPins == nil {
+		rr.linkOwnPins = make(map[string]*ResourceIdentityPin)
+	}
+	if pin, ok := identityPinForResource(resource); ok {
+		rr.linkOwnPins[id] = &pin
+		return
+	}
+	rr.linkOwnPins[id] = nil
+}
+
+// holdLinkedResourceLocked keeps a link whose member exists only through
+// saved-host continuity out of the fold. A saved enrollment is not an
+// observation: folded into a live resource it would lend that resource its
+// offline verdict and old payload, and a live resource folded into it would
+// hide live telemetry behind it. The link still names one identity, so a
+// saved member the fold would have taken in answers to the primary,
+// as a folded one does. A live member keeps its own references even when the
+// saved member is the primary: a live row never resolves to a saved one. The
+// first link to claim a member holds it, as the first fold takes it in.
+func (rr *ResourceRegistry) holdLinkedResourceLocked(primaryID, otherID string, other *Resource) {
+	if !other.continuityOnly {
+		return
+	}
+	if _, held := rr.linkHolds[otherID]; held {
+		return
+	}
+	if rr.linkHolds == nil {
+		rr.linkHolds = make(map[string]string)
+	}
+	rr.linkHolds[otherID] = primaryID
+	rr.canonicalIdentityIndex = nil
+}
+
+// linkHoldPrimaryLocked returns the row a held link member's references
+// resolve to: its primary, followed through a later fold of the primary into
+// another resource and through further holds (a saved primary held under
+// another link). Empty when the row is not held or the chain does not end on
+// a listed row.
+func (rr *ResourceRegistry) linkHoldPrimaryLocked(resourceID string) string {
+	primaryID, held := rr.linkHolds[resourceID]
+	if !held {
+		return ""
+	}
+	seen := map[string]struct{}{resourceID: {}}
+	for {
+		if rr.resources[primaryID] == nil {
+			holderID, _ := rr.linkFoldHolderLocked(primaryID)
+			if holderID == "" {
+				return ""
+			}
+			primaryID = holderID
+		}
+		next, held := rr.linkHolds[primaryID]
+		if !held {
+			return primaryID
+		}
+		if _, cycle := seen[primaryID]; cycle {
+			return ""
+		}
+		seen[primaryID] = struct{}{}
+		primaryID = next
+	}
+}
+
+// linkHoldTargetLocked maps a resolved row to the row its references answer
+// to: the hold primary for a held link member, the row itself otherwise.
+func (rr *ResourceRegistry) linkHoldTargetLocked(resourceID string) string {
+	if primaryID := rr.linkHoldPrimaryLocked(resourceID); primaryID != "" {
+		return primaryID
+	}
+	return resourceID
 }
 
 func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {
@@ -4873,6 +5101,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	}
 	if primary.Ceph == nil {
 		primary.Ceph = other.Ceph
+	}
+	if primary.TrueNAS == nil {
+		primary.TrueNAS = other.TrueNAS
+	}
+	if primary.VMware == nil {
+		primary.VMware = other.VMware
 	}
 
 	// Manual links combine already-normalized resources. Preserve each metric's
@@ -5310,6 +5544,9 @@ func (rr *ResourceRegistry) buildCanonicalIdentityIndexLocked() {
 		if resource.Canonical == nil {
 			continue
 		}
+		// A saved link member held beside its primary shares the primary's
+		// identity, so an alias both carry (a hostname) stays unambiguous.
+		resourceID = rr.linkHoldTargetLocked(resourceID)
 		indexCandidate(resource.Canonical.PrimaryID, resourceID)
 		indexCandidate(resource.Canonical.PlatformID, resourceID)
 		for _, alias := range resource.Canonical.Aliases {
@@ -5512,8 +5749,9 @@ func (rr *ResourceRegistry) physicalDiskScopedIDLocked(disk *Resource) string {
 }
 
 // physicalDiskFallbackIDLocked returns the observation's source-specific ID,
-// keyed to its machine when another machine's disk already holds it: agent
-// disk source IDs are the bare serial, so one candidate ID serves every host.
+// keyed to its machine when another machine's disk already holds it: an agent
+// disk's source-specific ID hashes its bare serial (sourceSpecificIDKey), so
+// one candidate ID serves every host.
 func (rr *ResourceRegistry) physicalDiskFallbackIDLocked(candidateID string, incoming *Resource, source DataSource) string {
 	holder := rr.resources[candidateID]
 	if holder == nil || (holder.Type == ResourceTypePhysicalDisk && !rr.physicalDiskMachinesConflictLocked(holder, incoming, source)) {
@@ -5672,8 +5910,7 @@ func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, i
 }
 
 func (rr *ResourceRegistry) sourceSpecificID(resourceType ResourceType, source DataSource, sourceID string) string {
-	stable := fmt.Sprintf("%s:%s", source, normalizeSourceID(sourceID))
-	return buildHashID(resourceType, stable)
+	return SourceSpecificID(resourceType, source, sourceID)
 }
 
 func buildHashID(resourceType ResourceType, stable string) string {
@@ -6282,6 +6519,27 @@ func mergeMetrics(
 	return &merged
 }
 
+// sourceStaleThreshold is how long a source may go without delivering before
+// its sighting is stale: the caller's threshold for the source, else the
+// default. The stale pass and the metric merge's freshness gate both read it,
+// so the gate never calls a source current that the pass marks stale, or the
+// reverse.
+func sourceStaleThreshold(source DataSource, sighting SourceStatus, thresholds map[DataSource]time.Duration) time.Duration {
+	threshold := thresholds[source]
+	if threshold <= 0 {
+		threshold = defaultStaleThresholds[source]
+	}
+	if threshold <= 0 {
+		threshold = 120 * time.Second
+	}
+	if sighting.ExpectedUpdateIntervalSeconds > 0 {
+		// Slow inventory polls have their own cadence. A source must miss
+		// two expected intervals before its retained observation is stale.
+		threshold = max(threshold, 2*time.Duration(sighting.ExpectedUpdateIntervalSeconds)*time.Second)
+	}
+	return threshold
+}
+
 // metricSourceStale reports whether a source's most recent report is older than
 // its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
 // merge never demotes a source on missing information.
@@ -6298,17 +6556,7 @@ func metricSourceStale(
 	if !ok || st.LastSeen.IsZero() {
 		return false
 	}
-	threshold := time.Duration(0)
-	if configured := thresholds[source]; configured > 0 {
-		threshold = configured
-	}
-	if threshold <= 0 {
-		threshold = defaultStaleThresholds[source]
-	}
-	if threshold <= 0 {
-		threshold = 60 * time.Second
-	}
-	return now.Sub(st.LastSeen) > threshold
+	return now.Sub(st.LastSeen) > sourceStaleThreshold(source, st, thresholds)
 }
 
 func mergeMetric(

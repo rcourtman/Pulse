@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "421d1e5423e5b83b7923ea8c3b133ad520cd5f60",
+  "verified_at": "2026-10-07T15:20:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "f1e249c36f0f0f9810330a37cc9a80cb43baa1cd123db1defd3f27720d39912a",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "cb0a6962ed929238a974a3bbe5f69f4c89961ff30c88c2c94398073b9ef99a1c"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Mode and automation disclosure)",
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent tree (333e51d2de; rebased onto 421d1e5423, which changes only contract docs) and this tree, each on a private DEMO_MODE mock stack with a fresh data dir; the same Playwright script ran against both and produced identical results on all 31 observed fields at both widths.",
+    "Patrol on/off save whose PUT /api/settings/ai/update response (page.route) reports patrol_readiness not_ready: switching off and back on each raise only the warning toast 'Patrol setting was saved, but Patrol is not ready to run.' (role=alert inside the Notifications region, close button only); no role=alert outside the toast region, no 'needs attention' text, no readiness summary rendered inline, no Assistant action.",
+    "Failed Patrol mode save (Pro mode selector unlocked by adding ai_autofix to runtime-capabilities via page.route; PUT /api/ai/patrol/autonomy answered 500 {error}): only the error toast with the server reason; mode badge returns to Watch only; no inline error or 'needs attention' state.",
+    "Successful Patrol mode save (PUT 200, reconcile GET returns approval): Ask first becomes pressed and the badge reads Ask first; no new toast and no inline alert.",
+    "Settings > Pulse Intelligence > Patrol save (Schedule -> Every hour) and Settings > Provider & Models save with a not_ready response: only the warning toast '<saved label>, but Patrol is not ready: The selected model cannot run Patrol tools. \u00b7 Provider: OpenRouter \u00b7 Model: openrouter:deepseek/deepseek-r1'; no inline alert.",
+    "Patrol status with readiness not_ready (page.route on /api/ai/patrol/status): the page's own 'Patrol model issue' banner names summary, provider and model, and the header shows Fix setup, at both widths.",
+    "Dist proof: 187 files each side; after normalising chunk hashes and SRI strings only assets/AIIntelligence.js differs (935 bytes smaller): the removed failure builder, details helper and surface callback replaced by one status check, toast string byte-identical; check-bundle-size.mjs passes."
+  ],
+  "interactions": [
+    "Demo sign-in; on /patrol click Toggle Patrol twice (off, then on) with a not-ready settings response; open 'Mode and automation' and click Ask first with a rejected save, then again with an accepted save; desktop mouse and phone touch (isMobile) contexts.",
+    "On /settings/pulse-intelligence/patrol select Schedule 'Every hour' and click Save Patrol settings; on /settings/pulse-intelligence click Save provider settings; both with a not-ready response.",
+    "Screenshots of each toast state captured and inspected at both widths."
+  ]
+}

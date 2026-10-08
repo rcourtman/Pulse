@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 import { useAlertOverviewState } from '../useAlertOverviewState';
 
@@ -116,6 +117,22 @@ describe('useAlertOverviewState', () => {
     finishOlder([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
     await Promise.resolve();
     expect(result.deliveryDiagnoses()).toEqual({ a1: retained });
+  });
+
+  it('refreshes diagnoses once a minute, not on the 30-second age clock', async () => {
+    renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(RELATIVE_TIME_TICK_MS);
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60_000 - RELATIVE_TIME_TICK_MS);
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledTimes(2);
   });
 
   it('ignores pending responses and stops periodic reads after disposal', async () => {

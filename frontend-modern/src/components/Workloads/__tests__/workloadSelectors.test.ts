@@ -8,7 +8,6 @@ import {
   getDiskUsagePercent,
   getWorkloadGroupKey,
   getWorkloadGroupLabel,
-  buildWorkloadSummaryGroupScopeMap,
   groupWorkloads,
   selectVisibleWorkloadInventory,
 } from '@/components/Workloads/workloadSelectors';
@@ -945,32 +944,6 @@ describe('workloadSelectors', () => {
         name: 'frigate',
         type: 'LXC',
       });
-    });
-
-    it('passes group identity badges into summary group scope labels', () => {
-      const guests = [
-        makeGuest(1, {
-          id: 'container-1',
-          name: 'frigate',
-          type: 'app-container',
-          workloadType: 'app-container',
-          contextLabel: 'frigate-host',
-        }),
-      ];
-
-      const scopes = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-        groupLabelBadges: {
-          'app-container:frigate-host': { label: 'LXC' },
-        },
-      });
-
-      expect(scopes.get('app-container:frigate-host')?.label).toBe(
-        'frigate-host · LXC (1 workload)',
-      );
     });
   });
 

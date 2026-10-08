@@ -29,12 +29,23 @@ describe('PlatformOutdatedSensorSetupNotice', () => {
     );
   });
 
+  it('names a renamed node by its table label and its Proxmox node', () => {
+    render(() => (
+      <PlatformOutdatedSensorSetupNotice
+        nodes={[{ id: 'node-3', name: 'West Production C', nodeName: 'pve3' }]}
+      />
+    ));
+    expect(screen.getByTestId('platform-outdated-sensor-setup-notice')).toHaveTextContent(
+      'West Production C (pve3) is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures.',
+    );
+  });
+
   it('summarises multiple affected nodes and lists them', () => {
     render(() => (
       <PlatformOutdatedSensorSetupNotice
         nodes={[
           { id: 'node-1', name: 'pve1' },
-          { id: 'node-2', name: 'pve2' },
+          { id: 'node-3', name: 'West Production C', nodeName: 'pve3' },
         ]}
       />
     ));
@@ -42,6 +53,6 @@ describe('PlatformOutdatedSensorSetupNotice', () => {
     expect(notice).toHaveTextContent(
       '2 nodes are using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures.',
     );
-    expect(notice).toHaveTextContent('Affected: pve1, pve2.');
+    expect(notice).toHaveTextContent('Affected: pve1, West Production C (pve3).');
   });
 });

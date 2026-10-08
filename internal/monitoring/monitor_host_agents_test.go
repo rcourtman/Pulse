@@ -3017,6 +3017,71 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	}
 }
 
+// An Unraid member the agent sends no SMART row for (a --disk-exclude match)
+// still shows the temperature its Unraid inventory row reports, so the report
+// charts it under the disk's serial. A disk with its own SMART reading keeps
+// it, and a spun-down member's leftover reading is not charted.
+func TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART(t *testing.T) {
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-tower", Version: "1.0.0", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "machine-tower", Hostname: "tower", MachineID: "machine-tower"},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{Device: "/dev/sda", Model: "IronWolf", Serial: "SERIAL-TOWER-1", Temperature: 41},
+			},
+		},
+		Unraid: &agentshost.UnraidStorage{ArrayStarted: true, Disks: []agentshost.UnraidDisk{
+			{Name: "disk1", Device: "sda", Role: "data", Status: "online", Serial: "SERIAL-TOWER-1", Temperature: 40},
+			{Name: "disk2", Device: "sdb", Role: "data", Status: "online", Serial: "SERIAL-TOWER-2", Temperature: 36},
+			{Name: "disk3", Device: "sdc", Role: "data", Status: "online", Serial: "SERIAL-TOWER-3", Temperature: 34, SpunDown: true},
+		}},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	points := waitForStoredDiskMetric(t, store, "SERIAL-TOWER-2", "smart_temp")
+	if len(points) != 1 || points[0].Value != 36 {
+		t.Fatalf("SERIAL-TOWER-2 smart_temp = %+v, want the Unraid reading 36", points)
+	}
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_temp")
+	if len(points) != 1 || points[0].Value != 41 {
+		t.Fatalf("SERIAL-TOWER-1 smart_temp = %+v, want its own SMART reading 41", points)
+	}
+	now := time.Now().UTC()
+	points, err = store.Query("disk", "SERIAL-TOWER-3", "smart_temp", now.Add(-time.Hour), now.Add(time.Hour), 60)
+	if err != nil {
+		t.Fatalf("Query smart_temp: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("spun-down SERIAL-TOWER-3 smart_temp = %+v, want none", points)
+	}
+}
+
 func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	t.Helper()
 
@@ -3549,6 +3614,49 @@ func TestHostDiskIOMetricResourceIDFallbacks(t *testing.T) {
 	got = hostDiskIOMetricResourceID(host, ioNoSMART, proxmoxDisks)
 	if got != "SATA-SERIAL-456" {
 		t.Fatalf("proxmox fallback: expected SATA-SERIAL-456, got %q", got)
+	}
+
+	// The disk resource carries the serial the host's Unraid inventory reports
+	// when no SMART reading names the disk, so its I/O is filed under it.
+	// Controller members behind one block device keep their own identity, so
+	// the device's counter belongs to no member, even while one is in standby.
+	// Two inventory rows on one device name no single disk. A legacy SMART
+	// device label still names its block device.
+	host.Sensors.SMART = append(host.Sensors.SMART,
+		models.HostDiskSMART{Device: "sdb"},
+		models.HostDiskSMART{Device: "sdc", Serial: "STANDBY-SERIAL", Standby: true},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,1"},
+		models.HostDiskSMART{Device: "sdg", WWN: "5000c500a1b2c3e0", Controller: "ctrl1", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "/dev/sdg", WWN: "5000c500a1b2c3e1", Controller: "ctrl1", Target: "megaraid,1", Standby: true},
+		models.HostDiskSMART{Device: "sdh [sat]", Serial: "LEGACY-LABEL-SERIAL"},
+	)
+	host.Unraid = &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+		{Device: "sda", Serial: "UNRAID-SERIAL-A"},
+		{Device: "sdb", Serial: "UNRAID-SERIAL-B"},
+		{Device: "sdc", Serial: "UNRAID-SERIAL-C"},
+		{Device: "sdd"},
+		{Device: "sde", Serial: "UNRAID-SERIAL-E"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F1"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F2"},
+	}}
+	for _, tc := range []struct {
+		device string
+		want   string
+	}{
+		{"sda", "UNRAID-SERIAL-A"},
+		{"sdb", "UNRAID-SERIAL-B"},
+		{"sdc", "UNRAID-SERIAL-C"},
+		{"sdd", "myhost:sdd"},
+		{"sde", ""},
+		{"sdf", "myhost:sdf"},
+		{"sdg", ""},
+		{"sdh", "LEGACY-LABEL-SERIAL"},
+		{"nvme0n1", "NVME-SERIAL-123"},
+	} {
+		if got := hostDiskIOMetricResourceID(host, models.DiskIO{Device: tc.device}, proxmoxDisks); got != tc.want {
+			t.Fatalf("device %s: expected %q, got %q", tc.device, tc.want, got)
+		}
 	}
 }
 
@@ -6880,6 +6988,113 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 }
 
+// presentationFixtureStore keeps the fixture registry: the broadcast's read
+// refresh would otherwise rebuild it from the empty snapshot.
+type presentationFixtureStore struct {
+	*unifiedresources.MonitorAdapter
+}
+
+func (presentationFixtureStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+// A host pair the operator split (unlink or report-merge) must be two
+// broadcast rows exactly when the resources API lists two. The broadcast used
+// to coalesce without the store's exclusions, so the websocket folded the
+// pair the API kept apart.
+func TestBroadcastPresentationCoalesceHonoursMergeExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{
+			ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent:    &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"},
+		},
+		{
+			ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker:   &unifiedresources.DockerData{Hostname: "alpha"},
+		},
+	}
+	for _, split := range []bool{false, true} {
+		store := unifiedresources.NewMemoryStore()
+		if split {
+			if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		registry := unifiedresources.NewRegistry(store)
+		registry.IngestResources(resources)
+		adapter := unifiedresources.NewMonitorAdapter(registry)
+		m := &Monitor{resourceStore: presentationFixtureStore{adapter}}
+
+		state := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), m.mockModeFence.begin(), func() time.Time { return now })
+		broadcastRows := 0
+		for _, resource := range state.Resources {
+			if resource.Name == "alpha" {
+				broadcastRows++
+			}
+		}
+
+		// The resources API seeds a store-backed registry from the monitor's
+		// listing and presents it through ListForPresentation.
+		rest := unifiedresources.NewRegistry(store)
+		rest.IngestResources(adapter.GetAll())
+		restRows := len(rest.ListForPresentation())
+
+		want := 1
+		if split {
+			want = 2
+		}
+		if broadcastRows != want || restRows != want {
+			t.Fatalf("split=%v: broadcast rows=%d REST rows=%d, want %d on both", split, broadcastRows, restRows, want)
+		}
+	}
+}
+
+// The rows a broadcast coalesces were listed by its view's read state, such as
+// a host-continuity overlay that loaded the store's exclusions afresh, so its
+// exclusions decide even when the resource store's generation predates them.
+func TestBroadcastPresentationCoalescePrefersTheListingReadState(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent: &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"}},
+		{ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker: &unifiedresources.DockerData{Hostname: "alpha"}},
+	}
+	store := unifiedresources.NewMemoryStore()
+	base := unifiedresources.NewRegistry(store)
+	base.IngestResources(resources)
+	m := &Monitor{resourceStore: unifiedresources.NewMonitorAdapter(base)}
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	overlay := unifiedresources.NewRegistry(store)
+	overlay.IngestResources(resources)
+	listing := unifiedresources.NewMonitorAdapter(overlay)
+	if got := len(m.coalesceResourcesForPresentation(listing, listing.GetAll())); got != 2 {
+		t.Fatalf("coalesced %d rows with the listing's exclusion, want 2", got)
+	}
+	if got := len(m.coalesceResourcesForPresentation(nil, listing.GetAll())); got != 1 {
+		t.Fatalf("without a listing read state the store generation decides: %d rows, want 1", got)
+	}
+
+	// The mock view lists through a store-less registry, which carries no
+	// operator decisions, so the resource store's adapter supplies them.
+	mockView := monitorUnifiedStateViewFromResources(resources, now)
+	withSplit := &Monitor{resourceStore: listing}
+	if got := len(withSplit.coalesceResourcesForPresentation(mockView.readState, mockView.resources)); got != 2 {
+		t.Fatalf("mock-style view coalesced %d rows, want the store's split to keep 2", got)
+	}
+}
+
 // A host agent linked to a Proxmox node merges into one read-state row that
 // every PVE poll keeps online and fresh. Once the agent stops reporting, its
 // retained filesystem summary must stop standing in for the node's disk (and
@@ -7079,5 +7294,49 @@ func TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+// A Pulse agent linked into a VM fills the guest disk metric when Proxmox has
+// no guest filesystems. The next poll must not carry that agent reading
+// forward as Proxmox's own last known guest read: with Proxmox outranking the
+// agent on guests, the carried copy would freeze over the agent's live disk.
+func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
+	now := time.Now()
+	view := func(source unifiedresources.DataSource) *unifiedresources.VMView {
+		used, total := int64(400), int64(1000)
+		v := unifiedresources.NewVMView(&unifiedresources.Resource{
+			ID:       "vm-pve-node1-101",
+			Type:     unifiedresources.ResourceTypeVM,
+			Name:     "app-101",
+			LastSeen: now,
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance:         "pve",
+				NodeName:         "node1",
+				VMID:             101,
+				RuntimeStatus:    "running",
+				DiskStatusReason: "agent-not-running",
+			},
+			// The linked agent's addresses count as recent guest evidence.
+			Identity: unifiedresources.ResourceIdentity{IPAddresses: []string{"10.0.0.5"}},
+			Metrics: &unifiedresources.ResourceMetrics{
+				Disk: &unifiedresources.MetricValue{Used: &used, Total: &total, Percent: 40, Source: source},
+			},
+		})
+		return &v
+	}
+	carry := func(source unifiedresources.DataSource) (float64, string) {
+		prev := previousVMFromView(view(source))
+		_, _, _, usage, _, reason := stabilizeGuestLowTrustDisk(
+			&prev, "running", 32<<30, 0, 32<<30, -1, nil, "agent-not-running", false, now,
+		)
+		return usage, reason
+	}
+
+	if usage, reason := carry(unifiedresources.SourceAgent); usage != -1 || reason != "agent-not-running" {
+		t.Fatalf("linked agent disk carried as Proxmox's: usage=%v reason=%q", usage, reason)
+	}
+	if usage, reason := carry(unifiedresources.SourceProxmox); usage != 40 || reason != "prev-agent-not-running" {
+		t.Fatalf("Proxmox's own guest disk not carried: usage=%v reason=%q", usage, reason)
 	}
 }

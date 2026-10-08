@@ -57,6 +57,16 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
+
+	// continuityOnly marks a row saved-host continuity introduced: a machine
+	// no source has reported since a restart. It rides in-memory clones, so
+	// a registry seeded from a continuity read state still holds the row out
+	// of operator-link folds (holdLinkedResourceLocked). An observation that
+	// later merges into the row clears it.
+	continuityOnly bool
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`
@@ -967,8 +977,10 @@ type AgentData struct {
 	// offline by the staleness evaluator) even though the row itself may stay
 	// online via another source such as the Proxmox API poll. It lets the UI
 	// present the agent and its version as not-reporting instead of a
-	// healthy-looking stale value.
-	Stale bool `json:"stale,omitempty"`
+	// healthy-looking stale value. It is always sent: browsers merge agent
+	// facets field by field, so an omitted false would keep a resumed agent
+	// marked as stopped reporting.
+	Stale bool `json:"stale"`
 	// LastReportAt is the agent's own last successful report time. On a
 	// multi-source row (for example a Proxmox node also polled over the PVE
 	// API) this differs from the row's LastSeen, which reflects the freshest

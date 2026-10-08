@@ -43,12 +43,11 @@ import {
   ALERT_RESOURCE_METRIC_OFF_VALUE,
   getAlertResourceColumnKind,
   getAlertResourceColumnHeaderTooltip,
-  getAlertResourceEnabledDefault,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDelayOverride,
   getAlertResourceMetricStep,
-  isAlertResourceMetricOff,
   normalizeAlertResourceMetricKey,
+  resolveAlertResourceGlobalDefaultCell,
 } from './alertResourceTableModel';
 import type { OfflineState, Resource, ResourceTableProps } from './ResourceTable';
 
@@ -210,7 +209,10 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               {(column) => (
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind(getAlertResourceColumnKind(column))} whitespace-normal wrap-break-word`}
-                  title={getAlertResourceColumnHeaderTooltip(column)}
+                  title={
+                    props.table.columnTooltips?.[column] ??
+                    getAlertResourceColumnHeaderTooltip(column)
+                  }
                 >
                   {column}
                 </TableHead>
@@ -281,10 +283,14 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 {(column) => {
                   const metric = normalizeAlertResourceMetricKey(column);
                   const bounds = getAlertResourceMetricBounds(metric);
-                  const value = () => props.table.globalDefaults?.[metric] ?? 0;
+                  const value = () => props.table.globalDefaults?.[metric];
+                  const fallback = () => props.table.globalDefaultFallbacks?.[metric];
                   // An unset default and a stored 0 are both disabled to the
-                  // alert engine, so neither may render as On.
-                  const isOff = () => isAlertResourceMetricOff(value());
+                  // alert engine, so neither may render as On, unless the
+                  // metric's unset default follows another setting.
+                  const cell = () =>
+                    resolveAlertResourceGlobalDefaultCell(metric, value(), fallback());
+                  const isOff = () => cell().isOff;
 
                   return (
                     <TableCell
@@ -297,8 +303,12 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                             min={bounds.min}
                             max={bounds.max}
                             step={getAlertResourceMetricStep(metric)}
-                            value={isOff() ? '' : value()}
-                            placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
+                            value={isOff() || cell().follows ? '' : (value() ?? '')}
+                            placeholder={
+                              cell().follows && !isOff()
+                                ? fallback()?.label
+                                : getAlertResourceTableMetricPlaceholder(isOff())
+                            }
                             disabled={isOff()}
                             onInput={(e) => {
                               const nextValue = parseFloat(e.currentTarget.value);
@@ -318,12 +328,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                               }));
                               props.table.setHasUnsavedChanges?.(true);
                             }}
-                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                            class={`${cell().follows && !isOff() ? 'w-20' : 'w-16'} px-2 py-0.5 text-sm text-center border rounded ${
                               isOff()
                                 ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
                                 : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             }`}
-                            title={getAlertResourceTableMetricInputTitle(isOff())}
+                            title={
+                              cell().follows
+                                ? fallback()?.title
+                                : getAlertResourceTableMetricInputTitle(isOff())
+                            }
                           />
                           <Show when={isOff()}>
                             <button
@@ -332,7 +346,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                               onClick={() => {
                                 props.table.setGlobalDefaults?.((prev) => ({
                                   ...prev,
-                                  [metric]: getAlertResourceEnabledDefault(metric),
+                                  [metric]: cell().enableValue,
                                 }));
                                 props.table.setHasUnsavedChanges?.(true);
                               }}
@@ -348,7 +362,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                             props.table.setGlobalDefaults?.((prev) => ({
                               ...prev,
                               [metric]: isOff()
-                                ? getAlertResourceEnabledDefault(metric)
+                                ? cell().enableValue
                                 : ALERT_RESOURCE_METRIC_OFF_VALUE,
                             }));
                             props.table.setHasUnsavedChanges?.(true);

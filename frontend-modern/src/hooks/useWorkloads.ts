@@ -146,6 +146,7 @@ type APIResource = {
     networkInterfaces?: APINetworkInterface[];
     disks?: APIDiskInfo[];
     raid?: HostRAIDArray[];
+    stale?: boolean;
   };
   docker?: {
     containerId?: string;
@@ -592,6 +593,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     })(),
     disk: buildMetric(resource.metrics?.disk),
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
+    disksFromAgent: (resource.proxmox?.disks == null && resource.agent?.disks != null) || undefined,
     // Both the API and owning platform snapshot pass through this mapper.
     // A retained numeric metric must not lose the provider's read deferral.
     diskStatusReason: resource.proxmox?.diskStatusReason,
@@ -612,6 +614,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     agentId: resource.agent?.agentId,
     agentRaid: resource.agent?.raid,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
+    // A linked agent past its reporting lease keeps its last report on the
+    // resource, so its RAID, network and filesystem rows are not current.
+    agentStale: resource.agent?.stale === true || undefined,
     networkIn: finiteMetricNumber(resource.metrics?.netIn?.value) ?? 0,
     networkOut: finiteMetricNumber(resource.metrics?.netOut?.value) ?? 0,
     diskRead: finiteMetricNumber(resource.metrics?.diskRead?.value) ?? 0,

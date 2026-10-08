@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "bdf0f76b7bf61d550b1cb8574497eef75b354acb",
+  "verified_at": "2026-10-07T14:17:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/ai.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/ai.ts": "03a3c67b18121618f60a3bde3718a27d0be94b9cbfd96328340d0f8d5b8909a0",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "087cb28ff8c235f9c4b03ad3115021a40b6952b3a3c5844dbfc3eaa57d2753c0",
+    "frontend-modern/src/stores/aiIntelligence.ts": "bd947cc05d31c9ad126f6c992555bf8cffa8ee23eae88598485fa9fb9d812f29"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private DEMO_MODE mock stack (demo/demo, PULSE_TELEMETRY=false) serving an embedded production build of this tree on base bdf0f76b7b, plus a before build of unmodified main on a second port for comparison; headless Chromium at 1440x900 and 390x844.",
+    "Patrol Inbox renders unchanged at both widths: Watch only mode row, Check now and Settings, Inbox/Protection/Activity tabs, the 7-decision inbox with Start review, Review 1 approval and Refresh. No console errors after the change.",
+    "Before: one GET /api/ai/intelligence/correlations per initial Patrol load, browser reload, 60 s poll tick and tab hide/show at both widths. After: zero in every phase. Every other /api/ai/* read in each phase is identical before and after.",
+    "The production bundle no longer contains the /ai/intelligence/correlations string or the 'Failed to load correlations' log (control string /ai/intelligence still present); check-bundle-size passes with no chunk renamed.",
+    "Not covered in the browser: the Patrol could not refresh banner's Retry path, which every Patrol read swallows so it cannot be forced from the network; it calls the same background reader edited here and is covered by unit tests."
+  ],
+  "interactions": [
+    "Signed in through the demo auto sign-in, opened /patrol, reloaded the page, waited 68 s for the 60 s poll, and simulated a tab hide then show (visibilitychange) to trigger the visibility reload, counting /api/ai/* requests per phase with Playwright.",
+    "Repeated the load, reload and tab hide/show phases on the final rebased build at both widths and inspected the screenshots."
+  ]
+}

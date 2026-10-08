@@ -1,6 +1,8 @@
 package alerts
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,7 +15,36 @@ import (
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.updateConfigLocked(config)
+}
 
+// ErrConfigSnapshot reports an update that was applied but could not be copied
+// for the caller.
+var ErrConfigSnapshot = errors.New("snapshot applied alert configuration")
+
+// ApplyConfigUpdate applies a client's JSON update to the stored
+// configuration: keys the update carries replace their settings and the rest
+// keep their stored values (see alertconfig.ApplyAlertConfigUpdate). Reading,
+// merging and applying under one lock keeps two partial updates from
+// reverting each other's settings. It returns a snapshot of the applied
+// config that the caller owns, so persisting it cannot write into the live
+// config's maps.
+func (m *Manager) ApplyConfigUpdate(update []byte) (AlertConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, err := alertconfig.ApplyAlertConfigUpdate(m.config, update)
+	if err != nil {
+		return AlertConfig{}, err
+	}
+	m.updateConfigLocked(config)
+	snapshot, err := alertconfig.CloneAlertConfig(m.config)
+	if err != nil {
+		return AlertConfig{}, fmt.Errorf("%w: %w", ErrConfigSnapshot, err)
+	}
+	return snapshot, nil
+}
+
+func (m *Manager) updateConfigLocked(config AlertConfig) {
 	// Clients and rollback-era config writers may not know about the additive
 	// identity schema marker. Never lower a version already held by this
 	// process; an older binary can still omit it on disk and the migration will
@@ -409,12 +440,35 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.resolveResourceThresholds(primaryResourceType, resourceID)
+			query := alertPolicyQuery{TypeKey: primaryResourceType, ResourceID: resourceID}
+			if primaryResourceType == "truenas-disk" {
+				// Judge the alert against its disk type's threshold, as the
+				// next evaluation will. An alert raised before it recorded a
+				// disk type is held to the lowest per-type trigger, so a save
+				// never resolves an alert its type would raise again.
+				diskType, known := alert.Metadata["diskType"].(string)
+				query.DiskType = diskType
+				query.DiskTypeUnknown = !known
+			}
+			thresholds := m.effectiveAlertPolicyNoLock(query).Thresholds
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+		}
+
+		// A Proxmox disk temperature alert is judged by the disk temperature
+		// policy for its disk type, as CheckProxmoxDiskTemperature judges it.
+		// The node and guest policies below have no disk temperature, so a
+		// save would otherwise resolve an alert the next poll raises again.
+		if primaryResourceType == proxmoxDiskResourceType && metricType == proxmoxDiskTemperatureMetric {
+			diskType, known := alert.Metadata["diskType"].(string)
+			threshold = m.proxmoxDiskTemperatureThresholdNoLock(diskType, !known)
+			if threshold == nil || threshold.Trigger <= 0 {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
 		}
 
 		isAgentResource := alertResourceTypeKeysContain(resourceTypeKeys, "agent")
@@ -545,7 +599,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 
-			guestThresholds := m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+			guestThresholds := m.resolveGuestAlertThresholdsNoLock(alert, resourceID)
 			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -634,11 +688,15 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 	}
 }
 
-// GetConfig returns the current alert configuration.
+// GetConfig returns a copy of the alert configuration that the caller owns.
+// Callers encode, persist and edit it outside m.mu, and UpdateConfig
+// normalizes the maps it is handed in place, so a copy that shared the live
+// config's maps let a save or a re-apply write them while evaluation read
+// them, which Go aborts as a concurrent map write.
 func (m *Manager) GetConfig() AlertConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.config
+	return m.config.Clone()
 }
 
 func cloneThreshold(threshold *HysteresisThreshold) *HysteresisThreshold {

@@ -2,9 +2,11 @@ package monitoring
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -27,9 +29,20 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 	if m == nil || m.alertManager == nil {
 		return
 	}
+	identity := m.newOperatorIntentIdentity(store)
+	m.operatorIntentIdentity.Store(identity)
+	identity.refresh()
+	identityStore := func() any {
+		if identity == nil {
+			return store
+		}
+		return identity.current()
+	}
 	identityReader, hasIdentityReader := store.(resourceIntentIdentityReader)
 	if hasIdentityReader && identityReader != nil {
-		m.alertManager.SetResourceIntentIdentityResolver(identityReader.ResolveCanonicalResourceID)
+		m.alertManager.SetResourceIntentIdentityResolver(func(ref string) (string, bool) {
+			return identityStore().(resourceIntentIdentityReader).ResolveCanonicalResourceID(ref)
+		})
 	} else {
 		m.alertManager.SetResourceIntentIdentityResolver(nil)
 	}
@@ -38,10 +51,11 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 		m.alertManager.SetOperatorIntentContextResolver(nil)
 		return
 	}
-	ancestorReader, hasAncestorReader := store.(resourceIntentAncestorReader)
+	_, hasAncestorReader := store.(resourceIntentAncestorReader)
 	m.alertManager.SetOperatorIntentContextResolver(func(resourceID string, now time.Time) (alerts.OperatorIntentContext, bool) {
+		identity := identityStore()
 		if hasIdentityReader {
-			if canonicalID, found := identityReader.ResolveCanonicalResourceID(resourceID); found {
+			if canonicalID, found := identity.(resourceIntentIdentityReader).ResolveCanonicalResourceID(resourceID); found {
 				resourceID = canonicalID
 			}
 		}
@@ -81,7 +95,7 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 			applyActiveMaintenance(state, resourceID, false)
 		}
 		if hasAncestorReader {
-			for _, ancestorID := range ancestorReader.ResolveCanonicalResourceAncestors(resourceID) {
+			for _, ancestorID := range identity.(resourceIntentAncestorReader).ResolveCanonicalResourceAncestors(resourceID) {
 				ancestorState, ancestorFound, ancestorErr := reader.GetResourceOperatorState(ancestorID)
 				if ancestorErr != nil {
 					log.Warn().Err(ancestorErr).Str("resourceID", resourceID).Str("ancestorID", ancestorID).Msg("Failed to read inherited operator maintenance state")
@@ -100,6 +114,114 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 	if m.alertManager.ReconcileOperatorIntentState() > 0 && m.state != nil {
 		m.SyncAlertState()
 	}
+}
+
+// operatorIntentIdentity is the store alert intent resolves resource
+// references and ancestors through: the published registry with saved hosts
+// that have not reported since a restart overlaid, the read state Patrol
+// resolves through and the resources API seeds from. A saved host exists only
+// there, and an operator link holds it under the link's primary, so the
+// published registry alone left the saved host's alerts reading their literal
+// reference and missed intent set on that host or on the primary.
+//
+// The alert manager resolves under its own lock, once per metric check, so
+// the overlay is kept for the published generation it was built from.
+// Publication builds it before evaluating alerts (refresh, outside that
+// lock); a lookup that races ahead of publication builds it itself. A
+// saved-host change between generations shows on the next one. Mock mode
+// carries no saved hosts: the published registry answers and any real-mode
+// overlay is dropped.
+type operatorIntentIdentity struct {
+	monitor     *Monitor
+	store       ResourceStoreInterface
+	published   unifiedresources.ReadState
+	generations interface {
+		Generation() unifiedresources.RegistryGeneration
+	}
+
+	mu        sync.Mutex
+	built     bool
+	builtFor  unifiedresources.RegistryGeneration
+	readState any
+}
+
+// newOperatorIntentIdentity returns nil for a store without generations or
+// the reference and ancestor readers, which alert intent then uses as is.
+func (m *Monitor) newOperatorIntentIdentity(store ResourceStoreInterface) *operatorIntentIdentity {
+	published, isReadState := store.(unifiedresources.ReadState)
+	generations, versioned := store.(interface {
+		Generation() unifiedresources.RegistryGeneration
+	})
+	_, resolves := store.(resourceIntentIdentityReader)
+	_, walksAncestors := store.(resourceIntentAncestorReader)
+	if !isReadState || !versioned || !resolves || !walksAncestors {
+		return nil
+	}
+	return &operatorIntentIdentity{monitor: m, store: store, published: published, generations: generations}
+}
+
+// current returns the read state for the current published generation.
+func (i *operatorIntentIdentity) current() any {
+	if mock.IsMockEnabled() {
+		i.mu.Lock()
+		i.built, i.readState = false, nil
+		i.mu.Unlock()
+		return i.store
+	}
+	generation := i.generations.Generation()
+	i.mu.Lock()
+	if i.built && i.builtFor == generation {
+		readState := i.readState
+		i.mu.Unlock()
+		return readState
+	}
+	i.mu.Unlock()
+	return i.build(generation)
+}
+
+// refresh builds the read state for the current published generation unless
+// it is already built.
+func (i *operatorIntentIdentity) refresh() {
+	if i == nil || mock.IsMockEnabled() {
+		return
+	}
+	generation := i.generations.Generation()
+	i.mu.Lock()
+	fresh := i.built && i.builtFor == generation
+	i.mu.Unlock()
+	if !fresh {
+		i.build(generation)
+	}
+}
+
+// build overlays saved hosts on the published registry outside i.mu, so a
+// concurrent lookup waits on neither the overlay nor the store reads it makes.
+// It keeps the result only while the mock-mode epoch it started in and the
+// generation it read are still current. The check and the store run inside
+// the fence, so a mode switch, which advances the fence after flipping the
+// mode, either waits for them or makes them refuse: a build that read no
+// saved hosts because mock mode was on never stands in for real mode.
+func (i *operatorIntentIdentity) build(generation unifiedresources.RegistryGeneration) any {
+	scope := i.monitor.mockModeFence.begin()
+	if mock.IsMockEnabled() {
+		return i.store
+	}
+	readState := any(i.store)
+	overlay := i.monitor.readStateWithStandaloneHostContinuity(i.published)
+	if _, ok := overlay.(resourceIntentIdentityReader); ok {
+		if _, ok := overlay.(resourceIntentAncestorReader); ok {
+			readState = overlay
+		}
+	}
+	scope.run(func() {
+		if mock.IsMockEnabled() || i.generations.Generation() != generation {
+			return
+		}
+		i.mu.Lock()
+		i.built, i.builtFor, i.readState = true, generation, readState
+		i.mu.Unlock()
+	})
+	return readState
 }
 
 func (m *Monitor) resolveBackupIntentContext(_ string, instance, node string, vmid int, now time.Time) (alerts.BackupIntentContext, bool) {

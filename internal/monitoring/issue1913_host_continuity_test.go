@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -85,6 +86,164 @@ func TestHostContinuityPreservesLiveAgentAfterReenrollment(t *testing.T) {
 			}
 			if len(continuity.RecentEntries(now.Add(-24*time.Hour))) != 2 {
 				t.Fatal("read-time hydration deleted retained enrollment history")
+			}
+		})
+	}
+}
+
+// Continuity hydration clones the registry through resource ingest, which
+// applies operator links, while the rebuild ingests supplemental records after
+// the snapshot. A link to a record-sourced guest (an agent inside a vSphere VM)
+// must hold in the published inventory either way, or the state the websocket
+// broadcasts and the resources API seeds from flips with an unrelated absent
+// machine. A saved enrollment only fills an absent machine: when the linked
+// agent itself is gone, its continuity row stays separate and the guest keeps
+// what vSphere reports. The link still names one identity, so references to
+// the agent reach the guest in every case: alert intent reads maintenance set
+// on the guest for the agent's alerts, and the resources API, which seeds a
+// registry from the read state and re-applies the links, agrees without
+// merging the saved agent into the guest.
+func TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity(t *testing.T) {
+	now := time.Now().UTC()
+	guestAgent := models.Host{
+		ID: "host-app-guest", MachineID: "machine-app-guest", Hostname: "app-guest",
+		Platform: "linux", Status: "online", LastSeen: now, IntervalSeconds: 30,
+	}
+	vmRecords := []unifiedresources.IngestRecord{{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: unifiedresources.Resource{
+			Type:       unifiedresources.ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     unifiedresources.StatusOnline,
+			LastSeen:   now,
+			VMware:     &unifiedresources.VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+	}}
+
+	unlinked := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(
+		models.StateSnapshot{Hosts: []models.Host{guestAgent}, LastUpdate: now},
+		map[unifiedresources.DataSource][]unifiedresources.IngestRecord{unifiedresources.SourceVMware: vmRecords},
+	)
+	if len(unlinked.VMs()) != 1 || len(unlinked.Hosts()) != 1 {
+		t.Fatalf("unlinked estate = %d VMs, %d agents, want one of each", len(unlinked.VMs()), len(unlinked.Hosts()))
+	}
+	vmID, agentID := unlinked.VMs()[0].ID(), unlinked.Hosts()[0].ID()
+
+	for _, tc := range []struct {
+		name       string
+		reporting  bool
+		continuity []config.HostContinuityEntry
+	}{
+		{name: "no-continuity", reporting: true},
+		{
+			name:      "absent-machine-continuity",
+			reporting: true,
+			continuity: []config.HostContinuityEntry{{
+				HostID: "absent-machine", MachineID: "other-machine", Hostname: "other-host",
+				Platform: "linux", LastSeen: now.Add(-time.Hour),
+			}},
+		},
+		{
+			name: "linked-agent-continuity-only",
+			continuity: []config.HostContinuityEntry{{
+				HostID: guestAgent.ID, MachineID: guestAgent.MachineID, Hostname: guestAgent.Hostname,
+				Platform: "linux", LastSeen: now.Add(-10 * time.Minute),
+			}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			links := unifiedresources.NewMemoryStore()
+			if err := links.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			start, end := now.Add(-time.Hour), now.Add(time.Hour)
+			if err := links.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+				CanonicalID: vmID, MaintenanceStartAt: &start, MaintenanceEndAt: &end, MaintenanceReason: "guest migration",
+			}); err != nil {
+				t.Fatalf("set guest maintenance: %v", err)
+			}
+			state := models.NewState()
+			if tc.reporting {
+				state.Hosts = []models.Host{guestAgent}
+			}
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			m := &Monitor{state: state, alertManager: manager}
+			if len(tc.continuity) > 0 {
+				continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+				for _, entry := range tc.continuity {
+					if err := continuity.Upsert(entry); err != nil {
+						t.Fatal(err)
+					}
+				}
+				m.hostContinuityStore = continuity
+			}
+			m.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(links)))
+			m.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, &testSupplementalInventoryReadinessProvider{
+				source:  unifiedresources.SourceVMware,
+				records: vmRecords,
+				settled: true,
+				readyAt: now,
+			})
+
+			resources, _ := m.UnifiedResourceSnapshot()
+			var guest, agent *unifiedresources.Resource
+			for i := range resources {
+				switch resources[i].ID {
+				case agentID:
+					agent = &resources[i]
+				case vmID:
+					guest = &resources[i]
+				}
+			}
+			if guest == nil {
+				t.Fatalf("linked VM %s missing from published inventory", vmID)
+			}
+			preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+				ResourceID: "agent:" + guestAgent.ID, ResourceType: "agent",
+				Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if preview.Reason != "operator_maintenance" {
+				t.Fatalf("agent offline alert intent = %+v, want the guest's maintenance window", preview)
+			}
+			readState, ok := m.GetUnifiedReadStateOrSnapshot().(interface {
+				ResolveCanonicalResourceID(string) (string, bool)
+			})
+			if !ok {
+				t.Fatal("monitor read state cannot resolve references")
+			}
+			if resolved, ok := readState.ResolveCanonicalResourceID("agent:" + guestAgent.ID); !ok || resolved != vmID {
+				t.Fatalf("read state resolved the agent to %q (%v), want the guest %s", resolved, ok, vmID)
+			}
+			resourcesAPI := unifiedresources.NewRegistry(links)
+			resourcesAPI.IngestResources(resources)
+			for _, ref := range []string{agentID, "agent:" + guestAgent.ID} {
+				if resolved, ok := resourcesAPI.ResolveReferenceID(ref); !ok || resolved != vmID {
+					t.Fatalf("resources API resolved %q to %q (%v), want the guest %s", ref, resolved, ok, vmID)
+				}
+			}
+			if apiGuest, ok := resourcesAPI.Get(vmID); !ok || (!tc.reporting && apiGuest.Agent != nil) {
+				t.Fatalf("resources API guest = %+v (listed=%v), want it free of the saved enrollment", apiGuest, ok)
+			}
+			if tc.reporting {
+				if agent != nil {
+					t.Fatalf("linked agent %s still published standalone", agentID)
+				}
+				if guest.VMware == nil || guest.Agent == nil {
+					t.Fatalf("published VM vmware=%t agent=%t, want the VM carrying its agent", guest.VMware != nil, guest.Agent != nil)
+				}
+				return
+			}
+			if agent == nil || agent.Status != unifiedresources.StatusOffline {
+				t.Fatalf("saved enrollment row = %+v, want its own offline row", agent)
+			}
+			if guest.Agent != nil || guest.Status != unifiedresources.StatusOnline {
+				t.Fatalf("published VM agent=%t status=%s, want vSphere's online VM untouched by the saved enrollment", guest.Agent != nil, guest.Status)
 			}
 		})
 	}

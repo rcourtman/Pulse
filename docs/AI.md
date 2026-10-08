@@ -709,11 +709,12 @@ Pulse includes a model-context layer that aggregates evidence from AI runtime su
 | **Knowledge Store** | Persists user annotations and model-safe context |
 | **Forecast Service** | Estimates capacity trajectories from historical samples |
 
-### Health Scoring
+### Check History
 
-Historical Patrol checks and the legacy operational score remain available in
-the collapsed supporting-context section. They are not the primary daily
-monitoring answer and do not replace the canonical attention queue.
+Historical Patrol checks remain available from **Activity > Finding options and
+history**, under **History**. Patrol no longer shows the legacy operational
+score. Check history is not the primary daily monitoring answer and does not
+replace the canonical attention queue.
 
 ---
 

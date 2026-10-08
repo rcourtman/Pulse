@@ -23,7 +23,6 @@ import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
 import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
 import { PATROL_CONTROL_ANCHOR, PATROL_OPERATIONS_LOOP_ANCHOR } from '@/routing/resourceLinks';
-import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
 import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
 import { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 import { PATROL_AUTONOMY_EXPERIENCE } from './patrolHomePresentation';
@@ -34,25 +33,6 @@ import {
 import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowledgementDialog';
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
-
-const isNonEmptyConfigurationDetail = (value?: string | null): value is string =>
-  Boolean(value?.trim());
-
-export function getPatrolConfigurationFailureInlineDetails(
-  failure: PatrolConfigurationFailureInput,
-): string[] {
-  const readiness = failure.readiness ?? null;
-  const codeAndCause = [failure.code, readiness?.cause || failure.blockedCause]
-    .filter(isNonEmptyConfigurationDetail)
-    .join(' · ');
-
-  return [
-    codeAndCause || undefined,
-    readiness?.summary ? `Setup: ${readiness.summary}` : undefined,
-    readiness?.provider ? `Provider: ${readiness.provider}` : undefined,
-    readiness?.model ? `Model: ${readiness.model}` : undefined,
-  ].filter(isNonEmptyConfigurationDetail);
-}
 
 export function getPatrolAutopilotExpiry(expiresAt?: string | null): Date | null {
   if (!expiresAt?.trim()) return null;

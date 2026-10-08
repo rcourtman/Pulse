@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "bab38a25b92684c978c4273200765152040624ed",
+  "verified_at": "2026-10-07T14:02:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "bb98293f7a7b7b857b40ec71a38e1e32163aa937405278dd07af2a8c9dac1118",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "3e2c91ba930a1d3faf3965a5fd68f5bb44e27465a88cbb06c23aabe500d25668"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7697, Vite :5217 serving this tree on base bab38a25b9) with Playwright page.clock installed before load and an init script recording when each setInterval starts, so the shared 30s clock and the overview hook's minute interval have known phases",
+    "Three producer-shaped copies of a live disk threshold alert (metricStatus breaching) sent in one websocket frame 15s after a shared tick and 45s after the hook's minute, then /ws data frames held (data-free pong per step) and /api reads stalled, so only the clock moves",
+    "Late-mounted card (raised 70s ago, reading 10m05s old) reads '1 min. ago' and 'Last reading: Disk 92%, 10 mins ago' at mount; held card (reading goes stale 5s after the hook's next minute) is live at mount and 1s before the cut-off, and reads 'Last reading: ..., 10 mins ago' 31s after it; Triggered (24h) drops 85 -> 84 31s after the third copy turns 24h old; no page errors; same at 1440 and 390",
+    "Same-session control with both runtime files swapped to main under the running Vite: the late card read 'this minute' and led with the old reading as live, the held card was still live 31s after the cut-off, and the 24h count rose 84 -> 85 because the just-raised copy read as future; fix restored and diff compared byte-for-byte",
+    "tsc clean; src/features/alerts, src/components/Alerts and src/utils suites pass except the Mac-only agentInstallCommand lifecycle tests"
+  ],
+  "interactions": [
+    "Loaded /alerts/overview, injected the alert copies between ticks, held the stream and stepped the page clock past the stale cut-off and the 24h boundary, at both viewports, before and after the fix"
+  ]
+}

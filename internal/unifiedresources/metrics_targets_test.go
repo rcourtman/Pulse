@@ -408,6 +408,29 @@ func TestBuildMetricsTarget_AgentSourceWinsForPhysicalDiskMetrics(t *testing.T) 
 	}
 }
 
+// An agent disk's source ID carries its host while its metrics are written
+// under its serial or WWN, so a disk only the agent reports must resolve the
+// writer's key from its host-scoped source target. Without hardware identity
+// the source ID is the writer's key.
+func TestBuildMetricsTarget_AgentOnlyPhysicalDiskReadsTheWritersKey(t *testing.T) {
+	host := models.Host{ID: "agent-uuid", Hostname: "tower"}
+	for _, disk := range []models.HostDiskSMART{
+		{Device: "sda", Serial: "WD-WCC4N0000001", WWN: "5000c500a1b2c3d4"},
+		{Device: "sdb", WWN: "5000c500a1b2c3d5"},
+		{Device: "sdc"},
+	} {
+		resource, _ := resourceFromHostSMARTDisk(host, disk)
+		sourceID := HostSMARTDiskSourceID(host, disk)
+		target := BuildMetricsTarget(resource, []SourceTarget{{Source: SourceAgent, SourceID: sourceID}})
+		if target == nil {
+			t.Fatalf("%s: BuildMetricsTarget() returned nil for agent source %q", disk.Device, sourceID)
+		}
+		if want := HostSMARTDiskMetricID(host, disk); target.ResourceType != "disk" || target.ResourceID != want {
+			t.Fatalf("%s: metrics target = %+v, want disk/%s", disk.Device, *target, want)
+		}
+	}
+}
+
 func TestBuildMetricsTarget_PhysicalDiskSerialWinsOverAllSources(t *testing.T) {
 	// When the disk has a serial number, it becomes the metric ID
 	// regardless of source, so the priority order doesn't matter.

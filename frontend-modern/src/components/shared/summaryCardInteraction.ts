@@ -1,11 +1,6 @@
-export type SummaryCardInteractionState = 'default' | 'active' | 'inactive';
 export type SummaryGroupMemberInteractionState = 'default' | 'preview' | 'pinned';
 export type SummaryScopeKind = 'page' | 'group' | 'entity';
 export type SummaryScopeSource = 'page' | 'preview' | 'pinned';
-
-type SummarySeriesIdentity = {
-  id?: string | null;
-};
 
 export interface SummarySeriesGroupScope {
   id: string;
@@ -93,7 +88,6 @@ export const resolveSummaryGroupMemberInteractionState = (options: {
 };
 
 export const resolveSummaryScopeState = (options: {
-  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
   hoveredGroupScope?: SummarySeriesGroupScope | null;
@@ -106,19 +100,6 @@ export const resolveSummaryScopeState = (options: {
       hoveredGroupScope: options.hoveredGroupScope,
       focusedGroupScope: options.focusedGroupScope,
     });
-
-  const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
-  if (
-    chartHoveredSeriesId &&
-    (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))
-  ) {
-    return {
-      groupScope,
-      kind: 'entity',
-      seriesId: chartHoveredSeriesId,
-      source: 'preview',
-    };
-  }
 
   const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
   if (
@@ -175,63 +156,9 @@ export const resolveSummaryScopeState = (options: {
 };
 
 export function resolveSummaryActiveSeriesId(options: {
-  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
   groupScope?: SummarySeriesGroupScope | null;
 }): string | null {
   return resolveSummaryScopeState(options).seriesId;
-}
-
-export function filterSummarySeriesByGroupScope<T extends SummarySeriesIdentity>(
-  series: readonly T[],
-  groupScope?: SummarySeriesGroupScope | null,
-): T[] {
-  const normalizedScope = normalizeSummarySeriesGroupScope(groupScope);
-  if (!normalizedScope) {
-    return [...series];
-  }
-  return series.filter((entry) => isSummarySeriesInGroupScope(normalizedScope, entry.id));
-}
-
-export function resolveSummaryCardInteractionState(options: {
-  series: readonly SummarySeriesIdentity[];
-  chartHoveredSeriesId?: string | null;
-  hoveredSeriesId?: string | null;
-  focusedSeriesId?: string | null;
-  hoveredGroupScope?: SummarySeriesGroupScope | null;
-  focusedGroupScope?: SummarySeriesGroupScope | null;
-  groupScope?: SummarySeriesGroupScope | null;
-}): SummaryCardInteractionState {
-  const groupScope =
-    normalizeSummarySeriesGroupScope(options.groupScope) ??
-    resolveSummaryGroupScope({
-      hoveredGroupScope: options.hoveredGroupScope,
-      focusedGroupScope: options.focusedGroupScope,
-    });
-  const activeSeriesId = resolveSummaryActiveSeriesId({
-    chartHoveredSeriesId: options.chartHoveredSeriesId,
-    hoveredSeriesId: options.hoveredSeriesId,
-    focusedSeriesId: options.focusedSeriesId,
-    groupScope,
-  });
-  if (!activeSeriesId) {
-    if (groupScope) {
-      for (const series of options.series) {
-        if (isSummarySeriesInGroupScope(groupScope, series.id)) {
-          return 'active';
-        }
-      }
-      return 'inactive';
-    }
-    return 'default';
-  }
-
-  for (const series of options.series) {
-    if (normalizeSeriesId(series.id) === activeSeriesId) {
-      return 'active';
-    }
-  }
-
-  return 'inactive';
 }
