@@ -28,6 +28,8 @@ TESTS = (
     "test_agent_profile_docs.py",
     "test_pbs_docs.py",
     "test_audit_recovery_docs.py",
+    "test_notification_troubleshooting_docs.py",
+    "test_webhook_verification_docs.py",
     "test_pve_backup_troubleshooting_docs.py",
     "test_vm_disk_diagnostics.py",
     "test_memory_troubleshooting_docs.py",
