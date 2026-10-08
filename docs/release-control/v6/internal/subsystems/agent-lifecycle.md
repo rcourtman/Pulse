@@ -28,6 +28,31 @@ command, install or helper lifecycle policy changes. PMG failed-save and scope
 readback controls live in `internal/api/configapi/pmg_scope_test.go`; installed
 agent acceptance remains independent.
 
+### Windows service removal is a prerequisite for destructive continuation
+
+The Windows installer shares one service-removal boundary between replacement
+and uninstall. An SCM read error is unknown, not absence: only the cmdlet's
+explicit service-not-found result authorises the already-removed path. An
+existing service must reach `Stopped` within 30 seconds, with a refreshed state
+read; a pending stop is awaited without requesting it again. The installer
+requests no forced dependent-service stop and kills no process.
+
+Controller handles are closed before `sc.exe delete`. Its exit must succeed,
+and fresh SCM reads must then confirm actual absence within 30 seconds;
+"marked for deletion" alone is insufficient. A failed read, stop, delete or
+absence observation exits nonzero before binary replacement, token/connection
+mutation, server deregistration or local erasure. Uninstall also reports local
+cleanup failure instead of declaring completion. Successful fresh install,
+replacement and repeated uninstall retain their existing enrolment semantics.
+
+`TestInstallPS1ServiceRemovalRefusesUnknownRuntimeBeforeMutation` pins both
+callers and adverse structural controls. `TestInstallPS1ServiceRemovalRuntime`
+executes the actual production functions with SCM failure/delay controls, using
+Windows PowerShell 5.1 in the existing native Windows job. A missing PowerShell
+runtime is an explicit skip, not native or mocked execution. The real Windows
+service lifecycle job remains required evidence for installed behaviour; these
+controls do not establish published-agent recovery or auto-update acceptance.
+
 ### Installer identity recovery accounts for the whole legacy file
 
 The descriptor-safe collector command remains the primary agent-ID reader. Its
@@ -9232,3 +9257,28 @@ replaces that link, splitting the agent back out as unlink does. Agent
 registration, enrolment, install, update, removal, report identity and
 continuity are unchanged, and an agent's own declared node link still
 ignores exclusions.
+
+### Windows installer acceptance engine and absence (8 October 2026)
+
+Native installer parsing, service-removal failure controls and actual lifecycle
+execution use Windows PowerShell 5.1, never a PowerShell 7 substitute. A missing
+or mismatched engine on Windows fails rather than skips. The dedicated runner
+rejects pre-existing or unknown service/state instead of deleting it before the
+proof. Both first and repeated uninstall require independent SCM, binary, state
+and listener absence; only the exact SCM not-found identity/category proves
+absence. Failed listener enumeration remains a failure. This changes validation,
+not installer authority, transport, enrolment or host containment.
+
+`TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
+complete supplied parent and fourteen removed/changed controls. Native
+`TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
+functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
+the existing real lifecycle job then uses real SCM. Linux skips are explicit and
+do not establish a Windows parser, native runtime, reboot or installed result.
+
+Clean-runner admission checks service, binary, state and listener absence before
+machine-environment mutation. A rejected admission cannot clear a pre-existing
+machine setting. Cleanup restores only the captured prior setting, even when
+owned server teardown fails; an unconfirmed stop fails and retains the handle
+rather than reporting clean teardown. Real Windows execution and full terminal
+cleanup evidence still have to be returned by the existing native CI job.
