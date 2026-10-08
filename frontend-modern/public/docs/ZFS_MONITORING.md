@@ -45,7 +45,7 @@ it appear in Pulse. For a pool you intentionally keep unregistered:
 capacity estimate on RAIDZ. These commands do not change the pool or register
 it as Proxmox storage.
 
-## ⚙️ Requirements
+## ⚙ Requirements
 
 Pool health and device status come from the Proxmox API and need `Sys.Audit`
 on the affected node's disk scope. Use the **user, realm and token ID actually

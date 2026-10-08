@@ -64,7 +64,7 @@ If you intentionally want every proxy-authenticated user to be an admin, leave `
 
 Running Pulse 5.x? Role gating behaves differently there and needs two extra steps — see [Pulse 5.x (end-of-life)](#pulse-5x-end-of-life).
 
-## ⚠️ Header Trust Boundary
+## ⚠ Header Trust Boundary
 
 Pulse trusts these headers completely — they *are* the identity and the privilege decision. Two deployment requirements make that safe, and both are yours to enforce:
 
