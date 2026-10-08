@@ -5925,6 +5925,71 @@ func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
 	if len(after) != len(before) {
 		t.Fatalf("mock view wrote %d change rows into the durable store", len(after)-len(before))
 	}
+
+	// Reconcile the mock link proposal with the current latest-decision
+	// rule: a fresh monitor must restore the link, and unlink/relink must
+	// invalidate the seed cache without a fixture tick. Mock seeds retain
+	// their own default thresholds, not the live adapter's configured ones.
+	restarted := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(restarted.alertManager.Stop)
+	adapter := restarted.resourceStore.(*unifiedresources.MonitorAdapter)
+	assertMockLink := func(wantLinked bool) time.Time {
+		t.Helper()
+		frontend := restarted.BuildBroadcastFrontendState()
+		var vmFound, agentFound, vmHasAgent bool
+		for _, resource := range frontend.Resources {
+			if resource.ID == vmID {
+				vmFound, vmHasAgent = true, len(resource.Agent) > 0
+			}
+			if resource.ID == agentID {
+				agentFound = true
+			}
+		}
+		if !vmFound || vmHasAgent != wantLinked || agentFound == wantLinked {
+			t.Fatalf("mock link=%t: vm=%t vmAgent=%t standaloneAgent=%t", wantLinked, vmFound, vmHasAgent, agentFound)
+		}
+		seed, freshness, thresholds := restarted.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(thresholds) != 0 {
+			t.Fatalf("mock seed borrowed live thresholds: %v", thresholds)
+		}
+		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+			t.Fatalf("live adapter threshold = %v, want configured four minutes", got)
+		}
+		rest := unifiedresources.NewRegistryWithStaleThresholds(store, thresholds)
+		rest.IngestResources(seed)
+		_, hasStandaloneAgent := rest.Get(agentID)
+		if hasStandaloneAgent == wantLinked {
+			t.Fatalf("REST seed link=%t: standalone agent=%t", wantLinked, hasStandaloneAgent)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture version moved from %d to %d during operator lifecycle", version, got)
+		}
+		return freshness
+	}
+	restartFreshness := assertMockLink(true)
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: vmID, ResourceB: agentID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	// Reads deliberately reuse a generation younger than two seconds.
+	// Apply the owning ingest/rebuild boundary instead of waiting for that
+	// throttle or claiming a recorded decision changes a previous listing.
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	unlinkFreshness := assertMockLink(false)
+	if !unlinkFreshness.After(restartFreshness) {
+		t.Fatal("unlink must advance the mock seed's freshness")
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	if relinkFreshness := assertMockLink(true); !relinkFreshness.After(unlinkFreshness) {
+		t.Fatal("relink must advance the mock seed's freshness")
+	}
 }
 
 // TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
