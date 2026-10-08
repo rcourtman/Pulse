@@ -817,40 +817,6 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 	return nil
 }
 
-// normalizeHysteresisThreshold ensures a hysteresis threshold pointer has valid
-// trigger/clear values. If the pointer is nil or trigger is negative, it is set
-// to the given defaults. Trigger==0 means "disabled" (clear forced to 0).
-// Otherwise a non-positive clear is derived from trigger-5 with defaultClear as floor.
-func normalizeHysteresisThreshold(t **alerts.HysteresisThreshold, defaultTrigger, defaultClear float64) {
-	if *t == nil || (*t).Trigger < 0 {
-		*t = &alerts.HysteresisThreshold{Trigger: defaultTrigger, Clear: defaultClear}
-	} else if (*t).Trigger == 0 {
-		(*t).Clear = 0
-	} else if (*t).Clear <= 0 {
-		(*t).Clear = (*t).Trigger - 5
-		if (*t).Clear <= 0 {
-			(*t).Clear = defaultClear
-		}
-	}
-}
-
-// normalizeStorageDefault normalizes a non-pointer HysteresisThreshold used for
-// storage defaults. Same logic as normalizeHysteresisThreshold but operates on
-// a value (not pointer) and uses 0 as the clear floor.
-func normalizeStorageDefault(t *alerts.HysteresisThreshold) {
-	if t.Trigger < 0 {
-		t.Trigger = 85
-		t.Clear = 80
-	} else if t.Trigger == 0 {
-		t.Clear = 0
-	} else if t.Clear <= 0 {
-		t.Clear = t.Trigger - 5
-		if t.Clear < 0 {
-			t.Clear = 0
-		}
-	}
-}
-
 // normalizeAlertDefaults applies shared normalization logic to an AlertConfig.
 // Called by both SaveAlertConfig and LoadAlertConfig to avoid duplicating the
 // same validation and defaulting code.
@@ -858,7 +824,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	alerts.NormalizeAlertConfigAliases(config)
 
 	// Storage threshold
-	normalizeStorageDefault(&config.StorageDefault)
+	config.StorageDefault = *alerts.NormalizeHysteresisThreshold(&config.StorageDefault, 85, 80, "storage")
 
 	if config.MinimumDelta <= 0 {
 		config.MinimumDelta = 2.0
@@ -871,9 +837,9 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	}
 
 	// Agent defaults
-	normalizeHysteresisThreshold(&config.AgentDefaults.CPU, 80, 75)
-	normalizeHysteresisThreshold(&config.AgentDefaults.Memory, 85, 80)
-	normalizeHysteresisThreshold(&config.AgentDefaults.Disk, 90, 85)
+	config.AgentDefaults.CPU = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.CPU, 80, 75, "agent.cpu")
+	config.AgentDefaults.Memory = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.Memory, 85, 80, "agent.memory")
+	config.AgentDefaults.Disk = alerts.NormalizeHysteresisThreshold(config.AgentDefaults.Disk, 90, 85, "agent.disk")
 
 	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
@@ -882,8 +848,11 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 		config.TimeThresholds = make(map[string]int)
 	}
 	defaultDelay := 5
+	// Zero means no delay, as the alert manager reads it
+	// (alerts.Manager.UpdateConfig keeps it); only a missing or negative
+	// delay takes the default.
 	ensureDelay := func(key string) {
-		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
+		if delay, ok := config.TimeThresholds[key]; !ok || delay < 0 {
 			config.TimeThresholds[key] = defaultDelay
 		}
 	}
@@ -892,7 +861,7 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 	ensureDelay("agent")
 	ensureDelay("storage")
 	ensureDelay("pbs")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
+	if delay, ok := config.TimeThresholds["all"]; ok && delay < 0 {
 		config.TimeThresholds["all"] = defaultDelay
 	}
 
@@ -962,6 +931,11 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Normalize a copy. Callers hand in alerts.Manager.GetConfig() snapshots
+	// and configs they have just applied to the manager, so normalizing their
+	// maps and threshold pointers in place wrote into the running config.
+	config = config.Clone()
+
 	// Save-specific: normalize override clear values before shared defaults run
 	if config.MinimumDelta <= 0 {
 		margin := config.HysteresisMargin
@@ -1005,70 +979,17 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	alertOrphaned := true
 	data, err := c.fs.ReadFile(c.alertFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return default config if file doesn't exist
-			return &alerts.AlertConfig{
-				Enabled: true,
-				GuestDefaults: alerts.ThresholdConfig{
-					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-				},
-				NodeDefaults: alerts.ThresholdConfig{
-					CPU:         &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory:      &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:        &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-					Temperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-				},
-				AgentDefaults: alerts.ThresholdConfig{
-					CPU:    &alerts.HysteresisThreshold{Trigger: 80, Clear: 75},
-					Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-					Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
-				},
-				Schedule: alerts.ScheduleConfig{
-					Cooldown:        5,
-					MaxAlertsHour:   10,
-					InitialNotify:   "all",
-					NotifyOnResolve: true,
-					Grouping: alerts.GroupingConfig{
-						Enabled: true,
-						Window:  30,
-						ByNode:  true,
-						ByGuest: false,
-					},
-				},
-				StorageDefault: alerts.HysteresisThreshold{Trigger: 85, Clear: 80},
-				TimeThresholds: map[string]int{
-					"guest":   5,
-					"node":    5,
-					"agent":   5,
-					"storage": 5,
-					"pbs":     5,
-				},
-				MinimumDelta:      2.0,
-				SuppressionWindow: 5,
-				HysteresisMargin:  5.0,
-				SnapshotDefaults: alerts.SnapshotAlertConfig{
-					Enabled:         false,
-					WarningDays:     30,
-					CriticalDays:    45,
-					WarningSizeGiB:  0,
-					CriticalSizeGiB: 0,
-				},
-				BackupDefaults: alerts.BackupAlertConfig{
-					Enabled:       false,
-					WarningDays:   7,
-					CriticalDays:  14,
-					FreshHours:    24,
-					StaleHours:    72,
-					AlertOrphaned: &alertOrphaned,
-					IgnoreVMIDs:   []string{},
-				},
-				Overrides: make(map[string]alerts.ThresholdConfig),
-			}, nil
+			// A fresh install has no alerts.json yet. It starts from the alert
+			// manager's factory configuration; a second literal here left out
+			// Docker container thresholds, so they loaded as Off. Activation
+			// is a stored decision, not a factory value: leaving it unset lets
+			// UpdateConfig keep a running manager's state.
+			config := alerts.DefaultAlertConfig()
+			config.ActivationState = ""
+			return &config, nil
 		}
 		return nil, err
 	}
@@ -1135,7 +1056,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	}
 
 	// Load-specific: NodeDefaults.Temperature normalization
-	normalizeHysteresisThreshold(&config.NodeDefaults.Temperature, 80, 75)
+	config.NodeDefaults.Temperature = alerts.NormalizeHysteresisThreshold(config.NodeDefaults.Temperature, 80, 75, "node.temperature")
 
 	// Shared normalization (storage, host defaults, time thresholds, snapshots, backups, etc.)
 	normalizeAlertDefaults(&config)

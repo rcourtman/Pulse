@@ -246,7 +246,7 @@ func TestNormalizeDiskFillByType(t *testing.T) {
 		}
 	})
 
-	t.Run("negative trigger resets to default", func(t *testing.T) {
+	t.Run("negative trigger resets to default, negative clear derives", func(t *testing.T) {
 		cfg := &AlertConfig{
 			DiskFillByType: map[string]HysteresisThreshold{
 				"nvme": {Trigger: -1, Clear: 10},
@@ -259,9 +259,10 @@ func TestNormalizeDiskFillByType(t *testing.T) {
 		if nvme.Trigger != 92 || nvme.Clear != 87 {
 			t.Fatalf("nvme = %+v, want default reset {Trigger:92 Clear:87}", nvme)
 		}
+		// A positive trigger is kept; only its clear is derived.
 		sata := cfg.DiskFillByType["sata"]
-		if sata.Trigger != 90 || sata.Clear != 85 {
-			t.Fatalf("sata = %+v, want default reset {Trigger:90 Clear:85}", sata)
+		if sata.Trigger != 88 || sata.Clear != 83 {
+			t.Fatalf("sata = %+v, want {Trigger:88 Clear:83}", sata)
 		}
 	})
 
@@ -287,9 +288,9 @@ func TestNormalizeDiskFillByType(t *testing.T) {
 }
 
 func TestDefaultAlertConfigSeedsDiskFillByType(t *testing.T) {
-	cfg := defaultAlertConfig()
+	cfg := DefaultAlertConfig()
 	if cfg.DiskFillByType == nil {
-		t.Fatal("expected defaultAlertConfig to seed DiskFillByType, got nil")
+		t.Fatal("expected DefaultAlertConfig to seed DiskFillByType, got nil")
 	}
 	if nvme, ok := cfg.DiskFillByType["nvme"]; !ok || nvme.Trigger != 92 || nvme.Clear != 87 {
 		t.Fatalf("nvme = %+v ok=%v, want {Trigger:92 Clear:87}", nvme, ok)
@@ -356,7 +357,7 @@ func TestNormalizeDiskTempByType(t *testing.T) {
 		}
 	})
 
-	t.Run("negative trigger resets to default", func(t *testing.T) {
+	t.Run("negative trigger resets to default, negative clear derives", func(t *testing.T) {
 		cfg := &AlertConfig{
 			DiskTempByType: map[string]HysteresisThreshold{
 				"nvme": {Trigger: -1, Clear: 10},
@@ -369,9 +370,10 @@ func TestNormalizeDiskTempByType(t *testing.T) {
 		if nvme.Trigger != 70 || nvme.Clear != 65 {
 			t.Fatalf("nvme = %+v, want default reset {Trigger:70 Clear:65}", nvme)
 		}
+		// A positive trigger is kept; only its clear is derived.
 		sas := cfg.DiskTempByType["sas"]
-		if sas.Trigger != 65 || sas.Clear != 60 {
-			t.Fatalf("sas = %+v, want default reset {Trigger:65 Clear:60}", sas)
+		if sas.Trigger != 64 || sas.Clear != 59 {
+			t.Fatalf("sas = %+v, want {Trigger:64 Clear:59}", sas)
 		}
 	})
 
@@ -397,9 +399,9 @@ func TestNormalizeDiskTempByType(t *testing.T) {
 }
 
 func TestDefaultAlertConfigSeedsDiskTempByType(t *testing.T) {
-	cfg := defaultAlertConfig()
+	cfg := DefaultAlertConfig()
 	if cfg.DiskTempByType == nil {
-		t.Fatal("expected defaultAlertConfig to seed DiskTempByType, got nil")
+		t.Fatal("expected DefaultAlertConfig to seed DiskTempByType, got nil")
 	}
 	if nvme, ok := cfg.DiskTempByType["nvme"]; !ok || nvme.Trigger != 70 || nvme.Clear != 65 {
 		t.Fatalf("nvme = %+v ok=%v, want {Trigger:70 Clear:65}", nvme, ok)

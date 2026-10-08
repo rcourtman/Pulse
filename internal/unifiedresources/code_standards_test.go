@@ -729,6 +729,56 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 }
 
+// The resources API rebuilds its registry from a monitor's seed, so the
+// rebuild must judge source freshness by the thresholds that seed was judged
+// by, delivered with the seed in one call, and must not reuse a registry built
+// with other thresholds. A bare NewRegistry falls back to the defaults and
+// marks a slowly polled source stale between its configured polls.
+func TestResourceAPIRebuildsWithTheSeedingMonitorStaleThresholds(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"registry := unified.NewRegistryWithStaleThresholds(store, seed.staleThresholds)",
+		"seed.resources, seed.lastUpdate, thresholds = provider.UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID)",
+		"resources, lastUpdate, thresholds := provider.UnifiedResourceSnapshotWithStaleThresholds()",
+		"seed.staleThresholds = maps.Clone(thresholds)",
+		"maps.Equal(entry.staleThresholds, seed.staleThresholds)",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resourceapi/resources.go must contain %q", snippet)
+		}
+	}
+	if strings.Contains(source, "unified.NewRegistry(store)") {
+		t.Fatal("internal/api/resourceapi/resources.go must not rebuild a tenant registry with the default stale thresholds")
+	}
+}
+
+// Report-merge undoes an operator link through the registry's fold record. A
+// candidate ID derived from the merged resource's type names neither side of
+// a link, and the resources API's registry, seeded from the monitor's
+// already-linked listing, never holds the folded row to derive one from.
+func TestResourceAPIReportMergeExcludesRegistryLinkFolds(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resourceapi", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read resources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"linkFolds := registry.ManualLinkFolds(path)",
+		"if len(resource.Sources) < 2 && len(linkFolds) == 0 {",
+		"pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("internal/api/resourceapi/resources.go report-merge must contain %q", snippet)
+		}
+	}
+}
+
 func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "config", "availability.go"): {

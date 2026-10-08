@@ -187,15 +187,10 @@ func healthAlertSeverity(level string) int {
 	}
 }
 
+// availabilityFailureConfirmed reads the compatibility summary, which ranks a
+// confirmed outage on any attached check first.
 func availabilityFailureConfirmed(resource Resource) bool {
-	if resource.Availability == nil || !resource.Availability.Enabled || resource.Availability.Available {
-		return false
-	}
-	threshold := resource.Availability.FailureThreshold
-	if threshold <= 0 {
-		threshold = 1
-	}
-	return resource.Availability.ConsecutiveFailures >= threshold
+	return resource.Availability != nil && availabilityOutageConfirmed(*resource.Availability)
 }
 
 func availabilityFailureDetail(resource Resource) string {

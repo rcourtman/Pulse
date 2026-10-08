@@ -57,6 +57,38 @@ func resourceStaleThresholdsForConfig(
 	return thresholds
 }
 
+// UnifiedResourceSnapshotWithStaleThresholds is UnifiedResourceSnapshot
+// plus the stale thresholds the snapshot's registry judged its sightings by.
+// A consumer that rebuilds a registry from the snapshot, as the resources API
+// does, judges by the same thresholds, so its stale pass and presentation
+// agree with the monitor's views.
+func (m *Monitor) UnifiedResourceSnapshotWithStaleThresholds() ([]unifiedresources.Resource, time.Time, map[unifiedresources.DataSource]time.Duration) {
+	view := m.currentUnifiedStateView()
+	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness, view.staleThresholds
+}
+
+// unifiedResourceThresholdProjectionLister lists a read state with the stale
+// thresholds the listed registry generation was judged by (MonitorAdapter,
+// and any wrapper embedding one).
+type unifiedResourceThresholdProjectionLister interface {
+	GetAllWithMetricsTargetsAndStaleThresholds() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget, map[unifiedresources.DataSource]time.Duration)
+}
+
+// unifiedProjectionResourcesWithStaleThresholds lists a read state with the
+// thresholds the listed generation was judged by: the resource store's
+// configured ones, or nil (the registry defaults) for a read state that
+// reports none, such as a view built from mock fixtures or a bare snapshot.
+func unifiedProjectionResourcesWithStaleThresholds(
+	lister unifiedResourceReadStateLister,
+) ([]unifiedresources.Resource, MetricsTargetResourceStore, map[unifiedresources.DataSource]time.Duration) {
+	if projection, ok := lister.(unifiedResourceThresholdProjectionLister); ok {
+		resources, targets, thresholds := projection.GetAllWithMetricsTargetsAndStaleThresholds()
+		return resources, projectionMetricsTargets(targets), thresholds
+	}
+	resources, targets := unifiedProjectionResources(lister)
+	return resources, targets, nil
+}
+
 func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time.Duration {
 	if m == nil {
 		return ResourceStaleThresholdsForConfig(nil)

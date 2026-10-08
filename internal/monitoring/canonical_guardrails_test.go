@@ -543,8 +543,12 @@ func TestStoreRefreshTakesItsMockModeScopeBeforeReadingState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
 	}
-	if got := strings.Count(string(data), "m.mockModeFence.advance()\n\t\tm.alertManager.ClearActiveAlerts()"); got != 2 {
-		t.Fatalf("SetMockMode must end the mock-mode epoch immediately before clearing alerts in both directions, found %d", got)
+	source := string(data)
+	if got := strings.Count(source, "m.mockModeFence.advance()\n\tm.alertManager.ClearActiveAlerts()"); got != 1 {
+		t.Fatalf("endMockModeEpoch must end the mock-mode epoch immediately before clearing alerts, found %d", got)
+	}
+	if !strings.Contains(source, "for _, monitor := range monitors {\n\t\tmonitor.endMockModeEpoch(enable)\n\t}") {
+		t.Fatal("SetMockMode must end the epoch of every monitor the switch reaches")
 	}
 }
 
@@ -646,7 +650,9 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	for _, snippet := range []string{
 		"metricsTargetResolver := unifiedView.metricsTargets",
 		"metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)",
-		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
+		"broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources, unifiedView.staleThresholds)",
+		"if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {",
+		"return unifiedresources.CoalescePresentationHostResourcesWithStaleThresholds(resources, staleThresholds)",
 		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)",
 		"attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
@@ -1664,16 +1670,11 @@ func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
 	}
-	source := string(data)
-	requiredSnippets := []string{
-		"if err := mock.SetEnabled(true); err != nil {",
-		"if err := mock.SetEnabled(false); err != nil {",
-		"return err",
-	}
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor.go must contain %q", snippet)
-		}
+	source := strings.Join(strings.Fields(string(data)), " ")
+	authorize := strings.Index(source, "if err := mock.SetEnabled(enable); err != nil { return err }")
+	reset := strings.Index(source, "monitor.endMockModeEpoch(enable)")
+	if authorize < 0 || reset < 0 || authorize > reset {
+		t.Fatal("SetMockMode must return the mock.SetEnabled error before it ends any monitor's epoch or resets its state")
 	}
 }
 
@@ -2076,7 +2077,7 @@ func TestHostPhysicalDiskIOMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	requiredSnippets := []string{
 		"m.writeHostPhysicalDiskIOMetrics(host, now)",
 		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {",
-		`resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)`,
+		`resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)`,
 		`m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "disk", busyPct, now)`,
@@ -2161,7 +2162,6 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"if mock.IsMockEnabled() {",
 				"return nil",
 				"func (m *Monitor) prewarmMockDashboardChartCaches() {",
-				"_, _ = m.mockStorageSummaryCapacityTrendCached(24 * time.Hour)",
 			},
 		},
 		{
@@ -2170,7 +2170,6 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {",
 				"values := canonicalMetricSeries(resourceType, resourceID, metricType, timestamps)",
 				"return lttb(points, chartDownsampleTarget)",
-				"func (m *Monitor) mockStorageSummaryCapacityTrend(duration time.Duration) []MetricPoint {",
 				`usageValues := canonicalMetricSeries("storage", storageID, "usage", timestamps)`,
 			},
 		},

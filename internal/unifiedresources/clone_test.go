@@ -269,6 +269,25 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
+// Operator link folds ride clones, so a registry seeded from another
+// registry's listing can name each link's pair, and stay detached from them.
+func TestCloneResource_CarriesLinkFolds(t *testing.T) {
+	original := &Resource{
+		ID:        "vm-1",
+		linkFolds: []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent}}},
+	}
+	cloned := cloneResource(original)
+	if len(cloned.linkFolds) != 1 || cloned.linkFolds[0].FoldedID != "agent-1" {
+		t.Fatalf("clone lost link folds: %+v", cloned.linkFolds)
+	}
+
+	cloned.linkFolds[0].Sources[0] = SourceDocker
+	cloned.linkFolds[0].FoldedID = "MUTATED"
+	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" {
+		t.Errorf("mutating cloned link folds affected the original: %+v", original.linkFolds)
+	}
+}
+
 func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 	checkedAt := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
 	succeededAt := checkedAt.Add(-time.Minute)
@@ -515,6 +534,25 @@ func TestCloneProxmoxData_TemperatureIsolation(t *testing.T) {
 	cloned.LoadAverage[0] = 99.0
 	if original.LoadAverage[0] != 1.0 {
 		t.Error("mutating cloned LoadAverage should not affect original")
+	}
+}
+
+// List and presentation readers get detached clones of a node, so the
+// registry-derived sensor setup verdict travels with the clone and stays put
+// when the live node's verdict changes afterwards.
+func TestCloneProxmoxDataKeepsDerivedSensorSetupVerdict(t *testing.T) {
+	outdated := true
+	original := &ProxmoxData{NodeName: "pve", SensorSetupOutdated: &outdated}
+	cloned := cloneProxmoxData(original)
+	if cloned.SensorSetupOutdated == nil || !*cloned.SensorSetupOutdated {
+		t.Fatal("clone dropped the derived sensor setup verdict")
+	}
+	if cloned.SensorSetupOutdated == original.SensorSetupOutdated {
+		t.Fatal("clone shares the live node's verdict pointer")
+	}
+	*original.SensorSetupOutdated = false
+	if !*cloned.SensorSetupOutdated {
+		t.Fatal("changing the live node's verdict changed a clone already handed out")
 	}
 }
 
@@ -1010,5 +1048,20 @@ func TestCloneMaterializedResourceDetachesCanonicalPolicy(t *testing.T) {
 	}
 	if cloneMaterializedResource(nil).ID != "" || cloneMaterializedResourcePtr(nil) != nil {
 		t.Fatal("nil materialized clone changed absence")
+	}
+}
+
+// The resources API seeds its registry from the monitor's read state, so the
+// marker on a row saved-host continuity introduced must ride the clone, or the
+// API's link pass would fold the saved agent into its linked guest.
+func TestCloneResourceKeepsContinuityMarker(t *testing.T) {
+	saved := Resource{ID: "agent-saved", Type: ResourceTypeAgent, continuityOnly: true}
+	if clone := cloneResource(&saved); !clone.continuityOnly {
+		t.Fatal("clone dropped the continuity marker")
+	}
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{saved})
+	if seeded, ok := rr.Get(saved.ID); !ok || !seeded.continuityOnly {
+		t.Fatalf("seeded row = %+v (listed=%v), want the continuity marker kept", seeded, ok)
 	}
 }

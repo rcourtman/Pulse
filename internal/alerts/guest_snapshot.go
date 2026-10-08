@@ -251,6 +251,9 @@ func guestSnapshotFromAlert(alert *Alert, resourceID string) guestSnapshot {
 	if snapshot.VMID <= 0 {
 		snapshot.VMID = metadataIntValue(alert.Metadata["guestVmid"])
 	}
+	// Tags carry pulse-relaxed, so a config save re-judges the alert by the
+	// thresholds CheckGuest raised it under.
+	snapshot.Tags, _ = metadataStringsValue(alert.Metadata, "tags")
 	return snapshot.normalizeCollections()
 }
 

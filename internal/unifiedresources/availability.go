@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 // AvailabilityChecksForResource returns the complete canonical availability
@@ -26,6 +29,25 @@ func AvailabilityCheckByTargetID(resource Resource, targetID string) *Availabili
 		}
 	}
 	return nil
+}
+
+// availabilityChecksProveOnline reports whether any availability check
+// projected onto a monitored resource proves, at now, that the resource
+// answers. Only a passing check with current evidence does. Each check is
+// judged by its own evidence window (two poll intervals for a local check,
+// the report window for a remote probe), so one check's recent run cannot
+// vouch for another check's old pass, and a local check that missed its
+// cadence keeps Available but proves nothing. A failing check proves only
+// that one port or service does not answer, so it never decides the
+// resource's status at all: not online, offline or warning, current or quiet.
+func availabilityChecksProveOnline(checks []AvailabilityData, now time.Time) bool {
+	for _, check := range checks {
+		if check.Enabled && check.Available && check.Evidence != nil &&
+			check.Evidence.FreshnessAt(now) == operationaltrust.EvidenceFresh {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeResourceAvailability(resource *Resource) {
@@ -99,6 +121,10 @@ func availabilityCheckKey(check AvailabilityData) string {
 	return fmt.Sprintf("endpoint:%s:%s:%d:%s", protocol, address, check.Port, path)
 }
 
+// primaryAvailabilityCheck selects the singular compatibility summary: the
+// worst check, ties going to the first by key. Health and row presentation
+// read only the summary, so a confirmed outage on any check must outrank a
+// failure that has not yet reached its threshold.
 func primaryAvailabilityCheck(checks []AvailabilityData) *AvailabilityData {
 	if len(checks) == 0 {
 		return nil
@@ -113,13 +139,39 @@ func primaryAvailabilityCheck(checks []AvailabilityData) *AvailabilityData {
 }
 
 func availabilityCheckPriority(check AvailabilityData) int {
-	if check.LastChecked != nil && !check.Available {
+	if availabilityOutageConfirmed(check) {
 		return 0
+	}
+	if check.LastChecked != nil && !check.Available {
+		return 1
 	}
 	if check.LastChecked == nil ||
 		check.CorrelationState == AvailabilityCorrelationAmbiguous ||
 		check.CorrelationState == AvailabilityCorrelationUnresolved {
-		return 1
+		return 2
 	}
-	return 2
+	return 3
+}
+
+// availabilityOutageConfirmed reports whether an enabled check has failed at
+// least its failure threshold in a row, by the same gate the availability
+// poller uses before raising availability_unreachable: an observed failure
+// whose aggregate, when present, is unavailable. A probe agent that stops
+// reporting keeps its failure count but reads indeterminate with an unknown
+// aggregate, and confirms nothing.
+func availabilityOutageConfirmed(check AvailabilityData) bool {
+	if !check.Enabled || check.Available || check.LastChecked == nil {
+		return false
+	}
+	if state := strings.TrimSpace(check.AggregateState); state != "" && !strings.EqualFold(state, "unavailable") {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(check.ProbeOutcome), "indeterminate") {
+		return false
+	}
+	threshold := check.FailureThreshold
+	if threshold <= 0 {
+		threshold = 1
+	}
+	return check.ConsecutiveFailures >= threshold
 }

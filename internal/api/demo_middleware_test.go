@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -44,8 +47,8 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on websocket GET", true, http.MethodGet, "/api/ws", "websocket", true, http.StatusOK, true},
 		{"demo on websocket case insensitive", true, http.MethodGet, "/api/ws", "WebSocket", true, http.StatusOK, true},
 		{"demo on websocket uppercase", true, http.MethodGet, "/api/ws", "WEBSOCKET", true, http.StatusOK, true},
-		// WebSocket upgrade with POST method (tests websocket branch after GET/HEAD/OPTIONS check)
-		{"demo on websocket POST", true, http.MethodPost, "/api/ws", "websocket", true, http.StatusOK, true},
+		// An Upgrade header does not turn a write into a websocket handshake
+		{"demo on websocket POST", true, http.MethodPost, "/api/ws", "websocket", false, http.StatusForbidden, true},
 
 		// Demo mode enabled - auth endpoints allowed (POST)
 		{"demo on login", true, http.MethodPost, "/api/login", "", true, http.StatusOK, true},
@@ -170,5 +173,81 @@ func TestDemoModeMiddleware_BlockedResponse(t *testing.T) {
 
 	if response["message"] == "" {
 		t.Error("message should not be empty")
+	}
+}
+
+// A write that carries websocket handshake headers is still a write. The demo
+// guard used to wave through any request with "Upgrade: websocket", so a demo
+// session could switch mock mode off or change settings by adding two headers.
+func TestDemoModeMiddlewareUpgradeHeadersDoNotExemptWrites(t *testing.T) {
+	handler := DemoModeMiddleware(&config.Config{DemoMode: true}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("write with websocket upgrade headers reached the handler: %s %s", r.Method, r.URL.Path)
+	}))
+
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	paths := []string{"/api/system/mock-mode", "/api/system/settings/update", "/api/orgs", "/ws", "/api/agent/ws"}
+	for _, method := range methods {
+		for _, path := range paths {
+			req := httptest.NewRequest(method, path, strings.NewReader(`{"enabled":false}`))
+			req.Header.Set("Connection", "Upgrade")
+			req.Header.Set("Upgrade", "websocket")
+			req.Header.Set("Sec-WebSocket-Version", "13")
+			req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("%s %s with websocket upgrade headers: status = %d, want %d", method, path, rec.Code, http.StatusForbidden)
+			}
+		}
+	}
+}
+
+func TestDemoModeMiddlewareAllowsWebSocketHandshake(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	echo := func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		messageType, payload, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		_ = conn.WriteMessage(messageType, payload)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", echo)
+	mux.HandleFunc("/api/agent/ws", echo)
+
+	server := newIPv4HTTPServer(t, DemoModeMiddleware(&config.Config{DemoMode: true}, mux))
+	defer server.Close()
+
+	for _, path := range []string{"/ws", "/api/agent/ws"} {
+		conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL)+path, nil)
+		if err != nil {
+			status := 0
+			if resp != nil {
+				status = resp.StatusCode
+			}
+			t.Fatalf("websocket handshake to %s failed in demo mode: %v (status %d)", path, err, status)
+		}
+		if resp.StatusCode != http.StatusSwitchingProtocols {
+			conn.Close()
+			t.Fatalf("websocket handshake to %s: status = %d, want %d", path, resp.StatusCode, http.StatusSwitchingProtocols)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			conn.Close()
+			t.Fatalf("set read deadline for %s: %v", path, err)
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
+			conn.Close()
+			t.Fatalf("write to %s: %v", path, err)
+		}
+		_, payload, err := conn.ReadMessage()
+		conn.Close()
+		if err != nil || string(payload) != "ping" {
+			t.Fatalf("echo from %s = %q, %v; want %q", path, payload, err, "ping")
+		}
 	}
 }

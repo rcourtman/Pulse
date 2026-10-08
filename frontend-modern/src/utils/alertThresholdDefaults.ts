@@ -44,8 +44,12 @@ export const FACTORY_TRUENAS_DEFAULTS = {
   networkOut: -1,
 };
 
-export const FACTORY_TRUENAS_DISK_DEFAULTS = {
-  temperature: 55,
+// TrueNAS disk temperature has no flat factory value. Unset, each TrueNAS disk
+// follows Disk temperature by type, as the backend resolves it
+// (trueNASDiskTemperatureDefaultNoLock); a saved value applies to every
+// TrueNAS disk.
+export const FACTORY_TRUENAS_DISK_DEFAULTS: Record<string, number | undefined> = {
+  temperature: undefined,
 };
 
 export const FACTORY_VMWARE_DEFAULTS = {

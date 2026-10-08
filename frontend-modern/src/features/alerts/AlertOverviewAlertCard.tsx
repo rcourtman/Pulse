@@ -36,6 +36,7 @@ import { AlertSnoozeAction } from './AlertSnoozeAction';
 import { isAlertSnoozed } from './useAlertSnoozeState';
 import { isPulseSystemAlert } from '@/utils/alertScope';
 import { formatTemperature } from '@/utils/temperature';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   normalizeSourcePlatformQueryValue,
   resolvePlatformTypeFromSources,
@@ -110,6 +111,9 @@ const platformPagePath = (platform: string | undefined): string | undefined => {
 };
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
+  // The started age and the live reading's stale cut-off and ages measure
+  // from the wall clock, so a card that mounts between ticks is current.
+  const now = useRelativeTimeNow();
   const alertKey = () => getCanonicalAlertId(props.alert);
   const hasResource = () =>
     !isPulseSystemAlert(props.alert) && Boolean(props.alert.resourceId?.trim());
@@ -138,9 +142,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   // A threshold alert can stay open below its trigger, so the card leads with
   // the reading Pulse is evaluating now; the message keeps the last breach.
   const metricPresentation = () =>
-    isPulseSystemAlert(props.alert)
-      ? null
-      : getMetricAlertPresentation(props.alert, props.state.tick());
+    isPulseSystemAlert(props.alert) ? null : getMetricAlertPresentation(props.alert, now());
   const alertLevels = (): { alert: string; clear?: string } | null => {
     const presentation = metricPresentation();
     if (presentation) {
@@ -318,7 +320,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                   new Date(props.alert.startTime).toLocaleString(),
                 )}
               >
-                {formatAlertOverviewStartedAgo(props.alert.startTime, props.state.tick())}
+                {formatAlertOverviewStartedAgo(props.alert.startTime, now())}
               </span>
             </div>
             <Show

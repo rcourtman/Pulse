@@ -848,7 +848,7 @@ func TestProxmoxPhysicalDiskAlertReferenceShape(t *testing.T) {
 		ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/"),
 	} {
 		require.True(t, isProxmoxPhysicalDiskAlertReference(ref), ref)
-		require.Len(t, ProxmoxPhysicalDiskAlertIdentifiers(ref), 2, ref)
+		require.Len(t, ProxmoxPhysicalDiskAlertIdentifiers(ref), 3, ref)
 	}
 	for _, ref := range []string{
 		ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", ""),

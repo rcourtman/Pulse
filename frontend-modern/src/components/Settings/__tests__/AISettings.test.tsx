@@ -525,6 +525,146 @@ describe('AISettings model loading error states', () => {
     });
   });
 
+  it('shows the alert severity selector only while alert triggers are on and writes it on Save', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      patrol_alert_triggers_enabled: false,
+      patrol_alert_trigger_min_severity: 'critical',
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      ...payload,
+    }));
+
+    renderComponent('patrol');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('180');
+    });
+    const alertToggle = screen.getByLabelText('Enable alert-triggered Patrols');
+    expect(alertToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+
+    fireEvent.click(alertToggle);
+    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+      target: { value: 'warning' },
+    });
+    fireEvent.click(alertToggle);
+    expect(screen.queryByLabelText('Investigate alerts at or above')).toBeNull();
+    fireEvent.click(alertToggle);
+    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(updateSettingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patrol_alert_triggers_enabled: true,
+        patrol_alert_trigger_min_severity: 'warning',
+      }),
+    );
+  });
+
+  it('keeps an unsaved alert severity edit in the form when the Patrol save is rejected', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      patrol_alert_triggers_enabled: true,
+      patrol_alert_trigger_min_severity: 'critical',
+    });
+    updateSettingsMock
+      .mockRejectedValueOnce(new Error('Settings store unavailable'))
+      .mockImplementation(async (payload: Record<string, unknown>) => ({
+        ...baseSettings(),
+        enabled: true,
+        configured: true,
+        patrol_interval_minutes: 360,
+        patrol_alert_triggers_enabled: true,
+        patrol_alert_trigger_min_severity: 'critical',
+        ...payload,
+      }));
+
+    renderComponent('patrol');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('180');
+    });
+    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+      target: { value: 'warning' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('Settings store unavailable'),
+      );
+    });
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(2);
+    });
+    expect(updateSettingsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ patrol_alert_trigger_min_severity: 'warning' }),
+    );
+    await waitFor(() => {
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Patrol settings saved');
+    });
+    // The form reloads from the saved response, so an unchanged severity is
+    // not sent again.
+    expect(screen.getByLabelText('Schedule')).toHaveValue('360');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(3);
+    });
+    expect(updateSettingsMock.mock.calls[2][0]).not.toHaveProperty(
+      'patrol_alert_trigger_min_severity',
+    );
+  });
+
+  it('names each Patrol trigger toggle with an accessible name containing its visible label', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_alert_triggers_enabled: true,
+      patrol_finding_notifications_enabled: true,
+    });
+
+    renderComponent('patrol');
+
+    await screen.findByLabelText('Enable alert-triggered Patrols');
+    for (const visibleLabel of [
+      'Alert-triggered Patrols',
+      'Anomaly-triggered Patrols',
+      'Container update risk',
+      'Finding notifications',
+    ]) {
+      const row = screen.getByText(visibleLabel).parentElement?.parentElement;
+      expect(row, visibleLabel).toBeTruthy();
+      const escaped = visibleLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      expect(
+        within(row as HTMLElement).getByRole('button', { name: new RegExp(escaped, 'i') }),
+      ).toHaveAttribute('aria-pressed');
+    }
+  });
+
   it('shows inline warning when getModels throws a network error', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),

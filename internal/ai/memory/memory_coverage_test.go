@@ -11,17 +11,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
-func TestChangeDetector_DefaultsAndHelpers(t *testing.T) {
+func TestChangeDetector_Defaults(t *testing.T) {
 	detector := NewChangeDetector(ChangeDetectorConfig{})
 	if detector.maxChanges != 1000 {
 		t.Fatalf("expected default maxChanges=1000, got %d", detector.maxChanges)
-	}
-
-	if got := intToString(0); got != "0" {
-		t.Errorf("intToString(0) = %q", got)
-	}
-	if got := intToString(42); got != "42" {
-		t.Errorf("intToString(42) = %q", got)
 	}
 }
 

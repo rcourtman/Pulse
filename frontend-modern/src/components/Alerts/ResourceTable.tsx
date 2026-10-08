@@ -11,6 +11,7 @@ import { ActionIconButton } from '@/components/shared/Button';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
 import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
+import type { AlertResourceGlobalDefaultFallback } from './alertResourceTableModel';
 import { AlertResourceTableDesktop } from './AlertResourceTableDesktop';
 import { AlertResourceTableMobile } from './AlertResourceTableMobile';
 
@@ -49,6 +50,10 @@ export interface ResourceTableProps {
   formatMetricValue: (metric: string, value: number | undefined) => string;
   hasActiveAlert: (resourceId: string, metric: string) => boolean;
   globalDefaults?: Record<string, number | undefined>;
+  /** Metrics whose unset global default follows another setting. */
+  globalDefaultFallbacks?: Record<string, AlertResourceGlobalDefaultFallback>;
+  /** Header tooltips that replace the generic one for a column label. */
+  columnTooltips?: Record<string, string>;
   setGlobalDefaults?: (
     value:
       | Record<string, number | undefined>
@@ -97,10 +102,20 @@ export function ResourceTable(props: ResourceTableProps) {
     someSelected,
     clearSelectedIds,
   } = useAlertResourceTableState({
-    resources: props.resources,
-    groupedResources: props.groupedResources,
-    globalDefaults: props.globalDefaults,
-    factoryDefaults: props.factoryDefaults,
+    // Getters keep the state reactive: saved defaults arrive after mount, and
+    // the Custom badge and reset control must follow them.
+    get resources() {
+      return props.resources;
+    },
+    get groupedResources() {
+      return props.groupedResources;
+    },
+    get globalDefaults() {
+      return props.globalDefaults;
+    },
+    get factoryDefaults() {
+      return props.factoryDefaults;
+    },
   });
   const totalColumnCount = createMemo(
     () =>

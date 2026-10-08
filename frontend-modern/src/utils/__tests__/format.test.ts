@@ -13,6 +13,7 @@ import {
   formatUptime,
   formatAbsoluteTime,
   formatRelativeTime,
+  formatTimeUntil,
   getBackupInfo,
 } from '@/utils/format';
 
@@ -260,6 +261,67 @@ describe('formatRelativeTime', () => {
   it('handles future timestamps', () => {
     const now = Date.now();
     expect(formatRelativeTime(now + 60 * 1000)).toBe('0s ago');
+  });
+});
+
+describe('formatTimeUntil', () => {
+  const now = Date.parse('2024-03-15T12:00:00Z');
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  it('returns empty text for falsy or unparseable input', () => {
+    expect(formatTimeUntil(undefined, { now })).toBe('');
+    expect(formatTimeUntil(0, { now, emptyText: '-' })).toBe('-');
+    expect(formatTimeUntil('not a date', { now, emptyText: '-' })).toBe('-');
+  });
+
+  it('counts down to a future time instead of reading it as just now', () => {
+    expect(formatTimeUntil(now + 30 * 1000, { now })).toBe('in under a minute');
+    expect(formatTimeUntil(now + 5 * minute, { now, compact: true })).toBe('in 5m');
+    expect(formatTimeUntil(now + 3 * hour, { now, compact: true })).toBe('in 3h');
+    expect(formatTimeUntil(now + 6 * day, { now, compact: true })).toBe('in 6d');
+    expect(formatTimeUntil(now + 45 * day, { now, compact: true })).toBe('in 45d');
+  });
+
+  it('spells units out in the long form', () => {
+    expect(formatTimeUntil(now + minute, { now })).toBe('in 1 min');
+    expect(formatTimeUntil(now + 5 * minute, { now })).toBe('in 5 mins');
+    expect(formatTimeUntil(now + hour, { now })).toBe('in 1 hour');
+    expect(formatTimeUntil(now + 5 * hour, { now })).toBe('in 5 hours');
+    expect(formatTimeUntil(now + day, { now })).toBe('in 1 day');
+    expect(formatTimeUntil(now + 7 * day, { now })).toBe('in 7 days');
+    expect(formatTimeUntil(now + 60 * day, { now })).toBe('in 2 months');
+    expect(formatTimeUntil(now + 365 * day, { now })).toBe('in 1 year');
+  });
+
+  it('rounds to the nearest unit, so a duration just set reads as chosen', () => {
+    // A 24-hour, 1-hour and 7-day suppression set a few seconds ago.
+    expect(formatTimeUntil(now + day - 5000, { now, compact: true })).toBe('in 1d');
+    expect(formatTimeUntil(now + hour - 5000, { now, compact: true })).toBe('in 1h');
+    expect(formatTimeUntil(now + 7 * day - 5000, { now, compact: true })).toBe('in 7d');
+    expect(formatTimeUntil(now + 2 * hour + 10 * minute, { now, compact: true })).toBe('in 2h');
+    expect(formatTimeUntil(now + 2 * hour + 50 * minute, { now, compact: true })).toBe('in 3h');
+    // Months round from the remaining time itself, not from rounded days.
+    expect(formatTimeUntil(now + 44 * day + 12 * hour, { now })).toBe('in 1 month');
+    expect(formatTimeUntil(now + 45 * day + hour, { now })).toBe('in 2 months');
+  });
+
+  it('reads as due once the time has arrived or passed', () => {
+    expect(formatTimeUntil(now, { now })).toBe('now');
+    expect(formatTimeUntil(now - hour, { now, compact: true })).toBe('now');
+    expect(formatTimeUntil(now - hour, { now, dueText: 'overdue' })).toBe('overdue');
+  });
+
+  it('accepts ISO strings and Date objects and defaults now to the current time', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      expect(formatTimeUntil('2024-03-15T15:00:00Z', { compact: true })).toBe('in 3h');
+      expect(formatTimeUntil(new Date(now + 10 * minute), { compact: true })).toBe('in 10m');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

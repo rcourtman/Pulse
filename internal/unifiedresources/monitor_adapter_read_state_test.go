@@ -400,6 +400,289 @@ func TestReadStateWithRecordsPreservesConfiguredStaleThresholds(t *testing.T) {
 	}
 }
 
+// A link whose side arrives as a record joins during record ingest, so it
+// must judge freshness by the adapter's thresholds as a snapshot-time link
+// does. Under a five-minute vSphere threshold a VM polled three minutes ago
+// is current, and its own memory reading outranks its in-guest agent's.
+func TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "host-app-guest",
+			Hostname:  "app-guest",
+			MachineID: "machine-app-guest",
+			Status:    "online",
+			LastSeen:  now,
+			Memory:    models.Memory{Total: 8 << 30, Used: 6 << 30, Free: 2 << 30, Usage: 75},
+		}},
+		LastUpdate: now,
+	}
+	vmRecords := []IngestRecord{{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type:       ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     StatusOnline,
+			LastSeen:   now.Add(-3 * time.Minute),
+			Metrics:    &ResourceMetrics{Memory: &MetricValue{Percent: 40, Source: SourceVMware}},
+			VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+	}}
+	thresholds := map[DataSource]time.Duration{SourceVMware: 5 * time.Minute}
+
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: vmRecords})
+	vms, hosts := unlinked.VMs(), unlinked.Hosts()
+	if len(vms) != 1 || len(hosts) != 1 {
+		t.Fatalf("unlinked estate = %d VMs, %d agents, want one of each", len(vms), len(hosts))
+	}
+	link := ResourceLink{ResourceA: vms[0].ID(), ResourceB: hosts[0].ID(), PrimaryID: hosts[0].ID()}
+
+	for _, path := range []struct {
+		name string
+		read func(adapter *MonitorAdapter) ReadState
+	}{
+		{"rebuild", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: vmRecords})
+			return adapter
+		}},
+		{"supplemental", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateFromSnapshot(snapshot)
+			adapter.PopulateSupplementalRecords(SourceVMware, vmRecords)
+			return adapter
+		}},
+		{"overlay", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateFromSnapshot(snapshot)
+			return ReadStateWithRecords(adapter, SourceVMware, vmRecords)
+		}},
+	} {
+		t.Run(path.name, func(t *testing.T) {
+			store := NewMemoryStore()
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			readState := path.read(NewMonitorAdapterWithStaleThresholds(NewRegistry(store), thresholds))
+
+			if hosts := readState.Hosts(); len(hosts) != 0 {
+				t.Fatalf("linked agent still listed standalone: %s", hosts[0].ID())
+			}
+			vms := readState.VMs()
+			if len(vms) != 1 || vms[0].ID() != link.ResourceA {
+				t.Fatalf("VMs = %d, want the linked VM %s", len(vms), link.ResourceA)
+			}
+			if vms[0].r.Metrics == nil || vms[0].r.Metrics.Memory == nil {
+				t.Fatal("linked VM lost its memory reading")
+			}
+			if memory := vms[0].r.Metrics.Memory; memory.Source != SourceVMware || memory.Percent != 40 {
+				t.Fatalf("linked VM memory = %.0f%% from %s, want vSphere's current 40%%", memory.Percent, memory.Source)
+			}
+		})
+	}
+}
+
+// Every source merge into an existing row judges metric freshness by the
+// adapter's configured thresholds, as the rebuild's links and stale pass do.
+// A linked vSphere VM first reports no memory, so its in-guest agent supplies
+// it; a refresh then brings vSphere memory observed three minutes ago, current
+// under a five-minute threshold. The live supplemental refresh and the
+// read-state overlay merge that record into the existing row, and must show
+// vSphere's memory as a rebuild from the same records does. A Proxmox node
+// polled every two minutes is likewise current at ninety seconds, so the
+// rebuild keeps its readings over those of its auto-linked agent, silent for
+// seventy-five seconds.
+func TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	thresholds := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute, SourceVMware: 5 * time.Minute}
+
+	t.Run("linked vSphere VM refresh", func(t *testing.T) {
+		snapshot := models.StateSnapshot{
+			Hosts: []models.Host{{
+				ID:        "host-app-guest",
+				Hostname:  "app-guest",
+				MachineID: "machine-app-guest",
+				Status:    "online",
+				LastSeen:  now,
+				Memory:    models.Memory{Total: 8 << 30, Used: 6 << 30, Free: 2 << 30, Usage: 75},
+			}},
+			LastUpdate: now,
+		}
+		vmRecord := func(lastSeen time.Time, metrics *ResourceMetrics) []IngestRecord {
+			return []IngestRecord{{
+				SourceID: "vc-1:vm:vm-42",
+				Resource: Resource{
+					Type:       ResourceTypeVM,
+					Technology: "vmware",
+					Name:       "app-guest",
+					Status:     StatusOnline,
+					LastSeen:   lastSeen,
+					Metrics:    metrics,
+					VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+				},
+			}}
+		}
+		initial := vmRecord(now.Add(-4*time.Minute), &ResourceMetrics{CPU: &MetricValue{Percent: 10, Source: SourceVMware}})
+		refreshedAt := now.Add(-3 * time.Minute)
+		refreshed := vmRecord(refreshedAt, &ResourceMetrics{
+			CPU:    &MetricValue{Percent: 10, Source: SourceVMware},
+			Memory: &MetricValue{Percent: 40, Source: SourceVMware},
+		})
+
+		unlinked := NewMonitorAdapter(NewRegistry(nil))
+		unlinked.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: initial})
+		vms, hosts := unlinked.VMs(), unlinked.Hosts()
+		if len(vms) != 1 || len(hosts) != 1 {
+			t.Fatalf("unlinked estate = %d VMs, %d agents, want one of each", len(vms), len(hosts))
+		}
+		link := ResourceLink{ResourceA: vms[0].ID(), ResourceB: hosts[0].ID(), PrimaryID: hosts[0].ID()}
+
+		for _, path := range []struct {
+			name string
+			read func(adapter *MonitorAdapter) ReadState
+		}{
+			{"rebuild", func(adapter *MonitorAdapter) ReadState {
+				adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: refreshed})
+				return adapter
+			}},
+			{"supplemental", func(adapter *MonitorAdapter) ReadState {
+				adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: initial})
+				adapter.PopulateSupplementalRecords(SourceVMware, refreshed)
+				return adapter
+			}},
+			{"overlay", func(adapter *MonitorAdapter) ReadState {
+				adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: initial})
+				return ReadStateWithRecords(adapter, SourceVMware, refreshed)
+			}},
+		} {
+			t.Run(path.name, func(t *testing.T) {
+				store := NewMemoryStore()
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+				readState := path.read(NewMonitorAdapterWithStaleThresholds(NewRegistry(store), thresholds))
+
+				vms := readState.VMs()
+				if len(vms) != 1 || vms[0].ID() != link.ResourceA || len(readState.Hosts()) != 0 {
+					t.Fatalf("estate = %d VMs, %d standalone agents, want only the linked VM %s", len(vms), len(readState.Hosts()), link.ResourceA)
+				}
+				if got := vms[0].r.SourceStatus[SourceVMware]; got.Status != "online" || !got.LastSeen.Equal(refreshedAt) {
+					t.Fatalf("vSphere sighting = %+v, want the refresh, current under the configured threshold", got)
+				}
+				if vms[0].r.Metrics == nil || vms[0].r.Metrics.Memory == nil {
+					t.Fatal("linked VM lost its memory reading")
+				}
+				if memory := vms[0].r.Metrics.Memory; memory.Source != SourceVMware || memory.Percent != 40 {
+					t.Fatalf("linked VM memory = %.0f%% from %s, want vSphere's current 40%%", memory.Percent, memory.Source)
+				}
+			})
+		}
+	})
+
+	t.Run("node with auto-linked agent", func(t *testing.T) {
+		adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), thresholds)
+		adapter.PopulateFromSnapshot(models.StateSnapshot{
+			Nodes: []models.Node{{
+				ID:            "homelab-pve1",
+				Name:          "pve1",
+				Instance:      "homelab",
+				Status:        "online",
+				LinkedAgentID: "host-pve1",
+				CPU:           0.12,
+				Memory:        models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+				LastSeen:      now.Add(-90 * time.Second),
+			}},
+			Hosts: []models.Host{{
+				ID:              "host-pve1",
+				MachineID:       "machine-pve1",
+				Hostname:        "pve1",
+				LinkedNodeID:    "homelab-pve1",
+				Status:          "online",
+				CPUUsage:        80,
+				Memory:          models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+				LastSeen:        now.Add(-75 * time.Second),
+				IntervalSeconds: 30,
+			}},
+			LastUpdate: now,
+		})
+
+		nodes := adapter.Nodes()
+		if len(nodes) != 1 {
+			t.Fatalf("nodes = %d, want the node merged with its agent", len(nodes))
+		}
+		node := nodes[0].r
+		if poll := node.SourceStatus[SourceProxmox]; poll.Status != "online" || !poll.LastSeen.Equal(now.Add(-90*time.Second)) {
+			t.Fatalf("Proxmox sighting = %+v, want the current poll from ninety seconds ago", poll)
+		}
+		if got := node.SourceStatus[SourceAgent].Status; got != "stale" {
+			t.Fatalf("agent sighting = %q, want stale", got)
+		}
+		if node.Metrics == nil || node.Metrics.CPU == nil || node.Metrics.Memory == nil {
+			t.Fatalf("merged node lost its readings: %+v", node.Metrics)
+		}
+		if cpu := node.Metrics.CPU; cpu.Source != SourceProxmox || cpu.Percent != 12 {
+			t.Fatalf("node CPU = %.0f%% from %s, want the current poll's 12%%", cpu.Percent, cpu.Source)
+		}
+		if memory := node.Metrics.Memory; memory.Source != SourceProxmox || memory.Percent != 25 {
+			t.Fatalf("node memory = %.0f%% from %s, want the current poll's 25%%", memory.Percent, memory.Source)
+		}
+	})
+}
+
+// The adapter reports the thresholds its current registry generation was
+// judged by. Thresholds set since then wait for the rebuild that judges a
+// generation by them, so a consumer rebuilding from the current listing never
+// re-judges it by thresholds it was not judged by. A read-state overlay of
+// that generation is judged by the same thresholds: re-judging its listing by
+// newer, shorter ones would mark polls stale that the generation calls
+// current.
+func TestMonitorAdapterReportsTheThresholdsItsGenerationWasJudgedBy(t *testing.T) {
+	snapshot := staleThresholdEstateSnapshot(time.Now().UTC())
+	configured := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}
+	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), configured)
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("after the rebuild StaleThresholds = %v, want the four minutes it was judged by", got)
+	}
+
+	adapter.SetStaleThresholds(map[DataSource]time.Duration{SourceProxmox: 60 * time.Second})
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("before the next rebuild StaleThresholds = %v, want the current generation's four minutes", got)
+	}
+	for name, row := range presentedNodeRows(t, adapter.GetAll()) {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+			t.Fatalf("current generation %s Proxmox sighting = %q, want online as judged", name, poll.Status)
+		}
+	}
+	overlay, ok := ReadStateWithRecords(adapter, SourceAgent, []IngestRecord{{
+		SourceID: "host-elsewhere",
+		Resource: Resource{
+			Type: ResourceTypeAgent, Name: "elsewhere", Status: StatusOnline, LastSeen: time.Now().UTC(),
+			Agent: &AgentData{AgentID: "host-elsewhere", Hostname: "elsewhere"},
+		},
+		Identity: ResourceIdentity{MachineID: "machine-elsewhere", Hostnames: []string{"elsewhere"}},
+	}}).(*MonitorAdapter)
+	if !ok || overlay == adapter {
+		t.Fatal("ReadStateWithRecords did not build an overlay")
+	}
+	if got := overlay.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("overlay StaleThresholds = %v, want the generation's four minutes", got)
+	}
+	overlayRows := presentedNodeRows(t, overlay.GetAll())
+	if len(overlayRows) != 3 {
+		t.Fatalf("overlay lists %d Proxmox node rows, want 3", len(overlayRows))
+	}
+	for name, row := range overlayRows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+			t.Fatalf("overlay %s Proxmox sighting = %q, want online as the generation judged it", name, poll.Status)
+		}
+	}
+
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 60*time.Second {
+		t.Fatalf("after the next rebuild StaleThresholds = %v, want the sixty seconds it was judged by", got)
+	}
+}
+
 func TestHostContinuityCannotOverwriteCurrentResource(t *testing.T) {
 	now := time.Now().UTC()
 	for _, mode := range []string{"machine-identity", "source-identity", "future-timestamp", "provider-only"} {

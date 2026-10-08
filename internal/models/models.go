@@ -2766,7 +2766,11 @@ type PhysicalDisk struct {
 	IO                     *DiskIO                         `json:"io,omitempty"`
 	Collection             *diskinventory.CollectionStatus `json:"collection,omitempty"`
 	ExpectedUpdateInterval time.Duration                   `json:"-"` // Collector schedule, independent of general node polling
-	LastChecked            time.Time                       `json:"lastChecked"`
+	// AgentSMARTReported marks a disk a linked host agent lists in its SMART
+	// report, so the agent's CheckHost owns its temperature alert. Internal
+	// poll evidence, set by the PVE disk poller's agent SMART merge.
+	AgentSMARTReported bool      `json:"-"`
+	LastChecked        time.Time `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance

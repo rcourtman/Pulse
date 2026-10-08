@@ -174,12 +174,24 @@ const cloneBackupDefaults = (backupDefaults: BackupAlertConfig): BackupAlertConf
   ignoreVMIDs: [...(backupDefaults.ignoreVMIDs ?? [])],
 });
 
+// Off is written as 0. The editors stage -1 for Off, but the backend reads a
+// negative default trigger as unset and restores the factory threshold, so a
+// saved -1 came back On.
 const createHysteresisThreshold = (trigger: number | undefined, clearMargin = 5) => {
-  const normalized = typeof trigger === 'number' ? trigger : 0;
+  const normalized = typeof trigger === 'number' && trigger > 0 ? trigger : 0;
   return {
     trigger: normalized,
     clear: Math.max(0, normalized - clearMargin),
   };
+};
+
+// Unset leaves TrueNAS disks on Disk temperature by type, so it is omitted
+// rather than written as a trigger. Off is written as 0: the backend reads a
+// negative trigger as unset.
+const buildTrueNASDiskDefaultsConfig = (temperature: number | undefined) => {
+  if (temperature === undefined) return {};
+  if (temperature <= 0) return { temperature: { trigger: 0, clear: 0 } };
+  return { temperature: createHysteresisThreshold(temperature) };
 };
 
 const normalizeGap = (value: unknown, fallback: number) => {
@@ -410,10 +422,10 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.truenasDiskDefaults) {
+    // Unset means each TrueNAS disk follows Disk temperature by type.
+    const temperature = config.truenasDiskDefaults.temperature;
     snapshot.trueNASDiskDefaults = {
-      temperature:
-        getTriggerValue(config.truenasDiskDefaults.temperature) ??
-        FACTORY_TRUENAS_DISK_DEFAULTS.temperature,
+      temperature: temperature === undefined ? undefined : getTriggerValue(temperature),
     };
   }
 
@@ -844,9 +856,8 @@ export function buildAlertsConfigurationPayload({
         networkIn: createHysteresisThreshold(snapshot.trueNASDefaults.networkIn),
         networkOut: createHysteresisThreshold(snapshot.trueNASDefaults.networkOut),
       },
-      truenasDiskDefaults: {
-        temperature: createHysteresisThreshold(snapshot.trueNASDiskDefaults.temperature),
-      },
+      truenasDiskDefaults: buildTrueNASDiskDefaultsConfig(snapshot.trueNASDiskDefaults.temperature),
+      truenasDiskTemperatureByType: true,
       vmwareDefaults: {
         cpu: createHysteresisThreshold(snapshot.vmwareDefaults.cpu),
         memory: createHysteresisThreshold(snapshot.vmwareDefaults.memory),

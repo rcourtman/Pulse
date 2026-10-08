@@ -1193,6 +1193,18 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+Each unified view carries the thresholds its listed registry generation was
+judged by, read with the listing from the same generation: the resource
+store's configured ones, or none (the defaults) for a view built from mock
+fixtures or a bare state snapshot.
+`UnifiedResourceSnapshotWithStaleThresholds` hands them, with the seed, to
+consumers that rebuild a registry from the monitor's resources (the resources
+API reads each tenant monitor's), and the websocket broadcast coalesces split
+host rows with them, so a coalesced row prefers readings by the same
+freshness rule and thresholds as the view's own merges. Regression coverage:
+`TestBroadcastCoalescedHostJudgesFreshnessByConfiguredThresholds` and
+`TestUnifiedViewCarriesItsGenerationsStaleThresholds` in
+`internal/monitoring/monitor_host_agents_test.go`.
 PBS and PMG configured instances also have one monitoring-owned runtime
 resource identity constructor. Poll publication, connection status, setup and
 auto-registration checks, canonical alias resolution, and alert-policy bridges
@@ -1825,6 +1837,29 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
+`checkPhysicalDiskAlerts` also hands each disk's temperature to
+`CheckProxmoxDiskTemperature`, so a Proxmox disk that only the node's sensors
+report alerts under the disk temperature policy, as its Running Hot verdict
+already says it should. It passes the reading only when this poll collected it
+(`collectedPhysicalDiskTemperature`, `diskinventory.TemperatureCollected`), so
+a retained last-known value holds the alert rather than judging it, and it
+passes `AgentSMARTReported`, which `mergeHostAgentSMARTIntoDisks` sets on a
+disk a still-reporting linked agent lists in its SMART report (disks built
+from that report when the Proxmox query fails go through the same merge). A
+disk the agent lists is the agent's: `CheckHost` raises its temperature
+alert, and the PVE disk check closes its own as moved to the agent, so no
+disk alerts twice. Once the agent's lease lapses (`ExpireHostTelemetry` marks
+the host offline) its retained rows still enrich the disk, but ownership
+returns to the PVE check, which judges the node's own current readings; an
+agent newly linked to a disk with an open PVE alert takes it over on the next
+disk poll. An excluded device closes its temperature
+alert with the health and wearout ones. Fixture disks carry no agent SMART
+merge, so on a mock estate every hot disk on an online node alerts.
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` and
+`TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
+the collected reading, agent ownership and exclusion.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection
@@ -1899,11 +1934,33 @@ a live report or poll already past its mock-mode check when mock mode is
 switched on can still evaluate after that clear, and its alerts can persist
 until mock mode is left.
 
-The fence and the clear are per monitor while the mode is process-wide. A
-tenant monitor other than the one `SetMockMode` was called on neither drains
-nor clears, so fixture alerts it raised outlive the switch as they did before
-the fence; switching mock mode with several tenant monitors running is not
-covered.
+The mode is process-wide while each monitor keeps its own fence, alert manager,
+fixture agents and state, and the server runs one monitor per organization, so
+`SetMockMode` switches every running monitor, whichever tenant's monitor it is
+called on (the mock-mode API calls the requesting tenant's, the demo-fixture
+licence sync the default organization's). `Start` joins a process-wide set of
+running monitors under `mockModeSwitchMu`, and leaves it when its loop returns.
+A switch flips the mode once, then ends each monitor's epoch, waits for its
+admitted calls, clears its alerts, forgets its fixture agents when leaving mock
+mode and resets its state, and only then restarts the mode-dependent runtime of
+each monitor in the set. `Start` sets its runtime context before it joins and
+chooses the mock metrics sampler or discovery while it joins, under the same
+lock, so no switch lands between reading the mode and starting the runtime for
+it, and a switch that reaches a monitor not yet joined leaves the runtime to
+its `Start`. A monitor that missed switches between `New` and `Start` first
+leaves what it holds: `New` records the mode and the number of switches made so
+far, and `Start` compares both, so even a round trip that brought the flag back
+drops the fixture alerts a read path raised meanwhile, as well as the live
+alerts `New` restored outside mock mode. A monitor that is not running is
+switched only when the switch is made through it; a call for the mode the flag
+already holds still moves any reached monitor whose alerts belong to the other
+mode, and leaves the rest alone.
+
+Release builds reach several tenant monitors in mock mode only on an instance
+running `DemoMode` with the `demo_fixtures` entitlement (release
+`ValidateEnablement` refuses mock fixtures otherwise) and with more than one
+organization's monitor running; the licence sync switches only for the
+default organization.
 
 The proofs park a real evaluation at a fixed point, switch modes and release
 it. `TestLeavingMockModeRefusesTheRestOfAnInFlightPass` holds a mock pass at its
@@ -1933,7 +1990,25 @@ previous-state carry returns fixture nodes or guests. All eight are in
 `TestStoreRefreshTakesItsMockModeScopeBeforeReadingState` in
 `internal/monitoring/canonical_guardrails_test.go` rejects a call that reads
 state in an argument ahead of `m.mockModeFence.begin()` and pins the
-end-epoch-then-clear order in `SetMockMode`.
+end-epoch-then-clear order in `endMockModeEpoch`, which `SetMockMode` runs for
+every monitor it reaches.
+
+`TestLeavingMockModeClearsEveryRunningTenantMonitor` and
+`TestEnteringMockModeClearsEveryRunningTenantMonitor` start the default and one
+other tenant monitor through `MultiTenantMonitor`, wait until both have joined,
+raise alerts in both, switch through one of them and check both. Against a
+switch that reached only its own monitor, the default monitor kept its fixture
+alerts (69 to 104 across runs) and all 69 fixture agents after leaving mock
+mode through the other tenant, and that tenant kept its live alert after mock
+mode was entered through the default monitor. `TestMonitorStartedAfterAMockModeSwitchLeavesTheModeItWasBuiltIn`
+fails if `Start` joins without leaving the mode its monitor was built in, and
+`TestSetMockModeAlignsAMonitorWhoseModeTheFlagAlreadyHolds` fails if a call for
+the flag's current mode returns without moving such a monitor, and
+`TestMockModeSwitchLeavesAnUnjoinedMonitorsRuntimeToItsStart` fails if a switch
+starts the runtime of a monitor whose `Start` has not joined, and
+`TestMonitorStartedAfterAMockModeRoundTripDropsWhatItRaisedMeanwhile` fails if
+`Start` compares only the mode. All six are in
+`internal/monitoring/monitor_mock_alerts_test.go`.
 
 The disk evaluation runs on the mock alert tick, not the poller's disk
 interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
@@ -2636,7 +2711,18 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     ingestion so canonical host IDs stay stable across restarts (see the
     unified-resources contract's durable identity-pin obligation). Rebuild
     paths added to the adapter must keep that persistence step; ephemeral
-    snapshot-bridge adapters stay read-only.
+    snapshot-bridge adapters stay read-only. The rebuild, the live
+    supplemental refresh and the read-state overlay ingest records with the
+    adapter's configured stale thresholds, because record ingest joins
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go` and
+    `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
+    `internal/monitoring/issue1913_host_continuity_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
@@ -3175,7 +3261,20 @@ Monitoring retains one current status per target and location, using server
 receipt time for remote freshness while keeping the agent-authored observation
 time as evidence metadata. A stale or disconnected agent path derives as
 indeterminate at read time; slow or fast agent clocks cannot manufacture or
-conceal a disconnect. Aggregation is conservative: all reachable paths are
+conceal a disconnect. A local path beside other locations that has not run
+within the same window derives as indeterminate too ("no recent local check").
+The target takes its freshness from its newest location, so otherwise a
+failing remote report kept an old local pass counted as reachable and the
+check read available with current evidence. For the same reason an available
+check's evidence lasts only as long as its newest reachable path, not a
+fresher path that failed. When the external-probe entitlement lapses, a
+single remote result stands in for the local location until the local poller
+runs, with the earlier of its agent check time and the server's receipt time
+as its check time, so a fast agent clock cannot keep it current. An aggregate
+over several locations never stands in: a target without a retained local
+observation reads as never checked, and not connected, until the local poller
+runs.
+Aggregation is conservative: all reachable paths are
 healthy, mixed reachable and failed/unknown paths are degraded, all current
 paths unreachable are unavailable, and no reachable path with incomplete or
 indeterminate coverage is unknown. Only aggregate unavailability advances the
@@ -3655,19 +3754,18 @@ sampler generation instead of regenerating or re-downsampling the same seeded
 timeline on every endpoint hit. When seeded mock history is rebuilt or a live
 mock tick advances, monitoring must invalidate that cache so preview charts
 stay current without paying repeated per-request synthesis cost.
-That same sampler-owned cache contract also covers compact summary reads after
-the dashboard overview retirement. When live mock ticks advance, monitoring
-must repopulate the canonical 24-hour aggregate `/api/charts/storage-summary`
-cache inside the sampler path instead of leaving the first operator request
-after each tick to rebuild per-pool mock storage charts on demand.
-The same mock sampler path must also prewarm the default Workloads guest-chart
+The mock sampler path must prewarm the default Workloads guest-chart
 cache through `GetGuestMetricsForChartBatch`, using canonical `ReadState`
 workload identities for VMs, system containers, Kubernetes pods, and app
-containers so `/api/charts/workloads` and `/api/charts/workloads-summary` do
-not rebuild every guest sparkline on the first post-tick request.
+containers so `/api/charts/workloads` does not rebuild every guest sparkline
+on the first post-tick request. The retired aggregate
+`/api/charts/storage-summary` trend is no longer prewarmed; its route,
+`GetStorageSummaryCapacityTrend` and the mock aggregate cache went with it,
+and sampler ticks must not regain an aggregate storage synthesis step
+without a live consumer.
 That same metrics-hot-path ownership also includes metric-type selection for
-compact summary reads. When infrastructure or storage summary routes request
-only a subset of canonical chart series,
+compact chart reads. When chart routes such as `/api/charts/infrastructure` or
+`/api/charts/workloads` request only a subset of canonical chart series,
 `internal/monitoring/monitor_metrics.go` must preserve that narrowed metric
 set through the batch store fallback path instead of querying every metric type
 for each resource and discarding most of the payload afterward.
@@ -4051,6 +4149,14 @@ ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
 shape, while multiple controller members behind one block path add their
 controller target to the fallback identity. Per-member I/O must never inherit
 an aggregate controller counter.
+A linked node's agent with no SMART reading for a device, such as a member's
+standby row, files that device's I/O under the Proxmox disk's metrics target
+(`proxmoxPhysicalDiskMatchesForLinkedNode` reads `MetricResourceID`). For a
+member merged with its Proxmox row that target is the member's own SMART key,
+scoped to the member once (`PhysicalDiskMetaMetricID`), so its SMART and I/O
+history share one series. The target used to carry the member topology twice,
+and I/O already stored under that doubled key is left to age out rather than
+migrated. Proof: `TestIdentitylessControllerMembersReadTheirWritersHistory`.
 The same rules apply to SATA and NVMe inventory: direct-disk source IDs keep
 their historical shape, controller-member IDs add their member target, and
 cross-source correlation is scoped to the canonical parent node. A successful
@@ -4430,6 +4536,13 @@ disk usage when the last VM snapshot is still recent guest-agent truth rather
 than an already carried-forward fallback. That keeps transient guest-agent or
 status-call failures from regressing a VM back to misleading allocated-disk
 data while still avoiding indefinite replay of stale disk summaries.
+The previous VM that `previousVMFromView` builds from the unified read state
+carries disk usage only when it is Proxmox's own reading. When a manually
+linked Pulse agent's disk filled in because Proxmox had no guest filesystems
+(`VMView.DiskFromLinkedAgent`), carrying it would relabel the agent's value as
+a Proxmox `prev-` read, and with Proxmox outranking the agent on guests that
+copy would then freeze over the agent's live disk.
+`TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry` pins both owners.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
@@ -4737,6 +4850,37 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+The SMART-resolved id is the serial the disk resource carries: when a SMART row
+reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
+reports for that disk, as the unified-resources adapter does, unless the Unraid
+row does not describe the disk (`unraidDiskDescribesSMARTRow`: a controller
+member, or several SMART rows on the disk's device path), and
+`hostDiskIOMetricResourceID` keys
+a device with no non-standby SMART row by its Unraid serial
+(`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
+before the linked Proxmox node's disks and the `<host>:<device>` fallback.
+Controller members sharing a device path keep distinct keys, so the I/O
+writer's aggregate-device guard, which compares every row on the path by its
+own identity (standby rows and legacy `sdc [sat]` labels included), files
+their counter under no member.
+Proof:
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
+`TestHostDiskIOMetricResourceIDFallbacks`.
+The agent's `smart_temp` series holds the reading the disk resource shows,
+not only the SMART row's own. `writeHostSMARTMetrics` writes
+`HostSMARTDiskTemperature`, which falls back to the host's Unraid inventory
+reading when the row has none, and `writeHostUnraidDiskTemperatures` writes
+`HostUnraidDiskTemperature` under `HostUnraidDiskMetricID` for each Unraid row
+whose key is not one of the host's SMART rows' keys, such as a `--disk-exclude`
+member, so an Unraid reading never overwrites a SMART row's own at the same
+timestamp.
+Unraid rows sharing a key are one disk in the registry, which shows the latest
+of their readings, so the last row with a reading decides that key's single
+sample. `diskinventory.TemperatureCollected` keeps a spun-down disk's or an
+expired host's leftover reading out of history.
+Proof:
+`TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared
@@ -5253,6 +5397,42 @@ canonical aliases retain their precedence and ambiguous aliases remain
 unresolved. This avoids cloning a full resource for every policy lookup while
 keeping alert intent tied to the same identity rules as resource reads.
 
+Alert intent resolves references and ancestors through the read state Patrol
+resolves through and the resources API seeds from: the published registry with
+saved hosts that have not reported since a restart overlaid
+(`operatorIntentIdentity`). A saved host exists only there, so against the
+published registry alone its alerts (`agent:<host ID>`) read their literal
+reference after a restart and missed intent set on the host, and, when an
+operator link joins it to a live resource, intent set on the link primary that
+the registry now resolves the saved host to. Alerts resolve under the alert
+manager's lock, once per metric check, so the overlay is kept for the published
+registry generation it was built from. Publication builds it before alert
+evaluation, outside that lock; a lookup that races ahead of publication, or the
+first one after leaving mock mode, builds it under the lock. A generation is
+the registry the adapter publishes and when it last changed
+(`MonitorAdapter.Generation`), since two publications can share a
+`LastRebuiltAt`. A finished build is stored only if that generation is still
+the published one and the mock-mode epoch it started in is current, checked and
+stored inside the mock-mode fence, so a build that overlapped a mode switch is
+discarded. A lookup made while mock mode is on drops the stored overlay; a
+switch to mock and back with no lookup in between keeps it, since it still
+describes the published generation. A saved-host change that arrives without a
+new generation shows on the next one. Mock mode carries no saved hosts: lookups
+then resolve against the published registry as before.
+`monitor_alert_intent_test.go`
+(`TestOperatorIntentIdentityKeepsOneOverlayPerGeneration`,
+`TestOperatorIntentReachesSavedHostAlertsAfterRestart`) pins the reuse, a
+generation sharing or preceding the last one's timestamp, the mock switch, a
+rebuild made from inside an admitted fence call, and an unlinked saved host's
+intent reaching its offline alert.
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins a saved
+agent's offline alert reading maintenance set on the guest it is linked into,
+and `monitor_host_agent_removal_lifecycle_test.go`
+(`TestHostAgentRemovalLifecycleHonorsSavedHostIntentAfterRestart`) pins the
+restarted monitor's own host-offline check raising no alert for a saved host
+the operator marked intentionally offline.
+
 Alert restore precedes resource-store attachment during startup. Once the
 adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
 to reconcile the restored set and refreshes shared alert state if it changed.
@@ -5693,3 +5873,24 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Broadcast host coalescing honours operator splits
+
+The websocket broadcast coalesced top-level host views with
+`CoalescePresentationHostResources`, which applies no merge exclusions, while
+the resources API's `ResourceRegistry.ListForPresentation` applies the
+registry's. A host pair the operator split (unlink or report-merge) could
+therefore be one broadcast row and two REST rows.
+`Monitor.buildBroadcastFrontendStateFromSnapshotWithClock` now calls
+`coalesceResourcesForPresentation`, which asks the view's read state for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh), and otherwise the resource store's adapter: the
+mock-mode view lists through a store-less registry that carries no operator
+decisions. Both surfaces share `presentationExclusionFilter`. Polling, rebuild cadence,
+alert evaluation and the broadcast payload shape are unchanged.
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` compares broadcast
+and REST row counts with and without the split, and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
+listing read state over an older store generation and the store's exclusions
+for a mock-style view.

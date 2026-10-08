@@ -5,7 +5,6 @@
  * - Unified findings (alerts + AI findings)
  * - Canonical intelligence summary
  * - Remediation plans
- * - Circuit breaker status
  */
 
 import { createSignal } from 'solid-js';
@@ -25,7 +24,6 @@ import {
 import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
   RemediationPlan,
-  CircuitBreakerStatus,
   UnifiedFindingRecord,
   InvestigationRecord,
   ApprovalRequest,
@@ -41,7 +39,7 @@ import {
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { sortPendingApprovalsByUrgency } from '@/utils/approvalRiskPresentation';
 import { logger } from '@/utils/logger';
-import type { CorrelationsResponse, IntelligenceSummary } from '@/types/aiIntelligence';
+import type { IntelligenceSummary } from '@/types/aiIntelligence';
 import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
 import { presentationPolicyIsDemoMode } from './sessionPresentationPolicy';
 import { eventBus } from './events';
@@ -450,26 +448,12 @@ function getPatrolOpenWorkCount(): number {
 }
 
 // ============================================
-// Circuit Breaker
-// ============================================
-
-const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(
-  null,
-);
-
-// ============================================
 // Canonical Intelligence Summary
 // ============================================
 
 const [intelligenceSummary, setIntelligenceSummary] = createSignal<IntelligenceSummary | null>(
   null,
 );
-
-// ============================================
-// Learned Correlations
-// ============================================
-
-const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
 
 // ============================================
 // Org Switch Reset
@@ -488,9 +472,7 @@ eventBus.on('org_switched', () => {
   setPlansError(null);
   setPendingApprovalsWithExpiryTracking([]);
   setApprovalsError(null);
-  setCircuitBreakerStatus(null);
   setIntelligenceSummary(null);
-  setCorrelations(null);
 });
 
 // ============================================
@@ -803,44 +785,18 @@ export const aiIntelligenceStore = {
     }
   },
 
-  // Circuit Breaker
-  get circuitBreakerStatus() {
-    return circuitBreakerStatus();
-  },
-  circuitBreakerStatusSignal: circuitBreakerStatus,
-
-  // Learned Correlations
-  get correlations() {
-    return correlations();
-  },
-  correlationsSignal: correlations,
-
   // Canonical Intelligence Summary
   get intelligenceSummary() {
     return intelligenceSummary();
   },
   intelligenceSummarySignal: intelligenceSummary,
 
-  async loadCorrelations(resourceId?: string) {
-    try {
-      const response = await AIAPI.getCorrelations(resourceId);
-      setCorrelations(response);
-      return response;
-    } catch (e) {
-      logger.error('Failed to load correlations:', e);
-      setCorrelations(null);
-      return null;
-    }
-  },
-
   async loadDashboardData() {
     await Promise.all([
       this.loadIntelligenceSummary(),
       this.loadFindings(),
       this.loadPatrolFindings(),
-      this.loadCircuitBreakerStatus(),
       this.loadPendingApprovals(),
-      this.loadCorrelations(),
     ]);
   },
 
@@ -853,15 +809,6 @@ export const aiIntelligenceStore = {
       logger.error('Failed to load intelligence summary:', e);
       setIntelligenceSummary(null);
       return null;
-    }
-  },
-
-  async loadCircuitBreakerStatus() {
-    try {
-      const status = await AIAPI.getCircuitBreakerStatus();
-      setCircuitBreakerStatus(status);
-    } catch (e) {
-      logger.error('Failed to load circuit breaker status:', e);
     }
   },
 

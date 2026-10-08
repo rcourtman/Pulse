@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "77d21197927a670076a74e87634e73ea999a566a",
+  "verified_at": "2026-10-07T19:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/reportingCatalogModel.ts",
+    "frontend-modern/src/components/Settings/reportingPanelModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/reportingCatalogModel.ts": "fc3ab83f49ac62aaf7ef97b415a0bff1c4e445ca17771efc18304295e94e3df0",
+    "frontend-modern/src/components/Settings/reportingPanelModel.ts": "e4366a8c50ea897dcb4907b4e488a2c5f758e710d7a9be0d5fe0d3e047e2d9c5"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/api/admin/reports/generate"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Pro dev licence active, Pulse Assistant enabled on a local stub OpenAI-compatible provider that logs each call, real admin session login (no admin bypass)",
+    "Data & Reports panel with one mock agent selected, then two",
+    "Downloaded single-resource PDF opened: POST copy carries the stub AI narrative and provenance footer; GET copy carries the deterministic summary and the new GET note in place of the Configure Pulse Assistant tip",
+    "AI usage summary after the run: report_narrative recorded only for the two UI POST downloads"
+  ],
+  "interactions": [
+    "Generate Report (1 resource) as PDF at 1280x800 and 390x844: one POST /api/admin/reports/generate with a JSON body, 200 application/pdf, download saved, stub provider called once each",
+    "Generate Report (1 resource) as CSV at both widths: POST, 200 text/csv, stub provider not called",
+    "Generate Report (2 resources) as PDF at both widths: POST /api/admin/reports/generate-multi unchanged, 200 application/pdf",
+    "Top-level browser navigation to GET /api/admin/reports/generate?format=pdf with the session cookie: PDF downloaded, stub provider not called",
+    "HEAD, PUT, DELETE and PATCH return 405 with Allow GET, POST; a session POST without the CSRF header returns 403",
+    "No console errors on the reporting panel at either width"
+  ]
+}

@@ -178,14 +178,12 @@ func TestBranchCovNormalizePBSDefaults(t *testing.T) {
 			wantMemory: alertconfig.HysteresisThreshold{Trigger: 90, Clear: 85},
 		},
 		{
-			// SUSPECTED SOURCE BUG: derived clear (1-5=-4) is <=0 so the code
-			// falls back to the FIXED default (75 CPU / 80 Memory), producing
-			// Clear >> Trigger. Unlike normalizeThresholdPointer (which clamps
-			// to 0) and with no EnsureValidHysteresis call, this stays invalid.
-			name:       "small trigger with zero clear falls back to fixed default yielding clear>trigger",
+			// Derived clear (1-5=-4) floors at 0, never the factory clear,
+			// which would sit above the trigger.
+			name:       "small trigger with zero clear keeps clear below trigger",
 			in:         alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
-			wantCPU:    alertconfig.HysteresisThreshold{Trigger: 1, Clear: 75},
-			wantMemory: alertconfig.HysteresisThreshold{Trigger: 1, Clear: 80},
+			wantCPU:    alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
+			wantMemory: alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
 		},
 	}
 	for _, tc := range tests {
@@ -466,12 +464,10 @@ func TestBranchCovNormalizeNodeDefaults(t *testing.T) {
 			want: alertconfig.HysteresisThreshold{Trigger: 90, Clear: 85},
 		},
 		{
-			// SUSPECTED SOURCE BUG: derived clear (1-5=-4) <=0 falls back to the
-			// FIXED 75, giving Clear(75) > Trigger(1); NormalizeNodeDefaults has
-			// no EnsureValidHysteresis call so this stays invalid.
-			name: "small trigger zero clear falls back to fixed 75 (clear>trigger)",
+			// Derived clear (1-5=-4) floors at 0, never the factory 75.
+			name: "small trigger zero clear keeps clear below trigger",
 			in:   &alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
-			want: alertconfig.HysteresisThreshold{Trigger: 1, Clear: 75},
+			want: alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
 		},
 		{
 			name: "valid pair untouched",
@@ -588,19 +584,16 @@ func TestBranchCovNormalizeAgentDefaults(t *testing.T) {
 		}
 	})
 
-	// SUSPECTED SOURCE BUG (CPU arm): derived clear (1-5=-4) <=0 falls back to
-	// the FIXED 75; CPU has NO EnsureValidHysteresis call, so Clear(75) >
-	// Trigger(1) persists. DiskTemperature (which DOES call EnsureValidHysteresis)
-	// is repaired - covered by the next two subtests.
-	t.Run("CPU small trigger zero clear yields clear>trigger (no EnsureValidHysteresis net)", func(t *testing.T) {
+	// Derived clear (1-5=-4) floors at 0, never the factory 75.
+	t.Run("CPU small trigger zero clear keeps clear below trigger", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			AgentDefaults: alertconfig.ThresholdConfig{
 				CPU: &alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0},
 			},
 		}
 		alertconfig.NormalizeAgentDefaults(cfg)
-		if !ptrHtEq(cfg.AgentDefaults.CPU, alertconfig.HysteresisThreshold{Trigger: 1, Clear: 75}) {
-			t.Fatalf("CPU = %+v, want {1 75} (clear>trigger anomaly)", cfg.AgentDefaults.CPU)
+		if !ptrHtEq(cfg.AgentDefaults.CPU, alertconfig.HysteresisThreshold{Trigger: 1, Clear: 0}) {
+			t.Fatalf("CPU = %+v, want {1 0}", cfg.AgentDefaults.CPU)
 		}
 	})
 
@@ -617,17 +610,16 @@ func TestBranchCovNormalizeAgentDefaults(t *testing.T) {
 		}
 	})
 
-	t.Run("DiskTemperature small trigger: fallback to 50 then repaired to 0 by EnsureValidHysteresis", func(t *testing.T) {
+	t.Run("DiskTemperature small trigger zero clear keeps clear below trigger", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			AgentDefaults: alertconfig.ThresholdConfig{
 				DiskTemperature: &alertconfig.HysteresisThreshold{Trigger: 2, Clear: 0},
 			},
 		}
 		alertconfig.NormalizeAgentDefaults(cfg)
-		// derived clear 2-5=-3 <=0 -> fixed fallback 50; EnsureValidHysteresis
-		// then sees 50>=2 and sets clear=2-5=-3<0 -> 0. End state {2 0}.
+		// derived clear 2-5=-3 floors at 0. End state {2 0}.
 		if !ptrHtEq(cfg.AgentDefaults.DiskTemperature, alertconfig.HysteresisThreshold{Trigger: 2, Clear: 0}) {
-			t.Fatalf("DiskTemperature = %+v, want {2 0} (fallback 50 repaired to 0)", cfg.AgentDefaults.DiskTemperature)
+			t.Fatalf("DiskTemperature = %+v, want {2 0}", cfg.AgentDefaults.DiskTemperature)
 		}
 	})
 
@@ -802,7 +794,6 @@ func TestBranchCovNormalizeTrueNASDefaults(t *testing.T) {
 			{"DiskWrite", t1.DiskWrite, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
 			{"NetworkIn", t1.NetworkIn, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
 			{"NetworkOut", t1.NetworkOut, alertconfig.HysteresisThreshold{Trigger: 0, Clear: 0}},
-			{"Disk.Temperature", cfg.TrueNASDiskDefaults.Temperature, alertconfig.HysteresisThreshold{Trigger: 55, Clear: 50}},
 		} {
 			if f.got == nil {
 				t.Fatalf("%s is nil, want non-nil", f.name)
@@ -810,6 +801,11 @@ func TestBranchCovNormalizeTrueNASDefaults(t *testing.T) {
 			if !htEq(*f.got, f.want) {
 				t.Fatalf("%s = %+v, want %+v", f.name, *f.got, f.want)
 			}
+		}
+		// TrueNAS disks follow the disk temperature policy until the user
+		// saves a TrueNAS-wide value.
+		if cfg.TrueNASDiskDefaults.Temperature != nil {
+			t.Fatalf("Disk.Temperature = %+v, want unset", *cfg.TrueNASDiskDefaults.Temperature)
 		}
 	})
 
@@ -987,7 +983,7 @@ func TestBranchCovNormalizeDiskTempByType(t *testing.T) {
 		}
 	})
 
-	t.Run("non-positive trigger or clear resets canonical key to default", func(t *testing.T) {
+	t.Run("non-positive trigger resets canonical key, non-positive clear derives", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			DiskTempByType: map[string]alertconfig.HysteresisThreshold{
 				"sata": {Trigger: 88, Clear: 0},
@@ -996,14 +992,14 @@ func TestBranchCovNormalizeDiskTempByType(t *testing.T) {
 			},
 		}
 		alertconfig.NormalizeDiskTempByType(cfg)
-		if got := cfg.DiskTempByType["sata"]; !htEq(got, wantDefaults["sata"]) {
-			t.Fatalf("sata = %+v, want default %+v (clear<=0)", got, wantDefaults["sata"])
+		if got := cfg.DiskTempByType["sata"]; !htEq(got, alertconfig.HysteresisThreshold{Trigger: 88, Clear: 83}) {
+			t.Fatalf("sata = %+v, want {88 83} (clear<=0 derives)", got)
 		}
 		if got := cfg.DiskTempByType["sas"]; !htEq(got, wantDefaults["sas"]) {
 			t.Fatalf("sas = %+v, want default %+v (trigger<=0)", got, wantDefaults["sas"])
 		}
-		if got := cfg.DiskTempByType["nvme"]; !htEq(got, wantDefaults["nvme"]) {
-			t.Fatalf("nvme = %+v, want default %+v (clear<=0)", got, wantDefaults["nvme"])
+		if got := cfg.DiskTempByType["nvme"]; !htEq(got, alertconfig.HysteresisThreshold{Trigger: 70, Clear: 65}) {
+			t.Fatalf("nvme = %+v, want {70 65} (clear<=0 derives)", got)
 		}
 	})
 }

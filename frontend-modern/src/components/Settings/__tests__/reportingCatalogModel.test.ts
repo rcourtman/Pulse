@@ -22,6 +22,7 @@ const baseCatalogPayload = {
     title: 'Performance Reports',
     description: 'Historical performance reporting',
     singleResourceEndpoint: '/api/admin/reports/generate',
+    singleResourceMethod: 'POST',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     singleFilenameSubject: 'resource_id',
@@ -74,6 +75,7 @@ describe('reporting catalog model', () => {
     const catalog = buildLegacyReportingCatalogFallback();
 
     expect(catalog.performanceReport.singleResourceEndpoint).toBe('/api/reporting');
+    expect(catalog.performanceReport.singleResourceMethod).toBe('GET');
     expect(catalog.performanceReport.multiResourceEndpoint).toBe('/api/reporting/generate-multi');
     expect(catalog.vmInventoryExport).toBeNull();
   });

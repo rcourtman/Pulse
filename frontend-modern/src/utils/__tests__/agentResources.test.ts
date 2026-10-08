@@ -6,7 +6,6 @@ import {
   getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
   getExplicitResourceClusterName,
-  getMetricsChartKeyCandidatesFromResource,
   getPreferredResourceClusterName,
   hasDockerWorkloadsScope,
   hasAgentFacet,
@@ -248,38 +247,6 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe(false);
-  });
-
-  it('builds canonical metrics chart key candidates for host-family resources', () => {
-    expect(
-      getMetricsChartKeyCandidatesFromResource(
-        makeResource({
-          id: 'hash-resource',
-          type: 'docker-host',
-          name: 'tower',
-          platformId: 'tower',
-          metricsTarget: { resourceType: 'docker-host', resourceId: 'docker-host-1' },
-          platformData: {
-            docker: { hostSourceId: 'docker-host-1' },
-            agent: { agentId: 'agent-host-1' },
-          },
-        }),
-      ),
-    ).toEqual(['docker-host-1', 'agent-host-1', 'hash-resource', 'tower']);
-
-    expect(
-      getMetricsChartKeyCandidatesFromResource(
-        makeResource({
-          id: 'hash-resource-2',
-          type: 'agent',
-          name: 'pve1',
-          platformId: 'pve1',
-          platformData: {
-            linkedAgentId: 'agent-linked',
-          },
-        }),
-      ),
-    ).toEqual(['agent-linked', 'hash-resource-2', 'pve1']);
   });
 
   it('detects agent facets without relying on node-only typing', () => {

@@ -7,7 +7,6 @@ export const EXPLAIN_SELECTED_ISSUE_PROMPT =
 
 export function explanationSendOptions(context: AIChatContext): SendMessageOptions {
   return {
-    autonomousMode: false,
     handoffContext: context.handoffContext,
     handoffResources: context.handoffResources,
     handoffActions: context.handoffActions,

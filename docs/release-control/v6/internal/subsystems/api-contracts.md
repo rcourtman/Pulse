@@ -1286,12 +1286,16 @@ for a release, a diagnostic build, and a marker-declared source build.
 
 Summary-chart response caching is a shared API boundary:
 `internal/api/chartapi/service.go` may serve a short cached JSON payload for repeated
-infrastructure-summary and workloads-summary requests with the same
+infrastructure-summary and per-workload chart requests with the same
 organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
-change normalized response shape, bypass monitor or read-state availability
-checks, merge tenants, or become the source of truth for telemetry freshness.
-Infrastructure-summary, workloads-summary, and per-workload chart payloads
+change normalized response shape, answer for a tenant whose monitor is
+unavailable, merge tenants, or become the source of truth for telemetry
+freshness. The infrastructure route resolves read-state before it reads its
+cache; the per-workload route checks read-state only when it recomputes, so a
+cached workload payload can outlive a read-state outage by at most its
+3-second TTL.
+Infrastructure-summary and per-workload chart payloads
 must share one bounded retention budget across query variants: no more than 64
 entries or 16 MiB of encoded payloads. Inserts must purge expired variants and
 evict the oldest retained payloads as either bound is reached; a response larger
@@ -2090,6 +2094,20 @@ payload shape change when the portal presents compact client rows.
     index; clients must treat the endpoint's `accepted:true` as inbox
     receipt, not delivery. Browser clients must use the shared
     `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
+    Every Assistant session mutation sub-resource under
+    `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
+    `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
+    handler returns `405` with `Allow: POST` through
+    `requireAssistantSessionMutationMethod` in `internal/api/ai_handler.go`,
+    before the session service is resolved (earlier layers still answer
+    first: `Router.ServeHTTP` returns `200` for `OPTIONS` preflight, and
+    auth, scope, CSRF, and demo-mode guards keep their own refusals). The
+    session router dispatches these sub-resources by path alone, and the
+    demo-mode read-only guard and the CSRF check both treat `GET` and `HEAD`
+    as reads, so the method contract belongs to the mutating handler rather
+    than to its callers. `GET /api/ai/sessions/{id}/messages` stays the read
+    path, and the unsupported `/diff`, `/revert`, and `/unrevert` handlers
+    keep answering `501` for every method that reaches them.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed
@@ -2688,9 +2706,10 @@ a new API state machine, queue contract, or verification-accounting field.
    remediation-plan handoffs must use the same boundary for model-only
    context: plan status, risk, step labels, and command counts are allowed,
    while raw command and rollback command payloads remain in governed action
-   surfaces. Frontend Patrol finding-discussion handoffs must force a
-   request-local approval-required Assistant mode instead of inheriting the
-   user's persistent autonomous control setting; live approval, action artifact,
+   surfaces. Frontend Patrol finding-discussion handoffs run in the
+   approval-required Assistant mode that `/api/ai/chat` sets server-side for
+   every request, never the user's persistent autonomous control setting, and
+   send no execution-mode field of their own; live approval, action artifact,
    fix-outcome, and remediation-plan references only add structured action
    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
    briefing payloads must stay compact and must not include suggested prompt
@@ -2698,7 +2717,7 @@ a new API state machine, queue contract, or verification-accounting field.
    recommendation metadata. Frontend queued-fix recovery handoffs
    where the live approval or action artifact payload is unavailable must still
    carry that Patrol-owned finding briefing, current `fix_queued` posture,
-   request-local approval-required mode, and model-only evidence context; they must
+   approval-required disclosure, and model-only evidence context; they must
    not degrade into generic Assistant investigation chat or imply that
    execution can proceed from missing command payloads. Expired-approval
    recovery handoffs may use a still-available structured action artifact payload
@@ -3168,10 +3187,11 @@ a new API state machine, queue contract, or verification-accounting field.
    `Safe auto-fix`, and
    `Autopilot` rather than transport shorthand or Pro-matrix labels, the Patrol
    header description derives from the same
-   effective control state, and the advanced settings
-   drawer stays limited to model, schedule, trigger, and user-level model checks
-   sourced from the existing settings APIs rather than duplicating a second
-   control-level chooser. Runtime or provider setup
+   effective control state, and Settings > Pulse Intelligence > Patrol, which
+   replaced the retired header settings drawer, stays limited to model,
+   schedule, trigger, notification, and user-level model checks sourced from
+   the existing settings APIs rather than duplicating a second control-level
+   chooser. Runtime or provider setup
    readiness may suppress run, schedule, model, trigger, and provider-repair
    controls until Patrol can check infrastructure reliably, but it must not hide
    the Patrol mode selector or replace it with setup-first proof/status chrome.
@@ -3304,13 +3324,14 @@ a new API state machine, queue contract, or verification-accounting field.
    and the `/api/ai/intelligence/changes` route plus `internal/api/contract_test.go`, so the canonical recent-changes endpoint stays on the same intelligence facade and contract snapshot instead of bypassing the shared timeline source
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the resource-detail surface stays on one canonical intelligence contract instead of introducing a separate detail endpoint
-   and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
+   and the global learned-correlation route `/api/ai/intelligence/correlations`, which has no frontend client today: no page renders that list, so the shared AI intelligence store neither loads nor holds it and the resource drawer reads per-resource correlations from the resource-intelligence payload; a surface that later renders the global list must add one store-owned load instead of a page-local fetch
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
-   and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
+   and the Patrol header in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, which outside setup-only states may summarize noteworthy API-owned `status.trigger_status` facts in one compact line and, unless a provider setup block shows `Fix setup` instead, links to Settings > Pulse Intelligence > Patrol, where the Patrol model, schedule, and trigger tuning are saved through `PUT /api/settings/ai/update`, so none of those settings or background-only runtime-policy pauses become the primary Patrol control decision and the header carries no schedule and model drawer
    and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so if Patrol recent-change, learned-correlation, or policy-coverage summary text returns, it is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today and the model carries no such derivation
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
+   and the Patrol finding-to-Assistant handoff owned by `frontend-modern/src/components/AI/FindingsPanel.tsx`, so the pending-approval, investigation, and proposed-fix reads behind that handoff happen once in the panel instead of in a second, unwired copy inside the Patrol state hook
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
@@ -3325,14 +3346,15 @@ a new API state machine, queue contract, or verification-accounting field.
    action artifact so the Assistant runtime can refresh finding and action posture
    from IDs and safe summaries instead of relying on pasted chat text
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
+   and the Patrol findings list the state hook reads from `aiIntelligenceStore.patrolFindings`, so `usePatrolIntelligenceState.ts` does not re-derive page-level severity tallies from it: the hook's unread `summaryStats` tally has been removed, the hook derives no client-side severity tally from that list today (the backend's per-severity `findings_count` reaches it only inside the AI summary payload it passes through), and the Activity tab's `This week` card takes its open-by-severity counts from `GET /api/ai/patrol/digest` instead of recounting that list
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' optional `buildResourceHref` input, so a surface that needs resource-filter links passes them into the shared card instead of rebuilding infrastructure URLs inline; the cards carry no link default since the cross-resource drilldown links were retired, and render resource labels as plain text
    and the Patrol runtime-remediation destination shared with the AI settings endpoint, so run-history runtime-failure actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
-   and the Patrol mode selector boundary, so the default header and the
-   Patrol mode dialog compose the shared
+   and the Patrol mode selector boundary, so the header's `Mode and automation`
+   disclosure composes the shared
    `frontend-modern/src/components/shared/FilterButtonGroup.tsx` primitive for
    the visible `Watch only` / `Ask first` / `Safe auto-fix` /
    `Autopilot` presentation while the API contract remains the sole owner of
@@ -3582,7 +3604,7 @@ a new API state machine, queue contract, or verification-accounting field.
 23. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
 24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens. The same post-boot lifecycle owns the investigation surface: a successful in-process chat start or restart must reapply the same live dependency wiring as cold startup, including the Enterprise investigation orchestrator and Patrol circuit breaker, so enabling Intelligence after boot cannot leave finding investigations on `503 Investigation orchestrator not initialized` until the server restarts.
 25. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
-26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
+26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload chart API, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
 27. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/chartapi/service.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 28. Keep Patrol remediation payload naming backward-compatible without leaking
     legacy automation-first wording into product copy. `frontend-modern/src/api/patrol.ts`,
@@ -3593,7 +3615,7 @@ a new API state machine, queue contract, or verification-accounting field.
     contract must describe the operator-visible capability as remediation or
     safe remediation workflows.
 29. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
-30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+30. Keep synthetic chart-history fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` synthesizes mock history (through `BuildSyntheticMetricHistorySeries`, which the metrics-store history route uses), it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
     Mock storage follows the same rule at `/api/metrics-store/history`: when a
     storage or Ceph resource has current capacity in canonical live state, the
     handler must return its in-memory or deterministic `usage` series for both
@@ -3601,16 +3623,7 @@ a new API state machine, queue contract, or verification-accounting field.
     demo store. This includes provider-derived targets with no legacy history
     row and legacy rows whose persistent series is still sparse while fleet
     backfill is running.
-    The same compact chart boundary also owns aggregate-only storage summary
-    transport. `/api/charts/storage-summary` may batch only the canonical
-    `used` and `avail` storage series required for the aggregate capacity
-    sparkline, and it must not regress into the full per-pool storage payload
-    or a fetch-all-metrics backend path just because the storage page carries a
-    broader chart surface.
-    When mock mode is active, that same endpoint must come from the
-    monitor-owned aggregate summary cache rather than rehydrating each pool
-    chart on request.
-31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
     Kubernetes pod workload rows follow that same contract through their
     metrics target. `/api/resources` may expose pod history only through the
     unified `MetricsTarget.ResourceID`, but that target must be the canonical
@@ -3675,8 +3688,9 @@ a new API state machine, queue contract, or verification-accounting field.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
-37. Keep the storage summary route in `internal/api/chartapi/service.go` as the
-    canonical storage summary contract across dashboard and storage consumers.
+37. Keep the storage charts route (`HandleStorageCharts` in
+    `internal/api/chartapi/service.go`) as the canonical storage summary
+    contract for the storage page's summary consumers.
     `internal/api/chartapi/service.go`,
     `internal/api/chartapi/service_test.go`, and shared frontend consumers must
     expose pooled storage history through one response keyed by canonical
@@ -3695,6 +3709,10 @@ a new API state machine, queue contract, or verification-accounting field.
     requested metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
+    `ChartsAPI.getInfrastructureSummaryCharts` is the only frontend client for
+    `/api/charts/infrastructure`; the deprecated `getInfrastructureCharts`
+    alias, which could not pass `metrics`, is removed and must not return as a
+    second unfiltered entry point.
 39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
@@ -3704,6 +3722,14 @@ a new API state machine, queue contract, or verification-accounting field.
     rows, governed resource labels, top-infrastructure identity, or metrics-
     target join keys. New summary payloads must be owned by their product
     route and pinned in the API contract there.
+    The aggregate `/api/charts/workloads-summary` and
+    `/api/charts/storage-summary` chart routes are retired the same way. No
+    first-party client ever called the workloads route, the storage route lost
+    its last reader when `storageSummaryTrendCache.ts` was deleted, and
+    neither appeared in `docs/API.md`. Their handlers, response types,
+    `ChartsAPI` methods, mock prewarm and SLO budget are gone, and they must
+    not return as compatibility reads; a new aggregate chart starts from a
+    live consumer and its own contract entry.
 40. Keep mock and demo chart reads on the same canonical unified snapshot as
     the rest of the API surface. `internal/api/chartapi/service.go`,
     `internal/api/chartapi/service_test.go`, and chart consumers must route
@@ -3892,6 +3918,13 @@ counters exist to measure.
     onboarding telemetry. Customer diagnostics may expose runtime health,
     supportability, and sanitized troubleshooting state; admin analytics must
     stay behind admin-owned metrics routes.
+25. Handlers that perform a caller-requested write (settings, sessions,
+    credentials, workflow or resource state) while answering `GET` or `HEAD`.
+    A route registered without a mux method pattern, or a sub-resource
+    dispatched by path, must refuse safe methods in the mutating handler
+    through `requireRequestMethod` in `internal/api/method_guard.go` (or an
+    equivalent explicit check) instead of relying on its callers, the
+    demo-mode read-only guard, or the CSRF check.
 
 ## Completion Obligations
 
@@ -4008,24 +4041,34 @@ the authoritative analysis outcome.
    self-hosted v6 GA UI
    and the Patrol autonomy save contract, so Community/free runtime payloads
    may persist only `monitor` autonomy settings through
-   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and `full` return
-   the canonical license-required response instead of a generic save failure,
-   and Patrol frontend state owners must clamp stale paid autonomy to `monitor`
-   and send `full_mode_unlocked:false` before submitting that endpoint when the
-   safe-remediation entitlement is not effective. The monitor-only backend path
-   must likewise clear stale full-mode unlock state in its response and
-   persistence layer instead of preserving paid remediation state through a free
-   configuration save
+   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and an
+   acknowledged `full` return the canonical license-required response instead
+   of a generic save failure (the shared acknowledgement gate refuses a `full`
+   request without a current Autopilot acknowledgement first, for example with
+   `409 acknowledgement_required` when it carries none), and the Patrol
+   frontend state owner must
+   refuse any level other than `monitor` when a save starts while the
+   safe-remediation entitlement is not effective; its payload carries only
+   `autonomy_level`, the investigation budget and timeout, and (for Autopilot)
+   `acknowledgement_id`, never `full_mode_unlocked`. The monitor-only backend
+   path owns the unlock clamp:
+   it must clear stale full-mode unlock and Autopilot activation state in its
+   response and persistence layer instead of preserving paid remediation state
+   through a free configuration save
    and the Patrol settings-save readiness contract, so
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
    echo `patrol_readiness` with stable `cause` metadata and execution routes
-   must continue to fail closed before model calls. Frontend Patrol settings
+   must continue to fail closed before model calls. Frontend settings
    consumers must surface that saved-but-not-ready response as a saved
-   configuration issue with the echoed provider, model, cause, and summary
-   instead of reporting the successful save as a failed save or hiding the
-   readiness blocker behind a generic notification; and the structured
-   investigation-record contract, so unified findings may
+   configuration issue rather than a failed save, and never as inline failure
+   state: every Pulse Intelligence settings page (Provider & Models, Patrol,
+   Assistant, Service context) raises a warning notification naming the echoed
+   summary, provider, and model, while the Patrol page's on/off save raises a
+   fixed not-ready warning and leaves the diagnosis to the page's own readiness
+   surfaces, such as the readiness banner that names the summary, provider,
+   and model while the header offers `Fix setup` when Patrol is active; and
+   the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
    and backend contract tests updated in the same slice as any field change.
@@ -4279,7 +4322,7 @@ the authoritative analysis outcome.
    run-history consumers may pass a bounded `[Patrol Run Context]` block,
    scoped resource references, run outcome/coverage facts, sanitized analysis,
    and structured runtime failure summary/detail as model-only chat context
-   while forcing request-local approval-required mode and leaving retries,
+   under the server-set approval-required mode, leaving retries,
    configuration changes, and remediation authority outside the chat payload
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the Current issues and history workspace the same payloads must not
@@ -4842,6 +4885,10 @@ transition and evidence times) from the frontend-primitives shared
 relative-time clock. That is presentation over the same `GET
 /api/ai/patrol/status`, run history and `GET /api/ai/patrol/attention/{id}`
 payloads: no field, request or polling cadence changes.
+The attention detail's suppression `expiresAt` and a finding's `remind_at` and
+`snoozed_until` from `GET /api/ai/patrol/findings` are future times, so the
+page presents them as countdowns from the same clock ("in 1d") instead of
+ages. That is presentation only: no field, request or polling cadence changes.
 
 ### Resource-list facets preserve scoped navigation evidence
 
@@ -5139,6 +5186,134 @@ pass the bounded non-symlink regular-file boundary in
 `internal/api/sso_outbound.go`. Cloud handoff redirects consume the shared
 host-local redirect validator rather than carrying route-local prefix checks.
 
+A handler that performs a caller-requested write behind a route whose mux
+pattern carries no method must refuse `GET` and `HEAD` itself.
+`requireRequestMethod` in `internal/api/method_guard.go` is the shared
+handler-level guard: it admits only the listed methods and answers any other
+method that reaches the handler with `405` and an `Allow` header naming them.
+The demo-mode read-only guard and the CSRF check both admit `GET` and `HEAD` as
+reads, and the `SameSite=Lax` session cookie rides cross-site top-level `GET`
+navigations, so the method contract belongs to the mutating handler rather than
+to its callers. `/api/discovery/settings` accepts `PUT`, its documented method,
+and `POST`, which it took before the guard existed. SP-initiated SAML logout at
+`/api/saml/{id}/logout` accepts only `POST`, matching the `/api/logout`
+fallback it delegates to. The IdP's LogoutResponse keeps returning to
+`/api/saml/{id}/slo`, which must accept the HTTP-Redirect binding's `GET` and
+validates the signed response before it touches the session.
+`TestDemoModeSafeMethodsCannotReachRouteMutations` in
+`internal/api/ai_handlers_more_test.go` drives both routes through the full
+`DEMO_MODE` router and proves the threshold and the session survive.
+The rule does not cover `GET` flows the protocol or the browser handoff
+requires (OIDC login and callback, SAML login initiation and SLO, magic-link
+verify, cloud handoff, the checkout start and activation bridges, websocket
+handshakes), or reads that run one-time lazy initialization or idempotent
+reconciliation, such as the license and onboarding-overflow bootstrap behind
+the entitlement reads and the action-expiry sweep behind the action reads.
+Single-resource report generation at `GET /api/admin/reports/generate` still
+runs the configured AI narrator, a paid provider call recorded in the cost
+ledger; that is a known open exception, not part of this contract.
+
+The SAML SLO callback at `/api/saml/{id}/slo` accepts a LogoutResponse only as
+the answer to a logout this SP started. crewjam/saml verifies the response's
+signature, `Destination`, `Issuer` and `Status` and rejects one issued more
+than 90 seconds ago, but never checks its `InResponseTo`, and the IdP signs its
+answer to every user's logout, so a valid signature alone let one user replay
+the answer to their own logout through a cross-site `GET` and clear another
+user's session. `SAMLService.MakeLogoutRequest` in
+`internal/api/saml_service.go` therefore records each LogoutRequest ID, on the
+provider's own service, against the session-store hash of the session
+`handleSAMLLogout` is ending. A record is honored for ten minutes unless the
+1,024-record cap evicts it first, oldest first. `SAMLService.ValidateLogoutResponse`
+reads `InResponseTo` from the same payload crewjam verified, taking only the
+root element's attribute written without a prefix, the one the signature
+covers (a namespace declaration such as `xmlns:InResponseTo` is ignored,
+because exclusive canonicalization can leave an unused one out of the signed
+form), and
+spends the matching record. The response is accepted only when that record
+exists and is unexpired, and the browser carries either no session cookie (the
+normal case, because `handleSAMLLogout` clears the cookie before redirecting to
+the IdP) or the session that request ended. Unsolicited, expired, evicted,
+replayed and other-session responses are refused with `403` and a failed
+`saml_slo_callback` audit event, and the handler leaves sessions and cookies
+alone. A misdelivered response still spends its record, so each LogoutRequest
+is answered at most once. The handler writes no session state or cookie for an
+accepted response either: `handleSAMLLogout` already invalidated the session
+and expired its cookies, and a cross-site HTTP-POST delivery withholds the
+`SameSite=Lax` cookie, so a deletion cookie written there could log out a
+browser whose session the request never presented. For the same reason
+`handleSAMLLogout` answers `401` to a request that carries no session cookie,
+API-token-only callers included, instead of falling back to a cookie-clearing
+logout: the SAML routes are public and skip CSRF, so that fallback was a
+cross-site forced logout of a kind a deployment with authentication configured
+refuses on `/api/logout` as unauthenticated. The records live in memory,
+so a restart or provider re-initialization during the IdP round trip leaves the
+returning response unmatched and refused; the local session was already
+cleared when logout began. `TestSAMLSLOAuditsLogoutResponseNotBoundToSession`
+in `internal/api/audit_handlers_test.go` replays one user's signed response
+into another user's browser and proves the victim's session survives and the
+refusal is audited.
+
+The SAML ACS at `/api/saml/{id}/acs` accepts a Response, at default settings,
+only as the IdP's answer to a login the presenting browser started. crewjam/saml
+refuses a Response unless its `InResponseTo`, and that of each bearer
+`SubjectConfirmationData`, is one of the request IDs its caller supplies, and
+Pulse used to supply none, so with `allowIdpInitiated` off, the default, every
+SAML login failed with "Authentication failed". `SAMLService.MakeAuthRequest`
+in `internal/api/saml_service.go` therefore records each AuthnRequest ID, on
+the provider's own service, with the sanitized `returnTo` and the hash of a
+random token that `handleSAMLLogin` sets as the `HttpOnly`, `SameSite=Lax`
+cookie `pulse_saml_login` (`__Host-pulse_saml_login` over HTTPS) for ten
+minutes. A browser that already holds a token keeps it, so logins started one
+after another in several tabs all stay valid. A record is honored for ten
+minutes, judged when the Response spends it, unless the 1,024-record cap
+evicts it first, oldest first. The IdP delivers its Response by a cross-site
+HTTP-POST, which browsers send without `SameSite=Lax` cookies, so
+`handleSAMLACS` answers a POST that carries a `SAMLResponse` or
+`SAMLart` but no login cookie with a page that posts the same fields once more
+from Pulse's own origin. The form has no `action`, so it returns to the URL
+the IdP posted to, path prefix included, its script carries the request's CSP
+nonce, and a marker field prevents a second repost. `SAMLService.ProcessResponse`
+then has crewjam check the Response against every outstanding request ID and
+reads the request it answers from the canonical form goxmldsig verified for
+the signature covering the assertion crewjam returned, never from crewjam's
+parsed fields, taking only an `InResponseTo` written without a prefix: the
+signed `Response`'s, or that of the `Response` inside a signed
+`ArtifactResponse`, when the IdP signed the message, and otherwise that of
+every `SubjectConfirmationData` in the returned assertion's own `Subject`,
+which must agree and of which there must be at least one, and no other signed
+assertion may carry its ID. Other assertions in the Response, and assertions
+in `Advice`, do not take part. That record is
+spent only when it is bound to the presenting browser's token, and the login
+returns to the recorded `returnTo`, not to the posted `RelayState`, which
+`MakeAuthRequest` now escapes into the redirect query so a `returnTo` with its
+own query string is not cut short at the IdP. A Response answering another browser's login, an unknown,
+expired or already spent request, or none is refused with the
+`saml_validation_failed` redirect and a failed `saml_login` audit event, and
+refusing another browser's Response leaves that browser's record for it. With
+`allowIdpInitiated` on, crewjam skips `InResponseTo`, so a Response answering
+any request or none is accepted in any browser without the cookie or the
+repost and returns to its posted `RelayState`, as before. In both modes the
+signature verifier refuses signed content carrying a prefixed attribute or a
+namespace declaration named like an un-namespaced attribute crewjam reads from
+a Response or Assertion, such as `xmlns:IssueInstant`, `xmlns:NotOnOrAfter` or
+`ext:ID`: encoding/xml fills an un-namespaced attribute field from any
+attribute with that local name, and exclusive canonicalization leaves an
+unused declaration out of the signed form, so appending one let a stale signed
+Response pass crewjam's age checks, and an IdP-initiated login could be
+replayed indefinitely. The records live in memory, so a
+restart or a saved provider change (which replaces the provider's service;
+a metadata refresh keeps the records) during the IdP round trip, or a login
+started on a host that does not share cookies with the configured public
+URL's, leaves the Response unmatched and the user starts the login again. Two logins started at
+the same moment in a browser that holds no token yet each mint one and only
+the last cookie set survives, so the other fails the same way, and, as with
+OIDC login state, a flood of unauthenticated login starts can evict pending
+records.
+`TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin` in
+`internal/api/audit_handlers_test.go` delivers one browser's signed Response to
+another browser with a login in progress and proves it is refused and audited
+while its own browser completes the login.
+
 Alert delivery diagnosis is a read-only monitoring API contract.
 `GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
 manager's current delivery-policy projection for one active alert, including
@@ -5399,16 +5574,51 @@ the projection to the Finding before calling the orchestrator. This
 is the one in-process write path that decides what the orchestrator
 sees about operator commitments; all consumers (in-process Patrol,
 external Claude Code, and MCP-speaking clients) read the same enriched shape.
-The provider closure must tolerate the findings runtime's mixed
-resource key spaces: unified-derived findings reference the hashed
-canonical resource ID, but Patrol guest inventory rows reference the
-node-scoped Proxmox source ID (`instance:node:vmid`). Operator state
-is keyed by canonical ID only, so a reference that misses the store
-directly resolves through the registry (`GetByReference`, which also
-covers retired canonical-ID eras and node-scoped guest references
-after #1669) before the provider reports no state — without that
-hop, maintenance windows and intentionally-offline intent silently
-never reach guest findings. Pinned by
+The provider (`Router.patrolResourceOperatorStateProvider`) must
+tolerate the findings runtime's mixed resource key spaces:
+unified-derived findings reference the hashed canonical resource ID,
+Patrol guest inventory rows reference the node-scoped Proxmox source
+ID (`instance:node:vmid`), and a finding raised before an operator
+link folded its resource into another keeps the folded canonical ID,
+which Patrol re-projects as stored. Operator state is keyed by
+canonical ID only, so every reference resolves before the store read,
+through the identity-only `ResolveCanonicalResourceID` of the
+organization monitor's current read state
+(`GetUnifiedReadStateOrSnapshot`: the published registry with saved
+hosts that have not reported since a restart overlaid, or the mock
+estate). That read state is the listing the resources API seeds its
+registry from, and resolution covers retired canonical-ID eras,
+node-scoped guest references after #1669 and link-folded IDs. Only a
+reference it cannot place is read as given. Resolving first is what
+keeps Patrol on the row the resources API writes for the same
+reference: an exact read first would let a row left under a folded
+ID, even a default-valued one, hide the maintenance window the
+operator then set on the merged resource. A saved host that has not
+reported since a restart but is linked into a live resource resolves
+alike everywhere: the read state keeps it as its own offline row, so its
+saved telemetry never reaches the resource, but holds it under the
+link's primary, and the resources API's registry, seeded from that
+listing, holds it the same way instead of folding it. A finding, an
+alert and an operator-state write naming the saved agent by its
+canonical ID or `agent:<host ID>` therefore all reach the resource the
+agent was folded into before the restart. Only when the saved agent is
+itself the link's primary and the resource is not its guest does each
+keep its own identity until the agent reports. Two cases still resolve
+differently in the resources API, whose registry re-ingests that
+listing: references to records it replays from supplemental providers
+on top of the listing, and manual links in mock mode, whose view
+applies none. The read
+state answers from a registry it keeps (a continuity overlay is shared
+and reused for up to two seconds while the published registry and the
+saved hosts are unchanged), so findings do not each clone the unified
+listing the way a resources-API registry build does; only a monitor
+left without a resource store, which the router never does, builds a
+snapshot registry per call. Pinned by
+`TestPatrolFindingOperatorStateFollowsLinkFoldedReference` and
+`TestPatrolFindingOperatorStateResolvesContinuityBackedHost` in
+`internal/api/ai_handlers_more_test.go`,
+`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest` in
+`internal/api/resources_link_continuity_test.go` and
 `TestContract_FindingsResourceOperatorStateProviderIsWired` in
 `internal/api/contract_test.go`.
 
@@ -6304,12 +6514,12 @@ the first store-backed read-state when provider-owned inventories such as
 TrueNAS or VMware have not yet completed an initial baseline and been rebuilt
 into the canonical monitor store.
 That same workload-chart boundary now also owns the rendered-metric budget on
-the shared monitoring routes. `/api/charts/workloads` and
-`/api/charts/workloads-summary` may batch provider-backed reads in parallel,
-but they must request only the canonical workload metrics they actually
-serialize (`cpu`, `memory`, `disk`, `netin`, `netout`), with Kubernetes pods
-staying on that same five-metric set, instead of widening back to disk
-read/write or fetch-all backend batches that the browser never renders.
+the shared monitoring routes. `/api/charts/workloads` may batch
+provider-backed reads in parallel, but each workload type must request only
+the metric set the route serializes for it: the guest sparkline set for VMs
+and system containers, the infrastructure set for app containers, and the
+five-metric set (`cpu`, `memory`, `disk`, `netin`, `netout`) for Kubernetes
+pods, instead of fetch-all backend batches that the browser never renders.
 The shared metrics-history contract now also owns physical-disk live I/O
 windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `30m` as a valid compact live range, and resolve `disk`, `diskread`,
@@ -6424,6 +6634,25 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same manual SAML configuration must verify signatures with the IdP
+certificate the administrator supplied. With no IdP metadata,
+`SAMLService.buildManualMetadata` in `internal/api/saml_service.go` builds the
+IdP descriptor from `idpSsoUrl`, optional `idpSloUrl` and the PEM signing
+certificate in `idpCertificate` or `idpCertFile`, and must put that certificate
+in the signing `KeyDescriptor` as base64 DER, the `<X509Certificate>` content
+IdP metadata carries. crewjam/saml base64-decodes that field to verify every
+ACS Response and LogoutResponse, so the PEM block it once held failed each
+check with "illegal base64 data" before any key was compared, and no manually
+configured provider could accept a login or complete SLO. The stored
+`idpCertificate` stays the PEM the administrator supplied; only the descriptor
+rebuilt in memory on each load changed, so no saved configuration needs
+migrating. `TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures` in
+`internal/api/contract_test.go` signs an ACS Response and a LogoutResponse with
+one test IdP key and proves an inline-certificate provider, a certificate-file
+provider and a metadata provider accept both alike, while a Response signed by
+another key is refused. The proof runs at default settings, with each
+Response answering an AuthnRequest that `SAMLService.MakeAuthRequest`
+recorded for the test browser, as the SAML ACS binding above requires.
 That same SSO provider-detail boundary must return the non-secret nested
 provider configuration used by the settings edit form. `GET
 /api/security/sso/providers/{id}` may keep the flat list/card fields for
@@ -7119,12 +7348,14 @@ introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
 unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
-That same `/api/ai/chat` payload boundary owns per-request execution-mode
-overrides. Dashboard Pulse Brief and other scoped handoffs may include
-`autonomous_mode:false` on the chat request to force approval-required command
-execution for that exchange, but the transport must treat the field as a
-request override only and must not mutate the user's persistent AI control
-setting.
+That same `/api/ai/chat` payload boundary owns request-local execution mode,
+and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
+`autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at
+decode (the browser and the `internal/ai/eval` runner send none), and the
+handler passes approval-required mode into the chat service for every
+exchange; an Autonomous control level runs as Controlled for that request.
+That clamp is request-local and must not mutate the user's persistent AI
+control setting.
 That same chat transport boundary owns new-session anchoring. When the request
 omits `session_id`, the handler may generate and stream a session ID
 immediately so the browser can anchor the visible turn, but that generated ID is
@@ -7160,8 +7391,9 @@ status, and a runtime-failure flag; the backend rebuilds their context), but the
 must not turn their evidence or proposed remedies into user-authored message
 text. Ordinary attachment is context only. A labelled Explain action may
 submit the shared user-selected explanation request over the existing chat
-transport, with the evidence kept in model-only handoff fields and
-`autonomous_mode:false`. This starts explanation/review and grants no new
+transport, with the evidence kept in model-only handoff fields and no
+execution-mode field, since the handler already runs it approval-required.
+This starts explanation/review and grants no new
 approval or execution authority. When a
 Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may
@@ -7178,13 +7410,13 @@ not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads, and it must not preserve Patrol-authored next-step
 recommendation fields from legacy handoffs.
-Patrol finding handoffs are stricter than ordinary chat requests: when a request
+Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
-request-local autonomous mode to false even if the caller supplied
+request-local autonomous mode to false even if a caller's JSON carries
 `autonomous_mode:true`. That server-side clamp is part of the public API
-contract because the frontend handoff setting is only advisory unless the
-backend preserves the approval-required boundary.
+contract because the drawer's `autonomousMode:false` flag is a disclosure only
+and never reaches the request.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend
@@ -7298,11 +7530,19 @@ The same AI resource-intelligence payload now also carries dependency and
 dependent correlation arrays plus correlation evidence, so the drawer can render
 canonical correlation context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
-The same AI frontend client now also loads `/api/ai/intelligence/correlations`
-through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
-the Patrol intelligence page and the AI summary page, so the
-learned-correlation list is governed by the same API contract that backs the
-resource drawer's correlation evidence instead of being fetched as page-local state.
+The frontend does not load `/api/ai/intelligence/correlations`. No page renders
+the global learned-correlation list, so `frontend-modern/src/api/ai.ts` carries
+no client for it, and neither the dashboard load bundle in
+`frontend-modern/src/stores/aiIntelligence.ts` nor the Patrol refresh path
+fetches it. The resource drawer's correlation evidence comes from the
+resource-intelligence payload above. The route stays an API surface behind the
+`ai:execute` scope.
+The frontend does not load `GET /api/ai/circuit/status` either. No surface
+renders provider breaker state, so `frontend-modern/src/api/ai.ts` carries no
+client or `CircuitBreakerStatus` type for it, and neither that dashboard bundle
+nor the Patrol refresh path fetches it. An open breaker reaches the Patrol page
+through `/api/ai/patrol/status` as the `circuit_open` blocked cause. The route
+stays a backend API surface.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation
@@ -7633,6 +7873,34 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+The same policy hides the Go runtime profiling family for every method: on a
+`DEMO_MODE` instance the demo guard answers `/debug/pprof`, `/debug/pprof/`
+and every path below it with `404`, ahead of route authentication.
+`registerDebugRoutes` gates those handlers on `RequireAdmin` plus a
+`settings:read` scope that session logins skip, so a demo that signs visitors
+in as the configured admin would otherwise hand every visitor goroutine and
+heap dumps, the process command line, and CPU profiles, execution traces and
+forced garbage collection that cost the whole process. `PULSE_PPROF_DISABLED`
+still removes the routes on any instance.
+`TestPublicDemoAdminOperationsPolicyHidesEveryDebugRoute` fails when a literal
+route the parsed router files register under `/debug/`, with or without a
+method prefix, escapes that policy for any common method.
+`TestContract_DemoModeHidesPprofFromDemoAdminSession` in
+`internal/api/contract_test.go` signs in as that admin through the full
+router, proves the same session still reads `/debug/pprof/cmdline` below the
+demo guard, and gets `404` through it for eight pprof paths with `GET`,
+`HEAD`, `OPTIONS` and `POST`.
+That generic write block keys on the request method alone. The demo
+middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
+execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
+`/ws` and `/api/agent/ws` are `GET` requests and connect through that read
+branch, so an `Upgrade: websocket` or `Connection: Upgrade` header never
+carries a `POST`, `PUT`, `PATCH` or `DELETE` past the guard. A demo deployment that signs
+visitors in as the configured admin, as the public demo does, has only this
+guard between that session and admin writes such as `/api/system/mock-mode`.
+`TestContract_DemoModeUpgradeHeadersDoNotExemptWrites` in
+`internal/api/contract_test.go` signs in as that admin through the full router
+and pins both halves.
 That shared infrastructure install boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at
 `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
@@ -8572,17 +8840,12 @@ That same generated payload may not shorten the earlier auto-register failure
 branch back to plain "Pulse Settings" wording either; both the immediate
 failure guidance and the final manual footer must preserve the same Settings →
 Nodes completion destination.
-`/api/charts/workloads-summary` now also has a canonical hot-path invariant:
-aggregate workload charts must preserve stable guest counts while batching
-store-backed metric reads across workload types, with no payload shape change.
-That endpoint now also carries an explicit API p95 budget under the same
-store-backed mixed-workload fixture used to verify the batched hot path.
-That same summary-chart contract now also owns synthetic mock fallback
-identity. When `internal/api/chartapi/service.go` needs to synthesize summary
-history for workloads, infrastructure, or storage cards, it must key those
-series by canonical `resourceType`, `resourceID`, and `metricType` instead of
-ad hoc seed-prefix bounds, so all time ranges and runtime mock samples stay on
-one governed timeline.
+The chart contract also owns synthetic mock fallback identity. When
+`internal/api/chartapi/service.go` synthesizes mock history for
+`/api/metrics-store/history`, it must key those series by canonical
+`resourceType`, `resourceID`, and `metricType` instead of ad hoc seed-prefix
+bounds, so all time ranges and runtime mock samples stay on one governed
+timeline.
 Frontend AI API clients now also normalize `402 Payment Required` responses for
 optional paywalled collections into explicit empty states, so Pulse Pro gating
 does not become a transport error path during page bootstrap.
@@ -8680,7 +8943,7 @@ briefings may reuse that same safe metadata for factual action labels and safety
 while approval command text remains inside the governed approval/remediation
 surface.
 Patrol approval-row Assistant handoffs must use the same safe metadata boundary
-and set `autonomousMode:false` for the request-local chat handoff; they must not
+and set the drawer's `autonomousMode:false` approval disclosure; they must not
 paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
@@ -9312,6 +9575,22 @@ That same resource-handler seed contract must also stay on canonical unified
 resource ownership for tenant-scoped requests: once a tenant state provider
 implements `UnifiedResourceSnapshotForTenant`, `/api/resources` may not fall
 back to raw tenant `StateSnapshot` seeding when that unified seed is empty.
+The seed contract carries source freshness too. A provider that implements
+`UnifiedResourceSnapshotWithStaleThresholds` (the default monitor) or
+`UnifiedResourceSnapshotWithStaleThresholdsForTenant` (the tenant state
+provider) returns the seed together with the stale thresholds its registry
+generation judged it by, captured with the listing, and the registry
+`/api/resources` rebuilds is built with them. Its stale pass and
+presentation coalesce then judge as the websocket broadcast does: a Proxmox node
+polled every two minutes stays online with a current sighting between polls
+instead of reading stale with warning status. The registry cache is keyed by
+its own copy of those thresholds as well as the freshness marker. A provider without those
+methods leaves the registry defaults, and the resources API reads them
+through optional interface checks, so `internal/api/router_helpers.go`
+asserts the monitor and the tenant state provider implement them. Proof:
+`TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` (default
+and tenant monitors on a resource store, and a monitor without one, each
+against the same monitor's broadcast).
 That same mock/runtime contract now also governs chart payloads under
 `internal/api/chartapi/service.go`: when demo or mock presentation is enabled,
 `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts` must
@@ -9586,19 +9865,22 @@ configuration from paid remediation autonomy. `GET /api/ai/patrol/autonomy`
 continues to clamp effective Community autonomy to `monitor`, and
 `PUT /api/ai/patrol/autonomy` in the open-source/free adapter must accept and
 persist only `monitor` settings while returning the canonical license-required
-payload for investigation or remediation autonomy levels. Frontend Patrol state
-owners must not rely on that 402 as normal control flow for stale local state:
-when the current entitlement locks safe remediation, they submit `monitor` even
-if older persisted settings or a previous entitlement left `approval`,
-`assisted`, or `full` in memory.
+payload for investigation or remediation autonomy levels (a `full` request
+reaches that adapter only with a current Autopilot acknowledgement; otherwise
+the shared acknowledgement gate refuses it first, for example with
+`409 acknowledgement_required` when it carries none). Frontend Patrol
+state owners must not rely on that 402 as normal control flow for stale local
+state: when the current entitlement locks safe remediation, the Patrol header
+presents `monitor` as the effective mode and the state owner starts no save but
+an explicit `monitor` choice, even if older persisted settings or a previous
+entitlement left `approval`, `assisted`, or `full` in memory.
 After a successful persisted update whose effective mode actually crosses from
 `monitor` to `approval`, `assisted`, or eligible `full`, the shared API mutation
 boundary invokes the bounded Patrol actionable-finding reconciliation pass.
 The pass runs only after `ApplyPatrolAutonomyConfig` has published the new
 runtime authority; failed writes, Community clamps, repeated paid-mode saves,
 budget-only edits, and demotions must not start backlog work.
-The Patrol header and configuration-dialog presentation for that API boundary
-must compose the shared
+The Patrol header presentation for that API boundary must compose the shared
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` selector: the
 endpoint contract still owns the accepted autonomy values and license-required
 response shape, while the frontend owns only the option mapping,
@@ -9637,6 +9919,32 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
+Only `POST /api/admin/reports/generate` may hand the tenant's AI narrator to
+the engine, because a narrated PDF makes a paid provider call and appends a
+`cost.UsageEvent` to the cost ledger. The single-resource handler accepts
+`POST` with a JSON body (the `generate-multi` decoding rules: 1MB cap, unknown
+fields and trailing payload rejected, through `decodeReportingRequestBody`) and
+`GET` with the same fields as query parameters, and answers any other method
+with `405` and `Allow: GET, POST`. GET never calls `resolveNarrator`, whose
+`GetAIService` can construct a tenant AI service (and with it list provider
+models or start background discovery): it narrates through `getReportNarrator`,
+the heuristic summary whose `Disclaimer` replaces the "Configure Pulse
+Assistant" tip with a note that AI narration needs POST, and reads Patrol
+findings through `SetExistingFindingsResolver`, which `router.go` backs with
+`AISettingsHandler.ExistingAIService` so only an already running service is
+used. GET passes the demo-mode guard and the CSRF check, and a SameSite=Lax
+session cookie rides a cross-site top-level GET navigation, so a link must not
+be able to spend AI budget. The reporting catalog advertises the transport as
+`performanceReport.singleResourceMethod` (`POST`), and the settings UI follows
+it. `generate-multi` and the manual schedule run endpoint
+(`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
+schedules run from the server's scheduler, not an HTTP request.
+`TestContract_SingleReportAINarrationRequiresPOST` pins the rule on a real
+engine: GET, HEAD, PUT and DELETE make no narrator call and no AI service
+resolution, while POST makes one of each.
+`TestContract_SingleReportGETDoesNotConstructTenantAIService` drives
+`Router.wireReportingAIResolvers` with an uncached tenant: GET constructs no
+tenant AI service and POST resolves one.
 Report alerts keep the alert engine's resolution. The node, VM and
 container enrichers in `internal/api/metrics_reporting_handlers.go` build
 every row through `reportActiveAlertInfo` and `reportResolvedAlertInfo`,
@@ -10261,6 +10569,22 @@ the transport, persistence-error, canonical-key, reload, and restart
 boundaries. Alert evaluation after that save remains alerts-owned and must use
 the persisted trigger/recovery pair plus a valid derived critical threshold;
 the API must not invent a TrueNAS-specific threshold sidecar.
+
+`PUT /api/alerts/config` replaces only the top-level keys the body carries
+and keeps the stored value of every key it leaves out, so a client that does
+not know a setting cannot turn it off by leaving it out: the thresholds page
+has no flapping-detection or alert-TTL controls, and an older browser bundle
+or API script predates later fields. A sent key replaces its stored value
+whole, so `"overrides": {}` removes every override rather than merging, and
+the merged config then goes through the same normalization as any update (for
+example, activation state is never cleared). The read, merge and apply run
+under the alert manager's lock, so two concurrent partial saves cannot revert
+each other in memory; the handler runs one save at a time and persists a
+snapshot of the applied config, so successful saves through this endpoint
+reach `alerts.json` in the order they were applied. A body that is not a JSON object, `null` included, is a 400 and changes
+nothing. `TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys`
+and `TestUpdateAlertConfig_RejectsNonObjectBody` in
+`internal/api/alerting/alerts_test.go` prove the transport.
 
 ### Alert intent and UDP availability transport
 
@@ -11397,3 +11721,17 @@ Router's or the package-global limiters. Limits, windows, tenant selection,
 revocation and response payloads are unchanged. The connected lifetime and
 ownership controls are in `router_limiter_lifecycle_test.go`; the integration
 fixture's cleanup also runs on a failed listener/request assertion.
+
+### Report-merge undoes operator links
+
+`POST /api/resources/{id}/report-merge` keeps its request, status codes and
+response shape. For a reported source that an operator link brought in, it
+now records the exclusion against the link's own pair instead of a candidate
+ID derived from the merged resource's type, so the store replaces the link
+and the pair splits as after unlink (contract under "Report-merge splits
+operator-linked resources" in unified-resources). `exclusions` counts those
+pairs with the identity-match exclusions. `400 Resource is not merged` and
+`400 No source targets found` now also need a resource with no applied link,
+so two linked agents, which share their only source, can be reported.
+`TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
+shape and the link's removal for a VM and the agent linked into it.

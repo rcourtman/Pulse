@@ -476,28 +476,6 @@ async function mockMonitorFirstPatrolWorkbench(
     });
   });
 
-  await page.route("**/api/ai/intelligence/correlations*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ correlations: [], count: 0 }),
-    });
-  });
-
-  await page.route("**/api/ai/circuit/status", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        state: "closed",
-        can_patrol: true,
-        consecutive_failures: 0,
-        total_successes: 4,
-        total_failures: 0,
-      }),
-    });
-  });
-
   await page.route("**/api/ai/approvals", async (route) => {
     const approvals =
       resolved.pendingApprovalCount > 0

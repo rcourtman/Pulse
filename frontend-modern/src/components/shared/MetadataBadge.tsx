@@ -22,11 +22,19 @@ export interface MetadataBadgeProps extends Omit<JSX.HTMLAttributes<HTMLSpanElem
   appearance?: MetadataBadgeAppearance;
   fit?: boolean;
   uppercase?: boolean;
+  /**
+   * Lets a long identity value (an alias, an address) wrap inside a narrow
+   * container instead of spilling past it. Breaks prefer spaces and hyphens
+   * and split a token only when nothing else fits.
+   */
+  wrap?: boolean;
   class?: string;
   children?: JSX.Element;
 }
 
-const METADATA_BADGE_BASE_CLASS = 'inline-flex items-center gap-1 font-medium whitespace-nowrap';
+const METADATA_BADGE_BASE_CLASS = 'inline-flex items-center gap-1 font-medium';
+const METADATA_BADGE_NOWRAP_CLASS = 'whitespace-nowrap';
+const METADATA_BADGE_WRAP_CLASS = 'min-w-0 max-w-full whitespace-normal wrap-anywhere text-left';
 
 const METADATA_BADGE_SIZE_CLASSES: Record<MetadataBadgeSize, string> = {
   xs: 'px-1.5 py-0.5 text-[10px]',
@@ -81,6 +89,7 @@ export function getMetadataBadgeClass(props: {
   appearance?: MetadataBadgeAppearance;
   fit?: boolean;
   uppercase?: boolean;
+  wrap?: boolean;
   class?: string;
 }): string {
   const tone = props.tone ?? 'neutral';
@@ -90,6 +99,7 @@ export function getMetadataBadgeClass(props: {
 
   return [
     METADATA_BADGE_BASE_CLASS,
+    props.wrap ? METADATA_BADGE_WRAP_CLASS : METADATA_BADGE_NOWRAP_CLASS,
     METADATA_BADGE_SIZE_CLASSES[size],
     METADATA_BADGE_SHAPE_CLASSES[shape],
     METADATA_BADGE_TONE_CLASSES[appearance][tone],
@@ -109,6 +119,7 @@ export const MetadataBadge: Component<MetadataBadgeProps> = (props) => {
     'appearance',
     'fit',
     'uppercase',
+    'wrap',
     'class',
     'children',
   ]);
@@ -123,6 +134,7 @@ export const MetadataBadge: Component<MetadataBadgeProps> = (props) => {
         appearance: local.appearance,
         fit: local.fit,
         uppercase: local.uppercase,
+        wrap: local.wrap,
         class: local.class,
       })}
     >

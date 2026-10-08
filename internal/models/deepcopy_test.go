@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -510,5 +512,24 @@ func TestCloneHostXCPNGInventoryIsolation(t *testing.T) {
 	dst.XCPNG.VMs[0].Name = "mutated"
 	if src.XCPNG.VMs[0].Name != "app" {
 		t.Fatal("cloned XCP-ng inventory aliases source VMs")
+	}
+}
+
+// AgentSMARTReported is internal poll evidence: a state snapshot copy keeps it
+// for the alert check, and it never reaches an API or websocket payload.
+func TestPhysicalDiskAgentSMARTReportedStaysInternal(t *testing.T) {
+	disk := PhysicalDisk{ID: "lab-pve1-sda", DevPath: "/dev/sda", AgentSMARTReported: true}
+	if clone := clonePhysicalDisk(disk); !clone.AgentSMARTReported {
+		t.Fatalf("clone dropped AgentSMARTReported")
+	}
+	if clones := clonePhysicalDisks([]PhysicalDisk{disk}); !clones[0].AgentSMARTReported {
+		t.Fatalf("slice clone dropped AgentSMARTReported")
+	}
+	payload, err := json.Marshal(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(string(payload)), "agentsmartreported") {
+		t.Fatalf("AgentSMARTReported leaked into JSON: %s", payload)
 	}
 }

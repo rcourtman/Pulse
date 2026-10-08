@@ -57,6 +57,16 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
+
+	// continuityOnly marks a row saved-host continuity introduced: a machine
+	// no source has reported since a restart. It rides in-memory clones, so
+	// a registry seeded from a continuity read state still holds the row out
+	// of operator-link folds (holdLinkedResourceLocked). An observation that
+	// later merges into the row clears it.
+	continuityOnly bool
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`
@@ -414,6 +424,14 @@ type ProxmoxData struct {
 	MemoryCache int64          `json:"memoryCache,omitempty"`
 	Memory      *models.Memory `json:"memory,omitempty"`
 	Lock        string         `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	// SensorSetupOutdated is derived by the registry, never ingested: the
+	// node's SSH temperature monitoring still runs the pre-rc.6 setup and a
+	// disk under it waits on a SMART temperature that setup cannot deliver
+	// (refreshProxmoxSensorSetupLocked). Every Proxmox node carries an
+	// explicit true or false, so clients that merge facets field by field
+	// replace a cleared verdict instead of keeping an earlier true; other
+	// resources omit it.
+	SensorSetupOutdated *bool `json:"sensorSetupOutdated,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }
@@ -959,8 +977,10 @@ type AgentData struct {
 	// offline by the staleness evaluator) even though the row itself may stay
 	// online via another source such as the Proxmox API poll. It lets the UI
 	// present the agent and its version as not-reporting instead of a
-	// healthy-looking stale value.
-	Stale bool `json:"stale,omitempty"`
+	// healthy-looking stale value. It is always sent: browsers merge agent
+	// facets field by field, so an omitted false would keep a resumed agent
+	// marked as stopped reporting.
+	Stale bool `json:"stale"`
 	// LastReportAt is the agent's own last successful report time. On a
 	// multi-source row (for example a Proxmox node also polled over the PVE
 	// API) this differs from the row's LastSeen, which reflects the freshest

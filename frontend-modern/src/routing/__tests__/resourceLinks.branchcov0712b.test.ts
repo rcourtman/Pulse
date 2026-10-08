@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildKubernetesPath,
-  buildRecoveryRouteSearch,
   buildStorageRouteSearch,
   buildTrueNASPath,
   buildVmwarePath,
   buildWorkloadsRouteSearch,
   KUBERNETES_PATH,
-  RECOVERY_QUERY_PARAMS,
   STORAGE_QUERY_PARAMS,
   TRUENAS_PATH,
   VMWARE_PATH,
@@ -28,22 +26,20 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
     expect(buildWorkloadsRouteSearch({})).toBe('');
   });
 
-  it('emits the runtime, namespace, cluster, and summaryGroup params the sibling suite omits', () => {
+  it('emits the runtime, namespace, and cluster params the sibling suite omits', () => {
     expect(
       buildWorkloadsRouteSearch({
         runtime: 'containerd',
         namespace: 'kube-system',
         cluster: 'prod-us-east',
-        summaryGroup: 'compute',
       }),
-    ).toBe('?runtime=containerd&namespace=kube-system&cluster=prod-us-east&summaryGroup=compute');
+    ).toBe('?runtime=containerd&namespace=kube-system&cluster=prod-us-east');
   });
 
   it('verifies the omitted query-param keys map to the canonical names', () => {
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(WORKLOADS_QUERY_PARAMS.cluster).toBe('cluster');
-    expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
   it('canonicalizes the "host" type alias to "agent" via canonicalizeWorkloadFilterType', () => {
@@ -69,10 +65,9 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
         cluster: '  cl-1  ',
         agent: '  ag-1  ',
         resource: '  res-1  ',
-        summaryGroup: '  sg-1  ',
       }),
     ).toBe(
-      '?type=pod&platform=kubernetes&runtime=cri-o&context=ctx-1&namespace=ns-1&cluster=cl-1&agent=ag-1&resource=res-1&summaryGroup=sg-1',
+      '?type=pod&platform=kubernetes&runtime=cri-o&context=ctx-1&namespace=ns-1&cluster=cl-1&agent=ag-1&resource=res-1',
     );
   });
 
@@ -87,7 +82,6 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
         cluster: '',
         agent: null,
         resource: undefined,
-        summaryGroup: '   ',
       }),
     ).toBe('');
   });
@@ -226,138 +220,5 @@ describe('buildStorageRouteSearch branch coverage', () => {
     ).toBe(
       '?tab=disks&group=storage&source=ceph&status=available&diskRole=nvme&diskGroup=data&node=pve1&q=lvm&resource=r-1&sort=usage&order=desc&summaryGroup=capacity',
     );
-  });
-});
-
-describe('buildRecoveryRouteSearch branch coverage', () => {
-  it('returns an empty string when no options are supplied', () => {
-    expect(buildRecoveryRouteSearch()).toBe('');
-    expect(buildRecoveryRouteSearch({})).toBe('');
-  });
-
-  it('emits the rollupId param the sibling suite omits', () => {
-    expect(buildRecoveryRouteSearch({ rollupId: 'rollup-42' })).toBe(
-      `?${RECOVERY_QUERY_PARAMS.rollupId}=rollup-42`,
-    );
-    expect(RECOVERY_QUERY_PARAMS.rollupId).toBe('rollupId');
-  });
-
-  it('treats the affirmative stale synonyms "yes" and "on" as the "1" flag', () => {
-    expect(buildRecoveryRouteSearch({ stale: 'yes', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve&stale=1',
-    );
-    expect(buildRecoveryRouteSearch({ stale: 'on', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve&stale=1',
-    );
-  });
-
-  it('drops the stale flag entirely for non-affirmative values (falsey boolean arm + falsy if-arm)', () => {
-    expect(buildRecoveryRouteSearch({ stale: 'no', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-    expect(buildRecoveryRouteSearch({ stale: 'off', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-    expect(buildRecoveryRouteSearch({ stale: '0', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-    expect(buildRecoveryRouteSearch({ stale: 'false', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-  });
-
-  it('canonicalizes system-container item-type aliases through the switch arms', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'lxc' })).toBe('?itemType=system-container');
-    expect(buildRecoveryRouteSearch({ itemType: 'ct' })).toBe('?itemType=system-container');
-    expect(buildRecoveryRouteSearch({ itemType: 'container' })).toBe('?itemType=system-container');
-    expect(buildRecoveryRouteSearch({ itemType: 'oci-container' })).toBe(
-      '?itemType=system-container',
-    );
-  });
-
-  it('canonicalizes the app-container item-type aliases through the switch arms', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'docker' })).toBe('?itemType=app-container');
-    expect(buildRecoveryRouteSearch({ itemType: 'docker-container' })).toBe(
-      '?itemType=app-container',
-    );
-    expect(buildRecoveryRouteSearch({ itemType: 'app-container' })).toBe('?itemType=app-container');
-  });
-
-  it('canonicalizes the remaining item-type switch arms (pod, pvc, cluster, dataset, velero, guest)', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'k8s-pod' })).toBe('?itemType=pod');
-    expect(buildRecoveryRouteSearch({ itemType: 'pvc' })).toBe('?itemType=pvc');
-    expect(buildRecoveryRouteSearch({ itemType: 'kubernetes-cluster' })).toBe('?itemType=cluster');
-    expect(buildRecoveryRouteSearch({ itemType: 'truenas-dataset' })).toBe('?itemType=dataset');
-    expect(buildRecoveryRouteSearch({ itemType: 'velero-backup' })).toBe('?itemType=velero-backup');
-    expect(buildRecoveryRouteSearch({ itemType: 'proxmox-guest' })).toBe('?itemType=guest');
-  });
-
-  it('strips the proxmox-/truenas-/k8s- prefixes via the default-arm branches', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'proxmox-storage' })).toBe('?itemType=storage');
-    expect(buildRecoveryRouteSearch({ itemType: 'truenas-share' })).toBe('?itemType=share');
-    expect(buildRecoveryRouteSearch({ itemType: 'k8s-node' })).toBe('?itemType=node');
-  });
-
-  it('maps itemType="all" to an empty value so the param is dropped', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'all', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-    expect(buildRecoveryRouteSearch({ itemType: '', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve',
-    );
-  });
-
-  it('passes an unrecognized itemType through the default arm unchanged', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'machine-learning-job' })).toBe(
-      '?itemType=machine-learning-job',
-    );
-  });
-
-  it('serializes every supported option in canonical insertion order, including rollupId', () => {
-    expect(
-      buildRecoveryRouteSearch({
-        rollupId: 'r-1',
-        view: 'events',
-        platform: 'proxmox-pve',
-        state: 'stale',
-        stale: '1',
-        range: '7',
-        cluster: 'c1',
-        day: '2026-02-13',
-        namespace: 'ns1',
-        mode: 'remote',
-        itemType: 'vm',
-        scope: 'workload',
-        status: 'failed',
-        verification: 'verified',
-        node: 'n1',
-        query: 'q1',
-      }),
-    ).toBe(
-      '?rollupId=r-1&view=events&platform=proxmox-pve&state=stale&stale=1&range=7&cluster=c1&day=2026-02-13&namespace=ns1&mode=remote&itemType=vm&scope=workload&status=failed&verification=verified&node=n1&q=q1',
-    );
-  });
-
-  it('drops fields whose normalized value is empty (per-field falsy arms across every option)', () => {
-    expect(
-      buildRecoveryRouteSearch({
-        rollupId: '   ',
-        view: '',
-        platform: null,
-        state: undefined,
-        stale: 'no',
-        range: '   ',
-        cluster: '',
-        day: null,
-        namespace: undefined,
-        mode: '   ',
-        itemType: 'all',
-        scope: '',
-        status: null,
-        verification: undefined,
-        node: '   ',
-        query: '',
-      }),
-    ).toBe('');
   });
 });

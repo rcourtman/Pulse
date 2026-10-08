@@ -261,6 +261,7 @@ type APIResource = {
       available?: boolean;
       legacySensorsFormat?: boolean;
     };
+    sensorSetupOutdated?: boolean;
     template?: boolean;
     containerType?: string;
     isOci?: boolean;

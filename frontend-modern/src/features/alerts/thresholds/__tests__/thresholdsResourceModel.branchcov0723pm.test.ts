@@ -48,6 +48,14 @@ describe('thresholdsResourceModel branch coverage 0723pm', () => {
       expect(hasThresholdDiff(override, { cpu: 80, memory: 70 })).toBe(false);
     });
 
+    it('keeps an explicit Off override visible against an Off default saved as 0', () => {
+      // The marker drives the row's revert control and override removal, so a
+      // stored -1 must not hide behind an Off default: switching the default
+      // back on would otherwise leave this resource silently off.
+      const override = makeOverride('a', { cpu: -1 });
+      expect(hasThresholdDiff(override, { cpu: 0 })).toBe(true);
+    });
+
     it('returns true when one threshold diverges while a sibling matches', () => {
       const override = makeOverride('a', { cpu: 80, memory: 90 });
       expect(hasThresholdDiff(override, { cpu: 80, memory: 70 })).toBe(true);

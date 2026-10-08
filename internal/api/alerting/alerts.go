@@ -32,6 +32,7 @@ import (
 type AlertManager interface {
 	GetConfig() alerts.AlertConfig
 	UpdateConfig(alerts.AlertConfig)
+	ApplyConfigUpdate(update []byte) (alerts.AlertConfig, error)
 	GetActiveAlerts() []alerts.Alert
 	DiagnoseAlertDelivery(alertIdentifier string) (alerts.AlertDeliveryDiagnosis, bool)
 	DiagnoseActiveAlertDeliveries() []alerts.AlertDeliveryDiagnosis
@@ -80,6 +81,7 @@ type AlertMonitor interface {
 type AlertHandlers struct {
 	stateMu        sync.RWMutex
 	intentPolicyMu sync.Mutex
+	configSaveMu   sync.Mutex
 	mtMonitor      *monitoring.MultiTenantMonitor
 	defaultMonitor AlertMonitor
 	wsHub          *websocket.Hub
@@ -292,13 +294,28 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	// from instances with a few hundred disabled containers (#1601).
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
-	var config alerts.AlertConfig
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(config)
-	updatedConfig := h.getMonitor(r.Context()).GetAlertManager().GetConfig()
+	// One save at a time, so a slower save cannot write an older config to
+	// disk after a newer one was applied.
+	h.configSaveMu.Lock()
+	defer h.configSaveMu.Unlock()
+
+	// Keys the client left out keep their stored values, so a thresholds
+	// save no longer turns off flapping detection or alert TTL cleanup.
+	updatedConfig, err := h.getMonitor(r.Context()).GetAlertManager().ApplyConfigUpdate(body)
+	if errors.Is(err, alerts.ErrConfigSnapshot) {
+		log.Error().Err(err).Msg("Failed to snapshot applied alert configuration")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Update notification manager with schedule settings
 	notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()

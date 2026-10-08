@@ -830,16 +830,39 @@ describe('buildTrueNASVMSections additional branches', () => {
 // =========================================================================
 
 describe('buildTrueNASDiskSections additional branches', () => {
-  it('sets Temperature tone to warning at 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 55 }), 'Temperature')?.tone).toBe('warning');
+  // The drawer judges heat by the disk type's alert trigger, through the
+  // resolver the alerts store provides; these are the factory triggers.
+  const factoryTriggers: Record<string, number> = { nvme: 70, sas: 65, sata: 55 };
+  const resolveThresholds = (diskType: string) => {
+    const critical = factoryTriggers[diskType.toLowerCase()] ?? 55;
+    return { warning: critical - 5, critical };
+  };
+  const temperatureTone = (disk: Partial<ResourcePhysicalDiskMeta>) =>
+    buildTrueNASDetailSections(diskRes(disk), resolveThresholds)
+      .flatMap((section) => section.rows)
+      .find((row) => row.label === 'Temperature')?.tone;
+
+  it('sets Temperature tone to warning from the disk type trigger', () => {
+    expect(temperatureTone({ diskType: 'sata', temperature: 55 })).toBe('warning');
+    expect(temperatureTone({ diskType: 'sas', temperature: 65 })).toBe('warning');
+    expect(temperatureTone({ diskType: 'nvme', temperature: 70 })).toBe('warning');
   });
 
-  it('sets Temperature tone to warning above 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 60 }), 'Temperature')?.tone).toBe('warning');
+  it('keeps a reading under its type trigger at default tone', () => {
+    expect(temperatureTone({ diskType: 'nvme', temperature: 60 })).toBe('default');
+    expect(temperatureTone({ diskType: 'sas', temperature: 63 })).toBe('default');
+    expect(temperatureTone({ diskType: 'sata', temperature: 40 })).toBe('default');
   });
 
-  it('sets Temperature tone to default below 55 degrees', () => {
-    expect(findRow(diskRes({ temperature: 40 }), 'Temperature')?.tone).toBe('default');
+  it('judges no heat without thresholds', () => {
+    expect(findRow(diskRes({ diskType: 'sata', temperature: 80 }), 'Temperature')?.tone).toBe(
+      'default',
+    );
+    expect(
+      buildTrueNASDetailSections(diskRes({ diskType: 'sata', temperature: 80 }), () => null)
+        .flatMap((section) => section.rows)
+        .find((row) => row.label === 'Temperature')?.tone,
+    ).toBe('default');
   });
 
   it('formats Wearout percentage for a valid value', () => {

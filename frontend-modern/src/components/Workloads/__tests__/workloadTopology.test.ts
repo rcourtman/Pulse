@@ -8,6 +8,7 @@ import {
   getWorkloadContainerHostId,
   getDiscoveryResourceIdForWorkload,
   getKubernetesContextKey,
+  getWorkloadAlertPolicyTags,
   getWorkloadDockerHostId,
   workloadNodeScopeId,
 } from '@/components/Workloads/workloadTopology';
@@ -237,6 +238,56 @@ describe('workloadTopology', () => {
 
       expect(getDiscoveryHostIdForWorkload(vm)).toBe('agent-pve1');
       expect(getDiscoveryResourceIdForWorkload(vm)).toBe('103');
+    });
+  });
+
+  describe('alert policy tags', () => {
+    it('passes only Proxmox guest tags to the threshold resolver', () => {
+      const tags = ['batch', 'pulse-relaxed'];
+      const proxmoxVm = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'proxmox-pve',
+        tags,
+      });
+      const proxmoxLxc = makeGuest(2, {
+        type: 'lxc',
+        workloadType: 'system-container',
+        platformScopes: ['proxmox-pve', 'agent'],
+        tags,
+      });
+      const legacyVm = makeGuest(3, { type: 'vm', workloadType: 'vm', tags });
+      const vsphereVm = makeGuest(4, {
+        type: 'vm',
+        workloadType: 'vm',
+        platformType: 'vmware-vsphere',
+        tags,
+      });
+      const appContainer = makeGuest(5, {
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        tags,
+      });
+
+      expect(getWorkloadAlertPolicyTags(proxmoxVm)).toEqual(tags);
+      expect(getWorkloadAlertPolicyTags(proxmoxLxc)).toEqual(tags);
+      expect(getWorkloadAlertPolicyTags(legacyVm)).toEqual(tags);
+      // The alert engine never reads Pulse control tags from these.
+      expect(getWorkloadAlertPolicyTags(vsphereVm)).toEqual([]);
+      expect(getWorkloadAlertPolicyTags(appContainer)).toEqual([]);
+    });
+
+    it('splits a legacy raw tag string', () => {
+      const guest = makeGuest(6, {
+        type: 'vm',
+        workloadType: 'vm',
+        tags: 'batch;pulse-relaxed' as unknown as string[],
+      });
+      expect(getWorkloadAlertPolicyTags(guest)).toEqual(['batch', 'pulse-relaxed']);
+      expect(getWorkloadAlertPolicyTags(makeGuest(7, { type: 'vm', tags: null as never }))).toEqual(
+        [],
+      );
     });
   });
 });

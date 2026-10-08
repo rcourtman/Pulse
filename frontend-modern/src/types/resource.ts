@@ -773,6 +773,10 @@ export interface ResourceProxmoxMeta {
     available?: boolean;
     legacySensorsFormat?: boolean;
   };
+  // Registry-derived on Proxmox nodes: the legacy setup above is in use and a
+  // SATA/SAS disk under the node has no current temperature. It arrives on the
+  // node so the outdated sensor setup notice never needs the disk inventory.
+  sensorSetupOutdated?: boolean;
 }
 
 export interface ResourceVirtualMachineMeta {

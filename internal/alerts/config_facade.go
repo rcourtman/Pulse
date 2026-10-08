@@ -86,6 +86,10 @@ func NormalizeMetricEvaluationWindows(input map[string]map[string]int) map[strin
 	return alertconfig.NormalizeMetricEvaluationWindows(input)
 }
 
+func NormalizeHysteresisThreshold(threshold *HysteresisThreshold, defaultTrigger, defaultClear float64, metricName string) *HysteresisThreshold {
+	return alertconfig.NormalizeHysteresisThreshold(threshold, defaultTrigger, defaultClear, metricName)
+}
+
 func NormalizeDockerIgnoredPrefixes(prefixes []string) []string {
 	return alertconfig.NormalizeDockerIgnoredPrefixes(prefixes)
 }

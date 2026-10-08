@@ -672,6 +672,15 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(file_entry["classification"], "runtime")
         self.assertEqual(file_entry["matches"], [])
 
+    def test_lookup_paths_reports_retired_problem_resource_helper_as_unowned(self) -> None:
+        path = "frontend-modern/src/utils/problemResourcePresentation.ts"
+        result = lookup_paths([path])
+        self.assertEqual(result["unowned_runtime_files"], [path])
+        self.assertEqual(result["impacted_subsystems"], [])
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(file_entry["matches"], [])
+
     def test_lookup_paths_assigns_recovery_points_hook_to_storage_recovery(self) -> None:
         result = lookup_paths(["frontend-modern/src/hooks/useRecoveryPoints.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])

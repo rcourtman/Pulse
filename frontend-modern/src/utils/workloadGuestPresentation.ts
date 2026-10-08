@@ -146,3 +146,61 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
 
   return carriedForward ? `Using last known disk stats. ${message}` : message;
 }
+
+export interface WorkloadGuestDiskReadSource {
+  status?: string;
+  /** Proxmox's reason for its own guest filesystem read. */
+  diskStatusReason?: string;
+  /** `disks` came from the linked Pulse agent because Proxmox reported none. */
+  disksFromAgent?: boolean;
+  agentStale?: boolean;
+}
+
+export type WorkloadGuestDiskRead =
+  | { state: 'current'; message: null; needsAction: false }
+  | {
+      state: 'last-known' | 'unavailable';
+      /** Why the reading is not current. */
+      message: string;
+      /** A broken read the user can fix, rather than a setup gap. */
+      needsAction: boolean;
+    };
+
+// Disk-read reasons that point at something broken the user can fix.
+const DISK_READ_ACTIONABLE_REASONS = new Set(['permission-denied', 'agent-error']);
+
+// One freshness rule for a guest's filesystem rows and aggregate disk metric,
+// shared by the workload table cell, the drawer and its History. Proxmox
+// records no guest disk usage without guest filesystems, so when the linked
+// Pulse agent's filesystems fill in, the registry keeps the agent's disk
+// metric too and the reading follows that agent, not the Proxmox reason.
+export function getWorkloadGuestDiskRead(
+  guest: WorkloadGuestDiskReadSource,
+  isVM: boolean,
+): WorkloadGuestDiskRead {
+  const reason = isVM ? guest.diskStatusReason : undefined;
+  if (guest.disksFromAgent) {
+    if (guest.status === 'stopped' || reason === 'vm-stopped') {
+      return {
+        state: 'unavailable',
+        message: isVM
+          ? getWorkloadGuestDiskStatusMessage('vm-stopped')
+          : 'Filesystem usage is unavailable.',
+        needsAction: false,
+      };
+    }
+    return guest.agentStale
+      ? {
+          state: 'last-known',
+          message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+          needsAction: false,
+        }
+      : { state: 'current', message: null, needsAction: false };
+  }
+  if (!reason) return { state: 'current', message: null, needsAction: false };
+  return {
+    state: reason.startsWith('prev-') ? 'last-known' : 'unavailable',
+    message: getWorkloadGuestDiskStatusMessage(reason),
+    needsAction: DISK_READ_ACTIONABLE_REASONS.has(reason.replace(/^prev-/, '')),
+  };
+}

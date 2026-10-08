@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
@@ -585,6 +586,82 @@ describe('ResourceTable', () => {
     });
   });
 
+  describe('pulse-relaxed guests', () => {
+    const relaxedGuest = (overrides: Partial<Resource> = {}) =>
+      makeResource({
+        id: 'vm-1',
+        name: 'batch-vm',
+        type: 'guest',
+        pulseRelaxed: true,
+        thresholds: {},
+        defaults: { cpu: 80, memory: 85, disk: 90 },
+        ...overrides,
+      });
+    const renderGrouped = (resource: Resource, overrides: Record<string, any> = {}) =>
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: undefined,
+            groupedResources: { node1: [resource] },
+            columns: ['CPU %', 'Memory %', 'Disk %'],
+            ...overrides,
+          })}
+        />
+      ));
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('states the thresholds the tag raises on the %s row', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      renderGrouped(relaxedGuest());
+
+      const line = screen.getByTestId('alert-resource-relaxed-triggers');
+      expect(line).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at CPU 95% · Memory 92% · Disk 95%',
+      );
+      expect(line.getAttribute('title')).toContain('Remove the tag in Proxmox');
+      // The row keeps showing the configured values the editor changes.
+      expect(screen.getByText('80')).toBeInTheDocument();
+    });
+
+    it('omits metrics the tag leaves alone', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: -1, memory: 96 } }));
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('follows unsaved edits', () => {
+      renderGrouped(relaxedGuest(), {
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: 97, memory: 93, disk: 70 }),
+      });
+
+      expect(screen.getByTestId('alert-resource-relaxed-triggers')).toHaveTextContent(
+        'Proxmox tag pulse-relaxed: alerts at Disk 95%',
+      );
+    });
+
+    it('stays hidden when the tag raises nothing or alerts are off', () => {
+      renderGrouped(relaxedGuest({ thresholds: { cpu: 99, memory: 99, disk: 99 } }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ disabled: true }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest(), { globalDisableFlag: () => true });
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+      cleanup();
+
+      renderGrouped(relaxedGuest({ pulseRelaxed: false }));
+      expect(screen.queryByTestId('alert-resource-relaxed-triggers')).toBeNull();
+    });
+  });
+
   describe('metric display values', () => {
     it('shows formatted metric values using formatMetricValue', () => {
       const formatMetricValue = vi.fn((metric: string, value: number | undefined) => {
@@ -1005,6 +1082,144 @@ describe('ResourceTable', () => {
         prev: Record<string, number | undefined>,
       ) => Record<string, number | undefined>;
       expect(updater({ cpu: 0 })).toEqual({ cpu: 80 });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('lets an unset %s global default follow its fallback', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: undefined },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      // Unset reads On and names where the value comes from.
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('On');
+      const input = screen.getByPlaceholderText('By type') as HTMLInputElement;
+      expect(input.value).toBe('');
+      expect(input.disabled).toBe(false);
+      expect(input.title).toBe('Follows Disk temperature by type');
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: undefined })).toEqual({ temperature: -1 });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('switches an Off %s fallback default back to following', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: -1 },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: -1 })).toEqual({ temperature: undefined });
+    });
+
+    it.each([
+      ['desktop', false],
+      ['mobile', true],
+    ])('reads an unset %s default Off when its fallback is off', (_layout, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: undefined },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Off by type', off: true, enableValue: 55 },
+        },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      expect(screen.queryByPlaceholderText('By type')).toBeNull();
+
+      // Unset would still be off, so switching on stages an explicit value.
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ temperature: undefined })).toEqual({ temperature: 55 });
+    });
+
+    it('shows a set fallback global default as its number', () => {
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        globalDefaults: { temperature: 62 },
+        globalDefaultFallbacks: {
+          temperature: { label: 'By type', title: 'Follows Disk temperature by type' },
+        },
+        setGlobalDefaults: vi.fn(),
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByDisplayValue('62')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('By type')).toBeNull();
+    });
+
+    it('follows global defaults that arrive after the table mounts', () => {
+      const [globalDefaults, setGlobalDefaults] = createSignal<Record<string, number | undefined>>({
+        temperature: undefined,
+      });
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        factoryDefaults: { temperature: undefined },
+        onResetDefaults: vi.fn(),
+        setGlobalDefaults: vi.fn(),
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} globalDefaults={globalDefaults()} />);
+
+      expect(screen.queryByText('Custom')).toBeNull();
+      // The saved config loads after mount.
+      setGlobalDefaults({ temperature: 62 });
+      expect(screen.getByText('Custom')).toBeInTheDocument();
+    });
+
+    it('uses a table column tooltip over the generic one', () => {
+      const props = makeProps({
+        resources: [],
+        columns: ['Temp °C'],
+        columnTooltips: { 'Temp °C': 'Disk temperature that raises an alert.' },
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByText('Temp °C', { selector: 'th' })).toHaveAttribute(
+        'title',
+        'Disk temperature that raises an alert.',
+      );
     });
 
     it('stages an explicit threshold from the mobile row editor', () => {

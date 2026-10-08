@@ -26,7 +26,6 @@ import { AlertOverviewAlertCard } from '../AlertOverviewAlertCard';
 const acknowledge = vi.fn();
 const toggleTimeline = vi.fn();
 const state = {
-  tick: () => Date.now(),
   processingAlerts: () => new Set(),
   snoozeProcessingAlerts: () => new Set(),
   deliveryDiagnoses: () => ({}),
