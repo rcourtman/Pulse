@@ -1,17 +1,17 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const http = require('node:http');
-const os = require('node:os');
-const path = require('node:path');
-const { afterEach, test } = require('node:test');
-const {
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, test } from 'vitest';
+import {
   createPublicationFixtureServer,
   loadPublicationFixture,
   runtimePaths,
   entryPaths,
   harnessPaths,
   hash,
-} = require('./publication-fixture-server.cjs');
+} from './publication-fixture-server.cjs';
 
 const temporary = [];
 afterEach(() => {

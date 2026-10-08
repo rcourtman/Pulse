@@ -64,7 +64,7 @@ fixtures once, before browser execution, from `frontend-modern`:
 
 ```sh
 node browser-tests/build-publication-fixtures.mjs
-node --test browser-tests/publication-fixture-server.test.cjs
+npm run test -- browser-tests/publication-fixture-server.test.mjs
 ```
 
 The four corresponding browser runners use the resulting static bundles in
