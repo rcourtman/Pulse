@@ -8983,6 +8983,45 @@ their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
 
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go`, `internal/api/discovery_handlers.go` and
+`internal/api/saml_handlers.go` changed only so `/api/discovery/settings` and
+`/api/saml/{id}/logout` answer `405` to every method outside their allowed set,
+`GET` and `HEAD` included. The settings write still takes `PUT` or `POST` and
+logout still takes `POST`. No agent registration, enrolment, install, update or
+removal path changed.
+
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/slo` accepts an IdP LogoutResponse when its signed
+`InResponseTo` names an unexpired LogoutRequest that `/api/saml/{id}/logout`
+issued, once, in a browser carrying no session or the session that logout
+ended. Other responses are refused, the SLO handler writes no session or
+cookie for any response (the logout request already cleared both), and
+`/api/saml/{id}/logout` refuses a request that carries no session. No agent
+registration, enrolment, install, update or removal path changed.
+
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` changed only so a SAML provider configured with
+`idpSsoUrl` and a PEM `idpCertificate` or `idpCertFile` puts that certificate
+into its in-memory IdP descriptor as base64 DER, which crewjam/saml can read
+when it verifies the IdP's ACS Responses and LogoutResponses. No agent
+registration, enrolment, install, update or removal path changed.
+
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/login` records each SAML AuthnRequest against a short-lived
+login cookie and `/api/saml/{id}/acs` accepts the IdP's signed answer to it
+once, in that browser, at default settings, reposting the IdP's cross-site
+delivery once from Pulse's origin so the cookie arrives. Signed content
+carrying a prefixed attribute or namespace declaration named like a SAML
+attribute is refused. No agent
+registration, enrolment, install, update or removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

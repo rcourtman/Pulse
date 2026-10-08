@@ -3912,6 +3912,13 @@ counters exist to measure.
     onboarding telemetry. Customer diagnostics may expose runtime health,
     supportability, and sanitized troubleshooting state; admin analytics must
     stay behind admin-owned metrics routes.
+25. Handlers that perform a caller-requested write (settings, sessions,
+    credentials, workflow or resource state) while answering `GET` or `HEAD`.
+    A route registered without a mux method pattern, or a sub-resource
+    dispatched by path, must refuse safe methods in the mutating handler
+    through `requireRequestMethod` in `internal/api/method_guard.go` (or an
+    equivalent explicit check) instead of relying on its callers, the
+    demo-mode read-only guard, or the CSRF check.
 
 ## Completion Obligations
 
@@ -5161,6 +5168,134 @@ SSO certificate/key file reads are privileged operator configuration and must
 pass the bounded non-symlink regular-file boundary in
 `internal/api/sso_outbound.go`. Cloud handoff redirects consume the shared
 host-local redirect validator rather than carrying route-local prefix checks.
+
+A handler that performs a caller-requested write behind a route whose mux
+pattern carries no method must refuse `GET` and `HEAD` itself.
+`requireRequestMethod` in `internal/api/method_guard.go` is the shared
+handler-level guard: it admits only the listed methods and answers any other
+method that reaches the handler with `405` and an `Allow` header naming them.
+The demo-mode read-only guard and the CSRF check both admit `GET` and `HEAD` as
+reads, and the `SameSite=Lax` session cookie rides cross-site top-level `GET`
+navigations, so the method contract belongs to the mutating handler rather than
+to its callers. `/api/discovery/settings` accepts `PUT`, its documented method,
+and `POST`, which it took before the guard existed. SP-initiated SAML logout at
+`/api/saml/{id}/logout` accepts only `POST`, matching the `/api/logout`
+fallback it delegates to. The IdP's LogoutResponse keeps returning to
+`/api/saml/{id}/slo`, which must accept the HTTP-Redirect binding's `GET` and
+validates the signed response before it touches the session.
+`TestDemoModeSafeMethodsCannotReachRouteMutations` in
+`internal/api/ai_handlers_more_test.go` drives both routes through the full
+`DEMO_MODE` router and proves the threshold and the session survive.
+The rule does not cover `GET` flows the protocol or the browser handoff
+requires (OIDC login and callback, SAML login initiation and SLO, magic-link
+verify, cloud handoff, the checkout start and activation bridges, websocket
+handshakes), or reads that run one-time lazy initialization or idempotent
+reconciliation, such as the license and onboarding-overflow bootstrap behind
+the entitlement reads and the action-expiry sweep behind the action reads.
+Single-resource report generation at `GET /api/admin/reports/generate` still
+runs the configured AI narrator, a paid provider call recorded in the cost
+ledger; that is a known open exception, not part of this contract.
+
+The SAML SLO callback at `/api/saml/{id}/slo` accepts a LogoutResponse only as
+the answer to a logout this SP started. crewjam/saml verifies the response's
+signature, `Destination`, `Issuer` and `Status` and rejects one issued more
+than 90 seconds ago, but never checks its `InResponseTo`, and the IdP signs its
+answer to every user's logout, so a valid signature alone let one user replay
+the answer to their own logout through a cross-site `GET` and clear another
+user's session. `SAMLService.MakeLogoutRequest` in
+`internal/api/saml_service.go` therefore records each LogoutRequest ID, on the
+provider's own service, against the session-store hash of the session
+`handleSAMLLogout` is ending. A record is honored for ten minutes unless the
+1,024-record cap evicts it first, oldest first. `SAMLService.ValidateLogoutResponse`
+reads `InResponseTo` from the same payload crewjam verified, taking only the
+root element's attribute written without a prefix, the one the signature
+covers (a namespace declaration such as `xmlns:InResponseTo` is ignored,
+because exclusive canonicalization can leave an unused one out of the signed
+form), and
+spends the matching record. The response is accepted only when that record
+exists and is unexpired, and the browser carries either no session cookie (the
+normal case, because `handleSAMLLogout` clears the cookie before redirecting to
+the IdP) or the session that request ended. Unsolicited, expired, evicted,
+replayed and other-session responses are refused with `403` and a failed
+`saml_slo_callback` audit event, and the handler leaves sessions and cookies
+alone. A misdelivered response still spends its record, so each LogoutRequest
+is answered at most once. The handler writes no session state or cookie for an
+accepted response either: `handleSAMLLogout` already invalidated the session
+and expired its cookies, and a cross-site HTTP-POST delivery withholds the
+`SameSite=Lax` cookie, so a deletion cookie written there could log out a
+browser whose session the request never presented. For the same reason
+`handleSAMLLogout` answers `401` to a request that carries no session cookie,
+API-token-only callers included, instead of falling back to a cookie-clearing
+logout: the SAML routes are public and skip CSRF, so that fallback was a
+cross-site forced logout of a kind a deployment with authentication configured
+refuses on `/api/logout` as unauthenticated. The records live in memory,
+so a restart or provider re-initialization during the IdP round trip leaves the
+returning response unmatched and refused; the local session was already
+cleared when logout began. `TestSAMLSLOAuditsLogoutResponseNotBoundToSession`
+in `internal/api/audit_handlers_test.go` replays one user's signed response
+into another user's browser and proves the victim's session survives and the
+refusal is audited.
+
+The SAML ACS at `/api/saml/{id}/acs` accepts a Response, at default settings,
+only as the IdP's answer to a login the presenting browser started. crewjam/saml
+refuses a Response unless its `InResponseTo`, and that of each bearer
+`SubjectConfirmationData`, is one of the request IDs its caller supplies, and
+Pulse used to supply none, so with `allowIdpInitiated` off, the default, every
+SAML login failed with "Authentication failed". `SAMLService.MakeAuthRequest`
+in `internal/api/saml_service.go` therefore records each AuthnRequest ID, on
+the provider's own service, with the sanitized `returnTo` and the hash of a
+random token that `handleSAMLLogin` sets as the `HttpOnly`, `SameSite=Lax`
+cookie `pulse_saml_login` (`__Host-pulse_saml_login` over HTTPS) for ten
+minutes. A browser that already holds a token keeps it, so logins started one
+after another in several tabs all stay valid. A record is honored for ten
+minutes, judged when the Response spends it, unless the 1,024-record cap
+evicts it first, oldest first. The IdP delivers its Response by a cross-site
+HTTP-POST, which browsers send without `SameSite=Lax` cookies, so
+`handleSAMLACS` answers a POST that carries a `SAMLResponse` or
+`SAMLart` but no login cookie with a page that posts the same fields once more
+from Pulse's own origin. The form has no `action`, so it returns to the URL
+the IdP posted to, path prefix included, its script carries the request's CSP
+nonce, and a marker field prevents a second repost. `SAMLService.ProcessResponse`
+then has crewjam check the Response against every outstanding request ID and
+reads the request it answers from the canonical form goxmldsig verified for
+the signature covering the assertion crewjam returned, never from crewjam's
+parsed fields, taking only an `InResponseTo` written without a prefix: the
+signed `Response`'s, or that of the `Response` inside a signed
+`ArtifactResponse`, when the IdP signed the message, and otherwise that of
+every `SubjectConfirmationData` in the returned assertion's own `Subject`,
+which must agree and of which there must be at least one, and no other signed
+assertion may carry its ID. Other assertions in the Response, and assertions
+in `Advice`, do not take part. That record is
+spent only when it is bound to the presenting browser's token, and the login
+returns to the recorded `returnTo`, not to the posted `RelayState`, which
+`MakeAuthRequest` now escapes into the redirect query so a `returnTo` with its
+own query string is not cut short at the IdP. A Response answering another browser's login, an unknown,
+expired or already spent request, or none is refused with the
+`saml_validation_failed` redirect and a failed `saml_login` audit event, and
+refusing another browser's Response leaves that browser's record for it. With
+`allowIdpInitiated` on, crewjam skips `InResponseTo`, so a Response answering
+any request or none is accepted in any browser without the cookie or the
+repost and returns to its posted `RelayState`, as before. In both modes the
+signature verifier refuses signed content carrying a prefixed attribute or a
+namespace declaration named like an un-namespaced attribute crewjam reads from
+a Response or Assertion, such as `xmlns:IssueInstant`, `xmlns:NotOnOrAfter` or
+`ext:ID`: encoding/xml fills an un-namespaced attribute field from any
+attribute with that local name, and exclusive canonicalization leaves an
+unused declaration out of the signed form, so appending one let a stale signed
+Response pass crewjam's age checks, and an IdP-initiated login could be
+replayed indefinitely. The records live in memory, so a
+restart or a saved provider change (which replaces the provider's service;
+a metadata refresh keeps the records) during the IdP round trip, or a login
+started on a host that does not share cookies with the configured public
+URL's, leaves the Response unmatched and the user starts the login again. Two logins started at
+the same moment in a browser that holds no token yet each mint one and only
+the last cookie set survives, so the other fails the same way, and, as with
+OIDC login state, a flood of unauthenticated login starts can evict pending
+records.
+`TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin` in
+`internal/api/audit_handlers_test.go` delivers one browser's signed Response to
+another browser with a login in progress and proves it is refused and audited
+while its own browser completes the login.
 
 Alert delivery diagnosis is a read-only monitoring API contract.
 `GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
@@ -6447,6 +6582,25 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same manual SAML configuration must verify signatures with the IdP
+certificate the administrator supplied. With no IdP metadata,
+`SAMLService.buildManualMetadata` in `internal/api/saml_service.go` builds the
+IdP descriptor from `idpSsoUrl`, optional `idpSloUrl` and the PEM signing
+certificate in `idpCertificate` or `idpCertFile`, and must put that certificate
+in the signing `KeyDescriptor` as base64 DER, the `<X509Certificate>` content
+IdP metadata carries. crewjam/saml base64-decodes that field to verify every
+ACS Response and LogoutResponse, so the PEM block it once held failed each
+check with "illegal base64 data" before any key was compared, and no manually
+configured provider could accept a login or complete SLO. The stored
+`idpCertificate` stays the PEM the administrator supplied; only the descriptor
+rebuilt in memory on each load changed, so no saved configuration needs
+migrating. `TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures` in
+`internal/api/contract_test.go` signs an ACS Response and a LogoutResponse with
+one test IdP key and proves an inline-certificate provider, a certificate-file
+provider and a metadata provider accept both alike, while a Response signed by
+another key is refused. The proof runs at default settings, with each
+Response answering an AuthnRequest that `SAMLService.MakeAuthRequest`
+recorded for the test browser, as the SAML ACS binding above requires.
 That same SSO provider-detail boundary must return the non-secret nested
 provider configuration used by the settings edit form. `GET
 /api/security/sso/providers/{id}` may keep the flat list/card fields for

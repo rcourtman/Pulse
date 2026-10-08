@@ -6498,6 +6498,44 @@ The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
 
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go` adds `requireRequestMethod`, and
+`internal/api/discovery_handlers.go` and `internal/api/saml_handlers.go` use it
+so `/api/discovery/settings` (`PUT` or `POST`) and `/api/saml/{id}/logout`
+(`POST`) answer `405` to any other method, `GET` and `HEAD` included, instead
+of changing the discovery staleness threshold or clearing a session. No
+storage, retention, backup, migration or recovery path is added or moved.
+
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` keeps each outstanding SAML LogoutRequest ID in
+memory on the provider's service, bound to the session-store hash of the
+session being logged out, and honors it for ten minutes (at most 1,024
+records; expired ones are dropped on the next logout). `internal/api/saml_handlers.go`
+refuses a LogoutResponse that does not answer one of them. The records are not
+persisted, and the SLO handler no longer writes session state. No storage,
+retention, backup, migration or recovery path is added or moved.
+
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` now encodes a manually configured SAML IdP
+signing certificate as base64 DER in the IdP descriptor it rebuilds in memory
+on each load. The saved settings are read as before: `idpCertificate` holds
+the PEM the administrator pasted and `idpCertFile` the path of a PEM file, so
+nothing persisted changes or needs migrating. No storage, retention, backup,
+migration or recovery path is added or moved.
+
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` keeps each outstanding SAML AuthnRequest ID in
+memory on the provider's service, with the login's return path and the hash of
+the browser's `pulse_saml_login` cookie token, and honors it for ten minutes
+(at most 1,024 records; expired ones are dropped on the next login). The cookie
+expires after ten minutes. Nothing is persisted, so a restart during the IdP
+round trip refuses the returning Response and the user signs in again. No
+storage, retention, backup, migration or recovery path is added or moved.
+
 ### A linked agent's stale flag and guest disk owner open no storage path
 
 `internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a

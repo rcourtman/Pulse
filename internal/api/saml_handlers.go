@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
@@ -154,13 +157,26 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Create SAML AuthnRequest
-	redirectURL, err := service.MakeAuthRequest(returnTo)
+	// Create SAML AuthnRequest, bound to this browser's login cookie
+	loginToken, err := samlLoginToken(req)
+	if err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to create SAML login binding")
+		writeErrorResponse(w, http.StatusInternalServerError, "saml_auth_failed", "Failed to create authentication request", nil)
+		return
+	}
+	redirectURL, err := service.MakeAuthRequest(returnTo, sessionHash(loginToken))
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to create SAML auth request")
 		writeErrorResponse(w, http.StatusInternalServerError, "saml_auth_failed", "Failed to create authentication request", nil)
 		return
 	}
+	cookiePolicy := getBrowserCookiePolicy(req)
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
+		Name:   samlLoginCookieName(cookiePolicy.secure),
+		Value:  loginToken,
+		Path:   "/",
+		MaxAge: int(samlRequestTTL / time.Second),
+	})
 
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login_initiated", "", GetClientIP(req), req.URL.Path, true, "Provider: "+providerID)
 
@@ -207,11 +223,29 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if err := req.ParseForm(); err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to parse SAML response form")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response validation failed: failed to parse form: "+err.Error())
+		r.redirectSAMLError(w, req, "", "saml_validation_failed")
+		return
+	}
+	browserKey := samlLoginBrowserKey(req)
+	if browserKey == "" && !service.AllowsIDPInitiated() && req.PostForm.Get(samlACSRepostField) == "" &&
+		(req.PostForm.Get("SAMLResponse") != "" || req.PostForm.Get("SAMLart") != "") {
+		writeSAMLACSRepost(w, req)
+		return
+	}
+
 	// Process SAML response
-	result, relayState, err := service.ProcessResponse(req)
+	result, relayState, err := service.ProcessResponse(req, browserKey)
 	if err != nil {
-		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to process SAML response")
-		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response validation failed: "+err.Error())
+		if errors.Is(err, errSAMLResponseUnbound) {
+			log.Warn().Err(err).Str("provider_id", providerID).Str("client_ip", GetClientIP(req)).Msg("SAML Response does not answer a login started in this browser")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response does not answer a login started in this browser")
+		} else {
+			log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to process SAML response")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", "", GetClientIP(req), req.URL.Path, false, "SAML response validation failed: "+err.Error())
+		}
 		r.redirectSAMLError(w, req, relayState, "saml_validation_failed")
 		return
 	}
@@ -377,8 +411,24 @@ func (r *Router) handleSAMLMetadata(w http.ResponseWriter, req *http.Request) {
 	w.Write(metadata)
 }
 
-// handleSAMLLogout handles SAML Single Logout
+// handleSAMLLogout handles SP-initiated SAML Single Logout. It is POST-only,
+// like the /api/logout fallback: the IdP's LogoutResponse returns to /slo, not
+// here, so a GET to this path could only be a forced logout.
 func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
+	if !requireRequestMethod(w, req, http.MethodPost) {
+		return
+	}
+	// The SAML routes are public and skip CSRF so the IdP flows can reach
+	// them, and a cross-site POST withholds the SameSite=Lax session cookie.
+	// A request carrying no session has nothing to log out, yet the deletion
+	// cookies every logout path below writes would log out whichever session
+	// that browser holds. Refuse it, as a deployment with authentication
+	// configured refuses an unauthenticated /api/logout. SP-initiated SAML
+	// logout always needs the browser session it ends.
+	if samlSessionBindingKey(req) == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Authentication required", nil)
+		return
+	}
 	providerID := extractSAMLProviderID(req.URL.Path, "logout")
 	if providerID == "" {
 		// Fall back to regular logout
@@ -408,11 +458,15 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Bind the LogoutRequest to the session it logs out before clearing it, so
+	// /slo can tell the IdP's answer to this logout from a replayed one.
+	sessionKey := samlSessionBindingKey(req)
+
 	// Clear local session first
 	r.clearSession(w, req)
 
 	// Attempt SAML SLO
-	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex)
+	logoutURL, err := service.MakeLogoutRequest(session.NameID, session.SessionIndex, sessionKey)
 	if err != nil {
 		log.Warn().Err(err).Str("provider_id", providerID).Msg("SAML SLO not available, local logout only")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_logout", "", GetClientIP(req), req.URL.Path, true, "Local logout only (SLO not available)")
@@ -432,6 +486,16 @@ func (r *Router) handleSAMLLogout(w http.ResponseWriter, req *http.Request) {
 // logout DoS against any user with a SAML session. Verify the IdP's
 // XML-DSig on the LogoutResponse before clearing anything; on validation
 // failure log the audit event and refuse to mutate session state.
+//
+// A valid signature alone is not enough: the IdP signs its answer to every
+// user's logout, and this route must take the HTTP-Redirect binding's GET,
+// which carries the SameSite=Lax session cookie on a cross-site navigation and
+// skips the CSRF check. The response must also answer an outstanding
+// LogoutRequest from handleSAMLLogout, once, in a browser carrying either no
+// session (handleSAMLLogout already cleared its cookie) or the session that
+// request logged out. Anything else is a replay or a forced logout and is
+// refused the same way. Completion writes no session state or cookie:
+// handleSAMLLogout already did that before redirecting to the IdP.
 func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 	providerID := extractSAMLProviderID(req.URL.Path, "slo")
 	if providerID == "" || !validateProviderID(providerID) {
@@ -477,7 +541,17 @@ func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := service.ValidateLogoutResponse(req); err != nil {
+	if err := service.ValidateLogoutResponse(req, samlSessionBindingKey(req)); err != nil {
+		if errors.Is(err, errSAMLLogoutResponseUnbound) {
+			log.Warn().
+				Err(err).
+				Str("provider_id", providerID).
+				Str("client_ip", GetClientIP(req)).
+				Msg("SAML LogoutResponse does not answer an outstanding logout for this session — refusing to clear session")
+			LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, false, "LogoutResponse does not answer an outstanding logout request for this session")
+			http.Error(w, "invalid LogoutResponse", http.StatusForbidden)
+			return
+		}
 		log.Warn().
 			Err(err).
 			Str("provider_id", providerID).
@@ -488,7 +562,11 @@ func (r *Router) handleSAMLSLO(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.clearSession(w, req)
+	// handleSAMLLogout already invalidated the session this response answers
+	// and expired its cookies. Write nothing here: a cross-site HTTP-POST
+	// delivery withholds the SameSite=Lax session cookie, so this request
+	// cannot see which session the browser holds, and deletion cookies would
+	// log out whichever one that is.
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_slo_callback", "", GetClientIP(req), req.URL.Path, true, "SAML SLO complete")
 	http.Redirect(w, req, "/?logout=success", http.StatusFound)
 }
@@ -567,6 +645,113 @@ func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
 		ProviderID:   samlInfo.ProviderID,
 		NameID:       samlInfo.NameID,
 		SessionIndex: samlInfo.SessionIndex,
+	}
+}
+
+// samlSessionBindingKey identifies the session the request's cookie selects,
+// as the session store's token hash, or returns "" when the request carries
+// none. SLO binds each LogoutRequest to it and checks it again when the IdP's
+// LogoutResponse arrives.
+func samlSessionBindingKey(req *http.Request) string {
+	cookie, err := readSessionCookie(req)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	return sessionHash(cookie.Value)
+}
+
+// The SAML login cookie binds each SP-initiated login to the browser that
+// started it. handleSAMLLogin sets it to a random token and records the
+// AuthnRequest against the token's hash; the ACS accepts the IdP's Response
+// only from a browser presenting that token. Like the session cookie it uses
+// the __Host- prefix over HTTPS, so a related subdomain cannot plant a token
+// of its own.
+const (
+	cookieNameSAMLLogin       = "pulse_saml_login"
+	cookieNameSAMLLoginSecure = "__Host-pulse_saml_login"
+	samlLoginTokenBytes       = 32
+	// samlACSRepostField marks the ACS form writeSAMLACSRepost re-posts.
+	samlACSRepostField = "PulseSAMLRepost"
+)
+
+func samlLoginCookieName(secure bool) string {
+	if secure {
+		return cookieNameSAMLLoginSecure
+	}
+	return cookieNameSAMLLogin
+}
+
+// readSAMLLoginCookie reads the login cookie the way readSessionCookie reads
+// the session cookie.
+func readSAMLLoginCookie(req *http.Request) (*http.Cookie, error) {
+	if isConnectionSecure(req) {
+		return req.Cookie(cookieNameSAMLLoginSecure)
+	}
+	if cookie, err := req.Cookie(cookieNameSAMLLogin); err == nil {
+		return cookie, nil
+	}
+	return req.Cookie(cookieNameSAMLLoginSecure)
+}
+
+// samlLoginToken returns the login token the browser already holds, so that
+// logins started in several tabs all stay bound to it, or a new one.
+func samlLoginToken(req *http.Request) (string, error) {
+	if cookie, err := readSAMLLoginCookie(req); err == nil && validSAMLLoginToken(cookie.Value) {
+		return cookie.Value, nil
+	}
+	return generateRandomURLString(samlLoginTokenBytes)
+}
+
+func validSAMLLoginToken(token string) bool {
+	if len(token) != base64.RawURLEncoding.EncodedLen(samlLoginTokenBytes) {
+		return false
+	}
+	_, err := base64.RawURLEncoding.DecodeString(token)
+	return err == nil
+}
+
+// samlLoginBrowserKey returns the binding key of the login token the request
+// carries, or "" when it carries none.
+func samlLoginBrowserKey(req *http.Request) string {
+	cookie, err := readSAMLLoginCookie(req)
+	if err != nil || !validSAMLLoginToken(cookie.Value) {
+		return ""
+	}
+	return sessionHash(cookie.Value)
+}
+
+var samlACSRepostPage = template.Must(template.New("saml-acs-repost").Parse(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Signing in to Pulse</title></head>
+<body><form method="post">{{range .Fields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<p>Finishing sign-in…</p><noscript><button type="submit">Continue</button></noscript></form>
+<script nonce="{{.Nonce}}">document.forms[0].submit();</script></body></html>
+`))
+
+// writeSAMLACSRepost answers the IdP's HTTP-POST delivery of a Response that
+// arrived without the login cookie. The IdP's page posts to the ACS from
+// another site, and browsers withhold SameSite=Lax cookies from cross-site
+// POSTs, so the cookie that binds the login to this browser is missing on
+// arrival in every browser. The page posts the same fields once more from
+// Pulse's own origin, which carries the cookie. The form has no action, so it
+// returns to the URL the IdP posted to, path prefix included, and the marker
+// field stops a second repost: a browser that still has no cookie started no
+// login here, and the ACS refuses its Response.
+func writeSAMLACSRepost(w http.ResponseWriter, req *http.Request) {
+	type field struct{ Name, Value string }
+	page := struct {
+		Fields []field
+		Nonce  string
+	}{Nonce: CSPNonceFromContext(req.Context())}
+	for _, name := range []string{"SAMLResponse", "SAMLart", "RelayState"} {
+		if value := req.PostForm.Get(name); value != "" {
+			page.Fields = append(page.Fields, field{Name: name, Value: value})
+		}
+	}
+	page.Fields = append(page.Fields, field{Name: samlACSRepostField, Value: "1"})
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := samlACSRepostPage.Execute(w, page); err != nil {
+		log.Error().Err(err).Msg("Failed to write SAML ACS repost page")
 	}
 }
 
