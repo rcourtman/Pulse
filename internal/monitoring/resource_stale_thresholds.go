@@ -13,9 +13,27 @@ const (
 	defaultPlatformResourceStaleThreshold = 120 * time.Second
 )
 
+// resourcePollIntervals are the poll cadences canonical resource freshness is
+// derived from.
+type resourcePollIntervals struct {
+	pve time.Duration
+	pbs time.Duration
+	pmg time.Duration
+}
+
+func resourcePollIntervalsForConfig(cfg *config.Config) resourcePollIntervals {
+	return resourcePollIntervals{
+		pve: effectivePVEPollingIntervalForConfig(cfg),
+		pbs: effectivePlatformPollingIntervalForConfig(cfg, "pbs"),
+		pmg: effectivePlatformPollingIntervalForConfig(cfg, "pmg"),
+	}
+}
+
 // ResourceStaleThresholdsForConfig derives canonical resource freshness from
-// polling cadence. A source should not be considered stale until it has missed
-// at least one expected poll cycle plus the normal interval.
+// configured polling cadence. A source should not be considered stale until it
+// has missed at least one expected poll cycle plus the normal interval. A
+// running monitor judges by Monitor.resourceStaleThresholds instead, which
+// honours the runtime polling overrides its scheduler reads.
 func ResourceStaleThresholdsForConfig(cfg *config.Config) map[unifiedresources.DataSource]time.Duration {
 	return resourceStaleThresholdsForConfig(cfg, mock.IsMockEnabled(), mock.SupplementalRefreshInterval)
 }
@@ -25,17 +43,25 @@ func resourceStaleThresholdsForConfig(
 	mockEnabled bool,
 	mockSupplementalCadence func() time.Duration,
 ) map[unifiedresources.DataSource]time.Duration {
+	return resourceStaleThresholdsForIntervals(resourcePollIntervalsForConfig(cfg), mockEnabled, mockSupplementalCadence)
+}
+
+func resourceStaleThresholdsForIntervals(
+	intervals resourcePollIntervals,
+	mockEnabled bool,
+	mockSupplementalCadence func() time.Duration,
+) map[unifiedresources.DataSource]time.Duration {
 	thresholds := map[unifiedresources.DataSource]time.Duration{
 		unifiedresources.SourceProxmox: resourceStaleThresholdForPollInterval(
-			effectivePVEPollingIntervalForConfig(cfg),
+			intervals.pve,
 			defaultProxmoxResourceStaleThreshold,
 		),
 		unifiedresources.SourcePBS: resourceStaleThresholdForPollInterval(
-			effectivePlatformPollingIntervalForConfig(cfg, "pbs"),
+			intervals.pbs,
 			defaultPlatformResourceStaleThreshold,
 		),
 		unifiedresources.SourcePMG: resourceStaleThresholdForPollInterval(
-			effectivePlatformPollingIntervalForConfig(cfg, "pmg"),
+			intervals.pmg,
 			defaultPlatformResourceStaleThreshold,
 		),
 	}
@@ -90,10 +116,33 @@ func unifiedProjectionResourcesWithStaleThresholds(
 }
 
 func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time.Duration {
-	if m == nil {
+	if m == nil || m.config == nil {
 		return ResourceStaleThresholdsForConfig(nil)
 	}
-	return ResourceStaleThresholdsForConfig(m.config)
+	return resourceStaleThresholdsForIntervals(
+		m.resourcePollIntervals(),
+		mock.IsMockEnabled(),
+		mock.SupplementalRefreshInterval,
+	)
+}
+
+// resourcePollIntervals reads the per-platform base cadences, honouring the
+// runtime overrides a fixed-cadence scheduler polls at. Non-default tenant
+// monitors poll against a detached config copy (#1619), so the settings API
+// pushes saved PBS and PMG intervals into them as runtime overrides; freshness
+// derived from m.config alone would judge those sources by an interval nothing
+// polls at. A PVE interval change reloads every monitor from saved config
+// instead, so the config value is already the live one. An adaptive scheduler
+// selects its own intervals and never reads the per-platform overrides, so
+// they must not move freshness there either.
+func (m *Monitor) resourcePollIntervals() resourcePollIntervals {
+	intervals := resourcePollIntervalsForConfig(m.config)
+	if m.scheduler != nil {
+		return intervals
+	}
+	intervals.pbs = clampInterval(m.pbsPollingIntervalSetting(), 10*time.Second, time.Hour)
+	intervals.pmg = clampInterval(m.pmgPollingIntervalSetting(), 10*time.Second, time.Hour)
+	return intervals
 }
 
 func (m *Monitor) pveNodeOfflineGracePeriod() time.Duration {
