@@ -15,6 +15,7 @@ on:
       - "scripts/tests/test_production_rollout_docs.py"
       - "scripts/tests/test_pmg_docs.py"
       - "scripts/tests/test_agent_profile_docs.py"
+      - "scripts/tests/test_audit_recovery_docs.py"
       - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
       - "scripts/tests/test_vm_disk_diagnostics.py"
       - "scripts/tests/test_memory_troubleshooting_docs.py"
@@ -38,6 +39,7 @@ on:
       - "scripts/tests/test_production_rollout_docs.py"
       - "scripts/tests/test_pmg_docs.py"
       - "scripts/tests/test_agent_profile_docs.py"
+      - "scripts/tests/test_audit_recovery_docs.py"
       - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
       - "scripts/tests/test_vm_disk_diagnostics.py"
       - "scripts/tests/test_memory_troubleshooting_docs.py"
@@ -84,6 +86,7 @@ jobs:
             test_production_rollout_docs.py \
             test_pmg_docs.py \
             test_agent_profile_docs.py \
+            test_audit_recovery_docs.py \
             test_pve_backup_troubleshooting_docs.py \
             test_vm_disk_diagnostics.py \
             test_memory_troubleshooting_docs.py \
