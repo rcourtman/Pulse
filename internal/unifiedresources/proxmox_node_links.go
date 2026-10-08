@@ -202,22 +202,23 @@ func pinBelongsToAgent(pin ResourceIdentityPin, agent ResourceIdentity) bool {
 	return true
 }
 
-// joinedPairOwnsIDLocked reports whether id is an ID one side of a joined
-// Proxmox node+agent row holds on its own: the node's (derived from the
-// row's Proxmox facet, not its merged identity, whose first hostname can be
-// the agent's) or the agent's source-specific ID, which an agent reporting
-// no machine key holds when split.
-func (rr *ResourceRegistry) joinedPairOwnsIDLocked(joined *Resource, id string) bool {
+// joinedPairSideLocked reports whether id is an ID one side of a joined
+// Proxmox node+agent row holds on its own, and that side's source: the
+// node's own IDs (derived from the row's Proxmox facet, not its merged
+// identity, whose first hostname can be the agent's) or the agent's
+// source-specific ID, which an agent reporting no machine key holds when
+// split.
+func (rr *ResourceRegistry) joinedPairSideLocked(joined *Resource, id string) (DataSource, bool) {
 	if joined == nil || joined.Proxmox == nil || joined.Agent == nil || CanonicalResourceType(joined.Type) != ResourceTypeAgent {
-		return false
+		return "", false
 	}
 	id = CanonicalResourceID(id)
 	if agentID := normalizeSourceID(joined.Agent.AgentID); agentID != "" && id == rr.sourceSpecificID(ResourceTypeAgent, SourceAgent, agentID) {
-		return true
+		return SourceAgent, true
 	}
 	sourceID := normalizeSourceID(joined.Proxmox.SourceID)
 	if sourceID == "" {
-		return false
+		return "", false
 	}
 	_, identity := resourceFromProxmoxNode(models.Node{
 		ID:                sourceID,
@@ -226,7 +227,7 @@ func (rr *ResourceRegistry) joinedPairOwnsIDLocked(joined *Resource, id string) 
 		Instance:          joined.Proxmox.Instance,
 		ClusterName:       joined.Proxmox.ClusterName,
 	}, nil)
-	return slices.Contains(rr.proxmoxNodeOwnIDs(sourceID, identity), id)
+	return SourceProxmox, slices.Contains(rr.proxmoxNodeOwnIDs(sourceID, identity), id)
 }
 
 // nodeAgentRowsSplit reports whether two listed rows are a Proxmox node and

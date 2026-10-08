@@ -350,6 +350,19 @@ func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
 					t.Fatal(err)
 				}
 				assertViews("after relink", 2, nodeAgentRows{joined: merged.joined})
+				// The joined row records the relinked row it took in, so a
+				// report-merge of it names the relink's own pair.
+				folded := want.node
+				if folded == merged.joined {
+					folded = want.agent
+				}
+				recorded := false
+				for _, fold := range adapter.currentRegistry().ManualLinkFolds(merged.joined) {
+					recorded = recorded || (fold.HolderID == merged.joined && fold.FoldedID == folded)
+				}
+				if !recorded {
+					t.Fatalf("joined %s records no fold of relinked %s: %+v", merged.joined, folded, adapter.currentRegistry().ManualLinkFolds(merged.joined))
+				}
 				// A rebuild that meets the agent first orders the joined row's
 				// hostnames the agent's way; persisting its pins must not
 				// re-key the relink onto the joined ID either.

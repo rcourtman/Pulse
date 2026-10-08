@@ -7066,10 +7066,11 @@ another pair than the exclusions do, as a relink of the two rows a
 report-merge left does (a registry now keeps each exclusion's `CreatedAt`);
 a tie keeps the pair apart. Once a relink rejoins them, the declared link
 folds one of the rows it names into the other's ID, and `applyManualLinks`
-records that ID with the IDs manual links fold (it recognises the node's own
-IDs from the joined row's Proxmox facet, and the agent's source-specific
-ID), so pin succession keeps the link instead of re-keying it onto the
-joined ID and handing the decision back to the older exclusions. The paths
+records that as a `ManualLinkFold` on the joined row (it recognises the
+node's own IDs from the row's Proxmox facet, and the agent's source-specific
+ID), so pin succession treats the folded ID as observed and keeps the link
+instead of re-keying it onto the joined ID and handing the decision back to
+the older exclusions, and report-merge of the joined row names that pair. The paths
 that join rows after ingest apply the same decision: `applyManualLinks`
 skips a link between a node row and an agent row split after it, and the
 presentation filter (`ListForPresentation` and the broadcast) keeps such

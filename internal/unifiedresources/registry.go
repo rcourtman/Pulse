@@ -4950,16 +4950,17 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 			otherID = link.ResourceA
 		}
 		other := rr.resources[otherID]
-		if other == nil && otherID != primaryID && rr.joinedPairOwnsIDLocked(primary, otherID) {
-			// A relink of a split node and its agent names the two rows,
-			// and the declared link folds one of them into the other's ID
-			// once the relink rejoins them. Treat the ID as folded by this
-			// link so pin succession keeps the link rather than re-keying
-			// it onto the joined ID, which would let the split decide again.
-			if rr.linkMergedIDs == nil {
-				rr.linkMergedIDs = make(map[string]struct{})
+		if other == nil && otherID != primaryID {
+			if source, ok := rr.joinedPairSideLocked(primary, otherID); ok {
+				// A relink of a split node and its agent names the two rows,
+				// and the declared link folds one of them into the other's
+				// ID once the relink rejoins them. Record the fold so pin
+				// succession keeps the link rather than re-keying it onto
+				// the joined ID, which would let the split decide again,
+				// and so report-merge of the joined row names this pair.
+				recordManualLinkFold(primary, primaryID, &Resource{Sources: []DataSource{source}}, otherID)
+				rr.indexLinkFoldsLocked(primary)
 			}
-			rr.linkMergedIDs[otherID] = struct{}{}
 		}
 		if other == nil || otherID == primaryID {
 			continue
