@@ -75,56 +75,81 @@ in [API authentication](API.md#-authentication); never paste the token or a
 session cookie into a command. For a one-off read, you can instead open the
 API path in your signed-in Pulse browser.
 
-The loopback URLs below apply on the Pulse host. For remote access, use your
-Pulse HTTPS URL with certificate verification enabled. Use curl 7.76 or later,
-keeping `--disable` first to ignore local trace/verbose defaults.
-`--fail-with-body` returns a non-zero exit on HTTP failures, including 401,
-402 and 403. Share only the relevant redacted error, not the header file or
-whole audit response: events can contain usernames, client addresses and paths.
+Define the `pulse_api` helper from [API authentication](API.md#-authentication)
+**in the same Bash session**, using your `audit:read` header file. It is local
+example code, not an installed Pulse command. The helper requires curl 7.76 or
+later and makes one request with five-second connection and twenty-second whole
+request limits. On the Pulse host it uses loopback; for remote access, follow
+that guide's HTTPS-origin and certificate verification instructions.
+
+Each call prints only the HTTP status and a new private response file's location,
+including on HTTP failure. Open the file locally, not in a shared terminal or
+recording: events, summaries and errors can contain usernames, client addresses,
+paths and other identifying details. Keep whole responses and the header file
+private; share only a relevant manually redacted excerpt.
+
+Run only the read relevant to your investigation:
 
 ```bash
-# List recent events
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  'http://127.0.0.1:7655/api/audit?limit=50'
+# List a small page of recent events
+pulse_api GET '/api/audit?limit=50'
 
 # Filter by event type and date range
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  'http://127.0.0.1:7655/api/audit?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false'
+pulse_api GET '/api/audit?limit=50&event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false'
 
 # Get audit summary
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/audit/summary
+pulse_api GET /api/audit/summary
 ```
+
+HTTP 401, 402, 403, other errors and redirects are not an empty audit history.
+The helper does not follow redirects or retry. A transport failure can leave a
+partial file, not a complete result; preserve the status and original evidence
+rather than looping, resetting the store or changing a licence to make it pass.
 
 ### Query Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `limit` | integer | Maximum events to return (default: 100) |
+| `limit` | positive integer | List page size (default: 100, capped at 1,000) |
+| `offset` | non-negative integer | List page offset (default: 0) |
 | `event` | string | Filter by event type (e.g., `login`, `password_change`) |
 | `user` | string | Filter by username |
 | `success` | boolean | Filter by success (`true`) or failure (`false`) |
-| `startTime` | ISO 8601 | Start of date range |
-| `endTime` | ISO 8601 | End of date range |
+| `startTime` | RFC3339 | Start of date range, with timezone |
+| `endTime` | RFC3339 | End of date range, strictly after `startTime` |
+
+These parameters describe **the event list**, not every audit endpoint. Its
+response contains an `events` page and `total` matching events; fewer rows than
+`total` do not establish missing history. Keep the same filters when reading
+another page. New events can shift offsets; a sequence of pages is not a
+consistent archival snapshot. Malformed list filters return HTTP 400, not an
+empty result. URL-encode query values; do not put private usernames or other
+identifiers into a shared command or report.
 
 ---
 
 ## Exporting Audit Data
 
-Export the audit log for external analysis or compliance archival:
+Use the same helper to save an export privately. For an investigation, prefer
+the relevant event type and known time range over an unfiltered whole-history
+export; replace the example dates with your incident's UTC bounds:
 
 ```bash
-umask 077
-export_dir="$(mktemp -d)" &&
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --output "$export_dir/audit-export.json" \
-  http://127.0.0.1:7655/api/audit/export &&
-printf 'Saved private export to %s\n' "$export_dir/audit-export.json"
+pulse_api GET '/api/audit/export?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z'
 ```
 
-This creates a new private directory and prints the file's location only on
-success. It does not reuse filters selected in the UI. Treat the export as
-sensitive data; keep it outside shared repositories and issue attachments.
+The new owner-only response file is created in the helper's private directory.
+It does not reuse filters selected in the UI. Export accepts `event`, `user`,
+`success`, `startTime` and `endTime`, but **not list pagination**: adding `limit`
+or `offset` does not bound an export. With no filters it requests the full
+available history. Unlike the list, export ignores malformed time filters;
+check the dates and returned event times locally rather than assuming HTTP 200
+proves that the intended window was applied.
+
+Keep the export outside shared repositories and issue attachments. A failed or
+incomplete download is not a valid archive. Do not widen or repeat a failed
+export just to fill a report; existing evidence is valid. Dispose of private
+response files under your normal data-retention policy.
 
 ---
 
@@ -135,11 +160,11 @@ captured without a signer remain unsigned. Use **Verify** in the signed-in
 Audit Log panel, or the authenticated read below, to check a stored signature:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify
+pulse_api GET /api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify
 ```
 
-Response:
+Open the saved response privately; a successful verification result has this
+shape (HTTP 200 alone is not signature verification):
 ```json
 {
   "available": true,
