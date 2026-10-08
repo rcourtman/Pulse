@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Automatic Proxmox agent attribution preserves distinct FQDNs
+
+Hostname-only attribution uses the common full-hostname equivalence rule:
+case, surrounding whitespace and a DNS root dot are normalised; a short name
+may match an FQDN, but different full domains never identify the same machine.
+A bare name matching multiple provider nodes/guests stays unlinked. Explicit
+endpoint and unique provider-network hints retain their existing precedence.
+The connection FQDN and Pulse display name are not guest-hostname evidence.
+
+`TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs` covers node, VM and LXC
+selection, a sole unrelated domain, ambiguous short names and legacy short/full
+pairs. `TestCrossInstallationIdentitySurvivesStandaloneAddition` adds FQDN
+connections with overlapping native node names/VMIDs and distinct guest domains,
+checking original node health, scoped backups, Docker inventory and agent link
+continuity. These are source controls, not the established reporter cause or
+native three-surface recovery for #2681.
+
+
 ### PMG saved collection scope and incomplete observations
 
 The PMG poller snapshots the selected connection's saved scope once per poll.
