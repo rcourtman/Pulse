@@ -805,33 +805,7 @@ func (r *Router) setupRoutes() {
 	// tenant services are refreshed when Router.SetMonitor replaces a monitor.
 	r.configureMetadataProviderFactory()
 
-	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
-	// findings provider into reporting. The AI service implements all
-	// three interfaces; when not configured for the tenant the engine
-	// falls back to the heuristic narrators with no findings section.
-	if r.reportingHandlers != nil {
-		settings := r.aiSettingsHandler
-		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
-			if settings == nil {
-				return ai.PatrolDigest{}, false
-			}
-			return settings.BuildPatrolDigest(ctx, days)
-		})
-		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
-			if settings == nil {
-				return nil, nil, nil
-			}
-			svc := settings.GetAIService(ctx)
-			if svc == nil {
-				return nil, nil, nil
-			}
-			cfg := svc.GetAIConfig()
-			if cfg == nil || !cfg.Enabled {
-				return nil, nil, nil
-			}
-			return svc, svc, svc
-		})
-	}
+	r.wireReportingAIResolvers()
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
@@ -1029,6 +1003,50 @@ func (r *Router) setupRoutes() {
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
+}
+
+// wireReportingAIResolvers connects reporting to the per-tenant AI service.
+func (r *Router) wireReportingAIResolvers() {
+	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
+	// findings provider into reporting. The AI service implements all
+	// three interfaces; when not configured for the tenant the engine
+	// falls back to the heuristic narrators with no findings section.
+	if r.reportingHandlers != nil {
+		settings := r.aiSettingsHandler
+		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
+			if settings == nil {
+				return ai.PatrolDigest{}, false
+			}
+			return settings.BuildPatrolDigest(ctx, days)
+		})
+		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+			if settings == nil {
+				return nil, nil, nil
+			}
+			svc := settings.GetAIService(ctx)
+			if svc == nil {
+				return nil, nil, nil
+			}
+			cfg := svc.GetAIConfig()
+			if cfg == nil || !cfg.Enabled {
+				return nil, nil, nil
+			}
+			return svc, svc, svc
+		})
+		r.reportingHandlers.SetExistingFindingsResolver(func(ctx context.Context) reporting.FindingsProvider {
+			if settings == nil {
+				return nil
+			}
+			svc := settings.ExistingAIService(ctx)
+			if svc == nil {
+				return nil
+			}
+			if cfg := svc.GetAIConfig(); cfg == nil || !cfg.Enabled {
+				return nil
+			}
+			return svc
+		})
+	}
 }
 
 // CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
@@ -2195,6 +2213,66 @@ func unifiedFindingFromAI(f *ai.Finding) *unified.UnifiedFinding {
 	}
 }
 
+// canonicalResourceIDResolver is the identity-only reference resolver a
+// monitor's unified read state exposes.
+type canonicalResourceIDResolver interface {
+	ResolveCanonicalResourceID(ref string) (string, bool)
+}
+
+// patrolResourceOperatorStateProvider projects durable operator state onto the
+// resource a Patrol finding names. Findings carry whatever resource ID their
+// producer used: unified-derived findings hold the canonical hash, Patrol
+// guest inventory rows hold the node-scoped Proxmox source ID, and a finding
+// raised before an operator link folded its resource into another keeps the
+// folded ID. Operator state is keyed by canonical ID, so the reference
+// resolves before any read, as the resources API resolves it; reading the
+// exact reference first would let a row left under a folded ID hide the merged
+// resource's maintenance window. The resolver is the monitor's current read
+// state (its published registry with saved hosts that have not reported since
+// a restart overlaid, or the mock estate), the listing the resources API seeds
+// from. It answers from a registry it keeps (a continuity overlay is shared
+// and reused for up to two seconds while nothing it depends on changes), so
+// findings do not each clone the unified listing. Only a reference it cannot
+// resolve is read as given.
+func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOperatorStateProvider {
+	return ai.ResourceOperatorStateProviderFunc(
+		func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
+			orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
+			if lookupErr != nil {
+				return ai.ResourceOperatorStateProjection{}, false
+			}
+			canonicalID := resourceRef
+			if resolver, ok := r.resolveMonitorForOrg(orgID).GetUnifiedReadStateOrSnapshot().(canonicalResourceIDResolver); ok {
+				if resolvedID, resolved := resolver.ResolveCanonicalResourceID(resourceRef); resolved {
+					canonicalID = resolvedID
+				}
+			}
+			state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
+			if fetchErr != nil || !found {
+				return ai.ResourceOperatorStateProjection{}, false
+			}
+			projection := ai.ResourceOperatorStateProjection{
+				IntentionallyOffline: state.IntentionallyOffline,
+				MonitoringMode:       string(state.MonitoringMode),
+				LifecycleState:       string(state.LifecycleState),
+				NeverAutoRemediate:   state.NeverAutoRemediate,
+				Criticality:          string(state.Criticality),
+			}
+			if state.LifecycleState == unifiedresources.LifecycleStateRetired {
+				projection.NeverAutoRemediate = true
+			}
+			if state.IsInMaintenanceAt(now) {
+				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
+					StartAt: *state.MaintenanceStartAt,
+					EndAt:   *state.MaintenanceEndAt,
+					Reason:  state.MaintenanceReason,
+				}
+			}
+			return projection, true
+		},
+	)
+}
+
 func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 	if r == nil || r.aiSettingsHandler == nil {
 		return false
@@ -2462,64 +2540,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			// signals later does not multiply round-trips per finding.
 			// Keeps `internal/ai` clear of an
 			// `internal/unifiedresources` import.
-			patrol.GetFindings().SetResourceOperatorStateProvider(
-				ai.ResourceOperatorStateProviderFunc(
-					func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
-						orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
-						if lookupErr != nil {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						// Findings carry whatever resource ID their
-						// producer used: unified-derived findings hold
-						// the canonical hash, but Patrol guest inventory
-						// rows hold the node-scoped Proxmox source ID.
-						// Operator state is keyed by canonical ID only,
-						// so a reference that misses directly resolves
-						// through the registry before giving up —
-						// otherwise maintenance windows and
-						// intentionally-offline intent silently never
-						// reach guest findings.
-						canonicalID := resourceRef
-						state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
-						if fetchErr != nil {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						if !found {
-							registry, registryErr := r.resourceHandlers.buildRegistry(orgID)
-							if registryErr != nil || registry == nil {
-								return ai.ResourceOperatorStateProjection{}, false
-							}
-							_, resolvedID, resolved := registry.GetByReference(resourceRef)
-							if !resolved || resolvedID == canonicalID {
-								return ai.ResourceOperatorStateProjection{}, false
-							}
-							canonicalID = resolvedID
-							state, found, fetchErr = orgStore.GetResourceOperatorState(canonicalID)
-						}
-						if fetchErr != nil || !found {
-							return ai.ResourceOperatorStateProjection{}, false
-						}
-						projection := ai.ResourceOperatorStateProjection{
-							IntentionallyOffline: state.IntentionallyOffline,
-							MonitoringMode:       string(state.MonitoringMode),
-							LifecycleState:       string(state.LifecycleState),
-							NeverAutoRemediate:   state.NeverAutoRemediate,
-							Criticality:          string(state.Criticality),
-						}
-						if state.LifecycleState == unifiedresources.LifecycleStateRetired {
-							projection.NeverAutoRemediate = true
-						}
-						if state.IsInMaintenanceAt(now) {
-							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
-								StartAt: *state.MaintenanceStartAt,
-								EndAt:   *state.MaintenanceEndAt,
-								Reason:  state.MaintenanceReason,
-							}
-						}
-						return projection, true
-					},
-				),
-			)
+			patrol.GetFindings().SetResourceOperatorStateProvider(r.patrolResourceOperatorStateProvider(orgID))
 
 			// Wire push notifications: patrol findings → relay client (best-effort)
 			patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {

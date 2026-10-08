@@ -1,19 +1,15 @@
-import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode, WorkloadType } from '@/types/workloads';
 import {
   getWorkloadInfoValue,
   type IODistributionStats,
   type WorkloadIOEmphasis,
 } from './guestRowModel';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
-import { getNodeDisplayName } from '@/utils/nodes';
 import {
   isContainerWorkloadViewMode,
-  getCanonicalWorkloadId,
   getWorkloadCPUPercent,
   resolveWorkloadType,
   workloadMatchesPlatformScope,
@@ -21,7 +17,6 @@ import {
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 import {
-  buildNodeByInstance,
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
   workloadHostScopeId,
@@ -417,29 +412,6 @@ export const getWorkloadGroupLabel = (
   return { type: '', name: context };
 };
 
-export const buildWorkloadSummaryGroupScope = (
-  groupId: string,
-  guests: WorkloadGuest[],
-  label: { type: string; name: string },
-): SummarySeriesGroupScope | null => {
-  const seriesIds = Array.from(
-    new Set(guests.map((guest) => getCanonicalWorkloadId(guest)).filter(Boolean)),
-  );
-  if (seriesIds.length === 0) {
-    return null;
-  }
-
-  const summaryLabelParts = [label.name.trim(), label.type.trim()].filter(Boolean);
-  const scopeLabel = summaryLabelParts.join(' · ');
-  const workloadCountLabel = `${guests.length} workload${guests.length === 1 ? '' : 's'}`;
-
-  return {
-    id: groupId.trim(),
-    label: scopeLabel ? `${scopeLabel} (${workloadCountLabel})` : workloadCountLabel,
-    seriesIds,
-  };
-};
-
 export const groupWorkloads = (
   guests: WorkloadGuest[],
   mode: 'grouped' | 'flat',
@@ -469,46 +441,6 @@ export const groupWorkloads = (
   }
 
   return groups;
-};
-
-export const buildWorkloadSummaryGroupScopeMap = ({
-  guests,
-  nodes,
-  groupingMode,
-  sortComparator,
-  groupLabelBadges,
-}: {
-  guests: WorkloadGuest[];
-  nodes: Node[];
-  groupingMode: 'grouped' | 'flat';
-  sortComparator: ((a: WorkloadGuest, b: WorkloadGuest) => number) | null;
-  groupLabelBadges?: Record<string, { label: string }>;
-}): Map<string, SummarySeriesGroupScope> => {
-  if (groupingMode !== 'grouped') {
-    return new Map<string, SummarySeriesGroupScope>();
-  }
-
-  const grouped = groupWorkloads(guests, groupingMode, sortComparator);
-  const nodeByInstance = buildNodeByInstance(nodes);
-  const scopes = new Map<string, SummarySeriesGroupScope>();
-  for (const [groupKey, groupGuests] of Object.entries(grouped)) {
-    const node = nodeByInstance[groupKey];
-    const badge = groupLabelBadges?.[groupKey] ?? groupLabelBadges?.[groupKey.toLowerCase()];
-    const scope = buildWorkloadSummaryGroupScope(
-      groupKey,
-      groupGuests,
-      getWorkloadGroupLabel(
-        groupKey,
-        groupGuests,
-        node ? getNodeDisplayName(node) : null,
-        badge?.label,
-      ),
-    );
-    if (scope) {
-      scopes.set(scope.id, scope);
-    }
-  }
-  return scopes;
 };
 
 export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => {

@@ -2480,12 +2480,13 @@ agent inventory, registration state, or command-channel readiness.
    or fleet-command evidence. Lifecycle flows must not
    recreate the retired Patrol quickstart bootstrap path, mint server-issued
    hosted-model tokens, or derive AI provider state from installation identity.
-   Per-request `/api/ai/chat` execution-mode overrides follow that same
-   boundary: lifecycle-adjacent consumers may rely on Assistant approval
-   semantics, but scoped `autonomous_mode:false` chat requests must not be
-   reinterpreted as agent registration, assignment, installer, or connection
-   lifecycle state. Patrol finding handoffs that force approval-required mode
-   from a non-empty `finding_id` are likewise AI/runtime governance, not an
+   The server-set `/api/ai/chat` execution mode follows that same boundary:
+   lifecycle-adjacent consumers may rely on Assistant approval semantics, but
+   the approval-required mode `HandleChat` installs on every chat request
+   (`ChatRequest` decodes no `autonomous_mode` field) must not be reinterpreted as agent
+   registration, assignment, installer, or connection lifecycle state. Patrol
+   finding handoffs running in that mode from a non-empty `finding_id` are
+   likewise AI/runtime governance, not an
    agent command grant or lifecycle authorization primitive.
    Patrol queued-fix approvals may now seed the shared action-audit store with
    planned and pending lifecycle evidence, but lifecycle surfaces must treat
@@ -4344,6 +4345,22 @@ findings handed to the orchestrator, so investigation reasoning sees
 the same lock-against-remediation flag that the action broker
 enforces downstream — no possible drift between "what Patrol
 proposes" and "what the broker accepts."
+That builder resolves a finding's resource reference through the
+organization monitor's current read state before it reads operator
+state. A finding still keyed by an agent's canonical ID after an
+operator linked the agent into its guest therefore reads the merged
+row's state while the read state folds the agent, as the resources API
+does. A finding naming a saved host that has not reported since a
+restart by its agent reference reads the row stored under that host's
+canonical ID, because the read state overlays host continuity as the
+resources API listing does. A saved host joined to its guest by a link
+stays its own row there, without lending the guest its saved payload,
+but the registry holds it under the guest, so its findings read the
+guest's state, as they did before the restart. The
+resolution only reads identity. It does not treat the folded agent as
+removed, offline or unenrolled, does not turn a continuity-only host
+into a live sighting, and grants no heartbeat, command, install or
+repair authority.
 
 The same router wiring owns the alert-bridge patrol-trigger callback. It now
 receives the full alert payload as a struct and consults the operator's
@@ -4926,8 +4943,8 @@ withheld) is an AI-runtime privacy concern; it is not agent enrollment config,
 installer readiness, command reachability, or any fleet-control capability signal.
 Patrol finding chat handoffs follow the same ownership split: when
 `/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
-resource, or action context, the backend-enforced `autonomous_mode:false`
-clamp is Assistant action-governance, not agent readiness, fleet command
+resource, or action context, the backend-enforced approval-required clamp
+is Assistant action-governance, not agent readiness, fleet command
 reachability, or enrollment health.
 If the same request also carries recognized Patrol product handoff context,
 resources, or action references, the API handler may merge only same-finding
@@ -7662,6 +7679,16 @@ bounded and classified temperature nodes, and leaves the host report intact
 when the helper is absent or incompatible. It does not treat Windows ACPI
 thermal zones as hardware sensor evidence, accept remote provider locations,
 or grant Pulse hardware-control authority.
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go`, `internal/api/router.go` and
+`internal/api/ai_handlers.go` changed only how `/api/admin/reports/generate`
+reads its fields (a `POST` JSON body or `GET` query parameters), which of those
+may use the tenant's AI narrator (`POST` only), and how a `GET` finds Patrol
+findings (`ExistingAIService`, which never constructs a tenant AI service). No
+agent registration, enrolment, install, update, removal or report ingest path
+changed.
+
 ### Agent profile adoption is reported as a count only
 
 The usage telemetry snapshot reads `LoadAgentProfiles` and reports
@@ -8969,6 +8996,45 @@ their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
 
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go`, `internal/api/discovery_handlers.go` and
+`internal/api/saml_handlers.go` changed only so `/api/discovery/settings` and
+`/api/saml/{id}/logout` answer `405` to every method outside their allowed set,
+`GET` and `HEAD` included. The settings write still takes `PUT` or `POST` and
+logout still takes `POST`. No agent registration, enrolment, install, update or
+removal path changed.
+
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/slo` accepts an IdP LogoutResponse when its signed
+`InResponseTo` names an unexpired LogoutRequest that `/api/saml/{id}/logout`
+issued, once, in a browser carrying no session or the session that logout
+ended. Other responses are refused, the SLO handler writes no session or
+cookie for any response (the logout request already cleared both), and
+`/api/saml/{id}/logout` refuses a request that carries no session. No agent
+registration, enrolment, install, update or removal path changed.
+
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` changed only so a SAML provider configured with
+`idpSsoUrl` and a PEM `idpCertificate` or `idpCertFile` puts that certificate
+into its in-memory IdP descriptor as base64 DER, which crewjam/saml can read
+when it verifies the IdP's ACS Responses and LogoutResponses. No agent
+registration, enrolment, install, update or removal path changed.
+
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/login` records each SAML AuthnRequest against a short-lived
+login cookie and `/api/saml/{id}/acs` accepts the IdP's signed answer to it
+once, in that browser, at default settings, reposting the IdP's cross-site
+delivery once from Pulse's origin so the cookie arrives. Signed content
+carrying a prefixed attribute or namespace declaration named like a SAML
+attribute is refused. No agent
+registration, enrolment, install, update or removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or
@@ -8985,3 +9051,24 @@ No agent registration, enrolment, install, update or removal path changed.
 for every method. No agent route lives under `/debug/`, so agent registration,
 enrolment, install, update, removal, report ingest and `/api/agent/ws`
 handshakes are unchanged on a demo instance.
+
+### Broadcast host coalescing honours operator splits
+
+`internal/monitoring/monitor.go` changed only so the websocket broadcast
+coalesces host views with the operator's merge exclusions
+(`MonitorAdapter.CoalesceForPresentation`), as the resources API's
+`ListForPresentation` already did, so an agent host the operator split from
+a same-named platform view by unlink or report-merge is coalesced on the
+websocket as REST coalesces it (the filter's limits are recorded under
+"Unlink replaces the pair's operator link" in the unified-resources
+contract). Agent registration, enrolment, install, update, removal, report
+identity and continuity are unchanged.
+
+### Report-merge splits a linked agent
+
+`internal/api/resourceapi/resources.go` changed only so report-merge on a
+resource an operator linked an agent into (a VM, a node or a Docker host)
+replaces that link, splitting the agent back out as unlink does. Agent
+registration, enrolment, install, update, removal, report identity and
+continuity are unchanged, and an agent's own declared node link still
+ignores exclusions.

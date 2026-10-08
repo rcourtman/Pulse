@@ -1609,7 +1609,12 @@ Source freshness is a separate unified-resource status input, not a fixed
 global health timer. Snapshot rebuilds, resource seeding, supplemental record
 overlays, and cloned read-state overlays must preserve the monitoring-provided
 stale thresholds for Proxmox, PBS, and PMG sources so resources do not flap to
-warning/degraded between successful configured poll cycles.
+warning/degraded between successful configured poll cycles. A source merge
+into an existing row judges metric freshness by the ingest's thresholds and
+the stale pass's own threshold rule, so the merge's freshness gate never
+calls a source current that the stale pass marks stale, or the reverse. The
+gate decides only where no stronger rule does: a hypervisor-managed guest
+keeps its platform CPU even while that source is stale.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a
@@ -2484,8 +2489,10 @@ signal source instead of advertising empty object browsers. The
 canonical TrueNAS adapter (`internal/truenas/provider.go::
     truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
 appliance as a unified `agent` row tagged with the `truenas`
-platform, so TrueNAS defaults to `/truenas/overview` (the Systems
-sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
+platform, so TrueNAS defaults to `/truenas/overview`, whose Overview
+sub-tab lists those systems in `TrueNASSystemsTable`. `/truenas/storage`
+renders the TrueNAS-owned `TrueNASStorageTopologyTable`, not
+`StorageSurface`; only the Proxmox Storage tab embeds `StorageSurface`.
 Any future platform that wants to default to a Systems / Hosts
 overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder
@@ -2596,10 +2603,12 @@ application resource-provider or WebSocket lifecycle.
     in place through that shared runtime and the root app-shell restore path,
     instead of looking like a page refresh or remount.
 12. Keep summary-chart visibility a display preference, not a unified-resource
-    filter. Platform/runtime pages may hide or restore chart sections through
-    shared presentation controls, but those controls must not mutate resource
-    identity, table membership, source scope, or summary-hover state. The
-    retired top-level `/infrastructure` page, its summary chart strip, and its
+    filter. The workload and infrastructure summary chart sections are
+    retired and no platform page exposes a chart show/hide control today. If a
+    governed product decision brings one back, hiding or restoring it must not
+    mutate resource identity, table membership, source scope, or summary-hover
+    state. The retired top-level
+    `/infrastructure` page, its summary chart strip, and its
     saved-view/route-state machinery must not be reintroduced for this purpose.
 15. Keep operator-local resource search on the operator's own names.
     Resource-policy redaction is a transmission boundary (`docs/PRIVACY.md`),
@@ -2763,7 +2772,7 @@ application resource-provider or WebSocket lifecycle.
     (`canonical_id` ↔ machine ID / DMI UUID / cluster / hostname) in the
     `resource_identities` table (`ResourceStore.UpsertResourceIdentityPins`
     / `ListResourceIdentityPins`, written diff-aware after monitor-adapter
-    rebuilds) and completes weak incoming identities from those pins
+    rebuilds; manual-link sides write through `ReplaceResourceIdentityPins`) and completes weak incoming identities from those pins
     before matching and ID derivation
     (`internal/unifiedresources/canonical_id_pins.go`). Persisted primary
     hostnames preserve their normalized dotted form. The pin index resolves
@@ -2779,7 +2788,15 @@ application resource-provider or WebSocket lifecycle.
     must not mint host canonical IDs from snapshot-content-dependent
     identity subsets without consulting the pins, and pin writes stay on
     the durable store-backed registry (ephemeral per-request registries
-    consult, never write). Pinned hostnames preserve the full dotted name
+    consult, never write). A pin records the identity a resource derives
+    from its own sources rather than a manual link's merged projection:
+    each side of a link writes the pin captured before the link merged
+    them, keeping its row's other fields unless another resource holds that
+    key, and a pinnable folded side keeps its pin under its own canonical
+    ID, less any strong key a live resource or an earlier folded side
+    holds. Capture follows pin completion, so a key an earlier release
+    borrowed into a side's row can still reach the capture (see "Operator
+    links reach record-ingested resources"). Pinned hostnames preserve the full dotted name
     (`NormalizeFullHostname`): distinct machines that share a short
     hostname (`cloud.rnd-lax1` vs `cloud.gce-or1`) must keep distinct
     pins, distinct pin-index buckets, and distinct presentation host rows.
@@ -2814,7 +2831,9 @@ application resource-provider or WebSocket lifecycle.
     ID and drops the superseded pin row (`ApplyCanonicalIDSuccessions`
     in `internal/unifiedresources/canonical_id_succession.go`).
     Successions never fire while the old ID still belongs to a live
-    resource, never follow a contradicting machine key (a reinstalled
+    resource or to one a manual link folded into its primary (see
+    "Operator links reach record-ingested resources"), never follow a
+    contradicting machine key (a reinstalled
     machine mints fresh, it does not absorb the old host's operator
     state), and never rewrite change-journal rows. Known limitation:
     machine-keyless hosts whose history already merged under a collapsed
@@ -2895,8 +2914,9 @@ application resource-provider or WebSocket lifecycle.
     `ResourceRegistry.IngestRecords` applies the same
     `ApplyCanonicalIDSuccessions` semantics as pin-driven successions
     (operator state and action audits re-key, the superseded pin row
-    drops, never while the old ID belongs to a live resource, journal
-    rows never rewritten). Regression coverage:
+    drops, never while the old ID belongs to a live resource or one a
+    manual link folded into its primary, journal rows never rewritten).
+    Regression coverage:
     `TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct` /
     `TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs` /
     `TestIngestRecordsDoNotCompleteTrueNASIdentityFromPins` in
@@ -3045,10 +3065,11 @@ canonical WebSocket snapshot, including the public `vmware-vsphere` alias for
 the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
-and one explicit refresh path. Beyond disabling the grouped host drawer, it
-passes no option that adds host metrics to grouped rows: the shared Workloads
-group row carries host identity only, and per-host stats stay in the page's
-own hosts table.
+and one explicit refresh path. It passes no option that adds host metrics to
+grouped rows: the shared Workloads group row carries host identity only, with
+no drawer, hover preview, or group pin, and per-host stats and details stay in
+the page's own hosts table. The Workloads route model no longer parses a
+`summaryGroup` param, because no group focus remains to hydrate.
 Its page-owned workload toolbar consumes the complete shared
 `getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
 Trends, Details, History, range, and first-use discovery contract as every
@@ -3193,9 +3214,10 @@ in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 route to `/kubernetes/workloads` rather than building
 retired aggregate workload URLs; the legacy context/namespace query filter
 does not carry forward because the new Kubernetes Workloads tab does not
-consume those parameters. Workloads, storage, and recovery route-state helpers
-in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
-only; the owning platform/runtime route supplies the pathname. New drawer or
+consume those parameters. The workloads and storage route-state helpers in
+`frontend-modern/src/routing/resourceLinks.ts` serialize query state only, and
+the owning platform/runtime route supplies the pathname; the recovery
+serializer was deleted once nothing read it. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
 The Proxmox Backups route-state vocabulary includes the opaque `location`
@@ -3217,8 +3239,9 @@ recreate raw labelled `<select>` controls for those filters locally.
 The Proxmox platform page is a route-level consumer of canonical unified
 resources, not a new resource source. It filters the existing resource snapshot
 to Proxmox VE, Backup Server, Mail Gateway, storage, disk, and workload rows,
-then composes the existing Workloads, Storage, Recovery, and infrastructure
-table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
+then composes the existing Workloads and Storage surfaces, its own Backups
+tab tables, and the infrastructure table owners; no Recovery surface exists to
+compose. Proxmox host row version, uptime, temperature, CPU, memory, disk,
 network I/O, and disk I/O presentation must derive from canonical resource
 facets and the shared `nodeFromResource` adapter; platform pages must not
 rebuild resource identity, merge policy, or metric-target inference locally.
@@ -4102,10 +4125,13 @@ inline drawer through local component state, most through
 while the Docker hosts and Proxmox nodes tables keep their own selection
 signal, and write no route state. An infrastructure table that moves drawer selection
 into route state must tag the opened detail with the canonical active resource
-ID; direct toggles of a row already in view must capture the current
-`.app-scroll-shell` position through
-`frontend-modern/src/utils/appShellScrollRestoration.ts`, so the remounted root
-shell in `frontend-modern/src/App.tsx` stays anchored, and then hand off to the
+ID; its route write must go through the shared same-path route-state scheduler
+in `frontend-modern/src/utils/routeStateNavigation.ts`, which alone stages the
+`.app-scroll-shell` position in
+`frontend-modern/src/utils/appShellScrollRestoration.ts` at the moment it
+navigates, so the root shell in `frontend-modern/src/App.tsx` stays anchored.
+The row toggle itself stages nothing: the root shell applies a staged position
+on the next route change, whatever caused it. The table must then hand off to the
 shared summary-table/contextual-focus helpers when the opened drawer would fall
 below the fold. That reveal scrolls only enough to keep the row header plus the
 start of the detail visible, never leaving the drawer clipped or hard-centering
@@ -4776,32 +4802,30 @@ canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
 `resource` query rather than an opaque unified-resource id, so direct route
 loads and cross-surface drill-downs reopen the correct workload drawer instead
 of landing on an unselected table state.
-That same routing contract now also owns recovery route-state vocabulary for
-unified resources without restoring the retired `/recovery` top-level route.
-Infrastructure drawers and other cross-surface consumers must carry canonical
-`platform` and `node` query state into an owning platform/runtime route instead
-of rebuilding drawer-local recovery links, assuming only PBS services can
-expose recovery handoffs from infrastructure, or sending operators to a
-standalone aggregate workspace URL.
-When shared recovery links include protected-inventory posture, they must use
-the recovery-owned `state` query instead of overloading event `status`. Event
-outcome `status` remains recovery-history state, and compatibility input such
-as legacy `stale=1` must be normalized by the recovery route owner before
-cross-surface links are rebuilt.
-That same shared routing boundary now also owns alert-investigation handoffs.
-Resource-incident panels and other alert-side resource drill-down consumers
-must route operators back through canonical infrastructure resource detail and
-then into platform-owned workload, storage, and recovery surfaces via
-`frontend-modern/src/routing/resourceLinks.ts` route-state vocabulary, instead
-of treating alert investigation as a provider-local dead end, freezing
-per-surface route strings outside the unified-resource contract, or reviving
+Unified resources carry no recovery route-state vocabulary. The recovery
+query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
+`buildRecoveryRouteSearch`) was deleted from
+`frontend-modern/src/routing/resourceLinks.ts` after the aggregate Recovery page
+that read it went on 2026-05-26, and the protected-inventory `state`, event
+`status`, and legacy `stale=1` rules went with it. Infrastructure drawers and
+other cross-surface consumers that expose recovery context must land in the
+owning platform tab (the Proxmox Backups tab or the TrueNAS Protection tab)
+instead of rebuilding drawer-local recovery links, assuming only PBS services
+can expose recovery from infrastructure, or sending operators to a standalone
+aggregate workspace URL.
+Alert investigation offers no resource cross-jump links. The
+resource-incident panel names its resource through the unified-resource lookup
+and links to no other surface (its Pulse Assistant handoff aside): its
+cross-jump chips were retired on 2026-05-16, and an alert card's single
+resource link opens the owning platform page. Alert-side consumers must not freeze
+per-surface route strings outside the unified-resource contract or revive
 retired aggregate workspace URLs.
-That same routing contract also owns Patrol finding handoffs. Expanded
-Patrol-finding rows and scoped-run finding snapshots must resolve the backing
-unified resource and surface the same platform-owned workload/storage/recovery
-route-state vocabulary there, including exact workload and physical-disk route
-state when the selected resource is itself the workload or disk, instead of
-stopping at finding text, rebuilding patrol-local route strings, or reviving
+Patrol findings stay in place the same way: expanded Patrol-finding rows
+carry the finding's own primary action and manual controls rather than
+surface-link chips, and
+`frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts` keeps
+`buildResolvedResourceSurfaceLinks` and `useResources()` out of the panel. A
+future finding handoff must not rebuild patrol-local route strings or revive
 retired aggregate workspace URLs.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
@@ -5665,50 +5689,14 @@ contract for reporting/ignored infrastructure state; future settings-row
 grouping or reporting-surface scope changes must be routed through that backend
 projection instead of teaching the frontend to reinterpret raw resource facets
 or removed-runtime arrays locally.
-Canonical route-state helpers must also preserve recovery-specific drill-down
-state when they serialize governed resource views. Recovery timeline day
-selection is part of the durable route-state contract, so recovery query state
-must round-trip the selected day inside an owning platform/runtime route
-instead of dropping it as transient local UI state or restoring `/recovery`.
-The same recovery route-state contract also applies to the selected timeline
-range: canonical recovery query state must preserve explicit non-default chart
-windows such as `7d`, `90d`, and `1y` so recovery drill-down transport does
-not widen back to the default `30d` window on reload or shared navigation.
-That same shared recovery route-state contract also owns the primary recovery
-workspace selection. When an operator explicitly switches between protected
-items and recovery events, canonical recovery query state must round-trip that
-`view` selection unless the active `rollupId` or selected day already implies
-the default recovery-events workspace.
-That same shared recovery route helper contract now also owns canonical
-protected-inventory posture encoding. Visible recovery inventory filters must
-round-trip through the owned `state=<value>` query form instead of leaking ad
-hoc booleans, overloading event `status`, or disappearing from shared links on
-reload. Legacy `stale=1` may be parsed only as compatibility input that
-rewrites to canonical inventory state.
-That same route-state contract now also owns the canonical recovery `itemType`
-query. Recovery query state must round-trip a provider-neutral item category
-such as `vm`, `dataset`, or `pvc`, and
-`frontend-modern/src/routing/resourceLinks.ts` may canonicalize provider-native
-aliases like `proxmox-vm` into that shared vocabulary during parse/build, but
-recovery route state must not drift back to raw platform-specific
-`subjectType` values in shared navigation.
-That same route-state contract also owns the canonical recovery `platform`
-query. Recovery query state must emit `platform=<owned-source-key>` as the
-shared operator-facing shape, while accepted legacy `provider` aliases may be
-parsed only as compatibility input that rewrites back to canonical platform
-route state. `frontend-modern/src/routing/resourceLinks.ts` must not keep
-legacy `provider` as a first-class build option once parse-time compatibility
-has converted it back to canonical recovery route state.
-Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
-prefer canonical `platform` / `platforms` response fields over legacy
-`provider` aliases, so unified resource drill-downs and shared recovery links
-carry the same platform vocabulary on both route and payload boundaries.
-That same shared drill-down contract also owns which primary recovery workspace
-an upstream surface is targeting. Infrastructure service links that open
-platform-level recovery activity must emit canonical recovery route state with
-`view=events` inside an owning platform/runtime destination instead of
-inheriting the inventory default, and those entry links should describe the
-destination as recovery events rather than platform-specific backup wording.
+No shared helper serializes recovery drill-down state any more: the
+recovery timeline day, chart range, workspace `view`, inventory `state`,
+`itemType`, and `platform` route-state rules served the deleted aggregate
+Recovery page. The Proxmox Backups tab owns its own day selection through
+`PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
+of `/api/recovery/*` payloads must still prefer canonical `platform` /
+`platforms` response fields over legacy `provider` aliases, which
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites at decode time.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request
@@ -6597,6 +6585,224 @@ full heading. This shared drawer rule applies across resource types. The 390px
 browser qualification checks heading fit and keyboard expansion; no data model,
 authorisation, action dispatch or resource admission contract changes.
 
+### Operator links reach record-ingested resources
+
+Every registry ingest path applies the operator's manual links: snapshot
+ingest, resource ingest and record ingest (`IngestRecords`,
+`IngestRecordsWithStaleThresholds` and the read-state overlay's record pass).
+Either side of a link can arrive only as a supplemental record, such as a
+vSphere or TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host,
+and the monitor's rebuild ingests those records after the snapshot. While only
+snapshot and resource ingest applied links, the rebuilt registry behind the
+websocket broadcast and `/api/state` kept both rows. The resources API, which
+seeds through resource ingest, showed them merged, and so did the published
+inventory whenever an unrelated absent machine made continuity hydration
+clone the registry. Mock mode builds its unified view from fixtures without
+the link store, so links do not reach the mock broadcast; that boundary is
+separate.
+
+- The monitor adapter passes its configured stale thresholds to record
+  ingest, so a link joined there judges each side's metrics the way a
+  snapshot-time link does. Ordinary source merges into an existing row use
+  the same thresholds on every ingest path: snapshot and record ingest hold
+  the caller's thresholds while they run, and `mergeInto` judges each
+  metric's freshness with them through `sourceStaleThreshold`, the rule the
+  stale pass reads. Before this, those merges used the defaults, so a
+  Proxmox node polled every two minutes showed a silent auto-linked agent's
+  readings while the stale pass called the node's poll current, and a
+  supplemental refresh of a linked vSphere VM kept the agent's memory over
+  vSphere's current reading. Outside mock mode the monitor configures only
+  Proxmox, PBS and PMG; mock mode also configures TrueNAS, vSphere and
+  availability. Regression coverage:
+  `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` (rebuild,
+  supplemental refresh, overlay, node with auto-linked agent),
+  `TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds` and
+  `TestMetricMergeFreshnessMatchesTheStalePass`.
+- Continuity records never merge into a link. A saved enrollment only fills
+  an absent machine, so it stays its own row instead of lending its linked
+  guest an offline verdict and an old agent payload. The link still names one
+  identity, so the pass holds the saved row beside the primary
+  (`holdLinkedResourceLocked`): every reference that resolves to the saved
+  row (its canonical ID, `agent:<host ID>`, its machine ID or an alias it
+  shares with the primary) resolves to the primary instead, through
+  `ResolveReferenceID`, `GetByReference` and the alias index, as a
+  reference to a folded resource does. An availability check resolved after
+  the hold, as the resources API replays checks onto its seed, attaches to
+  the primary too; the monitor's read state does not re-resolve checks after
+  continuity, so a check naming the saved agent stays as the published
+  registry left it. Reference lookups by the saved agent's ID (a resource
+  detail read, the agent resource context), operator-state reads and writes
+  through the resources API, Patrol's finding projection and alert intent
+  therefore all reach the guest the agent was folded into before the
+  restart, while each row keeps its own telemetry. Saved rows carry an
+  in-memory marker (`Resource.continuityOnly`) that rides clones, so the
+  resources API, which
+  seeds a registry from the monitor's read state and re-applies the links,
+  holds them too instead of merging the saved agent into the guest; an
+  observation that later merges into the row clears it. A live member never
+  resolves to a saved one: when the saved row is the link's primary (a link
+  made from an agent's page to a resource that is not its guest), both rows
+  answer for themselves until the agent reports and the link folds them, so
+  intent set on the pair under the agent's ID does not reach the live
+  member's references in that window. Holds are recomputed on every link
+  pass; a hold whose primary a later link folds follows the fold, a saved
+  row held under a saved primary follows that primary's hold, and a cycle of
+  saved rows resolves each to itself. Exact reads are untouched: `Get` still
+  returns the saved row, so the saved agent's own drawer reads its own facet
+  bundle and history, while its operator-state section reads and writes the
+  guest's state.
+- Holds cover a link whose two members are both listed. A saved member
+  whose partner an earlier link already folded into a third resource, such
+  as an agent linked into a VM that is itself linked into another resource,
+  is not held: the monitor's published registry folds the VM before
+  continuity adds the agent, so the agent answers for itself until it
+  reports. Live chains already depend on the order their links are stored
+  in, which this does not change.
+- A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
+  an agent chosen as primary over a TrueNAS system still carries the
+  system's facet, and the system's pools re-parent to the merged row.
+- The registry remembers each resource a manual link folded into its
+  primary. A folded resource is still observed, so neither pin-driven nor
+  record-declared succession may succeed its ID: that re-keyed the link onto
+  the primary itself, which split the pair on the next rebuild, and already
+  broke snapshot links whose primary is a machine-keyless agent-type row,
+  such as a Proxmox node.
+- Each side of a link is pinned only from its own identity, captured when
+  the link first joins it in a rebuild (`recordLinkOwnPin`). A side with no
+  pinnable identity (not agent-shaped, or no strong key) writes no pin, and
+  a pinnable folded side keeps its pin under its own canonical ID. The merged
+  primary used to be pinned with both sides' keys, and the store's
+  one-owner-per-key rule then deleted the folded side's pin. A Proxmox node's
+  pin records its qualified endpoint as the hostname, so the node's next
+  rebuild completed the linked agent's machine key from that merged pin,
+  minted the agent's machine-derived ID and merged with the agent by ID
+  before the link applied. With the node as primary, succession then
+  rewrote the link into a self-link on the agent's ID; in either direction,
+  removing the link left the pair merged.
+- A link side rewrites its whole row (`ReplaceResourceIdentityPins`)
+  instead of upserting it. Like an upsert it keeps the stored fields its
+  own pin leaves empty, so evidence from an earlier observation survives a
+  weaker one, but it never keeps a machine, DMI or cluster-and-hostname key
+  another resource holds this rebuild, including a cluster key a kept
+  hostname would complete. That is how a key an earlier release borrowed
+  into the row from the merged identity leaves it; a key a resource reports
+  now also beats one a link side's row only kept, as the store already
+  hands a moved key to the new pin. The store gives each strong key one
+  owner and deletes any other row holding a key a written pin carries, so a
+  folded side drops each own key held by a live non-link resource's
+  upserted row (an upsert cannot drop a field), a live link side's own pin,
+  or a folded side earlier in canonical-ID order. It writes no pin when no
+  strong key is left, or when it would lose the machine or DMI key it
+  reports: a cluster-only row reads as a machine-keyless host's, which
+  cluster-slot succession lets a later machine in that slot absorb. A row kept for a side that writes no pin goes
+  when another written pin carries one of its keys, such as the folded
+  agent's own pin carrying the machine key an earlier release borrowed into
+  a Proxmox node's row. That hand-back only reaches a row the node cannot
+  complete from: while the node's qualified endpoint, or its cluster and
+  name, still resolve to that row, completion supplies the borrowed key
+  before any link applies, so the pair merges by ID and succession rewrites
+  the link into a self-link, as it did before this change. A link side whose
+  row loses a borrowed machine key becomes a machine-keyless row, open to
+  the cluster-slot succession any machine-keyless host gets. Two live resources that share a strong key
+  still take it from each other on alternate rebuilds, as before. Evidence
+  a later record pass of the same rebuild merges into an already-joined row
+  reaches neither side's pin.
+- A folded resource's canonical ID resolves to the primary holding it. The
+  registry indexes the folded IDs named by the merged resource's link fold
+  record (`linkFolds`, `recordManualLinkFold`), which covers IDs folded along
+  a chain of links, both when a link applies and when resource seeding
+  copies the record in. The monitor's rebuild, a registry seeded from its listing (the resources API,
+  which then replays availability checks) and a read-state overlay therefore
+  resolve them alike. The index follows the holding rows, so a holder that a
+  later link merges away or that is re-keyed in place keeps the answer
+  consistent. An availability check configured against an agent later
+  linked into its guest lands on the merged row, as a check configured
+  against the primary would. "A manual link keeps only the primary's own
+  checks" still holds: the merge never carries the folded resource's
+  projected checks; only the check's own reference resolves again.
+  `ResolveReferenceID` and `GetByReference` follow the fold as well, as the
+  folded agent's alert reference (`agent:<host ID>`) already did through the
+  merged row's canonical aliases. Alert intent, operator-state reads and
+  writes through the resources API, Patrol's finding operator-state
+  projection and resource lookups by the folded ID
+  (`GET /api/resources/{id}`) therefore reach the merged row. Patrol
+  resolves a finding's reference through the monitor's current read
+  state before it reads, so a finding raised before the link reads the
+  merged row's maintenance and monitoring mode, not an operator-state
+  row left under the folded ID, whenever that read state folds the
+  agent, or holds the saved agent beside the guest after a restart
+  (above). History does
+  not follow the fold: a history binding persists, and
+  `expandHistoryAliases` walks bindings in both directions, so binding a
+  folded ID would join the two journals for good. Folded IDs are never
+  `SupersededCanonicalIDs`, which alert-configuration and availability-link
+  migrations rewrite permanently; the stored link stays as the operator
+  wrote it. A live row with a folded ID answers for itself. Two rows holding
+  one folded ID resolve to neither, without falling through to weaker
+  matches such as a hostname alias. Folds ride in-memory clones only; a
+  serialized listing loses them, as it loses source parents.
+  `availability_link_test.go` pins both link directions through two
+  rebuilds in all three registries
+  (`TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary`), a chain
+  (`TestAvailabilityLinkFollowsChainedLinkFolds`) and the index cases
+  (`TestLinkFoldIndexFollowsItsHolders`).
+  `TestResourceUnlinkSplitsManuallyLinkedPair` pins the API lookup: the
+  folded agent's ID answers with the VM while linked and with the agent's own
+  row once unlinked.
+  `internal/api/ai_handlers_more_test.go`
+  (`TestPatrolFindingOperatorStateFollowsLinkFoldedReference`) pins the
+  Patrol read against the resources API's write.
+
+`registry_merge_policy_test.go` pins the record links in both directions
+through two rebuilds and the live supplemental refresh, and checks that a
+registry seeded from the monitor's listing through resource ingest, as the
+resources API seeds, lists the same rows
+(`TestManualLinksJoinRecordIngestedResourcesInMonitorRebuild`). The same file
+pins the node case (`TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence`),
+record-declared succession (`TestRecordDeclaredSuccessionSparesALinkFoldedResource`)
+and both payloads (`TestManualLinkKeepsProviderPayloadsThePrimaryLacks`).
+It also pins each side's own pin for a qualified-endpoint node linked to an
+agent, standalone and clustered, in both directions, through three rebuilds
+with no steady-state pin writes and a separate pair once the link is removed
+(`TestManualLinkPinsEachSideFromItsOwnIdentity`), an unclaimed stored field
+kept without a rewrite every rebuild
+(`TestManualLinkSideKeepsAnUnclaimedStoredField`), a shared
+cluster-and-hostname key kept by the live primary while the folded side keeps
+its machine key, and handed to the folded side when the primary's row only
+kept it (`TestManualLinkFoldedSideNeverTakesALiveResourcesKey`), a kept
+hostname refused where it would complete another resource's cluster key
+(`TestManualLinkSideKeepsNoHostnameThatCompletesAHeldClusterKey`), no pin for a
+folded side whose machine key another host holds
+(`TestManualLinkFoldedSideWritesNoPinWithoutItsMachineKey`), a folded side
+re-pinned after the primary's new pin deletes its widened row
+(`TestManualLinkFoldedSideKeepsItsPinWhenAPrimaryClaimsItsWiderRow`), and the
+agent's own pin taking back the machine key an earlier release borrowed into
+a node's row (`TestManualLinkReturnsABorrowedMachineKeyToItsAgent`).
+`store_test.go` (`TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps`) pins
+replace against upsert on both stores.
+`monitor_adapter_read_state_test.go`
+(`TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds`) pins the
+thresholds on the rebuild, supplemental and overlay paths, and
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins the
+published inventory with no continuity, an unrelated absent machine and the
+linked agent's own saved enrollment, and in each case that the read state,
+alert intent and a registry seeded from the read state resolve the agent to
+the guest without merging the saved agent into it.
+`resolve_test.go` pins the hold in the read state and the
+resources-API registry, the fold once the agent reports
+(`TestContinuityAgentLinkedIntoLiveGuestAnswersToTheGuest`), a saved primary
+that leaves the live member its own identity
+(`TestContinuityPrimaryLeavesLiveLinkMemberItsOwnIdentity`), an observation
+merging into a saved row (`TestObservationMergedIntoASavedRowLetsItsLinkFold`)
+and holds through later folds, saved primaries and cycles
+(`TestLinkHoldsFollowTheirPrimaryThroughThePass`); `clone_test.go`
+(`TestCloneResourceKeepsContinuityMarker`) pins the marker riding clones and
+resource seeding.
+`internal/api/resources_link_continuity_test.go`
+(`TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest`) pins the
+resources API's write and Patrol's read on the same store.
+
 ### Provider link network corroboration
 
 An existing reciprocal host/provider link remains authoritative, including a
@@ -6776,3 +6982,155 @@ above the hosts table without its filter toolbar. Nothing renders when
 vCenter reports no signals. The Overview's own model, workload snapshot and
 navigation facets still come from the Overview query; the Health tab keeps
 the filterable table.
+
+### Unlink replaces the pair's operator link
+
+`POST /api/resources/{id}/link` records a `ResourceLink`; unlink and
+report-merge record a `ResourceExclusion`. An operator decides each resource
+pair one way, and the later decision replaces the earlier: the store's
+`AddExclusion` deletes the pair's link rows and `AddLink` deletes its
+exclusion rows, in the same transaction as the write, matching both ID
+orders because canonical-ID succession can store either. Unlink used to add
+only the exclusion. The link row survived, and `applyManualLinks`, which
+never consults exclusions, kept the pair folded in the monitor's rebuilds and
+in the resources API's registry, so the agent facet stayed on the VM and the
+agent row stayed hidden although the API answered "Resources unlinked".
+`GetLinks` and `GetExclusions` return only each pair's latest decision
+(`effectiveManualPairDecisions` in `manual_link_decisions.go`), so a store
+that still holds both rows for a pair, written before this change or
+rewritten onto one pair by succession, reads its later write, and a tie
+reads as apart. Every registry loads its links and exclusions from its store
+when it is constructed, so the monitor's rebuild and the resources API's
+store-backed registry apply one decision with no exclusion check in
+`applyManualLinks`. Unlink keeps the exclusion, so identity matching and
+presentation coalescing also keep a pair apart that would otherwise match
+automatically.
+
+Identity pins honour the exclusion too. While a Proxmox node was linked to a
+standalone agent, the merged resource's pin could record the node's endpoint
+hostname with the agent's machine key. After unlink the node completed that
+key in `completeIdentityFromPins`, minted the agent's machine-derived ID and
+folded into the agent by ID, a path no exclusion check sees, so the pair
+stayed merged with the link row gone. A pin whose canonical ID the operator
+excluded from the ID the record takes without the pin (its `chooseNewID` or
+source-specific ID) now completes nothing. This covers pins already written
+that way, not only new ones. Merges through an agent's own declared node link
+(`resolveLinkedResource`) still ignore exclusions.
+
+The resources API seeds its registry from the monitor's listing, which
+already has the link applied, so it cannot split the pair itself: an unlink
+shows on REST, `/api/state` and the websocket from the monitor's next
+registry rebuild, the same generation in which a new link reaches the
+broadcast. REST applies a new link at once, because its own registry applies
+the store's links on top of the seed. The mock-mode view applies no operator
+links, so in mock mode REST splits a manually linked pair as soon as the
+unlink is recorded. Mock fixtures that identity matching merged stay merged
+on every surface: the fixture graph is built without the store's exclusions.
+
+The websocket broadcast coalesced host views with
+`CoalescePresentationHostResources`, which honours no exclusions, while the
+resources API's `ListForPresentation` honours the registry's, so a host pair
+the operator split could be one broadcast row and two REST rows. The
+broadcast now coalesces through `Monitor.coalesceResourcesForPresentation`,
+which asks the read state that listed the rows for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh). The mock view and other views built from an
+already-unified list sit on a store-less registry, which declines, so the
+resource store's adapter supplies the exclusions instead. Either applies its
+current registry's exclusions through the same `presentationExclusionFilter`
+that `ListForPresentation` uses; a rebuild published between listing the
+rows and coalescing them is judged by the newer generation's exclusions for
+that one broadcast. Both surfaces share one known limit: the filter compares
+the IDs of the rows being merged, so a third same-host fragment that merges
+first can carry an excluded pair into one row.
+
+A write leaves one row for its pair: `AddLink` and `AddExclusion` also delete
+a row of their own kind that succession stored in the other order, and the
+in-memory store replaces a pair's rows on every write and stamps `CreatedAt`
+as SQLite does. Reads keep the newest link per pair, so an older reversed copy
+cannot win with its primary, and drop exclusions older than it; duplicate
+exclusions already stored stay, which changes no decision. A registry resolves its `GetLinks` and `GetExclusions` results
+together in `loadOverrides`, so an unlink committed between the two reads
+cannot load both decisions for one generation. Report-merge undoes a link
+the same way (see "Report-merge splits operator-linked resources" below).
+`TestManualPairDecisionReplacesThePreviousOne` and
+`TestManualPairDecisionReadsResolveStoredConflictsByRecency` pin the store
+rule on SQLite and the in-memory store,
+`TestUnlinkSplitsHostPairWhosePinTookTheOtherSidesKey` links and unlinks
+node and agent pairs (IP and FQDN endpoints, either side primary) through
+three monitor rebuilds per step,
+`TestRegistryResolvesDecisionsAcrossItsTwoReads` loads a link read before an
+unlink and the exclusion read after it,
+`TestResourceUnlinkSplitsManuallyLinkedPair` drives link, unlink and relink
+through the API handlers against a monitor adapter rebuilt twice per step,
+and `TestMonitorAdapterCoalesceForPresentationHonoursExclusions`,
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pin broadcast
+and REST row counts for a split host pair.
+
+### Report-merge splits operator-linked resources
+
+`POST /api/resources/{id}/report-merge` records exclusions for the reported
+sources. For each reported source mapped to the merged resource it excludes
+the merged resource's ID and the candidate ID that source's record takes when
+no match is allowed (`ResourceRegistry.SourceTargets`), as before, which
+keeps an identity match apart. That candidate is derived from the merged
+resource's type, so for a source an operator link brought in it named
+neither side of the link: an agent linked into a VM got a `vm-`
+candidate, and an agent linked with a node or a Docker host keyed by its
+machine ID got a source-specific one. No link row matched, the link stayed
+applied, and the API answered "Merge reported" while the drawer's Split
+dialog toasted "Resource split applied". Two linked agents share their only
+source, so the API refused them as "Resource is not merged"; an applied link
+now marks a merge as well (the drawer still offers Split only for a resource
+listing two sources).
+
+`applyManualLinks` now records each link it applies on the merged resource
+(`recordManualLinkFold`): the link row's own pair, the resource that took the
+other in and the one folded into it, plus the sources the folded side
+brought, including anything links had already folded into it, so every link
+along a chain keeps its own pair. A pair is recorded once, since record
+ingest can recreate a folded side whose source mapping points at a holder of
+another type and fold it again, so a repeated pair adds its sources to the
+fold already recorded (the holder still carries what the earlier fold
+brought). The record is unexported and rides in-memory
+clones, so it reaches the resources API's registry, which seeds from the
+monitor's already-linked listing and never holds the folded row.
+Report-merge excludes the pair of every link whose folded side brought a
+reported source category (`ResourceRegistry.ManualLinkFolds`), and the
+store's one-decision-per-pair rule deletes that link row, so the pair splits
+on every surface from the monitor's next rebuild, as with unlink. The drawer
+reports every merged source. Categories are not attributed to individual
+contributors: naming one that some folded side carried undoes that link even
+where the holder carries it too, and a source that arrived along a chain of
+links undoes every link on its way to the merged resource.
+
+A link joins only the pair its row names. Canonical-ID succession re-keys
+link endpoints with `UPDATE OR IGNORE` but moves `primary_id`
+unconditionally, so a row whose re-key collided with the successor's own row
+kept the retired endpoint and took the successor as its primary.
+`applyManualLinks` honoured that primary and merged the successor through a
+row no exclusion of the merged pair removes, so an unlink or report-merge of
+that pair came back on the next rebuild. A primary that names neither side
+of its row now falls back to the row's first side, which leaves such a row
+inert while the retired ID is gone.
+
+`TestResourceReportMergeSplitsOperatorLinkedPair` links and reports through
+the API handlers against a monitor adapter on the same SQLite store, rebuilt
+three times per step, for VM/agent, node/agent and agent/Docker pairs linked
+from either side and for two linked agents. Every two-source case but a node
+linked from its agent fails with the previous handler, whose candidate for
+that node happened to be the node's own source-specific ID.
+`TestResourceReportMergeSplitsPairBehindASuccessionShadowedRow` reports a
+pair that a shadowed row also named,
+`TestResourceReportMergeSourceFilterSelectsLinks` pins the source filter,
+`TestResourceReportMergeSplitsIdentityMergedPair` keeps an identity-merged
+agent and Docker host apart through the rebuilds,
+`TestManualLinkFoldsNameEachLinkPairAlongAChain` pins a chain's pairs on the
+monitor's registry and on one seeded from its listing, and
+`TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests` folds a TrueNAS
+system into a VM across repeated record ingests, and
+`TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
+sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
+keeps the handler on the registry's fold record.

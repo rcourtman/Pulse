@@ -2699,7 +2699,18 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     ingestion so canonical host IDs stay stable across restarts (see the
     unified-resources contract's durable identity-pin obligation). Rebuild
     paths added to the adapter must keep that persistence step; ephemeral
-    snapshot-bridge adapters stay read-only.
+    snapshot-bridge adapters stay read-only. The rebuild, the live
+    supplemental refresh and the read-state overlay ingest records with the
+    adapter's configured stale thresholds, because record ingest joins
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go` and
+    `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
+    `internal/monitoring/issue1913_host_continuity_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
@@ -5374,6 +5385,42 @@ canonical aliases retain their precedence and ambiguous aliases remain
 unresolved. This avoids cloning a full resource for every policy lookup while
 keeping alert intent tied to the same identity rules as resource reads.
 
+Alert intent resolves references and ancestors through the read state Patrol
+resolves through and the resources API seeds from: the published registry with
+saved hosts that have not reported since a restart overlaid
+(`operatorIntentIdentity`). A saved host exists only there, so against the
+published registry alone its alerts (`agent:<host ID>`) read their literal
+reference after a restart and missed intent set on the host, and, when an
+operator link joins it to a live resource, intent set on the link primary that
+the registry now resolves the saved host to. Alerts resolve under the alert
+manager's lock, once per metric check, so the overlay is kept for the published
+registry generation it was built from. Publication builds it before alert
+evaluation, outside that lock; a lookup that races ahead of publication, or the
+first one after leaving mock mode, builds it under the lock. A generation is
+the registry the adapter publishes and when it last changed
+(`MonitorAdapter.Generation`), since two publications can share a
+`LastRebuiltAt`. A finished build is stored only if that generation is still
+the published one and the mock-mode epoch it started in is current, checked and
+stored inside the mock-mode fence, so a build that overlapped a mode switch is
+discarded. A lookup made while mock mode is on drops the stored overlay; a
+switch to mock and back with no lookup in between keeps it, since it still
+describes the published generation. A saved-host change that arrives without a
+new generation shows on the next one. Mock mode carries no saved hosts: lookups
+then resolve against the published registry as before.
+`monitor_alert_intent_test.go`
+(`TestOperatorIntentIdentityKeepsOneOverlayPerGeneration`,
+`TestOperatorIntentReachesSavedHostAlertsAfterRestart`) pins the reuse, a
+generation sharing or preceding the last one's timestamp, the mock switch, a
+rebuild made from inside an admitted fence call, and an unlinked saved host's
+intent reaching its offline alert.
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins a saved
+agent's offline alert reading maintenance set on the guest it is linked into,
+and `monitor_host_agent_removal_lifecycle_test.go`
+(`TestHostAgentRemovalLifecycleHonorsSavedHostIntentAfterRestart`) pins the
+restarted monitor's own host-offline check raising no alert for a saved host
+the operator marked intentionally offline.
+
 Alert restore precedes resource-store attachment during startup. Once the
 adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
 to reconcile the restored set and refreshes shared alert state if it changed.
@@ -5814,3 +5861,24 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Broadcast host coalescing honours operator splits
+
+The websocket broadcast coalesced top-level host views with
+`CoalescePresentationHostResources`, which applies no merge exclusions, while
+the resources API's `ResourceRegistry.ListForPresentation` applies the
+registry's. A host pair the operator split (unlink or report-merge) could
+therefore be one broadcast row and two REST rows.
+`Monitor.buildBroadcastFrontendStateFromSnapshotWithClock` now calls
+`coalesceResourcesForPresentation`, which asks the view's read state for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh), and otherwise the resource store's adapter: the
+mock-mode view lists through a store-less registry that carries no operator
+decisions. Both surfaces share `presentationExclusionFilter`. Polling, rebuild cadence,
+alert evaluation and the broadcast payload shape are unchanged.
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` compares broadcast
+and REST row counts with and without the split, and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
+listing read state over an older store generation and the store's exclusions
+for a mock-style view.

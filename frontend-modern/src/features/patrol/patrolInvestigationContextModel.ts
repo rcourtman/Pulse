@@ -182,27 +182,6 @@ export interface PatrolRunAssistantHandoff {
   context: AIChatContext;
 }
 
-export interface PatrolConfigurationFailureInput {
-  message: string;
-  code?: string;
-  status?: number;
-  saved?: boolean;
-  details?: Record<string, string>;
-  autonomyLevel?: string;
-  fullModeUnlocked?: boolean;
-  investigationBudget?: number;
-  investigationTimeoutSec?: number;
-  readiness?: {
-    status?: string;
-    cause?: string;
-    summary?: string;
-    provider?: string;
-    model?: string;
-  } | null;
-  runtimeState?: string;
-  blockedReason?: string;
-  blockedCause?: string;
-}
 const MAX_PATROL_RUN_HANDOFF_RESOURCES = 8;
 
 export function buildPatrolInvestigationRecordPresentation(

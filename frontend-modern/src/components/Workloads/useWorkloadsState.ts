@@ -5,7 +5,6 @@ import {
   type RuntimeInventorySourcesResponse,
 } from '@/api/runtimeInventorySources';
 import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
-import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
@@ -28,7 +27,6 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
-  buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   selectVisibleWorkloadInventory,
@@ -105,10 +103,6 @@ export interface WorkloadsSurfaceProps {
   }>;
   resourceSnapshotRefetch?: () => Promise<unknown>;
   statusModeStorageScope?: string;
-  // Default Workloads behavior owns grouped host row drawers inline. Platform
-  // pages with a dedicated host table can disable that drawer so host details
-  // open from the host-owned table instead of the embedded guest table.
-  groupNodeDrawerMode?: 'inline' | 'disabled';
   // When a platform page owns the metric display mode + sparkline range
   // (so the same toggle drives both the page's hosts table and this
   // embedded workloads surface), pass the accessors + change handlers.
@@ -423,9 +417,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     reconnect();
   };
 
-  const getNodeTemperatureThresholds = (node: Node) =>
-    alertsActivation.getMetricThresholds('node', 'temperature', nodeOverrideIdCandidates(node));
-
   createEffect(() => {
     if (!workloadsEnabled() || props.inventorySourcesQuery) return;
     const handle = window.setInterval(() => {
@@ -480,29 +471,14 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const groupLabelBadges = createMemo<Record<string, WorkloadGroupLabelBadge>>(
     () => props.groupLabelBadges ?? {},
   );
-  const summaryGroupScopes = createMemo(() =>
-    buildWorkloadSummaryGroupScopeMap({
-      guests: filteredGuests(),
-      nodes: infrastructureNodes(),
-      groupingMode: groupingMode(),
-      sortComparator: guestSortComparator(),
-      groupLabelBadges: groupLabelBadges(),
-    }),
-  );
 
   const {
-    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,
-    focusedSummaryWorkloadGroupScope,
-    focusedSummaryWorkloadGroupId,
-    hoveredSummaryWorkloadGroupScope,
     hoveredWorkloadId,
     revealedGuestId,
     selectedGuestId,
     setClearSurfaceRootRef,
-    setFocusedWorkloadGroupScope,
-    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
@@ -515,7 +491,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
       resetWorkloadRouteFilters();
     },
     filteredGuests,
-    summaryGroupScopes,
     routeStateEnabled: props.routeStateEnabled,
   });
 
@@ -606,7 +581,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     allGuests,
     inventoryStats,
     isScrollToTopVisible,
-    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     clearPinnedSummaryScope,
     bottomSpacerHeight,
@@ -623,10 +597,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsInfrastructureEmptyState,
     workloadsLoadingState,
     filteredGuests,
-    focusedSummaryWorkloadGroupScope,
-    focusedSummaryWorkloadGroupId,
     getGroupLabel,
-    getNodeTemperatureThresholds,
     groupedGuests,
     groupedWindowing,
     guestMetadata,
@@ -638,7 +609,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     handleTagClick,
     hasInfrastructureSources,
     hostFilterConfig,
-    hoveredSummaryWorkloadGroupScope,
     infrastructureSourceStateReady,
     infrastructureNodes,
     initialDataReceived,
@@ -667,9 +637,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     selectedNode,
     setContainerRuntime,
     setClearSurfaceRootRef,
-    setFocusedWorkloadGroupScope,
     setGroupingMode,
-    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSearch,
     setSelectedCluster,
@@ -725,7 +693,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsNoInventoryState,
     ws,
     groupingMode,
-    groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
     groupLabelBadges,
   } as const;
 }

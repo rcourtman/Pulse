@@ -6988,6 +6988,113 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 }
 
+// presentationFixtureStore keeps the fixture registry: the broadcast's read
+// refresh would otherwise rebuild it from the empty snapshot.
+type presentationFixtureStore struct {
+	*unifiedresources.MonitorAdapter
+}
+
+func (presentationFixtureStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+// A host pair the operator split (unlink or report-merge) must be two
+// broadcast rows exactly when the resources API lists two. The broadcast used
+// to coalesce without the store's exclusions, so the websocket folded the
+// pair the API kept apart.
+func TestBroadcastPresentationCoalesceHonoursMergeExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{
+			ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent:    &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"},
+		},
+		{
+			ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha",
+			Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker:   &unifiedresources.DockerData{Hostname: "alpha"},
+		},
+	}
+	for _, split := range []bool{false, true} {
+		store := unifiedresources.NewMemoryStore()
+		if split {
+			if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		registry := unifiedresources.NewRegistry(store)
+		registry.IngestResources(resources)
+		adapter := unifiedresources.NewMonitorAdapter(registry)
+		m := &Monitor{resourceStore: presentationFixtureStore{adapter}}
+
+		state := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), m.mockModeFence.begin(), func() time.Time { return now })
+		broadcastRows := 0
+		for _, resource := range state.Resources {
+			if resource.Name == "alpha" {
+				broadcastRows++
+			}
+		}
+
+		// The resources API seeds a store-backed registry from the monitor's
+		// listing and presents it through ListForPresentation.
+		rest := unifiedresources.NewRegistry(store)
+		rest.IngestResources(adapter.GetAll())
+		restRows := len(rest.ListForPresentation())
+
+		want := 1
+		if split {
+			want = 2
+		}
+		if broadcastRows != want || restRows != want {
+			t.Fatalf("split=%v: broadcast rows=%d REST rows=%d, want %d on both", split, broadcastRows, restRows, want)
+		}
+	}
+}
+
+// The rows a broadcast coalesces were listed by its view's read state, such as
+// a host-continuity overlay that loaded the store's exclusions afresh, so its
+// exclusions decide even when the resource store's generation predates them.
+func TestBroadcastPresentationCoalescePrefersTheListingReadState(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []unifiedresources.Resource{
+		{ID: "agent-runtime-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent: &unifiedresources.AgentData{AgentID: "agent-alpha", Hostname: "alpha"}},
+		{ID: "agent-docker-alpha", Type: unifiedresources.ResourceTypeAgent, Name: "alpha", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker}, Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker: &unifiedresources.DockerData{Hostname: "alpha"}},
+	}
+	store := unifiedresources.NewMemoryStore()
+	base := unifiedresources.NewRegistry(store)
+	base.IngestResources(resources)
+	m := &Monitor{resourceStore: unifiedresources.NewMonitorAdapter(base)}
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: "agent-runtime-alpha", ResourceB: "agent-docker-alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	overlay := unifiedresources.NewRegistry(store)
+	overlay.IngestResources(resources)
+	listing := unifiedresources.NewMonitorAdapter(overlay)
+	if got := len(m.coalesceResourcesForPresentation(listing, listing.GetAll())); got != 2 {
+		t.Fatalf("coalesced %d rows with the listing's exclusion, want 2", got)
+	}
+	if got := len(m.coalesceResourcesForPresentation(nil, listing.GetAll())); got != 1 {
+		t.Fatalf("without a listing read state the store generation decides: %d rows, want 1", got)
+	}
+
+	// The mock view lists through a store-less registry, which carries no
+	// operator decisions, so the resource store's adapter supplies them.
+	mockView := monitorUnifiedStateViewFromResources(resources, now)
+	withSplit := &Monitor{resourceStore: listing}
+	if got := len(withSplit.coalesceResourcesForPresentation(mockView.readState, mockView.resources)); got != 2 {
+		t.Fatalf("mock-style view coalesced %d rows, want the store's split to keep 2", got)
+	}
+}
+
 // A host agent linked to a Proxmox node merges into one read-state row that
 // every PVE poll keeps online and fresh. Once the agent stops reporting, its
 // retained filesystem summary must stop standing in for the node's disk (and

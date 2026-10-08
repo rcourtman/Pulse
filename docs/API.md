@@ -836,9 +836,12 @@ delivery for all resources.
 - `GET /api/admin/reports/catalog` (admin, `settings:read`)
   - Returns the canonical reporting catalog for the settings surface, including locked-state teaser copy, enabled-surface guidance copy, performance-report options, canonical single-report filename subject, canonical fallback filename date style, and the nested VM inventory export definition.
   - Metadata route: readable without the `advanced_reporting` feature so locked admin surfaces can render the same reporting definition before upsell.
-- `GET /api/admin/reports/generate` (admin, `settings:read`)
-  - Query params: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
+- `POST /api/admin/reports/generate` (admin, `settings:read`)
+  - Body fields: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default title for that resource report.
+  - When Pulse Assistant is configured, the configured AI provider narrates a PDF's executive summary; each narration counts against the AI budget and appears in AI usage. If the call fails, times out or the budget is spent, the PDF falls back to the deterministic summary. CSV output is never narrated. The settings UI uses this method.
+- `GET /api/admin/reports/generate` (admin, `settings:read`)
+  - Takes the same fields as query params and returns the same report, except that it never calls an AI provider: a PDF carries the deterministic summary and a note saying AI narration needs `POST`. Other methods return `405` with `Allow: GET, POST`.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default fleet report title.
@@ -851,8 +854,8 @@ Validation and limits:
 - Malformed `start`/`end` values, `end` not strictly after `start`, or report windows over 366 days return `400 invalid_time_range`.
 - `metricType` must match `[a-zA-Z0-9._:-]+` and be <= 64 chars, otherwise `400 invalid_metric_type`.
 - `title` must be <= 256 chars, otherwise `400 invalid_title`.
-- Multi-report body max size is 1MB; oversized payloads return `400 body_too_large`.
-- Multi-report bodies reject trailing payload and unknown JSON fields with `400 invalid_body`.
+- Report body max size is 1MB; oversized payloads return `400 body_too_large`.
+- Report bodies reject trailing payload and unknown JSON fields with `400 invalid_body`.
 - VM inventory export only accepts `csv`.
 
 Common reporting error codes:

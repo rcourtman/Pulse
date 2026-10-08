@@ -126,6 +126,8 @@ vi.mock('@/components/shared/workloadTypeBadges', () => ({
 }));
 
 vi.mock('../workloadTopology', () => ({
+  getWorkloadAlertPolicyTags: (guest: WorkloadGuest) =>
+    Array.isArray(guest.tags) ? guest.tags : [],
   getWorkloadAlertResourceIdCandidates: (guest: WorkloadGuest) => [guest.id],
   getWorkloadAlertThresholdScope: (guest: WorkloadGuest) =>
     guest.workloadType === 'app-container' ? 'docker' : 'guest',

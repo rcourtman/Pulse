@@ -329,13 +329,14 @@ or historical proof/counting for resolved-only work.
    shared parent node, or explicit correlated finding IDs. Grouping must not
    infer causality from title or description prose, and the queue's affected
    resource count must continue to count canonical resources rather than
-   visual groups. Because a
-   contextual Assistant handoff from that workflow is still a first-party Patrol
-   starter for the same governed journey, it must record content-free workflow
-   prompt activity through the shared marker route with the `pulse_patrol`
-   surface before the drawer opens; it must not include finding IDs, prompt
-   text, resource context, model output, or direct-action payloads in that
-   marker.
+   visual groups. A contextual Assistant handoff from that workflow opens
+   through `frontend-modern/src/components/AI/FindingsPanel.tsx` and records no
+   workflow starter today, so the first-party `pulse_patrol` marker has no
+   browser producer. If that handoff starts recording one, it must write
+   content-free workflow prompt activity through the shared marker route with
+   the `pulse_patrol` surface before the drawer opens, with no finding IDs,
+   prompt text, resource context, model output, or direct-action payloads in
+   that marker.
    A compact Patrol work-group row may appear above the list only when it adds
    cross-source current-work grouping that the row title alone cannot express:
    pending approvals, failed governed actions, a failed/latest Patrol check,
@@ -471,8 +472,11 @@ or historical proof/counting for resolved-only work.
    compact progress label must describe current work state (`ready`, `needs
 attention`, `approval needed`, `outcome verified`, `no active work`) instead
    of repeating the selected mode; the Patrol mode selector/header
-   owns current-mode copy, and local Patrol state must expose work evidence as
+   owns current-mode copy, and any local Patrol work evidence must be
    Patrol-owned issue/work counts rather than legacy proof counts.
+   No Patrol surface reads issue-evidence, governed-action decision, or
+   verified-outcome counts today, so `usePatrolIntelligenceState.ts` computes
+   none of them.
    When no active finding or pending approval remains, terminal verified or
    rejected outcomes must read as history behind a `no active work` current
    state; current-state copy must not ask operators to reconcile old approved
@@ -771,12 +775,12 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    only block the selected run view while the run references finding ids that
    still need the direct Patrol findings payload.
    Patrol page refresh state must also separate background data loads from the
-   operator-clicked Update status action: slow or stalled supporting
-   intelligence reads may continue in the background, but they must not make the
-   shared header action spin or stay disabled once Patrol findings and status
-   remain visible. The header action is a status/history sync affordance; it
-   must not read like another Patrol run or imply that it changes
-   infrastructure.
+   operator-clicked Retry on the stale-data banner: background polls hold no
+   busy state, and slow or stalled supporting intelligence reads may continue
+   in the background, but they must not make Retry spin or stay disabled once
+   Patrol findings and status remain visible. Retry is a status/history sync
+   affordance; it must not read like another Patrol run or imply that it
+   changes infrastructure.
    Patrol trigger-status copy in the default header and activity strip must stay
    actionable. Runtime policy pauses for alert/anomaly-triggered background
    checks, such as the local development safety guard, may explain a blocked
@@ -986,7 +990,7 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    answer. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
-   bounded action reference, and request-local approval-required posture stay in
+   bounded action reference, and drawer approval-required disclosure stay in
    sync. The model-only context may include
    current finding status, recurrence, investigation record facts, evidence,
    verification, approval state, dry-run posture, existing action artifact
@@ -997,8 +1001,8 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe
    summary/count metadata as review context, attach the target resource
    reference, include bounded `handoff_actions` for live approvals or structured
-   action artifacts when present, force the request-local approval-required mode,
-   attach the Patrol-owned visible drawer briefing for the pending approval or
+   action artifacts when present, mark the drawer's approval-required
+   disclosure, attach the Patrol-owned visible drawer briefing for the pending approval or
    queued-fix recovery state, and never paste the approval command or
    action command text into the chat prompt. Existing remediation-plan or
    action-plan artifacts follow the same boundary: plan status, risk, and
@@ -1006,11 +1010,12 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    the LLM to critique, but visible handoffs must not render Patrol step lists
    or suggested prompt chips, and command or rollback command text stays in the
    governed remediation or approval surface. Generic finding
-   discussion handoffs must also force request-local approval-required mode for
-   any non-empty Patrol `finding_id`, including context-only findings and
-   findings that reference a live approval, action artifact, fix outcome, or
-   remediation plan, so default autonomous Assistant settings cannot bypass the
-   Patrol action-governance boundary. The assembled handoff must still pass
+   discussion handoffs for any non-empty Patrol `finding_id`, including
+   context-only findings and findings that reference a live approval, action
+   artifact, fix outcome, or remediation plan, run in the approval-required
+   mode `/api/ai/chat` sets server-side for every request; the browser sends no
+   execution-mode field, so default autonomous Assistant settings cannot bypass
+   the Patrol action-governance boundary. The assembled handoff must still pass
    through the Assistant runtime's resource-policy sanitizer before prompt
    injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
@@ -1190,8 +1195,9 @@ fix`, or `Explain` based on current finding state), while secondary
    the model-only run context: it resolves the run ID from Patrol history,
    rebuilds bounded run facts, scoped resource references, sanitized analysis,
    and classified failure detail server-side, and rehydrates the same context
-   from stored metadata on follow-up turns. It must force request-local
-   approval-required mode, present a source-named visible drawer briefing, and
+   from stored metadata on follow-up turns. The exchange runs in the
+   server-set approval-required mode; the handoff must present a source-named
+   visible drawer briefing and
    frame Assistant as explanation and next-step review rather than execution or
    automatic retry authority.
 9. Keep the normal Patrol status summary plain and operator-first rather
@@ -1581,17 +1587,18 @@ suppress stale healthy summary headlines such as `Health A · 100/100` even if
 the last summary payload still looks healthy. Legacy `/ai` entry points must
 redirect into that same Patrol-owned shell rather than preserving a second
 canonical route.
-That same browser proof now covers the Patrol control and advanced-settings
-split. The advanced Patrol settings drawer must stay within the desktop
-viewport, avoid duplicating the inline Patrol control policy, expose
-provider/model, schedule, trigger, and user-level model checks directly, and surface
-the backend's concrete license/validation reason when a settings change is
-rejected instead of replacing it with a generic `Failed to save advanced
-settings` toast. That inline failure no longer
-opens Assistant. If it does again, the handoff is model-only explanation
-context: raw command, script, credential, and provider-detail payloads stay
-redacted, Assistant opens with `autonomousMode:false`, and the Patrol control
-panel closes so the operator is not left behind an overlapping popover.
+That same browser proof now covers where Patrol settings are saved. The
+Patrol page has no settings drawer or popover: Patrol schedule, triggers, and
+the Patrol model override live on Settings > Pulse Intelligence > Patrol
+(`Save Patrol settings`), and providers and the shared default model on
+Settings > Provider & Models. A rejected save there raises an error
+notification carrying the backend's concrete license/validation reason
+instead of generic fallback copy, and it offers no Assistant handoff. If a
+Patrol settings popover or an Assistant handoff from a settings failure
+returns, the handoff is model-only explanation context: raw command, script,
+credential, and provider-detail payloads stay redacted, Assistant opens with
+`autonomousMode:false`, and the popover closes so the operator is not left
+behind it.
 Patrol-control save-failure sessions saved by earlier builds keep the
 compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
 runtime-failure boolean needed for drawer/session presentation, so they restore
@@ -1626,27 +1633,32 @@ after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must
 return the structured readiness reason if a stale UI still submits, and
 scheduled or scoped alert/anomaly runs must skip before calling the model while
-preserving the blocked reason and cause in Patrol status. The Patrol
-control state owner must also clamp stale investigation/remediation
-autonomy back to findings-only `monitor` and clear stale full-mode unlock state
-before persisting Patrol control when the safe-remediation entitlement is not
-effective, so an expired or downgraded plan cannot turn a recoverable control
-review into a Pro-only save failure. Patrol renders no inline error
+preserving the blocked reason and cause in Patrol status. When the
+safe-remediation entitlement is not effective, the Patrol header must present
+findings-only `monitor` as the effective mode and the Patrol control state
+owner must refuse any investigation/remediation level when a save starts;
+the `monitor` save it does send is accepted without the entitlement, and the
+API clears stale full-mode unlock and Autopilot activation state on it, so an
+expired or downgraded plan cannot turn a recoverable control review into a
+Pro-only save failure. Patrol renders no inline error
 surface for these failures today: switching Patrol on or off while it is not
 ready raises a fixed warning notification, a failed Patrol mode save raises an error
 notification, and neither offers an Assistant handoff. A provider or model save
 in Settings > Provider & Models reports the readiness summary, provider and
 model in its own save message.
-The Patrol mode selector in that header and configuration dialog must
-compose the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx`
-instead of rebuilding a local active-button group. The wide default Patrol
-header uses the segmented layout; the constrained configuration dialog may use
-the shared prominent layout so all four mode labels remain readable without
-inventing a Patrol-local selector. Patrol owns the default visible four-level
+The Patrol mode selector in that header must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` instead of
+rebuilding a local active-button group. When the header shows Patrol mode
+options, it renders the selector in the segmented layout inside its `Mode and
+automation` disclosure; a constrained surface that hosts it may use the shared
+prominent layout so all four mode labels remain readable without inventing a
+Patrol-local selector. Patrol owns the default visible four-level
 policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
 `Autopilot`), entitlement locks, and the rule that choosing the highest
-Autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
-acknowledgement. The shared primitive owns pressed-state semantics,
+Autopilot level opens the acknowledgement dialog and saves `full` only with a
+recorded `acknowledgement_id` (the API derives the compatibility
+`full_mode_unlocked` value itself), while saving any lower level lets the API
+clear the Autopilot activation. The shared primitive owns pressed-state semantics,
 disabled-option behavior, and active/inactive selector styling.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
@@ -2189,10 +2201,13 @@ requester identity as safe metadata, without copying the approval command
 payload into Assistant.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
-repeating the individual summary, findings, circuit-breaker, and approval
-fetches inline. Neither that bundle nor the Patrol refresh path fetches the
-global learned-correlation list: the Patrol page renders no correlations, so
-the store holds no copy of that list.
+repeating the individual summary, findings, and approval fetches inline.
+Neither that bundle nor the Patrol refresh path fetches the global
+learned-correlation list: the Patrol page renders no correlations, so
+the store holds no copy of that list. Nor do they fetch the provider
+circuit-breaker status: an open breaker already reaches the page as the
+`circuit_open` Patrol runtime block on `/api/ai/patrol/status`, so the store
+holds no separate breaker state.
 The shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
