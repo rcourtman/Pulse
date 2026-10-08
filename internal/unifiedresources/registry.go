@@ -3351,7 +3351,8 @@ func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*M
 			!physicalDiskMatchScopeCompatible(existing, &incoming) {
 			continue
 		}
-		if rr.isExcluded(candidate.ID, candidateID) {
+		if rr.isExcluded(candidate.ID, candidateID) ||
+			(incoming.Type == ResourceTypePhysicalDisk && rr.physicalDiskSplitLocked(existing, &incoming, candidateID)) {
 			excludedMatch = true
 			continue
 		}
@@ -3437,7 +3438,10 @@ func physicalDiskTypeIs(disk *Resource, diskType string) bool {
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
 	if resource.Type == ResourceTypePhysicalDisk &&
 		(source == SourceAgent || source == SourceProxmox) {
-		if linked := rr.resolveLinkedPhysicalDisk(source, resource); linked != "" {
+		// An operator split of the one match refuses the join; it never
+		// makes another candidate unique.
+		if linked := rr.resolveLinkedPhysicalDisk(source, resource); linked != "" &&
+			!rr.physicalDiskSplitLocked(rr.resources[linked], &resource, rr.sourceSpecificID(resource.Type, source, sourceID)) {
 			return linked
 		}
 	}
@@ -3541,6 +3545,39 @@ func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incomin
 		matchID = resourceID
 	}
 	return matchID
+}
+
+// physicalDiskSplitLocked reports whether an operator split (exclusion)
+// separates a disk observation, named by its source-specific candidate ID,
+// from an existing disk. The exclusion may name any ID the joined disk could
+// hold: the existing disk's current ID, or the unscoped hardware-keyed ID or
+// machine-scoped ID either disk's identity mints. So a split survives a
+// re-key, and an existing disk that reports no hardware identity this time
+// (an agent disk in standby) stays apart from an observation still carrying
+// the identity the split named. Report-merge records the merged disk's ID
+// against each source's candidate, and the registry ingests agent disks
+// before Proxmox disks, so the agent's row holds the merged ID and the
+// Proxmox observation is the one the split names.
+func (rr *ResourceRegistry) physicalDiskSplitLocked(existing, incoming *Resource, candidateID string) bool {
+	if existing == nil || candidateID == "" || len(rr.exclusions) == 0 {
+		return false
+	}
+	if rr.isExcluded(existing.ID, candidateID) {
+		return true
+	}
+	for _, disk := range []*Resource{existing, incoming} {
+		if disk == nil {
+			continue
+		}
+		if key := physicalDiskHardwareKey(disk.Identity); key != "" &&
+			rr.isExcluded(buildHashID(ResourceTypePhysicalDisk, key), candidateID) {
+			return true
+		}
+		if rr.isExcluded(rr.physicalDiskScopedIDLocked(disk), candidateID) {
+			return true
+		}
+	}
+	return false
 }
 
 // A kernel path identifies a direct device only within its already-correlated
@@ -5677,8 +5714,7 @@ func (rr *ResourceRegistry) physicalDiskIDForMachineLocked(id, candidateID strin
 		if rr.physicalDiskMachinesConflictLocked(sibling, incoming, source) {
 			continue
 		}
-		if rr.isExcluded(sibling.ID, candidateID) || rr.isExcluded(id, candidateID) ||
-			rr.isExcluded(rr.physicalDiskScopedIDLocked(sibling), candidateID) {
+		if rr.physicalDiskSplitLocked(sibling, incoming, candidateID) {
 			excluded = true
 			continue
 		}
