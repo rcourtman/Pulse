@@ -37,14 +37,35 @@ by itself, and a missing candidate does not prove the gateway is unavailable.
 Only scan networks you administer and intend to scan. Do not broaden a scan or
 repeat discovery merely to diagnose missing statistics.
 
-### Collection scope is not a no-request guarantee
+### Collection scope and older releases
 
 The connection form offers **Mail statistics & trends**, **Queue health
 insights**, **Quarantine totals** and **Domain-level statistics**. Domain
-statistics are off by default for a new connection. Do not use the individual
-scope switches as a privacy or no-request boundary: mail, queue and quarantine
-requests can still run with their options off. A saved checkbox or an absent
-chart is not evidence that those requests stopped.
+statistics are off by default for a new connection. In current development
+source, the saved switches control these subsequent ordinary poll requests:
+
+| Saved option | Reads it controls |
+| --- | --- |
+| Mail statistics & trends | Mail statistics, hourly mail counts and spam-score distribution. |
+| Queue health insights | Each collected cluster node's queue status. |
+| Quarantine totals | Both spam and virus quarantine counts. |
+| Domain-level statistics | Relay-domain inventory and domain statistics. |
+
+Saving all four options off preserves that choice when settings are reopened.
+An older connection with no recorded scope keeps the legacy mail-statistics
+default until its collection scope is explicitly saved; all-zero legacy settings
+cannot distinguish an old opt-out from an unset default. Version, cluster and
+configuration-backup reads are independent of these four switches: all four off
+does not mean no PMG requests. Edits apply to the next poll, not requests already
+in flight. Disabling collection removes coverage; it does not dismiss an
+existing alert or establish recovery.
+
+**Published v6.5.0 does not contain this scope correction.** In that version,
+mail, queue and quarantine requests can still run with their options off;
+domain statistics alone follow their switch. Do not rely on those three
+switches as a privacy boundary in v6.5.0, or assume development-source behaviour
+is present in an installed release. An absent chart is not evidence that
+requests stopped.
 
 If PMG collection must stop, pause the **PMG connection** in
 **Settings → Infrastructure**, rather than deleting it or only disabling
@@ -76,6 +97,13 @@ display as zero or an empty section. A recent overall update time, a green
 badge or one populated panel does not prove that every dataset was read. Compare
 the affected value and observation window with PMG's own existing view before
 acting on an apparent empty queue or quarantine.
+
+Current development source records downstream read failures as incomplete
+collection while retaining the successful version connection. Missing readings
+do not become observed zero totals or resolve their metric alerts. Partial
+queue data can still raise the highest configured severity, but cannot clear
+or downgrade an existing alert; quarantine recovery requires both categories.
+These collector safeguards do not make every empty display a verified zero.
 
 ## Alerts
 
