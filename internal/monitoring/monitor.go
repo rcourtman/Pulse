@@ -4479,7 +4479,9 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 	if metricsTargetResolver == nil {
 		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
 	}
-	broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources)
+	// Coalescing picks each merged metric's source by freshness, judged by
+	// the thresholds the view's own registry judged its sightings by.
+	broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources, unifiedView.staleThresholds)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
@@ -4505,7 +4507,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 // presentationCoalescingResourceStore is implemented by resource stores whose
 // registry can hold the operator's merge exclusions (MonitorAdapter).
 type presentationCoalescingResourceStore interface {
-	CoalesceForPresentation(resources []unifiedresources.Resource) ([]unifiedresources.Resource, bool)
+	CoalesceForPresentation(resources []unifiedresources.Resource, thresholds map[unifiedresources.DataSource]time.Duration) ([]unifiedresources.Resource, bool)
 }
 
 // coalesceResourcesForPresentation applies the presentation host coalesce with
@@ -4515,10 +4517,16 @@ type presentationCoalescingResourceStore interface {
 // the rows supplies them when its registry is store-backed, as the resource
 // store's adapter and a host-continuity overlay are; the mock view and other
 // views built from an unified list carry none, so the resource store's
-// adapter supplies them instead.
-func (m *Monitor) coalesceResourcesForPresentation(readState unifiedresources.ReadState, resources []unifiedresources.Resource) []unifiedresources.Resource {
+// adapter supplies them instead. staleThresholds are those the listing's
+// registry generation judged its sightings by; the coalesce judges each
+// merged metric's freshness by them.
+func (m *Monitor) coalesceResourcesForPresentation(
+	readState unifiedresources.ReadState,
+	resources []unifiedresources.Resource,
+	staleThresholds map[unifiedresources.DataSource]time.Duration,
+) []unifiedresources.Resource {
 	if coalescer, ok := readState.(presentationCoalescingResourceStore); ok {
-		if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+		if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {
 			return coalesced
 		}
 	}
@@ -4527,12 +4535,12 @@ func (m *Monitor) coalesceResourcesForPresentation(readState unifiedresources.Re
 		store := m.resourceStore
 		m.mu.RUnlock()
 		if coalescer, ok := store.(presentationCoalescingResourceStore); ok {
-			if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+			if coalesced, ok := coalescer.CoalesceForPresentation(resources, staleThresholds); ok {
 				return coalesced
 			}
 		}
 	}
-	return unifiedresources.CoalescePresentationHostResources(resources)
+	return unifiedresources.CoalescePresentationHostResourcesWithStaleThresholds(resources, staleThresholds)
 }
 
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without
@@ -5086,6 +5094,9 @@ type monitorUnifiedStateView struct {
 	readState      unifiedresources.ReadState
 	freshness      time.Time
 	metricsTargets MetricsTargetResourceStore
+	// staleThresholds are those the listed resources' registry generation
+	// was judged by; nil means the registry defaults.
+	staleThresholds map[unifiedresources.DataSource]time.Duration
 }
 
 type unifiedResourceReadStateLister interface {
@@ -5155,9 +5166,10 @@ func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifi
 		return view
 	}
 
-	resources, targets := unifiedProjectionResources(lister)
+	resources, targets, thresholds := unifiedProjectionResourcesWithStaleThresholds(lister)
 	view.resources = resources
 	view.metricsTargets = targets
+	view.staleThresholds = thresholds
 	if view.freshness.IsZero() {
 		view.freshness = latestUnifiedResourceLastSeen(resources)
 	}
@@ -5263,11 +5275,11 @@ func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State)
 // associated freshness marker. In mock mode it returns the shared mock
 // unified-resource fixture graph rather than the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
-	view := m.currentUnifiedStateView()
 	// REST /api/resources seeds its registry from this snapshot. Apply the
 	// same user-metadata hydration (container customUrl) as the websocket
 	// broadcast path, so the two payload shapes cannot drift.
-	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness
+	resources, freshness, _ := m.UnifiedResourceSnapshotWithStaleThresholds()
+	return resources, freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the

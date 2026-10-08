@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -78,6 +79,25 @@ func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string
 	}
 
 	return monitor.UnifiedResourceSnapshot()
+}
+
+// The resources API reads both seeds-with-thresholds through optional
+// interface checks, so a signature drift would silently restore the registry
+// defaults.
+var (
+	_ resourceapi.UnifiedResourceSnapshotWithStaleThresholdsProvider       = (*monitoring.Monitor)(nil)
+	_ resourceapi.TenantUnifiedResourceSnapshotWithStaleThresholdsProvider = (*MultiTenantStateProvider)(nil)
+)
+
+// UnifiedResourceSnapshotWithStaleThresholdsForTenant returns a tenant's
+// unified-resource seed with the stale thresholds its registry judged it by,
+// read from one monitor in one call.
+func (p *MultiTenantStateProvider) UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID string) ([]unifiedresources.Resource, time.Time, map[unifiedresources.DataSource]time.Duration) {
+	monitor := p.monitorForTenant(orgID)
+	if monitor == nil {
+		return nil, time.Time{}, nil
+	}
+	return monitor.UnifiedResourceSnapshotWithStaleThresholds()
 }
 
 // ResourceHealthAlertsForTenant returns only the minimal alert facts needed by

@@ -41,14 +41,15 @@ func (rr *ResourceRegistry) presentationExclusionFilter() func(left, right Resou
 // listed from this adapter's current registry generation, honouring the
 // operator's merge exclusions through the same filter that
 // ResourceRegistry.ListForPresentation uses, so the websocket broadcast keeps
-// a pair the operator split apart as the resources API does. It reports
-// false, leaving resources untouched, when the registry has no store and so
-// carries no operator decisions: the mock view and other read states built
-// from an already-unified list.
-func (a *MonitorAdapter) CoalesceForPresentation(resources []Resource) ([]Resource, bool) {
+// a pair the operator split apart as the resources API does. Metric
+// freshness is judged by thresholds: those the listing's registry generation
+// judged its sightings by. It reports false, leaving resources untouched,
+// when the registry has no store and so carries no operator decisions: the
+// mock view and other read states built from an already-unified list.
+func (a *MonitorAdapter) CoalesceForPresentation(resources []Resource, thresholds map[DataSource]time.Duration) ([]Resource, bool) {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
 		return resources, false
 	}
-	return CoalescePresentationHostResourcesWithExclusions(resources, registry.presentationExclusionFilter()), true
+	return coalescePresentationHostResources(resources, registry.presentationExclusionFilter(), thresholds), true
 }

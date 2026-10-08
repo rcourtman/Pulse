@@ -179,6 +179,12 @@ type ResourceRegistry struct {
 	// stale pass do. nil outside an ingest and for callers without
 	// thresholds, where all three use the defaults.
 	ingestStaleThresholds map[DataSource]time.Duration
+
+	// staleThresholds are the freshness thresholds of the monitor whose
+	// resources this registry holds, fixed at construction. An ingest or
+	// stale pass without thresholds of its own and the presentation listing
+	// judge sightings by them; nil means the defaults.
+	staleThresholds map[DataSource]time.Duration
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -217,6 +223,13 @@ func (rr *ResourceRegistry) ensureCanonicalMetadataLocked() {
 
 // NewRegistry creates a new registry using the provided store for overrides.
 func NewRegistry(store ResourceStore) *ResourceRegistry {
+	return NewRegistryWithStaleThresholds(store, nil)
+}
+
+// NewRegistryWithStaleThresholds creates a registry that judges source
+// freshness by the given thresholds wherever a caller passes none, for a
+// registry rebuilt from a monitor's resources, such as the resources API's.
+func NewRegistryWithStaleThresholds(store ResourceStore, thresholds map[DataSource]time.Duration) *ResourceRegistry {
 	rr := &ResourceRegistry{
 		resources:              make(map[string]*Resource),
 		bySource:               make(map[DataSource]map[string]string),
@@ -224,6 +237,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 		store:                  store,
 		exclusions:             make(map[string]time.Time),
 		canonicalMetadataDirty: true,
+		staleThresholds:        cloneStaleThresholds(thresholds),
 	}
 
 	rr.bySource[SourceProxmox] = make(map[string]string)
@@ -280,6 +294,7 @@ func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.St
 }
 
 func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	thresholds = rr.thresholdsOrOwn(thresholds)
 	rr.mu.Lock()
 	rr.ingestStaleThresholds = thresholds
 	rr.mu.Unlock()
@@ -663,6 +678,7 @@ func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, 
 }
 
 func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
+	thresholds = rr.thresholdsOrOwn(thresholds)
 	rr.mu.Lock()
 	rr.ingestStaleThresholds = thresholds
 	rr.mu.Unlock()
@@ -921,6 +937,7 @@ func (rr *ResourceRegistry) IngestResourcesWithStaleThresholds(resources []Resou
 }
 
 func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map[DataSource]time.Duration) {
+	thresholds = rr.thresholdsOrOwn(thresholds)
 	seededIDs := make([]string, 0, len(resources))
 	for _, incoming := range resources {
 		resource := cloneResourcePtr(&incoming)
@@ -1508,10 +1525,11 @@ func (rr *ResourceRegistry) listMaterialized(withTargets bool) ([]Resource, map[
 
 // ListForPresentation returns resources in the canonical API/broadcast
 // presentation shape, including top-level host coalescing that respects manual
-// merge exclusions.
+// merge exclusions and judges source freshness by the thresholds the registry
+// was constructed with (not those an individual ingest passed).
 func (rr *ResourceRegistry) ListForPresentation() []Resource {
 	resources := rr.List()
-	return CoalescePresentationHostResourcesWithExclusions(resources, rr.presentationExclusionFilter())
+	return coalescePresentationHostResources(resources, rr.presentationExclusionFilter(), rr.staleThresholds)
 }
 
 // ListByType returns all resources of the provided type.
@@ -1870,11 +1888,20 @@ func (rr *ResourceRegistry) Stats() ResourceStats {
 }
 
 // MarkStale marks sources as stale based on last seen timestamps.
-// If thresholds is nil, default thresholds are used.
+// If thresholds is nil, the registry's own thresholds are used.
 func (rr *ResourceRegistry) MarkStale(now time.Time, thresholds map[DataSource]time.Duration) {
+	thresholds = rr.thresholdsOrOwn(thresholds)
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	rr.markStaleLocked(now, thresholds)
+}
+
+// thresholdsOrOwn returns a caller's thresholds, else the registry's own.
+func (rr *ResourceRegistry) thresholdsOrOwn(thresholds map[DataSource]time.Duration) map[DataSource]time.Duration {
+	if thresholds != nil {
+		return thresholds
+	}
+	return rr.staleThresholds
 }
 
 // sourceSightingStatus derives the per-source delivery status from the last

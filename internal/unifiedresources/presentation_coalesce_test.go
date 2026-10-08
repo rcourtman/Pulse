@@ -390,7 +390,7 @@ func TestMonitorAdapterCoalesceForPresentationHonoursExclusions(t *testing.T) {
 		if split {
 			want = 2
 		}
-		rows, ok := adapter.CoalesceForPresentation(adapter.GetAll())
+		rows, ok := adapter.CoalesceForPresentation(adapter.GetAll(), nil)
 		if !ok || len(rows) != want {
 			t.Fatalf("split=%v: adapter coalesced %d rows (ok=%v), want %d", split, len(rows), ok, want)
 		}
@@ -403,7 +403,7 @@ func TestMonitorAdapterCoalesceForPresentationHonoursExclusions(t *testing.T) {
 	// rather than coalescing as if none existed.
 	storeless := NewRegistry(nil)
 	storeless.IngestResources(resources)
-	if _, ok := NewMonitorAdapter(storeless).CoalesceForPresentation(resources); ok {
+	if _, ok := NewMonitorAdapter(storeless).CoalesceForPresentation(resources, nil); ok {
 		t.Fatal("a store-less adapter claimed to carry operator decisions")
 	}
 }
