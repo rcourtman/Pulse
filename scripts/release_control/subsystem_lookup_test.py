@@ -10,12 +10,6 @@ from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 from subsystem_lookup import lookup_paths, normalize_input_path, parse_args, render_pretty
 
 
-RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-    "tests/integration/tests/17-recovery-layout.spec.ts",
-]
-
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/api/__tests__/patrolAttention.test.ts",
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
