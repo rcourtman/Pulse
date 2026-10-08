@@ -4,17 +4,23 @@ import "time"
 
 // presentationExclusionFilter reports whether the presentation host coalesce
 // must keep two resources apart because the operator split the pair (unlink
-// or report-merge). It reads a copy of the registry's exclusions, so callers
-// coalesce without holding the registry lock; nil means no pair is excluded.
+// or report-merge): an exclusion names the two rows, or they are a Proxmox
+// node and an agent split across the IDs they can hold (nodeAgentSplit). It
+// reads a copy of the registry's decisions, so callers coalesce without
+// holding the registry lock; nil means no pair is excluded.
 func (rr *ResourceRegistry) presentationExclusionFilter() func(left, right Resource) bool {
 	rr.mu.RLock()
 	if len(rr.exclusions) == 0 {
 		rr.mu.RUnlock()
 		return nil
 	}
-	exclusions := make(map[string]struct{}, len(rr.exclusions))
-	for key := range rr.exclusions {
-		exclusions[key] = struct{}{}
+	// The link index is built once per registry and never written again.
+	decisions := operatorPairDecisions{
+		exclusions: make(map[string]time.Time, len(rr.exclusions)),
+		linksByID:  rr.linksByID,
+	}
+	for key, at := range rr.exclusions {
+		decisions.exclusions[key] = at
 	}
 	rr.mu.RUnlock()
 
@@ -24,8 +30,10 @@ func (rr *ResourceRegistry) presentationExclusionFilter() func(left, right Resou
 		if leftID == "" || rightID == "" {
 			return false
 		}
-		_, ok := exclusions[exclusionKey(leftID, rightID)]
-		return ok
+		if _, ok := decisions.exclusions[exclusionKey(leftID, rightID)]; ok {
+			return true
+		}
+		return rr.nodeAgentRowsSplit(decisions, &left, &right)
 	}
 }
 
