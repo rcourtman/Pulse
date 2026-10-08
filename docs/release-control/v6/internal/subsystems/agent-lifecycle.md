@@ -28,6 +28,31 @@ command, install or helper lifecycle policy changes. PMG failed-save and scope
 readback controls live in `internal/api/configapi/pmg_scope_test.go`; installed
 agent acceptance remains independent.
 
+### Windows service removal is a prerequisite for destructive continuation
+
+The Windows installer shares one service-removal boundary between replacement
+and uninstall. An SCM read error is unknown, not absence: only the cmdlet's
+explicit service-not-found result authorises the already-removed path. An
+existing service must reach `Stopped` within 30 seconds, with a refreshed state
+read; a pending stop is awaited without requesting it again. The installer
+requests no forced dependent-service stop and kills no process.
+
+Controller handles are closed before `sc.exe delete`. Its exit must succeed,
+and fresh SCM reads must then confirm actual absence within 30 seconds;
+"marked for deletion" alone is insufficient. A failed read, stop, delete or
+absence observation exits nonzero before binary replacement, token/connection
+mutation, server deregistration or local erasure. Uninstall also reports local
+cleanup failure instead of declaring completion. Successful fresh install,
+replacement and repeated uninstall retain their existing enrolment semantics.
+
+`TestInstallPS1ServiceRemovalRefusesUnknownRuntimeBeforeMutation` pins both
+callers and adverse structural controls. `TestInstallPS1ServiceRemovalRuntime`
+executes the actual production functions with SCM failure/delay controls, using
+Windows PowerShell 5.1 in the existing native Windows job. A missing PowerShell
+runtime is an explicit skip, not native or mocked execution. The real Windows
+service lifecycle job remains required evidence for installed behaviour; these
+controls do not establish published-agent recovery or auto-update acceptance.
+
 ### Installer identity recovery accounts for the whole legacy file
 
 The descriptor-safe collector command remains the primary agent-ID reader. Its
