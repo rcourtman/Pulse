@@ -115,15 +115,7 @@ const ALLOWLIST = new Set([
   'src/utils/organizationSettingsPresentation.ts',
   'src/utils/ssoProviderPresentation.ts',
   'src/utils/thresholdSliderPresentation.ts',
-  'src/utils/recoveryActionPresentation.ts',
   'src/utils/recoveryDatePresentation.ts',
-  'src/utils/recoveryEmptyStatePresentation.ts',
-  'src/utils/recoveryRecordPresentation.ts',
-  'src/utils/recoveryFilterChipPresentation.ts',
-  'src/utils/recoveryIssuePresentation.ts',
-  'src/utils/recoverySummaryPresentation.ts',
-  'src/utils/recoveryStatusPresentation.ts',
-  'src/utils/recoveryTablePresentation.ts',
   'src/utils/recoveryTimelineChartPresentation.ts',
   'src/utils/recoveryTimelinePresentation.ts',
   'src/utils/remediationPresentation.ts',
@@ -968,66 +960,11 @@ const HELPER_RULES = [
       'Do not inline SSO certificate tone ternaries in component code. Use @/utils/ssoProviderPresentation instead.',
   },
   {
-    rule: 'canonical-recovery/no-local-filter-chip-presentation',
-    regex:
-      /(?:border-blue-200\s+bg-blue-50|border-cyan-200\s+bg-cyan-50|border-emerald-200\s+bg-emerald-50|border-violet-200\s+bg-violet-50)[\s\S]{0,260}(?:Day|Cluster|Node\/Agent|Namespace)/g,
-    message:
-      'Do not define local recovery filter chip presentation in page code. Use @/utils/recoveryFilterChipPresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-issue-rail-presentation-map',
-    regex: /\bconst\s+ISSUE_RAIL_CLASS\s*:\s*Record<Exclude<IssueTone,\s*'none'>,\s*string>\s*=/g,
-    message:
-      'Do not define local recovery issue rail presentation maps in page code. Use @/utils/recoveryIssuePresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-summary-presentation-maps',
-    regex:
-      /\bconst\s+RECOVERY_TIME_RANGE_LABELS\s*:\s*Record<string,\s*string>\s*=|\bconst\s+FRESHNESS_LABELS\s*:\s*\{[\s\S]{0,120}label:\s*string;\s*color:\s*string\s*\}\[\]\s*=/g,
-    message:
-      'Do not define local recovery summary presentation maps in component code. Use @/utils/recoverySummaryPresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-empty-state-copy',
-    regex:
-      /No protected items yet|Pulse hasn’t observed any protected items for this org yet\.|No recovery history matches your filters|Adjust your search, provider, method, status, or verification filters\.|Loading protected items\.\.\.|Loading recovery activity\.\.\.|No recovery activity in the selected window\.|Loading recovery points\.\.\.|Failed to load protected items|Failed to load recovery points/g,
-    message:
-      'Do not define local recovery empty-state copy in component code. Use @/utils/recoveryEmptyStatePresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-table-presentation-helpers',
-    regex:
-      /\bconst\s+groupHeaderRowClass\s*=\s*\(|\bconst\s+groupHeaderTextClass\s*=\s*\(|\bconst\s+eventTimeTextClass\s*=\s*\(|\bconst\s+subjectTypeBadgeClass\s*=\s*\(|\bconst\s+artifactColumnHeaderClass\s*=\s*\(|\bconst\s+artifactRowClass\s*=\s*\(|\bconst\s+advancedFilterLabelClass\s*=|\bconst\s+advancedFilterFieldClass\s*=|\bconst\s+deriveRollupIssueTone\s*=\s*\(|\bconst\s+rollupAgeTextClass\s*=\s*\(/g,
-    message:
-      'Do not define local recovery table presentation helpers in component code. Use @/utils/recoveryTablePresentation instead.',
-  },
-  {
     rule: 'canonical-recovery/no-local-date-presentation-helpers',
     regex:
       /\bconst\s+dateKeyFromTimestamp\s*=\s*\(|\bconst\s+parseDateKey\s*=\s*\(|\bconst\s+prettyDateLabel\s*=\s*\(|\bconst\s+fullDateLabel\s*=\s*\(|\bconst\s+compactAxisLabel\s*=\s*\(|\bconst\s+niceAxisMax\s*=\s*\(/g,
     message:
       'Do not define local recovery date or timeline formatting helpers in component code. Use @/utils/recoveryDatePresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-record-presentation-helpers',
-    regex:
-      /\bconst\s+rollupSubjectLabel\s*=\s*\(|\bconst\s+pointTimestampMs\s*=\s*\(|\bconst\s+buildSubjectLabelForPoint\s*=\s*\(|\bconst\s+buildRepositoryLabelForPoint\s*=\s*\(|\bconst\s+buildDetailsSummaryForPoint\s*=\s*\(|\bconst\s+normalizeModeFromQuery\s*=\s*\(/g,
-    message:
-      'Do not define local recovery record-shaping helpers in component code. Use @/utils/recoveryRecordPresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-status-pill-presentation',
-    regex:
-      /\bprotectedStaleOnly\(\)\s*\?\s*['"]border-amber-300\s+bg-amber-50\s+text-amber-800|\brounded-full\s+bg-blue-100\/80\s+px-1\.5\s+py-px|\bwhitespace-nowrap\s+rounded\s+px-1\s+py-0\.5\s+text-\[10px\]\s+font-medium\s+text-amber-700\s+bg-amber-50|\bwhitespace-nowrap\s+rounded\s+px-1\s+py-0\.5\s+text-\[10px\]\s+font-medium\s+text-rose-700\s+bg-rose-100|\btext-amber-600\s+dark:text-amber-400['"]?\s*>\s*never/g,
-    message:
-      'Do not define local recovery status-pill or stale-toggle presentation in component code. Use @/utils/recoveryStatusPresentation instead.',
-  },
-  {
-    rule: 'canonical-recovery/no-local-action-link-presentation',
-    regex:
-      /setRollupId\(''\);\s*setView\('protected'\);[\s\S]{0,220}text-sm\s+font-medium\s+text-blue-600\s+dark:text-blue-400\s+hover:text-blue-700\s+dark:hover:text-blue-300\s+transition-colors|resetAdvancedArtifactFilters[\s\S]{0,220}text-xs\s+font-medium\s+text-blue-600\s+hover:text-blue-700\s+dark:text-blue-400\s+dark:hover:text-blue-300|resetAllArtifactFilters[\s\S]{0,260}inline-flex\s+items-center\s+gap-2\s+rounded-md\s+border\s+border-border\s+bg-surface\s+px-3\s+py-1\.5\s+text-xs\s+font-medium\s+text-base-content\s+hover:bg-surface-hover|aria-label=\"Close details\"[\s\S]{0,180}rounded-md\s+p-1\s+hover:text-base-content\s+hover:bg-surface-hover/g,
-    message:
-      'Do not define local recovery action-link, empty-state action, or drawer-close presentation in component code. Use @/utils/recoveryActionPresentation instead.',
   },
   {
     rule: 'canonical-recovery/no-local-timeline-chart-presentation',
