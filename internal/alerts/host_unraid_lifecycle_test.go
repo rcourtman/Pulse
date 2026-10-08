@@ -1775,6 +1775,9 @@ func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
 				disk := models.HostUnraidDisk{Name: "disk1", Device: "sda", Serial: "CONTINUITY-1", Transport: "sata", Temperature: 85}
 				host := unraidTempHost(nil, disk)
 				id := hostDiskTemperatureResourceID(host.ID, "sda")
+				// The inventory also has its separate array-health alert.
+				// Judge only the disk-temperature occurrence under test.
+				alertID := canonicalMetricStateID(id, "diskTemperature")
 				m.CheckHost(host)
 				if incident, ok := continuityIncident(m, id, "diskTemperature"); !ok || incident.State != reducer.StatePending {
 					t.Fatalf("no initial pending Unraid run: %+v %v", incident, ok)
@@ -1801,22 +1804,22 @@ func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
 				elapsed.Store(int64(time.Minute))
 				m.CheckHost(host)
 				if gap == "continuous" {
-					if len(m.GetActiveAlerts()) != 1 {
+					if !testHasActiveAlert(t, m, alertID) {
 						t.Fatal("live Unraid-only reports lost continuous pending grace")
 					}
 					return
 				}
-				if len(m.GetActiveAlerts()) != 0 {
+				if testHasActiveAlert(t, m, alertID) {
 					t.Fatal("Unraid gap inherited earlier pending grace")
 				}
 				elapsed.Store(int64(119 * time.Second))
 				m.CheckHost(host)
-				if len(m.GetActiveAlerts()) != 0 {
+				if testHasActiveAlert(t, m, alertID) {
 					t.Fatal("fresh Unraid grace fired early")
 				}
 				elapsed.Store(int64(2 * time.Minute))
 				m.CheckHost(host)
-				if len(m.GetActiveAlerts()) != 1 {
+				if !testHasActiveAlert(t, m, alertID) {
 					t.Fatal("fresh continuous Unraid breach did not fire")
 				}
 			})
