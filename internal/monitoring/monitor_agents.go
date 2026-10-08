@@ -4590,25 +4590,12 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 		return "", "", ""
 	}
 
-	// Normalize hostname for comparison (lowercase, strip domain)
-	normalizedHostname := strings.ToLower(hostname)
-	shortHostname := normalizedHostname
-	if idx := strings.Index(normalizedHostname, "."); idx > 0 {
-		shortHostname = normalizedHostname[:idx]
-	}
-
+	// A short name may match its FQDN, but two different FQDNs are not the
+	// same machine. Collapsing both to the first label can erase a working
+	// guest link when an independent installation is added, or link a sole
+	// unrelated guest before that installation has been discovered.
 	matchHostname := func(name string) bool {
-		normalized := strings.ToLower(name)
-		if normalized == normalizedHostname || normalized == shortHostname {
-			return true
-		}
-		// Also check short version of the candidate
-		if idx := strings.Index(normalized, "."); idx > 0 {
-			if normalized[:idx] == shortHostname {
-				return true
-			}
-		}
-		return false
+		return unifiedresources.HostnamesEquivalent(hostname, name)
 	}
 
 	readState := m.GetUnifiedReadStateOrSnapshot()

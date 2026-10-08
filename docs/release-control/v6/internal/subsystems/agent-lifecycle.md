@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Automatic provider links retain full hostname distinctions
+
+An agent report may automatically associate a short hostname with a unique
+Proxmox node/guest FQDN, or an FQDN with a short provider name. Two distinct
+FQDNs sharing a first label cannot link by hostname alone. Adding an independent
+provider with a different guest domain must not clear the original exact-FQDN
+link. Ambiguous bare names still yield no automatic link; operator-owned links,
+endpoint/network hints, token/machine identity and enrolment remain unchanged.
+
+`TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs` and the FQDN sequential
+addition cases in `TestCrossInstallationIdentitySurvivesStandaloneAddition`
+verify this attribution boundary and retained Docker inventory. Connection
+endpoint form does not prove guest hostname, reporter cause, native recovery or
+containing release availability.
+
+
 ### PMG scope persistence does not change agent authority
 
 PMG scope booleans remain explicit when false in shared settings readback,

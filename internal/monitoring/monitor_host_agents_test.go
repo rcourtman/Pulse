@@ -7452,3 +7452,60 @@ func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
 		t.Fatalf("Proxmox's own guest disk not carried: usage=%v reason=%q", usage, reason)
 	}
 }
+
+// Endpoint hints are deliberately absent: an operator-saved FQDN endpoint
+// does not establish the agent's guest hostname. Test that attribution keeps
+// full provider/agent names distinct while preserving short-name compatibility.
+func TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs(t *testing.T) {
+	for _, kind := range []string{"node", "vm", "container"} {
+		t.Run(kind, func(t *testing.T) {
+			m := &Monitor{state: models.NewState()}
+			setNames := func(names ...string) {
+				nodes, vms, containers := []models.Node{}, []models.VM{}, []models.Container{}
+				for i, name := range names {
+					id, instance := "home", "Home"
+					if i > 0 {
+						id, instance = "remote", "Remote"
+					}
+					switch kind {
+					case "node":
+						nodes = append(nodes, models.Node{ID: id, Name: name, Instance: instance})
+					case "vm":
+						vms = append(vms, models.VM{ID: id, Name: name, Instance: instance, VMID: 100})
+					case "container":
+						containers = append(containers, models.Container{ID: id, Name: name, Instance: instance, VMID: 100})
+					}
+				}
+				m.state.UpdateNodes(nodes)
+				m.state.UpdateVMs(vms)
+				m.state.UpdateContainers(containers)
+			}
+			check := func(hostname, want string) {
+				t.Helper()
+				node, vm, container := m.findLinkedProxmoxEntity(hostname)
+				got := map[string]string{"node": node, "vm": vm, "container": container}
+				for k, id := range got {
+					expected := ""
+					if k == kind {
+						expected = want
+					}
+					if id != expected {
+						t.Errorf("hostname %q: %s=%q, want %q", hostname, k, id, expected)
+					}
+				}
+			}
+			setNames("docker.home.example")
+			check("docker.home.example", "home")
+			check("  DOCKER.HOME.EXAMPLE.  ", "home")
+			check("docker.remote.example", "") // A sole unrelated FQDN is not identity.
+			check("docker", "home")
+			setNames("docker.home.example", "docker.remote.example")
+			check("docker.home.example", "home")
+			check("docker.remote.example", "remote")
+			check("docker", "") // Bare name still cannot choose between estates.
+			check("docker.third.example", "")
+			setNames("docker")
+			check("docker.home.example", "home") // Legacy short provider name remains usable.
+		})
+	}
+}
