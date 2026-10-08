@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -97,7 +98,11 @@ func TestHostContinuityPreservesLiveAgentAfterReenrollment(t *testing.T) {
 // broadcasts and the resources API seeds from flips with an unrelated absent
 // machine. A saved enrollment only fills an absent machine: when the linked
 // agent itself is gone, its continuity row stays separate and the guest keeps
-// what vSphere reports.
+// what vSphere reports. The link still names one identity, so references to
+// the agent reach the guest in every case: alert intent reads maintenance set
+// on the guest for the agent's alerts, and the resources API, which seeds a
+// registry from the read state and re-applies the links, agrees without
+// merging the saved agent into the guest.
 func TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity(t *testing.T) {
 	now := time.Now().UTC()
 	guestAgent := models.Host{
@@ -153,11 +158,19 @@ func TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity(t *testing.T
 			if err := links.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
 				t.Fatalf("add link: %v", err)
 			}
+			start, end := now.Add(-time.Hour), now.Add(time.Hour)
+			if err := links.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+				CanonicalID: vmID, MaintenanceStartAt: &start, MaintenanceEndAt: &end, MaintenanceReason: "guest migration",
+			}); err != nil {
+				t.Fatalf("set guest maintenance: %v", err)
+			}
 			state := models.NewState()
 			if tc.reporting {
 				state.Hosts = []models.Host{guestAgent}
 			}
-			m := &Monitor{state: state}
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			m := &Monitor{state: state, alertManager: manager}
 			if len(tc.continuity) > 0 {
 				continuity := config.NewHostContinuityStore(t.TempDir(), nil)
 				for _, entry := range tc.continuity {
@@ -187,6 +200,35 @@ func TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity(t *testing.T
 			}
 			if guest == nil {
 				t.Fatalf("linked VM %s missing from published inventory", vmID)
+			}
+			preview, err := manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+				ResourceID: "agent:" + guestAgent.ID, ResourceType: "agent",
+				Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if preview.Reason != "operator_maintenance" {
+				t.Fatalf("agent offline alert intent = %+v, want the guest's maintenance window", preview)
+			}
+			readState, ok := m.GetUnifiedReadStateOrSnapshot().(interface {
+				ResolveCanonicalResourceID(string) (string, bool)
+			})
+			if !ok {
+				t.Fatal("monitor read state cannot resolve references")
+			}
+			if resolved, ok := readState.ResolveCanonicalResourceID("agent:" + guestAgent.ID); !ok || resolved != vmID {
+				t.Fatalf("read state resolved the agent to %q (%v), want the guest %s", resolved, ok, vmID)
+			}
+			resourcesAPI := unifiedresources.NewRegistry(links)
+			resourcesAPI.IngestResources(resources)
+			for _, ref := range []string{agentID, "agent:" + guestAgent.ID} {
+				if resolved, ok := resourcesAPI.ResolveReferenceID(ref); !ok || resolved != vmID {
+					t.Fatalf("resources API resolved %q to %q (%v), want the guest %s", ref, resolved, ok, vmID)
+				}
+			}
+			if apiGuest, ok := resourcesAPI.Get(vmID); !ok || (!tc.reporting && apiGuest.Agent != nil) {
+				t.Fatalf("resources API guest = %+v (listed=%v), want it free of the saved enrollment", apiGuest, ok)
 			}
 			if tc.reporting {
 				if agent != nil {

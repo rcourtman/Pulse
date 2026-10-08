@@ -6133,6 +6133,19 @@ no backup, snapshot, restore, retention, cleanup, or verification authority.
 The storage/recovery resource query and its admission, freshness, and
 persistence contracts are unchanged.
 
+### Saved-host link holds open no recovery path
+
+`internal/unifiedresources/types.go` gains an unexported
+`Resource.continuityOnly`: it marks a row saved-host continuity introduced (a
+machine that has not reported since a restart), so an operator link holds the
+row beside its primary instead of merging it, and, unless the saved row is
+itself the link's effective primary (an agent linked into its guest makes the
+guest primary), reference reads by its IDs resolve to the primary. It is
+in-memory only, never serialized, persisted or exposed on the API, and storage
+and recovery code neither reads it nor resolves references through the
+registry, so recovery ownership, restore targeting and protection grouping are
+unchanged.
+
 ### Token creation and deletion preserve restart-time persistence truth
 
 The shared `internal/api` token creation path treats its persisted inventory as
