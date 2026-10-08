@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "1b01ab6e1bbbb12996d39ea4c8b64cf379ce2e01",
+  "verified_at": "2026-10-07T23:54:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "ef09be2978d90248ad165176d49b131939ea1231b02e4fe239bb01e9da11e4d0"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history)",
+    "/patrol (Pulse Assistant drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Follow-up receipt for merging the repaired #2695 head (32fad38aa4, which contains current main) into this branch: the hook's final content is that head's hook minus the circuit-breaker supporting read this branch removes.",
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of 32fad38aa4 and of this merged tree (1b01ab6e1b), run on pulse-dev because local memory pressure refused heavy work; each on a private DEMO_MODE mock stack with a fresh data dir; the same Playwright script ran against both at both widths.",
+    "Patrol load, tab hide/show, stale-data banner forced by failing GET /api/settings/ai and Retry: GET /api/ai/circuit/status drops from one request per phase on the parent build to none; the banner shows and Retry clears it on both builds; no console errors on either.",
+    "Served active finding, Activity > Finding options and history, Resolve or dismiss > Open in Assistant: the Pulse Assistant drawer opens with the finding attached on both builds.",
+    "Patrol status forced to runtime_state blocked with blocked_cause circuit_open (page.route): both builds show 'Patrol paused' with 'circuit breaker is open'.",
+    "Across the run the only other endpoint difference is one GET /api/updates/plan from the update banner, which fires once the server's background update check completes and does not depend on this change.",
+    "Dist proof on pulse-dev: 187 files each side; after normalising chunk hashes, SRI strings and short identifiers, only the removed store loader, signal, getter and API client differ in index.js and the removed supporting read in AIIntelligence.js."
+  ],
+  "interactions": [
+    "Demo auto sign-in; on /patrol open the Activity tab and 'Finding options and history', expand the served finding, open 'Resolve or dismiss', click 'Open in Assistant', close the drawer.",
+    "Dispatch visibilitychange hidden then visible; reload with GET /api/settings/ai failing, wait for the banner, restore the route and click Retry, wait for the banner to clear; reload /patrol with a circuit_open Patrol status.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the Patrol page, Finding options and history, the Assistant drawer, the stale-data banner and the paused banner inspected."
+  ]
+}

@@ -41,7 +41,6 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
   },
   intelligenceState: {
     findings: [] as Array<Record<string, unknown>>,
-    circuitBreakerStatus: null as { state: string; consecutive_failures: number } | null,
     summary: null as {
       timestamp: string;
       overall_health: {
@@ -254,13 +253,11 @@ vi.mock('@/stores/aiIntelligence', () => {
     loadFindings: vi.fn().mockResolvedValue(undefined),
     loadPatrolFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
-    loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
     loadDashboardData: vi.fn().mockImplementation(async () => {
       await Promise.all([
         store.loadFindings(),
         store.loadIntelligenceSummary(),
-        store.loadCircuitBreakerStatus(),
         store.loadPendingApprovals(),
       ]);
     }),
@@ -272,9 +269,6 @@ vi.mock('@/stores/aiIntelligence', () => {
     },
     get intelligenceSummary() {
       return intelligenceState.summary;
-    },
-    get circuitBreakerStatus() {
-      return intelligenceState.circuitBreakerStatus;
     },
     get patrolPendingApprovals() {
       return [];
@@ -631,7 +625,6 @@ describe('AIIntelligence entitlement gating', () => {
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.findings = [];
-    intelligenceState.circuitBreakerStatus = null;
     intelligenceState.summary = null;
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());

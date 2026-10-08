@@ -646,7 +646,6 @@ export function usePatrolIntelligenceState() {
     void Promise.allSettled([
       aiIntelligenceStore.loadIntelligenceSummary(),
       aiIntelligenceStore.loadFindings(),
-      aiIntelligenceStore.loadCircuitBreakerStatus(),
     ]);
   }
 
