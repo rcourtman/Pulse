@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
-  buildWorkloadSummaryGroupScope,
-  buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   getDiskUsagePercent,
@@ -36,26 +33,6 @@ const makeGuest = (i: number, overrides?: Partial<WorkloadGuest>): WorkloadGuest
   lastSeen: new Date().toISOString(),
   workloadType: 'vm',
   ...overrides,
-});
-
-const makeNode = (id: string, instance: string, name: string): Node => ({
-  id,
-  name,
-  displayName: name,
-  instance,
-  host: `${name}.local`,
-  status: 'online',
-  type: 'pve',
-  cpu: 0,
-  memory: { total: 1, used: 0, free: 1, usage: 0 },
-  disk: { total: 1, used: 0, free: 1, usage: 0 },
-  uptime: 1,
-  loadAverage: [0, 0, 0],
-  kernelVersion: 'test',
-  pveVersion: 'test',
-  cpuInfo: { model: 'test', cores: 1, sockets: 1, mhz: '1' },
-  lastSeen: new Date().toISOString(),
-  connectionHealth: 'online',
 });
 
 describe('workloadSelectors (branch coverage)', () => {
@@ -700,139 +677,6 @@ describe('workloadSelectors (branch coverage)', () => {
 
     it('falls through to context-only when guests empty and prefix is unrecognized', () => {
       expect(getWorkloadGroupLabel('plainkey', [])).toEqual({ type: '', name: 'plainkey' });
-    });
-  });
-
-  describe('buildWorkloadSummaryGroupScope', () => {
-    it('returns null when all guests produce empty canonical IDs', () => {
-      const guest = makeGuest(1, { id: '', type: 'app-container', workloadType: 'app-container' });
-      expect(buildWorkloadSummaryGroupScope('grp', [guest], { type: 'T', name: 'N' })).toBeNull();
-    });
-
-    it('builds singular label for a single guest', () => {
-      const guest = makeGuest(1, {
-        id: 'cid-1',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('grp', [guest], {
-        type: 'Container',
-        name: 'frigate',
-      });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('frigate · Container (1 workload)');
-      expect(scope!.seriesIds).toEqual(['cid-1']);
-    });
-
-    it('builds plural label and deduplicates canonical IDs for multiple guests', () => {
-      const guests = [
-        makeGuest(1, { id: 'dup-id', type: 'app-container', workloadType: 'app-container' }),
-        makeGuest(2, { id: 'dup-id', type: 'app-container', workloadType: 'app-container' }),
-      ];
-      const scope = buildWorkloadSummaryGroupScope('grp', guests, { type: 'C', name: 'host' });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('host · C (2 workloads)');
-      expect(scope!.seriesIds).toEqual(['dup-id']); // deduped
-    });
-
-    it('uses workload count alone when label name and type are both empty', () => {
-      const guest = makeGuest(1, {
-        id: 'x-1',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('grp', [guest], { type: '', name: '' });
-      expect(scope).not.toBeNull();
-      expect(scope!.label).toBe('1 workload');
-    });
-
-    it('trims the groupId for the scope id', () => {
-      const guest = makeGuest(1, {
-        id: 'x-2',
-        type: 'app-container',
-        workloadType: 'app-container',
-      });
-      const scope = buildWorkloadSummaryGroupScope('  padded-grp  ', [guest], {
-        type: 'T',
-        name: 'N',
-      });
-      expect(scope).not.toBeNull();
-      expect(scope!.id).toBe('padded-grp');
-    });
-  });
-
-  describe('buildWorkloadSummaryGroupScopeMap', () => {
-    it('returns an empty map when groupingMode is flat', () => {
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests: [makeGuest(1)],
-        nodes: [],
-        groupingMode: 'flat',
-        sortComparator: null,
-      });
-      expect(result.size).toBe(0);
-    });
-
-    it('resolves node display name via buildNodeByInstance for the group label', () => {
-      const guests = [
-        makeGuest(1, { type: 'vm', workloadType: 'vm', instance: 'cluster-a', node: 'node-a' }),
-      ];
-      const nodes = [makeNode('n1', 'cluster-a', 'node-a')];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes,
-        groupingMode: 'grouped',
-        sortComparator: null,
-      });
-
-      // groupKey = 'cluster-a-node-a' matches node via instance-name key
-      // getNodeDisplayName -> 'node-a' -> label includes it
-      const scope = result.get('cluster-a-node-a');
-      expect(scope).toBeDefined();
-      expect(scope!.label).toBe('node-a (1 workload)');
-      expect(scope!.seriesIds).toEqual(['cluster-a:node-a:101']);
-    });
-
-    it('falls back to lowercase badge key when exact-case lookup misses', () => {
-      const guests = [
-        makeGuest(1, {
-          id: 'c-1',
-          name: 'frigate',
-          type: 'app-container',
-          workloadType: 'app-container',
-          contextLabel: 'Frigate', // capital F -> groupKey 'app-container:Frigate'
-        }),
-      ];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-        groupLabelBadges: {
-          'app-container:frigate': { label: 'Docker' }, // lowercase key
-        },
-      });
-
-      // badge found via lowercase fallback -> label includes 'Docker'
-      const scope = result.get('app-container:Frigate');
-      expect(scope).toBeDefined();
-      expect(scope!.label).toBe('Frigate · Docker (1 workload)');
-    });
-
-    it('omits groups whose scope is null (empty canonical IDs)', () => {
-      const guests = [
-        makeGuest(1, { id: '', type: 'app-container', workloadType: 'app-container' }),
-      ];
-
-      const result = buildWorkloadSummaryGroupScopeMap({
-        guests,
-        nodes: [],
-        groupingMode: 'grouped',
-        sortComparator: null,
-      });
-
-      expect(result.size).toBe(0);
     });
   });
 

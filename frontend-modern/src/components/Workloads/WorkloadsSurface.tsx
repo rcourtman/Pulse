@@ -173,9 +173,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
                 props.memoryDisplayBasis ? state.workloadMemoryDisplayBasis : undefined
               }
               forcedPlatform={props.forcedPlatform}
-              pinnedSelectionActive={() =>
-                Boolean(state.selectedGuestId() || state.focusedSummaryWorkloadGroupId())
-              }
+              pinnedSelectionActive={() => Boolean(state.selectedGuestId())}
               onClearPinnedSelection={state.clearPinnedSummaryScope}
             />
           </div>
@@ -193,29 +191,21 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             alertsEnabled={state.alertsEnabled}
             bottomSpacerHeight={state.bottomSpacerHeight}
             getGroupLabel={state.getGroupLabel}
-            getNodeTemperatureThresholds={state.getNodeTemperatureThresholds}
             groupedGuests={state.groupedGuests}
             groupedWindowing={state.groupedWindowing}
             groupLabelBadges={state.groupLabelBadges}
             guestMetadata={state.guestMetadata}
             guestParentNodeMap={state.guestParentNodeMap}
-            groupNodeDrawerMode={state.groupNodeDrawerMode}
             groupingMode={state.groupingMode}
             handleCustomUrlUpdate={state.handleCustomUrlUpdate}
             handleSort={state.handleSort}
             handleTagClick={state.handleTagClick}
-            activeSummaryWorkloadGroupScope={state.activeSummaryWorkloadGroupScope}
             activeSummaryWorkloadId={state.activeSummaryWorkloadId}
-            focusedSummaryWorkloadGroupScope={state.focusedSummaryWorkloadGroupScope}
-            focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
-            hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
             isMobile={state.isMobile}
             nestedWorkloadContextByGuestId={state.nestedWorkloadContextByGuestId}
             nodeByInstance={state.nodeByInstance}
             search={state.search}
             selectedGuestId={state.selectedGuestId}
-            setFocusedWorkloadGroupScope={state.setFocusedWorkloadGroupScope}
-            setHoveredWorkloadGroupScope={state.setHoveredWorkloadGroupScope}
             setHoveredWorkloadId={state.setHoveredWorkloadId}
             setSelectedGuestId={state.setSelectedGuestId}
             setTableRootRef={state.setTableRootRef}
