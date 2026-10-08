@@ -7,6 +7,8 @@ import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabil
 import { WorkloadsSurface } from '../WorkloadsSurface';
 import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
+import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
+import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
 import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
@@ -246,10 +248,6 @@ vi.mock('@/components/shared/InfrastructureSelector', () => ({
   InfrastructureSelector: () => (
     <div data-testid="infrastructure-selector">infrastructure-selector</div>
   ),
-}));
-
-vi.mock('../WorkloadsFilter', () => ({
-  WorkloadsFilter: () => <div data-testid="workloads-filter">filter</div>,
 }));
 
 vi.mock('../GuestDrawer', () => ({
@@ -503,8 +501,16 @@ describe('Workloads performance contract', () => {
     it('binds every workload toolbar to the complete canonical metric-control contract', () => {
       expect(workloadsFilterModelSource).toContain('getWorkloadsMetricFilterProps');
       expect(workloadsFilterModelSource).toContain('metricHistoryHintVisible');
-      expect(workloadsSource).toContain('{...getWorkloadsMetricFilterProps(state)}');
-      expect(workloadsSource).not.toContain('metricDisplayMode={state.workloadMetricDisplayMode}');
+      // The owning platform pages render the only workload toolbars; the
+      // embedded surface renders none.
+      expect(workloadsSource).not.toContain('<WorkloadsFilter');
+      expect(workloadsSource).not.toContain("from './WorkloadsFilter'");
+      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
+        expect(pageSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
+        expect(pageSource).not.toContain(
+          'metricDisplayMode={workloadsState.workloadMetricDisplayMode}',
+        );
+      }
     });
 
     it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
@@ -516,9 +522,6 @@ describe('Workloads performance contract', () => {
 
       render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
-      await waitFor(() => {
-        expect(document.querySelector('[data-testid="workloads-filter"]')).toBeInTheDocument();
-      });
       await waitFor(() => {
         expect(
           document.querySelector('[data-testid="guest-row-route-owned-workload"]'),
@@ -586,7 +589,6 @@ describe('Workloads performance contract', () => {
                 state={
                   {
                     setClearSurfaceRootRef: vi.fn(),
-                    kioskMode: () => false,
                     surfaceConnected: () => true,
                     surfaceInitialDataReceived: () => true,
                     allGuests: () => [],
@@ -676,7 +678,6 @@ describe('Workloads performance contract', () => {
                 state={
                   {
                     setClearSurfaceRootRef: vi.fn(),
-                    kioskMode: () => false,
                     surfaceConnected: () => true,
                     surfaceInitialDataReceived: () => true,
                     allGuests: () => [],
@@ -1323,8 +1324,11 @@ describe('Workloads performance contract', () => {
       expect(workloadsSource).toContain('setClearSurfaceRootRef');
       expect(workloadsSource).toContain('setTableRootRef={state.setTableRootRef}');
       expect(workloadsSource).toContain('data-testid="workloads-interaction-surface"');
-      expect(workloadsSource).toContain('data-summary-clear-ignore');
-      expect(workloadsSource).toContain('onClearPinnedSelection={state.clearPinnedSummaryScope}');
+      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
+        expect(pageSource).toContain(
+          'onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}',
+        );
+      }
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
