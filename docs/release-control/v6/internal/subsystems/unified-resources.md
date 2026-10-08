@@ -6706,11 +6706,43 @@ separate.
   still take it from each other on alternate rebuilds, as before. Evidence
   a later record pass of the same rebuild merges into an already-joined row
   reaches neither side's pin.
-- Fold history is registry-local: resource seeding and overlay clones do not
-  carry it. A reference to the folded resource's canonical ID, such as an
-  availability check configured against an agent later linked into its
-  guest, does not resolve to the primary, so the check loses its target in
-  the broadcast as it already did in the resources API.
+- A folded resource's canonical ID resolves to the primary holding it. The
+  registry indexes the folded IDs named by the merged resource's link fold
+  record (`linkFolds`, `recordManualLinkFold`), which covers IDs folded along
+  a chain of links, both when a link applies and when resource seeding
+  copies the record in. The monitor's rebuild, a registry seeded from its listing (the resources API,
+  which then replays availability checks) and a read-state overlay therefore
+  resolve them alike. The index follows the holding rows, so a holder that a
+  later link merges away or that is re-keyed in place keeps the answer
+  consistent. An availability check configured against an agent later
+  linked into its guest lands on the merged row, as a check configured
+  against the primary would. "A manual link keeps only the primary's own
+  checks" still holds: the merge never carries the folded resource's
+  projected checks; only the check's own reference resolves again.
+  `ResolveReferenceID` and `GetByReference` follow the fold as well, as the
+  folded agent's alert reference (`agent:<host ID>`) already did through the
+  merged row's canonical aliases. Alert intent, operator-state reads and
+  writes through the resources API and resource lookups by the folded ID
+  (`GET /api/resources/{id}`) therefore reach the merged row. Patrol's finding auto-acknowledgement
+  still reads a row stored under the exact reference first, so an
+  operator-state row kept under the folded ID applies there. History does
+  not follow the fold: a history binding persists, and
+  `expandHistoryAliases` walks bindings in both directions, so binding a
+  folded ID would join the two journals for good. Folded IDs are never
+  `SupersededCanonicalIDs`, which alert-configuration and availability-link
+  migrations rewrite permanently; the stored link stays as the operator
+  wrote it. A live row with a folded ID answers for itself. Two rows holding
+  one folded ID resolve to neither, without falling through to weaker
+  matches such as a hostname alias. Folds ride in-memory clones only; a
+  serialized listing loses them, as it loses source parents.
+  `availability_link_test.go` pins both link directions through two
+  rebuilds in all three registries
+  (`TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary`), a chain
+  (`TestAvailabilityLinkFollowsChainedLinkFolds`) and the index cases
+  (`TestLinkFoldIndexFollowsItsHolders`).
+  `TestResourceUnlinkSplitsManuallyLinkedPair` pins the API lookup: the
+  folded agent's ID answers with the VM while linked and with the agent's own
+  row once unlinked.
 
 `registry_merge_policy_test.go` pins the record links in both directions
 through two rebuilds and the live supplemental refresh, and checks that a
