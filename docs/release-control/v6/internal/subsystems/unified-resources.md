@@ -7499,3 +7499,16 @@ for report-merge. No synthetic telemetry, identity key, enrollment or service
 link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
 the monitor and its re-ingested API seed retain the fold across all split
 shapes, then survive pin persistence and a repeated split.
+
+### TrueNAS disk policy consumers use the disk's alert identity
+
+The AI/Patrol physical-disk consumers classify TrueNAS disks through
+`alerts.IsTrueNASDiskResource`, the same classifier as unified alert evaluation.
+They resolve temperature policy under the disk's canonical resource ID, not its
+parent system's synthetic agent ID. Merged agent/TrueNAS disks retain that
+classification; ordinary agent disks still follow their reporting host's policy.
+Registry identity, source precedence and retained-reading semantics are unchanged.
+`TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` exercise the unified registry
+projection and its consumer boundaries. Table/drawer frontend acceptance remains
+with Web, not established by these backend tests.
