@@ -4385,3 +4385,21 @@ observation gap merely because SMART is empty; absent or uncollected rows still
 restart confirmation. `TestUnraidOnlyTemperatureRetainsPendingContinuity` checks
 continuous, spun-down, omitted and type-off intervals under both grace paths;
 existing SMART pending, override, departure and upstream Unraid controls remain.
+
+### Applied configuration input ownership
+
+`Manager.UpdateConfig` clones the supplied configuration before normalisation
+and retention. Callers keep ownership of its JSON-shaped maps, slices and
+threshold pointers, just as they own `GetConfig` snapshots. Subsequent edits
+do not alter running policy until explicitly reapplied; normalisation cannot
+rewrite an input concurrently encoded for persistence or a response. The
+existing typed clone's non-JSON custom filter-value limitation is unchanged.
+`ApplyConfigUpdate` already decodes an owned configuration under the manager
+lock and keeps its atomic partial-update semantics.
+
+`config_validation_test.go` requires unchanged caller inputs, normalised
+live thresholds, isolated edits, ordinary guest CPU evaluation, explicit
+resubmission and concurrent response encoding/update under the race detector.
+Existing snapshot, persistence, partial-update and threshold tests remain
+required. This is source ownership acceptance, not installed notification or
+guest-agent recovery evidence.
