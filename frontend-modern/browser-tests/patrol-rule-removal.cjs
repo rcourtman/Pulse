@@ -337,12 +337,25 @@ async function journey(
         output,
         `${parent ? 'parent' : engine}-${width}-${visualOnly === 'long' ? 'long-' : ''}${name}.png`,
       );
+      const openDialog = page.getByRole('dialog');
+      const hasDialog = (await openDialog.count()) > 0;
+      if (hasDialog) {
+        // Use the same settled entrance state as the dedicated viewport cases.
+        // Otherwise the panel can still be offscreen above a painted backdrop.
+        await openDialog.evaluate((e) =>
+          e.getAnimations({ subtree: true }).forEach((animation) => {
+            try {
+              animation.finish();
+            } catch {}
+          }),
+        );
+      }
       await page.screenshot({
         path: file,
         // Full-page capture can move a fixed overlay outside the expanded
         // phone image. Capture the real viewport whenever a dialog is open.
-        fullPage: !visualOnly && (await page.getByRole('dialog').count()) === 0,
-        animations: visualOnly ? 'disabled' : 'allow',
+        fullPage: !visualOnly && !hasDialog,
+        animations: visualOnly || hasDialog ? 'disabled' : 'allow',
       });
       report.captures.push({ path: file.replace('/workspace/', ''), sha256: hash(file) });
       const dimensions = await page.evaluate(() => ({
