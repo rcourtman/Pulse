@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import sourceIdentity from './publication-fixture-source.cjs';
 import {
   entryPaths,
   harnessPaths,
@@ -21,7 +22,9 @@ const outDir = path.resolve(root, '../tmp/publication-final-static');
 const started = Date.now();
 const binding = {
   version: 1,
-  source_sha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  ...sourceIdentity.publicationSourceIdentity(process.argv.slice(2), () =>
+    execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }),
+  ),
   graph: hash(fs.readFileSync(path.join(root, 'package-lock.json'))),
   entries: entryPaths,
   sources: {},

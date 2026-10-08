@@ -81,6 +81,13 @@ own-parent and final-content receipts still require a real browser pass. No
 native guest-agent, thaw, filesystem-write, installed or publication acceptance
 is established by compiling these synthetic fixtures.
 
+The isolated browser copy has no Git store. When preparing its preview there,
+pass `--source-sha <full SHA>` with the source owner's externally checked HEAD.
+The binding marks this as `supplied-for-isolated-copy`, not a Git observation.
+The default remains an actual Git HEAD read, with no silent fallback. Verify
+the binding's source and artifact hashes against the assigned tree before using
+the preview as evidence; a supplied SHA alone establishes no source identity.
+
 ## CI and release evidence
 
 These standalone runners are manual qualification commands: the current GitHub
