@@ -62,6 +62,7 @@ import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?r
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 
 const indexCssSource = readFileSync('src/index.css', 'utf8');
 
@@ -681,8 +682,10 @@ describe('platform overview layout guardrails', () => {
     // Proxmox and vSphere overview pages render their own page-level
     // WorkloadsFilter above the embedded WorkloadsSurface so a single
     // toolbar drives both the page's top table and the workloads table.
-    // If the embedded surface also renders its own filter the page ends
-    // up with two stacked toolbars wired to the same state (RC6 bug).
+    // The surface renders no filter of its own; one there would stack a
+    // second toolbar wired to the same state (RC6 bug).
+    expect(workloadsSurfaceSource).not.toContain('<WorkloadsFilter');
+    expect(workloadsSurfaceSource).not.toContain("from './WorkloadsFilter'");
     const surfacesWithSharedToolbar: Array<[string, string]> = [
       ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
       ['VmwarePageSurface', vmwarePageSurfaceSource],
@@ -691,9 +694,9 @@ describe('platform overview layout guardrails', () => {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
       expect(
-        /<WorkloadsSurface\b[^>]*?suppressFilterToolbar/s.test(source),
-        `${name} should pass suppressFilterToolbar to <WorkloadsSurface>`,
-      ).toBe(true);
+        source.indexOf('<WorkloadsFilter'),
+        `${name} filter precedes the surface`,
+      ).toBeLessThan(source.indexOf('<WorkloadsSurface'));
     }
   });
 

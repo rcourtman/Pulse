@@ -539,7 +539,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
         useWorkloads
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
-        suppressFilterToolbar
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
       />

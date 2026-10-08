@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "03767f1e956c68c7b826635990638ea45fd9ddbd",
+  "verified_at": "2026-10-07T23:47:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "fc363b5f4ae9b077a71833eb6e349e90c4d0fbcc2d3adfde103ba73912720a8a",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "2d1ace3380674b5defb87046d8de09f1f24e1b7a84b0b54f4406f3dceb8a4a95",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "eec7c3bf66f2efe3b0a4fd8c1ae68b0330ce284f07de2825e2a2787240f8bde4",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "16a61ff9cd61bac8baffde2c07705a0b718acff00680956f85bf898a112177fe",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "f1ab8fae802c210436bb1b071e941fb079db351ce177252d4af301cbc0301731",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "a017251a1e32298f2e62bf76f94471420333e2f74979addd57f082cc71c82e21",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "18d2f9ffdb97c311070d3282a75ee5a4f7496225633eceae7eaaf9981eb7decd"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview",
+    "/proxmox/overview?kiosk=1",
+    "/vmware/overview?kiosk=1"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Before/after pair on pulse-dev: production builds of the parent 03767f1e95 (PR 2723 head) and of this tree, each embedded with go build and run as a DEMO_MODE mock stack (ports 7771/7772, fresh data dirs, telemetry off), driven by the same headless Chromium script.",
+    "Both builds, both overviews, both widths: exactly one workload FilterBar on the page (aria-label \"Proxmox workload filters\" / \"vSphere workload filters\"), zero filter groups and zero inputs inside [data-testid=workloads-page], zero toolbars with the default \"Workloads filters\" label or default search placeholder, and the page toolbar precedes the surface in document order.",
+    "Search for a guest name narrows the embedded table to that one row (Proxmox artifact-cache-310: 140 to 1 at desktop, 36 to 1 at phone; vSphere etl-batch-01: 18 to 1) and shows Clear filters at desktop; a no-match search shows the surface empty state \"No guests found / No guests match your search\" and Clear filters restores 140 / 18 rows.",
+    "Opening a guest drawer shows the page toolbar \"Clear pinned selection\" button; clicking it closes the drawer and the button goes away, at both widths on both pages.",
+    "Kiosk mode (?kiosk=1, sessionStorage pulse_kiosk_mode=true) shows the same single page toolbar and rows in both builds; only the deleted branch ever read kiosk mode.",
+    "Results JSON: 103 of 104 measurements identical, and the toolbar/surface chrome signature (tag, test id, role, aria-label multiset outside tbody) is identical on all four page/width pairs. The one difference is the count of the same demo-mode 403 on POST /api/usage/workload-history at phone width (timing-dependent; identical failing-endpoint set). No page errors in either build.",
+    "Dist proof: 188 files each side; 94 byte-identical, 91 differ only in chunk-hash names and SRI strings, 3 differ in code. After normalising hashes and 1-3 character identifiers, Proxmox-*.js and Vmware-*.js lose only suppressFilterToolbar:!0 on the WorkloadsSurface mount, and WorkloadsSurface-*.js loses only the toolbar JSX and its show-condition, the useKioskMode() call and kioskMode state entry, and the defaultSortKey fallbacks. CSS unchanged.",
+    "check-bundle-size.mjs passes on both builds: WorkloadsSurface 57.20 kB to 56.81 kB gzip (baseline 61.07, cap 70.23), Proxmox 78.71 to 78.70, Vmware 11.23 to 11.22, total JS 1367.17 to 1366.62 kB; no chunk renamed, .bundlesize.json unchanged."
+  ],
+  "interactions": [
+    "Demo sign-in, then for /proxmox/overview and /vmware/overview: wait for guest rows, count toolbars and inputs inside and outside the surface, record the chrome signature, screenshot.",
+    "Type the first guest name into the page search, read the row count, then type a no-match term, read the empty state, click Clear filters (or clear the box at phone width) and read the restored row count.",
+    "Click the first guest row name cell to open its inline drawer, read the Clear pinned selection button, click it, confirm the drawer closed.",
+    "Repeat in a 1440x900 desktop context and a 390x844 touch phone context, then load both overviews with ?kiosk=1 in a fresh context and count toolbars and rows; screenshots of every state inspected."
+  ]
+}

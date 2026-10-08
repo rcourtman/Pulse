@@ -3057,10 +3057,11 @@ grouped rows: the shared Workloads group row carries host identity only, with
 no drawer, hover preview, or group pin, and per-host stats and details stay in
 the page's own hosts table. The Workloads route model no longer parses a
 `summaryGroup` param, because no group focus remains to hydrate.
-Its page-owned workload toolbar consumes the complete shared
+Its page-owned workload toolbar, the only one on the page because the embedded
+`WorkloadsSurface` renders none, consumes the complete shared
 `getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
-Trends, Details, History, range, and first-use discovery contract as every
-other `WorkloadsSurface` consumer. The page must not select only display and
+Trends, Details, History, range, and first-use discovery contract as the
+Proxmox overview, the only other `WorkloadsSurface` consumer. The page must not select only display and
 range props while silently dropping row-hover state from that shared resource
 projection.
 Docker and Kubernetes page owners use the same source-aware projection for

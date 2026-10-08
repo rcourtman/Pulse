@@ -181,7 +181,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
 
   const handleClearAll = () => {
     props.setSearch('');
-    props.setSortKey(props.defaultSortKey ?? DEFAULT_WORKLOADS_SORT_KEY);
+    props.setSortKey(DEFAULT_WORKLOADS_SORT_KEY);
     props.setSortDirection(DEFAULT_WORKLOADS_SORT_DIRECTION);
     if (!props.suppressTypeFilter) {
       props.setViewMode(DEFAULT_WORKLOADS_VIEW_MODE);

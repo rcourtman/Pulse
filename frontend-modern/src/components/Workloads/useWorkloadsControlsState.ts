@@ -64,7 +64,6 @@ import {
 interface WorkloadsControlsStateOptions {
   layoutWidth?: Accessor<number | null | undefined>;
   forcedGroupingMode?: WorkloadsGroupingMode;
-  defaultSortKey?: WorkloadsSortKey;
   statusModeStorageScope?: string;
   // When a platform page owns the metric display mode (e.g. Proxmox
   // overview shares it across a top hosts table and the embedded workloads
@@ -262,8 +261,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     setInternalMetricHistoryRange(value);
   };
 
-  const defaultSortKey = options.defaultSortKey ?? DEFAULT_WORKLOADS_SORT_KEY;
-  const [sortKey, setSortKey] = createSignal<WorkloadsSortKey | null>(defaultSortKey);
+  const [sortKey, setSortKey] = createSignal<WorkloadsSortKey | null>(DEFAULT_WORKLOADS_SORT_KEY);
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>(
     DEFAULT_WORKLOADS_SORT_DIRECTION,
   );
@@ -499,7 +497,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const resetWorkloadsControls = () => {
     setSearch('');
     setIsSearchLocked(false);
-    setSortKey(defaultSortKey);
+    setSortKey(DEFAULT_WORKLOADS_SORT_KEY);
     setSortDirection(DEFAULT_WORKLOADS_SORT_DIRECTION);
     setStatusMode(DEFAULT_WORKLOADS_STATUS_MODE);
     blurFocusedTypeToSearch();

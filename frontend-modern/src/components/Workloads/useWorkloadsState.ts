@@ -15,7 +15,6 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useWorkloads } from '@/hooks/useWorkloads';
-import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   getWorkloadsDisconnectedState,
   getWorkloadsGuestsEmptyState,
@@ -37,7 +36,6 @@ import {
   type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
   type WorkloadsMetricHoverMode,
-  type WorkloadsStatusOption,
   type WorkloadsSortKey,
 } from './workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from './workloadMetricHistoryModel';
@@ -78,21 +76,13 @@ export interface WorkloadsSurfaceProps {
   excludedWorkloadTypes?: readonly WorkloadType[];
   showNestedExcludedWorkloads?: boolean;
   forcedGroupingMode?: WorkloadsGroupingMode;
-  defaultSortKey?: WorkloadsSortKey;
-  filterAriaLabel?: string;
-  filterSearchPlaceholder?: string;
-  filterSearchEmptyMessage?: string;
-  filterStatusOptions?: readonly WorkloadsStatusOption[];
   // When the surface is mounted inside a platform-first page, the page owns
   // platform scope through `forcedPlatform`. `suppressPlatformFilter`
-  // removes the redundant Platform chip from the filter row since the
-  // platform is already fixed by the owning page.
+  // withholds the Platform filter config from the returned state, so a
+  // platform the owning page already fixed never counts as an operator
+  // filter. The owning page renders the one WorkloadsFilter; the surface
+  // renders none.
   suppressPlatformFilter?: boolean;
-  // When a platform page renders its own shared WorkloadsFilter above the
-  // embedded surface (so one toolbar drives both the page's top table and
-  // this surface), set `suppressFilterToolbar` so the surface skips its
-  // internal filter row and avoids a duplicate.
-  suppressFilterToolbar?: boolean;
   // An owning platform page may provide the canonical unified-resource
   // snapshot it already fetched. This avoids a second workload/infrastructure
   // request and keeps both surfaces on the same refresh generation.
@@ -149,8 +139,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
-
-  const kioskMode = useKioskMode();
 
   const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState();
 
@@ -347,7 +335,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     setWorkloadMetricHoverMode,
     setWorkloadMetricHistoryRange,
   } = useWorkloadsControlsState({
-    defaultSortKey: props.defaultSortKey,
     forcedGroupingMode: props.forcedGroupingMode,
     statusModeStorageScope: props.statusModeStorageScope,
     metricDisplayMode: props.metricDisplayMode,
@@ -615,7 +602,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     isMobile,
     isSearchLocked,
     isWorkloadsRoute,
-    kioskMode,
     kubernetesContextOptions,
     kubernetesNamespaceOptions,
     navigate,

@@ -708,7 +708,6 @@ describe('WorkloadsFilter', () => {
       render(() => (
         <WorkloadsFilter
           {...makeProps({
-            defaultSortKey: 'name',
             search: vi.fn(() => 'nginx'),
             setSearch,
             setSortKey,
@@ -722,7 +721,7 @@ describe('WorkloadsFilter', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
       expect(setSearch).toHaveBeenCalledWith('');
-      expect(setSortKey).toHaveBeenCalledWith('name');
+      expect(setSortKey).toHaveBeenCalledWith(DEFAULT_WORKLOADS_SORT_KEY);
       expect(setViewMode).not.toHaveBeenCalled();
     });
   });

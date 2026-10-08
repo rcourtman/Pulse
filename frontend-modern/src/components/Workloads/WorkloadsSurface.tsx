@@ -9,12 +9,7 @@ import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
-import { WorkloadsFilter } from './WorkloadsFilter';
-import {
-  DEFAULT_WORKLOADS_VIEW_MODE,
-  getWorkloadsMetricFilterProps,
-  hasActiveWorkloadsFilters,
-} from './workloadsFilterModel';
+import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
 import { WorkloadWebLinksAction } from './WorkloadWebLinksAction';
 import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
@@ -134,51 +129,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
         </Portal>
       </Show>
       <div class="space-y-3" data-testid="workloads-interaction-surface">
-        <Show
-          when={
-            !props.suppressFilterToolbar &&
-            !state.kioskMode() &&
-            state.surfaceConnected() &&
-            state.surfaceInitialDataReceived() &&
-            state.allGuests().length > 0
-          }
-        >
-          <div data-summary-clear-ignore>
-            <WorkloadsFilter
-              search={state.search}
-              setSearch={state.setSearch}
-              viewMode={state.viewMode}
-              setViewMode={state.setViewMode}
-              statusMode={state.statusMode}
-              setStatusMode={state.setStatusMode}
-              groupingMode={state.groupingMode}
-              setGroupingMode={state.setGroupingMode}
-              defaultSortKey={props.defaultSortKey}
-              setSortKey={state.setSortKey}
-              setSortDirection={state.setSortDirection}
-              onBeforeAutoFocus={state.handleBeforeAutoFocus}
-              ariaLabel={props.filterAriaLabel}
-              searchPlaceholder={props.filterSearchPlaceholder}
-              searchEmptyMessage={props.filterSearchEmptyMessage}
-              searchSuggestionWorkloads={state.allGuests}
-              statusOptions={props.filterStatusOptions}
-              columnVisibility={state.workloadsFilterColumnVisibility()}
-              containerRuntimeFilter={state.containerRuntimeFilterConfig()}
-              hostFilter={state.hostFilterConfig()}
-              namespaceFilter={state.namespaceFilterConfig()}
-              platformFilter={state.platformFilterConfig()}
-              suppressTypeFilter={props.forcedViewMode !== undefined}
-              {...getWorkloadsMetricFilterProps(state)}
-              memoryDisplayBasis={
-                props.memoryDisplayBasis ? state.workloadMemoryDisplayBasis : undefined
-              }
-              forcedPlatform={props.forcedPlatform}
-              pinnedSelectionActive={() => Boolean(state.selectedGuestId())}
-              onClearPinnedSelection={state.clearPinnedSummaryScope}
-            />
-          </div>
-        </Show>
-
         <Show
           when={
             state.surfaceConnected() &&

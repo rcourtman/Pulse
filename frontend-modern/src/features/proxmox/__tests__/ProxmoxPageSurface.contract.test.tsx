@@ -21,6 +21,7 @@ const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
+const mockWorkloadsReady = vi.hoisted(() => vi.fn(() => false));
 const mockFetchReplicationJobs = vi.hoisted(() =>
   vi.fn((_signal?: AbortSignal) => Promise.resolve([] as unknown[])),
 );
@@ -97,9 +98,9 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: (options: unknown) => {
     mockWorkloadsOptions(options);
     return {
-      surfaceConnected: () => false,
-      surfaceInitialDataReceived: () => false,
-      allGuests: () => [],
+      surfaceConnected: mockWorkloadsReady,
+      surfaceInitialDataReceived: mockWorkloadsReady,
+      allGuests: () => (mockWorkloadsReady() ? [{ id: 'vm-1' }] : []),
       selectedNode: mockSelectedNode,
       handleNodeSelect: mockHandleNodeSelect,
       selectedHostHint: () => null,
@@ -179,6 +180,7 @@ const renderSurface = () =>
 describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockWorkloadsOptions.mockClear();
+    mockWorkloadsReady.mockReturnValue(false);
     mockSelectedNode.mockReturnValue(null);
     mockHandleNodeSelect.mockClear();
     mockPathname.mockReturnValue('/proxmox/overview');
@@ -591,6 +593,24 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).not.toContain(
       'metricHoverMode={workloadsState.workloadMetricHoverMode}',
     );
+  });
+
+  it('renders the one workload toolbar above the guests table once workload state is ready', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+
+    renderSurface();
+    expect(screen.queryByTestId('workloads-filter')).not.toBeInTheDocument();
+    cleanup();
+
+    mockWorkloadsReady.mockReturnValue(true);
+    renderSurface();
+    expect(screen.getAllByTestId('workloads-filter')).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId('workloads-filter')
+        .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('keeps the bounded node preview before guests at every viewport', () => {

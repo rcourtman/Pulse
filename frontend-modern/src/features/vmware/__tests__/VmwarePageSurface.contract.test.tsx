@@ -149,6 +149,30 @@ describe('VmwarePageSurface contract', () => {
     );
   });
 
+  it('renders the one workload toolbar above the VM table once workload state is ready', () => {
+    setResources([makeResource({ id: 'vm-app-01', type: 'vm' })]);
+
+    render(() => <VmwarePageSurface />);
+    expect(screen.queryByTestId('workloads-filter')).not.toBeInTheDocument();
+    cleanup();
+
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: () => true,
+      surfaceInitialDataReceived: () => true,
+      allGuests: () => [{ id: 'vm-app-01' }],
+      search: () => '',
+      setSearch: vi.fn(),
+    });
+    render(() => <VmwarePageSurface />);
+    expect(screen.getAllByTestId('workloads-filter')).toHaveLength(1);
+    expect(
+      screen
+        .getByTestId('workloads-filter')
+        .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('surfaces stale in-guest agents on correlated vSphere VMs', () => {
     mockVersionInfo.mockReturnValue({
       version: 'v6.0.0-rc.6',

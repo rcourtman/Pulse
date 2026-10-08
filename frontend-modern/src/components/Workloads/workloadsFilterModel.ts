@@ -49,7 +49,6 @@ export interface WorkloadsFilterProps {
   setStatusMode: (value: WorkloadsStatusMode) => void;
   groupingMode: () => WorkloadsGroupingMode;
   setGroupingMode: (value: WorkloadsGroupingMode) => void;
-  defaultSortKey?: WorkloadsSortKey;
   setSortKey: (value: WorkloadsSortKey) => void;
   setSortDirection: (value: 'asc' | 'desc') => void;
   onBeforeAutoFocus?: () => boolean;

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import { createEffect } from 'solid-js';
 import { WorkloadsSurface } from '../WorkloadsSurface';
+import { useWorkloadsState, type WorkloadsSurfaceProps } from '../useWorkloadsState';
+import type { WorkloadsToolbarFilterConfig } from '../workloadsFilterModel';
 import type { State } from '@/types/api';
 
 const mockWebSocketState: State = {
@@ -36,18 +38,10 @@ const mockWebSocketState: State = {
 let mockLocationSearch = '?type=pod';
 let mockWorkloads: Array<Record<string, unknown>> = [];
 const navigateSpy = vi.fn();
-type HostFilterMock = {
-  id?: string;
-  label?: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-};
-
-let lastHostFilter: HostFilterMock | undefined;
+let lastHostFilter: WorkloadsToolbarFilterConfig | undefined;
 let lastDrawerGuestName: string | null = null;
 
-const requireLastHostFilter = (): HostFilterMock => {
+const requireLastHostFilter = (): WorkloadsToolbarFilterConfig => {
   if (!lastHostFilter) {
     throw new Error('Expected host filter to be available');
   }
@@ -142,19 +136,6 @@ vi.mock('@/components/shared/InfrastructureSelector', () => ({
   ),
 }));
 
-vi.mock('../WorkloadsFilter', () => ({
-  WorkloadsFilter: (props: { hostFilter?: HostFilterMock }) => {
-    createEffect(() => {
-      lastHostFilter = props.hostFilter;
-    });
-    return (
-      <div data-testid="workloads-filter">
-        {props.hostFilter ? 'host-filter-enabled' : 'host-filter-disabled'}
-      </div>
-    );
-  },
-}));
-
 vi.mock('../GuestDrawer', () => ({
   GuestDrawer: (props: { guest: { name: string } }) => {
     lastDrawerGuestName = props.guest.name;
@@ -185,6 +166,17 @@ vi.mock('../GuestRow', () => {
     ),
   };
 });
+
+// Platform pages own the workload toolbar: they build the state, pass it to
+// the surface, and hand state.hostFilterConfig() to their WorkloadsFilter.
+// This harness reads that same config.
+function PageOwnedWorkloadsSurface(props: WorkloadsSurfaceProps) {
+  const state = useWorkloadsState(props);
+  createEffect(() => {
+    lastHostFilter = state.hostFilterConfig();
+  });
+  return <WorkloadsSurface {...props} state={state} />;
+}
 
 describe('Workloads pod workloads integration', () => {
   beforeEach(() => {
@@ -223,15 +215,15 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
     mockLocationSearch = '?type=pod';
-    const { getByText, getByTestId } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+    const { getByText } = render(() => (
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
       expect(getByText('api-6c4d8')).toBeInTheDocument();
     });
 
-    expect(getByTestId('workloads-filter')).toHaveTextContent('host-filter-enabled');
+    expect(lastHostFilter).toBeDefined();
   });
 
   it('excludes app-container workloads when a platform page owns them as nested context', async () => {
@@ -296,7 +288,6 @@ describe('Workloads pod workloads integration', () => {
         state={
           {
             setClearSurfaceRootRef: vi.fn(),
-            kioskMode: () => false,
             surfaceConnected: () => true,
             surfaceInitialDataReceived: () => true,
             allGuests: () => [{ id: 'vm-1' }],
@@ -346,7 +337,6 @@ describe('Workloads pod workloads integration', () => {
         state={
           {
             setClearSurfaceRootRef: vi.fn(),
-            kioskMode: () => false,
             surfaceConnected: () => true,
             surfaceInitialDataReceived: () => true,
             allGuests: () => [],
@@ -515,7 +505,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
