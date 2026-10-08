@@ -3183,10 +3183,11 @@ a new API state machine, queue contract, or verification-accounting field.
    `Safe auto-fix`, and
    `Autopilot` rather than transport shorthand or Pro-matrix labels, the Patrol
    header description derives from the same
-   effective control state, and the advanced settings
-   drawer stays limited to model, schedule, trigger, and user-level model checks
-   sourced from the existing settings APIs rather than duplicating a second
-   control-level chooser. Runtime or provider setup
+   effective control state, and Settings > Pulse Intelligence > Patrol, which
+   replaced the retired header settings drawer, stays limited to model,
+   schedule, trigger, notification, and user-level model checks sourced from
+   the existing settings APIs rather than duplicating a second control-level
+   chooser. Runtime or provider setup
    readiness may suppress run, schedule, model, trigger, and provider-repair
    controls until Patrol can check infrastructure reliably, but it must not hide
    the Patrol mode selector or replace it with setup-first proof/status chrome.
@@ -3322,7 +3323,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the global learned-correlation route `/api/ai/intelligence/correlations`, which has no frontend client today: no page renders that list, so the shared AI intelligence store neither loads nor holds it and the resource drawer reads per-resource correlations from the resource-intelligence payload; a surface that later renders the global list must add one store-owned load instead of a page-local fetch
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
-   and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
+   and the Patrol header in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, which outside setup-only states may summarize noteworthy API-owned `status.trigger_status` facts in one compact line and, unless a provider setup block shows `Fix setup` instead, links to Settings > Pulse Intelligence > Patrol, where the Patrol model, schedule, and trigger tuning are saved through `PUT /api/settings/ai/update`, so none of those settings or background-only runtime-policy pauses become the primary Patrol control decision and the header carries no schedule and model drawer
    and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so if Patrol recent-change, learned-correlation, or policy-coverage summary text returns, it is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today and the model carries no such derivation
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
