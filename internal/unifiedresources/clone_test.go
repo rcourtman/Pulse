@@ -1050,3 +1050,18 @@ func TestCloneMaterializedResourceDetachesCanonicalPolicy(t *testing.T) {
 		t.Fatal("nil materialized clone changed absence")
 	}
 }
+
+// The resources API seeds its registry from the monitor's read state, so the
+// marker on a row saved-host continuity introduced must ride the clone, or the
+// API's link pass would fold the saved agent into its linked guest.
+func TestCloneResourceKeepsContinuityMarker(t *testing.T) {
+	saved := Resource{ID: "agent-saved", Type: ResourceTypeAgent, continuityOnly: true}
+	if clone := cloneResource(&saved); !clone.continuityOnly {
+		t.Fatal("clone dropped the continuity marker")
+	}
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{saved})
+	if seeded, ok := rr.Get(saved.ID); !ok || !seeded.continuityOnly {
+		t.Fatalf("seeded row = %+v (listed=%v), want the continuity marker kept", seeded, ok)
+	}
+}
