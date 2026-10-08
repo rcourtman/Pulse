@@ -4348,6 +4348,21 @@ findings handed to the orchestrator, so investigation reasoning sees
 the same lock-against-remediation flag that the action broker
 enforces downstream — no possible drift between "what Patrol
 proposes" and "what the broker accepts."
+That builder resolves a finding's resource reference through the
+organization monitor's current read state before it reads operator
+state. A finding still keyed by an agent's canonical ID after an
+operator linked the agent into its guest therefore reads the merged
+row's state while the read state folds the agent, as the resources API
+does. A finding naming a saved host that has not reported since a
+restart by its agent reference reads the row stored under that host's
+canonical ID, because the read state overlays host continuity as the
+resources API listing does; a saved host joined to its guest by a link
+stays its own row there, so its findings read the agent's own state
+until it reports again. The
+resolution only reads identity. It does not treat the folded agent as
+removed, offline or unenrolled, does not turn a continuity-only host
+into a live sighting, and grants no heartbeat, command, install or
+repair authority.
 
 The same router wiring owns the alert-bridge patrol-trigger callback. It now
 receives the full alert payload as a struct and consults the operator's
