@@ -823,8 +823,11 @@ choices compose the shared `ViewOptionsDisclosure` instead of occupying the
 primary filter rail: layout, metric style, chart visibility, memory basis, and
 columns remain discoverable behind one `View` trigger. The history range stays
 inline in both metric modes because bars now expose an intent-driven row
-history lens and Trends keeps the same charts persistent. That inline range
-must carry a visible contextual label.
+history lens and Trends keeps the same charts persistent. In Bars the range
+renders only at desktop widths while Row hover is set to `History`, the mode
+that drives that lens; `Details` hover and the phone (`isMobile`) layout hide
+it. The inline range carries the visible `History` label that
+`WorkloadsFilter` passes to `MetricHistoryRangeSegmentedControl`.
 Controls inside the View disclosure must expand in place rather than opening
 nested absolute panels that can clip or create competing overlay stacks. The
 Proxmox page owns and persists the `Guest` / `Host` memory basis;

@@ -2462,11 +2462,13 @@ recovery scope, or a storage/recovery-owned secret source.
     Storage and recovery UI must keep sourcing those signals from their
     existing canonical page models instead of polling the connections
     ledger for per-datastore or per-backup truth.
-    Platform-first top-level pages may embed `StorageSurface` and
-    `RecoverySurface` with `embedded tableOnly` and forced source or
-    platform filters (e.g. `forcedSourceFilter`, `forcedPlatformFilter`)
-    so platform-scoped storage and recovery rows render through the same
-    canonical surfaces rather than a forked per-platform table.
+    Platform-first top-level pages may embed `StorageSurface`
+    (`frontend-modern/src/components/Storage/Storage.tsx`) with a forced
+    source filter (`forcedSourceFilter`) so platform-scoped storage rows
+    render through the same canonical surface rather than a forked
+    per-platform table. The surface has no `embedded` or `tableOnly` mode
+    and no `forcedPlatformFilter`, and no `RecoverySurface` component
+    exists to embed alongside it.
     `frontend-modern/src/App.tsx` may carry the platform-page route
     registrations that mount those embedded canonical surfaces, but the
     routes themselves must derive their paths from the canonical builders
@@ -2476,22 +2478,30 @@ recovery scope, or a storage/recovery-owned secret source.
     canonical surface that actually populates. The canonical TrueNAS
     adapter already emits the top-level TrueNAS system as a unified
     `agent` row tagged with the `truenas` platform, so the platform
-    page defaults to `/truenas/overview` (the Systems sub-tab) and the
-    embedded `StorageSurface` lives at `/truenas/storage`. The Source
-    filter chip in `StoragePageControls` is also suppressed when a
-    platform page locks source scope through `forcedSourceFilter` (via
-    `suppressSourceFilter`, auto-applied whenever `forcedSourceFilter`
-    is set), so the user never sees the platform's name pinned as a
-    removable filter chip inside the embedded surface.
-    Platform pages that embed `StorageSurface` reuse the canonical
-    `StoragePageControls` toolbar through the `showFilterToolbar` prop on
-    `StorageProps`. The page keeps `tableOnly` to hide the storage summary
-    section but opts in to the shared search, status, grouping, sort,
-    node, view, and chart-collapse controls so platform operators get
-    dense-table storage controls on every embedded storage tab without
-    forking the toolbar. The source scope flows through
-    `forcedSourceFilter` as a typed page input; the source filter remains
-    available in the toolbar only when not forced. The seven-state Storage
+    page defaults to `/truenas/overview`, whose Overview sub-tab lists
+    those systems. `/truenas/storage` renders the TrueNAS-owned
+    `TrueNASStorageTopologyTable`, not `StorageSurface`; the Proxmox
+    Storage tab in `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    is the only page that embeds `StorageSurface` today.
+    An embedding page gets the canonical `StoragePageControls` toolbar
+    without opting in: `Storage.tsx` always renders it (only kiosk mode
+    hides it), there is no `showFilterToolbar` prop, and there is no storage
+    summary section to hide. The Proxmox embed passes `forcedSourceFilter`,
+    its own `resourceSource`, `suppressNodeFilter`, `filterAriaLabel`, and
+    Proxmox search placeholder and empty-history copy. It passes no
+    `forcedView`, so the Storage / Physical Disks view tabs stay.
+    `forcedSourceFilter` is a typed page input that the route state reads
+    as the source value and never writes back to the URL, and `Storage.tsx`
+    sets `suppressSourceFilter` whenever it is present. `StoragePageControls`
+    then drops the Source chip, so the user never sees the platform's name
+    pinned as a removable filter chip, and the locked source does not count
+    as an active filter that surfaces the toolbar's clear action.
+    `suppressNodeFilter` drops the Node chip so search carries host and
+    node scoping, and `Storage.tsx` resets any selected node to all nodes
+    while it is set. The embedded toolbar otherwise keeps search, the
+    Status filter on the Storage view (Role and Group filters on Physical
+    Disks once there is more than one choice), and the View popover's
+    grouping and sort; it has no chart-collapse control. The seven-state Storage
     status catalog stays in the shared Add filter menu instead of occupying a
     permanent segmented rail; a non-default status surfaces through the
     canonical FilterBar chip. Grouping and sort remain durable presentation
