@@ -628,6 +628,61 @@ func TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds(t *testing.T) {
 	})
 }
 
+// The adapter reports the thresholds its current registry generation was
+// judged by. Thresholds set since then wait for the rebuild that judges a
+// generation by them, so a consumer rebuilding from the current listing never
+// re-judges it by thresholds it was not judged by. A read-state overlay of
+// that generation is judged by the same thresholds: re-judging its listing by
+// newer, shorter ones would mark polls stale that the generation calls
+// current.
+func TestMonitorAdapterReportsTheThresholdsItsGenerationWasJudgedBy(t *testing.T) {
+	snapshot := staleThresholdEstateSnapshot(time.Now().UTC())
+	configured := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}
+	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), configured)
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("after the rebuild StaleThresholds = %v, want the four minutes it was judged by", got)
+	}
+
+	adapter.SetStaleThresholds(map[DataSource]time.Duration{SourceProxmox: 60 * time.Second})
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("before the next rebuild StaleThresholds = %v, want the current generation's four minutes", got)
+	}
+	for name, row := range presentedNodeRows(t, adapter.GetAll()) {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+			t.Fatalf("current generation %s Proxmox sighting = %q, want online as judged", name, poll.Status)
+		}
+	}
+	overlay, ok := ReadStateWithRecords(adapter, SourceAgent, []IngestRecord{{
+		SourceID: "host-elsewhere",
+		Resource: Resource{
+			Type: ResourceTypeAgent, Name: "elsewhere", Status: StatusOnline, LastSeen: time.Now().UTC(),
+			Agent: &AgentData{AgentID: "host-elsewhere", Hostname: "elsewhere"},
+		},
+		Identity: ResourceIdentity{MachineID: "machine-elsewhere", Hostnames: []string{"elsewhere"}},
+	}}).(*MonitorAdapter)
+	if !ok || overlay == adapter {
+		t.Fatal("ReadStateWithRecords did not build an overlay")
+	}
+	if got := overlay.StaleThresholds(); got[SourceProxmox] != 4*time.Minute {
+		t.Fatalf("overlay StaleThresholds = %v, want the generation's four minutes", got)
+	}
+	overlayRows := presentedNodeRows(t, overlay.GetAll())
+	if len(overlayRows) != 3 {
+		t.Fatalf("overlay lists %d Proxmox node rows, want 3", len(overlayRows))
+	}
+	for name, row := range overlayRows {
+		if poll := row.SourceStatus[SourceProxmox]; poll.Status != "online" {
+			t.Fatalf("overlay %s Proxmox sighting = %q, want online as the generation judged it", name, poll.Status)
+		}
+	}
+
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := adapter.StaleThresholds(); got[SourceProxmox] != 60*time.Second {
+		t.Fatalf("after the next rebuild StaleThresholds = %v, want the sixty seconds it was judged by", got)
+	}
+}
+
 func TestHostContinuityCannotOverwriteCurrentResource(t *testing.T) {
 	now := time.Now().UTC()
 	for _, mode := range []string{"machine-identity", "source-identity", "future-timestamp", "provider-only"} {
