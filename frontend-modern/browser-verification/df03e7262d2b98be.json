@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "a9f23501ebbdf3ca9cb2bccdb7891211e9d6cf22",
+  "verified_at": "2026-10-08T04:58:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "8c3557c19ac17c2e7baa937af259d2f0375f876d4cd359ac21a431abbfafeb7f"
+  },
+  "routes": [
+    "/patrol (header 'Mode and automation' disclosure)",
+    "/patrol (Activate Autopilot acknowledgement dialog)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Follow-up receipt for the #2740 merge (a9f23501eb): main's usePatrolIntelligenceState.ts combines #2704's removal of the circuit-breaker read with #2740's removal of the test-only autonomy save helpers, so its final content matches neither parent.",
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of 986cead30c (main just before the merge, Canonical Governance green) and of a9f23501eb, run on pulse-dev because local memory pressure refused heavy work. The two dists are byte-identical (189 files, every sha256 equal).",
+    "Each build on its own private DEMO_MODE mock stack with a fresh data dir, one at a time; the same Playwright script ran against both at both widths.",
+    "Paid entitlement (ai_autofix added to /api/license/runtime-capabilities via page.route): Ask first, Watch only and Autopilot each saved through PUT /api/ai/patrol/autonomy (stubbed 200 plus a GET reconcile rewrite); Autopilot opened the acknowledgement dialog and saved only after 'Record acknowledgement and activate'. Same PUT sequence on both builds; no PUT carried full_mode_unlocked.",
+    "Runtime lock under demo presentation: Watch only with no selector and no save on both builds. Runtime lock with the demo presentation flags cleared (GET /api/security/status rewritten): paid choices disabled, forced clicks saved nothing and opened no dialog, Watch only sent exactly autonomy_level monitor plus the investigation budget and timeout, on both builds.",
+    "Neither build requested GET /api/ai/circuit/status in any session (#2704's change). The per-session /api path sets match except GET /api/replication/jobs, a timer-driven poll that appears in some sessions on each build.",
+    "Timing on the loaded host (load 25-53): on the 986cead30c build the desktop badge was read before the Ask first reconcile applied and Watch only took three clicks while that save finished; the PUTs were the same. tsc --noEmit and the Patrol hook, page, header and resource-boundary suites pass on a9f23501eb."
+  ],
+  "interactions": [
+    "Demo auto sign-in; open /patrol, expand 'Mode and automation', read the selector's pressed and disabled states.",
+    "Paid: click Ask first, then Watch only, then Autopilot (re-clicking only while the previous save was still reconciling), tick the acknowledgement checkbox and click 'Record acknowledgement and activate'.",
+    "Locked (selector visible): force-click Ask first, Safe auto-fix and Autopilot, then click Watch only.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the initial, Autopilot dialog and final states inspected."
+  ]
+}
