@@ -1365,6 +1365,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
+    expect(summaryTableFocusSource).toContain(
+      'untrack(() => revealFocusedSeries(root, focusedId))',
+    );
     expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
     expect(summaryTableFocusSource).toContain('onEscapeClear?: () => void;');
     expect(summaryTableFocusSource).toContain('setClearSurfaceRootRef');
@@ -2617,6 +2620,7 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/RunToolCallTrace.tsx',
       'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
+      'src/components/Infrastructure/ResourceDetailSummary.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
     expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
@@ -2684,6 +2688,18 @@ describe('shared primitive guardrails', () => {
     expect(metadataBadgeSource).toContain("muted: 'bg-surface-alt text-muted'");
     expect(metadataBadgeSource).toContain("warning: 'bg-amber-100 text-amber-800");
     expect(metadataBadgeSource).not.toContain(["muted: 'bg", 'slate', '100'].join('-'));
+    // Drawer identity values differ at their ends and a phone has no hover to
+    // show a title, so they wrap inside the drawer cell instead of spilling
+    // past the drawer edge, where the content shell clips them.
+    expect(metadataBadgeSource).toContain(
+      "METADATA_BADGE_WRAP_CLASS = 'min-w-0 max-w-full whitespace-normal wrap-anywhere text-left'",
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge tone="info" size="xs" shape="rounded" wrap title={ip}>',
+    );
+    expect(resourceDetailSummarySource).toContain(
+      '<MetadataBadge size="xs" shape="rounded" wrap title={value}>',
+    );
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
     expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');
@@ -8407,6 +8423,11 @@ describe('shared primitive guardrails', () => {
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipStateSource).toContain('sanitizeTooltipContent');
     expect(tooltipStateSource).toContain('supportsHoverTooltips');
+    // Hidden tooltips sit on every table row; only an open one may hold a
+    // window resize listener (TooltipPortal.test.tsx proves the behaviour).
+    expect(tooltipStateSource).toMatch(
+      /if \(typeof window === 'undefined' \|\| !options\.visible\(\)\) return;\s*updateViewport\(\);\s*const handleResize/,
+    );
 
     expect(sharedTooltipHookSource).toContain('supportsHoverTooltips');
     expect(hoverCapabilitySource).toContain('(hover: hover) and (pointer: fine)');

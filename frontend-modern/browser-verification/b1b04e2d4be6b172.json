@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "1a094646d7f21217eda051af6ba0252e208f283e",
+  "verified_at": "2026-10-07T22:57:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/shared/MetadataBadge.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "cd82ec5bd4dbf1ab54c9b4dd291814f728567700836799c794e2f71046624725",
+    "frontend-modern/src/components/shared/MetadataBadge.tsx": "0b87b1a7b3b56ee384874a56710cf260a7787388dd43ec67b8ca144412474ad1"
+  },
+  "routes": [
+    "/docker",
+    "/kubernetes",
+    "/proxmox",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 393,
+      "height": 851
+    },
+    {
+      "width": 768,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack built from this branch (50 Proxmox nodes, 2 Docker hosts, 1 Kubernetes cluster, 2 generic hosts), Chromium headless",
+    "Baseline on origin/main at 390px: 92 inline drawers opened across the four routes, 53 descendants past the drawer content shell's right edge, all of them Aliases chips in the Identity section (Docker container drawers 12, Kubernetes drawers 41), for example proxmox-lxc-docker:Production West:pve1:113 at +82px and k8s-production-1:deployment:redis-ffcd-b17c78f012 at +114px; 0 at 768px",
+    "After the change: 140 inline drawers across the four routes (Proxmox node and guest drawers included) at 390px and 768px, 0 identity chips past the shell; the one remaining element is the Deployments tab inside the Kubernetes cluster drawer's role=tablist scroller (scrolls 102px), reachable by swiping",
+    "Docker container drawer nginx and Kubernetes drawer checkout-api at 390px: alias and IP chips wrap at spaces and hyphens inside the value cell, full values readable, chip right edge 326px against a 343px shell, +N overflow chip unchanged",
+    "Same drawers with the two runtime files swapped back to origin/main: chip right edges 352 to 457px, cut off at the cell with no ellipsis",
+    "Docker container drawer nginx at 1440px: Identity card unchanged, every alias chip on one line",
+    "Truncating Primary ID and Parent values keep their ellipsis; Docker labels chips unchanged",
+    "Rebased onto main after the phone drawer width change (#2703, drawer content now fills the table's visible width): Docker container drawer at Pixel 5 and iPhone 12 sizes has no Identity-section element or text past the detail cell, table wrapper or drawer shell; with the two runtime files reverted the proxmox-lxc-docker alias still sits 71px past the cell and app-container-<hash> 20px"
+  ],
+  "interactions": [
+    "Opened each sampled row's inline drawer and expanded every nested disclosure inside it before measuring",
+    "Tapped a Docker container row at Pixel 5 and iPhone 12 sizes (the disclosure chevron is screen-reader only there) and checked that no Identity-section element or text crosses the detail cell, table wrapper or drawer shell",
+    "Re-ran that check with the runtime files reverted: it failed on every long alias chip",
+    "Closed each drawer before opening the next"
+  ]
+}

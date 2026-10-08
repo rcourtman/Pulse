@@ -2000,9 +2000,17 @@
         { "path": "src/components/patrol/RunHistoryEntry.tsx" },
         { "path": "src/components/patrol/RunToolCallTrace.tsx" },
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" }
+        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailSummary.tsx" }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/components/Infrastructure/ResourceDetailSummary.tsx",
+          "patterns": [
+            "inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]",
+            "inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px]"
+          ]
+        },
         {
           "path": "src/components/AI/FindingsPanel.tsx",
           "patterns": [

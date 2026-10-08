@@ -2554,12 +2554,13 @@ agent inventory, registration state, or command-channel readiness.
    or fleet-command evidence. Lifecycle flows must not
    recreate the retired Patrol quickstart bootstrap path, mint server-issued
    hosted-model tokens, or derive AI provider state from installation identity.
-   Per-request `/api/ai/chat` execution-mode overrides follow that same
-   boundary: lifecycle-adjacent consumers may rely on Assistant approval
-   semantics, but scoped `autonomous_mode:false` chat requests must not be
-   reinterpreted as agent registration, assignment, installer, or connection
-   lifecycle state. Patrol finding handoffs that force approval-required mode
-   from a non-empty `finding_id` are likewise AI/runtime governance, not an
+   The server-set `/api/ai/chat` execution mode follows that same boundary:
+   lifecycle-adjacent consumers may rely on Assistant approval semantics, but
+   the approval-required mode `HandleChat` installs on every chat request
+   (`ChatRequest` decodes no `autonomous_mode` field) must not be reinterpreted as agent
+   registration, assignment, installer, or connection lifecycle state. Patrol
+   finding handoffs running in that mode from a non-empty `finding_id` are
+   likewise AI/runtime governance, not an
    agent command grant or lifecycle authorization primitive.
    Patrol queued-fix approvals may now seed the shared action-audit store with
    planned and pending lifecycle evidence, but lifecycle surfaces must treat
@@ -5032,8 +5033,8 @@ withheld) is an AI-runtime privacy concern; it is not agent enrollment config,
 installer readiness, command reachability, or any fleet-control capability signal.
 Patrol finding chat handoffs follow the same ownership split: when
 `/api/ai/chat` resolves a `finding_id` into model-only Patrol briefing,
-resource, or action context, the backend-enforced `autonomous_mode:false`
-clamp is Assistant action-governance, not agent readiness, fleet command
+resource, or action context, the backend-enforced approval-required clamp
+is Assistant action-governance, not agent readiness, fleet command
 reachability, or enrollment health.
 If the same request also carries recognized Patrol product handoff context,
 resources, or action references, the API handler may merge only same-finding
@@ -9105,6 +9106,45 @@ agent from its last report instead of from the PVE poll, and mark it stale at
 their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
+
+### Safe methods refused on discovery settings and SAML logout
+
+`internal/api/method_guard.go`, `internal/api/discovery_handlers.go` and
+`internal/api/saml_handlers.go` changed only so `/api/discovery/settings` and
+`/api/saml/{id}/logout` answer `405` to every method outside their allowed set,
+`GET` and `HEAD` included. The settings write still takes `PUT` or `POST` and
+logout still takes `POST`. No agent registration, enrolment, install, update or
+removal path changed.
+
+### SAML SLO responses bound to the logout that requested them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/slo` accepts an IdP LogoutResponse when its signed
+`InResponseTo` names an unexpired LogoutRequest that `/api/saml/{id}/logout`
+issued, once, in a browser carrying no session or the session that logout
+ended. Other responses are refused, the SLO handler writes no session or
+cookie for any response (the logout request already cleared both), and
+`/api/saml/{id}/logout` refuses a request that carries no session. No agent
+registration, enrolment, install, update or removal path changed.
+
+### Manual SAML IdP certificate published as base64 DER
+
+`internal/api/saml_service.go` changed only so a SAML provider configured with
+`idpSsoUrl` and a PEM `idpCertificate` or `idpCertFile` puts that certificate
+into its in-memory IdP descriptor as base64 DER, which crewjam/saml can read
+when it verifies the IdP's ACS Responses and LogoutResponses. No agent
+registration, enrolment, install, update or removal path changed.
+
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/login` records each SAML AuthnRequest against a short-lived
+login cookie and `/api/saml/{id}/acs` accepts the IdP's signed answer to it
+once, in that browser, at default settings, reposting the IdP's cross-site
+delivery once from Pulse's origin so the cookie arrives. Signed content
+carrying a prefixed attribute or namespace declaration named like a SAML
+attribute is refused. No agent
+registration, enrolment, install, update or removal path changed.
 
 ### Demo write guard ignores websocket upgrade headers
 

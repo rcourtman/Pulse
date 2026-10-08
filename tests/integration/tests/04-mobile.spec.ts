@@ -1,5 +1,9 @@
 import { test, expect, devices } from "@playwright/test";
-import { ensureAuthenticated, setMockMode } from "./helpers";
+import {
+  ensureAuthenticated,
+  setMockMode,
+  waitForDefaultMockRuntimeReady,
+} from "./helpers";
 
 const getViewportWidth = async (
   page: import("@playwright/test").Page,
@@ -395,6 +399,131 @@ test.describe("Mobile viewport flows", () => {
     expect(detailGeometry.detailRight).toBeLessThanOrEqual(
       detailGeometry.wrapperRight + 1,
     );
+  });
+
+  test("Drawer identity chips wrap inside the drawer content instead of being clipped", async ({
+    page,
+  }) => {
+    await waitForDefaultMockRuntimeReady(page);
+    await page.goto("/docker");
+
+    // Container drawers carry long generated aliases such as
+    // app-container-<hash> that are wider than the identity value cell.
+    const containerRow = page.locator("tr[data-docker-container-row]").first();
+    if (
+      ["1", "true", "yes", "on"].includes(
+        String(process.env.PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY || "")
+          .trim()
+          .toLowerCase(),
+      )
+    ) {
+      // CI runs the default mock estate, which always has Docker containers.
+      await expect(containerRow).toBeVisible({ timeout: 15_000 });
+    } else {
+      const containerRowVisible = await containerRow
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      if (!containerRowVisible) {
+        test.skip(true, "No Docker container rows available to expand");
+      }
+    }
+    // On phones the whole row is the disclosure target.
+    await containerRow.locator("td").first().click();
+    await expect(
+      containerRow.getByRole("button", { name: /^Collapse details for / }),
+    ).toHaveAttribute("aria-expanded", "true");
+
+    const identity = page
+      .locator('[data-testid="resource-identity-section"]')
+      .first();
+    await expect(identity).toBeVisible();
+    await expect(identity.getByText("Aliases")).toBeVisible();
+
+    const cutOff = await identity.evaluate((section) => {
+      // Below lg the inline drawer's content shell clips anything past it.
+      let shell: HTMLElement | null = section.parentElement;
+      while (shell && window.getComputedStyle(shell).overflowX !== "clip") {
+        shell = shell.parentElement;
+      }
+      if (!shell) return ["no clipping drawer content shell"];
+
+      const offenders: string[] = [];
+      const walker = document.createTreeWalker(
+        section,
+        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+      );
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        let rect: DOMRect;
+        let inlineLevel: boolean;
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (!node.textContent?.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          rect = range.getBoundingClientRect();
+          inlineLevel = true;
+        } else {
+          rect = (node as Element).getBoundingClientRect();
+          inlineLevel = window
+            .getComputedStyle(node as Element)
+            .display.startsWith("inline");
+        }
+        const left = rect.left;
+        let right = rect.right;
+        // Inline content that truncates with an ellipsis is meant to end
+        // inside the block whose line it sits on (a truncating value span or
+        // label cell). The fixed-layout detail cell also declares an ellipsis,
+        // but that only marks its own line: a block child such as the chip
+        // row crosses the cell edge with no ellipsis and is silently cut.
+        if (inlineLevel) {
+          let line = node.parentElement;
+          while (
+            line &&
+            line !== shell &&
+            ["inline", "contents"].includes(
+              window.getComputedStyle(line).display,
+            )
+          ) {
+            line = line.parentElement;
+          }
+          const lineStyle = line ? window.getComputedStyle(line) : null;
+          if (
+            line &&
+            lineStyle?.textOverflow === "ellipsis" &&
+            lineStyle.overflowX !== "visible" &&
+            ["block", "inline-block", "table-cell", "list-item", "flow-root"].includes(
+              lineStyle.display,
+            )
+          ) {
+            right = Math.min(right, line.getBoundingClientRect().right);
+          }
+        }
+        // Any clipping box on the way up (the detail cell, the table wrapper,
+        // the drawer shell) hides whatever still crosses either of its edges.
+        for (
+          let box: HTMLElement | null = node.parentElement;
+          box;
+          box = box === shell ? null : box.parentElement
+        ) {
+          const style = window.getComputedStyle(box);
+          if (style.overflowX === "visible" || style.display === "contents") {
+            continue;
+          }
+          const edges = box.getBoundingClientRect();
+          const past = Math.max(right - edges.right, edges.left - left);
+          if (past > 1) {
+            offenders.push(
+              `${node.textContent?.trim().slice(0, 60)} (${Math.round(past)}px past ${box.tagName.toLowerCase()})`,
+            );
+            break;
+          }
+        }
+      }
+      return offenders;
+    });
+    expect(cutOff).toEqual([]);
   });
 
   test("Infrastructure landing loads without horizontal overflow at mobile viewport", async ({

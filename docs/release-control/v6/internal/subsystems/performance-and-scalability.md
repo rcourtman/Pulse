@@ -1166,6 +1166,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 8. Render workload row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract
 9. Format infrastructure sensor labels through the shared `frontend-modern/src/utils/textPresentation.ts` presentation helper instead of maintaining a local title-casing implementation in `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 10. Extend workload row contract and per-row hot-path derivations through `frontend-modern/src/components/Workloads/guestRowModel.tsx` and `frontend-modern/src/components/Workloads/useGuestRowState.ts`, and extend tooltip-backed row cell presentation through `frontend-modern/src/components/Workloads/GuestRowCells.tsx`, rather than rebuilding column metadata, row identity, cell tooltips, or anomaly correlation inside `frontend-modern/src/components/Workloads/GuestRow.tsx`
+    Guest metric thresholds read the guest's alert policy tags through one
+    `getWorkloadAlertPolicyTags` memo per row and per drawer, beside the
+    existing scope and override-candidate memos, so `pulse-relaxed` bar
+    colouring adds no per-render tag parsing and no extra store reads.
     On coarse-pointer touch layouts, those cell details must not spawn floating
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability
@@ -1735,18 +1739,26 @@ shell clickable behind another overlay.
     scoped table metric-history interaction that requested them. Platform
     landing should stay route-module warm and data-light until the selected
     platform page owns its normal resource/table query.
-    Platform pages that embed `WorkloadsSurface` reuse the canonical
-    workloads filter toolbar through the `showFilterToolbar` +
-    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
-    keeps `tableOnly` to hide the dashboard cards and summary strip but
-    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
-    `ColumnPicker`, status/type chips, and search-history primitives that
-    the global Workloads page renders, so platform operators get
-    dense-table search, sort, grouping, view, status, and column controls
-    on every embedded workloads tab without spawning a forked toolbar.
-    The platform scope flows through `forcedPlatform` as a typed page
-    input; `suppressPlatformFilter` drops the now-redundant Platform chip
-    from the rendered toolbar so the user never sees a removable lock.
+    Two platform pages embed `WorkloadsSurface`: the Proxmox and vSphere
+    Overview tabs (`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
+    builds the workloads state itself with `useWorkloadsState`, renders the
+    one shared `WorkloadsFilter` toolbar (search, status filter, a type
+    filter that vSphere suppresses, and the View options for grouping, metric display, and columns on the
+    shared `FilterBar`) from that state, and hands the same state to `WorkloadsSurface` through its
+    `state` prop with `suppressFilterToolbar`, so the surface skips its own
+    filter row and the page never stacks two toolbars wired to one state.
+    Proxmox also passes that state's search, plus its page-owned metric mode
+    and history range, to the nodes table above the guests, so one toolbar
+    drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
+    `showFilterToolbar` prop, and no dashboard cards or summary strip to
+    hide: it renders its filter row (unless suppressed or in kiosk mode), the
+    workloads table, or an empty-state table card. The platform scope flows
+    through `forcedPlatform` as a typed page input to `useWorkloadsState`,
+    the toolbar, and the surface. `suppressPlatformFilter: true` makes the
+    state expose no Platform filter config and both pages pass
+    `platformFilter={undefined}` to the toolbar, so the user never sees the
+    locked platform as a removable chip.
 
 ### Navigation resolves from a bounded request
 
@@ -1831,6 +1843,22 @@ This correctness proof does not close the large-estate performance gap. The
 final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
+
+### Window resize listeners do not grow with rows
+
+Table rows must not each register a window `resize` listener.
+`frontend-modern/src/hooks/useBreakpoint.ts` keeps one module-level width
+signal, fed by a single rAF-debounced listener while at least one caller is
+mounted, and a new caller starts from the live `innerWidth`. Shared tooltip
+state in `frontend-modern/src/components/shared/useTooltipState.ts` listens
+only while its tooltip is visible. Measured on 2026-10-07 on a mock-mode
+`/proxmox` page with 140 workload rows at 1440 px, the active listener count
+fell from 859 (699 tooltip instances, 156 breakpoint callers) to 5; at 390 px
+with 36 rows it fell from 203 to 5. An open tooltip adds one listener and
+removes it on close, and crossing the phone breakpoint in either direction
+still switches the workload table and row layout. `useBreakpoint.test.ts`
+proves one listener for 50 callers, that back-to-back resizes leave one pending
+frame, and that every caller crosses a breakpoint when that frame runs.
 
 ### Large API responses negotiate gzip without corrupting edge cases
 

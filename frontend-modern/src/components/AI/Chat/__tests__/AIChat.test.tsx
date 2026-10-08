@@ -2737,8 +2737,9 @@ describe('AIChat', () => {
         expect.stringContaining('Explain this issue'),
         undefined,
         'finding-1',
-        expect.objectContaining({ autonomousMode: false, handoffContext: 'Current evidence' }),
+        expect.objectContaining({ handoffContext: 'Current evidence' }),
       );
+      expect(mockChat.sendMessage.mock.calls[0]?.[3]).not.toHaveProperty('autonomousMode');
       expect(textarea).toHaveValue('My unfinished question');
       expect(mockChat.newSession).not.toHaveBeenCalled();
       expect(mockChat.stop).not.toHaveBeenCalled();
@@ -3090,7 +3091,7 @@ describe('AIChat', () => {
         prompt: 'queued scoped prompt',
         mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         findingId: 'finding-1',
-        sendOptions: { autonomousMode: false, handoffContext: 'scoped context' },
+        sendOptions: { handoffContext: 'scoped context' },
         timestamp: new Date('2026-06-06T08:00:00Z'),
       };
       mockChat.queuedFollowUps.mockReturnValue([queued]);
@@ -3120,7 +3121,7 @@ describe('AIChat', () => {
         'edited scoped prompt',
         [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-1',
-        { autonomousMode: false, handoffContext: 'scoped context' },
+        { handoffContext: 'scoped context' },
       );
     });
 
@@ -3507,7 +3508,6 @@ describe('AIChat', () => {
         mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         findingId: 'finding-1',
         sendOptions: {
-          autonomousMode: false,
           handoffContext: 'scoped context',
         },
         timestamp: new Date(),
@@ -3535,7 +3535,6 @@ describe('AIChat', () => {
         [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-1',
         {
-          autonomousMode: false,
           handoffContext: 'scoped context',
         },
       );
@@ -3847,7 +3846,6 @@ describe('AIChat', () => {
           mentions: [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
           findingId: 'finding-101',
           model: 'openrouter:deepseek/deepseek-chat',
-          autonomousMode: false,
           handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
         },
       });
@@ -3873,7 +3871,6 @@ describe('AIChat', () => {
           [{ id: 'vm:pve:101', name: 'vm-101', type: 'vm', node: 'pve' }],
           'finding-101',
           expect.objectContaining({
-            autonomousMode: false,
             handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
             model: 'openrouter:deepseek/deepseek-chat',
           }),
@@ -4589,9 +4586,7 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: 'what failed?' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockChat.sendMessage).toHaveBeenCalledWith('what failed?', undefined, undefined, {
-        autonomousMode: false,
-      });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('what failed?', undefined, undefined);
     });
 
     it('does not restore handoff context when loading a session fails', async () => {
@@ -4881,7 +4876,6 @@ describe('AIChat', () => {
         'what changed?',
         undefined,
         'finding-context-only',
-        { autonomousMode: false },
       );
     });
 
@@ -5781,7 +5775,6 @@ describe('AIChat', () => {
         'summarize this dashboard',
         undefined,
         undefined,
-        { autonomousMode: false },
       );
     });
 
@@ -5894,7 +5887,6 @@ describe('AIChat', () => {
         undefined,
         undefined,
         {
-          autonomousMode: false,
           handoffContext:
             '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
           handoffResources: [
@@ -5977,7 +5969,6 @@ describe('AIChat', () => {
         'what changed next?',
         undefined,
         undefined,
-        { autonomousMode: false },
       );
     });
   });
