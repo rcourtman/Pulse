@@ -86,36 +86,6 @@ export const patrolStartFailureMessage = (error: unknown): string =>
     ? `Could not reach Pulse to start Patrol: ${patrolErrorMessage(error, 'network request failed')}`
     : patrolErrorMessage(error, 'Pulse rejected the Patrol run');
 
-export function resolvePatrolAutonomyLevelForSave(
-  level: PatrolAutonomyLevel,
-  fullModeUnlocked: boolean,
-  autoFixLocked: boolean,
-): PatrolAutonomyLevel {
-  if (autoFixLocked) return 'monitor';
-  if (level === 'full') {
-    return fullModeUnlocked ? 'full' : 'assisted';
-  }
-  return level;
-}
-
-export function resolvePatrolAutonomySettingsForSave({
-  level,
-  fullModeUnlocked,
-  autoFixLocked,
-}: {
-  level: PatrolAutonomyLevel;
-  fullModeUnlocked: boolean;
-  autoFixLocked: boolean;
-}): { autonomyLevel: PatrolAutonomyLevel; fullModeUnlocked: boolean } {
-  const canUseFullMode = !autoFixLocked && level === 'full' && fullModeUnlocked;
-  const autonomyLevel = resolvePatrolAutonomyLevelForSave(level, canUseFullMode, autoFixLocked);
-
-  return {
-    autonomyLevel,
-    fullModeUnlocked: autonomyLevel === 'full',
-  };
-}
-
 /**
  * A Patrol on/off save whose response reports Patrol not ready was still
  * saved, so it raises a warning rather than an error.
