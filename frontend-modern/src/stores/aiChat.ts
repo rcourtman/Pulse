@@ -75,10 +75,6 @@ export interface AIChatContext {
   handoffActions?: AIChatHandoffAction[];
   handoffMetadata?: AIChatHandoffMetadata;
   preferredWorkflowPromptName?: string;
-  // Drawer-only: false marks a scoped handoff so the drawer discloses the
-  // approval-required posture. Never sent; /api/ai/chat sets that posture
-  // server-side for every request.
-  autonomousMode?: boolean;
 }
 
 export type AIChatCommandRequestAction =
@@ -420,12 +416,11 @@ export const aiChatStore = {
   // A labelled Explain action is a user request. Merely opening the drawer
   // or attaching context never starts inference.
   explain(context: AIChatContext) {
-    const scopedContext = { ...context, autonomousMode: false };
     batch(() => {
-      setAIChatContext(scopedContext);
+      setAIChatContext(context);
       setExplanationRequest({
         id: nextExplanationRequestId++,
-        context: scopedContext,
+        context,
         signal: explanationScope.signal,
       });
       setIsAIChatOpen(true);

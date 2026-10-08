@@ -1,6 +1,6 @@
 # Pulse Intelligence Modes and Safety Configuration
 
-This guide covers how to configure Patrol mode, Pulse Assistant command access, and the safety guardrails that apply before Pulse can change infrastructure.
+This guide covers how to configure Patrol mode, the Pulse Assistant chat action mode, and the safety guardrails that apply before Pulse can change infrastructure.
 
 For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
 
@@ -11,9 +11,9 @@ For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level
 Pulse separates AI permissions into two independent axes:
 
 1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
-2. **Assistant Command Access** — Whether the interactive chat assistant can execute commands during a chat session.
+2. **Assistant Chat Action Mode** — Whether the interactive chat assistant can plan actions for you to review in **Actions**.
 
-Patrol mode is configured on the **Patrol** page. Assistant command access is configured in **Settings → Pulse Intelligence → Assistant**.
+Patrol mode is configured on the **Patrol** page. The Assistant chat action mode is configured in **Settings → Pulse Intelligence → Assistant**.
 
 ---
 
@@ -82,26 +82,26 @@ Without the `ai_autofix` capability, the effective Patrol mode is clamped to `mo
 
 ## Assistant Control Levels
 
-Control levels govern what the interactive Pulse Assistant can do during chat sessions.
+Control levels govern what the interactive Pulse Assistant can do during chat sessions. The assistant never changes infrastructure from chat: an action it plans is saved to **Actions**, where you review and run it.
 
-| Level | Key | Query | Execute Commands | Plan |
-|-------|-----|:-----:|:----------------:|------|
+| Level | Key | Answers questions | Plans actions | Plan |
+|-------|-----|:-----------------:|:-------------:|------|
 | **Read-only** | `read_only` | Yes | No | Community |
-| **Controlled** | `controlled` | Yes | With approval | Community |
-| **Autonomous** | `autonomous` | Yes | Yes | Pro / legacy Pro+ / Cloud |
+| **Ask first** | `controlled` | Yes | Yes, for review in Actions | Community |
 
-- **Read-only** (default): The assistant can query metrics, storage, and resource status but cannot execute any control actions.
-- **Controlled**: The assistant can propose commands but pauses for your explicit approval before execution. Each command shows a detailed approval card in the chat UI.
-- **Autonomous**: The assistant executes commands without prompting. Requires a Pro, legacy Pro+, or Cloud license.
+- **Read-only** (default): The assistant can query metrics, storage, and resource status but cannot plan actions.
+- **Ask first**: The assistant can plan an action a resource advertises, such as restarting a container, and saves the plan to **Actions** for you to review and run.
+
+Earlier versions offered a third `autonomous` level on Pro. Since July 2026, chat has run every request approval-required, so that level no longer changed what chat did. Pulse now saves a submitted `autonomous` value, and reads a stored one, as `controlled`.
 
 ### Configuration
 
-**UI:** Settings → Pulse Intelligence → Assistant → Chat command mode
+**UI:** Settings → Pulse Intelligence → Assistant → Chat action mode
 
-**API:** This intentionally changes chat command access. Use the same private
+**API:** This intentionally changes the chat action mode. Use the same private
 administrator header file with `settings:write`; the token must also have
 permission to change settings. Prefer the UI for one-off changes, and verify
-the saved **Chat command mode** there afterwards. Do not use a write as an
+the saved **Chat action mode** there afterwards. Do not use a write as an
 authentication test.
 
 ```bash
@@ -112,17 +112,14 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
 JSON
 ```
 
-### Approval Flow (Controlled Mode)
+### Reviewing Planned Actions (Ask First)
 
-When control level is `controlled`, write operations follow this flow:
+When the level is `controlled`, an action the assistant proposes follows this flow:
 
-1. The assistant proposes a command (e.g., `qm start 100`).
-2. An `APPROVAL_REQUIRED` response is emitted with an `approval_id`.
-3. The UI displays an approval card showing the exact command.
-4. You click **Approve** or **Deny**.
-5. On approval, the command executes and the assistant verifies the result.
-
-Approvals expire after 5 minutes if not acted upon.
+1. The assistant calls `pulse_control` with a capability the resource advertises, such as `restart` on a container.
+2. Pulse saves the plan in **Actions**; the chat does not run it.
+3. You review the plan in **Actions**, where approving and running it are separate recorded steps.
+4. The assistant can read the recorded outcome to confirm what happened.
 
 ---
 

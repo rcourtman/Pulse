@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "base_sha": "b0ba51db1685eac13ac97fda12245c2ba57be616",
+  "verified_at": "2026-10-08T08:33:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts",
+    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/stores/aiChat.ts",
+    "frontend-modern/src/types/ai.ts",
+    "frontend-modern/src/utils/aiChatPresentation.ts",
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts",
+    "frontend-modern/src/utils/resourceAssistantContextModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "d439b0b5923d7a0c6207c6d172f55296aa478d8726e02c9279258940f3cfc620",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "5d49f080454bc44095e53fd43153f0167958e71a92b10e8e9c3d870dcd721a32",
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts": "704f70f37e83835f2b4b2672e624d3d469e6f3882b5e1e7bcaa27f84caad2fe4",
+    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts": "36311d09159bd09916e164814bf543e204cd3ce25344813d87df415d60f524a2",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "9eb7285678f80f7932a6a0b15ae4bbfe336fd73598394b137956531d3415c13e",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "12550da71274b9a2e4f3033ed3ea13c1e16d4931dcf042f5c454784a5fc8e74f",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "f4424b9b1056f1a97acbe9b039f299e1d641d3df051b35668ef204f6ade86ad7",
+    "frontend-modern/src/stores/aiChat.ts": "6ad70d1494c3afa446be460385be972ec0c3acabed34982be9c9d79c62764650",
+    "frontend-modern/src/types/ai.ts": "3973ede189b2899bb9472ab0b939b062103bb30624f8c4a0fb8ad3e04956254c",
+    "frontend-modern/src/utils/aiChatPresentation.ts": "15de18883e31ecf4f618788c55ffa7fcc0a33cb97943878f739452cfd5f0379d",
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts": "845deafcd89772858bc0c98f2428509a6b31fb41e4d05cc73b4ead82fd750b5f",
+    "frontend-modern/src/utils/resourceAssistantContextModel.ts": "cf9804a6dbf2d7f3301b2210c47698cd582419e29c1bbf491e1d338379253883"
+  },
+  "routes": [
+    "/docker/overview",
+    "/alerts/overview",
+    "/settings/pulse-intelligence/assistant"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 860
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private non-mock stack: backend built from this change (cross-compiled on pulse-dev from the landing clone at origin/main d2ac0c5112 plus the change, then rebased onto b0ba51db16 whose only new commit (#2745, resources API freshness thresholds) touches no frontend or Assistant code) on :7871 with PULSE_DEV and admin bypass, Vite from the same tree on :5391, Assistant configured with a local OpenAI-compatible stub provider that logs every request, and a reported Docker host with one nginx container (later reported exited to raise a real docker-container-state alert)",
+    "Before (origin/main binary, same data dir, saved control_level=autonomous): drawer pill 'Chat: Chat actions', third menu option 'Chat actions / Eligible chat-only actions', red 'Chat-only actions are allowed.' row with Switch to Ask first, footer '12 capabilities'; /api/ai/chat turns under saved controlled and saved autonomous sent the stub the same 13 tools, a byte-identical 10449-char system prompt and got the same pulse_control result",
+    "After, first start on the same data dir: GET /api/settings/ai returns control_level=controlled (stored autonomous migrated); PUT control_level=autonomous returns 200 and saves controlled; surface-tools lists the same 13 tools (pulse_question included) as a chat turn offers",
+    "Drawer on /docker/overview at both widths: pill 'Chat: Ask first', no chat-actions warning row and no activity dock when idle, footer '13 capabilities'; mode menu lists exactly Read-only (Answers questions only) and Ask first (Plans actions for your review)",
+    "At 375px the mode menu box (w-60, anchored left-0 to the 'Chat: Ask first' pill at x=210) spans 210-450px past the 375px edge; measured in the rendered 11px font from the description's left edge at 223px, the new Ask first description is 151px (ends at 374px), while the old 'Asks before chat-only actions' measures 156.4px and would end at 379px with the same pill label and anchor, so the box overflow predates this change and the new copy fits where the old copy clipped",
+    "Alert handoff on /alerts/overview: More alert actions > Explain with Assistant opened the drawer with the alert briefing (Warning docker-container-state on web-nginx), sent the explanation turn through the stub (STUB-REPLY), pill 'Chat: Ask first', no separate approval note",
+    "Settings > Assistant at both widths: select offers only Read-only and Ask first; Ask first shows the amber 'Ask first' badge, the Actions review description and Protected guests; Read-only hides badge and Protected guests and reads 'Assistant answers questions and cannot plan actions.'; no upgrade link or chat-actions warning; no horizontal page overflow",
+    "Console: only WebSocket proxy errors from the private Vite ws proxy (present before the change too); no application errors"
+  ],
+  "interactions": [
+    "Opened the Assistant drawer from the page launcher at 1366 and 375 widths",
+    "Selected Read-only from the drawer menu (server saved read_only; surface-tools dropped pulse_control, 12 tools) and switched back to Ask first with the keyboard: ArrowDown moved Read-only -> Ask first, ArrowDown wrapped to Read-only, End then Enter selected Ask first",
+    "Explain with Assistant from an active alert's More alert actions menu",
+    "Changed Chat action mode to Read-only in Settings at 375px and saved (server read_only), then back to Ask first at 1366px and saved ('Assistant settings saved' toast, server controlled)",
+    "Ran /api/ai/chat LIVECHECK turns under saved controlled and saved autonomous on both binaries and diffed the stub's logged requests"
+  ]
+}

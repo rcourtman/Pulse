@@ -744,13 +744,13 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 
 func TestService_isAutonomousModeEnabled(t *testing.T) {
 	service := &Service{cfg: &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}}
-	if !service.isAutonomousModeEnabled() {
-		t.Fatalf("expected autonomous mode from config")
+	if service.isAutonomousModeEnabled() {
+		t.Fatalf("a saved retired autonomous control level must not enable autonomous mode")
 	}
 
-	service = &Service{}
-	if service.isAutonomousModeEnabled() {
-		t.Fatalf("expected autonomous mode to be false")
+	service = &Service{autonomousMode: true}
+	if !service.isAutonomousModeEnabled() {
+		t.Fatalf("expected the service autonomy flag to enable autonomous mode")
 	}
 }
 

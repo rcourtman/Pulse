@@ -33,7 +33,6 @@ describe('buildResourceAssistantContext', () => {
 
     expect(context.targetType).toBe('resource');
     expect(context.targetId).toBe('app-container:homeassistant');
-    expect(context.autonomousMode).toBe(false);
     expect(context.handoffContext).toBeUndefined();
     expect(context.handoffResources).toEqual([
       {

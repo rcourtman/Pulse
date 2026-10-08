@@ -80,9 +80,8 @@ describe('aiChatStore', () => {
   it('starts only explicit explanations and ignores stale acknowledgements', () => {
     aiChatStore.open({ targetId: 'vm-a' });
     expect(aiChatStore.explanationRequestSignal()).toBeNull();
-    aiChatStore.explain({ targetId: 'vm-a', autonomousMode: true });
+    aiChatStore.explain({ targetId: 'vm-a' });
     const first = aiChatStore.explanationRequestSignal()!;
-    expect(first.context.autonomousMode).toBe(false);
     aiChatStore.explain({ targetId: 'vm-b', handoffContext: 'Evidence B' });
     const second = aiChatStore.explanationRequestSignal()!;
     aiChatStore.ackExplanationRequest(first.id);
@@ -213,22 +212,19 @@ describe('aiChatStore', () => {
     });
   });
 
-  it('preserves the drawer approval disclosure flag for context-only opens', () => {
+  it('opens the drawer for a context-only open', () => {
     aiChatStore.open({
       targetType: 'dashboard',
       targetId: 'pulse-brief',
-      autonomousMode: false,
     });
 
     expect(aiChatStore.isOpen).toBe(true);
-    expect(aiChatStore.context.autonomousMode).toBe(false);
   });
 
   it('preserves model-only handoff context and resources for context-only opens', () => {
     aiChatStore.open({
       targetType: 'storage',
       targetId: 'storage-1',
-      autonomousMode: false,
       handoffContext:
         '[Alert Incident Context]\nTimeline Event 1: 2026-05-07T00:02:00Z | Command | Command event recorded',
       handoffResources: [{ id: 'storage-1', name: 'tank', type: 'storage', node: 'nas-1' }],
@@ -248,7 +244,6 @@ describe('aiChatStore', () => {
     aiChatStore.open({
       targetType: 'storage',
       targetId: 'storage-1',
-      autonomousMode: false,
       findingId: 'finding-1',
       briefing: {
         sourceLabel: 'Pulse Patrol',
@@ -277,7 +272,6 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.preferredWorkflowPromptName).toBeUndefined();
     expect(aiChatStore.context.targetId).toBe('storage-1');
     expect(aiChatStore.context.findingId).toBe('finding-1');
-    expect(aiChatStore.context.autonomousMode).toBe(false);
     expect(aiChatStore.context.briefing?.title).toBe('Patrol finding on tank');
   });
 

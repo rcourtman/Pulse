@@ -264,7 +264,6 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
         },
         handoffResources: [{ id: 'vm-101', name: 'web-prod-01', type: 'vm', node: 'esxi-host-1' }],
         handoffMetadata: { kind: 'resource_context' },
-        autonomousMode: false,
       };
 
       expect(buildResourceAssistantContextForTarget(target)).toStrictEqual(expected);

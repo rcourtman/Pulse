@@ -994,8 +994,7 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    answer. Finding
    handoffs must be assembled through the Patrol-owned handoff model so the
    prompt, visible briefing, model-only finding context, resource reference,
-   bounded action reference, and drawer approval-required disclosure stay in
-   sync. The model-only context may include
+   and bounded action reference stay in sync. The model-only context may include
    current finding status, recurrence, investigation record facts, evidence,
    verification, approval state, dry-run posture, existing action artifact
    summary, target resource references, and governed action references without
@@ -1005,8 +1004,8 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe
    summary/count metadata as review context, attach the target resource
    reference, include bounded `handoff_actions` for live approvals or structured
-   action artifacts when present, mark the drawer's approval-required
-   disclosure, attach the Patrol-owned visible drawer briefing for the pending approval or
+   action artifacts when present, attach the Patrol-owned visible drawer
+   briefing for the pending approval or
    queued-fix recovery state, and never paste the approval command or
    action command text into the chat prompt. Existing remediation-plan or
    action-plan artifacts follow the same boundary: plan status, risk, and
@@ -1018,16 +1017,16 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    context-only findings and findings that reference a live approval, action
    artifact, fix outcome, or remediation plan, run in the approval-required
    mode `/api/ai/chat` sets server-side for every request; the browser sends no
-   execution-mode field, so default autonomous Assistant settings cannot bypass
-   the Patrol action-governance boundary. The assembled handoff must still pass
+   execution-mode field, so no Assistant setting can bypass the Patrol
+   action-governance boundary. The assembled handoff must still pass
    through the Assistant runtime's resource-policy sanitizer before prompt
    injection, so Patrol-owned prose
    cannot leak governed resource names, IDs, aliases, nodes, paths, or
    addresses outside the canonical policy boundary.
    If a `fix_queued` finding no longer has a live approval payload or detailed
    action artifact payload available, the recovery action must still open Assistant
-   with the same Patrol-owned visible briefing and approval-required posture
-   from current finding facts; it must not fall back to generic investigation
+   with the same Patrol-owned visible briefing from current finding facts, and
+   the server keeps that chat approval-required; it must not fall back to generic investigation
    chat or invite execution from missing command details.
    Patrol run-history Assistant handoffs are a separate run-context surface:
    the visible drawer must keep the `Patrol run attached` headline, may show the
@@ -1615,9 +1614,8 @@ notification carrying the backend's concrete license/validation reason
 instead of generic fallback copy, and it offers no Assistant handoff. If a
 Patrol settings popover or an Assistant handoff from a settings failure
 returns, the handoff is model-only explanation context: raw command, script,
-credential, and provider-detail payloads stay redacted, Assistant opens with
-`autonomousMode:false`, and the popover closes so the operator is not left
-behind it.
+credential, and provider-detail payloads stay redacted, and the popover
+closes so the operator is not left behind it.
 Patrol-control save-failure sessions saved by earlier builds keep the
 compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
 runtime-failure boolean needed for drawer/session presentation, so they restore

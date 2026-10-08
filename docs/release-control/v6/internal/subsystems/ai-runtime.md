@@ -1448,6 +1448,19 @@ Assistant control wording must identify the effective scope as Assistant chat
 only. Patrol autonomy and global Actions remain separate authority surfaces;
 the chat pill may display the effective `control_level` but must not imply that
 read-only chat demotes Patrol or infrastructure action policy.
+Assistant chat has two control levels, `read_only` and `controlled`. The third
+`autonomous` level is retired: since the July 2026 chat authority boundary,
+public chat runs every turn approval-required and Assistant control only plans
+into Pulse Actions, so the level stopped changing drawer turns. `internal/config/ai.go` owns the alias: `GetControlLevel` reads
+a stored `autonomous` as `controlled`, `SettableControlLevel` saves a submitted
+one as `controlled`, and config load rewrites it. Nothing resolves an
+entitlement-clamped level any more, and `ai.Service` has no autonomy branch.
+The drawer, Settings and the surface-tools contract must present only the two
+levels, with no chat-actions warning or upgrade prompt for a third. The
+drawer synthesizes no approval-required disclosure of its own: the shared chat
+mode pill shows the saved mode for every chat, and scoped handoffs add no
+separate drawer-authored approval note. A briefing's own safety note (for
+example the resource-context handoff's) remains briefing content.
 
 The manual Patrol route is an extension boundary for scoped work. `POST
 /api/ai/patrol/run` (`HandleForcePatrol`) accepts an optional scope body
@@ -2509,8 +2522,8 @@ deriving an older display status from `workflowStatusHistory`.
    operations through explicit command titles before those actions reach the
    terminal UI. Pulse's browser drawer must therefore expose command-specific
    accessible names and selected/expanded state for always-visible chat actions
-   such as New session, session history, collapse/close, autonomous-warning
-   recovery, and the control-mode selector instead of depending on title-only
+   such as New session, session history, collapse/close, and the control-mode
+   selector instead of depending on title-only
    icon controls or ambiguous short labels.
    The slash command autocomplete is a command-discovery surface, not just a
    text shortcut hint. The referenced OpenCode source at fetched `origin/dev`
@@ -3813,9 +3826,9 @@ query...`, and `Reading storage...` before streamed tool arguments are
    `frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts`.
    It preserves drafts and current work, captures the selected context before
    asynchronous initialization, and uses normal send, queue, and retry handling.
-   The store marks that context `autonomousMode:false` so the drawer discloses
-   approval-required posture; the request itself carries no execution-mode
-   field, because `/api/ai/chat` sets that mode server-side. It must not prescribe a diagnosis
+   The request carries no execution-mode field, because `/api/ai/chat` sets
+   that mode server-side, and the drawer shows the same saved mode for a scoped
+   handoff as for a plain chat. It must not prescribe a diagnosis
    or a tool sequence or grant action authority. The drawer
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
@@ -4310,13 +4323,13 @@ resolve canonical/source IDs and unique aliases before collection, reject
     `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     may describe approval posture, but must not add Pro-badge suffixes or
     local commercial tracking around those runtime controls.
-13. Keep Assistant control and Patrol paid runtime settings entitlement-effective
-    at every runtime boundary. Stored config may preserve autonomous, Patrol
-    auto-remediation, and alert-triggered analysis preferences so they come
-    back if entitlement returns, but API responses, chat executor startup,
-    restart, settings-update, request-clone paths, and Patrol execution must
+13. Keep Patrol paid runtime settings entitlement-effective at every runtime
+    boundary. Stored config may preserve Patrol auto-remediation and
+    alert-triggered analysis preferences so they come back if entitlement
+    returns, but API responses, settings-update paths, and Patrol execution must
     clamp those values through runtime entitlements before exposing or enforcing
-    them.
+    them. The Assistant control level is not entitlement-gated: config reads and
+    saves the retired `autonomous` level as `controlled` for every install.
 14. Keep agent-backed Patrol reachability checks aligned with the agent command
     policy. `internal/ai/patrol_prober.go` may use connected agents for
     read-only guest ping probes, but it must validate each target as an IP
@@ -4633,9 +4646,8 @@ resolve canonical/source IDs and unique aliases before collection, reject
     completed, failed, expired, or otherwise historical action references must
     remain action context without being relabeled as requiring approval.
     When the Assistant drawer restores any session from that `handoff_summary`,
-    it must restore the scoped approval-required disclosure (the drawer-only
-    `autonomousMode:false` context flag) as well as the safe visible briefing,
-    even when the summary is context-only and has no queued action. The next
+    it must restore the safe visible briefing, even when the summary is
+    context-only and has no queued action. The next
     chat turn carries no execution-mode field; `/api/ai/chat` runs it
     approval-required server-side. The visible badge/action copy must still reflect the
     actual last-known action state or Patrol assessment context instead of
@@ -4671,8 +4683,7 @@ resolve canonical/source IDs and unique aliases before collection, reject
     model-context text parsing must not resurrect them as a legacy fallback.
     After that send succeeds, the drawer
     must clear those request payloads while preserving the safe visible
-    briefing and the drawer's
-    approval-required disclosure; later turns must rely on backend-owned session
+    briefing; later turns must rely on backend-owned session
     model-context hydration and current canonical stores instead of resending
     stale browser handoff payloads. Patrol approval-row Assistant entries are
     still Patrol finding handoffs, not local prompt-only shortcuts: live
@@ -4698,27 +4709,27 @@ resolve canonical/source IDs and unique aliases before collection, reject
     (`chat.ExecuteRequest.AutonomousMode`) to
     both the per-request `AgenticLoop` and the cloned `PulseToolExecutor`;
     persistent autonomous settings must not leak into approval-required
-    requests through executor state. When the request forces approval mode
-    and the saved control level is autonomous, the executor clone must clamp its
-    effective control level to controlled for that request only, so even
-    policy-allowed diagnostic commands require operator approval in public chat
-    without mutating the user's saved setting.
+    requests through executor state. Config already reads a stored retired
+    autonomous level as controlled; the executor clone still clamps an
+    autonomous executor level to controlled whenever the request forces
+    approval mode, so policy-allowed diagnostic commands require operator
+    approval in public chat.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.
     Resource-drawer Assistant entries use that same briefing path with
     `handoff_metadata.kind=resource_context`, a structured `handoff_resources`
-    reference, and the drawer-only `autonomousMode:false` approval disclosure;
-    they must not prefill or submit a
+    reference; they must not prefill or submit a
     browser-authored prompt, and any rich resource facts must be hydrated by the
     backend context-pack path rather than reconstructed in the browser.
     Safe route-owned briefing actions may render as app links when the handoff
     includes an `actionHref`, but those links are navigation guidance only and
     do not grant tool execution or approval authority.
-    Scoped handoffs must present the approval-required boundary
-    through compact source-named drawer state and the effective control label,
-    so Patrol approval/finding handoffs and alert-investigation handoffs are
-    named by their source rather than as generic dashboard briefs.
+    Scoped handoffs must present compact source-named drawer state, with the
+    effective control label showing the saved mode and no drawer-authored
+    approval note, so Patrol approval/finding handoffs and
+    alert-investigation handoffs are named by their source rather than as
+    generic dashboard briefs.
 
 ### Operational attention projection boundary
 
@@ -5406,9 +5417,8 @@ the prompt and active/retry/interrupt state in the prompt footer in
 `packages/tui/src/component/prompt/index.tsx`, with broader system status kept
 in `packages/tui/src/routes/session/footer.tsx`. Pulse adapts that pattern for
 the web drawer by keeping model route, recent-route cycling, control mode,
-last-turn usage, active workflow progress, queued follow-ups, route-recovery
-notices, and the autonomous control warning in the input-adjacent
-composer/status rail.
+last-turn usage, active workflow progress, queued follow-ups, and
+route-recovery notices in the input-adjacent composer/status rail.
 Those items stay visible and actionable, but they do not compete with the
 transcript as separate top-of-drawer banners unless they are provider readiness
 or scoped handoff context surfaces with their own governed content.
@@ -6991,9 +7001,7 @@ instead of carrying one. When an overview brief opens Assistant, the drawer may
 prefill only governed prompt/context data; the submitted chat request carries
 no execution-mode field (`/api/ai/chat` runs every request approval-required),
 the operator's persistent Assistant control-level setting stays untouched, and
-the drawer discloses the approval-required mode through the
-`autonomousMode:false` context flag instead of showing the generic Autonomous
-warning.
+the drawer shows the same saved mode as it does for a plain chat.
 Scoped Assistant handoffs that originate in owned product surfaces may also
 send bounded `handoff_context` text, structured `handoff_resources`, and safe
 structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
@@ -7008,7 +7016,6 @@ Patrol product handoff section as secondary model-only briefing, and it must
 drop mismatched resource/action references plus raw command payload lines.
 Direct alert-investigation runtime handoffs follow the same rule even when
 they bypass the chat drawer. `/api/ai/investigate-alert` must set
-`ai.ExecuteRequest.AutonomousMode` to false plus
 `ai.ExecuteRequest.RequireCommandApproval` to true, and
 `internal/ai/alert_provider.go` must frame diagnostics as approval-bound
 operator actions rather than instructing the model to execute commands because

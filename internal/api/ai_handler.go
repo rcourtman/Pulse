@@ -174,7 +174,6 @@ type AIHandler struct {
 	// re-installs it on every freshly created store so multi-tenant
 	// re-keying or data-dir changes keep the agent SSE stream wired.
 	approvalCreatedCallback func(*approval.ApprovalRequest)
-	controlLevelResolver    func(context.Context, *config.AIConfig) string
 	patrolRunProvider       patrolRunHandoffProvider
 
 	// reportNarratorResolver returns the per-tenant report-narration
@@ -459,42 +458,6 @@ func (h *AIHandler) SetServiceInitializer(initializer func(ctx context.Context, 
 	}
 }
 
-// SetControlLevelResolver configures the entitlement-aware control-level
-// resolver used by chat services when applying Assistant tool permissions.
-func (h *AIHandler) SetControlLevelResolver(
-	resolver func(context.Context, *config.AIConfig) string,
-) {
-	if h == nil {
-		return
-	}
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	h.controlLevelResolver = resolver
-}
-
-func (h *AIHandler) resolveControlLevel(ctx context.Context, cfg *config.AIConfig) string {
-	if h == nil {
-		if cfg == nil {
-			return config.ControlLevelReadOnly
-		}
-		return cfg.GetControlLevel()
-	}
-
-	h.stateMu.RLock()
-	resolver := h.controlLevelResolver
-	h.stateMu.RUnlock()
-
-	if resolver != nil {
-		if level := strings.TrimSpace(resolver(ctx, cfg)); config.IsValidControlLevel(level) {
-			return level
-		}
-	}
-	if cfg == nil {
-		return config.ControlLevelReadOnly
-	}
-	return cfg.GetControlLevel()
-}
-
 // GetService returns the AI service for the current context
 func (h *AIHandler) GetService(ctx context.Context) AIService {
 	orgID := GetOrgID(ctx)
@@ -639,9 +602,6 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		AgentServer: tenantAgentServerForOrganization(h.agentServer, orgID),
 		ReadState:   h.readStateForOrg(orgID),
 		OrgID:       orgID,
-		ControlLevelResolver: func(next *config.AIConfig) string {
-			return h.resolveControlLevel(tenantCtx, next)
-		},
 	}
 	if recoveryManager != nil {
 		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsToolAdapter(recoveryManager, orgID)
@@ -889,9 +849,6 @@ func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Mon
 		AgentServer:   tenantAgentServerForOrganization(h.agentServer, orgID),
 		ReadState:     h.readStateForOrg(orgID),
 		OrgID:         orgID,
-		ControlLevelResolver: func(next *config.AIConfig) string {
-			return h.resolveControlLevel(serviceCtx, next)
-		},
 	}
 	_, _, _, _, _, recoveryManager := h.stateRefs()
 	if recoveryManager != nil {

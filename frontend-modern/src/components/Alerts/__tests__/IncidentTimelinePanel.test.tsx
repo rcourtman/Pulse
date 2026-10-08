@@ -182,7 +182,6 @@ describe('IncidentTimelinePanel', () => {
     expect(openSpy).toHaveBeenCalledTimes(1);
     const [context] = openSpy.mock.calls[0] as [Record<string, unknown>];
     expect(context).toMatchObject({
-      autonomousMode: false,
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Incident timeline attached',

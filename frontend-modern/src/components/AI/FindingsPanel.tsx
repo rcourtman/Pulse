@@ -945,7 +945,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       findingId: finding.id,
       handoffContext,
       briefing,
-      autonomousMode: false,
     });
   };
 

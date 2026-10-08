@@ -362,7 +362,6 @@ describe('InvestigateAlertButton', () => {
       expect(context).toMatchObject({
         targetType: 'vm',
         targetId: 'vm-101',
-        autonomousMode: false,
         briefing: expect.objectContaining({
           sourceLabel: 'Pulse Alerts',
           title: 'Alert investigation attached',
@@ -394,7 +393,6 @@ describe('InvestigateAlertButton', () => {
 
       const context = openedContext();
 
-      expect(context.autonomousMode).toBe(false);
       expect(context.briefing).toMatchObject({
         sourceLabel: 'Pulse Alerts',
         title: 'Alert investigation attached',

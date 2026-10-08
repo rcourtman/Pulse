@@ -73,7 +73,6 @@ describe('mobile incident Assistant transition', () => {
       expect(openAssistant).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'resource-1',
-          autonomousMode: false,
           context: expect.objectContaining({
             alertIncidentId: 'incident-1',
             alertStatus: 'resolved',

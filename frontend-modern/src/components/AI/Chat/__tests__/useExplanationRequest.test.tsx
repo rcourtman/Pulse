@@ -42,7 +42,6 @@ describe('explicit issue explanations', () => {
     aiChatStore.explain({
       targetId: 'vm-1',
       findingId: 'finding-1',
-      autonomousMode: true,
       handoffContext: 'Current finding evidence',
       handoffResources: resources,
       handoffActions: actions,
@@ -55,8 +54,6 @@ describe('explicit issue explanations', () => {
       handoffActions: actions,
       handoffMetadata: { kind: 'patrol_finding' },
     });
-    // The drawer still discloses the approval-required posture the server sets.
-    expect(aiChatStore.context.autonomousMode).toBe(false);
     aiChatStore.close();
     aiChatStore.open();
     await Promise.resolve();

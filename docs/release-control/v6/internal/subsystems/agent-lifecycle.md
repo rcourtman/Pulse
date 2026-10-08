@@ -4929,9 +4929,9 @@ context as well: lifecycle-adjacent setup and fleet surfaces may not treat
 `provider_auth`, `provider_connection`, model-selection, or provider-settings
 recommendations as agent registration, updater trust, or fleet-control health.
 That same shared AI handler dependency also assumes direct alert-investigation
-execution mode is AI/API-owned. Request-scoped `AutonomousMode:false` and
-`RequireCommandApproval:true` on `/api/ai/investigate-alert` are Assistant
-action-governance facts, not agent install readiness, command reachability, or
+execution mode is AI/API-owned. Request-scoped `RequireCommandApproval:true`
+on `/api/ai/investigate-alert` is an Assistant action-governance fact, not
+agent install readiness, command reachability, or
 fleet-control capability signals.
 Visible `stream_idle` workflow progress on that same legacy Assistant SSE
 route, and on `/api/ai/execute/stream`, is likewise Assistant/API transport

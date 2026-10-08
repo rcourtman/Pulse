@@ -1544,10 +1544,8 @@ func TestContract_InvestigateAlertIsApprovalBound(t *testing.T) {
 	}
 	text := string(source)
 
-	if !strings.Contains(text, "autonomousMode := false") ||
-		!strings.Contains(text, "AutonomousMode:         &autonomousMode") ||
-		!strings.Contains(text, "RequireCommandApproval: true") {
-		t.Fatal("investigate-alert API handoff must force request-scoped approval and command approval")
+	if !strings.Contains(text, "RequireCommandApproval: true") {
+		t.Fatal("investigate-alert API handoff must force command approval")
 	}
 }
 
@@ -20706,9 +20704,9 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`ControlLevelReadOnly = string(agentcapabilities.ControlLevelReadOnly)`,
 		`ControlLevelControlled = string(agentcapabilities.ControlLevelControlled)`,
 		`ControlLevelAutonomous = string(agentcapabilities.ControlLevelAutonomous)`,
-		`return string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))`,
+		`level := string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))`,
 		`return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))`,
-		`return agentcapabilities.IsValidControlLevel(level)`,
+		`func SettableControlLevel(level string) (string, bool) {`,
 	} {
 		if !strings.Contains(configAI, fragment) {
 			t.Errorf("AI config must alias shared control-level vocabulary; missing %s", fragment)

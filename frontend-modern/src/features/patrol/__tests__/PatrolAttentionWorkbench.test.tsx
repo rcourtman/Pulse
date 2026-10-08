@@ -1414,7 +1414,6 @@ describe('attention explanation context', () => {
     );
     expect(handoff.context.handoffContext).toContain('Operational Record: record-1');
     expect(handoff.context.handoffContext).toContain('Evidence evidence-1:');
-    expect(handoff.context.autonomousMode).toBe(false);
   });
 
   it('keeps unlinked attention evidence and existing governed action references without inventing a finding', () => {

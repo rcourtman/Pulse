@@ -37,20 +37,17 @@ func TestServiceExecuteCommand_NoExecutor(t *testing.T) {
 	}
 }
 
-func TestServiceEffectiveControlLevelUsesResolver(t *testing.T) {
+func TestServiceEffectiveControlLevelReadsRetiredAutonomousAsControlled(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelAutonomous},
-		ControlLevelResolver: func(*config.AIConfig) string {
-			return config.ControlLevelReadOnly
-		},
 	})
 
 	service.mu.RLock()
 	got := service.effectiveControlLevelLocked()
 	service.mu.RUnlock()
 
-	if got != tools.ControlLevelReadOnly {
-		t.Fatalf("expected resolver-clamped control level %q, got %q", tools.ControlLevelReadOnly, got)
+	if got != tools.ControlLevelControlled {
+		t.Fatalf("expected retired autonomous setting to read as %q, got %q", tools.ControlLevelControlled, got)
 	}
 }
 
@@ -72,9 +69,6 @@ func TestControlLevelForRequestAutonomousModeClampsAutonomousToControlled(t *tes
 func TestServiceUpdateControlSettingsRefreshesEffectiveConfig(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
-		ControlLevelResolver: func(cfg *config.AIConfig) string {
-			return config.EffectiveControlLevelForEntitlement(cfg.GetControlLevel(), false)
-		},
 	})
 
 	next := &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
@@ -89,7 +83,7 @@ func TestServiceUpdateControlSettingsRefreshesEffectiveConfig(t *testing.T) {
 		t.Fatal("expected UpdateControlSettings to refresh the service config")
 	}
 	if gotLevel != tools.ControlLevelControlled {
-		t.Fatalf("expected autonomous setting to be clamped to %q, got %q", tools.ControlLevelControlled, gotLevel)
+		t.Fatalf("expected retired autonomous setting to read as %q, got %q", tools.ControlLevelControlled, gotLevel)
 	}
 }
 

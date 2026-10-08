@@ -9,43 +9,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
-func TestEffectiveControlLevelForEntitlement(t *testing.T) {
+func TestSettableControlLevel(t *testing.T) {
 	tests := []struct {
-		name              string
-		level             string
-		autonomousAllowed bool
-		want              string
+		name   string
+		level  string
+		want   string
+		wantOK bool
 	}{
-		{
-			name:              "autonomous allowed stays autonomous",
-			level:             ControlLevelAutonomous,
-			autonomousAllowed: true,
-			want:              ControlLevelAutonomous,
-		},
-		{
-			name:              "autonomous without entitlement becomes controlled",
-			level:             ControlLevelAutonomous,
-			autonomousAllowed: false,
-			want:              ControlLevelControlled,
-		},
-		{
-			name:              "controlled stays controlled without entitlement",
-			level:             ControlLevelControlled,
-			autonomousAllowed: false,
-			want:              ControlLevelControlled,
-		},
-		{
-			name:              "invalid stays fail closed",
-			level:             "bad",
-			autonomousAllowed: true,
-			want:              ControlLevelReadOnly,
-		},
+		{name: "read_only saves as read_only", level: ControlLevelReadOnly, want: ControlLevelReadOnly, wantOK: true},
+		{name: "controlled saves as controlled", level: " controlled ", want: ControlLevelControlled, wantOK: true},
+		{name: "retired autonomous saves as controlled", level: ControlLevelAutonomous, want: ControlLevelControlled, wantOK: true},
+		{name: "legacy suggest is not settable", level: "suggest", wantOK: false},
+		{name: "empty is not settable", level: "", wantOK: false},
+		{name: "unknown is not settable", level: "bad", wantOK: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EffectiveControlLevelForEntitlement(tt.level, tt.autonomousAllowed); got != tt.want {
-				t.Fatalf("EffectiveControlLevelForEntitlement(%q, %v) = %q, want %q", tt.level, tt.autonomousAllowed, got, tt.want)
+			got, ok := SettableControlLevel(tt.level)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("SettableControlLevel(%q) = (%q, %v), want (%q, %v)", tt.level, got, ok, tt.want, tt.wantOK)
 			}
 		})
 	}

@@ -626,7 +626,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(assistantContext).toContainText(
       "High CPU usage on web-server (host)",
     );
-    await expect(assistantContext).toContainText(
+    await expect(assistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(
@@ -651,7 +651,7 @@ test.describe("Patrol Assistant operator briefing", () => {
       "Patrol finding on web-server",
     );
     await expect(reloadedAssistantContext).toContainText("approval pending");
-    await expect(reloadedAssistantContext).toContainText(
+    await expect(reloadedAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(
@@ -671,7 +671,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(contextOnlyAssistantContext).toContainText(
       "Patrol finding on web-server",
     );
-    await expect(contextOnlyAssistantContext).toContainText(
+    await expect(contextOnlyAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(
@@ -718,7 +718,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(restoredAssessmentAssistantContext).toContainText(
       "Patrol assessment handoff",
     );
-    await expect(restoredAssessmentAssistantContext).toContainText(
+    await expect(restoredAssessmentAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
 
@@ -763,7 +763,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(queuedAssistantContext).toContainText(
       "High CPU usage on web-server (host)",
     );
-    await expect(queuedAssistantContext).toContainText(
+    await expect(queuedAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(
@@ -797,7 +797,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(hydratedFindingAssistantContext).toContainText(
       "High CPU usage on web-server (host)",
     );
-    await expect(hydratedFindingAssistantContext).toContainText(
+    await expect(hydratedFindingAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(
@@ -819,7 +819,7 @@ test.describe("Patrol Assistant operator briefing", () => {
     await expect(expiredAssistantContext).toContainText(
       "High CPU usage on web-server",
     );
-    await expect(expiredAssistantContext).toContainText(
+    await expect(expiredAssistantContext).not.toContainText(
       "Approval required before any action.",
     );
     await expect(

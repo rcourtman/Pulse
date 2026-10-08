@@ -81,7 +81,6 @@ export const buildResourceAssistantContextForTarget = (
     handoffMetadata: {
       kind: 'resource_context',
     },
-    autonomousMode: false,
   };
 };
 

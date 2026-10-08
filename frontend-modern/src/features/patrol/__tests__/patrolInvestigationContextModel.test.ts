@@ -62,7 +62,6 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff).not.toHaveProperty('prompt');
     expect(JSON.stringify(handoff.context)).not.toContain('tool_choice');
     expect(JSON.stringify(handoff.context)).not.toContain('No endpoints found');
-    expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context).toMatchObject({
       targetType: 'patrol-run',
       targetId: 'run-runtime-error',
@@ -425,7 +424,6 @@ describe('patrolInvestigationContextModel', () => {
       targetType: 'agent',
       targetId: 'agent-1',
       findingId: 'finding-1',
-      autonomousMode: false,
       handoffResources: [{ id: 'agent-1', name: 'node-1', type: 'agent' }],
       context: {
         source: 'pulse-patrol-finding',
@@ -693,7 +691,6 @@ describe('patrolInvestigationContextModel', () => {
       targetType: 'service',
       targetId: 'pulse-patrol-runtime',
       findingId: 'finding-context-only',
-      autonomousMode: false,
       context: {
         source: 'pulse-patrol-finding',
         findingId: 'finding-context-only',

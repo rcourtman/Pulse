@@ -32,7 +32,6 @@ interface StrictAlertContext {
 interface StrictHandoffContext {
   targetType: string;
   targetId: string;
-  autonomousMode: boolean;
   handoffContext: string;
   handoffResources: { id: string; name: string; type: string; node: string }[];
   briefing: StrictBriefing;

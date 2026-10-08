@@ -350,7 +350,6 @@ describe('AlertResourceIncidentsPanel', () => {
     expect(context).toMatchObject({
       targetType: 'storage',
       targetId: 'storage:tank',
-      autonomousMode: false,
       briefing: {
         sourceLabel: 'Pulse Alerts',
         title: 'Incident timeline attached',

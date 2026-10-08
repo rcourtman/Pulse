@@ -836,9 +836,6 @@ func (r *Router) setupRoutes() {
 			})
 		})
 	}
-	r.aiHandler.SetControlLevelResolver(func(ctx context.Context, cfg *config.AIConfig) string {
-		return r.aiSettingsHandler.EffectiveControlLevel(ctx, cfg)
-	})
 	r.aiHandler.SetServiceInitializer(func(ctx context.Context, service AIService) {
 		r.wireAIChatDependenciesForService(ctx, service)
 	})
@@ -904,7 +901,7 @@ func (r *Router) setupRoutes() {
 				if cfg != nil {
 					svc.UpdateControlSettings(cfg)
 					log.Info().
-						Str("control_level", r.aiSettingsHandler.EffectiveControlLevel(ctx, cfg)).
+						Str("control_level", cfg.GetControlLevel()).
 						Msg("Updated AI control settings")
 				}
 			}

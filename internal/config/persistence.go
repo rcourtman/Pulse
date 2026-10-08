@@ -2281,7 +2281,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 
 	migratedLegacyFields := applyLegacyAIConfigFields(settings, legacyRaw)
 	migratedControlLevel := false
-	if settings.ControlLevel == "suggest" {
+	if settings.ControlLevel == "suggest" || settings.ControlLevel == ControlLevelAutonomous {
 		settings.ControlLevel = ControlLevelControlled
 		migratedControlLevel = true
 	}
@@ -2363,7 +2363,7 @@ func applyLegacyAIConfigFields(settings *AIConfig, raw map[string]json.RawMessag
 	}
 
 	if hasLegacyAutonomous && legacyAutonomousMode && settings.ControlLevel == "" {
-		settings.ControlLevel = ControlLevelAutonomous
+		settings.ControlLevel = ControlLevelControlled
 		migrated = true
 	}
 

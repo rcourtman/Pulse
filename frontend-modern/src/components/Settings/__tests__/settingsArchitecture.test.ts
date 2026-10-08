@@ -570,18 +570,13 @@ describe('settings architecture guardrails', () => {
       'Reporting is locked for this session. The report builder appears when advanced reporting is available.',
     );
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
-    expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
-    expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Ask first - Assistant asks before chat-only actions',
+      'Ask first - Assistant plans actions for your review',
     );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Allow chat-only actions - Assistant may take eligible chat actions',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'This controls actions started from Assistant chat only',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain('Patrol handles infrastructure');
+    expect(aiRuntimeControlsSectionSource).not.toContain("'autonomous'");
+    expect(aiRuntimeControlsSectionSource).not.toContain('chat-only actions');
+    expect(aiRuntimeControlsSectionSource).not.toContain('UpgradeLink');
+    expect(aiRuntimeControlsSectionSource).toContain('This sets what Assistant chat may do.');
     expect(aiRuntimeControlsSectionSource).not.toContain('Command auto-run');
     expect(aiRuntimeControlsSectionSource).not.toContain('without per-command approval');
     expect(aiRuntimeControlsSectionSource).not.toContain('Legal Disclaimer');

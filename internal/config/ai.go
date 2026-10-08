@@ -116,7 +116,7 @@ type AIConfig struct {
 
 	// AI Infrastructure Control settings
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
-	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
+	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only" or "controlled"; see SettableControlLevel
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
 
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
@@ -160,7 +160,10 @@ const (
 	ControlLevelReadOnly = string(agentcapabilities.ControlLevelReadOnly)
 	// ControlLevelControlled - AI can execute with per-command approval
 	ControlLevelControlled = string(agentcapabilities.ControlLevelControlled)
-	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
+	// ControlLevelAutonomous is the retired third Assistant chat level. Public
+	// chat runs every turn approval-gated and Assistant actions only plan into
+	// Pulse Actions, so the level granted nothing; a stored or submitted value
+	// reads and saves as ControlLevelControlled.
 	ControlLevelAutonomous = string(agentcapabilities.ControlLevelAutonomous)
 )
 
@@ -975,34 +978,17 @@ func (c *AIConfig) GetDiscoveryAIAnalysisTimeout() time.Duration {
 	return c.GetRequestTimeout()
 }
 
-// GetControlLevel returns the AI control level, defaulting to read_only if not set.
+// GetControlLevel returns the AI control level, defaulting to read_only if not
+// set. A stored retired autonomous level reads as controlled.
 func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
 		return ControlLevelReadOnly
 	}
-	return string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))
-}
-
-// EffectiveControlLevelForEntitlement returns the control level that may be
-// enforced for the current entitlement state. Stored autonomous preferences are
-// preserved in config, but without the autonomous entitlement they run as
-// controlled approval mode.
-func EffectiveControlLevelForEntitlement(level string, autonomousAllowed bool) string {
-	cfg := AIConfig{ControlLevel: level}
-	normalized := cfg.GetControlLevel()
-	if normalized == ControlLevelAutonomous && !autonomousAllowed {
+	level := string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))
+	if level == ControlLevelAutonomous {
 		return ControlLevelControlled
 	}
-	return normalized
-}
-
-// GetEffectiveControlLevel returns the AI control level that should be exposed
-// or enforced for the current entitlement state.
-func (c *AIConfig) GetEffectiveControlLevel(autonomousAllowed bool) string {
-	if c == nil {
-		return ControlLevelReadOnly
-	}
-	return EffectiveControlLevelForEntitlement(c.GetControlLevel(), autonomousAllowed)
+	return level
 }
 
 // IsControlEnabled returns true if AI has any control capability beyond read-only
@@ -1010,14 +996,19 @@ func (c *AIConfig) IsControlEnabled() bool {
 	return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))
 }
 
-// IsAutonomous returns true if AI is configured for autonomous operation (no approval needed)
-func (c *AIConfig) IsAutonomous() bool {
-	return c.GetControlLevel() == ControlLevelAutonomous
-}
-
-// IsValidControlLevel checks if a control level string is valid
-func IsValidControlLevel(level string) bool {
-	return agentcapabilities.IsValidControlLevel(level)
+// SettableControlLevel returns the level a submitted control_level saves as,
+// and false when the value is not a level. The retired autonomous level is
+// accepted and saves as controlled, so older API clients keep working with
+// the behaviour they already had.
+func SettableControlLevel(level string) (string, bool) {
+	switch level = strings.TrimSpace(level); level {
+	case ControlLevelReadOnly, ControlLevelControlled:
+		return level, true
+	case ControlLevelAutonomous:
+		return ControlLevelControlled, true
+	default:
+		return "", false
+	}
 }
 
 // GetProtectedGuests returns the list of protected guests (VMIDs or names)

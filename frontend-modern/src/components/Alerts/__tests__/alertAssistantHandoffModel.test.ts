@@ -31,7 +31,6 @@ describe('alertAssistantHandoffModel', () => {
       expect(context.targetType).toBeUndefined();
       expect(context.targetId).toBeUndefined();
       expect(context.handoffResources).toEqual([]);
-      expect(context.autonomousMode).toBe(false);
       expect(context.handoffContext).toContain('Scope: Pulse itself (not a monitored resource)');
       expect(context.handoffContext).toContain(alert.message);
       expect(context.handoffContext).toContain(`Alert Identifier: ${alert.id}`);
@@ -67,7 +66,6 @@ describe('alertAssistantHandoffModel', () => {
     expect(handoff.context).toMatchObject({
       targetType: 'vm',
       targetId: 'vm-101',
-      autonomousMode: false,
       handoffResources: [
         {
           id: 'vm-101',

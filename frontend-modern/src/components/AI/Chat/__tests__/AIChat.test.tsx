@@ -81,7 +81,6 @@ const {
       model: 'gpt-4',
       chat_model: '',
       control_level: 'read_only',
-      autonomous_mode: false,
       discovery_enabled: true,
     }),
     testProvider: vi.fn().mockResolvedValue({
@@ -170,7 +169,6 @@ const {
     targetType: undefined,
     targetId: undefined,
     findingId: undefined,
-    autonomousMode: undefined,
     context: undefined,
     briefing: undefined,
     handoffContext: undefined,
@@ -204,7 +202,6 @@ const {
       targetType?: string;
       targetId?: string;
       findingId?: string;
-      autonomousMode?: boolean;
       context?: Record<string, unknown>;
       handoffContext?: string;
       handoffResources?: Array<{
@@ -560,7 +557,6 @@ beforeEach(() => {
   mockAiChatStore.ackExplanationRequest.mockReset();
   mockAiChatStore.context = {
     findingId: undefined,
-    autonomousMode: undefined,
     briefing: undefined,
   };
   mockChat.messages.mockReturnValue([]);
@@ -583,7 +579,6 @@ beforeEach(() => {
     model: 'gpt-4',
     chat_model: '',
     control_level: 'read_only',
-    autonomous_mode: false,
     discovery_enabled: true,
   });
   mockAIAPI.testProvider.mockResolvedValue({
@@ -928,7 +923,6 @@ describe('AIChat', () => {
         targetType: 'vm',
         targetId: 'vm:101',
         findingId: undefined,
-        autonomousMode: undefined,
         briefing: undefined,
       };
       mockFetchAgentCapabilitiesManifest.mockResolvedValueOnce({
@@ -1012,7 +1006,6 @@ describe('AIChat', () => {
         targetType: 'vm',
         targetId: 'vm:101',
         findingId: 'finding-1',
-        autonomousMode: false,
         preferredWorkflowPromptName: 'pulse_operations_loop',
       };
       mockFetchAgentCapabilitiesManifest.mockResolvedValueOnce({
@@ -1185,7 +1178,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
@@ -1249,7 +1241,6 @@ describe('AIChat', () => {
         model: 'openrouter:qwen/qwen3.7-plus',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['openrouter', 'openai'],
       });
@@ -1306,7 +1297,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter', 'openai'],
       });
@@ -1362,7 +1352,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
@@ -1401,7 +1390,6 @@ describe('AIChat', () => {
         model: 'openai:gpt-4',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockReturnValue(new Promise(() => {}));
@@ -1441,7 +1429,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
@@ -1481,7 +1468,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: 'gemini:gemini-3.1-flash-lite',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
@@ -1521,7 +1507,6 @@ describe('AIChat', () => {
         model: 'gpt-4',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
@@ -1581,7 +1566,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
@@ -1638,7 +1622,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
@@ -1702,7 +1685,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider
@@ -1745,7 +1727,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
 
@@ -1771,7 +1752,6 @@ describe('AIChat', () => {
     it('renders attached context briefing without raw command text', () => {
       mockAiChatStore.context = {
         findingId: 'finding-1',
-        autonomousMode: undefined,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Investigation record attached',
@@ -1809,7 +1789,6 @@ describe('AIChat', () => {
 
     it('renders safe briefing actions as links when a route is attached', () => {
       mockAiChatStore.context = {
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol finding attached',
@@ -1830,7 +1809,6 @@ describe('AIChat', () => {
     it('renders Patrol mode handoff details without replacing the attached headline', () => {
       mockAiChatStore.context = {
         targetType: 'patrol-configuration',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol mode save failure attached',
@@ -1850,13 +1828,11 @@ describe('AIChat', () => {
       expect(context).toHaveTextContent('patrol_autonomy_pro_required');
       expect(context).toHaveTextContent('Provider: openrouter');
       expect(context).toHaveTextContent('Command: sensitive or command detail withheld');
-      expect(context).toHaveTextContent('Approval required before any action.');
     });
 
     it('renders resource context handoff details without prompt text injection', () => {
       mockAiChatStore.context = {
         targetType: 'resource',
-        autonomousMode: false,
         handoffResources: [
           {
             id: 'app-container:homeassistant',
@@ -1897,7 +1873,6 @@ describe('AIChat', () => {
     it('renders Patrol run handoff details without replacing the attached headline', () => {
       mockAiChatStore.context = {
         targetType: 'patrol-run',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol run attached',
@@ -1917,12 +1892,10 @@ describe('AIChat', () => {
       expect(context).toHaveTextContent('Scoped run run-alert-scoped');
       expect(context).toHaveTextContent('Review Patrol runtime failure');
       expect(context).toHaveTextContent('Selected model does not support Patrol tools');
-      expect(context).toHaveTextContent('Approval required before any action.');
     });
 
     it('keeps Patrol action-artifact briefings compact in the sidebar', () => {
       mockAiChatStore.context = {
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol finding attached',
@@ -1944,7 +1917,6 @@ describe('AIChat', () => {
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('Pending · Medium risk')).toBeInTheDocument();
       expect(screen.getByText('Backup failed on delly (backup)')).toBeInTheDocument();
-      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(
         screen.queryByText('Existing action artifact: Fix: Backup failed'),
       ).not.toBeInTheDocument();
@@ -1960,7 +1932,6 @@ describe('AIChat', () => {
 
     it('does not expose legacy Patrol remediation-plan briefing internals', () => {
       mockAiChatStore.context = {
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Remediation plan attached',
@@ -1979,7 +1950,6 @@ describe('AIChat', () => {
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('Pending · Medium risk')).toBeInTheDocument();
       expect(screen.getByText('Backup failed on delly (backup)')).toBeInTheDocument();
-      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(screen.queryByText('Plan: Fix: Backup failed')).not.toBeInTheDocument();
       expect(screen.queryByText('4 planned steps')).not.toBeInTheDocument();
       expect(
@@ -1995,7 +1965,6 @@ describe('AIChat', () => {
 
     it('uses the context strip instead of product-authored empty transcript prompts', () => {
       mockAiChatStore.context = {
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol assessment attached',
@@ -2007,7 +1976,6 @@ describe('AIChat', () => {
 
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('Coverage incomplete')).toBeInTheDocument();
-      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(screen.queryByText('Patrol assessment attached')).not.toBeInTheDocument();
       expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
       expect(
@@ -2589,7 +2557,6 @@ describe('AIChat', () => {
         model: 'openai:gpt-4o',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
         configured_providers: ['openai', 'openrouter'],
       });
@@ -2682,7 +2649,6 @@ describe('AIChat', () => {
         model: 'openrouter:deepseek/deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValue({
@@ -2741,7 +2707,6 @@ describe('AIChat', () => {
         context: {
           findingId: 'finding-1',
           handoffContext: 'Current evidence',
-          autonomousMode: false,
         },
       });
       await waitFor(() => expect(mockChat.sendMessage).toHaveBeenCalledOnce());
@@ -3583,9 +3548,9 @@ describe('AIChat', () => {
         'false',
       );
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
-      expect(screen.getByText('Observes only')).toBeInTheDocument();
-      expect(screen.getByText('Asks before chat-only actions')).toBeInTheDocument();
-      expect(screen.getByText('Eligible chat-only actions')).toBeInTheDocument();
+      expect(screen.getByText('Answers questions only')).toBeInTheDocument();
+      expect(screen.getByText('Plans actions for your review')).toBeInTheDocument();
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
       await waitFor(() => {
         expect(document.activeElement).toBe(
           screen.getByRole('menuitemradio', { name: /Read-only/ }),
@@ -3627,7 +3592,6 @@ describe('AIChat', () => {
       fireEvent.click(controlButton);
       const readOnlyOption = screen.getByRole('menuitemradio', { name: /Read-only/ });
       const askFirstOption = screen.getByRole('menuitemradio', { name: /Ask first/ });
-      const chatActionsOption = screen.getByRole('menuitemradio', { name: /Chat actions/ });
       await waitFor(() => {
         expect(document.activeElement).toBe(readOnlyOption);
       });
@@ -3635,16 +3599,19 @@ describe('AIChat', () => {
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowDown' });
       expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(askFirstOption, { key: 'End' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      fireEvent.keyDown(askFirstOption, { key: 'Home' });
+      expect(document.activeElement).toBe(readOnlyOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Home' });
+      fireEvent.keyDown(readOnlyOption, { key: 'End' });
+      expect(document.activeElement).toBe(askFirstOption);
+
+      fireEvent.keyDown(askFirstOption, { key: 'ArrowDown' });
       expect(document.activeElement).toBe(readOnlyOption);
 
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowUp' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Escape' });
+      fireEvent.keyDown(askFirstOption, { key: 'Escape' });
 
       await waitFor(() => {
         expect(
@@ -3671,7 +3638,6 @@ describe('AIChat', () => {
     it('clears scoped handoff context when starting a new session', async () => {
       mockAiChatStore.context = {
         findingId: 'finding-old',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Old finding handoff',
@@ -3703,7 +3669,6 @@ describe('AIChat', () => {
       mockChat.newSession.mockResolvedValueOnce(null);
       mockAiChatStore.context = {
         findingId: 'finding-old',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Old finding handoff',
@@ -4510,7 +4475,6 @@ describe('AIChat', () => {
         expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
           expect.objectContaining({
             findingId: 'finding-operator-briefing',
-            autonomousMode: false,
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
               title: 'Patrol finding on web-server',
@@ -4572,7 +4536,6 @@ describe('AIChat', () => {
             targetType: 'patrol-run',
             targetId: 'run-runtime-error',
             findingId: undefined,
-            autonomousMode: false,
             context: expect.objectContaining({
               kind: 'patrol_run',
               runId: 'run-runtime-error',
@@ -4683,7 +4646,6 @@ describe('AIChat', () => {
             targetType: 'patrol-assessment',
             targetId: 'pulse-patrol-assessment',
             findingId: undefined,
-            autonomousMode: false,
             context: expect.objectContaining({
               kind: 'patrol_assessment',
               findingId: undefined,
@@ -4737,7 +4699,6 @@ describe('AIChat', () => {
           expect.objectContaining({
             targetType: 'patrol-configuration',
             targetId: 'pulse-patrol-configuration',
-            autonomousMode: false,
             context: expect.objectContaining({
               kind: 'patrol_configuration_failure',
               runtimeFailure: true,
@@ -4801,7 +4762,6 @@ describe('AIChat', () => {
         expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
           expect.objectContaining({
             findingId: 'finding-complete',
-            autonomousMode: false,
             context: expect.objectContaining({
               requiresApproval: false,
               lastKnownActionState: 'completed',
@@ -4819,8 +4779,7 @@ describe('AIChat', () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
+        control_level: 'controlled',
         discovery_enabled: true,
       });
       mockAIChatAPI.listSessions.mockResolvedValue([
@@ -4866,7 +4825,6 @@ describe('AIChat', () => {
         expect(mockAiChatStore.setContext).toHaveBeenCalledWith(
           expect.objectContaining({
             findingId: 'finding-context-only',
-            autonomousMode: false,
             context: expect.objectContaining({
               actionCount: 0,
               requiresApproval: false,
@@ -4894,7 +4852,6 @@ describe('AIChat', () => {
     it('clears stale handoff context when loading a plain session', async () => {
       mockAiChatStore.context = {
         findingId: 'finding-old',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Old finding handoff',
@@ -5490,7 +5447,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
 
@@ -5566,7 +5522,6 @@ describe('AIChat', () => {
         model: 'deepseek:deepseek-v4-pro',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: true,
       });
 
@@ -5710,97 +5665,40 @@ describe('AIChat', () => {
     });
   });
 
-  // ── Autonomous warning ───────────────────────────────────────────────
+  // ── Retired chat actions mode ────────────────────────────────────────
 
-  describe('autonomous warning', () => {
-    it('shows autonomous warning in the activity dock when control level is autonomous', async () => {
+  describe('retired chat actions mode', () => {
+    it('shows a stale autonomous setting as Ask first with no chat actions warning', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
         control_level: 'autonomous',
-        autonomous_mode: true,
         discovery_enabled: true,
       });
-      renderChat();
-      await waitFor(() => {
-        const warning = screen.getByRole('status', {
-          name: 'Assistant chat actions warning',
-        });
-        expect(screen.getByTestId('assistant-activity-dock')).toContainElement(warning);
-        expect(warning).toHaveTextContent('Chat-only actions are allowed.');
-      });
-    });
-
-    it('shows Switch to Ask first button in autonomous warning row', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      renderChat();
-      await waitFor(() => {
-        expect(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        ).toBeInTheDocument();
-        expect(
-          screen.getByRole('button', { name: 'Switch Assistant chat actions to Ask first' }),
-        ).toBeInTheDocument();
-        expect(
-          screen.getByRole('button', { name: 'Dismiss chat actions warning' }),
-        ).toBeInTheDocument();
-      });
-    });
-
-    it('keeps scoped dashboard handoffs approval-required without showing the autonomous warning', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      mockAiChatStore.context = {
-        findingId: undefined,
-        autonomousMode: false,
-        briefing: undefined,
-      };
-
       renderChat();
 
       await waitFor(() => {
         expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
       });
-      expect(
-        screen.queryByText(/Approval required for this dashboard brief/),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Chat-only actions are allowed.')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Chat actions/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('assistant-activity-dock')).not.toBeInTheDocument();
 
-      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
-      fireEvent.input(textarea, { target: { value: 'summarize this dashboard' } });
-      fireEvent.keyDown(textarea, { key: 'Enter' });
-
-      expect(mockChat.sendMessage).toHaveBeenCalledWith(
-        'summarize this dashboard',
-        undefined,
-        undefined,
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Assistant chat action mode: Ask first' }),
       );
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
     });
 
-    it('shows scoped Patrol handoffs as approval-bound without a banner', async () => {
+    it('presents scoped handoffs with the same mode as a plain chat', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
+        control_level: 'controlled',
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
-        autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol finding attached',
@@ -5812,58 +5710,17 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
       });
-      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
-      expect(
-        screen.queryByText(/Approval required for this Patrol handoff/),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByText(/Approval required for this dashboard brief/),
-      ).not.toBeInTheDocument();
-    });
-
-    it('shows scoped alert handoffs as approval-bound without a banner', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      mockAiChatStore.context = {
-        autonomousMode: false,
-        briefing: {
-          sourceLabel: 'Pulse Alerts',
-          title: 'Alert investigation attached',
-        },
-        context: {
-          alertIdentifier: 'alert-1',
-        },
-      };
-
-      renderChat();
-
-      await waitFor(() => {
-        expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
-      });
-      expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
-      expect(
-        screen.queryByText(/Approval required for this alert investigation/),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByText(/Approval required for this dashboard brief/),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Approval required before any action.')).not.toBeInTheDocument();
     });
 
     it('passes model-only handoff context and resources on submit', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
+        control_level: 'controlled',
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
-        autonomousMode: false,
         handoffContext:
           '[Alert Incident Context]\nIncident ID: incident-1\nTimeline Event 1: Command event recorded',
         handoffResources: [
@@ -5924,13 +5781,11 @@ describe('AIChat', () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
+        control_level: 'controlled',
         discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
-        autonomousMode: false,
         handoffContext: '[Patrol Finding Context]\nFinding ID: finding-1',
         handoffResources: [
           {
@@ -5967,7 +5822,6 @@ describe('AIChat', () => {
       expect(mockAiChatStore.context.handoffContext).toBeUndefined();
       expect(mockAiChatStore.context.handoffResources).toBeUndefined();
       expect(mockAiChatStore.context.handoffActions).toBeUndefined();
-      expect(mockAiChatStore.context.autonomousMode).toBe(false);
       expect(mockAiChatStore.context.briefing?.title).toBe('Patrol finding on web-server');
 
       fireEvent.input(textarea, { target: { value: 'what changed next?' } });
@@ -5993,7 +5847,6 @@ describe('AIChat', () => {
         model: 'gpt-4',
         chat_model: '',
         control_level: 'read_only',
-        autonomous_mode: false,
         discovery_enabled: false,
       });
       renderChat();
@@ -6497,38 +6350,6 @@ describe('AIChat', () => {
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 
-    it('keeps autonomous warning alongside active assistant streaming status', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      mockChat.isLoading.mockReturnValue(true);
-      mockChat.messages.mockReturnValue([
-        {
-          id: 'msg-1',
-          role: 'assistant' as const,
-          content: '',
-          timestamp: new Date(),
-          isStreaming: true,
-        },
-      ]);
-
-      renderChat();
-
-      await waitFor(() => {
-        const activityDock = screen.getByTestId('assistant-activity-dock');
-        expect(activityDock).toContainElement(
-          screen.getByLabelText('Assistant active turn status'),
-        );
-        expect(activityDock).toContainElement(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        );
-      });
-    });
-
     it('shows no status indicator when not loading', () => {
       mockChat.isLoading.mockReturnValue(false);
       renderChat();
@@ -6643,7 +6464,6 @@ describe('AIChat', () => {
     it('passes findingId from store context on first message', () => {
       mockAiChatStore.context = {
         findingId: 'finding-123',
-        autonomousMode: undefined,
         briefing: undefined,
       };
       renderChat();

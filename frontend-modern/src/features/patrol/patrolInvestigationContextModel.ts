@@ -384,7 +384,6 @@ export function buildPatrolAttentionAssistantHandoff(
       ...canonical,
       targetType: item.subjectResourceType || 'resource',
       targetId: item.subjectResourceId,
-      autonomousMode: false,
       handoffResources: canonical.handoffResources ?? [
         {
           id: item.subjectResourceId,
@@ -443,7 +442,6 @@ export function buildPatrolAssistantFindingHandoff(
       targetType: resource?.type,
       targetId: resource?.id,
       findingId: findingId || undefined,
-      autonomousMode: false,
       handoffContext: buildPatrolAssistantFindingModelContext(input),
       handoffResources: handoffResources.length > 0 ? handoffResources : undefined,
       handoffActions: handoffActions.length > 0 ? handoffActions : undefined,
@@ -495,7 +493,6 @@ export function buildPatrolRunAssistantHandoff(run: PatrolRunRecord): PatrolRunA
     context: {
       targetType: 'patrol-run',
       targetId: runId || undefined,
-      autonomousMode: false,
       handoffMetadata: {
         kind: 'patrol_run',
         runId: runId || undefined,

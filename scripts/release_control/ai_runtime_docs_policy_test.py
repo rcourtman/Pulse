@@ -319,6 +319,21 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Patrol autonomy controls", control_doc)
         self.assertNotIn("Patrol Autonomy Level", control_doc)
 
+    def test_public_assistant_docs_offer_two_chat_levels(self) -> None:
+        overview = read_repo_text("docs/AI.md")
+        control_doc = read_repo_text("docs/AI_AUTONOMY.md")
+
+        for doc_path, content in (("docs/AI.md", overview), ("docs/AI_AUTONOMY.md", control_doc)):
+            with self.subTest(doc_path=doc_path):
+                self.assertIn("| **Read-only** | `read_only` |", content)
+                self.assertIn("| **Ask first** | `controlled` |", content)
+                self.assertIn("Earlier versions offered a third `autonomous` level on Pro.", content)
+                self.assertNotIn("| **Autonomous** |", content)
+                self.assertNotIn("without prompting", content)
+                self.assertNotIn("APPROVAL_REQUIRED", content)
+        self.assertIn("Settings → Pulse Intelligence → Assistant → Chat action mode", control_doc)
+        self.assertNotIn("Chat command mode", control_doc)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,8 +21,6 @@ import {
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
-import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import type {
@@ -421,8 +419,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     discoveryIntervalHours: 0,
   });
 
-  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-
   const settingsReadiness = createMemo(() =>
     getAISettingsReadinessPresentation({
       configured: Boolean(settings()?.configured),
@@ -430,7 +426,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       modelCount: availableModels().length,
     }),
   );
-  const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const providerIssueCount = createMemo(
     () => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length,
@@ -462,7 +457,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   });
 
   const effectivePatrolModel = createMemo(() => (form.patrolModel || form.model).trim());
-  const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
     (data?.configured_providers?.length ?? 0) > 0;
@@ -1454,7 +1448,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
 
   return {
     alertAnalysisLocked,
-    autoFixLocked,
     availableModels,
     chatSessions,
     chatSessionsError,
@@ -1522,10 +1515,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     showChatMaintenance,
     showDiscoverySettings,
     showSetupModal,
-    showUpgradePrompts,
     testing,
     testingProvider,
-    upgradeAutofixDestination,
   };
 };
 

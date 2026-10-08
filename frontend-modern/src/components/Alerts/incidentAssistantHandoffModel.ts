@@ -70,7 +70,6 @@ export function buildAlertIncidentAssistantHandoff({
     context: {
       targetType,
       targetId: incident.resourceId,
-      autonomousMode: false,
       handoffContext,
       handoffResources: [
         {

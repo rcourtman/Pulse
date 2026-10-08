@@ -724,6 +724,10 @@ the `white_label` branding entitlement.
     that rule: public chat and relay input cannot serialize its org/action
     authorization context, and invalid approvals fail before signing or agent
     dispatch rather than falling through to a route-local trust shortcut.
+    Router glue also wires no Assistant control-level resolver: chat services
+    read the saved level straight from config, which holds only `read_only` or
+    `controlled` (a retired `autonomous` value reads as `controlled`), so no
+    entitlement or router hook can widen what Assistant chat may do.
     The Assistant steer sub-route (`POST /api/ai/sessions/{id}/steer`) added
     to the session dispatch is bound by the same rule: it requires
     `ScopeAIChat`, carries conversation text only, cannot approve or bypass

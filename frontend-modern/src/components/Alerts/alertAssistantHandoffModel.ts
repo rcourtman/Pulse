@@ -76,7 +76,6 @@ export function buildAlertAssistantHandoff({
     context: {
       targetType,
       targetId: systemScoped ? undefined : alert.resourceId,
-      autonomousMode: false,
       handoffContext,
       handoffResources: systemScoped
         ? []

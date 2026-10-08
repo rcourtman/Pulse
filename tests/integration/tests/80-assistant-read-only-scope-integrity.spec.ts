@@ -84,7 +84,7 @@ test("Assistant makes the read-only promise literal in the current browser build
   await expect(
     page.getByRole("menuitemradio", { name: /Read-only/ }),
   ).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByText("Observes only")).toBeVisible();
+  await expect(page.getByText("Answers questions only")).toBeVisible();
 
   const closeAssistant = testInfo.project.name.startsWith("mobile-")
     ? page.getByTestId("assistant-close-button")

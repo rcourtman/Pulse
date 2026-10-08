@@ -1883,8 +1883,8 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     `handoffContext`, `handoffResources`, `handoffActions`, and safe
     `handoffMetadata`; it must also clear any preferred workflow prompt request
     once the manifest-rendered starter has seeded the composer and the first
-    scoped send succeeds. The store must preserve the safe visible briefing and
-    scoped approval-required posture, so later turns rely on backend session
+    scoped send succeeds. The store must preserve the safe visible briefing, so
+    later turns rely on backend session
     hydration instead of resending stale browser context. Patrol handoffs must not include
     Persisted Assistant redo availability is safe session chrome, not transcript
     content. The drawer may consume `ChatSession.can_redo` from the backend
@@ -3352,11 +3352,8 @@ Agent`), with the plain-language source phrase available through accessible
     explanation, and review support; it must not present Assistant as the
     approved-fix executor because Patrol is the hands-on operator for checks,
     governed fixes, and verification.
-    The shared shell must not show Pro-only autonomous execution as a default
-    free-user control when upgrade prompts are suppressed; it may surface that
-    option only when the entitlement is present, commercial prompts are
-    explicitly allowed, or the current saved setting already uses autonomous
-    mode and needs to remain visible for operator review.
+    The shared shell offers no autonomous execution option for Assistant chat
+    on any plan; a stale saved `autonomous` value reads as Ask first.
     Provider model catalogs must remain curated on that same shell:
     `frontend-modern/src/components/shared/AIModelPicker.tsx` owns the
     searchable, notable-first model picker pattern, and
@@ -3712,15 +3709,16 @@ production table, router and styles; it does not qualify full-app scrolling.
    browser-local commercial/onboarding metrics wrappers in SSO, audit,
    reporting, AI controls, agent profiles, or shared warning banners.
 10. Keep shared settings-shell AI control copy capability-scoped rather than
-    upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
-    approval-required, and autonomous action posture, but option labels and
-    helper text must avoid tier labels or broad "executes everything" wording;
-    paid capability availability belongs to entitlement-backed visibility and
-    lock state, not local select copy. Provider & Models settings copy must keep
-    Patrol autonomy distinct from Assistant chat actions: Patrol's
-    hands-on control level belongs on the Patrol page, while the shared settings
-    shell may only describe whether Assistant chat can run eligible chat
-    actions.
+    upsell-scoped. `AIRuntimeControlsSection.tsx` offers exactly the two
+    Assistant chat levels, Read-only and Ask first, from
+    `frontend-modern/src/utils/aiControlLevelPresentation.ts`; the retired
+    autonomous level has no option, warning, or upgrade link, and
+    `normalizeAIControlLevel` shows a stale `autonomous` value as Ask first.
+    Option labels and helper text must say what the operator gets (answers
+    only, or plans saved to Actions for review) and avoid tier labels or broad
+    "executes everything" wording. Provider & Models settings copy must keep
+    Patrol autonomy distinct from Assistant chat: Patrol's hands-on control
+    level belongs on the Patrol page.
 11. Keep first-session dashboard empty-state copy on
     `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
     infrastructure setup guidance name the canonical destination explicitly
@@ -3753,12 +3751,11 @@ production table, router and styles; it does not qualify full-app scrolling.
     IDs into setup payloads. The shared settings shell should let the backend
     resolve the effective BYOK model and then render that returned state rather
     than guessing a model in the modal.
-    Scoped Assistant handoffs keep their approval-required disclosure in
-    drawer context: `autonomousMode:false` on `AIChatContext` is a drawer-only
-    flag the chat transport never sends, because `/api/ai/chat` sets
-    approval-required mode server-side for every request. Dashboard and other
-    route-owned entry points may open the
-    Assistant drawer with source context and that flag, but they
+    Scoped Assistant handoffs carry no execution-mode flag: `AIChatContext`
+    has none, because `/api/ai/chat` sets approval-required mode server-side
+    for every request and the drawer shows the same saved mode for every chat.
+    Dashboard and other route-owned entry points may open the
+    Assistant drawer with source context, but they
     must not infer a user task from an ordinary context-only open. Explicit
     labelled explanation actions use `aiChatStore.explain` and the shared
     explanation dispatcher, which captures the request context, waits for open
@@ -3790,8 +3787,8 @@ production table, router and styles; it does not qualify full-app scrolling.
     rather than hidden, and shared chat primitives stay free of that
     placeholder logic. Patrol run-history handoffs must also use that feature helper rather
     than a row-local Assistant prompt, so the shared drawer receives only a
-    generic visible briefing, safe run identity metadata, and
-    `autonomousMode:false`; the backend rebuilds the bounded model-only run
+    generic visible briefing and safe run identity metadata; the backend
+    rebuilds the bounded model-only run
     context, scoped resource references, and runtime failure detail from the
     run ID, while the Patrol feature remains the source of run copy and
     retry/configuration guidance. Finding handoff action references
@@ -3824,7 +3821,7 @@ production table, router and styles; it does not qualify full-app scrolling.
     chips in the drawer and must not become another primitive path for raw
     approval, command, or rollback command payload text. Missing-detail
     queued-fix recovery actions must still provide the feature-owned Patrol
-    briefing and approval-required disclosure rather than opening the
+    briefing rather than opening the
     shared drawer as context-free generic Assistant chat. If a feature-owned
     expired-approval recovery action still has structured action artifact metadata,
     the shared drawer may receive only safe summary fields and command counts;
@@ -3842,8 +3839,8 @@ production table, router and styles; it does not qualify full-app scrolling.
     counts when available; raw approval commands remain owned by the governed
     approval/remediation panels. If the generic finding-level helper hydrates
     latest investigation detail to recover action artifact context, it may pass only
-    safe summary fields and command counts into the drawer briefing. Shared
-    approval-required posture must derive its subject from that briefing or
+    safe summary fields and command counts into the drawer briefing. The drawer
+    must derive the handoff subject from that briefing or
     structured finding context, so Patrol handoffs render as Patrol handoffs or
     Patrol findings, and alert handoffs render as alert investigations, rather
     than generic dashboard briefs. Patrol approval-row Assistant prompts must
@@ -3851,15 +3848,13 @@ production table, router and styles; it does not qualify full-app scrolling.
     feature-owned finding handoff helper rather than hand-written prompt-only
     drawer opens: safe approval metadata, action artifact summaries, resource
     references, and bounded `handoff_actions` may enter the prompt and context,
-    but raw command text stays out and the handoff must set the drawer's
-    `autonomousMode:false` disclosure instead of changing the user's persistent
-    Assistant control level. Patrol remediation-plan drawer handoffs must use the same
+    but raw command text stays out and the handoff must not change the user's
+    persistent Assistant control level. Patrol remediation-plan drawer handoffs must use the same
     primitive boundary: plan title/status/risk, step labels, and command counts
     may enter Assistant context; raw command and rollback command payloads must
     stay in the governed remediation/action panel. All Patrol finding
     discussion handoffs, including context-only findings without a live approval
-    or proposed fix, must set `autonomousMode:false` as that drawer-only flag
-    so the drawer shows the approval-required posture the server enforces,
+    or proposed fix, run in the approval-required mode the server enforces
     without mutating the persistent Assistant control setting.
 14. Keep shared filter primitives coherent with source-owned option hydration.
     Active platform/runtime pages and Settings infrastructure surfaces must keep
@@ -4594,8 +4589,10 @@ that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label and source-strategy copy. Shared
 primitives must not fork that string or revive removed nested route labels.
-The shared Assistant drawer owns compact source-named approval posture for
-governed handoffs. Patrol handoffs render as Patrol, and alert plus alert
+The shared Assistant drawer owns compact source-named briefings for governed
+handoffs; it authors no approval note of its own and shows the saved mode
+through the shared chat mode pill, while a briefing's own safety note stays
+briefing content. Patrol handoffs render as Patrol, and alert plus alert
 incident timeline handoffs render as alert investigations rather than dashboard
 briefs. Those same drawer handoffs may carry model-only chat context and
 resource references to the backend, but the drawer remains a presentation and

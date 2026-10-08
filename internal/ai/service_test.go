@@ -1189,19 +1189,6 @@ func TestService_LicenseGating(t *testing.T) {
 	}
 }
 
-func TestService_IsAutonomous(t *testing.T) {
-	svc := NewService(nil, nil)
-	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
-	if !svc.IsAutonomous() {
-		t.Error("Expected true")
-	}
-
-	svc.cfg.ControlLevel = config.ControlLevelReadOnly
-	if svc.IsAutonomous() {
-		t.Error("Expected false")
-	}
-}
-
 type mockLicenseChecker struct {
 	hasFeature bool
 }

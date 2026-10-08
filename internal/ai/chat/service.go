@@ -81,11 +81,6 @@ type Config struct {
 	// Optional: provides access to persisted recovery points (backups/snapshots).
 	RecoveryPointsProvider tools.RecoveryPointsProvider
 
-	// Optional: resolves the effective control level for current entitlements.
-	// Stored config may say autonomous, but runtime execution must use the
-	// entitlement-clamped level.
-	ControlLevelResolver func(*config.AIConfig) string
-
 	// Optional report-narration providers for the pulse_summarize tool.
 	// When the per-tenant AI service is configured the API layer passes
 	// it here for all three roles; when unconfigured the tool returns
@@ -128,7 +123,6 @@ type Service struct {
 	discoveryProvider       tools.DiscoveryProvider
 	budgetChecker           func() error // Optional mid-run budget enforcement
 	orgID                   string
-	controlLevelResolver    func(*config.AIConfig) string
 
 	// costStore receives a cost.UsageEvent after each ExecuteStream
 	// turn so user-chat token usage is visible in the operator
@@ -175,7 +169,7 @@ func NewService(cfg Config) *Service {
 	}
 
 	if cfg.AIConfig != nil {
-		execCfg.ControlLevel = resolveEffectiveControlLevel(cfg.ControlLevelResolver, cfg.AIConfig)
+		execCfg.ControlLevel = configuredControlLevel(cfg.AIConfig)
 		execCfg.ProtectedGuests = cfg.AIConfig.GetProtectedGuests()
 	}
 
@@ -185,29 +179,23 @@ func NewService(cfg Config) *Service {
 	executor.SetTelemetryCallback(NewAIMetricsTelemetryCallback())
 
 	return &Service{
-		cfg:                  cfg.AIConfig,
-		dataDir:              cfg.DataDir,
-		stateProvider:        cfg.StateProvider,
-		readState:            cfg.ReadState,
-		agentServer:          cfg.AgentServer,
-		executor:             executor,
-		orgID:                strings.TrimSpace(cfg.OrgID),
-		controlLevelResolver: cfg.ControlLevelResolver,
-		costStore:            cfg.CostStore,
-		activeExecutions:     make(map[string]map[*AgenticLoop]struct{}),
-		questionExecutions:   make(map[string]*AgenticLoop),
+		cfg:                cfg.AIConfig,
+		dataDir:            cfg.DataDir,
+		stateProvider:      cfg.StateProvider,
+		readState:          cfg.ReadState,
+		agentServer:        cfg.AgentServer,
+		executor:           executor,
+		orgID:              strings.TrimSpace(cfg.OrgID),
+		costStore:          cfg.CostStore,
+		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
+		questionExecutions: make(map[string]*AgenticLoop),
 	}
 }
 
-func resolveEffectiveControlLevel(
-	resolver func(*config.AIConfig) string,
-	cfg *config.AIConfig,
-) tools.ControlLevel {
-	if resolver != nil {
-		if resolved := strings.TrimSpace(resolver(cfg)); config.IsValidControlLevel(resolved) {
-			return tools.ControlLevel(resolved)
-		}
-	}
+// configuredControlLevel is the Assistant control level the saved settings
+// hold. Config owns the vocabulary and reads the retired autonomous level as
+// controlled, so no entitlement can widen it here.
+func configuredControlLevel(cfg *config.AIConfig) tools.ControlLevel {
 	if cfg == nil {
 		return tools.ControlLevelReadOnly
 	}
@@ -225,7 +213,7 @@ func controlLevelForRequestAutonomousMode(level tools.ControlLevel, requested *b
 }
 
 func (s *Service) effectiveControlLevelLocked() tools.ControlLevel {
-	return resolveEffectiveControlLevel(s.controlLevelResolver, s.cfg)
+	return configuredControlLevel(s.cfg)
 }
 
 func (s *Service) registerActiveLoop(sessionID string, loop *AgenticLoop) {
@@ -4440,10 +4428,7 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 func (s *Service) isAutonomousModeEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.autonomousMode {
-		return true
-	}
-	return s.cfg != nil && s.cfg.IsAutonomous()
+	return s.autonomousMode
 }
 
 // ExecuteAssistantTool executes a native Assistant registry tool directly by

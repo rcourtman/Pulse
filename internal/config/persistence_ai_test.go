@@ -217,29 +217,33 @@ func TestPersistence_HasAIConfig(t *testing.T) {
 	}
 }
 
-func TestPersistence_AIConfig_MigratesSuggestControlLevel(t *testing.T) {
-	tempDir := t.TempDir()
-	p := NewConfigPersistence(tempDir)
+func TestPersistence_AIConfig_MigratesRetiredControlLevels(t *testing.T) {
+	for _, retired := range []string{"suggest", ControlLevelAutonomous} {
+		t.Run(retired, func(t *testing.T) {
+			tempDir := t.TempDir()
+			p := NewConfigPersistence(tempDir)
 
-	cfg := NewDefaultAIConfig()
-	cfg.ControlLevel = "suggest"
-	require.NoError(t, p.SaveAIConfig(*cfg))
+			cfg := NewDefaultAIConfig()
+			cfg.ControlLevel = retired
+			require.NoError(t, p.SaveAIConfig(*cfg))
 
-	loaded, err := p.LoadAIConfig()
-	require.NoError(t, err)
-	assert.Equal(t, ControlLevelControlled, loaded.ControlLevel)
+			loaded, err := p.LoadAIConfig()
+			require.NoError(t, err)
+			assert.Equal(t, ControlLevelControlled, loaded.ControlLevel)
 
-	updatedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
-	require.NoError(t, err)
-	if p.crypto != nil {
-		decoded, err := p.crypto.Decrypt(updatedRaw)
-		require.NoError(t, err)
-		updatedRaw = decoded
+			updatedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
+			require.NoError(t, err)
+			if p.crypto != nil {
+				decoded, err := p.crypto.Decrypt(updatedRaw)
+				require.NoError(t, err)
+				updatedRaw = decoded
+			}
+
+			var saved AIConfig
+			require.NoError(t, json.Unmarshal(updatedRaw, &saved))
+			assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
+		})
 	}
-
-	var saved AIConfig
-	require.NoError(t, json.Unmarshal(updatedRaw, &saved))
-	assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
 }
 
 func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
@@ -269,7 +273,7 @@ func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "anthropic:claude-3-5-sonnet-20241022", loaded.Model)
 	assert.Equal(t, "sk-ant-legacy", loaded.AnthropicAPIKey)
-	assert.Equal(t, ControlLevelAutonomous, loaded.ControlLevel)
+	assert.Equal(t, ControlLevelControlled, loaded.ControlLevel)
 	assert.Equal(t, "legacy config", loaded.CustomContext)
 
 	savedRaw, err := os.ReadFile(filepath.Join(tempDir, "ai.enc"))
@@ -282,7 +286,7 @@ func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
 	var saved AIConfig
 	require.NoError(t, json.Unmarshal(savedRaw, &saved))
 	assert.Equal(t, "sk-ant-legacy", saved.AnthropicAPIKey)
-	assert.Equal(t, ControlLevelAutonomous, saved.ControlLevel)
+	assert.Equal(t, ControlLevelControlled, saved.ControlLevel)
 }
 
 func TestPersistence_AIConfig_MigratesLegacyPatrolEventTriggerToggle(t *testing.T) {

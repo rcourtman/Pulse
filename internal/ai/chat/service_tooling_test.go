@@ -291,6 +291,33 @@ func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T
 	}
 }
 
+// A saved retired autonomous level must advertise exactly what a drawer chat
+// turn offers: the interactive question tool stays, and control stays behind
+// execute authority as in controlled mode.
+func TestAssistantSurfaceToolContractMatchesChatTurnForRetiredAutonomousSetting(t *testing.T) {
+	cfg := &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider:      fakeStateProvider{},
+		TypedActionPlanner: &gateTestPlanner{},
+		AgentServer:        fakeAgentServer{},
+		ReadState:          &fakeCanonicalReadState{},
+		ControlLevel:       configuredControlLevel(cfg),
+	})
+	svc := &Service{executor: exec, cfg: cfg}
+
+	contract := svc.AssistantSurfaceToolContract(context.Background())
+	if !stringSliceContains(contract.ToolNames, agentcapabilities.PulseQuestionToolName) {
+		t.Fatalf("retired autonomous setting dropped the question tool a chat turn offers: %#v", contract.ToolNames)
+	}
+	if stringSliceContains(contract.ToolNames, agentcapabilities.PulseControlToolName) {
+		t.Fatalf("surface without execute authority exposed control: %#v", contract.ToolNames)
+	}
+	executeAuthorized := svc.AssistantSurfaceToolContract(WithExecuteAuthority(context.Background(), true))
+	if !stringSliceContains(executeAuthorized.ToolNames, agentcapabilities.PulseControlToolName) {
+		t.Fatalf("execute-authorized surface missing governed control: %#v", executeAuthorized.ToolNames)
+	}
+}
+
 func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider:      fakeStateProvider{},

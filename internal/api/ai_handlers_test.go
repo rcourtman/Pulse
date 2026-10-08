@@ -873,6 +873,42 @@ func TestAISettingsHandler_GetSettingsClampsPaidControlsToEntitlements(t *testin
 	require.False(t, resp.AlertTriggeredAnalysis)
 }
 
+// The retired autonomous chat level is accepted from older API clients without
+// a licence gate and saves as controlled, the behaviour chat already had; an
+// unknown level is still refused.
+func TestAISettingsHandler_UpdateSettings_RetiredAutonomousSavesControlled(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+
+	body, err := json.Marshal(AISettingsUpdateRequest{ControlLevel: ptr(config.ControlLevelAutonomous)})
+	require.NoError(t, err)
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, config.ControlLevelControlled, resp.ControlLevel)
+
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, config.ControlLevelControlled, saved.ControlLevel)
+
+	body, err = json.Marshal(AISettingsUpdateRequest{ControlLevel: ptr("full_auto")})
+	require.NoError(t, err)
+	req = newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "must be read_only or controlled")
+}
+
 func TestAISettingsHandler_UpdateSettings_OllamaKeepAlive(t *testing.T) {
 	t.Parallel()
 
@@ -3070,8 +3106,6 @@ func TestHandleInvestigateAlert_ForcesApprovalBoundExecuteRequest(t *testing.T) 
 	require.NoError(t, err)
 	text := string(source)
 
-	require.Contains(t, text, "autonomousMode := false")
-	require.Contains(t, text, "AutonomousMode:         &autonomousMode")
 	require.Contains(t, text, "RequireCommandApproval: true")
 }
 

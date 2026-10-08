@@ -244,14 +244,14 @@ describe('AISettings model loading error states', () => {
 
     expect(await screen.findByText('Assistant chat actions')).toBeInTheDocument();
     expect(
-      screen.getByText('This controls actions started from Assistant chat only', { exact: false }),
+      screen.getByText('This sets what Assistant chat may do.', { exact: false }),
     ).toBeInTheDocument();
     const chatActionMode = screen.getByLabelText('Chat action mode');
     expect(chatActionMode).toBeInTheDocument();
     expect(chatActionMode).toHaveClass('w-full', 'min-w-0', 'sm:flex-1');
     expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
     expect(
-      screen.getByText('Assistant asks before chat-only actions.', { exact: false }),
+      screen.getByText('saves each plan to Actions for you to review and run.', { exact: false }),
     ).toHaveClass('sm:ml-30');
     expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
@@ -868,24 +868,7 @@ describe('AISettings model loading error states', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides autonomous controls when auto-fix is locked and upgrade prompts are hidden', async () => {
-    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
-    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
-
-    renderComponent('assistant');
-
-    await waitFor(() => {
-      expect(getSettingsMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(
-      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
-    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
-    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+  it('offers only Read-only and Ask first, and shows a stale autonomous setting as Ask first', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       control_level: 'autonomous',
@@ -897,8 +880,15 @@ describe('AISettings model loading error states', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole('option', { name: /Allow chat-only actions/i })).toBeInTheDocument();
-    expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
+    const chatActionMode = screen.getByLabelText('Chat action mode') as HTMLSelectElement;
+    await waitFor(() => {
+      expect(chatActionMode.value).toBe('controlled');
+    });
+    expect(Array.from(chatActionMode.options).map((option) => option.value)).toEqual([
+      'read_only',
+      'controlled',
+    ]);
+    expect(screen.queryByText(/chat-only actions/i)).not.toBeInTheDocument();
   });
 });
 

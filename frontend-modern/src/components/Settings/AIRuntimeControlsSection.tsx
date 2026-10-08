@@ -2,23 +2,19 @@ import { Component, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
-import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { FormSelect } from '@/components/shared/FormSelect';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle } from '@/components/shared/Toggle';
-import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import {
-  getAIControlLevelBadgeClass,
+  AI_CONTROL_LEVEL_ASK_FIRST_BADGE_CLASS,
+  AI_CONTROL_LEVEL_PANEL_CLASS,
   getAIControlLevelDescription,
-  getAIControlLevelPanelClass,
 } from '@/utils/aiControlLevelPresentation';
 import {
   AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
-import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 
 interface AIRuntimeControlsSectionProps {
   state: AISettingsState;
@@ -271,18 +267,10 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
   props,
 ) => {
   const { state } = props;
-  const showAutonomousControlOption = () =>
-    !state.autoFixLocked() ||
-    state.showUpgradePrompts() ||
-    state.form.controlLevel === 'autonomous';
-  const assistantCommandAccessBadgeLabel = () =>
-    state.form.controlLevel === 'autonomous' ? 'Allowed' : 'Ask first';
 
   return (
     <>
-      <div
-        class={`space-y-3 p-4 rounded-md border ${getAIControlLevelPanelClass(state.form.controlLevel)}`}
-      >
+      <div class={`space-y-3 p-4 rounded-md border ${AI_CONTROL_LEVEL_PANEL_CLASS}`}>
         <div class="flex items-center gap-2">
           <svg
             class="w-4 h-4 text-blue-600 dark:text-blue-400"
@@ -300,17 +288,16 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
           <span class="text-sm font-medium text-base-content">
             {AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE}
           </span>
-          <Show when={state.form.controlLevel !== 'read_only'}>
+          <Show when={state.form.controlLevel === 'controlled'}>
             <span
-              class={`px-1.5 py-0.5 text-[10px] font-medium rounded-sm ${getAIControlLevelBadgeClass(state.form.controlLevel)}`}
+              class={`px-1.5 py-0.5 text-[10px] font-medium rounded-sm ${AI_CONTROL_LEVEL_ASK_FIRST_BADGE_CLASS}`}
             >
-              {assistantCommandAccessBadgeLabel()}
+              Ask first
             </span>
           </Show>
         </div>
         <p class="text-[10px] text-muted">
-          This controls actions started from Assistant chat only. Patrol handles infrastructure work
-          from the Patrol page.
+          This sets what Assistant chat may do. Patrol's own mode is set on the Patrol page.
         </p>
 
         <FormSelect
@@ -324,45 +311,12 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
           labelClass="text-xs font-medium text-muted sm:w-28 sm:shrink-0"
           selectBaseClass="w-full min-w-0 min-h-10 px-2 py-2 text-sm border border-border rounded-sm bg-surface sm:min-h-9 sm:flex-1"
         >
-          <option value="read_only">Observe only - Assistant cannot take chat actions</option>
-          <option value="controlled">Ask first - Assistant asks before chat-only actions</option>
-          <Show when={showAutonomousControlOption()}>
-            <option value="autonomous">
-              Allow chat-only actions - Assistant may take eligible chat actions
-            </option>
-          </Show>
+          <option value="read_only">Read-only - Assistant answers questions only</option>
+          <option value="controlled">Ask first - Assistant plans actions for your review</option>
         </FormSelect>
         <p class="text-[10px] text-muted sm:ml-30">
           {getAIControlLevelDescription(state.form.controlLevel)}
         </p>
-        <Show when={state.form.controlLevel === 'autonomous'}>
-          <div class="p-2 bg-amber-100 dark:bg-amber-900/25 rounded-sm border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
-            <strong>Important:</strong> Assistant may take eligible chat-only actions from this
-            mode. Infrastructure changes stay with Patrol mode. Keep protected guests set for
-            anything Assistant must not touch. See{' '}
-            <ExternalTextLink href={TERMS_DOC_URL} variant="compactInherit">
-              Terms of Service
-            </ExternalTextLink>
-            .
-          </div>
-        </Show>
-        <Show
-          when={
-            state.form.controlLevel === 'autonomous' &&
-            state.autoFixLocked() &&
-            state.showUpgradePrompts()
-          }
-        >
-          <p class="text-xs text-muted">
-            <UpgradeLink
-              class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
-              destination={state.upgradeAutofixDestination()}
-            >
-              {UPGRADE_ACTION_LABEL}
-            </UpgradeLink>{' '}
-            to review eligible chat action options.
-          </p>
-        </Show>
 
         <Show when={state.form.controlLevel !== 'read_only'}>
           <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">

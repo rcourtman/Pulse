@@ -510,7 +510,6 @@ describe('tab path helpers', () => {
     expect(alertAssistantHandoffModelSource).toContain('handoffContext');
     expect(alertAssistantHandoffModelSource).toContain('handoffResources');
     expect(alertAssistantHandoffModelSource).toContain('[Alert Investigation Context]');
-    expect(incidentAssistantHandoffModelSource).toContain('autonomousMode: false');
     expect(incidentAssistantHandoffModelSource).toContain('handoffContext');
     expect(incidentAssistantHandoffModelSource).toContain('handoffResources');
     expect(incidentAssistantHandoffModelSource).toContain('[Alert Incident Context]');

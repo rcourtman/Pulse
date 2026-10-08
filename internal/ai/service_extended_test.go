@@ -2611,36 +2611,24 @@ func TestService_GetConfig_ReturnsCopy(t *testing.T) {
 // IsAutonomous Tests
 // ============================================================================
 
-func TestService_IsAutonomous_Variations(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-autonomous-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
+func TestService_LoadConfig_RetiredAutonomousLevelReadsAsControlled(t *testing.T) {
+	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 
-	// Test with read_only control level
 	cfg := config.AIConfig{
 		Enabled:      true,
-		ControlLevel: config.ControlLevelReadOnly,
+		ControlLevel: config.ControlLevelAutonomous,
 	}
-	_ = persistence.SaveAIConfig(cfg)
+	if err := persistence.SaveAIConfig(cfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
 
 	svc := NewService(persistence, nil)
-	_ = svc.LoadConfig()
-
-	if svc.IsAutonomous() {
-		t.Error("Expected not autonomous when mode is false")
+	if err := svc.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
 	}
-
-	// Test with autonomous control level
-	cfg.ControlLevel = config.ControlLevelAutonomous
-	_ = persistence.SaveAIConfig(cfg)
-	_ = svc.LoadConfig()
-
-	if !svc.IsAutonomous() {
-		t.Error("Expected autonomous when mode is true")
+	if got := svc.GetConfig().GetControlLevel(); got != config.ControlLevelControlled {
+		t.Fatalf("control level = %q, want %q", got, config.ControlLevelControlled)
 	}
 }
 

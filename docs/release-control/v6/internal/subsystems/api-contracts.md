@@ -2708,8 +2708,8 @@ a new API state machine, queue contract, or verification-accounting field.
    while raw command and rollback command payloads remain in governed action
    surfaces. Frontend Patrol finding-discussion handoffs run in the
    approval-required Assistant mode that `/api/ai/chat` sets server-side for
-   every request, never the user's persistent autonomous control setting, and
-   send no execution-mode field of their own; live approval, action artifact,
+   every request, whatever the user's saved control level, and send no
+   execution-mode field of their own; live approval, action artifact,
    fix-outcome, and remediation-plan references only add structured action
    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
    briefing payloads must stay compact and must not include suggested prompt
@@ -2717,7 +2717,7 @@ a new API state machine, queue contract, or verification-accounting field.
    recommendation metadata. Frontend queued-fix recovery handoffs
    where the live approval or action artifact payload is unavailable must still
    carry that Patrol-owned finding briefing, current `fix_queued` posture,
-   approval-required disclosure, and model-only evidence context; they must
+   and model-only evidence context; they must
    not degrade into generic Assistant investigation chat or imply that
    execution can proceed from missing command payloads. Expired-approval
    recovery handoffs may use a still-available structured action artifact payload
@@ -2730,8 +2730,7 @@ a new API state machine, queue contract, or verification-accounting field.
    into the authored prompt or visible briefing. Direct
    alert-investigation API handoffs through `internal/api/ai_handlers.go` must
    enforce that same request-scoped boundary by setting
-   `ai.ExecuteRequest.AutonomousMode` to
-   false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
+   `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
    keep this guarded in both `internal/api/ai_handlers_test.go` and
    `internal/api/contract_test.go`. Governed action artifact lines in the
    briefing must derive from those
@@ -4337,10 +4336,14 @@ the authoritative analysis outcome.
    defaults.
 10. Keep AI settings paid-control fields entitlement-effective at the API
     payload boundary. `/api/settings/ai` and `/api/settings/ai/update` may
-    preserve stored autonomous, Patrol auto-remediation, and alert-triggered
-    analysis preferences in config, but response payloads must expose only the
-    control level and paid Patrol settings currently allowed by runtime
-    entitlements.
+    preserve stored Patrol auto-remediation and alert-triggered analysis
+    preferences in config, but response payloads must expose only the paid
+    Patrol settings currently allowed by runtime entitlements. `control_level`
+    is not entitlement-gated: it is `read_only` or `controlled`, and a submitted
+    retired `autonomous` saves as `controlled` with no licence check
+    (`config.SettableControlLevel`), because Assistant chat runs
+    approval-required and only plans actions, so the level grants nothing to
+    gate.
 11. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 12. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not add a second assessment verdict derived from runtime state alone
 13. Treat Patrol recency as a singular transport-driven fact: the page-header recency line presents the governed Patrol timing context, so frontend summary consumers must not derive an extra timing pill from the same payloads inside any primary summary card that returns
@@ -7348,7 +7351,8 @@ and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
 `autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at
 decode (the browser and the `internal/ai/eval` runner send none), and the
 handler passes approval-required mode into the chat service for every
-exchange; an Autonomous control level runs as Controlled for that request.
+exchange; config already reads a stored retired autonomous level as
+controlled.
 That clamp is request-local and must not mutate the user's persistent AI
 control setting.
 That same chat transport boundary owns new-session anchoring. When the request
@@ -7410,8 +7414,7 @@ carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
 request-local autonomous mode to false even if a caller's JSON carries
 `autonomous_mode:true`. That server-side clamp is part of the public API
-contract because the drawer's `autonomousMode:false` flag is a disclosure only
-and never reaches the request.
+contract; no browser flag reaches the request.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend
@@ -8937,9 +8940,8 @@ plan expiry, and dry-run summary are allowed. Finding-level visible
 briefings may reuse that same safe metadata for factual action labels and safety notes,
 while approval command text remains inside the governed approval/remediation
 surface.
-Patrol approval-row Assistant handoffs must use the same safe metadata boundary
-and set the drawer's `autonomousMode:false` approval disclosure; they must not
-paste raw approval or action command text into a chat prompt.
+Patrol approval-row Assistant handoffs must use the same safe metadata boundary;
+they must not paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
 for the configured LLM to critique; raw plan command and rollback command

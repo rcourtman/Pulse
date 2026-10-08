@@ -1817,7 +1817,6 @@ func buildConfiguredProvider(ctx context.Context, cfg *config.AIConfig, orgID st
 		Str("provider", selectedProvider).
 		Str("model", selectedModel).
 		Str("control_level", cfg.GetControlLevel()).
-		Bool("autonomous", cfg.IsAutonomous()).
 		Msg("AI service initialized")
 	return nextProvider, ""
 }
@@ -2122,28 +2121,6 @@ func (s *Service) GetDebugContext(req ExecuteRequest) map[string]interface{} {
 	return result
 }
 
-// IsAutonomous returns true if autonomous mode is enabled AND licensed.
-// Autonomous mode requires the ai_autofix license feature (Pro tier).
-func (s *Service) IsAutonomous() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.cfg == nil || !s.cfg.IsAutonomous() {
-		return false
-	}
-	// Autonomous mode requires Pro license with ai_autofix feature
-	if s.licenseChecker != nil && !s.licenseChecker.HasFeature(FeatureAIAutoFix) {
-		return false
-	}
-	return true
-}
-
-func (s *Service) isAutonomousForRequest(req ExecuteRequest) bool {
-	if req.AutonomousMode != nil && !*req.AutonomousMode {
-		return false
-	}
-	return s.IsAutonomous()
-}
-
 // ConversationMessage represents a message in conversation history
 type ConversationMessage struct {
 	Role    string `json:"role"` // "user" or "assistant"
@@ -2161,7 +2138,6 @@ type ExecuteRequest struct {
 	FindingID              string                 `json:"finding_id,omitempty"`               // If fixing a patrol finding, the ID to resolve
 	Model                  string                 `json:"model,omitempty"`                    // Override model for this request (for user selection in chat)
 	UseCase                string                 `json:"use_case,omitempty"`                 // "chat" or "patrol" - determines which default model to use
-	AutonomousMode         *bool                  `json:"autonomous_mode,omitempty"`          // Per-request execution override; false keeps scoped handoffs approval-required
 	RequireCommandApproval bool                   `json:"require_command_approval,omitempty"` // Force every run_command tool call through operator approval
 }
 
@@ -2772,16 +2748,14 @@ Always execute the commands rather than telling the user how to do it.`
 					}
 				}
 
-				isAuto := s.isAutonomousForRequest(req)
 				policyDecision := s.policy.Evaluate(cmd)
 				log.Debug().
-					Bool("autonomous", isAuto).
 					Str("policy_decision", string(policyDecision)).
 					Str("command", cmd).
 					Str("target_host", targetHost).
 					Msg("Checking command policy/approval")
 
-				// Always block commands blocked by policy (even in autonomous mode).
+				// Always block commands blocked by policy.
 				if policyDecision == agentexec.PolicyBlock {
 					result := formatPolicyBlockedToolResult(cmd, "This command is blocked by security policy")
 					execution := ToolExecution{
@@ -2809,14 +2783,12 @@ Always execute the commands rather than telling the user how to do it.`
 					continue
 				}
 
-				if req.RequireCommandApproval || isAuto || policyDecision == agentexec.PolicyRequireApproval {
+				if req.RequireCommandApproval || policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
 					approvalReason = "Security policy requires approval"
 					if req.RequireCommandApproval {
 						approvalReason = "This handoff requires operator approval before command execution"
-					} else if isAuto {
-						approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 					}
 					approvalID = createRunCommandApprovalRecord(
 						approvalOrgID,
@@ -3391,24 +3363,21 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		// Enforce security policy.
-		// - Blocked commands are ALWAYS blocked (even in autonomous mode).
-		// - Approval-required commands only require approval when not in autonomous mode.
+		// Enforce security policy: blocked commands are always blocked, and
+		// approval-required commands (or a handoff that demands approval) stop
+		// for operator approval.
 		decision := s.policy.Evaluate(command)
 		if decision == agentexec.PolicyBlock {
 			execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
 			return execution.Output, execution
 		}
-		isAuto := s.isAutonomousForRequest(req)
-		if req.RequireCommandApproval || isAuto || decision == agentexec.PolicyRequireApproval {
+		if req.RequireCommandApproval || decision == agentexec.PolicyRequireApproval {
 			s.mu.RLock()
 			approvalOrgID := s.orgID
 			s.mu.RUnlock()
 			approvalReason := "Security policy requires approval"
 			if req.RequireCommandApproval {
 				approvalReason = "This handoff requires operator approval before command execution"
-			} else if isAuto {
-				approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 			}
 			approvalID := createRunCommandApprovalRecord(
 				approvalOrgID,

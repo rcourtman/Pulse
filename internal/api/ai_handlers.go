@@ -1849,19 +1849,6 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
 
-// EffectiveControlLevel returns the Assistant control level that should be
-// exposed or enforced for the current entitlement state. The stored setting can
-// remain autonomous so it comes back if the entitlement returns, but runtime
-// execution without ai_autofix must stay in approval mode.
-func (h *AISettingsHandler) EffectiveControlLevel(ctx context.Context, settings *config.AIConfig) string {
-	if settings == nil {
-		return config.ControlLevelReadOnly
-	}
-	return settings.GetEffectiveControlLevel(
-		h.GetAIService(ctx).HasLicenseFeature(ai.FeatureAIAutoFix),
-	)
-}
-
 // SetChatHandler sets the chat handler for investigation orchestration
 // This enables the patrol service to spawn chat sessions to investigate findings
 func (h *AISettingsHandler) SetChatHandler(chatHandler *AIHandler) {
@@ -2342,7 +2329,7 @@ type AISettingsResponse struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`    // "read_only", "controlled", "autonomous"
+	ControlLevel    string   `json:"control_level"`    // "read_only" or "controlled"
 	ProtectedGuests []string `json:"protected_guests"` // VMIDs/names that AI cannot control
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
@@ -2538,7 +2525,7 @@ type AISettingsUpdateRequest struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
+	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only" or "controlled"; "autonomous" saves as "controlled"
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
 	// Discovery settings
 	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
@@ -2678,7 +2665,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Providers:                 aiProviderDefinitionResponses(settings),
 		CostBudgetUSD30d:          settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ControlLevel:              settings.GetControlLevel(),
 		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
@@ -3058,17 +3045,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Handle infrastructure control settings
 	if req.ControlLevel != nil {
-		level := strings.TrimSpace(*req.ControlLevel)
-		if !config.IsValidControlLevel(level) {
-			http.Error(w, "invalid control_level: must be read_only, controlled, or autonomous", http.StatusBadRequest)
+		level, ok := config.SettableControlLevel(*req.ControlLevel)
+		if !ok {
+			http.Error(w, "invalid control_level: must be read_only or controlled", http.StatusBadRequest)
 			return
-		}
-		// "autonomous" requires Pro license
-		if level == config.ControlLevelAutonomous {
-			if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-				WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Autonomous control requires Pulse Pro")
-				return
-			}
 		}
 		settings.ControlLevel = level
 	}
@@ -3232,7 +3212,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ConfiguredProviders:       settings.GetConfiguredProviders(),
 		Providers:                 aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ControlLevel:              settings.GetControlLevel(),
 		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.DiscoveryEnabled,
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
@@ -4818,12 +4798,10 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 		}
 	}()
 
-	autonomousMode := false
 	resp, err := h.GetAIService(r.Context()).ExecuteStream(ctx, ai.ExecuteRequest{
 		Prompt:                 investigationPrompt,
 		TargetType:             targetType,
 		TargetID:               targetID,
-		AutonomousMode:         &autonomousMode,
 		RequireCommandApproval: true,
 		Context: map[string]interface{}{
 			"alertIdentifier": alertIdentifier,

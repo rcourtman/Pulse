@@ -2567,8 +2567,8 @@ alert-investigation action may remain visibly unavailable, but it must not
 show Pro-required tooltip copy, track upgrade clicks, or open the commercial
 handoff route.
 Unlocked alert-investigation Assistant handoffs are contextual explanation and
-triage entries, not autonomous execution grants. `InvestigateAlertButton.tsx`
-must pass `autonomousMode: false` when it opens Pulse Assistant, and it must
+triage entries, not autonomous execution grants; `/api/ai/chat` runs them
+approval-required server-side. `InvestigateAlertButton.tsx` must
 open the drawer with context only rather than seeding a product-authored prompt
 or choosing a diagnostic/remediation route. The
 visible drawer briefing for that same handoff is Alerts-owned presentation

@@ -1947,8 +1947,8 @@ recovery scope, or a storage/recovery-owned secret source.
     not treat it as backup visibility, restore authority, recovery readiness,
     storage-health evidence, or storage/recovery job progress.
     Direct alert-investigation execution controls in `internal/api/ai_handlers.go`
-    follow that same split: request-scoped `AutonomousMode:false` and
-    `RequireCommandApproval:true` are AI action-governance constraints, not
+    follow that same split: request-scoped `RequireCommandApproval:true` is an
+    AI action-governance constraint, not
     storage/recovery restore approval, recovery freshness, or storage diagnostic
     payload semantics.
     Visible `stream_idle` workflow progress on legacy Assistant SSE routes in
@@ -2813,7 +2813,7 @@ canonical pre-handler authorization proof covering both transfer routes.
     17a. Keep adjacent AI paid-control state entitlement-effective on that shared
     `internal/api/` boundary. Storage- and recovery-adjacent flows may preserve
     stored Assistant or Patrol preferences in config, but they must not treat
-    stored autonomous, auto-remediation, or alert-triggered analysis settings
+    stored auto-remediation or alert-triggered analysis settings
     as active restore, recovery, or support capability unless the shared AI
     runtime entitlement clamp exposes them as currently effective.
     AI settings control-refresh callbacks in `internal/api/ai_handlers.go` are

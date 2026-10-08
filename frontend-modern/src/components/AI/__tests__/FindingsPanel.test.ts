@@ -141,7 +141,6 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantModelContext');
     expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantBriefing');
     expect(findingsPanelSource).toContain('handoffContext,');
-    expect(findingsPanelSource).toContain('autonomousMode: false');
     expect(findingsPanelSource).not.toContain('Command: `');
     expect(findingsPanelSource).not.toContain('Rollback: `');
   });

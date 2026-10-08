@@ -50,7 +50,6 @@ describe('incidentAssistantHandoffModel', () => {
     expect(handoff.context).toMatchObject({
       targetType: 'app-container',
       targetId: 'docker:app-1',
-      autonomousMode: false,
       handoffResources: [
         {
           id: 'docker:app-1',

@@ -296,7 +296,6 @@ describe('RunHistoryEntry', () => {
     expect(context).toMatchObject({
       targetType: 'patrol-run',
       targetId: 'run-runtime-error',
-      autonomousMode: false,
       handoffMetadata: {
         kind: 'patrol_run',
         runId: 'run-runtime-error',

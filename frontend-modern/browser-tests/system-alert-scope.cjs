@@ -184,7 +184,6 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         assert.equal(context.targetId, undefined);
         assert.equal(context.targetType, undefined);
         assert.deepEqual(context.handoffResources, []);
-        assert.equal(context.autonomousMode, false);
         assert.equal(context.context.guestName, undefined);
         assert.equal(context.context.node, undefined);
         assert.match(context.handoffContext, /Scope: Pulse itself \(not a monitored resource\)/);

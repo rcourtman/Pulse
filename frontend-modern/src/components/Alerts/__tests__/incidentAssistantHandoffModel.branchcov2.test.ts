@@ -19,7 +19,6 @@ interface SanitizedIncidentEvent {
 interface StrictHandoffContext {
   targetType: string;
   targetId: string;
-  autonomousMode: boolean;
   handoffContext: string;
   handoffResources: { id: string; name: string; type: string; node?: string }[];
   briefing: {
@@ -381,7 +380,6 @@ describe('buildAlertIncidentAssistantHandoff (resource-label, event-count & capp
     // Top-level context scalars are concrete.
     expect(handoff.context.targetType).toBe('app-container');
     expect(handoff.context.targetId).toBe('docker:app-1');
-    expect(handoff.context.autonomousMode).toBe(false);
     expect(handoff.context.context.alertIncidentId).toBe('incident-1');
     expect(handoff.context.context.acknowledged).toBe(false);
     expect(handoff.context.context.eventCount).toBe(2);

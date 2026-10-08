@@ -43,9 +43,6 @@ func TestAIConfig_DiscoveryAndControl(t *testing.T) {
 	if !cfg.IsControlEnabled() {
 		t.Fatalf("control should be enabled for controlled level")
 	}
-	if cfg.IsAutonomous() {
-		t.Fatalf("autonomous should be false for controlled level")
-	}
 }
 
 func TestAIConfig_PatrolSettings(t *testing.T) {
@@ -125,11 +122,11 @@ func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
 		t.Fatalf("unexpected protected guests: %v", guests)
 	}
 
-	if IsValidControlLevel("bad") {
-		t.Fatalf("expected invalid control level to be false")
+	if _, ok := SettableControlLevel("bad"); ok {
+		t.Fatalf("expected invalid control level to be refused")
 	}
-	if !IsValidControlLevel(ControlLevelAutonomous) {
-		t.Fatalf("expected autonomous to be valid")
+	if level, ok := SettableControlLevel(ControlLevelAutonomous); !ok || level != ControlLevelControlled {
+		t.Fatalf("expected retired autonomous to save as controlled, got %q (%v)", level, ok)
 	}
 	if IsValidPatrolAutonomyLevel("bad") {
 		t.Fatalf("expected invalid patrol autonomy to be false")

@@ -124,7 +124,6 @@ describe('ApprovalSection typed action handoff', () => {
     expect(openMock).toHaveBeenCalledWith(
       expect.objectContaining({
         handoffContext: expect.stringContaining('Resolved'),
-        autonomousMode: false,
       }),
     );
   });
@@ -178,7 +177,6 @@ describe('ApprovalSection typed action handoff', () => {
     expect(openMock).toHaveBeenCalledWith(
       expect.objectContaining({
         handoffContext: expect.stringContaining('expired'),
-        autonomousMode: false,
       }),
     );
   });

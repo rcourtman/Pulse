@@ -129,7 +129,7 @@ export interface AISettings {
   request_timeout_seconds?: number;
 
   // Infrastructure control settings
-  control_level?: 'read_only' | 'controlled' | 'autonomous';
+  control_level?: 'read_only' | 'controlled';
   protected_guests?: string[];
 
   // AI Discovery settings
@@ -285,7 +285,7 @@ export interface AISettingsUpdateRequest {
   request_timeout_seconds?: number;
 
   // Infrastructure control settings
-  control_level?: 'read_only' | 'controlled' | 'autonomous';
+  control_level?: 'read_only' | 'controlled';
   protected_guests?: string[];
 
   // AI Discovery settings

@@ -254,7 +254,6 @@ describe('guestAssistantContextModel (branch coverage)', () => {
         },
         handoffResources: [{ id: 'pve-a:node-a:101', name: 'web-vm', type: 'vm', node: 'node-a' }],
         handoffMetadata: { kind: 'resource_context' },
-        autonomousMode: false,
       });
     });
 
@@ -297,7 +296,6 @@ describe('guestAssistantContextModel (branch coverage)', () => {
           { id: 'app-container:sidecar', name: 'sidecar', type: 'app-container', node: '' },
         ],
         handoffMetadata: { kind: 'resource_context' },
-        autonomousMode: false,
       });
     });
   });

@@ -445,26 +445,26 @@ The assistant enforces multiple safety gates:
 2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
 3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
 4. **Grounded Execution Guardrails** — Visible tool traces and read-after-write checks prevent unsupported execution claims from being treated as facts
-5. **Approval Mode** — In Controlled mode, every write requires explicit user approval
+5. **Plan, Don't Run** — In Ask first mode, an action the assistant proposes is saved as a plan in Actions instead of running from chat
 6. **Execution Context Binding** — Commands execute within the resolved resource's context, not on parent hosts
 
 ### Control Levels
 
-| Level | Behavior | Plan |
-|-------|----------|---------|
-| **Read-only** | AI can observe and query data only | Community |
-| **Controlled** | AI asks for approval before executing commands | Community |
-| **Autonomous** | AI executes actions without prompting | Pro / hosted Cloud |
+| Level | Key | Behavior | Plan |
+|-------|-----|----------|------|
+| **Read-only** | `read_only` | Assistant answers questions only | Community |
+| **Ask first** | `controlled` | Assistant plans actions for you to review and run in Actions | Community |
 
-### Using Approvals (Controlled Mode)
+Earlier versions offered a third `autonomous` level on Pro. Since July 2026,
+chat has run every request approval-required, so that level no longer changed
+what chat did; Pulse now saves and reads it as `controlled`.
 
-When control level is **Controlled**, write actions pause for approval:
+### Reviewing Planned Actions (Ask First)
 
-1. Tool returns `APPROVAL_REQUIRED: { approval_id, command, ... }`
-2. Agentic loop emits `approval_needed` SSE event
-3. UI shows approval card with the proposed command
-4. **Approve** to execute and verify, or **Deny** to cancel
-5. Only users with admin privileges can approve/deny
+When the level is **Ask first**, an action the assistant proposes is saved as a
+plan in **Actions** instead of running from chat. Review the plan there:
+approving and running it are separate recorded steps, and the assistant can
+read the recorded outcome afterwards.
 
 ---
 
