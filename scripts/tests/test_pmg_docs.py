@@ -22,6 +22,17 @@ def plain(text):
     return " ".join(text.replace("**", "").split())
 
 
+def go_block(text, opening):
+    """Read one known source block, including its nested bodies."""
+    start = text.index(opening) + len(opening)
+    depth = 1
+    for end in range(start, len(text)):
+        depth += (text[end] == "{") - (text[end] == "}")
+        if depth == 0:
+            return text[start:end]
+    raise AssertionError(f"Unclosed source block: {opening}")
+
+
 class PMGDocsTest(unittest.TestCase):
     def setUp(self):
         self.text = DOC.read_text(encoding="utf-8")
@@ -95,20 +106,76 @@ class PMGDocsTest(unittest.TestCase):
         self.assertIn("does not prove that every dataset was read", self.guide)
         self.assertIn("Unavailable evidence is unknown, not zero", self.guide)
 
-    def test_opt_out_guidance_does_not_invent_scope_enforcement(self):
+    def test_saved_scope_guidance_matches_each_owning_gate(self):
         poll = (ROOT / "internal/monitoring/monitor_pbs_pmg.go").read_text()
         poll = poll.split("func (m *Monitor) pollPMGInstance(", 1)[1]
-        # Do not lock in the runtime defect. If the owner adds these gates,
-        # the caveat can be reviewed/removed with that containing correction.
-        if any(f"if instanceCfg.{flag}" not in poll for flag in (
-            "MonitorMailStats", "MonitorQueues", "MonitorQuarantine",
-        )):
-            self.assertIn("requests can still run with their options off", self.guide)
-            self.assertIn("not evidence that those requests stopped", self.guide)
+        for condition, methods, description in (
+            ("MailStatsEnabled()", ("GetMailStatistics", "GetMailCount", "GetSpamScores"),
+             "Mail statistics, hourly mail counts and spam-score distribution"),
+            ("MonitorQueues", ("GetQueueStatus",), "Each collected cluster node's queue status"),
+            ("MonitorQuarantine", ("GetQuarantineStatus",), "Both spam and virus quarantine counts"),
+            ("MonitorDomainStats", ("ListRelayDomains", "GetDomainStatistics"),
+             "Relay-domain inventory and domain statistics"),
+        ):
+            body = go_block(poll, f"if instanceCfg.{condition} {{")
+            for method in methods:
+                self.assertIn(f"client.{method}(", body)
+                self.assertEqual(body.count(f"client.{method}("), poll.count(f"client.{method}("))
+            self.assertIn(description, self.guide)
+        for phrase in ("saved switches control these subsequent ordinary poll requests",
+                       "Edits apply to the next poll", "not requests already in flight",
+                       "does not dismiss an existing alert or establish recovery"):
+            self.assertIn(phrase, self.guide)
+
+    def test_legacy_scope_and_explicit_false_readback_are_not_overpromised(self):
+        cfg = (ROOT / "internal/config/config.go").read_text()
+        default = go_block(cfg, "func (i PMGInstance) MailStatsEnabled() bool {")
+        self.assertIn("!i.MonitoringConfigured", default)
+        for flag in ("MonitorQueues", "MonitorQuarantine", "MonitorDomainStats"):
+            self.assertIn(f"!i.{flag}", default)
+        wire = (ROOT / "internal/api/configapi/config_handlers.go").read_text()
+        response = go_block(wire, "type NodeResponse struct {")
+        for flag in ("monitorMailStats", "monitorQueues", "monitorQuarantine", "monitorDomainStats"):
+            self.assertIn(f'json:"{flag}"', response)
+            self.assertNotIn(f'json:"{flag},omitempty"', response)
+        for phrase in ("Saving all four options off preserves that choice when settings are reopened",
+                       "keeps the legacy mail-statistics default",
+                       "until its collection scope is explicitly saved",
+                       "cannot distinguish an old opt-out from an unset default"):
+            self.assertIn(phrase, self.guide)
+
+    def test_dataset_opt_out_is_not_a_connection_pause(self):
+        poll = (ROOT / "internal/monitoring/monitor_pbs_pmg.go").read_text()
+        poll = poll.split("func (m *Monitor) pollPMGInstance(", 1)[1]
+        for condition in ("MailStatsEnabled()", "MonitorQueues", "MonitorQuarantine", "MonitorDomainStats"):
+            body = go_block(poll, f"if instanceCfg.{condition} {{")
+            for method in ("GetVersion", "GetClusterStatus", "ListBackups"):
+                self.assertIn(f"client.{method}(", poll)
+                self.assertNotIn(f"client.{method}(", body)
+        for phrase in ("Version, cluster and configuration-backup reads are independent",
+                       "all four off does not mean no PMG requests"):
+            self.assertIn(phrase, self.guide)
         self.assertIn("if instanceCfg.Disabled", poll)
         self.assertLess(poll.index("if instanceCfg.Disabled"), poll.index("client.GetVersion"))
         for phrase in ("pause the PMG connection", "does not cancel a request already in flight",
                        "arrange independent coverage", "only the connection you deliberately paused"):
+            self.assertIn(phrase, self.guide)
+
+    def test_published_warning_is_bounded_to_the_named_release(self):
+        for phrase in ("Published v6.5.0 does not contain this scope correction",
+                       "In that version, mail, queue and quarantine requests can still run",
+                       "domain statistics alone follow their switch",
+                       "assume development-source behaviour is present in an installed release"):
+            self.assertIn(phrase, self.guide)
+
+    def test_incomplete_collection_does_not_promise_zero_or_recovery(self):
+        for phrase in ("records downstream read failures as incomplete collection",
+                       "retaining the successful version connection",
+                       "Missing readings do not become observed zero totals",
+                       "Partial queue data can still raise the highest configured severity",
+                       "cannot clear or downgrade an existing alert",
+                       "quarantine recovery requires both categories",
+                       "do not make every empty display a verified zero"):
             self.assertIn(phrase, self.guide)
 
     def test_diagnostics_preserve_mail_privacy_and_separate_failure_classes(self):
