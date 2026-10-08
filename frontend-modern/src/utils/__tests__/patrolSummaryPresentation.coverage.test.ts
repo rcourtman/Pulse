@@ -4,8 +4,11 @@ import type { PatrolRunRecord } from '@/api/patrol';
 
 import {
   getPatrolRecencyPresentation,
-  getPatrolVerificationPresentation,
+  getPatrolRunCoverage,
 } from '@/utils/patrolSummaryPresentation';
+
+// Ten minutes after the default fixture run completed.
+const NOW = Date.parse('2026-07-10T09:15:00Z');
 
 // Minimal typed PatrolRunRecord fixtures.
 function makeRun(overrides: Partial<PatrolRunRecord> = {}): PatrolRunRecord {
@@ -49,269 +52,190 @@ function successfulFullRun(resourcesChecked = 50): PatrolRunRecord {
 }
 
 // ===========================================================================
-// getPatrolVerificationPresentation — runtime-state branches, full-run-with-
-// errors, zero-resource full run, limited-run variants (verification/scoped/
-// unknown), no-completed-runs, and getVerificationActivityMixLabel undefined
-// paths.
+// getPatrolRunCoverage — the latest completed full run decides; errors,
+// zero-resource runs, limited-only history, and missing history.
 // ===========================================================================
 
-describe('getPatrolVerificationPresentation — runtime state', () => {
-  it('maps the blocked state to the paused runtime presentation', () => {
-    expect(getPatrolVerificationPresentation({ runtimeState: 'blocked' })).toEqual({
-      title: 'Patrol paused',
-      description: 'Patrol cannot check infrastructure until the blocking condition is cleared.',
-      compactLabel: 'Patrol paused',
-      tone: 'warning',
-    });
+describe('getPatrolRunCoverage — latest completed full run', () => {
+  it('is complete when the full run ended cleanly and checked resources', () => {
+    expect(getPatrolRunCoverage([successfulFullRun(58)], NOW)).toBe('complete');
   });
 
-  it('maps the disabled state to the disabled runtime presentation', () => {
-    expect(getPatrolVerificationPresentation({ runtimeState: 'disabled' })).toEqual({
-      title: 'Patrol disabled',
-      description: 'Enable Patrol to resume checks.',
-      compactLabel: 'Patrol disabled',
-      tone: 'info',
-    });
+  it('is complete when the full run checked a single resource', () => {
+    expect(getPatrolRunCoverage([successfulFullRun(1)], NOW)).toBe('complete');
   });
 
-  it('maps the unavailable state to the unavailable runtime presentation', () => {
-    expect(getPatrolVerificationPresentation({ runtimeState: 'unavailable' })).toEqual({
-      title: 'Patrol unavailable',
-      description: 'Patrol is not ready yet. Check Provider & Models and runtime availability.',
-      compactLabel: 'Patrol unavailable',
-      tone: 'error',
-    });
+  it('is unproven when the clean full run checked zero resources', () => {
+    expect(getPatrolRunCoverage([successfulFullRun(0)], NOW)).toBe('unproven');
+  });
+
+  it('is incomplete when the full run ended with errors after checking resources', () => {
+    expect(
+      getPatrolRunCoverage(
+        [makeRun({ resources_checked: 30, error_count: 2, status: 'error' })],
+        NOW,
+      ),
+    ).toBe('incomplete');
+  });
+
+  it('is incomplete when the full run ended with errors and checked nothing', () => {
+    expect(
+      getPatrolRunCoverage(
+        [makeRun({ resources_checked: 0, error_count: 1, status: 'error' })],
+        NOW,
+      ),
+    ).toBe('incomplete');
+  });
+
+  it('detects errors via status "error" even when error_count is 0', () => {
+    expect(
+      getPatrolRunCoverage(
+        [makeRun({ resources_checked: 30, error_count: 0, status: 'error' })],
+        NOW,
+      ),
+    ).toBe('incomplete');
+  });
+
+  it('detects errors case-insensitively via status "ERROR" as wrong-typed input', () => {
+    const run = makeRun({ resources_checked: 30, error_count: 0 });
+    (run as unknown as { status: string }).status = ' ERROR ';
+    expect(getPatrolRunCoverage([run], NOW)).toBe('incomplete');
+  });
+
+  it('reads only the latest completed full run when an older one errored', () => {
+    expect(
+      getPatrolRunCoverage(
+        [
+          successfulFullRun(40),
+          makeRun({ id: 'run-older', resources_checked: 40, error_count: 3, status: 'error' }),
+        ],
+        NOW,
+      ),
+    ).toBe('complete');
+  });
+
+  it('reads only the latest completed full run when an older one was clean', () => {
+    expect(
+      getPatrolRunCoverage(
+        [
+          makeRun({ id: 'run-newer', resources_checked: 40, error_count: 1, status: 'error' }),
+          successfulFullRun(40),
+        ],
+        NOW,
+      ),
+    ).toBe('incomplete');
+  });
+
+  it('skips a full run still in progress', () => {
+    expect(
+      getPatrolRunCoverage(
+        [
+          makeRun({ id: 'run-in-progress', completed_at: '  ', error_count: 1, status: 'error' }),
+          successfulFullRun(40),
+        ],
+        NOW,
+      ),
+    ).toBe('complete');
+  });
+
+  it('lets later clean targeted runs leave a clean full run complete', () => {
+    expect(
+      getPatrolRunCoverage(
+        [
+          makeRun({ id: 'run-scoped', type: 'scoped', resources_checked: 1 }),
+          successfulFullRun(40),
+        ],
+        NOW,
+      ),
+    ).toBe('complete');
   });
 });
 
-describe('getPatrolVerificationPresentation — full run with errors (hasRunErrors)', () => {
-  it('reports a needs-review check when the full run has errors and covered resources', () => {
+describe('getPatrolRunCoverage — what a clean full run can vouch for', () => {
+  it('is incomplete when a targeted run after the clean full run failed', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
           makeRun({
-            type: 'patrol',
-            resources_checked: 10,
-            error_count: 2,
-            status: 'error',
-          }),
-        ],
-      }),
-    ).toEqual({
-      title: 'Patrol check needs review',
-      description: 'The most recent Patrol check covered 10 resources but ended with 2 errors.',
-      compactLabel: 'Check needs review',
-      tone: 'warning',
-      lastFullRunAt: '2026-07-10T09:05:00Z',
-    });
-  });
-
-  it('reports a needs-review check with a generic message when errors occurred and zero resources', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
-            type: 'patrol',
+            id: 'run-scoped-failed',
+            type: 'scoped',
+            started_at: '2026-07-10T09:08:00Z',
+            completed_at: '2026-07-10T09:09:00Z',
             resources_checked: 0,
             error_count: 1,
             status: 'error',
           }),
+          successfulFullRun(40),
         ],
-      }),
-    ).toEqual({
-      title: 'Patrol check needs review',
-      description: 'The most recent Patrol check ended with errors.',
-      compactLabel: 'Check needs review',
-      tone: 'warning',
-      lastFullRunAt: '2026-07-10T09:05:00Z',
-    });
+        NOW,
+      ),
+    ).toBe('incomplete');
   });
 
-  it('detects errors via status "error" even when error_count is 0', () => {
-    const result = getPatrolVerificationPresentation({
-      runs: [
-        makeRun({
-          type: 'patrol',
-          resources_checked: 5,
-          error_count: 0,
-          status: 'error',
-        }),
-      ],
-    });
-    expect(result.title).toBe('Patrol check needs review');
-  });
-
-  it('detects errors case-insensitively via status "ERROR" as wrong-typed input', () => {
-    const run = makeRun({
-      type: 'patrol',
-      resources_checked: 5,
-      error_count: 0,
-      status: 'ERROR' as unknown as PatrolRunRecord['status'],
-    });
-    expect(getPatrolVerificationPresentation({ runs: [run] }).title).toBe(
-      'Patrol check needs review',
-    );
-  });
-});
-
-describe('getPatrolVerificationPresentation — successful full run', () => {
-  it('reports a successful check with zero resources', () => {
+  it('is complete when the failure came before the clean full run', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
+          successfulFullRun(40),
           makeRun({
-            type: 'patrol',
-            resources_checked: 0,
-            error_count: 0,
-            status: 'healthy',
-          }),
-        ],
-      }),
-    ).toEqual({
-      title: 'Recently checked',
-      description: 'The most recent Patrol check completed successfully.',
-      compactLabel: 'Recently checked',
-      tone: 'success',
-      lastFullRunAt: '2026-07-10T09:05:00Z',
-    });
-  });
-
-  it('reports a successful check with a single resource (singular)', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
-            type: 'patrol',
-            resources_checked: 1,
-            error_count: 0,
-            status: 'healthy',
-          }),
-        ],
-      }).description,
-    ).toBe('The most recent Patrol check completed successfully and covered 1 resource.');
-  });
-});
-
-describe('getPatrolVerificationPresentation — limited runs', () => {
-  it('reports follow-up checks with zero resources', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
-            type: 'verification',
-            resources_checked: 0,
-            error_count: 0,
-            status: 'healthy',
-          }),
-        ],
-      }).description,
-    ).toBe(
-      'Recent follow-up checks did not cover your full infrastructure. Run Patrol to check everything.',
-    );
-  });
-
-  it('reports targeted checks with zero resources', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
+            id: 'run-scoped-failed',
             type: 'scoped',
-            resources_checked: 0,
-            error_count: 0,
-            status: 'healthy',
+            started_at: '2026-07-10T08:00:00Z',
+            completed_at: '2026-07-10T08:01:00Z',
+            error_count: 1,
+            status: 'error',
           }),
         ],
-      }).description,
-    ).toBe(
-      'Recent targeted checks did not cover your full infrastructure. Run Patrol to check everything.',
-    );
+        NOW,
+      ),
+    ).toBe('complete');
   });
 
-  it('reports an unknown-type limited run with resources using the targeted fallback', () => {
+  it('is unproven when the clean full run finished more than 24 hours ago', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
-            type: 'custom',
-            resources_checked: 3,
-            error_count: 0,
-            status: 'healthy',
-          }),
-        ],
-      }).description,
-    ).toBe('Recent targeted checks covered 3 resources. Run Patrol to check everything.');
+      getPatrolRunCoverage(
+        [successfulFullRun(40)],
+        Date.parse('2026-07-10T09:05:00Z') + 24 * 60 * 60 * 1000 + 1,
+      ),
+    ).toBe('unproven');
   });
 
-  it('uses the default limited description for an unknown type with zero resources', () => {
+  it('is complete when the clean full run finished exactly 24 hours ago', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
-          makeRun({
-            type: 'custom',
-            resources_checked: 0,
-            error_count: 0,
-            status: 'healthy',
-          }),
-        ],
-      }).description,
-    ).toBe(
-      'Recent activity only checked part of your infrastructure. Run Patrol to check everything.',
-    );
+      getPatrolRunCoverage(
+        [successfulFullRun(40)],
+        Date.parse('2026-07-10T09:05:00Z') + 24 * 60 * 60 * 1000,
+      ),
+    ).toBe('complete');
+  });
+
+  it('is unproven when the clean full run has an unparseable completion time', () => {
+    expect(
+      getPatrolRunCoverage([makeRun({ resources_checked: 40, completed_at: 'soon' })], NOW),
+    ).toBe('unproven');
   });
 });
 
-describe('getPatrolVerificationPresentation — no completed runs', () => {
-  it('reports a pending check when no runs exist', () => {
-    expect(getPatrolVerificationPresentation({})).toEqual({
-      title: 'Run Patrol to check',
-      description: 'Patrol has not completed a check yet.',
-      compactLabel: 'Check pending',
-      tone: 'info',
-    });
+describe('getPatrolRunCoverage — no completed full run', () => {
+  it('is incomplete when only targeted runs completed', () => {
+    expect(getPatrolRunCoverage([makeRun({ type: 'scoped', resources_checked: 1 })], NOW)).toBe(
+      'incomplete',
+    );
   });
 
-  it('reports a pending check when the only run is not completed', () => {
+  it('is incomplete when only follow-up checks completed', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ completed_at: '' })],
-      }),
-    ).toEqual({
-      title: 'Run Patrol to check',
-      description: 'Patrol has not completed a check yet.',
-      compactLabel: 'Check pending',
-      tone: 'info',
-    });
-  });
-});
-
-describe('getVerificationActivityMixLabel (via getPatrolVerificationPresentation)', () => {
-  it('omits activityMixLabel when there is only a single completed run', () => {
-    const result = getPatrolVerificationPresentation({
-      runs: [successfulFullRun(10)],
-    });
-    expect(result.activityMixLabel).toBeUndefined();
+      getPatrolRunCoverage([makeRun({ type: 'verification', resources_checked: 1 })], NOW),
+    ).toBe('incomplete');
   });
 
-  it('omits activityMixLabel when all completed runs are full patrols', () => {
-    const result = getPatrolVerificationPresentation({
-      runs: [
-        makeRun({
-          id: 'run-a',
-          started_at: '2026-07-10T10:00:00Z',
-          completed_at: '2026-07-10T10:05:00Z',
-          type: 'patrol',
-          resources_checked: 40,
-        }),
-        makeRun({
-          id: 'run-b',
-          started_at: '2026-07-10T09:00:00Z',
-          completed_at: '2026-07-10T09:05:00Z',
-          type: 'full',
-          resources_checked: 40,
-        }),
-      ],
-    });
-    expect(result.activityMixLabel).toBeUndefined();
+  it('is unproven when no runs exist', () => {
+    expect(getPatrolRunCoverage(undefined, NOW)).toBe('unproven');
+    expect(getPatrolRunCoverage([], NOW)).toBe('unproven');
+  });
+
+  it('is unproven when the only run is not completed', () => {
+    expect(getPatrolRunCoverage([makeRun({ completed_at: undefined })], NOW)).toBe('unproven');
   });
 });
 
@@ -458,54 +382,38 @@ describe('getPatrolRecencyPresentation — resourcesCheckedLabel', () => {
 
 // ===========================================================================
 // normalizeRunType (private) — exercised through run-type classification in
-// verification and recency presentations. Covers case/whitespace/empty
-// normalization and the resulting full/scoped/verification classification.
+// the run-history coverage verdict. Covers case/whitespace/empty
+// normalization and the resulting full/limited classification.
 // ===========================================================================
 
 describe('normalizeRunType (via run-type classification)', () => {
   it('treats an empty type as a full run', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ type: '', resources_checked: 5, error_count: 0 })],
-      }).title,
-    ).toBe('Recently checked');
+    expect(getPatrolRunCoverage([makeRun({ type: '', resources_checked: 5 })], NOW)).toBe(
+      'complete',
+    );
   });
 
   it('treats undefined type as a full run', () => {
-    const run = makeRun({ resources_checked: 5, error_count: 0 });
+    const run = makeRun({ resources_checked: 5 });
     delete (run as Partial<PatrolRunRecord>).type;
-    expect(getPatrolVerificationPresentation({ runs: [run] }).title).toBe('Recently checked');
+    expect(getPatrolRunCoverage([run], NOW)).toBe('complete');
   });
 
   it('treats "PATROL" (uppercase) as a full run', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ type: 'PATROL', resources_checked: 5, error_count: 0 })],
-      }).title,
-    ).toBe('Recently checked');
+    expect(getPatrolRunCoverage([makeRun({ type: 'PATROL', resources_checked: 5 })], NOW)).toBe(
+      'complete',
+    );
   });
 
   it('treats "  Full  " (whitespace, mixed case) as a full run', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ type: '  Full  ', resources_checked: 5, error_count: 0 })],
-      }).title,
-    ).toBe('Recently checked');
+    expect(getPatrolRunCoverage([makeRun({ type: '  Full  ', resources_checked: 5 })], NOW)).toBe(
+      'complete',
+    );
   });
 
-  it('classifies "SCOPED" (uppercase) as a scoped run', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ type: 'SCOPED', resources_checked: 1, error_count: 0 })],
-      }).description,
-    ).toContain('targeted checks');
-  });
-
-  it('classifies "verification" as a verification run', () => {
-    expect(
-      getPatrolVerificationPresentation({
-        runs: [makeRun({ type: 'verification', resources_checked: 1, error_count: 0 })],
-      }).description,
-    ).toContain('follow-up checks');
+  it('classifies "SCOPED" (uppercase) as a limited run', () => {
+    expect(getPatrolRunCoverage([makeRun({ type: 'SCOPED', resources_checked: 1 })], NOW)).toBe(
+      'incomplete',
+    );
   });
 });

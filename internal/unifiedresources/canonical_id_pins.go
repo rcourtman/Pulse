@@ -265,7 +265,8 @@ func (rr *ResourceRegistry) completeIdentityFromPins(source DataSource, sourceID
 	// The exclusion names the IDs the record holds without the pin.
 	if len(rr.exclusions) > 0 &&
 		(rr.isExcluded(pin.CanonicalID, rr.chooseNewID(resource.Type, identity, source, sourceID)) ||
-			rr.isExcluded(pin.CanonicalID, rr.sourceSpecificID(resource.Type, source, sourceID))) {
+			rr.isExcluded(pin.CanonicalID, rr.sourceSpecificID(resource.Type, source, sourceID)) ||
+			rr.proxmoxNodePinOfSplitAgentLocked(source, sourceID, resource, identity, pin)) {
 		return identity
 	}
 	if strings.TrimSpace(identity.MachineID) == "" {

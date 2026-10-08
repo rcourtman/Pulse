@@ -157,13 +157,6 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
     return "DEFAULT"
 
 
-RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
-    "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-    "tests/integration/tests/17-recovery-layout.spec.ts",
-]
-
-
 class CanonicalCompletionGuardTest(unittest.TestCase):
     def test_registry_exists_and_contains_required_subsystems(self):
         self.assertTrue(SUBSYSTEM_REGISTRY.exists())

@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPatrolRecencyPresentation,
-  getPatrolVerificationPresentation,
+  getPatrolRunCoverage,
 } from '@/utils/patrolSummaryPresentation';
 
-describe('Patrol recency and verification presentation', () => {
-  it('reports a recent successful Patrol check', () => {
+// Half an hour after the fixture runs below.
+const NOW = Date.parse('2026-03-12T10:30:00Z');
+
+describe('Patrol recency and run-history coverage', () => {
+  it('proves coverage with a recent successful Patrol check', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
           {
             id: 'run-1',
             started_at: '2026-03-12T09:50:00Z',
@@ -38,20 +41,15 @@ describe('Patrol recency and verification presentation', () => {
             tool_call_count: 0,
           },
         ] as never,
-      }),
-    ).toEqual({
-      title: 'Recently checked',
-      description: 'The most recent Patrol check completed successfully and covered 58 resources.',
-      compactLabel: 'Recently checked',
-      tone: 'success',
-      lastFullRunAt: '2026-03-12T09:57:00Z',
-    });
+        NOW,
+      ),
+    ).toBe('complete');
   });
 
-  it('adds a check mix when targeted runs make recent activity look busy', () => {
+  it('keeps coverage proven when targeted runs follow a clean full check', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
           {
             id: 'run-scoped-alert',
             started_at: '2026-03-12T10:00:00Z',
@@ -139,21 +137,15 @@ describe('Patrol recency and verification presentation', () => {
             tool_call_count: 0,
           },
         ] as never,
-      }),
-    ).toEqual({
-      title: 'Recently checked',
-      description: 'The most recent Patrol check completed successfully and covered 58 resources.',
-      compactLabel: 'Recently checked',
-      tone: 'success',
-      lastFullRunAt: '2026-03-12T09:57:00Z',
-      activityMixLabel: '1 full check, 1 alert-triggered check, 1 anomaly-triggered check',
-    });
+        NOW,
+      ),
+    ).toBe('complete');
   });
 
-  it('reports a partial check when only targeted runs are recent', () => {
+  it('reports incomplete coverage when only targeted runs are recent', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
           {
             id: 'run-1',
             started_at: '2026-03-12T09:58:00Z',
@@ -184,19 +176,15 @@ describe('Patrol recency and verification presentation', () => {
             tool_call_count: 0,
           },
         ] as never,
-      }),
-    ).toEqual({
-      title: 'Needs full check',
-      description: 'Recent targeted checks covered 1 resource. Run Patrol to check everything.',
-      compactLabel: 'Partial check',
-      tone: 'warning',
-    });
+        NOW,
+      ),
+    ).toBe('incomplete');
   });
 
-  it('reports a partial check when only follow-up checks are recent', () => {
+  it('reports incomplete coverage when only follow-up checks are recent', () => {
     expect(
-      getPatrolVerificationPresentation({
-        runs: [
+      getPatrolRunCoverage(
+        [
           {
             id: 'run-1',
             started_at: '2026-03-12T09:58:00Z',
@@ -227,13 +215,9 @@ describe('Patrol recency and verification presentation', () => {
             tool_call_count: 0,
           },
         ] as never,
-      }),
-    ).toEqual({
-      title: 'Needs full check',
-      description: 'Recent follow-up checks covered 1 resource. Run Patrol to check everything.',
-      compactLabel: 'Partial check',
-      tone: 'warning',
-    });
+        NOW,
+      ),
+    ).toBe('incomplete');
   });
 
   it('labels targeted recency as the last check', () => {

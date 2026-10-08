@@ -1,19 +1,17 @@
-import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
-import {
-  formatPatrolActivityBreakdown,
-  getPatrolActivityBreakdown,
-} from '@/utils/patrolRunPresentation';
-import type { SemanticTone } from '@/utils/semanticTonePresentation';
-import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
+import type { PatrolRunRecord } from '@/api/patrol';
 
-export interface PatrolVerificationPresentation {
-  title: string;
-  description: string;
-  compactLabel: string;
-  tone: SemanticTone;
-  lastFullRunAt?: string;
-  activityMixLabel?: string;
-}
+// What Patrol run history proves about coverage of the whole estate.
+// `complete`: the latest completed full patrol ended without errors, checked
+// at least one resource, finished within the last 24 hours, and no run after
+// it failed. `incomplete`: it ended with errors, a run after it failed, or
+// only targeted or follow-up runs have completed. `unproven`: anything else,
+// including no completed run.
+export type PatrolRunCoverage = 'complete' | 'incomplete' | 'unproven';
+
+// The backend judges coverage over the same 24 hours
+// (intelligencePatrolCoverageWindow in internal/ai/intelligence.go), so an
+// older clean run cannot vouch for what its coverage factor reports.
+const PATROL_RUN_COVERAGE_PROOF_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export interface PatrolRecencyPresentation {
   label: string;
@@ -38,36 +36,6 @@ function isFullPatrolRun(run: PatrolRunRecord): boolean {
   return normalized === '' || normalized === 'full' || normalized === 'patrol';
 }
 
-function isScopedPatrolRun(run: PatrolRunRecord): boolean {
-  return normalizeRunType(run.type) === 'scoped';
-}
-
-function isVerificationPatrolRun(run: PatrolRunRecord): boolean {
-  return normalizeRunType(run.type) === 'verification';
-}
-
-function getVerificationActivityMixLabel(runs: PatrolRunRecord[]): string | undefined {
-  const latestCompletedRun = runs.find((run) => isCompletedPatrolRun(run));
-  const referenceTimestamp = latestCompletedRun?.completed_at || latestCompletedRun?.started_at;
-  if (!referenceTimestamp) {
-    return undefined;
-  }
-
-  const breakdown = getPatrolActivityBreakdown(runs, new Date(referenceTimestamp));
-  const scopedRuns =
-    breakdown.alertTriggeredRuns +
-    breakdown.anomalyTriggeredRuns +
-    breakdown.alertClearedRuns +
-    breakdown.verificationChecks +
-    breakdown.otherScopedRuns;
-  if (breakdown.totalRuns <= 1 || scopedRuns <= 0) {
-    return undefined;
-  }
-
-  const label = formatPatrolActivityBreakdown(breakdown);
-  return label || undefined;
-}
-
 function isCompletedPatrolRun(run: PatrolRunRecord): boolean {
   return Boolean(run.completed_at?.trim());
 }
@@ -90,93 +58,29 @@ function formatRecencyResourcesCheckedLabel(run: PatrolRunRecord): string | unde
   return `checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}`;
 }
 
-export function getPatrolVerificationPresentation(args: {
-  runs?: PatrolRunRecord[];
-  runtimeState?: PatrolRuntimeState;
-  blockedReason?: string;
-}): PatrolVerificationPresentation {
-  if (
-    args.runtimeState === 'blocked' ||
-    args.runtimeState === 'disabled' ||
-    args.runtimeState === 'unavailable'
-  ) {
-    const runtime = getPatrolRuntimePresentation(args.runtimeState, args.blockedReason);
-    return {
-      title: runtime.label,
-      description: runtime.description,
-      compactLabel: runtime.label,
-      tone: runtime.tone,
-    };
+export function getPatrolRunCoverage(
+  runs: PatrolRunRecord[] | undefined,
+  nowMs: number = Date.now(),
+): PatrolRunCoverage {
+  const completedRuns = (runs ?? []).filter((run) => isCompletedPatrolRun(run));
+  const latestFullRunIndex = completedRuns.findIndex((run) => isFullPatrolRun(run));
+
+  if (latestFullRunIndex < 0) {
+    return completedRuns.length > 0 ? 'incomplete' : 'unproven';
   }
-
-  const completedRuns = (args.runs ?? []).filter((run) => isCompletedPatrolRun(run));
-  const activityMixLabel = getVerificationActivityMixLabel(completedRuns);
-  const recentFullRun = completedRuns.find((run) => isFullPatrolRun(run));
-
-  if (recentFullRun) {
-    const resourcesChecked = recentFullRun.resources_checked || 0;
-    if (hasRunErrors(recentFullRun)) {
-      return {
-        title: 'Patrol check needs review',
-        description:
-          resourcesChecked > 0
-            ? `The most recent Patrol check covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'} but ended with ${recentFullRun.error_count} error${recentFullRun.error_count === 1 ? '' : 's'}.`
-            : 'The most recent Patrol check ended with errors.',
-        compactLabel: 'Check needs review',
-        tone: 'warning',
-        lastFullRunAt: recentFullRun.completed_at,
-        activityMixLabel,
-      };
-    }
-
-    return {
-      title: 'Recently checked',
-      description:
-        resourcesChecked > 0
-          ? `The most recent Patrol check completed successfully and covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}.`
-          : 'The most recent Patrol check completed successfully.',
-      compactLabel: 'Recently checked',
-      tone: 'success',
-      lastFullRunAt: recentFullRun.completed_at,
-      activityMixLabel,
-    };
+  const latestFullRun = completedRuns[latestFullRunIndex];
+  // A clean full run supersedes only the failures before it, not one after.
+  if (completedRuns.slice(0, latestFullRunIndex + 1).some((run) => hasRunErrors(run))) {
+    return 'incomplete';
   }
-
-  const recentLimitedRun = completedRuns.find((run) => !isFullPatrolRun(run));
-  if (recentLimitedRun) {
-    const resourcesChecked = recentLimitedRun.resources_checked || 0;
-    let description =
-      'Recent activity only checked part of your infrastructure. Run Patrol to check everything.';
-
-    if (isVerificationPatrolRun(recentLimitedRun)) {
-      description =
-        resourcesChecked > 0
-          ? `Recent follow-up checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`
-          : 'Recent follow-up checks did not cover your full infrastructure. Run Patrol to check everything.';
-    } else if (isScopedPatrolRun(recentLimitedRun)) {
-      description =
-        resourcesChecked > 0
-          ? `Recent targeted checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`
-          : 'Recent targeted checks did not cover your full infrastructure. Run Patrol to check everything.';
-    } else if (resourcesChecked > 0) {
-      description = `Recent targeted checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`;
-    }
-
-    return {
-      title: 'Needs full check',
-      description,
-      compactLabel: 'Partial check',
-      tone: 'warning',
-      activityMixLabel,
-    };
+  if ((latestFullRun.resources_checked || 0) <= 0) {
+    return 'unproven';
   }
-
-  return {
-    title: 'Run Patrol to check',
-    description: 'Patrol has not completed a check yet.',
-    compactLabel: 'Check pending',
-    tone: 'info',
-  };
+  const completedMs = Date.parse(latestFullRun.completed_at);
+  if (!Number.isFinite(completedMs) || nowMs - completedMs > PATROL_RUN_COVERAGE_PROOF_WINDOW_MS) {
+    return 'unproven';
+  }
+  return 'complete';
 }
 
 export function getPatrolRecencyPresentation(args: {

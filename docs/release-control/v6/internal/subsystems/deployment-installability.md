@@ -5638,10 +5638,20 @@ browser runtime, cover both stream-only reconnect degradation and full backend
 loss, bounce the real backend through the launcher contract when needed, and
 prove that the shell degrades and recovers through the proxy instead of
 relying on backend-only API checks that miss browser/runtime drift.
-That same managed browser proof pack must also keep the desktop Recovery page
-layout guard on the canonical entrypoint, so `dev:verify` catches right-edge
-history-table overflow regressions introduced by more human-readable subject
-labels instead of leaving that check as a hidden one-off Playwright command.
+That same managed browser proof pack must also keep the desktop Proxmox Backups
+layout guard, `tests/integration/tests/17-proxmox-backups-layout.spec.ts`, on
+the canonical entrypoint instead of leaving that check as a hidden one-off
+Playwright command. It checks that selecting an activity day keeps the
+operator on `/proxmox/backups` with an `N of M backups` count, and that a
+one-year activity range keeps the page inside the horizontal viewport with the
+PBS servers table's trailing column inside its wrapper. The guard reads the
+mock-mode estate, so against a real-mode managed runtime it skips with a
+`npm run mock:on` hint rather than switching modes in place, which would clear
+the runtime's active alerts. Every spec the default proof command names must
+exist under `tests/integration/`: Playwright treats each path as a filter and
+runs whatever still matches, so a retired spec would drop out of `dev:verify`
+without failing it. `scripts/tests/test-hot-dev-bg.sh` pins the spec name
+and that existence check.
 That same proof pack must also keep the Patrol blocked-runtime page contract on
 the canonical entrypoint, so `dev:verify` catches stale healthy-summary
 regressions where the real `/ai` route would otherwise look healthy even after
