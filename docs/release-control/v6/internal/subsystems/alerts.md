@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### PMG collection opt-outs are not recovery evidence
+
+Missing node queues (including an entirely disabled collector) cannot resolve
+aggregate queue-depth or oldest-message alerts: recovery and lower severity
+require every discovered node's observation. A partial non-negative reading
+is a lower bound and can still establish the highest configured severity
+(critical when configured, otherwise warning), never downgrade or resolve it.
+Observed per-node queues retain their existing independent evaluation. Missing quarantine totals preserve both category alerts
+and add no zero growth sample; a successful complete zero remains real recovery
+evidence. Explicit alert-policy disablement and the existing offline policy
+remain separate and unchanged. `pmg_collection_test.go` and the corrected
+nil-quarantine control in `alerts_test.go` cover missing/partial datasets and
+complete oldest-message recovery, known-high partial activation and refusal
+to downgrade a critical alert using an incomplete lower reading.
+
 ### Connection confirmations cannot span unknown or disabled observations
 
 The existing PVE/PBS/PMG/vSphere/TrueNAS connection-degraded detector requires

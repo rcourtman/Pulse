@@ -21,6 +21,16 @@
 
 ## Purpose
 
+### PMG collection scope remains separate from backup recovery
+
+Shared node-settings and connections code preserves PMG collection opt-outs
+without changing storage identity, capacity, History or recovery semantics.
+The four mail/queue/quarantine/domain switches do not disable PMG configuration
+backup discovery, and pausing the PMG connection still prevents subsequent
+ordinary polls including backup reads. `TestPMGCollectionScope` in
+`monitor_pmg_test.go` checks independent backup reads in every scope; no backup
+restore, mail manipulation or native recovery is introduced or proved.
+
 ### Persisted trust edits and restart consistency
 
 The shared `internal/api/` settings path durably saves an explicit empty

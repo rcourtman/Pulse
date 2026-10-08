@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### PMG saved collection scope and incomplete observations
+
+The PMG poller snapshots the selected connection's saved scope once per poll.
+Mail statistics, mail-count trends and spam-score reads follow `MonitorMailStats`;
+each discovered node's queue read follows `MonitorQueues`; both quarantine
+category reads follow `MonitorQuarantine`; domain reads follow `MonitorDomainStats`.
+Disabled datasets make no requests and supply no current observation. Version,
+cluster discovery and configuration-backup reads remain independent of these
+four switches; pausing the connection prevents every subsequent ordinary poll.
+An edit or pause does not revoke an already running poll's snapshot.
+
+A successful version read still establishes online connection health, not
+complete collection. Downstream read failures are retained as failed poll
+evidence, with missing fields instead of synthetic zero readings. Quarantine
+totals require both category reads. Collector controls in `monitor_pmg_test.go`
+cover sixteen scopes, next-poll edits/pause/resume, in-flight snapshots, each
+read failure, recovery, legacy defaults and cancelled/unknown connections.
+These synthetic controls are not native PMG or installed privacy acceptance.
+
+The PMG client rejects omitted/null object payloads for version, mail, queue
+and quarantine instead of materialising them as zero structs. Explicit
+successful zero objects remain observations. `TestPMGCollectionMissingObjectData`
+and `TestPMGCollectionObservedZeroData` in `pkg/pmg/client_test.go` exercise the
+real request/decoder boundary using an in-memory HTTP transport, with no listener.
+
 ### Guest configuration reads preserve installation and node identity
 
 Resolving omitted placement for the existing guest-config read honours every

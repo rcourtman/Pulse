@@ -485,21 +485,27 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 
 // GetVersion returns version information for the PMG instance.
 func (c *Client) GetVersion(ctx context.Context) (*VersionInfo, error) {
-	var resp apiResponse[VersionInfo]
+	var resp apiResponse[*VersionInfo]
 	if err := c.getJSON(ctx, "/version", nil, &resp); err != nil {
 		return nil, err
 	}
-	return &resp.Data, nil
+	if resp.Data == nil {
+		return nil, fmt.Errorf("PMG GetVersion response missing data")
+	}
+	return resp.Data, nil
 }
 
 func (c *Client) GetMailStatistics(ctx context.Context, timeframe string) (*MailStatistics, error) {
 	// PMG API does not accept timeframe parameter - it returns current day statistics
 	// The timeframe parameter is ignored to maintain API compatibility
-	var resp apiResponse[MailStatistics]
+	var resp apiResponse[*MailStatistics]
 	if err := c.getJSON(ctx, "/statistics/mail", nil, &resp); err != nil {
 		return nil, err
 	}
-	return &resp.Data, nil
+	if resp.Data == nil {
+		return nil, fmt.Errorf("PMG GetMailStatistics response missing data")
+	}
+	return resp.Data, nil
 }
 
 func (c *Client) GetMailCount(ctx context.Context, timespanSeconds int) ([]MailCountEntry, error) {
@@ -537,20 +543,26 @@ func (c *Client) GetClusterStatus(ctx context.Context, listSingle bool) ([]Clust
 
 func (c *Client) GetQuarantineStatus(ctx context.Context, category string) (*QuarantineStatus, error) {
 	path := fmt.Sprintf("/quarantine/%sstatus", category)
-	var resp apiResponse[QuarantineStatus]
+	var resp apiResponse[*QuarantineStatus]
 	if err := c.getJSON(ctx, path, nil, &resp); err != nil {
 		return nil, err
 	}
-	return &resp.Data, nil
+	if resp.Data == nil {
+		return nil, fmt.Errorf("PMG GetQuarantineStatus response missing data")
+	}
+	return resp.Data, nil
 }
 
 func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusEntry, error) {
 	path := fmt.Sprintf("/nodes/%s/postfix/queue", node)
-	var resp apiResponse[QueueStatusEntry]
+	var resp apiResponse[*QueueStatusEntry]
 	if err := c.getJSON(ctx, path, nil, &resp); err != nil {
 		return nil, err
 	}
-	return &resp.Data, nil
+	if resp.Data == nil {
+		return nil, fmt.Errorf("PMG GetQueueStatus response missing data")
+	}
+	return resp.Data, nil
 }
 
 // ListBackups returns configuration backup archives available on a PMG node.

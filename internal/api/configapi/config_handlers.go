@@ -1687,10 +1687,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 
 	// Add PMG nodes
 	for i, pmgInst := range h.getConfig(ctx).PMGInstances {
-		monitorMailStats := pmgInst.MonitorMailStats
-		if !pmgInst.MonitorMailStats && !pmgInst.MonitorQueues && !pmgInst.MonitorQuarantine && !pmgInst.MonitorDomainStats {
-			monitorMailStats = true
-		}
+		monitorMailStats := pmgInst.MailStatsEnabled()
 
 		node := NodeResponse{
 			ID:                           generateNodeID("pmg", i),

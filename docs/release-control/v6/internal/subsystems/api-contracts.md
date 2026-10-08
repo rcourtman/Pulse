@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### PMG scope readback preserves explicit all-off settings
+
+Existing node add/update payloads keep their four boolean collection options.
+PMG saves persist the internal `monitoringConfigured` discriminator: legacy
+all-zero entries retain the existing mail-statistics default, while a saved
+all-off scope remains off through readback and restart. Partial scope patches
+first materialise that legacy default, then apply the supplied options; omitted
+options and unrelated edits do not erase an opt-out. PMG additions/edits publish
+the new runtime connection only after the durable save succeeds. Nodes and
+connection aggregation use the same effective mail-statistics rule.
+
+`configapi/pmg_scope_test.go`, `connections_aggregator_test.go` and the PMG
+branch controls cover defaults, saved/partial/failed patches and readback.
+`TestContract_PMGUncollectedDatasetsRemainAbsent` preserves missing optional
+readings across the existing PMG endpoint; it adds no route or payload dataset.
+
 ### Origin-trust reversal and consistent webhook placeholders
 
 `POST /api/system/settings/update` treats the presence of a string
