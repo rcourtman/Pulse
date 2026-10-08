@@ -1773,6 +1773,11 @@ func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/explicit=%v", gap, explicit), func(t *testing.T) {
 				m, elapsed := continuityManager(t, explicit)
 				disk := models.HostUnraidDisk{Name: "disk1", Device: "sda", Serial: "CONTINUITY-1", Transport: "sata", Temperature: 85}
+				if gap == "type-off" {
+					// Canonical SATA zero triggers are restored to defaults on save.
+					// Custom transport entries support disabling through UpdateConfig.
+					disk.Transport = "custom"
+				}
 				host := unraidTempHost(nil, disk)
 				id := hostDiskTemperatureResourceID(host.ID, "sda")
 				// The inventory also has its separate array-health alert.
@@ -1798,7 +1803,7 @@ func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
 					cfg := m.GetConfig()
 					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
 					m.UpdateConfig(cfg)
-					if threshold := m.DiskTemperatureThreshold("custom"); threshold != nil && threshold.Trigger > 0 {
+					if threshold := m.DiskTemperatureThreshold(disk.Transport); threshold != nil && threshold.Trigger > 0 {
 						t.Fatalf("type-off fixture did not disable temperature alerts: %+v", threshold)
 					}
 					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
