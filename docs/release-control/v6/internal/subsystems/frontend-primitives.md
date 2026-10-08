@@ -942,10 +942,11 @@ or assuming identical value scales.
 Workload tables expose their inline history lens through one shared filter
 contract. Its first-use hint is visible only while bar or history metrics are
 available, disappears after a populated guest preview succeeds, and is passed
-through `getWorkloadsMetricFilterProps`. The generic `WorkloadsSurface` and
-provider-owned compositions such as `ProxmoxPageSurface` and
-`VmwarePageSurface` must consume that binding atomically rather than selecting
-display, hover, range, or hint accessors independently. Hover and range
+through `getWorkloadsMetricFilterProps`. The provider-owned compositions
+`ProxmoxPageSurface` and `VmwarePageSurface` render the only `WorkloadsFilter`
+above their embedded `WorkloadsSurface`, which renders no toolbar of its own,
+and must consume that binding atomically rather than selecting display, hover,
+range, or hint accessors independently. Hover and range
 interactions remain session deduplicated so the presentation layer cannot
 create per-row or per-frame telemetry traffic. Provider-native inventories
 that do not render `WorkloadsFilter` are outside this guest-row contract and
@@ -6859,9 +6860,13 @@ run history it uses `Last check` for the `last_patrol_at` full-sweep transport
 fact and `Last activity` when `last_activity_at` is newer, and it never
 collapses them into a generic `Last run` label. Its coverage phrase reads
 `checked N resources` and never says `verified`.
-If a summary shell returns, it should not present `Recent coverage is
-incomplete` when run history shows a successful full patrol with non-zero
-resource coverage.
+The current-findings empty state already applies that run-history rule
+through `getPatrolRunCoverage`: a successful latest full patrol with non-zero
+resource coverage, completed within the last 24 hours with no failed run
+after it, keeps an overall-health `coverage` factor from turning the empty
+queue into `Check needed` or `Patrol needs review`. If a summary shell
+returns, it must not present `Recent coverage is incomplete` in that state
+either.
 That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from

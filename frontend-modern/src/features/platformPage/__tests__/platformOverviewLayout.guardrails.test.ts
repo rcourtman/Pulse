@@ -761,8 +761,10 @@ describe('platform overview layout guardrails', () => {
     // Proxmox and vSphere overview pages render their own page-level
     // WorkloadsFilter above the embedded WorkloadsSurface so a single
     // toolbar drives both the page's top table and the workloads table.
-    // If the embedded surface also renders its own filter the page ends
-    // up with two stacked toolbars wired to the same state (RC6 bug).
+    // The surface renders no filter of its own; one there would stack a
+    // second toolbar wired to the same state (RC6 bug).
+    expect(workloadsSurfaceSource).not.toContain('<WorkloadsFilter');
+    expect(workloadsSurfaceSource).not.toContain("from './WorkloadsFilter'");
     const surfacesWithSharedToolbar: Array<[string, string]> = [
       ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
       ['VmwarePageSurface', vmwarePageSurfaceSource],
@@ -771,9 +773,9 @@ describe('platform overview layout guardrails', () => {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
       expect(
-        /<WorkloadsSurface\b[^>]*?suppressFilterToolbar/s.test(source),
-        `${name} should pass suppressFilterToolbar to <WorkloadsSurface>`,
-      ).toBe(true);
+        source.indexOf('<WorkloadsFilter'),
+        `${name} filter precedes the surface`,
+      ).toBeLessThan(source.indexOf('<WorkloadsSurface'));
     }
   });
 
@@ -817,7 +819,8 @@ describe('platform overview layout guardrails', () => {
     expect(existsSync('src/components/Recovery')).toBe(false);
 
     // Neither surface has an embedded or table-only mode, and WorkloadsSurface
-    // has no opt-in toolbar prop: the embedding page suppresses its toolbar.
+    // has no toolbar prop at all: it renders no toolbar, and the embedding page
+    // renders the only one.
     const surfaceSources: Array<[string, string]> = [
       ['WorkloadsSurface', workloadsSurfaceSource],
       ['useWorkloadsState', useWorkloadsStateSource],
@@ -825,10 +828,10 @@ describe('platform overview layout guardrails', () => {
     ];
     for (const [name, source] of surfaceSources) {
       expect(source, `${name} must not declare an embed-mode prop`).not.toMatch(
-        /\b(?:embedded|tableOnly|showFilterToolbar)\??:/,
+        /\b(?:embedded|tableOnly|showFilterToolbar|suppressFilterToolbar)\??:/,
       );
       expect(source, `${name} must not read an embed-mode prop`).not.toMatch(
-        /props\.(?:embedded|tableOnly|showFilterToolbar)\b/,
+        /props\.(?:embedded|tableOnly|showFilterToolbar|suppressFilterToolbar)\b/,
       );
     }
 
@@ -855,7 +858,6 @@ describe('platform overview layout guardrails', () => {
       expect(jsxAttr(toolbar, 'forcedPlatform'), name).toBe(platform);
       const surface = onlyJsxTag(overviewFn, 'WorkloadsSurface');
       expect(jsxAttr(surface, 'state'), name).toBe('workloadsState');
-      expect(jsxAttr(surface, 'suppressFilterToolbar'), name).toBe('true');
     }
 
     // StorageSurface sits on the Proxmox Storage tab with the source locked and

@@ -986,7 +986,7 @@ run_verify_proof_command() {
       HOT_DEV_VERIFY_LOCK_FILE="${HOT_DEV_VERIFY_LOCK}" \
       node ./scripts/run-playwright.mjs \
         tests/16-dev-runtime-recovery.spec.ts \
-        tests/17-recovery-layout.spec.ts \
+        tests/17-proxmox-backups-layout.spec.ts \
         tests/18-patrol-runtime-state.spec.ts \
         --project=chromium
     )

@@ -99,6 +99,269 @@ describe('patrolEmptyStatePresentation', () => {
     });
   });
 
+  describe('coverage factor after a clean full run', () => {
+    // Ten minutes after the clean full run below completed.
+    const NOW = Date.parse('2026-10-07T12:15:00Z');
+    const recentErrorsFactor = (impact: number) => ({
+      name: 'Recent Patrol errors',
+      impact,
+      description:
+        'Recent Patrol runs encountered errors, so the current health summary may be incomplete.',
+      category: 'coverage',
+    });
+    const fullRun = (overrides: Partial<PatrolRunRecord>) =>
+      ({
+        id: 'run-full',
+        started_at: '2026-10-07T12:00:00Z',
+        completed_at: '2026-10-07T12:05:00Z',
+        type: 'patrol',
+        status: 'healthy',
+        error_count: 0,
+        resources_checked: 1377,
+        finding_ids: [],
+        ...overrides,
+      }) as unknown as PatrolRunRecord;
+    const erroredEarlierRun = fullRun({
+      id: 'run-errored-earlier',
+      started_at: '2026-10-07T06:00:00Z',
+      completed_at: '2026-10-07T06:05:00Z',
+      status: 'error',
+      error_count: 2,
+    });
+
+    it('reads as no current issues once the latest full run checked resources cleanly', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 90,
+            grade: 'A',
+            trend: 'stable',
+            factors: [recentErrorsFactor(-0.1)],
+            prediction:
+              'Recent Patrol runs encountered errors, so the current health summary may be incomplete.',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [fullRun({}), erroredEarlierRun],
+        }),
+      ).toEqual({
+        title: 'No current issues',
+        body: 'Checked 1377 resources.',
+        tone: 'success',
+      });
+    });
+
+    it('does not ask for review when the coverage factor alone lowered the grade', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 70,
+            grade: 'C',
+            trend: 'stable',
+            factors: [
+              recentErrorsFactor(-0.3),
+              {
+                name: 'Knowledge learned',
+                impact: 0.05,
+                description: 'Pulse Patrol has learned about 12 resources',
+                category: 'learning',
+              },
+            ],
+            prediction:
+              'Most recent Patrol runs encountered errors (6 of 10); the current health summary is not reliable until coverage stabilizes.',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [fullRun({}), erroredEarlierRun],
+        }),
+      ).toEqual({
+        title: 'No current issues',
+        body: 'Checked 1377 resources.',
+        tone: 'success',
+      });
+    });
+
+    it('still asks for review when another factor lowered the grade', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 70,
+            grade: 'C',
+            trend: 'declining',
+            factors: [
+              recentErrorsFactor(-0.2),
+              {
+                name: 'Predicted issue',
+                impact: -0.1,
+                description: 'disk_full predicted within 2.0 days',
+                category: 'prediction',
+              },
+            ],
+            prediction: 'Recent Patrol runs encountered errors (2 of 5).',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [fullRun({}), erroredEarlierRun],
+        }),
+      ).toEqual({
+        title: 'Patrol needs review',
+        body: 'No current issues are listed, but Patrol health needs review.',
+        tone: 'warning',
+      });
+    });
+
+    it('keeps the coverage caveat when the clean full run checked no resources', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 90,
+            grade: 'A',
+            trend: 'stable',
+            factors: [recentErrorsFactor(-0.1)],
+            prediction: '',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [fullRun({ resources_checked: 0 }), erroredEarlierRun],
+        }),
+      ).toEqual({
+        title: 'Check needed',
+        body: 'Run Patrol to check everything and refresh open work.',
+        tone: 'warning',
+      });
+    });
+
+    it('keeps the coverage caveat when only targeted runs completed', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 100,
+            grade: 'A',
+            trend: 'stable',
+            factors: [],
+            prediction: 'Infrastructure is healthy with no significant issues detected.',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [fullRun({ type: 'scoped', resources_checked: 3 })],
+        }),
+      ).toEqual({
+        title: 'Check needed',
+        body: 'Run Patrol to check everything and refresh open work.',
+        tone: 'warning',
+      });
+    });
+    it('keeps the coverage caveat when a targeted run failed after the clean full run', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 90,
+            grade: 'A',
+            trend: 'stable',
+            factors: [recentErrorsFactor(-0.1)],
+            prediction: '',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [
+            fullRun({
+              id: 'run-scoped-failed',
+              type: 'scoped',
+              started_at: '2026-10-07T12:08:00Z',
+              completed_at: '2026-10-07T12:09:00Z',
+              resources_checked: 0,
+              status: 'error',
+              error_count: 1,
+            }),
+            fullRun({}),
+          ],
+        }),
+      ).toEqual({
+        title: 'Check needed',
+        body: 'Run Patrol to check everything and refresh open work.',
+        tone: 'warning',
+      });
+    });
+
+    it('asks for a check when a targeted run failed after the clean full run, even without a coverage factor', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 100,
+            grade: 'A',
+            trend: 'stable',
+            factors: [],
+            prediction: 'Infrastructure is healthy with no significant issues detected.',
+          },
+          runtimeState: 'active',
+          nowMs: NOW,
+          runs: [
+            fullRun({
+              id: 'run-scoped-failed',
+              type: 'scoped',
+              started_at: '2026-10-07T12:08:00Z',
+              completed_at: '2026-10-07T12:09:00Z',
+              resources_checked: 0,
+              status: 'error',
+              error_count: 1,
+            }),
+            fullRun({}),
+          ],
+        }),
+      ).toEqual({
+        title: 'Check needed',
+        body: 'Run Patrol to check everything and refresh open work.',
+        tone: 'warning',
+      });
+    });
+
+    it('keeps the coverage caveat when the clean full run is older than a day', () => {
+      expect(
+        getPatrolFindingsEmptyState({
+          filter: 'active',
+          overallHealth: {
+            score: 80,
+            grade: 'B',
+            trend: 'stable',
+            factors: [
+              {
+                name: 'Patrol coverage incomplete',
+                impact: -0.2,
+                description:
+                  'Recent Patrol activity only covered targeted checks. Run Patrol to check everything.',
+                category: 'coverage',
+              },
+            ],
+            prediction: '',
+          },
+          runtimeState: 'active',
+          nowMs: NOW + 2 * 24 * 60 * 60 * 1000,
+          runs: [
+            fullRun({
+              id: 'run-scoped-recent',
+              type: 'scoped',
+              started_at: '2026-10-09T12:00:00Z',
+              completed_at: '2026-10-09T12:01:00Z',
+              resources_checked: 2,
+            }),
+            fullRun({}),
+          ],
+        }),
+      ).toEqual({
+        title: 'Check needed',
+        body: 'Run Patrol to check everything and refresh open work.',
+        tone: 'warning',
+      });
+    });
+  });
+
   it('uses an attention-focused empty state when patrol health is degraded for non-coverage reasons', () => {
     expect(
       getPatrolFindingsEmptyState({
