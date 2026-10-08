@@ -2014,6 +2014,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     "add, rename, remove or re-enrol anything", "Existing reports need no refile",
                     "node errors, backup status and Docker monitoring",
                     "recovery in one does not establish recovery in the others",
+                    "connection Host/URL, Pulse display name, native node/guest name",
+                    "agent-reported hostname separate",
+                    "full connection hostname does not establish",
+                    "guest or agent names are fully qualified",
+                    "ask only for the remembered short/full form",
+                    "whether full domain suffixes differ, not the literal names",
+                    "which guest has an agent", "whether it remained connected",
+                    "shared guest name unique across the platform inventory",
+                    "link is not proof that agent reporting stopped",
+                    "Do not install another agent, change a link or recreate the addition",
+                    "does not establish a fix for repeated short names",
                 ):
                     self.assertIn(distinction, prose)
 
