@@ -6915,6 +6915,77 @@ section). `TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale
 row and both same-disk shapes; monitoring's SMART merge applies the matching
 guard first.
 
+### Linked disk join honours operator splits
+
+`resolveLinkedPhysicalDisk` joins an agent SMART disk and the Proxmox disk
+under one linked host by hardware identity or, for SAS and identity-less
+disks, by device path, ahead of `findMatch`. It read no exclusions, so
+`POST /api/resources/{id}/report-merge` on such a disk (the drawer's Split
+merged resource) recorded its exclusions and answered 200 while the disks
+merged again on every rebuild. `resolveLinkedResource` now refuses the join
+when an exclusion separates the observation's source-specific candidate ID
+from the one disk it matched; a refusal never makes another candidate unique,
+so the path join's ambiguity rule stands. `physicalDiskSplitLocked` decides
+this for the three joins that match a disk observation by identity or path
+(this one, `findMatch` and `physicalDiskIDForMachineLocked`): the exclusion
+may name the existing disk's current ID, or the unscoped hardware-keyed or
+machine-scoped ID either disk's identity mints. So a split survives the
+re-key a same-serial disk on another machine causes, in either direction
+(`findMatch` used to read only the current ID), and an agent disk that
+smartctl finds in standby, reported without its serial and so keyed by its
+device, stays apart from a Proxmox observation still carrying that serial.
+Agent disks reach the registry only through the snapshot, which ingests them
+before Proxmox disks, so the agent's row holds the merged ID and keeps it,
+and the Proxmox observation is the one report-merge's pair against that ID
+names. Split, the Proxmox row takes the ID it holds alone or, when both carry
+one hardware identity (which the agent's row holds), its source-specific ID
+through `findMatch`'s excluded branch; that row takes the identity's ID
+while the agent's disk is absent or reports no serial, as for any identity
+split. An exclusion naming only the agent's candidate splits nothing, since
+the agent's row holds the merged ID, so a report-merge filtered to the agent
+source leaves the disks merged (it answers 200, or 400 "No exclusions
+created" where the merged ID is the agent's own candidate); the drawer sends
+every merged source. The monitor rebuild and a resources API registry built from the
+snapshot apply the split on their next build; the registry seeded from the
+monitor's listing follows once the monitor has rebuilt.
+
+What the split does not reach. The PVE disk poller's
+`mergeHostAgentSMARTIntoDisks` pairs the linked agent's SMART rows with
+Proxmox disks by WWN, serial or path before the registry sees them and reads
+no exclusions, so the split Proxmox row still carries the agent's SMART
+attributes and I/O, its health where it reports a failure or Proxmox none,
+and any serial, WWN, type or temperature it filled, and the agent keeps the
+disk's temperature alert while it reports (`AgentSMARTReported`). Two split
+rows that share a serial read one serial-keyed history
+(`PhysicalDiskMetaMetricID`), and a PVE disk alert lifecycle row whose
+recorded identity matches both, with no WWN only one of them shares, stays
+under its PVE reference (`proxmoxDiskAlertOwner` never breaks a tie by path),
+so neither row's canonical history lists it. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a split disk that Proxmox reports under
+another device path is a new observation the exclusions do not name and
+joins again until split again. A split names IDs: one recorded while the
+agent's disk reported no serial, or against an agent disk whose identity
+Proxmox does not carry (a SAS disk whose Proxmox serial is its transport
+address), stops applying while the agent's disk reports otherwise, as every
+exclusion keyed by a canonical ID does. In a registry seeded from a listing
+where another disk was split onto a slot's source-specific ID, a refused
+observation at that slot (next section) whose linked join a split refuses
+lands on that same ID and merges into the refused disk, as the slot guard's
+own replacement ID would; no production path replays Proxmox disks over a
+seeded registry.
+`TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost` pins the exclusions
+report-merge records (all candidates, or the Proxmox candidate alone), one
+naming only the agent's candidate and an unrelated one, for four shapes (a
+SAS disk whose Proxmox serial is its transport address, matching NVMe
+serials, an agent disk without a serial behind a USB bridge, and Proxmox's
+literal `unknown` serial), through three rebuilds of a SQLite-backed monitor
+adapter in the monitor listing and the resources API's registry seeded from
+the rebuilt listing or built from the snapshot, plain and for presentation;
+then a relink of the split rows, the exclusions report-merge records on the
+relinked disk (the link's own pair and both candidates), the agent's disk in
+standby, a same-serial disk appearing on another machine, and a split
+recorded while such a disk was present that holds once it leaves.
+
 ### Seeded slot mapping refuses a replaced disk
 
 `ingestRecord` honours a source key's existing mapping, such as one

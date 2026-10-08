@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strconv"
@@ -3617,4 +3618,304 @@ func TestPhysicalDiskExclusionFallbackStaysPerMachine(t *testing.T) {
 	if agentDisks != 2 {
 		t.Fatalf("agent disks = %d, want one per host rather than both hosts on the shared fallback ID", agentDisks)
 	}
+}
+
+// An operator split separates the disks the registry joins inside one linked
+// host. resolveLinkedPhysicalDisk joins an agent SMART disk and the Proxmox
+// disk under the same parent by hardware identity or, for SAS and
+// identity-less disks, by device path, ahead of findMatch, and it used to
+// ignore exclusions: report-merge answered 200 while the disks merged again
+// on every rebuild. The registry ingests agent disks first, so the agent's
+// row holds the merged ID and keeps it; the Proxmox row takes the ID it holds
+// alone, or its source-specific ID where both share a hardware identity (the
+// agent holds that ID), as findMatch's excluded branch does.
+func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
+	now := time.Now().UTC()
+	for _, shape := range []struct {
+		name  string
+		agent models.HostDiskSMART
+		pve   models.PhysicalDisk
+	}{
+		// Proxmox reports the SAS transport address as the serial (#1595),
+		// so only the device path joins the two.
+		{"sas-path",
+			models.HostDiskSMART{Device: "sda", Model: "ST4000NM0023", Serial: "Z1Z0ABCD", Type: "sas", Temperature: 34, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sda", Node: "pve1", Instance: "lab", DevPath: "/dev/sda", Model: "ST4000NM0023", Serial: "5000c500a1b2c3d4", Type: "hdd", Health: "PASSED", LastChecked: now}},
+		// One serial on both sides: the linked join matches before findMatch.
+		{"matching-serial",
+			models.HostDiskSMART{Device: "nvme0n1", Model: "Samsung 990 PRO", Serial: "S6B0NL0W123456", Type: "nvme", Temperature: 40, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-nvme0n1", Node: "pve1", Instance: "lab", DevPath: "/dev/nvme0n1", Model: "Samsung 990 PRO", Serial: "S6B0NL0W123456", Type: "nvme", Health: "PASSED", LastChecked: now}},
+		// smartctl reads no serial through this USB bridge.
+		{"agent-without-identity",
+			models.HostDiskSMART{Device: "sdb", Model: "USB Disk", Type: "sat", Temperature: 30, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sdb", Node: "pve1", Instance: "lab", DevPath: "/dev/sdb", Model: "USB Disk", Serial: "WD-ABC123", Type: "usb", Health: "PASSED", LastChecked: now}},
+		// PVE's literal "unknown" serial and WWN carry no identity.
+		{"proxmox-unknown-serial",
+			models.HostDiskSMART{Device: "sdc", Model: "CT1000MX500SSD1", Serial: "2117E59AB1C2", Type: "sata", Temperature: 31, Health: "PASSED"},
+			models.PhysicalDisk{ID: "lab-pve1--dev-sdc", Node: "pve1", Instance: "lab", DevPath: "/dev/sdc", Model: "CT1000MX500SSD1", Serial: "unknown", WWN: "unknown", Type: "ssd", Health: "PASSED", LastChecked: now}},
+	} {
+		node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-pve1"}
+		host := models.Host{ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", Status: "online", LastSeen: now, LinkedNodeID: node.ID}
+		host.Sensors.SMART = []models.HostDiskSMART{shape.agent}
+		snapshot := models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host}, PhysicalDisks: []models.PhysicalDisk{shape.pve}}
+		// A host on another machine reporting the agent's serial, as a
+		// cloned VM does. Its hosts sort first, so its disk holds the
+		// unscoped hardware ID until the host's own disk re-keys both.
+		clone := models.Host{ID: "host-clone", Hostname: "clone1", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}
+		clone.Sensors.SMART = []models.HostDiskSMART{shape.agent}
+		withClone := snapshot
+		withClone.Hosts = []models.Host{clone, host}
+
+		// The IDs each disk holds alone under the joined host.
+		alone := func(snapshot models.StateSnapshot) linkedDiskRows {
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(snapshot)
+			return linkedDiskRowsOn(t, registry.List())
+		}
+		agentOnly := snapshot
+		agentOnly.PhysicalDisks = nil
+		agentAlone := alone(agentOnly).agent
+		pveOnly := snapshot
+		pveOnly.Hosts = []models.Host{host}
+		pveOnly.Hosts[0].Sensors.SMART = nil
+		pveAlone := alone(pveOnly).proxmox
+
+		for _, request := range []struct {
+			name       string
+			exclusions func(ids diskSplitIDs) [][2]string
+			split      bool
+		}{
+			{"report-merge", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}, {ids.merged, ids.proxmoxCandidate}}
+			}, true},
+			// Report-merge filtered to the Proxmox source, or an unlink
+			// naming the merged disk and the Proxmox candidate.
+			{"proxmox-candidate-only", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.proxmoxCandidate}}
+			}, true},
+			// Report-merge records this pair whenever it splits any source
+			// off a disk the agent reports. It names the agent, whose row
+			// holds the merged ID, not the observation that joins it.
+			{"agent-candidate-only", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}}
+			}, false},
+			{"unrelated-exclusion", func(ids diskSplitIDs) [][2]string {
+				return [][2]string{{ids.merged, "physical_disk-00000000deadbeef"}}
+			}, false},
+		} {
+			t.Run(shape.name+"/"+request.name, func(t *testing.T) {
+				store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateFromSnapshot(snapshot)
+				merged := linkedDiskRowsOn(t, adapter.GetAll()).joined
+				if merged == "" || merged != agentAlone || pveAlone == "" {
+					t.Fatalf("fixture did not join the disks under the agent's ID: merged %q, alone: agent %q, proxmox %q", merged, agentAlone, pveAlone)
+				}
+				ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+				addExclusions(t, store, request.exclusions(ids))
+
+				want := linkedDiskRows{joined: merged}
+				if request.split {
+					want = linkedDiskRows{agent: agentAlone, proxmox: pveAlone}
+					if pveAlone == agentAlone {
+						want.proxmox = ids.proxmoxCandidate
+					}
+				}
+				assertViews := func(step string, snapshot models.StateSnapshot, want func(linkedDiskRows) bool, describe string) {
+					t.Helper()
+					for rebuild := 1; rebuild <= 3; rebuild++ {
+						adapter.PopulateFromSnapshot(snapshot)
+						listed := adapter.GetAll()
+						rest := NewRegistry(store)
+						rest.IngestResources(listed)
+						restFromSnapshot := NewRegistry(store)
+						restFromSnapshot.IngestSnapshot(snapshot)
+						for view, resources := range map[string][]Resource{
+							"monitor":                    listed,
+							"rest":                       rest.List(),
+							"rest presentation":          rest.ListForPresentation(),
+							"rest from snapshot":         restFromSnapshot.List(),
+							"rest presentation snapshot": restFromSnapshot.ListForPresentation(),
+						} {
+							if got := linkedDiskRowsOn(t, resources); !want(got) {
+								t.Fatalf("%s rebuild %d %s: got %+v, want %s", step, rebuild, view, got, describe)
+							}
+						}
+					}
+				}
+				exactly := func(want linkedDiskRows) (func(linkedDiskRows) bool, string) {
+					return func(got linkedDiskRows) bool { return got == want }, fmt.Sprintf("%+v", want)
+				}
+				apart := func(got linkedDiskRows) bool {
+					return got.joined == "" && got.agent != "" && got.proxmox != "" && got.agent != got.proxmox
+				}
+
+				check, describe := exactly(want)
+				assertViews("after the request", snapshot, check, describe)
+				if !request.split {
+					return
+				}
+
+				// A link between the rows the split left joins them again,
+				// and report-merge on the relinked disk splits them again:
+				// it excludes the link's own pair, which replaces the link.
+				if err := store.AddLink(ResourceLink{ResourceA: want.agent, ResourceB: want.proxmox, PrimaryID: want.agent, CreatedAt: time.Now().UTC()}); err != nil {
+					t.Fatal(err)
+				}
+				check, describe = exactly(linkedDiskRows{joined: merged})
+				assertViews("after relink", snapshot, check, describe)
+				relinked := adapter.currentRegistry()
+				var again [][2]string
+				for _, fold := range relinked.ManualLinkFolds(merged) {
+					again = append(again, [2]string{fold.HolderID, fold.FoldedID})
+				}
+				ids = diskSplitCandidates(t, relinked, merged)
+				again = append(again, [2]string{merged, ids.agentCandidate}, [2]string{merged, ids.proxmoxCandidate})
+				addExclusions(t, store, again)
+				check, describe = exactly(want)
+				assertViews("after splitting again", snapshot, check, describe)
+
+				// smartctl reads no serial from a disk in standby, so the
+				// agent's row takes its device-keyed ID. A Proxmox
+				// observation still carrying the serial the split named
+				// stays apart from it, on the serial's ID meanwhile.
+				if shape.pve.Serial == shape.agent.Serial {
+					asleep := snapshot
+					asleep.Hosts = []models.Host{host}
+					asleep.Hosts[0].Sensors.SMART = []models.HostDiskSMART{{Device: shape.agent.Device, Model: shape.agent.Model, Type: shape.agent.Type, Standby: true}}
+					assertViews("while the agent's disk is in standby", asleep, func(got linkedDiskRows) bool {
+						return apart(got) && got.proxmox == merged
+					}, "the disks apart, the Proxmox row on "+merged)
+					check, describe = exactly(want)
+					assertViews("once the agent's disk wakes", snapshot, check, describe)
+				}
+
+				// A same-serial disk on another machine re-keys the agent's
+				// disk to its machine-scoped ID; the split, recorded against
+				// the unscoped ID, still holds.
+				if shape.agent.Serial != "" {
+					assertViews("after a same-serial disk appears elsewhere", withClone, apart, "the disks apart")
+				}
+			})
+		}
+
+		// A split recorded while a same-serial disk sits on another machine
+		// names the agent disk's machine-scoped ID, and still holds once that
+		// disk goes away and the agent's disk returns to the unscoped ID.
+		if shape.agent.Serial == "" {
+			continue
+		}
+		t.Run(shape.name+"/split-while-scoped", func(t *testing.T) {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateFromSnapshot(withClone)
+			merged := linkedDiskRowsOn(t, adapter.GetAll()).joined
+			if merged == "" || merged == agentAlone {
+				t.Fatalf("fixture did not join the disks under a machine-scoped ID: merged %q, agent alone %q", merged, agentAlone)
+			}
+			ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+			addExclusions(t, store, [][2]string{{ids.merged, ids.agentCandidate}, {ids.merged, ids.proxmoxCandidate}})
+			for _, step := range []struct {
+				name     string
+				snapshot models.StateSnapshot
+			}{{"with the other machine's disk", withClone}, {"after it goes away", snapshot}} {
+				for rebuild := 1; rebuild <= 2; rebuild++ {
+					adapter.PopulateFromSnapshot(step.snapshot)
+					restFromSnapshot := NewRegistry(store)
+					restFromSnapshot.IngestSnapshot(step.snapshot)
+					for view, resources := range map[string][]Resource{"monitor": adapter.GetAll(), "rest from snapshot": restFromSnapshot.List()} {
+						if got := linkedDiskRowsOn(t, resources); got.joined != "" || got.agent == "" || got.proxmox == "" {
+							t.Fatalf("%s rebuild %d %s: got %+v, want the disks apart", step.name, rebuild, view, got)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+// diskSplitIDs are the IDs a report-merge of a joined agent and Proxmox disk
+// names: the merged disk and its SourceTargets candidates.
+type diskSplitIDs struct {
+	merged, agentCandidate, proxmoxCandidate string
+}
+
+func diskSplitCandidates(t *testing.T, registry *ResourceRegistry, mergedID string) diskSplitIDs {
+	t.Helper()
+	ids := diskSplitIDs{merged: mergedID}
+	for _, target := range registry.SourceTargets(mergedID) {
+		switch target.Source {
+		case SourceAgent:
+			ids.agentCandidate = target.CandidateID
+		case SourceProxmox:
+			ids.proxmoxCandidate = target.CandidateID
+		}
+	}
+	if ids.agentCandidate == "" || ids.proxmoxCandidate == "" || ids.proxmoxCandidate == mergedID {
+		t.Fatalf("merged disk %s lists candidates agent=%q proxmox=%q", mergedID, ids.agentCandidate, ids.proxmoxCandidate)
+	}
+	return ids
+}
+
+// addExclusions records each pair as report-merge does, skipping a pair that
+// names one ID twice (an identity-less agent disk's merged ID is its
+// candidate).
+func addExclusions(t *testing.T, store ResourceStore, pairs [][2]string) {
+	t.Helper()
+	for _, pair := range pairs {
+		if pair[0] == pair[1] {
+			continue
+		}
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+type linkedDiskRows struct {
+	agent   string // a disk only the agent reports
+	proxmox string // a disk only Proxmox reports
+	joined  string // a disk both report
+}
+
+// linkedDiskRowsOn sorts the disks under the joined pve1 host by the sources
+// that report them, ignoring disks on other machines.
+func linkedDiskRowsOn(t *testing.T, resources []Resource) linkedDiskRows {
+	t.Helper()
+	hostID := ""
+	for _, resource := range resources {
+		if resource.Type == ResourceTypeAgent && resource.Agent != nil && resource.Agent.AgentID == "host-pve1" {
+			hostID = resource.ID
+		}
+	}
+	var rows linkedDiskRows
+	set := func(slot *string, id string) {
+		if *slot != "" {
+			t.Fatalf("two disk rows of one kind: %s and %s", *slot, id)
+		}
+		*slot = id
+	}
+	for _, resource := range resources {
+		if resource.Type != ResourceTypePhysicalDisk || resource.ParentID == nil || *resource.ParentID != hostID {
+			continue
+		}
+		agent, proxmox := hasDataSource(resource.Sources, SourceAgent), hasDataSource(resource.Sources, SourceProxmox)
+		switch {
+		case agent && proxmox:
+			set(&rows.joined, resource.ID)
+		case agent:
+			set(&rows.agent, resource.ID)
+		case proxmox:
+			set(&rows.proxmox, resource.ID)
+		}
+	}
+	return rows
 }
