@@ -5826,3 +5826,24 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Broadcast host coalescing honours operator splits
+
+The websocket broadcast coalesced top-level host views with
+`CoalescePresentationHostResources`, which applies no merge exclusions, while
+the resources API's `ResourceRegistry.ListForPresentation` applies the
+registry's. A host pair the operator split (unlink or report-merge) could
+therefore be one broadcast row and two REST rows.
+`Monitor.buildBroadcastFrontendStateFromSnapshotWithClock` now calls
+`coalesceResourcesForPresentation`, which asks the view's read state for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh), and otherwise the resource store's adapter: the
+mock-mode view lists through a store-less registry that carries no operator
+decisions. Both surfaces share `presentationExclusionFilter`. Polling, rebuild cadence,
+alert evaluation and the broadcast payload shape are unchanged.
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` compares broadcast
+and REST row counts with and without the split, and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
+listing read state over an older store generation and the store's exclusions
+for a mock-style view.

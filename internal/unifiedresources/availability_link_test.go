@@ -1024,9 +1024,13 @@ func TestAvailabilityLinkFollowsChainedLinkFolds(t *testing.T) {
 func TestLinkFoldIndexFollowsItsHolders(t *testing.T) {
 	now := time.Now().UTC()
 	vm := func(id string, folded ...string) Resource {
+		folds := make([]ManualLinkFold, 0, len(folded))
+		for _, foldedID := range folded {
+			folds = append(folds, ManualLinkFold{HolderID: id, FoldedID: foldedID, Sources: []DataSource{SourceAgent}})
+		}
 		return Resource{
 			ID: id, Type: ResourceTypeVM, Name: id, Status: StatusOnline, LastSeen: now,
-			Sources: []DataSource{SourceVMware}, linkFoldedIDs: folded,
+			Sources: []DataSource{SourceVMware}, linkFolds: folds,
 		}
 	}
 

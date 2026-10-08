@@ -57,13 +57,9 @@ type Resource struct {
 	ParentName     string  `json:"parentName,omitempty"`
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
-
-	// linkFoldedIDs lists the canonical IDs operator links folded into this
-	// resource, including IDs folded into those along a chain. It rides
-	// in-memory clones, so a registry seeded from another registry's listing
-	// resolves references to them to the same merged row. It is never a
-	// superseded ID: a link is operator state, not a retired identity era.
-	linkFoldedIDs []string
+	// linkFolds lists the operator links folded into this resource
+	// (recordManualLinkFold); report-merge excludes their pairs.
+	linkFolds []ManualLinkFold
 
 	Tags                  []string                  `json:"tags,omitempty"`
 	CustomURL             string                    `json:"customUrl,omitempty"`

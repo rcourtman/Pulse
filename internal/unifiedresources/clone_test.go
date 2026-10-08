@@ -269,21 +269,22 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
-// A registry seeded from another registry's listing indexes the folds each
-// cloned resource carries, so the clone must carry them, detached.
-func TestCloneResourceCarriesLinkFoldedIDs(t *testing.T) {
-	original := &Resource{ID: "vm-1", linkFoldedIDs: []string{"agent-1", "agent-2"}}
+// Operator link folds ride clones, so a registry seeded from another
+// registry's listing can name each link's pair, and stay detached from them.
+func TestCloneResource_CarriesLinkFolds(t *testing.T) {
+	original := &Resource{
+		ID:        "vm-1",
+		linkFolds: []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent}}},
+	}
 	cloned := cloneResource(original)
+	if len(cloned.linkFolds) != 1 || cloned.linkFolds[0].FoldedID != "agent-1" {
+		t.Fatalf("clone lost link folds: %+v", cloned.linkFolds)
+	}
 
-	if !reflect.DeepEqual(cloned.linkFoldedIDs, []string{"agent-1", "agent-2"}) {
-		t.Fatalf("cloned linkFoldedIDs = %v, want the original's folds", cloned.linkFoldedIDs)
-	}
-	cloned.linkFoldedIDs[0] = "MUTATED"
-	if original.linkFoldedIDs[0] != "agent-1" {
-		t.Error("mutating cloned linkFoldedIDs should not affect original")
-	}
-	if listed := cloneMaterializedResource(original); !reflect.DeepEqual(listed.linkFoldedIDs, original.linkFoldedIDs) {
-		t.Fatalf("listed linkFoldedIDs = %v, want %v", listed.linkFoldedIDs, original.linkFoldedIDs)
+	cloned.linkFolds[0].Sources[0] = SourceDocker
+	cloned.linkFolds[0].FoldedID = "MUTATED"
+	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" {
+		t.Errorf("mutating cloned link folds affected the original: %+v", original.linkFolds)
 	}
 }
 

@@ -5836,6 +5836,7 @@
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
             ]
           },
@@ -7822,7 +7823,6 @@
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
         "frontend-modern/src/utils/recoveryDatePresentation.ts",
-        "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
@@ -7867,7 +7867,6 @@
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
               "frontend-modern/src/utils/recoveryDatePresentation.ts",
-              "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
               "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
               "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
               "frontend-modern/src/utils/recoveryTimelinePresentation.ts"

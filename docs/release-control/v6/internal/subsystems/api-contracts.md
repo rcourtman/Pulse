@@ -2702,9 +2702,10 @@ a new API state machine, queue contract, or verification-accounting field.
    remediation-plan handoffs must use the same boundary for model-only
    context: plan status, risk, step labels, and command counts are allowed,
    while raw command and rollback command payloads remain in governed action
-   surfaces. Frontend Patrol finding-discussion handoffs must force a
-   request-local approval-required Assistant mode instead of inheriting the
-   user's persistent autonomous control setting; live approval, action artifact,
+   surfaces. Frontend Patrol finding-discussion handoffs run in the
+   approval-required Assistant mode that `/api/ai/chat` sets server-side for
+   every request, never the user's persistent autonomous control setting, and
+   send no execution-mode field of their own; live approval, action artifact,
    fix-outcome, and remediation-plan references only add structured action
    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
    briefing payloads must stay compact and must not include suggested prompt
@@ -2712,7 +2713,7 @@ a new API state machine, queue contract, or verification-accounting field.
    recommendation metadata. Frontend queued-fix recovery handoffs
    where the live approval or action artifact payload is unavailable must still
    carry that Patrol-owned finding briefing, current `fix_queued` posture,
-   request-local approval-required mode, and model-only evidence context; they must
+   approval-required disclosure, and model-only evidence context; they must
    not degrade into generic Assistant investigation chat or imply that
    execution can proceed from missing command payloads. Expired-approval
    recovery handoffs may use a still-available structured action artifact payload
@@ -3325,6 +3326,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and any frontend presentation of the AI summary's `policy_posture` counts, which must render that canonical snapshot through one shared component instead of page-local posture loops; no frontend surface renders those counts today, and the resource drawer stays on per-resource policy lines
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so if Patrol recent-change, learned-correlation, or policy-coverage summary text returns, it is derived from the canonical AI payload in that one place instead of as hook-local count and pluralization logic; Patrol renders no such summary today and the model carries no such derivation
    and the Watch-only forward-path handoffs owned by `frontend-modern/src/features/patrol/patrolControlPresentation.ts` together with the Actions inbox empty-state read of `GET /api/ai/patrol/autonomy`, so finding-level and inbox-level mode guidance consumes the canonical Patrol autonomy read/save contract through the Patrol state hook (`handleAutonomyChange`) instead of introducing a second mode mutation path or a page-local autonomy dialect
+   and the Patrol finding-to-Assistant handoff owned by `frontend-modern/src/components/AI/FindingsPanel.tsx`, so the pending-approval, investigation, and proposed-fix reads behind that handoff happen once in the panel instead of in a second, unwired copy inside the Patrol state hook
    and that same Patrol investigation-context owner, so visible Assistant
    drawer handoffs may include live pending-approval metadata only as safe
    operator context: approval ID, status, risk, requested/expiry timestamps,
@@ -3911,6 +3913,13 @@ counters exist to measure.
     onboarding telemetry. Customer diagnostics may expose runtime health,
     supportability, and sanitized troubleshooting state; admin analytics must
     stay behind admin-owned metrics routes.
+25. Handlers that perform a caller-requested write (settings, sessions,
+    credentials, workflow or resource state) while answering `GET` or `HEAD`.
+    A route registered without a mux method pattern, or a sub-resource
+    dispatched by path, must refuse safe methods in the mutating handler
+    through `requireRequestMethod` in `internal/api/method_guard.go` (or an
+    equivalent explicit check) instead of relying on its callers, the
+    demo-mode read-only guard, or the CSRF check.
 
 ## Completion Obligations
 
@@ -4297,7 +4306,7 @@ the authoritative analysis outcome.
    run-history consumers may pass a bounded `[Patrol Run Context]` block,
    scoped resource references, run outcome/coverage facts, sanitized analysis,
    and structured runtime failure summary/detail as model-only chat context
-   while forcing request-local approval-required mode and leaving retries,
+   under the server-set approval-required mode, leaving retries,
    configuration changes, and remediation authority outside the chat payload
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the Current issues and history workspace the same payloads must not
@@ -5160,6 +5169,134 @@ SSO certificate/key file reads are privileged operator configuration and must
 pass the bounded non-symlink regular-file boundary in
 `internal/api/sso_outbound.go`. Cloud handoff redirects consume the shared
 host-local redirect validator rather than carrying route-local prefix checks.
+
+A handler that performs a caller-requested write behind a route whose mux
+pattern carries no method must refuse `GET` and `HEAD` itself.
+`requireRequestMethod` in `internal/api/method_guard.go` is the shared
+handler-level guard: it admits only the listed methods and answers any other
+method that reaches the handler with `405` and an `Allow` header naming them.
+The demo-mode read-only guard and the CSRF check both admit `GET` and `HEAD` as
+reads, and the `SameSite=Lax` session cookie rides cross-site top-level `GET`
+navigations, so the method contract belongs to the mutating handler rather than
+to its callers. `/api/discovery/settings` accepts `PUT`, its documented method,
+and `POST`, which it took before the guard existed. SP-initiated SAML logout at
+`/api/saml/{id}/logout` accepts only `POST`, matching the `/api/logout`
+fallback it delegates to. The IdP's LogoutResponse keeps returning to
+`/api/saml/{id}/slo`, which must accept the HTTP-Redirect binding's `GET` and
+validates the signed response before it touches the session.
+`TestDemoModeSafeMethodsCannotReachRouteMutations` in
+`internal/api/ai_handlers_more_test.go` drives both routes through the full
+`DEMO_MODE` router and proves the threshold and the session survive.
+The rule does not cover `GET` flows the protocol or the browser handoff
+requires (OIDC login and callback, SAML login initiation and SLO, magic-link
+verify, cloud handoff, the checkout start and activation bridges, websocket
+handshakes), or reads that run one-time lazy initialization or idempotent
+reconciliation, such as the license and onboarding-overflow bootstrap behind
+the entitlement reads and the action-expiry sweep behind the action reads.
+Single-resource report generation at `GET /api/admin/reports/generate` still
+runs the configured AI narrator, a paid provider call recorded in the cost
+ledger; that is a known open exception, not part of this contract.
+
+The SAML SLO callback at `/api/saml/{id}/slo` accepts a LogoutResponse only as
+the answer to a logout this SP started. crewjam/saml verifies the response's
+signature, `Destination`, `Issuer` and `Status` and rejects one issued more
+than 90 seconds ago, but never checks its `InResponseTo`, and the IdP signs its
+answer to every user's logout, so a valid signature alone let one user replay
+the answer to their own logout through a cross-site `GET` and clear another
+user's session. `SAMLService.MakeLogoutRequest` in
+`internal/api/saml_service.go` therefore records each LogoutRequest ID, on the
+provider's own service, against the session-store hash of the session
+`handleSAMLLogout` is ending. A record is honored for ten minutes unless the
+1,024-record cap evicts it first, oldest first. `SAMLService.ValidateLogoutResponse`
+reads `InResponseTo` from the same payload crewjam verified, taking only the
+root element's attribute written without a prefix, the one the signature
+covers (a namespace declaration such as `xmlns:InResponseTo` is ignored,
+because exclusive canonicalization can leave an unused one out of the signed
+form), and
+spends the matching record. The response is accepted only when that record
+exists and is unexpired, and the browser carries either no session cookie (the
+normal case, because `handleSAMLLogout` clears the cookie before redirecting to
+the IdP) or the session that request ended. Unsolicited, expired, evicted,
+replayed and other-session responses are refused with `403` and a failed
+`saml_slo_callback` audit event, and the handler leaves sessions and cookies
+alone. A misdelivered response still spends its record, so each LogoutRequest
+is answered at most once. The handler writes no session state or cookie for an
+accepted response either: `handleSAMLLogout` already invalidated the session
+and expired its cookies, and a cross-site HTTP-POST delivery withholds the
+`SameSite=Lax` cookie, so a deletion cookie written there could log out a
+browser whose session the request never presented. For the same reason
+`handleSAMLLogout` answers `401` to a request that carries no session cookie,
+API-token-only callers included, instead of falling back to a cookie-clearing
+logout: the SAML routes are public and skip CSRF, so that fallback was a
+cross-site forced logout of a kind a deployment with authentication configured
+refuses on `/api/logout` as unauthenticated. The records live in memory,
+so a restart or provider re-initialization during the IdP round trip leaves the
+returning response unmatched and refused; the local session was already
+cleared when logout began. `TestSAMLSLOAuditsLogoutResponseNotBoundToSession`
+in `internal/api/audit_handlers_test.go` replays one user's signed response
+into another user's browser and proves the victim's session survives and the
+refusal is audited.
+
+The SAML ACS at `/api/saml/{id}/acs` accepts a Response, at default settings,
+only as the IdP's answer to a login the presenting browser started. crewjam/saml
+refuses a Response unless its `InResponseTo`, and that of each bearer
+`SubjectConfirmationData`, is one of the request IDs its caller supplies, and
+Pulse used to supply none, so with `allowIdpInitiated` off, the default, every
+SAML login failed with "Authentication failed". `SAMLService.MakeAuthRequest`
+in `internal/api/saml_service.go` therefore records each AuthnRequest ID, on
+the provider's own service, with the sanitized `returnTo` and the hash of a
+random token that `handleSAMLLogin` sets as the `HttpOnly`, `SameSite=Lax`
+cookie `pulse_saml_login` (`__Host-pulse_saml_login` over HTTPS) for ten
+minutes. A browser that already holds a token keeps it, so logins started one
+after another in several tabs all stay valid. A record is honored for ten
+minutes, judged when the Response spends it, unless the 1,024-record cap
+evicts it first, oldest first. The IdP delivers its Response by a cross-site
+HTTP-POST, which browsers send without `SameSite=Lax` cookies, so
+`handleSAMLACS` answers a POST that carries a `SAMLResponse` or
+`SAMLart` but no login cookie with a page that posts the same fields once more
+from Pulse's own origin. The form has no `action`, so it returns to the URL
+the IdP posted to, path prefix included, its script carries the request's CSP
+nonce, and a marker field prevents a second repost. `SAMLService.ProcessResponse`
+then has crewjam check the Response against every outstanding request ID and
+reads the request it answers from the canonical form goxmldsig verified for
+the signature covering the assertion crewjam returned, never from crewjam's
+parsed fields, taking only an `InResponseTo` written without a prefix: the
+signed `Response`'s, or that of the `Response` inside a signed
+`ArtifactResponse`, when the IdP signed the message, and otherwise that of
+every `SubjectConfirmationData` in the returned assertion's own `Subject`,
+which must agree and of which there must be at least one, and no other signed
+assertion may carry its ID. Other assertions in the Response, and assertions
+in `Advice`, do not take part. That record is
+spent only when it is bound to the presenting browser's token, and the login
+returns to the recorded `returnTo`, not to the posted `RelayState`, which
+`MakeAuthRequest` now escapes into the redirect query so a `returnTo` with its
+own query string is not cut short at the IdP. A Response answering another browser's login, an unknown,
+expired or already spent request, or none is refused with the
+`saml_validation_failed` redirect and a failed `saml_login` audit event, and
+refusing another browser's Response leaves that browser's record for it. With
+`allowIdpInitiated` on, crewjam skips `InResponseTo`, so a Response answering
+any request or none is accepted in any browser without the cookie or the
+repost and returns to its posted `RelayState`, as before. In both modes the
+signature verifier refuses signed content carrying a prefixed attribute or a
+namespace declaration named like an un-namespaced attribute crewjam reads from
+a Response or Assertion, such as `xmlns:IssueInstant`, `xmlns:NotOnOrAfter` or
+`ext:ID`: encoding/xml fills an un-namespaced attribute field from any
+attribute with that local name, and exclusive canonicalization leaves an
+unused declaration out of the signed form, so appending one let a stale signed
+Response pass crewjam's age checks, and an IdP-initiated login could be
+replayed indefinitely. The records live in memory, so a
+restart or a saved provider change (which replaces the provider's service;
+a metadata refresh keeps the records) during the IdP round trip, or a login
+started on a host that does not share cookies with the configured public
+URL's, leaves the Response unmatched and the user starts the login again. Two logins started at
+the same moment in a browser that holds no token yet each mint one and only
+the last cookie set survives, so the other fails the same way, and, as with
+OIDC login state, a flood of unauthenticated login starts can evict pending
+records.
+`TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin` in
+`internal/api/audit_handlers_test.go` delivers one browser's signed Response to
+another browser with a login in progress and proves it is refused and audited
+while its own browser completes the login.
 
 Alert delivery diagnosis is a read-only monitoring API contract.
 `GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
@@ -6446,6 +6583,25 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same manual SAML configuration must verify signatures with the IdP
+certificate the administrator supplied. With no IdP metadata,
+`SAMLService.buildManualMetadata` in `internal/api/saml_service.go` builds the
+IdP descriptor from `idpSsoUrl`, optional `idpSloUrl` and the PEM signing
+certificate in `idpCertificate` or `idpCertFile`, and must put that certificate
+in the signing `KeyDescriptor` as base64 DER, the `<X509Certificate>` content
+IdP metadata carries. crewjam/saml base64-decodes that field to verify every
+ACS Response and LogoutResponse, so the PEM block it once held failed each
+check with "illegal base64 data" before any key was compared, and no manually
+configured provider could accept a login or complete SLO. The stored
+`idpCertificate` stays the PEM the administrator supplied; only the descriptor
+rebuilt in memory on each load changed, so no saved configuration needs
+migrating. `TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures` in
+`internal/api/contract_test.go` signs an ACS Response and a LogoutResponse with
+one test IdP key and proves an inline-certificate provider, a certificate-file
+provider and a metadata provider accept both alike, while a Response signed by
+another key is refused. The proof runs at default settings, with each
+Response answering an AuthnRequest that `SAMLService.MakeAuthRequest`
+recorded for the test browser, as the SAML ACS binding above requires.
 That same SSO provider-detail boundary must return the non-secret nested
 provider configuration used by the settings edit form. `GET
 /api/security/sso/providers/{id}` may keep the flat list/card fields for
@@ -7143,8 +7299,8 @@ unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
 That same `/api/ai/chat` payload boundary owns request-local execution mode,
 and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
-`autonomous_mode` field, so the `autonomous_mode:false` that scoped handoffs
-such as an explain-this-issue request still send is dropped at decode, and the
+`autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at
+decode (the browser and the `internal/ai/eval` runner send none), and the
 handler passes approval-required mode into the chat service for every
 exchange; an Autonomous control level runs as Controlled for that request.
 That clamp is request-local and must not mutate the user's persistent AI
@@ -7184,8 +7340,9 @@ status, and a runtime-failure flag; the backend rebuilds their context), but the
 must not turn their evidence or proposed remedies into user-authored message
 text. Ordinary attachment is context only. A labelled Explain action may
 submit the shared user-selected explanation request over the existing chat
-transport, with the evidence kept in model-only handoff fields and
-`autonomous_mode:false`. This starts explanation/review and grants no new
+transport, with the evidence kept in model-only handoff fields and no
+execution-mode field, since the handler already runs it approval-required.
+This starts explanation/review and grants no new
 approval or execution authority. When a
 Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may
@@ -7205,10 +7362,10 @@ recommendation fields from legacy handoffs.
 Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
-request-local autonomous mode to false even if the caller supplied
+request-local autonomous mode to false even if a caller's JSON carries
 `autonomous_mode:true`. That server-side clamp is part of the public API
-contract because the frontend handoff setting is only advisory unless the
-backend preserves the approval-required boundary.
+contract because the drawer's `autonomousMode:false` flag is a disclosure only
+and never reaches the request.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend
@@ -7329,6 +7486,12 @@ no client for it, and neither the dashboard load bundle in
 fetches it. The resource drawer's correlation evidence comes from the
 resource-intelligence payload above. The route stays an API surface behind the
 `ai:execute` scope.
+The frontend does not load `GET /api/ai/circuit/status` either. No surface
+renders provider breaker state, so `frontend-modern/src/api/ai.ts` carries no
+client or `CircuitBreakerStatus` type for it, and neither that dashboard bundle
+nor the Patrol refresh path fetches it. An open breaker reaches the Patrol page
+through `/api/ai/patrol/status` as the `circuit_open` blocked cause. The route
+stays a backend API surface.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation
@@ -8734,7 +8897,7 @@ briefings may reuse that same safe metadata for factual action labels and safety
 while approval command text remains inside the governed approval/remediation
 surface.
 Patrol approval-row Assistant handoffs must use the same safe metadata boundary
-and set `autonomousMode:false` for the request-local chat handoff; they must not
+and set the drawer's `autonomousMode:false` approval disclosure; they must not
 paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
@@ -11493,3 +11656,17 @@ Router's or the package-global limiters. Limits, windows, tenant selection,
 revocation and response payloads are unchanged. The connected lifetime and
 ownership controls are in `router_limiter_lifecycle_test.go`; the integration
 fixture's cleanup also runs on a failed listener/request assertion.
+
+### Report-merge undoes operator links
+
+`POST /api/resources/{id}/report-merge` keeps its request, status codes and
+response shape. For a reported source that an operator link brought in, it
+now records the exclusion against the link's own pair instead of a candidate
+ID derived from the merged resource's type, so the store replaces the link
+and the pair splits as after unlink (contract under "Report-merge splits
+operator-linked resources" in unified-resources). `exclusions` counts those
+pairs with the identity-match exclusions. `400 Resource is not merged` and
+`400 No source targets found` now also need a resource with no applied link,
+so two linked agents, which share their only source, can be reported.
+`TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
+shape and the link's removal for a VM and the agent linked into it.

@@ -97,7 +97,7 @@ type ResourceRegistry struct {
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
 	// linkFoldIndex maps each canonical ID a manual link folded into another
-	// resource to the rows that took it in (Resource.linkFoldedIDs). Folded
+	// resource to the rows that took it in (Resource.linkFolds). Folded
 	// resources are still observed, so identity succession treats them as
 	// live, and references to them resolve to the row holding them. Holders
 	// carry their folds, so a registry seeded from another registry's listing
@@ -245,6 +245,9 @@ func (rr *ResourceRegistry) loadOverrides() {
 	}
 	exclusions, err := rr.store.GetExclusions()
 	if err == nil {
+		// An unlink or link landing between the two reads would load both
+		// decisions for its pair (manual_link_decisions.go).
+		rr.links, exclusions = effectiveManualPairDecisions(rr.links, exclusions)
 		for _, exclusion := range exclusions {
 			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
 			rr.exclusions[key] = struct{}{}
@@ -806,20 +809,30 @@ func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
 	return len(rr.linkFoldHoldersLocked(id)) > 0
 }
 
-// indexLinkFoldedIDsLocked records that holder took in canonical IDs operator
-// links folded into it.
-func (rr *ResourceRegistry) indexLinkFoldedIDsLocked(holder *Resource, foldedIDs []string) {
-	if holder == nil || len(foldedIDs) == 0 {
+// indexLinkFoldsLocked records that holder took in the canonical IDs its
+// link folds name (Resource.linkFolds, recordManualLinkFold).
+func (rr *ResourceRegistry) indexLinkFoldsLocked(holder *Resource) {
+	if holder == nil || len(holder.linkFolds) == 0 {
 		return
 	}
 	if rr.linkFoldIndex == nil {
 		rr.linkFoldIndex = make(map[string][]*Resource)
 	}
-	for _, foldedID := range foldedIDs {
-		if !slices.Contains(rr.linkFoldIndex[foldedID], holder) {
-			rr.linkFoldIndex[foldedID] = append(rr.linkFoldIndex[foldedID], holder)
+	for _, fold := range holder.linkFolds {
+		if !slices.Contains(rr.linkFoldIndex[fold.FoldedID], holder) {
+			rr.linkFoldIndex[fold.FoldedID] = append(rr.linkFoldIndex[fold.FoldedID], holder)
 		}
 	}
+}
+
+// holdsLinkFold reports whether a resource's link folds name foldedID.
+func holdsLinkFold(resource *Resource, foldedID string) bool {
+	for _, fold := range resource.linkFolds {
+		if fold.FoldedID == foldedID {
+			return true
+		}
+	}
+	return false
 }
 
 // linkFoldHoldersLocked lists the live rows that hold a canonical ID an
@@ -828,7 +841,7 @@ func (rr *ResourceRegistry) linkFoldHoldersLocked(ref string) []string {
 	ref = CanonicalResourceID(ref)
 	var holders []string
 	for _, holder := range rr.linkFoldIndex[ref] {
-		if rr.resources[holder.ID] != holder || !slices.Contains(holder.linkFoldedIDs, ref) ||
+		if rr.resources[holder.ID] != holder || !holdsLinkFold(holder, ref) ||
 			slices.Contains(holders, holder.ID) {
 			continue
 		}
@@ -945,7 +958,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
 		if resource := rr.resources[resourceID]; resource != nil {
 			rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
-			rr.indexLinkFoldedIDsLocked(resource, resource.linkFoldedIDs)
+			rr.indexLinkFoldsLocked(resource)
 			rr.indexPhysicalDiskHardwareLocked(resource)
 		}
 	}
@@ -1486,23 +1499,7 @@ func (rr *ResourceRegistry) listMaterialized(withTargets bool) ([]Resource, map[
 // merge exclusions.
 func (rr *ResourceRegistry) ListForPresentation() []Resource {
 	resources := rr.List()
-
-	rr.mu.RLock()
-	exclusions := make(map[string]struct{}, len(rr.exclusions))
-	for key := range rr.exclusions {
-		exclusions[key] = struct{}{}
-	}
-	rr.mu.RUnlock()
-
-	return CoalescePresentationHostResourcesWithExclusions(resources, func(left, right Resource) bool {
-		leftID := CanonicalResourceID(left.ID)
-		rightID := CanonicalResourceID(right.ID)
-		if leftID == "" || rightID == "" {
-			return false
-		}
-		_, ok := exclusions[exclusionKey(leftID, rightID)]
-		return ok
-	})
+	return CoalescePresentationHostResourcesWithExclusions(resources, rr.presentationExclusionFilter())
 }
 
 // ListByType returns all resources of the provided type.
@@ -2982,7 +2979,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// pulse-agent's pin on a same-named host) completing the identity would
 	// re-merge systems the connection scoping keeps apart.
 	if source != SourceTrueNAS {
-		identity = rr.completeIdentityFromPins(source, resource, identity)
+		identity = rr.completeIdentityFromPins(source, sourceID, resource, identity)
 	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}
@@ -4871,8 +4868,13 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		return
 	}
 	for _, link := range rr.links {
+		// A link joins only the pair its row names. Canonical-ID succession
+		// can leave a row whose endpoint re-key collided with the successor's
+		// own row while its primary moved on to the successor; honouring that
+		// primary merged the successor through a row naming a retired ID, which
+		// an unlink or report-merge of the merged pair leaves behind.
 		primaryID := link.PrimaryID
-		if primaryID == "" {
+		if primaryID != link.ResourceA && primaryID != link.ResourceB {
 			primaryID = link.ResourceA
 		}
 		primary := rr.resources[primaryID]
@@ -4915,20 +4917,14 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		rr.recordLinkOwnPin(primaryID, primary)
 		rr.recordLinkOwnPin(otherID, other)
 		rr.mergeResourceData(primary, other, thresholds)
+		recordManualLinkFold(primary, primaryID, other, otherID)
 		delete(rr.resources, otherID)
-		rr.foldLinkedResourceLocked(primary, otherID, other)
+		// The fold record names every ID along a chain of links, so the chain
+		// resolves to its last primary; the folded row's own index entries
+		// lapse on read now that it has left the registry.
+		rr.indexLinkFoldsLocked(primary)
 		rr.updateSourceMappings(otherID, primaryID)
 	}
-}
-
-// foldLinkedResourceLocked records on the link primary the resource folded
-// into it and every ID earlier links folded into that resource, so a chain of
-// links resolves to its last primary. The folded row has left the registry,
-// so its own index entries lapse on read.
-func (rr *ResourceRegistry) foldLinkedResourceLocked(primary *Resource, otherID string, other *Resource) {
-	folded := append([]string{otherID}, other.linkFoldedIDs...)
-	primary.linkFoldedIDs = uniqueTrimmed(append(append([]string(nil), primary.linkFoldedIDs...), folded...)...)
-	rr.indexLinkFoldedIDsLocked(primary, folded)
 }
 
 // recordLinkOwnPin captures the identity pin a manual-link side derives from

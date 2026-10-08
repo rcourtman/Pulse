@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -20,6 +20,7 @@ describe('TooltipPortal', () => {
         media: '(hover: hover) and (pointer: fine)',
       }),
     );
+    const addListener = vi.spyOn(window, 'addEventListener');
 
     render(() => (
       <TooltipPortal when x={120} y={80}>
@@ -28,6 +29,7 @@ describe('TooltipPortal', () => {
     ));
 
     expect(document.body.querySelector('[data-tooltip-portal="true"]')).toBeNull();
+    expect(addListener.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
   });
 
   it('keeps tooltip portal on shell and runtime owners', () => {
@@ -171,5 +173,144 @@ describe('TooltipPortal', () => {
       expect(position.x).toBeGreaterThan(initialPosition.x + 100);
       expect(position.y).toBeGreaterThan(initialPosition.y + 80);
     });
+  });
+
+  it('holds a window resize listener only while the portal is visible', () => {
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const resizeCalls = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.filter(([type]) => type === 'resize').length;
+
+    const [when, setWhen] = createSignal(false);
+
+    render(() => (
+      <>
+        <For each={[1, 2, 3]}>
+          {() => (
+            <TooltipPortal when={false} x={40} y={40}>
+              <span>Hidden row tooltip</span>
+            </TooltipPortal>
+          )}
+        </For>
+        <TooltipPortal when={when()} x={120} y={80}>
+          <span>Memory Composition</span>
+        </TooltipPortal>
+      </>
+    ));
+
+    expect(resizeCalls(addListener)).toBe(0);
+
+    setWhen(true);
+    expect(resizeCalls(addListener)).toBe(1);
+    expect(resizeCalls(removeListener)).toBe(0);
+
+    setWhen(false);
+    expect(resizeCalls(addListener)).toBe(1);
+    expect(resizeCalls(removeListener)).toBe(1);
+  });
+
+  it('follows a window resize while the portal is open', async () => {
+    const innerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const setInnerWidth = (value: number) =>
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value, writable: true });
+
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(
+      (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      },
+    );
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 180,
+      height: 40,
+      left: 0,
+      top: 0,
+      right: 180,
+      bottom: 40,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    try {
+      setInnerWidth(1024);
+      render(() => (
+        <TooltipPortal when x={900} y={120}>
+          <span>Memory Composition</span>
+        </TooltipPortal>
+      ));
+
+      const readPortal = () => {
+        const portal = document.body.querySelector('foreignObject');
+        return {
+          viewBox: portal?.closest('svg')?.getAttribute('viewBox'),
+          x: Number.parseFloat(portal?.getAttribute('x') ?? 'NaN'),
+        };
+      };
+
+      await waitFor(() => {
+        expect(readPortal().viewBox).toBe(`0 0 1024 ${window.innerHeight}`);
+        expect(readPortal().x).toBe(810);
+      });
+
+      setInnerWidth(600);
+      window.dispatchEvent(new Event('resize'));
+
+      await waitFor(() => {
+        expect(readPortal().viewBox).toBe(`0 0 600 ${window.innerHeight}`);
+        // Clamped inside the narrower viewport: 600 - 180 wide - 4 padding.
+        expect(readPortal().x).toBe(416);
+      });
+    } finally {
+      if (innerWidth) Object.defineProperty(window, 'innerWidth', innerWidth);
+    }
+  });
+
+  it('opens against the live viewport after resizes it did not listen to', async () => {
+    const innerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const setInnerWidth = (value: number) =>
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value, writable: true });
+
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(
+      (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      },
+    );
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 180,
+      height: 40,
+      left: 0,
+      top: 0,
+      right: 180,
+      bottom: 40,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    try {
+      setInnerWidth(1024);
+      const [when, setWhen] = createSignal(false);
+      render(() => (
+        <TooltipPortal when={when()} x={900} y={120}>
+          <span>Memory Composition</span>
+        </TooltipPortal>
+      ));
+
+      setInnerWidth(600);
+      window.dispatchEvent(new Event('resize'));
+      setWhen(true);
+
+      await waitFor(() => {
+        const portal = document.body.querySelector('foreignObject');
+        expect(portal?.closest('svg')?.getAttribute('viewBox')).toBe(
+          `0 0 600 ${window.innerHeight}`,
+        );
+        expect(Number.parseFloat(portal?.getAttribute('x') ?? 'NaN')).toBe(416);
+      });
+    } finally {
+      if (innerWidth) Object.defineProperty(window, 'innerWidth', innerWidth);
+    }
   });
 });

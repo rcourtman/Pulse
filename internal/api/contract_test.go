@@ -4450,6 +4450,80 @@ func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
 	}
 }
 
+// A SAML provider configured by hand, with the IdP's SSO URL and its PEM
+// signing certificate pasted inline or named by IDPCertFile, verifies the
+// IdP's signatures with that certificate exactly as a provider configured from
+// IdP metadata does: at default settings the ACS accepts the IdP's signed
+// answer to an SP-initiated login and reads the user from it, the IdP's signed
+// answer to an SP-initiated logout completes that logout, and a Response
+// signed by any other key is refused. Manual
+// metadata used to hold the certificate as a PEM block where crewjam/saml
+// base64-decodes DER, so every signature check for these providers failed
+// before reaching the key.
+func TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	impostor := newSAMLManualCertTestIdP(t)
+	certFile := filepath.Join(t.TempDir(), "idp-signing.pem")
+	if err := os.WriteFile(certFile, idp.certPEM, 0o600); err != nil {
+		t.Fatalf("write IdP certificate file: %v", err)
+	}
+	manual := func(inline, file string) *config.SAMLProviderConfig {
+		return &config.SAMLProviderConfig{
+			IDPSSOURL:      "https://idp.example.com/sso",
+			IDPSLOURL:      "https://idp.example.com/slo",
+			IDPEntityID:    samlManualCertTestIdPEntityID,
+			IDPCertificate: inline,
+			IDPCertFile:    file,
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		cfg  *config.SAMLProviderConfig
+	}{
+		{name: "IdP metadata", cfg: &config.SAMLProviderConfig{IDPMetadataXML: idp.metadataXML()}},
+		{name: "manual inline certificate", cfg: manual(string(idp.certPEM), "")},
+		{name: "manual certificate file", cfg: manual("", certFile)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service, err := NewSAMLService(context.Background(), "okta", tc.cfg, "https://pulse.example.com")
+			if err != nil {
+				t.Fatalf("NewSAMLService: %v", err)
+			}
+			browserKey := sessionHash("login-token")
+			startLogin := func() string {
+				t.Helper()
+				redirectURL, err := service.MakeAuthRequest("/", browserKey)
+				if err != nil {
+					t.Fatalf("MakeAuthRequest: %v", err)
+				}
+				return samlTestAuthnRequestID(t, redirectURL)
+			}
+
+			result, _, err := service.ProcessResponse(idp.acsPostAnswering(t, service, startLogin()), browserKey)
+			if err != nil {
+				t.Fatalf("ACS refused the configured IdP's signed Response: %s", samlRejectionDetail(err))
+			}
+			if result.Username != "alice" {
+				t.Fatalf("ACS read username %q from the Response, want alice", result.Username)
+			}
+			if _, _, err := service.ProcessResponse(impostor.acsPostAnswering(t, service, startLogin()), browserKey); err == nil {
+				t.Fatal("ACS accepted a Response signed by a key the provider was not given")
+			}
+
+			useSAMLTestAuthStores(t)
+			router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
+			router.samlManager.services["okta"] = service
+			requestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "alice"))
+			rec := deliverSAMLTestLogoutResponse(router, idp.slo.redirectQuery(t, requestID), "")
+			if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/?logout=success" {
+				t.Fatalf("SLO refused the configured IdP's signed LogoutResponse: status=%d location=%q body=%q",
+					rec.Code, rec.Header().Get("Location"), rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)
@@ -14425,6 +14499,79 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false}},"facets":{"byType":{},"incidentCount":0}}`
 	if got := strings.TrimSpace(rec.Body.String()); got != want {
 		t.Fatalf("tenant resource fallback contract = %s, want %s", got, want)
+	}
+}
+
+// POST /api/resources/{id}/report-merge keeps its response shape, and on a
+// pair an operator linked it replaces the link: the store no longer holds it
+// and the resource list shows both sides again.
+func TestContract_ResourceReportMergeReplacesOperatorLink(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate: now,
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=vm,agent", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID string
+	for _, resource := range list() {
+		switch resource.Type {
+		case unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case unifiedresources.ResourceTypeAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture did not list a separate VM and agent: %+v", list())
+	}
+
+	linkRec := httptest.NewRecorder()
+	h.HandleLink(linkRec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/link", strings.NewReader(`{"targetId":"`+agentID+`"}`)))
+	if linkRec.Code != http.StatusOK {
+		t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
+	}
+	if linked := list(); len(linked) != 1 {
+		t.Fatalf("link listed %d resources, want one", len(linked))
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode report-merge: %v", err)
+	}
+	if len(resp) != 3 || resp["status"] != "ok" || resp["message"] != "Merge reported" {
+		t.Fatalf("report-merge response = %#v, want status, message and exclusions", resp)
+	}
+	if exclusions, ok := resp["exclusions"].(float64); !ok || exclusions < 1 {
+		t.Fatalf("report-merge exclusions = %#v, want a positive count", resp["exclusions"])
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if links, err := store.GetLinks(); err != nil || len(links) != 0 {
+		t.Fatalf("report-merge left links %+v (err %v)", links, err)
+	}
+	if split := list(); len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM and the agent apart", len(split))
 	}
 }
 
