@@ -23,6 +23,63 @@ def backup_section():
     return text.split(HEADING, 1)[1].split("\n### ", 1)[0]
 
 
+class BackupAgeEvaluationDocsTest(unittest.TestCase):
+    """Check existing warning guidance, not database or native recovery."""
+
+    guide = ROOT / "docs/TROUBLESHOOTING.md"
+    mirror = ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md"
+    heading = "#### Backup-age alerts were not evaluated\n"
+
+    def section(self):
+        text = self.guide.read_text()
+        self.assertEqual(text.count(self.heading), 1)
+        return " ".join(text.split(self.heading, 1)[1].split("\n#### ", 1)[0].split())
+
+    def test_warning_distinguishes_unavailable_evaluation_from_backup_failure(self):
+        text = self.section()
+        source = (ROOT / "internal/monitoring/recovery_rollups.go").read_text()
+        for phrase in ("Backup-age alerts were not evaluated because recovery data could not be read",
+                       "Failed to list recovery rollups for backup alerts"):
+            self.assertIn(phrase, text)
+            self.assertIn(phrase, source)
+        for distinction in ("not evidence that a backup failed", "not a fresh assessment",
+                            "absence of a new age alert does not establish",
+                            "visible backup row does not prove that age evaluation completed",
+                            "installation, guest type/ID, datastore, namespace and backup time"):
+            self.assertIn(distinction, text)
+
+    def test_policy_changes_and_warning_clearance_do_not_prove_recovery(self):
+        text = self.section()
+        for distinction in ("A disappearing warning alone is not recovery",
+                            "Disabling alerts or backup-age checks",
+                            "setting both age thresholds to zero",
+                            "without a successful evaluation", "intended policy unchanged",
+                            "ordinary polling", "restore readiness or guest thaw"):
+            self.assertIn(distinction, text)
+        source = (ROOT / "internal/monitoring/recovery_rollups.go").read_text()
+        for branch in ("!cfg.Enabled || !cfg.BackupDefaults.Enabled",
+                       "cfg.BackupDefaults.WarningDays <= 0 && cfg.BackupDefaults.CriticalDays <= 0",
+                       "ClearSystemAlert(alerts.BackupEvaluationAlertType)"):
+            self.assertIn(branch, source)
+
+    def test_help_reuses_safe_logs_and_preserves_workloads_and_evidence(self):
+        text = self.section()
+        for boundary in ("[bounded log reader](#inspect-notification-logs)",
+                         "matching systemd or Docker deployment", "original time and message",
+                         "timeout does not by itself establish its cause",
+                         "failed log read is unavailable", "manually redacted error",
+                         "database files out of public reports", "Do not restart or reinstall Pulse",
+                         "change database schema", "Do not run a new backup",
+                         "live diagnostics or guest-agent probe", "VM_DISK_MONITORING.md#backup-safety",
+                         "successful writes to every covered filesystem", "workload liveness",
+                         "only previously active monitoring"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("```", text, "reuse the contained reader, not a new copied command")
+
+    def test_warning_help_is_in_the_shipped_mirror(self):
+        self.assertEqual(self.guide.read_bytes(), self.mirror.read_bytes())
+
+
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
     def test_replication_help_uses_existing_row_details_not_backup_commands(self):
         trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
@@ -200,10 +257,16 @@ PY
                        "no automatic rollback", "recorded active before maintenance"):
             self.assertIn(phrase, text)
         helper = (ROOT / "scripts/uninstall-sensor-proxy.sh").read_text()
-        for fact in ('timeout 30 pct stop "$ctid"', 'timeout 30 pct start "$ctid"',
-                     'cleanup_sensor_proxy_lines_in_conf "$conf" "$snapshot_line"',
-                     'systemctl "$@" >/dev/null 2>&1 || true'):
+        for fact in ('timeout --kill-after=1s 30 pct stop "$ctid"',
+                     'timeout --kill-after=1s 30 pct start "$ctid"',
+                     'if ! cleanup_sensor_proxy_lines_in_conf "$conf"; then',
+                     'if ! disable_legacy_units; then',
+                     'if (( container_cleanup_status != 0 )); then'):
             self.assertIn(fact, helper)
+        # The current helper now returns failures rather than hiding them.
+        # Keep the guide's stop-on-unknown boundary tied to that repair, not
+        # the superseded permissive systemctl adapter.
+        self.assertNotIn('systemctl "$@" >/dev/null 2>&1 || true', helper)
 
     def test_preserves_credentials_and_explains_remote_cleanup_scope(self):
         text = " ".join(self.section().split())
