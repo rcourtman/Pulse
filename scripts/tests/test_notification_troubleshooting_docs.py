@@ -188,6 +188,28 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         guide = (ROOT / "docs/WEBHOOKS.md").read_text()
         self.assertIn("TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty", guide)
 
+    def test_pause_is_cancellation_not_catchup_or_remote_containment(self):
+        limits = " ".join(section("Pause and cancellation limits", 4).split())
+        for boundary in (
+            "not a store-and-forward hold", "Monitoring continues", "clears buffered alert groups",
+            "cancels pending queue deliveries", "including recovery deliveries",
+            "does not replay those cancelled deliveries", "pausing does not dismiss them",
+            "policy-skipped item is cancelled, not a successful provider delivery",
+            "does not replay cancelled items", "critical-alert exceptions",
+            "do not guarantee cancellation of a request already in flight",
+            "receiver may accept it after the settings change", "cancelled queue row",
+            "cannot recall a message", "receiver's existing record", "keeping both private",
+            "do not send another Test or replay", "revoke it with the provider",
+            "not credential revocation",
+        ):
+            self.assertIn(boundary, limits)
+        self.assertIn("#pause-and-cancellation-limits", section("Recover retained delivery failures", 4))
+        guide = " ".join((ROOT / "docs/WEBHOOKS.md").read_text().split())
+        for boundary in ("TROUBLESHOOTING.md#pause-and-cancellation-limits",
+                         "does not recall a request already in flight",
+                         "Alert delivery controls do not stop the separate"):
+            self.assertIn(boundary, guide)
+
 
 if __name__ == "__main__":
     unittest.main()

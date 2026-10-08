@@ -150,6 +150,15 @@ batch retries to diagnose rate limiting. A receiver can see a duplicate if an
 earlier request was accepted but Pulse did not receive its response; preserve
 [receiver deduplication](#receiver-correlation-and-deduplication).
 
+Global **Notifications paused** cancels pending alert deliveries and clears
+buffered groups; turning delivery back on does not replay those cancelled
+items. This differs from scheduled quiet-hours holds. Disabling or removing a
+destination can block queued work, but **does not recall a request already in
+flight**, revoke a provider credential or delete the receiver's copy. Follow
+the [pause and cancellation limits](TROUBLESHOOTING.md#pause-and-cancellation-limits)
+before treating a paused banner or cancelled row as containment. Alert delivery
+controls do not stop the separate [audit forwarding route](#-audit-webhooks-prolegacy-procloud).
+
 **Correlation header.** Alert webhooks carry `X-Pulse-Event-ID` in the form
 `<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). Retries retain it,
 but later occurrences, severity changes and reminders can share it too. A group

@@ -923,7 +923,8 @@ when they were queued.** Editing a URL, recipient, credential, header or templat
 does not replace that saved configuration. A test uses the edited settings;
 retrying an old delivery can still use the old endpoint or credential and fail
 again. If the old destination must no longer receive data, disable it rather
-than relying on a URL edit to redirect queued work.
+than relying on a URL edit to redirect queued work. This is not a recall of
+requests already sent; see the [pause and cancellation limits](#pause-and-cancellation-limits).
 
 **Retry retained deliveries** gives all retained terminal failures a fresh retry
 budget, not just the destination you tested. Use it only when sending those
@@ -939,6 +940,33 @@ Use **Dismiss retained failures** only when those deliveries should not be sent.
 Dismissal clears the warning without retrying them; delivery history remains.
 Neither action deletes the audit trail. Do not delete `notification_queue.db`
 or audit data to clear the warning.
+
+#### Pause and cancellation limits
+
+In **Alerts → Notifications**, global **Notifications paused** is not a
+store-and-forward hold. Monitoring continues, but pausing clears buffered alert
+groups and cancels pending queue deliveries for email, webhooks and Apprise,
+including recovery deliveries. **Turning delivery back on does not replay those
+cancelled deliveries.** Retained terminal failures are separate: pausing does
+not dismiss them or repair their saved destination settings.
+
+Disabling or removing an individual destination prevents a queued delivery that
+sees that policy from sending. A policy-skipped item is cancelled, not a
+successful provider delivery, and **Retry retained deliveries** does not replay
+cancelled items. Re-enabling a destination is not proof of catch-up or receipt.
+For a scheduled quiet period, use [Quiet hours](CONFIGURATION.md#quiet-hours-and-notification-holds)
+instead, reviewing its critical-alert exceptions and later re-evaluation; it
+still does not guarantee that every held message will be sent.
+
+**Pause, disable and removal do not guarantee cancellation of a request already
+in flight.** The receiver may accept it after the settings change. Neither a
+paused banner nor a cancelled queue row proves that the destination received no
+data, and Pulse cannot recall a message or delete the receiver's copy. Reconcile
+the original time with **Recent delivery activity** and the receiver's existing
+record, keeping both private; do not send another Test or replay a queue to
+check containment. If a destination credential was exposed, revoke it with
+the provider too: editing its URL or turning delivery off is not credential
+revocation and cannot undo an earlier disclosure.
 
 #### Emails not sending
 
