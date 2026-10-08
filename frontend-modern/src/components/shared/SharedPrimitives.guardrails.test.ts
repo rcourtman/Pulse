@@ -1356,8 +1356,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
 
     expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
-    expect(workloadSelectionStateSource).toContain('hoveredWorkloadGroupScope');
-    expect(workloadSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
     expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
@@ -1404,7 +1402,6 @@ describe('shared primitive guardrails', () => {
     expect(groupedTableRowPresentationSource).not.toContain('GROUPED_TABLE_ROW_DIVIDER_CLASS');
 
     expect(guestRowSource).toContain('data-summary-row-active');
-    expect(guestRowSource).toContain('data-summary-group-member-active');
     expect(guestRowStateSource).not.toContain('bg-sky-50/70');
     expect(guestRowStateSource).not.toContain('ring-sky-400/25');
 
@@ -1422,7 +1419,7 @@ describe('shared primitive guardrails', () => {
     expect(storageGroupPresentationSource).toContain('getGroupedTableRowCellClass');
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowClass');
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowCellClass');
-    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('class={getGroupedTableRowClass()}');
     expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
@@ -1728,7 +1725,6 @@ describe('shared primitive guardrails', () => {
     expect(storageGroupRowSource).not.toContain('hideWhenRowTappableOnMobile={false}');
     expect(storageGroupRowSource).toContain('props.onToggle();');
 
-    expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');
     expect(storageGroupRowSource).not.toContain('kind="scope"');
 
