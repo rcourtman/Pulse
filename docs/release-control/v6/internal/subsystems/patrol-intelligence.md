@@ -329,13 +329,14 @@ or historical proof/counting for resolved-only work.
    shared parent node, or explicit correlated finding IDs. Grouping must not
    infer causality from title or description prose, and the queue's affected
    resource count must continue to count canonical resources rather than
-   visual groups. Because a
-   contextual Assistant handoff from that workflow is still a first-party Patrol
-   starter for the same governed journey, it must record content-free workflow
-   prompt activity through the shared marker route with the `pulse_patrol`
-   surface before the drawer opens; it must not include finding IDs, prompt
-   text, resource context, model output, or direct-action payloads in that
-   marker.
+   visual groups. A contextual Assistant handoff from that workflow opens
+   through `frontend-modern/src/components/AI/FindingsPanel.tsx` and records no
+   workflow starter today, so the first-party `pulse_patrol` marker has no
+   browser producer. If that handoff starts recording one, it must write
+   content-free workflow prompt activity through the shared marker route with
+   the `pulse_patrol` surface before the drawer opens, with no finding IDs,
+   prompt text, resource context, model output, or direct-action payloads in
+   that marker.
    A compact Patrol work-group row may appear above the list only when it adds
    cross-source current-work grouping that the row title alone cannot express:
    pending approvals, failed governed actions, a failed/latest Patrol check,
@@ -471,8 +472,11 @@ or historical proof/counting for resolved-only work.
    compact progress label must describe current work state (`ready`, `needs
 attention`, `approval needed`, `outcome verified`, `no active work`) instead
    of repeating the selected mode; the Patrol mode selector/header
-   owns current-mode copy, and local Patrol state must expose work evidence as
+   owns current-mode copy, and any local Patrol work evidence must be
    Patrol-owned issue/work counts rather than legacy proof counts.
+   No Patrol surface reads issue-evidence, governed-action decision, or
+   verified-outcome counts today, so `usePatrolIntelligenceState.ts` computes
+   none of them.
    When no active finding or pending approval remains, terminal verified or
    rejected outcomes must read as history behind a `no active work` current
    state; current-state copy must not ask operators to reconcile old approved
@@ -771,12 +775,12 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    only block the selected run view while the run references finding ids that
    still need the direct Patrol findings payload.
    Patrol page refresh state must also separate background data loads from the
-   operator-clicked Update status action: slow or stalled supporting
-   intelligence reads may continue in the background, but they must not make the
-   shared header action spin or stay disabled once Patrol findings and status
-   remain visible. The header action is a status/history sync affordance; it
-   must not read like another Patrol run or imply that it changes
-   infrastructure.
+   operator-clicked Retry on the stale-data banner: background polls hold no
+   busy state, and slow or stalled supporting intelligence reads may continue
+   in the background, but they must not make Retry spin or stay disabled once
+   Patrol findings and status remain visible. Retry is a status/history sync
+   affordance; it must not read like another Patrol run or imply that it
+   changes infrastructure.
    Patrol trigger-status copy in the default header and activity strip must stay
    actionable. Runtime policy pauses for alert/anomaly-triggered background
    checks, such as the local development safety guard, may explain a blocked

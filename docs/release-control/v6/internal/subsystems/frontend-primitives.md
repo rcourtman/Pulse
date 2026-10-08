@@ -3767,11 +3767,11 @@ production table, router and styles; it does not qualify full-app scrolling.
     assessment readout, but shared drawer/chrome primitives stay free of
     the `FindingsTrustSummary` shape so adding new trust signals goes
     through the contract first rather than per-shell branching.
-    Patrol header refresh controls stay on that same feature-owned shell
+    Patrol refresh controls stay on that same feature-owned shell
     boundary: `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
     must make the refresh affordance generation-aware and timeout-bounded, so
-    a slow supporting intelligence read cannot permanently disable the shared
-    Patrol header control while Patrol findings and status remain visible.
+    a slow supporting intelligence read cannot permanently disable the
+    stale-data Retry control while Patrol findings and status remain visible.
     That feature-owned
     presentation helper is the single emitter for investigation-record
     `impact` and `rollback` fields: when an investigation record exists but those fields
@@ -3915,6 +3915,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     finding-presentation destinations such as the Patrol provider-settings
     route, while `patrol_autonomy` and legacy Pro activation URLs remain parser
     aliases only and verified review links use the plain Patrol history anchor.
+    The Patrol finding-to-Assistant handoff has one owner,
+    `frontend-modern/src/components/AI/FindingsPanel.tsx`; the Patrol state
+    hook keeps no second copy of it, and the Patrol workspace passes no
+    handoff callback because nothing on the page reacts to a handoff.
     UI surfaces must not duplicate the `patrolControlStarter` query string or
     write Patrol control or legacy entry-point starter telemetry from local
     click handlers.
@@ -6856,7 +6860,7 @@ That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
-shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
+Patrol stale-data Retry action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
 Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
 nor the Retry path's background supporting reads fetch the global
