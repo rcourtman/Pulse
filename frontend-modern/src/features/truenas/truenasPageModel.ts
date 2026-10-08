@@ -936,9 +936,7 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
     point.node,
     point.namespace,
     point.display?.itemLabel,
-    point.display?.subjectLabel,
     point.display?.itemType,
-    point.display?.subjectType,
     point.display?.clusterLabel,
     point.display?.nodeHostLabel,
     point.display?.nodeAgentLabel,
@@ -951,11 +949,6 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
     point.itemRef?.name,
     point.itemRef?.uid,
     point.itemRef?.id,
-    point.subjectRef?.type,
-    point.subjectRef?.namespace,
-    point.subjectRef?.name,
-    point.subjectRef?.uid,
-    point.subjectRef?.id,
     point.repositoryRef?.type,
     point.repositoryRef?.namespace,
     point.repositoryRef?.name,
@@ -992,17 +985,9 @@ export function sortTrueNASProtectionPoints(points: readonly RecoveryPoint[]): R
     const timeDelta = getRecoveryPointTimestampMs(right) - getRecoveryPointTimestampMs(left);
     if (timeDelta !== 0) return timeDelta;
     const leftLabel =
-      asTrimmedString(left.display?.itemLabel) ||
-      asTrimmedString(left.display?.subjectLabel) ||
-      asTrimmedString(left.itemRef?.name) ||
-      asTrimmedString(left.subjectRef?.name) ||
-      left.id;
+      asTrimmedString(left.display?.itemLabel) || asTrimmedString(left.itemRef?.name) || left.id;
     const rightLabel =
-      asTrimmedString(right.display?.itemLabel) ||
-      asTrimmedString(right.display?.subjectLabel) ||
-      asTrimmedString(right.itemRef?.name) ||
-      asTrimmedString(right.subjectRef?.name) ||
-      right.id;
+      asTrimmedString(right.display?.itemLabel) || asTrimmedString(right.itemRef?.name) || right.id;
     return leftLabel.localeCompare(rightLabel);
   });
 }

@@ -115,7 +115,6 @@ const ALLOWLIST = new Set([
   'src/utils/organizationSettingsPresentation.ts',
   'src/utils/ssoProviderPresentation.ts',
   'src/utils/thresholdSliderPresentation.ts',
-  'src/utils/recoveryArtifactModePresentation.ts',
   'src/utils/recoveryActionPresentation.ts',
   'src/utils/recoveryDatePresentation.ts',
   'src/utils/recoveryEmptyStatePresentation.ts',
@@ -969,13 +968,6 @@ const HELPER_RULES = [
       'Do not inline SSO certificate tone ternaries in component code. Use @/utils/ssoProviderPresentation instead.',
   },
   {
-    rule: 'canonical-recovery/no-local-artifact-mode-presentation-maps',
-    regex:
-      /\bconst\s+MODE_LABELS\s*:\s*Record<ArtifactMode,\s*string>\s*=|\bconst\s+MODE_BADGE_CLASS\s*:\s*Record<ArtifactMode,\s*string>\s*=|\bconst\s+CHART_SEGMENT_CLASS\s*:\s*Record<ArtifactMode,\s*string>\s*=/g,
-    message:
-      'Do not define local recovery artifact mode presentation maps in page code. Use @/utils/recoveryArtifactModePresentation instead.',
-  },
-  {
     rule: 'canonical-recovery/no-local-filter-chip-presentation',
     regex:
       /(?:border-blue-200\s+bg-blue-50|border-cyan-200\s+bg-cyan-50|border-emerald-200\s+bg-emerald-50|border-violet-200\s+bg-violet-50)[\s\S]{0,260}(?:Day|Cluster|Node\/Agent|Namespace)/g,
@@ -1012,7 +1004,7 @@ const HELPER_RULES = [
   {
     rule: 'canonical-recovery/no-local-date-presentation-helpers',
     regex:
-      /\bconst\s+dateKeyFromTimestamp\s*=\s*\(|\bconst\s+parseDateKey\s*=\s*\(|\bconst\s+prettyDateLabel\s*=\s*\(|\bconst\s+fullDateLabel\s*=\s*\(|\bconst\s+compactAxisLabel\s*=\s*\(|\bconst\s+formatTimeOnly\s*=\s*\(|\bconst\s+niceAxisMax\s*=\s*\(/g,
+      /\bconst\s+dateKeyFromTimestamp\s*=\s*\(|\bconst\s+parseDateKey\s*=\s*\(|\bconst\s+prettyDateLabel\s*=\s*\(|\bconst\s+fullDateLabel\s*=\s*\(|\bconst\s+compactAxisLabel\s*=\s*\(|\bconst\s+niceAxisMax\s*=\s*\(/g,
     message:
       'Do not define local recovery date or timeline formatting helpers in component code. Use @/utils/recoveryDatePresentation instead.',
   },
@@ -1040,7 +1032,7 @@ const HELPER_RULES = [
   {
     rule: 'canonical-recovery/no-local-timeline-chart-presentation',
     regex:
-      /\bconst\s+labelEvery\s*=\s*dayCount\s*<=\s*7\s*\?\s*1\s*:\s*dayCount\s*<=\s*30\s*\?\s*3\s*:\s*10|inline-flex\s+rounded\s+border\s+border-border\s+bg-surface\s+p-0\.5\s+text-xs|font-semibold\s+text-blue-700\s+dark:text-blue-300|chartRangeDays\(\)\s*===\s*7[\s\S]{0,120}min-w-\[28px\][\s\S]{0,120}chartRangeDays\(\)\s*===\s*30[\s\S]{0,120}min-w-\[14px\]/g,
+      /\bconst\s+labelEvery\s*=\s*dayCount\s*<=\s*7\s*\?\s*1\s*:\s*dayCount\s*<=\s*30\s*\?\s*3\s*:\s*10|font-semibold\s+text-blue-700\s+dark:text-blue-300/g,
     message:
       'Do not define local recovery timeline chart presentation in component code. Use @/utils/recoveryTimelineChartPresentation instead.',
   },
