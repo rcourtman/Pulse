@@ -1615,6 +1615,45 @@ the stale pass's own threshold rule, so the merge's freshness gate never
 calls a source current that the stale pass marks stale, or the reverse. The
 gate decides only where no stronger rule does: a hypervisor-managed guest
 keeps its platform CPU even while that source is stale.
+The resources API's registry rebuild is resource seeding too, and the seed
+carries the thresholds its own registry generation judged it by. The monitor
+adapter records them per generation (`MonitorAdapter.StaleThresholds`):
+thresholds set since a rebuild wait for the next one, and the read-state
+overlays and live supplemental refreshes of a generation are judged by that
+generation's thresholds, since a listing already marked stale cannot be
+cleared by re-judging it. A monitor view lists the store's current
+generation together with those thresholds
+(`GetAllWithMetricsTargetsAndStaleThresholds` reads both from one registry
+pointer); a view the monitor builds from mock fixtures or a bare state
+snapshot was judged by the defaults and carries none. `UnifiedResourceSnapshotWithStaleThresholds`
+(per tenant, `UnifiedResourceSnapshotWithStaleThresholdsForTenant`) hands the
+view's listing, freshness marker and thresholds to the resources API, which
+builds its registry with `NewRegistryWithStaleThresholds`: every ingest or
+stale pass on that registry that passes no thresholds of its own uses them,
+and a cached registry built with other thresholds is rebuilt even at the same
+freshness marker. Presentation coalescing picks the source of a merged host
+row's readings with the metric merge's own rule (`metricSourceStale`):
+`ListForPresentation` passes the thresholds its registry was constructed
+with, and the websocket broadcast passes its view's, so on mock and snapshot
+views both follow the defaults and still agree. Before this the resources API judged by
+the defaults everywhere, so a Proxmox node polled every two minutes read
+stale, with warning status, in `/api/resources` ninety seconds after its poll
+while the broadcast called it online, and both views showed a silent agent's
+readings on a node whose agent keeps its own registry row. Patrol's scoped
+runtime state still rebuilds registries with the defaults. Regression
+coverage: `TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds` and
+`TestRegistryIngestThresholdsOverrideConstructionThresholds` in
+`registry_merge_policy_test.go`,
+`TestMonitorAdapterReportsTheThresholdsItsGenerationWasJudgedBy` in
+`monitor_adapter_read_state_test.go`,
+`TestUnifiedViewCarriesItsGenerationsStaleThresholds` in
+`internal/monitoring/monitor_host_agents_test.go`,
+`TestResourceAPIRebuildsWithTheSeedingMonitorStaleThresholds` in
+`code_standards_test.go`,
+`TestResourceListRebuildsWhenSeedStaleThresholdsChange` in
+`internal/api/resourceapi/resources_test.go`, and
+`TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` in
+`internal/api/contract_test.go`.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a
