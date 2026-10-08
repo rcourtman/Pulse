@@ -24,6 +24,7 @@ import {
 import {
   getDiscoveryHostIdForWorkload,
   getDiscoveryResourceIdForWorkload,
+  getWorkloadAlertPolicyTags,
   getWorkloadAlertResourceIdCandidates,
   getWorkloadAlertThresholdScope,
 } from './workloadTopology';
@@ -66,12 +67,14 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertResourceIdCandidates = createMemo(() =>
     getWorkloadAlertResourceIdCandidates(props.guest),
   );
+  const alertPolicyTags = createMemo(() => getWorkloadAlertPolicyTags(props.guest));
   const metricThresholds = (metric: DisplayMetricType) =>
     createMemo(() =>
       alertsActivation.getMetricThresholds(
         alertThresholdScope(),
         metric,
         alertResourceIdCandidates(),
+        alertPolicyTags(),
       ),
     );
   const diskThresholds = metricThresholds('disk');

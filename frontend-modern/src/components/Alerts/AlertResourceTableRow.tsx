@@ -32,6 +32,7 @@ import {
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
   getAlertResourceMetricStep,
+  getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
@@ -41,6 +42,7 @@ import {
 import type { Alert } from '@/types/api';
 import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
 
 type OfflineState = 'off' | 'warning' | 'critical';
 
@@ -94,6 +96,14 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       isEditing(),
     );
   const isOverridden = (metric: string) => isAlertResourceMetricOverridden(props.resource, metric);
+  const relaxedTriggerSummary = () =>
+    props.globalDisableFlag?.()
+      ? null
+      : getAlertResourceRelaxedTriggerSummary(
+          props.resource,
+          props.editingThresholds(),
+          isEditing(),
+        );
   const preferredIntentSignal = (): AlertIntentSignal => {
     for (const metric of ['cpu', 'memory', 'disk'] as const) {
       if (
@@ -321,6 +331,11 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             value={props.editingNote()}
             onInput={(e) => props.setEditingNote(e.currentTarget.value)}
           />
+        </Show>
+        <Show when={relaxedTriggerSummary()}>
+          {(summary) => (
+            <AlertResourceRelaxedTriggers summary={summary()} class="mt-1 text-xs text-muted" />
+          )}
         </Show>
         <Show when={!isEditing() && props.resource.note}>
           <p class="mt-2 text-xs italic text-muted wrap-break-word">
