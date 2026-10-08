@@ -27055,3 +27055,21 @@ func TestContract_PMGUncollectedDatasetsRemainAbsent(t *testing.T) {
 		t.Fatalf("missing dataset became zero/healthy data: %+v", got)
 	}
 }
+
+func TestContract_PMGFalseScopeIsExplicitOnWire(t *testing.T) {
+	node := configapi.NodeResponse{ID: "pmg-0", Type: "pmg", Name: "gateway"}
+	raw, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"monitorMailStats", "monitorQueues", "monitorQuarantine", "monitorDomainStats"} {
+		value, exists := payload[key]
+		if !exists || string(value) != "false" {
+			t.Fatalf("saved opt-out omitted/changed %s: %s", key, raw)
+		}
+	}
+}

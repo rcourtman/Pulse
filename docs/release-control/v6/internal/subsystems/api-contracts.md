@@ -22,6 +22,13 @@
 
 ### PMG scope readback preserves explicit all-off settings
 
+Settings node responses carry explicit false for all four PMG scope booleans,
+including all-off and partial selections. The existing edit form defaults
+omitted mail/queue/quarantine flags to on; `omitempty` must not resurrect an
+opt-out during a later unrelated save. Real GET-payload controls in
+`configapi/pmg_scope_test.go` and `TestContract_PMGFalseScopeIsExplicitOnWire`
+cover this consumer boundary without changing frontend source.
+
 Existing node add/update payloads keep their four boolean collection options.
 PMG saves persist the internal `monitoringConfigured` discriminator: legacy
 all-zero entries retain the existing mail-statistics default, while a saved

@@ -17,6 +17,10 @@
 
 ### PMG scope persistence does not change agent authority
 
+PMG scope booleans remain explicit when false in shared settings readback,
+so the existing PMG form does not re-enable collection through an omission.
+These dataset options still grant no agent or command authority.
+
 Shared node-settings and connection API code now preserves explicit PMG
 collection choices via the internal saved-scope discriminator and effective
 legacy default. This affects PMG API reads only: no agent enrolment, credential,

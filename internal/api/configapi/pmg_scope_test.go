@@ -42,6 +42,22 @@ func TestPMGCollectionScopeSavedPatch(t *testing.T) {
 			if len(nodes) != 1 || nodes[0].MonitorMailStats != tc.wantMail || nodes[0].MonitorQueues != tc.queues {
 				t.Fatalf("readback scope=%+v", nodes)
 			}
+			// The real settings GET must carry explicit false, not just the
+			// Go value: the existing form defaults omitted flags to on.
+			wire := httptest.NewRecorder()
+			h.HandleGetNodes(wire, httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil))
+			var payload []map[string]json.RawMessage
+			if wire.Code != http.StatusOK || json.Unmarshal(wire.Body.Bytes(), &payload) != nil || len(payload) != 1 {
+				t.Fatalf("scope GET failed: %d %s", wire.Code, wire.Body.String())
+			}
+			for key, expected := range map[string]bool{"monitorMailStats": tc.wantMail, "monitorQueues": tc.queues, "monitorQuarantine": false, "monitorDomainStats": false} {
+				raw, exists := payload[0][key]
+				var got bool
+				if !exists || json.Unmarshal(raw, &got) != nil || got != expected {
+					t.Fatalf("scope GET omitted/changed %s: %s", key, wire.Body.String())
+				}
+			}
+
 			saved, err := config.NewConfigPersistence(cfg.DataPath).LoadNodesConfig()
 			if err != nil {
 				t.Fatal(err)

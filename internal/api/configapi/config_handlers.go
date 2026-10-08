@@ -907,10 +907,10 @@ type NodeResponse struct {
 	MonitorPruneJobs             bool                      `json:"monitorPruneJobs,omitempty"`
 	MonitorGarbageJobs           bool                      `json:"monitorGarbageJobs,omitempty"`
 	ExcludeDatastores            []string                  `json:"excludeDatastores"` // PBS only
-	MonitorMailStats             bool                      `json:"monitorMailStats,omitempty"`
-	MonitorQueues                bool                      `json:"monitorQueues,omitempty"`
-	MonitorQuarantine            bool                      `json:"monitorQuarantine,omitempty"`
-	MonitorDomainStats           bool                      `json:"monitorDomainStats,omitempty"`
+	MonitorMailStats             bool                      `json:"monitorMailStats"`
+	MonitorQueues                bool                      `json:"monitorQueues"`
+	MonitorQuarantine            bool                      `json:"monitorQuarantine"`
+	MonitorDomainStats           bool                      `json:"monitorDomainStats"`
 	Enabled                      bool                      `json:"enabled"` // Lifecycle; false = paused
 	Status                       string                    `json:"status"`  // "connected", "disconnected", "error"
 	IsCluster                    bool                      `json:"isCluster,omitempty"`

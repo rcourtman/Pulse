@@ -23,6 +23,10 @@
 
 ### PMG collection scope remains separate from backup recovery
 
+PMG settings readback emits explicit false dataset options; absence must not
+re-enable the existing edit form defaults. Backup polling remains independent
+of these mail/queue/quarantine/domain options and requires a pause to stop.
+
 Shared node-settings and connections code preserves PMG collection opt-outs
 without changing storage identity, capacity, History or recovery semantics.
 The four mail/queue/quarantine/domain switches do not disable PMG configuration
