@@ -2484,7 +2484,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				temperature:   tools.SplitDiskTemperature(r.PhysicalDisk.Temperature, r.PhysicalDisk.Collection),
 				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
 			}
-			row.temperatureLimits = snap.diskTemperatureLimits(physicalDiskTemperatureHost(r, owners), row.diskType)
+			row.temperatureLimits = physicalDiskTemperatureLimits(snap.thresholdProvider, r, owners)
 			rows = append(rows, row)
 		}
 		return rows

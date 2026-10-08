@@ -6502,3 +6502,21 @@ and REST row counts with and without the split, and
 `TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
 listing read state over an older store generation and the store's exclusions
 for a mock-style view.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
+
+Mock-link lifecycle validation drives the owning ingest/rebuild boundary
+after unlink and relink: read hydration intentionally reuses a registry
+generation younger than two seconds. The decision takes effect in the next
+loaded generation, not retroactively in the listing already served. The
+fixture seed keeps default thresholds while the configured live adapter
+retains its four-minute Proxmox threshold.
