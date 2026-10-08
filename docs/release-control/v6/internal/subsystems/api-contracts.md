@@ -5669,16 +5669,45 @@ the projection to the Finding before calling the orchestrator. This
 is the one in-process write path that decides what the orchestrator
 sees about operator commitments; all consumers (in-process Patrol,
 external Claude Code, and MCP-speaking clients) read the same enriched shape.
-The provider closure must tolerate the findings runtime's mixed
-resource key spaces: unified-derived findings reference the hashed
-canonical resource ID, but Patrol guest inventory rows reference the
-node-scoped Proxmox source ID (`instance:node:vmid`). Operator state
-is keyed by canonical ID only, so a reference that misses the store
-directly resolves through the registry (`GetByReference`, which also
-covers retired canonical-ID eras and node-scoped guest references
-after #1669) before the provider reports no state — without that
-hop, maintenance windows and intentionally-offline intent silently
-never reach guest findings. Pinned by
+The provider (`Router.patrolResourceOperatorStateProvider`) must
+tolerate the findings runtime's mixed resource key spaces:
+unified-derived findings reference the hashed canonical resource ID,
+Patrol guest inventory rows reference the node-scoped Proxmox source
+ID (`instance:node:vmid`), and a finding raised before an operator
+link folded its resource into another keeps the folded canonical ID,
+which Patrol re-projects as stored. Operator state is keyed by
+canonical ID only, so every reference resolves before the store read,
+through the identity-only `ResolveCanonicalResourceID` of the
+organization monitor's current read state
+(`GetUnifiedReadStateOrSnapshot`: the published registry with saved
+hosts that have not reported since a restart overlaid, or the mock
+estate). That read state is the listing the resources API seeds its
+registry from, and resolution covers retired canonical-ID eras,
+node-scoped guest references after #1669 and link-folded IDs. Only a
+reference it cannot place is read as given. Resolving first is what
+keeps Patrol on the row the resources API writes for the same
+reference: an exact read first would let a row left under a folded
+ID, even a default-valued one, hide the maintenance window the
+operator then set on the merged resource. Three cases still resolve
+differently in the resources API, whose registry re-ingests that
+listing: references to records it replays from supplemental providers
+on top of the listing; manual links in mock mode, whose view applies
+none; and a saved host that has not reported since a restart but is
+linked into a live resource. The read state keeps that host as its own
+offline row, because continuity records never join links, while the
+resources API's ingest re-applies the link and folds it, so Patrol
+reads the saved agent's own row there, as alert intent does for that
+agent's canonical ID, and state set only on the link primary does not
+reach the agent's findings until it reports again. The read
+state answers from a registry it keeps (a continuity overlay is shared
+and reused for up to two seconds while the published registry and the
+saved hosts are unchanged), so findings do not each clone the unified
+listing the way a resources-API registry build does; only a monitor
+left without a resource store, which the router never does, builds a
+snapshot registry per call. Pinned by
+`TestPatrolFindingOperatorStateFollowsLinkFoldedReference` and
+`TestPatrolFindingOperatorStateResolvesContinuityBackedHost` in
+`internal/api/ai_handlers_more_test.go` and
 `TestContract_FindingsResourceOperatorStateProviderIsWired` in
 `internal/api/contract_test.go`.
 

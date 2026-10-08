@@ -3587,6 +3587,13 @@ in-memory provider already wired against the durable
 commitments survive across restarts on the investigation read path
 the same way they do on the suppression read path — both flow
 through the same provider over the same durable table.
+That provider resolves a finding's resource reference through the
+organization monitor's current read state before it reads the table,
+so a reference that read state folds into another resource through an
+operator link reads the merged row. This changes which existing row is read,
+not what is stored: no new persistence, migration or recovery path
+opens, and a row left under a folded ID is neither rewritten nor
+removed.
 
 The agent SSE stream at `/api/agent/events` is in-memory and
 stateless. No persistence; each connection starts fresh from the

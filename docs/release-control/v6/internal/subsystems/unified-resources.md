@@ -6733,10 +6733,16 @@ separate.
   `ResolveReferenceID` and `GetByReference` follow the fold as well, as the
   folded agent's alert reference (`agent:<host ID>`) already did through the
   merged row's canonical aliases. Alert intent, operator-state reads and
-  writes through the resources API and resource lookups by the folded ID
-  (`GET /api/resources/{id}`) therefore reach the merged row. Patrol's finding auto-acknowledgement
-  still reads a row stored under the exact reference first, so an
-  operator-state row kept under the folded ID applies there. History does
+  writes through the resources API, Patrol's finding operator-state
+  projection and resource lookups by the folded ID
+  (`GET /api/resources/{id}`) therefore reach the merged row. Patrol
+  resolves a finding's reference through the monitor's current read
+  state before it reads, so a finding raised before the link reads the
+  merged row's maintenance and monitoring mode, not an operator-state
+  row left under the folded ID, whenever that read state folds the
+  agent. A saved agent that has not reported since a restart is not
+  folded there (continuity records never join links), so its findings
+  read its own row until it reports again. History does
   not follow the fold: a history binding persists, and
   `expandHistoryAliases` walks bindings in both directions, so binding a
   folded ID would join the two journals for good. Folded IDs are never
@@ -6754,6 +6760,9 @@ separate.
   `TestResourceUnlinkSplitsManuallyLinkedPair` pins the API lookup: the
   folded agent's ID answers with the VM while linked and with the agent's own
   row once unlinked.
+  `internal/api/ai_handlers_more_test.go`
+  (`TestPatrolFindingOperatorStateFollowsLinkFoldedReference`) pins the
+  Patrol read against the resources API's write.
 
 `registry_merge_policy_test.go` pins the record links in both directions
 through two rebuilds and the live supplemental refresh, and checks that a

@@ -2884,6 +2884,11 @@ the tenant resource store. Runtime reconciliation may visit every live monitor,
 but each alert manager resolves policy through its own tenant-scoped store, so a
 matching provider ID in another organization cannot import the mutation. The
 existing route scopes and authenticated actor attribution remain unchanged.
+Patrol's finding operator-state provider follows the same rule: it resolves a
+finding's reference through the read state of that organization's own monitor
+(`resolveMonitorForOrg`) and then reads that organization's store, so a
+source-native or link-folded reference never resolves through another tenant's
+registry.
 
 ### Secret-bearing configuration transfer fails closed before data access
 

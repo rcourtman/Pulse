@@ -23528,8 +23528,8 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "GetResourceOperatorState(canonicalID)") {
 		t.Error("router.go must read state from the unified store's canonical accessor")
 	}
-	if !strings.Contains(src, "GetByReference(resourceRef)") {
-		t.Error("router.go must resolve non-canonical finding resource references (Patrol guest rows carry node-scoped source IDs) through the registry before reporting no operator state")
+	if !strings.Contains(src, "resolver.ResolveCanonicalResourceID(resourceRef)") {
+		t.Error("router.go must resolve finding resource references (Patrol guest rows carry node-scoped source IDs; retained findings keep link-folded IDs) through the monitor's published resolver before reading operator state")
 	}
 	if !strings.Contains(src, "IntentionallyOffline: state.IntentionallyOffline") {
 		t.Error("router.go must propagate state.IntentionallyOffline through the projection so the findings runtime sees it")
