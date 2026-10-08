@@ -5,8 +5,6 @@ import {
   getPatrolSavedReadinessWarning,
   patrolStartFailureMessage,
   recordPatrolControlStarterActivity,
-  resolvePatrolAutonomyLevelForSave,
-  resolvePatrolAutonomySettingsForSave,
   resolvePatrolBlockedActionCause,
 } from '../usePatrolIntelligenceState';
 import patrolIntelligenceStateSource from '../usePatrolIntelligenceState.ts?raw';
@@ -78,6 +76,17 @@ describe('usePatrolIntelligenceState', () => {
     expect(patrolIntelligenceStateSource).toContain('let refreshRequestId = 0;');
     expect(patrolIntelligenceStateSource).toContain('const requestId = ++refreshRequestId;');
     expect(patrolIntelligenceStateSource).toContain('if (requestId === refreshRequestId) {');
+  });
+
+  it('refuses paid Patrol modes in the state owner while governed fixes are locked', () => {
+    // The header disables paid choices too; these guards keep the state owner
+    // from starting a paid save if a caller reaches it anyway.
+    expect(patrolIntelligenceStateSource).toContain(
+      "if (controlLocked && level !== 'monitor') return;",
+    );
+    expect(patrolIntelligenceStateSource).toContain(
+      'if (isUpdatingAutonomy() || autoFixLocked()) return;',
+    );
   });
 
   it('keeps browser/network start failures distinct from backend rejections', () => {
@@ -204,78 +213,6 @@ describe('usePatrolIntelligenceState', () => {
       '[Patrol mode handoff] Failed to record Patrol workflow starter',
       error,
     );
-  });
-
-  describe('resolvePatrolAutonomyLevelForSave', () => {
-    it('clamps stale paid autonomy to monitor when governed fixes are locked', () => {
-      expect(resolvePatrolAutonomyLevelForSave('full', true, true)).toBe('monitor');
-      expect(resolvePatrolAutonomyLevelForSave('assisted', false, true)).toBe('monitor');
-      expect(resolvePatrolAutonomyLevelForSave('approval', false, true)).toBe('monitor');
-    });
-
-    it('preserves paid autonomy choices when governed fixes are available', () => {
-      expect(resolvePatrolAutonomyLevelForSave('assisted', false, false)).toBe('assisted');
-      expect(resolvePatrolAutonomyLevelForSave('assisted', true, false)).toBe('assisted');
-      expect(resolvePatrolAutonomyLevelForSave('full', true, false)).toBe('full');
-      expect(resolvePatrolAutonomyLevelForSave('full', false, false)).toBe('assisted');
-      expect(resolvePatrolAutonomyLevelForSave('approval', false, false)).toBe('approval');
-    });
-  });
-
-  describe('resolvePatrolAutonomySettingsForSave', () => {
-    it('clears stale full-mode state when governed fixes are locked', () => {
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'full',
-          fullModeUnlocked: true,
-          autoFixLocked: true,
-        }),
-      ).toEqual({ autonomyLevel: 'monitor', fullModeUnlocked: false });
-    });
-
-    it('does not carry full-mode state into non-remediation modes', () => {
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'monitor',
-          fullModeUnlocked: true,
-          autoFixLocked: false,
-        }),
-      ).toEqual({ autonomyLevel: 'monitor', fullModeUnlocked: false });
-
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'approval',
-          fullModeUnlocked: true,
-          autoFixLocked: false,
-        }),
-      ).toEqual({ autonomyLevel: 'approval', fullModeUnlocked: false });
-    });
-
-    it('keeps full control tied to the explicit full selection', () => {
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'assisted',
-          fullModeUnlocked: true,
-          autoFixLocked: false,
-        }),
-      ).toEqual({ autonomyLevel: 'assisted', fullModeUnlocked: false });
-
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'full',
-          fullModeUnlocked: true,
-          autoFixLocked: false,
-        }),
-      ).toEqual({ autonomyLevel: 'full', fullModeUnlocked: true });
-
-      expect(
-        resolvePatrolAutonomySettingsForSave({
-          level: 'full',
-          fullModeUnlocked: false,
-          autoFixLocked: false,
-        }),
-      ).toEqual({ autonomyLevel: 'assisted', fullModeUnlocked: false });
-    });
   });
 
   describe('getPatrolSavedReadinessWarning', () => {

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "fd36869223864faae2dd0969a758cde6232f011c",
+  "verified_at": "2026-10-07T23:02:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "54f320df506ff23e31ebfb05c927d4ba1bf3760620962200dd19fad72636eeeb",
+    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "09e9c57fc2358564c5f929f06ac28daced329ef961dff3c52df9554f9359c0c2",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx": "8b7d3b4ffd7218042a2c24384f4175ffb0c9d2080f2a02cbca801b48b097bed6"
+  },
+  "routes": ["/proxmox/overview", "/vmware/overview"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite builds of the change (after) and of main's three runtime files (before) served by vite preview on pulse-dev, proxied to the 50-node mock perf rig; the after bundle carries no 'Show charts' copy, the before bundle does",
+    "Proxmox overview, 929 guests: Workloads View preferences disclosure open on desktop (Layout, Metrics, Row hover, Memory relative to, Inventory totals, Table) and phone (Layout, Metrics, Memory relative to, Inventory totals, Table)",
+    "vSphere overview: View preferences disclosure open on desktop (Layout, Metrics, Row hover, Inventory totals, Table) and phone (Layout, Metrics, Inventory totals, Table)",
+    "Before and after identical in every case: same section headings, same controls and pressed states, no Summary heading, no Charts / Show charts / Hide charts button, no horizontal page overflow, no console or page errors"
+  ],
+  "interactions": [
+    "Signed in to the dev rig, opened /proxmox/overview and /vmware/overview at each viewport",
+    "Desktop: clicked View to open the inline View preferences disclosure",
+    "Phone: opened Filters, then View, to reach the same disclosure",
+    "Captured every visible heading, button and pressed state inside the disclosure plus page-wide Charts buttons and Summary labels, then diffed before against after"
+  ]
+}

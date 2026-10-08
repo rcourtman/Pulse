@@ -269,6 +269,25 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
+// Operator link folds ride clones, so a registry seeded from another
+// registry's listing can name each link's pair, and stay detached from them.
+func TestCloneResource_CarriesLinkFolds(t *testing.T) {
+	original := &Resource{
+		ID:        "vm-1",
+		linkFolds: []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent}}},
+	}
+	cloned := cloneResource(original)
+	if len(cloned.linkFolds) != 1 || cloned.linkFolds[0].FoldedID != "agent-1" {
+		t.Fatalf("clone lost link folds: %+v", cloned.linkFolds)
+	}
+
+	cloned.linkFolds[0].Sources[0] = SourceDocker
+	cloned.linkFolds[0].FoldedID = "MUTATED"
+	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" {
+		t.Errorf("mutating cloned link folds affected the original: %+v", original.linkFolds)
+	}
+}
+
 func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 	checkedAt := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
 	succeededAt := checkedAt.Add(-time.Minute)

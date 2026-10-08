@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "32fad38aa486ac116f885cb77e27317ea351c957",
+  "verified_at": "2026-10-07T23:52:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "789f7e4a6f28e07d6d1d28abc29843ab02a90eef4f787fa024f0ba383abc8563"
+  },
+  "routes": [
+    "/patrol (header 'Mode and automation' disclosure)",
+    "/patrol (Activate Autopilot acknowledgement dialog)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Removal of the test-only resolvePatrolAutonomyLevelForSave / resolvePatrolAutonomySettingsForSave exports; no production code called them.",
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent 32fad38aa4 and of this change, run on pulse-dev because local memory pressure refused heavy work. The two dists are byte-identical (187 files, every sha256 equal): Rollup had already dropped both helpers.",
+    "Each build on its own private DEMO_MODE mock stack with a fresh data dir, one at a time; the same Playwright script ran against both at both widths. Results compared field by field: 6 sessions, 80 recorded fields, 0 differences.",
+    "Paid entitlement (ai_autofix added to /api/license/runtime-capabilities via page.route): all four Patrol mode choices enabled; Ask first, Watch only and Autopilot each saved through PUT /api/ai/patrol/autonomy (stubbed 200 plus a GET reconcile rewrite); Autopilot opened the acknowledgement dialog with no PUT until 'Record acknowledgement and activate' (one stubbed acknowledgement POST). Every PUT body carried only autonomy_level, investigation_budget, investigation_timeout_sec and, for Autopilot, acknowledgement_id; none carried full_mode_unlocked.",
+    "Runtime lock under demo presentation (ai_autofix blocked with paid_runtime_required): demo forces hideCommercial, so the header shows Watch only with no mode selector and no save path.",
+    "Runtime lock with the demo presentation flags cleared in the browser (GET /api/security/status rewritten): 'Pulse Pro runtime required' notice, Watch only selected, Ask first / Safe auto-fix / Autopilot disabled; forced clicks on them sent no PUT and opened no Autopilot dialog; Watch only sent exactly autonomy_level monitor plus the investigation budget and timeout.",
+    "Console/network noise identical on both builds and unrelated to the change: 403 POST /api/ai/workflow-prompts/activity (demo write guard on the starter record) in the paid sessions, 404 GET /api/license/commercial-posture in the cleared-presentation sessions."
+  ],
+  "interactions": [
+    "Demo auto sign-in; open /patrol, expand 'Mode and automation', read the selector's pressed and disabled states.",
+    "Paid: click Ask first, then Watch only, then Autopilot (re-clicking only while the previous save was still reconciling), tick the acknowledgement checkbox and click 'Record acknowledgement and activate'.",
+    "Locked (selector visible): force-click Ask first, Safe auto-fix and Autopilot, then click Watch only.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the initial, Autopilot dialog and final states inspected."
+  ]
+}
