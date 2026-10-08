@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Windows replacement and removal refuse uncertain service state
+
+Before replacing an agent binary or changing its token/connection state, and
+before uninstall deregistration or erasure, `scripts/install.ps1` must confirm
+the existing PulseAgent service stopped and actually removed. Only explicit
+SCM not-found establishes absence. Stop completion and post-delete absence
+each have a 30-second bound; stop/read/delete failures retain the old binary
+and agent state and return nonzero. Deletion success while SCM still lists a
+service is not completion. Local uninstall erasure errors also return nonzero,
+without a success message. No forced dependent-service stop, PID kill or trust
+relaxation is introduced.
+
+The registered Windows installer tests pin both mutation boundaries, their
+refusal exits and mocked production-function controls. The existing native
+Windows job runs those controls under PowerShell 5.1 and then the real
+install/update/uninstall lifecycle. Linux source tests cannot establish native
+SCM acceptance and retain a missing-runtime skip explicitly.
+
 ### Server removal requires every affected unit to be quiescent
 
 Both the existing-installation menu and `--uninstall` must stop and disable the

@@ -514,9 +514,81 @@ function Get-ConnectionStateValue {
     return $value.Trim("'")
 }
 
+function Get-PulseService {
+    try {
+        return Get-Service -Name $AgentName -ErrorAction Stop
+    } catch {
+        # Only SCM's explicit not-found result establishes absence. Access or
+        # enumeration failures must not authorise replacement or data removal.
+        if ($_.FullyQualifiedErrorId.Split(',')[0] -eq 'NoServiceFoundForGivenName' -and
+            $_.CategoryInfo.Category -eq [System.Management.Automation.ErrorCategory]::ObjectNotFound) {
+            return $null
+        }
+        throw
+    }
+}
+
+function Remove-PulseService {
+    param([int]$TimeoutSeconds = 30)
+
+    $service = Get-PulseService
+    if ($null -eq $service) {
+        return
+    }
+
+    try {
+        $service.Refresh()
+        if ($service.Status -ne 'Stopped') {
+            # ServiceController.Stop requests a stop without Stop-Service's
+            # unbounded wait. Do not force-stop other services or kill a PID.
+            if ($service.Status -ne 'StopPending') {
+                $service.Stop()
+            }
+            $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,
+                [TimeSpan]::FromSeconds($TimeoutSeconds))
+        }
+        $service.Refresh()
+        if ($service.Status -ne 'Stopped') {
+            throw "Service '$AgentName' is not confirmed stopped."
+        }
+    } finally {
+        # An open controller handle can itself keep an SCM deletion pending.
+        $service.Dispose()
+    }
+
+    $scOutput = sc.exe delete $AgentName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to delete service '$AgentName': $scOutput"
+    }
+
+    # sc.exe success can mean 'marked for deletion', not actually absent.
+    # Keep the old binary and state until an independent SCM read confirms it.
+    $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+    do {
+        $remaining = Get-PulseService
+        if ($null -eq $remaining) {
+            return
+        }
+        $remaining.Dispose()
+        if ($elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+            throw "Service '$AgentName' is still present after deletion. Close service-management windows and retry after confirming it is stopped."
+        }
+        Start-Sleep -Milliseconds 200
+    } while ($true)
+}
+
 # --- Uninstall Logic ---
 if ($Uninstall) {
     Write-Host "Uninstalling $AgentName..." -ForegroundColor Cyan
+
+    # Refuse remote deregistration and local erasure while runtime state is
+    # unknown. On failure keep the identity, token, logs and executable intact.
+    try {
+        Remove-PulseService
+    } catch {
+        Show-Error "Cannot uninstall '$AgentName'; binary and agent state have been retained. $_"
+        Exit 1
+    }
 
     # Try to notify the Pulse server about uninstallation if we have connection details
     if ([string]::IsNullOrWhiteSpace($Url)) {
@@ -619,23 +691,18 @@ if ($Uninstall) {
         }
     }
 
-    if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
-        Stop-Service $AgentName -Force -ErrorAction SilentlyContinue
-        $scOutput = sc.exe delete $AgentName 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Warning: Failed to delete service: $scOutput" -ForegroundColor Yellow
-        } else {
-            Write-Host "Service deleted successfully" -ForegroundColor Green
+    try {
+        if (Test-Path "$InstallDir\$BinaryName") {
+            Remove-Item "$InstallDir\$BinaryName" -Force -ErrorAction Stop
         }
-    } else {
-        Write-Host "Service '$AgentName' not found (already removed)" -ForegroundColor Yellow
+        if (Test-Path $StateDir) {
+            Remove-Item $StateDir -Recurse -Force -ErrorAction Stop
+        }
+    } catch {
+        Show-Error "Agent service was removed, but local cleanup did not complete. $_"
+        Exit 1
     }
 
-    if (Test-Path $StateDir) {
-        Remove-Item $StateDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    Remove-Item "$InstallDir\$BinaryName" -Force -ErrorAction SilentlyContinue
     Write-Host "Uninstallation complete." -ForegroundColor Green
     Exit 0
 }
@@ -974,15 +1041,14 @@ if ($CommandAuthority -eq 'monitoring-only' -and $EnableCommands) {
     Exit 1
 }
 
-# Stop existing service if running
-if (Get-Service $AgentName -ErrorAction SilentlyContinue) {
-    Write-Host "Removing existing $AgentName service..." -ForegroundColor Yellow
-    Stop-Service $AgentName -Force -ErrorAction SilentlyContinue
-    $scOutput = sc.exe delete $AgentName 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: Failed to delete existing service: $scOutput" -ForegroundColor Yellow
-    }
-    Start-Sleep -Seconds 2
+# Confirm existing service stopped and absent before changing the executable,
+# token or persisted connection. A failed read/stop/delete is not an upgrade.
+try {
+    Remove-PulseService
+} catch {
+    Cleanup
+    Show-Error "Cannot replace '$AgentName'; existing binary and agent state have been retained. $_"
+    Exit 1
 }
 
 # Move temp file to final location
