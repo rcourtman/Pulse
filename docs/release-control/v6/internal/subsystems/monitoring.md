@@ -6329,3 +6329,24 @@ collection policy and native health claims are unchanged.
 metadata, retained-without-history exclusion and original single-point
 observations to the production chart path. These source controls do not
 establish native temperature collection or installed History acceptance.
+
+### Broadcast host coalescing honours operator splits
+
+The websocket broadcast coalesced top-level host views with
+`CoalescePresentationHostResources`, which applies no merge exclusions, while
+the resources API's `ResourceRegistry.ListForPresentation` applies the
+registry's. A host pair the operator split (unlink or report-merge) could
+therefore be one broadcast row and two REST rows.
+`Monitor.buildBroadcastFrontendStateFromSnapshotWithClock` now calls
+`coalesceResourcesForPresentation`, which asks the view's read state for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh), and otherwise the resource store's adapter: the
+mock-mode view lists through a store-less registry that carries no operator
+decisions. Both surfaces share `presentationExclusionFilter`. Polling, rebuild cadence,
+alert evaluation and the broadcast payload shape are unchanged.
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` compares broadcast
+and REST row counts with and without the split, and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
+listing read state over an older store generation and the store's exclusions
+for a mock-style view.
