@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Optional held-alert breach date consumer
+
+`MetricAlertStatus.lastBreachAt?: string` mirrors the existing backend ISO
+field dating `Alert.value`. Older servers and restart-before-evaluation may
+omit it. Consumers validate it, then a valid legacy `lastSeen`, without
+creating a date from start/poll time. Frontend type and consumer regression
+controls are in `types/api.ts`, `features/alerts/__tests__/helpers.test.ts`
+and `components/Alerts/__tests__/alertAssistantHandoffModel.test.ts`.
+No endpoint, required field or mobile capability changes.
+
 ### PMG scope readback preserves explicit all-off settings
 
 Settings node responses carry explicit false for all four PMG scope booleans,

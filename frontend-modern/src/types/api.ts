@@ -1418,6 +1418,8 @@ export interface MetricAlertStatus {
   evaluationWindowSeconds?: number;
   unit?: string;
   observedAt: string;
+  /** Dates Alert.value, not the newer held/recovering observation; absent when unknown. */
+  lastBreachAt?: string;
   /** Opens at or above this value. */
   trigger: number;
   /** Clears after staying at or below this value for recoveryDelaySeconds. */

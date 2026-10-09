@@ -90,6 +90,34 @@ const isUsableStatus = (status: MetricAlertStatus | undefined): status is Metric
   (status.phase === 'breaching' || status.phase === 'latched' || status.phase === 'recovering');
 
 /**
+ * The date of Alert.value, shared by visible copy and Assistant evidence.
+ * New servers expose it in the live status; legacy clients may carry lastSeen.
+ * Neither occurrence start nor the latest evaluation dates a retained breach.
+ */
+export function getMetricAlertLastBreachAt(
+  alert: Pick<Alert, 'lastSeen' | 'metricStatus'>,
+): string | undefined {
+  for (const value of [alert.metricStatus?.lastBreachAt, alert.lastSeen]) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    // Wire dates are timezone-qualified ISO timestamps, not JavaScript's
+    // permissive date-only/numeric parses or Go's unknown zero time.
+    if (
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(text) ||
+      text.startsWith('0001-01-01')
+    )
+      continue;
+    const timestamp = Date.parse(text);
+    if (!Number.isFinite(timestamp)) continue;
+    // Date.parse normalises impossible calendar dates such as 30 February.
+    const calendarDate = new Date(`${text.slice(0, 10)}T00:00:00Z`);
+    if (calendarDate.toISOString().slice(0, 10) !== text.slice(0, 10)) continue;
+    return new Date(timestamp).toISOString();
+  }
+  return undefined;
+}
+
+/**
  * Describes an open threshold alert from the backend's live evaluation, so
  * every surface says what the reading is now and why the alert is still open
  * instead of repeating the last breach. Returns null when the alert carries
@@ -139,14 +167,15 @@ export function getMetricAlertPresentation(
 
   if (stale) {
     summary = `Last reading: ${reading}${
-      Number.isFinite(observedAt) ? `, ${formatRelativeTime(observedAt)}` : ''
+      Number.isFinite(observedAt) ? `, ${formatRelativeTime(observedAt, { now })}` : ''
     }`;
     phaseLabel = 'No recent reading';
   }
 
   let lastBreach: string | undefined;
   if (status.phase !== 'breaching' && Number.isFinite(alert.value)) {
-    const when = alert.lastSeen ? `, ${formatRelativeTime(alert.lastSeen)}` : '';
+    const lastBreachAt = getMetricAlertLastBreachAt(alert);
+    const when = lastBreachAt ? `, ${formatRelativeTime(lastBreachAt, { now })}` : '';
     lastBreach = `Last reading at or above ${trigger}: ${formatMetricValue(alert.value, status.unit)}${when}`;
   }
 
