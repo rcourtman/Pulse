@@ -99,8 +99,9 @@ class TrueNASDocsTest(unittest.TestCase):
     def test_disk_display_mismatch_has_a_passive_private_reporting_route(self):
         prose = " ".join(self.disk_health_section().split())
         for boundary in (
-            "**Storage display limitation:**", "inherited agent/by-type policy",
-            "not the TrueNAS-wide or per-disk temperature override",
+            "**Storage temperature judgement:**", "inherited agent/by-type policy",
+            "saved per-disk temperature override, then the TrueNAS-wide default",
+            "reading visible but unjudged", "last known reading is never current heat",
             "not proof that your saved rule failed", "same disk, observation time and saved threshold",
             "existing TrueNAS reading and SMART state", "do not raise thresholds",
             "run new SMART tests", "force a probe or restart", "only the disk type",
@@ -109,8 +110,15 @@ class TrueNASDocsTest(unittest.TestCase):
         ):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, prose)
+        self.assertNotIn("Storage display limitation", prose)
         config = ROOT / "docs/CONFIGURATION.md"
-        self.assertIn("TRUENAS.md#disk-temperature-and-health", config.read_text())
+        config_prose = " ".join(config.read_text().split())
+        self.assertIn("TRUENAS.md#disk-temperature-and-health", config_prose)
+        self.assertIn("per-disk override, then the TrueNAS-wide default, then the inherited by-type policy",
+                      config_prose)
+        self.assertIn("Off leaves the temperature visible but unjudged", config_prose)
+        self.assertIn("last known readings are not current heat", config_prose)
+        self.assertNotIn("do not yet follow", config_prose)
         self.assertEqual(config.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
 
