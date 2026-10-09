@@ -23,6 +23,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func TestGuestMemoryCarryForwardExpiryContract(t *testing.T) {
+	t.Run("original-age", testGuestMemoryCarryForwardOriginalAge)
+	t.Run("repeated-polls", testGuestMemoryCarryForwardRepeatedPollsDoNotExtendAge)
+	t.Run("ordinary-deferral-recovery", testGuestMemoryCarryForwardOrdinaryDeferralAndRecovery)
+}
+
 type stubPVEClientLXCStatus struct {
 	stubPVEClient
 

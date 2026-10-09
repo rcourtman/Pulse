@@ -232,6 +232,23 @@ resumption through unified and served conversions; wire and source-selection
 controls cover omission, cloning and independent live agent data. These are
 synthetic source proofs, not native QGA/HAOS acceptance or delivered relief.
 
+Low-trust memory stabilisation uses the original memory observation time for
+its existing two-minute reconnect and ten-minute healthy-guest windows, not
+the diagnostic poll's `RetrievedAt`. Repeated carried-forward polls cannot
+extend either window. Missing/future original times and explicit unavailable
+or incomplete observations cannot supply fallback usage. A legacy direct
+reading can still use its own receipt time; a legacy `previous-snapshot`
+without original provenance cannot acquire another lease from a new poll.
+Expiry leaves the independently selected current source in place (including
+unavailability when that source has no usage); it neither queues QGA commands
+nor changes cache/admission, current PVE/agent selection, alert thresholds or
+History's rejection of retained observations.
+`TestGuestMemoryCarryForwardExpiryContract` covers the original-age boundaries,
+repeated polling, real-client lock-unverified deferral, canonical served values,
+in-memory History, independent PVE readings and ordinary QGA read recovery.
+The existing cluster/node preservation tests use an original source timestamp;
+these fixtures do not establish native thaw, HAOS/Windows readings or shipment.
+
 ### Unavailable backup-age evaluation is not silent recovery
 
 PVE, PBS and mock backup checks share one failure-preserving evaluator. The
