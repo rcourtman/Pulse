@@ -267,6 +267,13 @@ func (v VMView) DiskObservation() models.GuestDiskObservation {
 	return v.r.Proxmox.DiskObservation
 }
 
+func (v VMView) GuestAgentEvidence() models.GuestAgentEvidence {
+	if v.r == nil || v.r.Proxmox == nil {
+		return models.GuestAgentEvidence{}
+	}
+	return v.r.Proxmox.GuestAgentEvidence
+}
+
 func (v VMView) OSName() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""

@@ -41,6 +41,26 @@ func TestGuestDiskObservationMergeReplacesMissingAndDifferentSource(t *testing.T
 	}
 }
 
+func TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge(t *testing.T) {
+	origin := models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, GuestAgentEvidence: origin}
+	for _, incoming := range []ProxmoxData{
+		{VMID: 105, GuestAgentEvidence: origin},
+		{VMID: 105, GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true}},
+		{VMID: 105},
+		{NodeDisplayName: "partial"},
+	} {
+		merged := mergeProxmoxData(existing, &incoming)
+		want := incoming.GuestAgentEvidence
+		if incoming.VMID == 0 {
+			want = origin
+		}
+		if merged.GuestAgentEvidence != want || existing.GuestAgentEvidence != origin {
+			t.Fatal("merge renewed/resurrected evidence or mutated its source")
+		}
+	}
+}
+
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 

@@ -426,7 +426,8 @@ type ProxmoxData struct {
 
 	// Original QGA filesystem evidence survives internal clone/merge/previous
 	// state, never JSON. Source identity or UpdatedAt cannot renew it.
-	DiskObservation models.GuestDiskObservation `json:"-"`
+	DiskObservation    models.GuestDiskObservation `json:"-"`
+	GuestAgentEvidence models.GuestAgentEvidence   `json:"-"`
 
 	Lock string `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// SensorSetupOutdated is derived by the registry, never ingested: the

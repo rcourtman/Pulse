@@ -27,6 +27,22 @@ func TestGuestDiskObservationDoesNotChangeWireOrIdentity(t *testing.T) {
 	}
 }
 
+func TestGuestAgentEvidenceDoesNotChangeWireOrIdentity(t *testing.T) {
+	vm := models.VM{ID: "pve:node:105", VMID: 105, Name: "guest", Instance: "pve", Node: "node", Type: "qemu", Status: "running", LastSeen: time.Now(),
+		GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}}
+	resource, identity := resourceFromVM(vm)
+	wire, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm.GuestAgentEvidence = models.GuestAgentEvidence{}
+	legacyResource, legacyIdentity := resourceFromVM(vm)
+	legacyWire, err := json.Marshal(legacyResource)
+	if err != nil || string(wire) != string(legacyWire) || !reflect.DeepEqual(identity, legacyIdentity) {
+		t.Fatal("internal admission evidence changed guest identity or public bytes")
+	}
+}
+
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
 	resource := Resource{
 		ID:   "agent-1",

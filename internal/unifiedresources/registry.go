@@ -4245,6 +4245,7 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 		// A completed guest observation also owns loss/recovery of its original
 		// filesystem evidence. Missing time must not inherit an older origin.
 		merged.DiskObservation = incoming.DiskObservation
+		merged.GuestAgentEvidence = incoming.GuestAgentEvidence
 		merged.GuestAgentStatus = incoming.GuestAgentStatus
 		merged.GuestAgentExpected = incoming.GuestAgentExpected
 	}

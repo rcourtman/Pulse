@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### QGA query-eligibility provenance stays internal
+
+The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
+coordination, not agent input or a public field. It prevents retained guest
+identity from renewing fallback QGA eligibility. Agent enrollment, token and
+machine identity, reporting and linked Pulse-agent readings are unchanged.
+`TestGuestAgentEvidenceIsInternalSnapshotEvidence` checks snapshot isolation
+and omission from both model and frontend JSON.
+
+
 ### QGA disk provenance stays outside the agent report contract
 
 The shared VM model carries an internal filesystem source/time observation for

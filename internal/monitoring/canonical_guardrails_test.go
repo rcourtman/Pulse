@@ -1131,6 +1131,12 @@ func TestGuestDiskObservationContract(t *testing.T) {
 	t.Run("ordinary-deferral-expiry-recovery", testGuestDiskOrdinaryDeferralExpiryAndRecovery)
 }
 
+func TestGuestAgentAdmissionEvidenceContract(t *testing.T) {
+	t.Run("retained-identity-cannot-renew", testGuestAgentRetainedIdentityCannotRenewAdmission)
+	t.Run("original-age", testGuestAgentEvidenceOriginalAge)
+	t.Run("canonical-continuity", testGuestAgentEvidenceCanonicalContinuity)
+}
+
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"guest_host_agent_fallback.go": {

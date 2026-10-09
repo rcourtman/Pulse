@@ -11,30 +11,45 @@ import (
 const recentGuestAgentEvidenceMaxAge = 10 * time.Minute
 
 func hasRecentGuestAgentEvidence(prev *models.VM, now time.Time) bool {
-	// Previous unified read-state snapshots normalize guest status to resource health
-	// (for example "online"), so continuity depends on recent guest-agent evidence
-	// rather than on replaying an exact prior runtime status string.
-	if prev == nil || prev.Type != "qemu" {
-		return false
-	}
-	if prev.LastSeen.IsZero() || now.Sub(prev.LastSeen) > recentGuestAgentEvidenceMaxAge {
-		return false
-	}
+	observedAt := guestAgentEvidenceTime(prev)
+	return !observedAt.IsZero() && !observedAt.After(now) && now.Sub(observedAt) <= recentGuestAgentEvidenceMaxAge
+}
 
+func guestAgentEvidenceTime(prev *models.VM) time.Time {
+	if prev == nil || prev.Type != "qemu" {
+		return time.Time{}
+	}
+	if prev.GuestAgentEvidence.Explicit || !prev.GuestAgentEvidence.ObservedAt.IsZero() {
+		return prev.GuestAgentEvidence.ObservedAt
+	}
+	// Import a legacy direct snapshot's receipt once. Modern producers mark
+	// evidence explicitly, including its absence, before preserving identity.
+	// Its subsequent LastSeen can therefore never refresh this original time.
 	if prev.AgentVersion != "" ||
 		prev.GuestAgentStatus == "available" ||
 		len(prev.IPAddresses) > 0 ||
 		len(prev.NetworkInterfaces) > 0 ||
 		prev.OSName != "" ||
 		prev.OSVersion != "" {
-		return true
+		return prev.LastSeen
 	}
 
 	if len(prev.Disks) > 0 && !strings.HasPrefix(prev.DiskStatusReason, "prev-") {
-		return true
+		return prev.LastSeen
 	}
+	return time.Time{}
+}
 
-	return false
+func retainGuestAgentEvidence(prev *models.VM, now time.Time) models.GuestAgentEvidence {
+	evidence := models.GuestAgentEvidence{Explicit: true}
+	renewGuestAgentEvidence(&evidence, guestAgentEvidenceTime(prev), now)
+	return evidence
+}
+
+func renewGuestAgentEvidence(evidence *models.GuestAgentEvidence, observedAt, now time.Time) {
+	if !observedAt.IsZero() && !observedAt.After(now) && observedAt.After(evidence.ObservedAt) {
+		evidence.ObservedAt = observedAt
+	}
 }
 
 func shouldQueryGuestAgent(vmStatus *proxmox.VMStatus, prev *models.VM, now time.Time) bool {
