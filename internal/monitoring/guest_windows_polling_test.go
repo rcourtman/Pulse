@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -83,6 +84,8 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					}
 				}
 				m := guestHistoryObservationMonitor(t)
+				m.alertManager = alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+				t.Cleanup(m.alertManager.Stop)
 				m.config, m.state, m.rateTracker = &config.Config{}, models.NewState(), NewRateTracker()
 				m.guestMetadataLimiter = make(map[string]time.Time)
 				registry := unifiedresources.NewRegistry(nil)
