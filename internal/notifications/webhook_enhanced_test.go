@@ -36,7 +36,7 @@ func TestEnhancedWebhook(t *testing.T) {
 	status, resp, err := nm.TestEnhancedWebhook(webhook)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "ok", resp)
+	assert.Equal(t, "Response body withheld (2 bytes read)", resp)
 }
 
 func TestGotifyPresetTestDelivery(t *testing.T) {
@@ -75,7 +75,7 @@ func TestGotifyPresetTestDelivery(t *testing.T) {
 	status, response, err := nm.TestEnhancedWebhook(BuildEnhancedWebhookTestConfig(basic, "gotify"))
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
-	assert.JSONEq(t, `{"id":1}`, response)
+	assert.Equal(t, "Response body withheld (8 bytes read)", response)
 }
 
 func TestShouldSendWebhook(t *testing.T) {
