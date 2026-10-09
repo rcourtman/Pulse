@@ -46,11 +46,13 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 							fmt.Fprint(w, `{"data":{"result":[]}} {}`)
 							return
 						}
-						if kind == "server error" || kind == "gateway error" {
-							status := http.StatusInternalServerError
-							if kind == "gateway error" {
-								status = http.StatusBadGateway
-							}
+						if status := map[string]int{
+							"server error":           http.StatusInternalServerError,
+							"gateway error":          http.StatusBadGateway,
+							"conflict response":      http.StatusConflict,
+							"too early response":     http.StatusTooEarly,
+							"client closed response": 499,
+						}[kind]; status != 0 {
 							w.WriteHeader(status)
 							fmt.Fprint(w, "upstream unavailable")
 							return

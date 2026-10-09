@@ -573,8 +573,12 @@ consistency, not native payload-to-command provenance, thaw, cross-process
 coordination or restart safety. The native recovery precaution below remains.
 
 The completed-error boundary uses the actual HTTP status retained by the request
-layer, not an `API error` phrase in provider or proxy text. HTTP 408 and
-unexplained server/proxy failures (including PVE 595) retain the same per-VM
+layer, not an `API error` phrase in provider or proxy text. The supported
+explicit request/access/command refusals (HTTP 400, 401, 403, 404, 405, 422 and
+429) remain errors, never successful observations. Other client-error statuses,
+including conflict/early-request responses and non-standard client-disconnect
+statuses, cannot establish command completion merely by belonging to HTTP 4xx.
+HTTP 408 and unexplained server/proxy failures (including PVE 595) retain the same per-VM
 uncertainty cooldown, even when their bodies finish: command completion is still
 unverified. Another method, diagnostic client or configured cluster alias cannot
 immediately send a command. Only complete, exact command-bound terminal QGA
@@ -591,6 +595,14 @@ independent status counters and cross-client cooldown; cluster and semantic
 controls pin no failover, definitive refusals and conservative error provenance.
 The connected transport/History lifecycle and counter-receipt controls also
 cover complete server/gateway failures without refreshing old guest evidence.
+`TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead` and its alias/resumption
+control cover fourteen unrecognised 4xx statuses across all six readers, fixed
+wire-status preservation, no follow-up command/config work, independent VM and
+endpoint admission, normal post-cooldown admission and unchanged endpoint health.
+`TestGuestAgentUnrecognisedHTTPStatusContract` connects conflict, early-request
+and client-disconnect responses to polling, last-known disk/memory continuity,
+unrenewed metadata/memory caches and History while live CPU advances. These
+synthetic checks are not a diagnosis of a frozen guest or native recovery.
 
 Guest commands also prevent transport-level replay: each uses a fresh single-use
 HTTP/1 connection, with no pooled-connection or HTTP/2-stream retries and no

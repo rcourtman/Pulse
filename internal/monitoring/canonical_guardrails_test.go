@@ -3251,6 +3251,10 @@ func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 	}
 }
 
+func TestGuestAgentUnrecognisedHTTPStatusContract(t *testing.T) {
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "conflict response", "too early response", "client closed response")
+}
+
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 	for _, reason := range []string{"agent-redirect", "agent-transport-unverified", "agent-completion-unverified"} {
 		for _, prefix := range []string{"", "prev-"} {
