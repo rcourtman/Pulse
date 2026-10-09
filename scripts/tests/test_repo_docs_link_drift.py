@@ -76,7 +76,9 @@ def should_skip(rel_path: str) -> bool:
 
 def link_offenders(rel_path: str, content: str) -> list[str]:
     for allowed_url in ALLOWED_BRANCH_TIP_DOC_URLS:
-        content = content.replace(allowed_url, "")
+        content = re.sub(
+            re.escape(allowed_url) + r"(?=$|[\s\"')>\]])", "", content
+        )
     if rel_path == TEMPLATE_GUIDANCE_PATH:
         content = re.sub(
             re.escape(TEMPLATE_GUIDANCE_URL) + r"(?=$|[\s\"')>\]])", "", content
@@ -127,6 +129,32 @@ class RepoDocsLinkDriftTest(unittest.TestCase):
     def test_existing_current_triage_disclosure_exception_is_preserved(self) -> None:
         for link in ALLOWED_BRANCH_TIP_DOC_URLS:
             self.assertEqual(link_offenders("scripts/triage.py", link), [])
+
+    def test_current_contribution_policy_is_allowed_only_in_the_pr_template(self) -> None:
+        policy_url = TEMPLATE_GUIDANCE_URL
+        link = f"[Sharing a tested patch]({policy_url})."
+        self.assertEqual(link_offenders(".github/PULL_REQUEST_TEMPLATE.md", link), [])
+        for runtime_path in ("frontend-modern/src/help.ts", "internal/api/help.go", ".github/workflows/release.yml"):
+            with self.subTest(path=runtime_path):
+                self.assertTrue(link_offenders(runtime_path, link))
+
+    def test_policy_exception_does_not_allow_other_or_extended_branch_tip_links(self) -> None:
+        policy_url = TEMPLATE_GUIDANCE_URL
+        for url in (
+            "https://github.com/rcourtman/Pulse/blob/main/docs/API.md",
+            policy_url.replace("main", "master"),
+            policy_url.replace("Pulse", "AnotherRepo"),
+            policy_url.replace("#sharing-a-tested-patch", "#another-anchor"),
+            policy_url + "?extra=1",
+            policy_url + "-extra",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(link_offenders(".github/PULL_REQUEST_TEMPLATE.md", f"[Guide]({url})"))
+        self.assertFalse(should_skip(".github/PULL_REQUEST_TEMPLATE.md"))
+
+    def test_standing_triage_disclosure_remains_allowed(self) -> None:
+        for url in ALLOWED_BRANCH_TIP_DOC_URLS:
+            self.assertEqual(link_offenders("internal/api/help.go", f"[Triage]({url})"), [])
 
     def test_runtime_files_do_not_reference_branch_tip_docs(self) -> None:
         offenders: list[str] = []
