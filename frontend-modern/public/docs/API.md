@@ -58,7 +58,7 @@ pulse_api() (
   set -eu
   umask 077
   if [ "$#" -ne 2 ]; then
-    printf 'Usage: pulse_api GET|POST /api/path\n' >&2
+    printf 'Usage: pulse_api GET|POST|PUT|DELETE /api/path\n' >&2
     exit 2
   fi
   method=$1
@@ -70,7 +70,9 @@ pulse_api() (
   case "$method" in
     GET) set -- ;;
     POST) set -- --header 'Content-Type: application/json' --request POST --data-binary @- ;;
-    *) printf 'This example helper accepts only GET and POST.\n' >&2; exit 2 ;;
+    PUT) set -- --header 'Content-Type: application/json' --request PUT --data-binary @- ;;
+    DELETE) set -- --request DELETE ;;
+    *) printf 'This example helper accepts only GET, POST, PUT and DELETE.\n' >&2; exit 2 ;;
   esac
   auth_dir="$HOME/.config/pulse"
   auth_file="$auth_dir/api-header"
@@ -117,6 +119,13 @@ seconds. A partial file after a transport error is not a complete result.
 No request is retried automatically, especially a POST whose outcome is
 uncertain: inspect the existing action and target before deciding what to do.
 A 2xx response is only HTTP success, not proof that an action completed.
+
+The helper also supports the existing [RBAC administration examples](RBAC.md#managing-roles).
+POST and PUT read their JSON body from standard input; GET and DELETE send no
+body. A method being supported is not permission to change a resource. Choose
+each administrative change separately and check its current state afterwards.
+A timeout or incomplete response can occur **after a change was applied**;
+do not repeat a POST, PUT or DELETE merely because the response was lost.
 
 Keep `--disable` first: it ignores local curl configuration that could enable
 trace output, bypass TLS or follow redirects. On an authentication-enabled

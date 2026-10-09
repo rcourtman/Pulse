@@ -366,6 +366,39 @@ class APIAuthDocsTest(unittest.TestCase):
                     self.assertEqual(result.returncode, exitcode, result.stderr.decode())
                     self.assertEqual(len(requests), 1, "uncertain POST must not be repeated or redirected")
 
+    def test_shared_helper_preserves_method_and_body_for_existing_admin_operations(self):
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
+            for method in ("GET", "POST", "PUT", "DELETE"):
+                with self.subTest(method=method):
+                    call = f"pulse_api {method} /api/admin/roles <<'JSON'\n{{\"fixture\":true}}\nJSON\n"
+                    result = self.run_documented_request(Path(temporary), "X-API-Token: " + TEST_TOKEN,
+                                                         port, request_helper() + "\n" + call)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    path, headers, sent_method, body = requests[-1]
+                    self.assertEqual((sent_method, path), (method, "/api/admin/roles"))
+                    if method in ("POST", "PUT"):
+                        self.assertEqual(headers["Content-Type"], "application/json")
+                        self.assertEqual(json.loads(body), {"fixture": True})
+                    else:
+                        self.assertEqual(body, b"")
+                        self.assertNotIn("Content-Type", headers)
+            self.assertEqual(len(requests), 4)
+
+    def test_shared_helper_refuses_unsupported_methods_urls_and_missing_auth_before_transport(self):
+        with recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
+            env = dict(os.environ, HOME=temporary)
+            for call, expected_exit in (("pulse_api PATCH /api/admin/roles", 2),
+                                        ("pulse_api GET https://example.invalid/api/admin/roles", 2),
+                                        ("pulse_api DELETE", 2),
+                                        ("pulse_api DELETE /api/admin/roles/unused", 1)):
+                with self.subTest(call=call):
+                    command = (request_helper() + "\n" + call).replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
+                    result = subprocess.run(["bash", "-eu", "-c", command], env=env,
+                                            capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                    self.assertEqual(requests, [])
+                    self.assertFalse((Path(temporary) / ".config").exists())
+
     def test_private_response_assertion_rejects_console_output_regression(self):
         request = commands()[1]
         self.assertEqual(request.count('--output "$result_file" '), 1)
