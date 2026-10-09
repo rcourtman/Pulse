@@ -1231,9 +1231,11 @@ describe('memory selection preserves displayed observation provenance', () => {
   );
 
   it('keeps current memory independent of QEMU disk-read deferral', () => {
-    const value = guest('current', 90);
-    value.diskStatusReason = 'prev-vm-locked';
-    value.lock = 'backup';
+    const value = {
+      ...guest('current', 90),
+      diskStatusReason: 'prev-vm-locked',
+      lock: 'backup',
+    };
     const compare = createWorkloadSortComparator('memory', 'desc')!;
     expect([guest('low', 10), value].sort(compare).map((row) => row.id)).toEqual([
       'current',
