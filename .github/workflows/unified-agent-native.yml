@@ -162,9 +162,38 @@ jobs:
         if: runner.os == 'Linux'
         run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
 
+      # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
+      # Keep their supported Bash/GNU metadata semantics local to that step;
+      # native macOS agent/runtime tests still use the runner's own utilities.
+      - name: Supply Linux server installer fixture tools on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install bash
+          linux_bash="$(brew --prefix bash)/bin/bash"
+          test -x "$linux_bash"
+          "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
+          coreutils_bin="$(brew --prefix coreutils)/bin"
+          fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
+          ln -s "$linux_bash" "$fixture_bin/bash"
+          for tool in stat chmod chown; do
+            executable="$coreutils_bin/g$tool"
+            test -x "$executable"
+            "$executable" --version | grep -q 'GNU coreutils'
+            ln -s "$executable" "$fixture_bin/$tool"
+          done
+          printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
+
       - name: Test native Unix installer contracts
         if: matrix.unix
-        run: go test ./scripts/installtests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
+            export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
+          fi
+          python3 scripts/installtests/run_unix_contracts.py
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}

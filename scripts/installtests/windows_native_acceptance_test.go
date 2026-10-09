@@ -9,6 +9,9 @@ import (
 )
 
 func windowsNativeAcceptanceContract(harness string, steps []nativeWindowsExitStep) error {
+	// Git's native Windows checkout can use CRLF. Check the same statements
+	// and ordering, rather than mistaking a line terminator for a missing gate.
+	harness = strings.ReplaceAll(harness, "\r\n", "\n")
 	for _, needle := range []string{
 		`$PSVersionTable.PSEdition -ne 'Desktop'`,
 		`$PSVersionTable.PSVersion.Major -ne 5`,
@@ -55,7 +58,7 @@ func TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	harness := string(content)
+	harness := strings.ReplaceAll(string(content), "\r\n", "\n")
 	steps := nativeWindowsExitSteps(t)
 	if err := windowsNativeAcceptanceContract(harness, steps); err != nil {
 		t.Fatal(err)
@@ -74,8 +77,12 @@ func TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence(t *testin
 		"Assert-LifecycleAgentAbsent\n    $previousDisableAutoUpdate = [Environment]::GetEnvironmentVariable",
 	} {
 		t.Run(needle, func(t *testing.T) {
-			if err := windowsNativeAcceptanceContract(strings.Replace(harness, needle, "", 1), steps); err == nil {
-				t.Fatal("accepted removed engine, readback or repeated-uninstall boundary")
+			for _, ending := range []string{"\n", "\r\n"} {
+				changed := strings.Replace(harness, needle, "", 1)
+				changed = strings.ReplaceAll(changed, "\n", ending)
+				if err := windowsNativeAcceptanceContract(changed, steps); err == nil {
+					t.Fatal("accepted removed engine, readback or repeated-uninstall boundary")
+				}
 			}
 		})
 	}
@@ -109,6 +116,33 @@ func TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence(t *testin
 			t.Fatal("accepted original single-uninstall suppressed-read proof")
 		}
 		t.Log("rejected complete supplied parent lifecycle harness")
+	}
+}
+
+func TestWindowsAgentLifecycleAcceptancePreservesBoundariesWithCRLF(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	harness := strings.ReplaceAll(string(content), "\r\n", "\n")
+	steps := nativeWindowsExitSteps(t)
+	for name, ending := range map[string]string{"LF": "\n", "CRLF": "\r\n"} {
+		t.Run(name, func(t *testing.T) {
+			if err := windowsNativeAcceptanceContract(strings.ReplaceAll(harness, "\n", ending), steps); err != nil {
+				t.Fatal(err)
+			}
+			// Normalisation must not collapse statements or forgive a missing
+			// preflight/reset. Both multi-line gates stay independently required.
+			for _, needle := range []string{
+				"$restoreAutoUpdateAtExit = $false",
+				"Assert-LifecycleAgentAbsent\n    $previousDisableAutoUpdate",
+			} {
+				changed := strings.Replace(harness, needle, "", 1)
+				if err := windowsNativeAcceptanceContract(strings.ReplaceAll(changed, "\n", ending), steps); err == nil {
+					t.Fatal("line-ending handling erased a safety boundary")
+				}
+			}
+		})
 	}
 }
 

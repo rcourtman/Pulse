@@ -639,10 +639,48 @@ func TestInstallPS1ServiceRemovalRuntime(t *testing.T) {
 		repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"),
 		"-InstallerPath", repoFile("scripts", "install.ps1"))
 	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil || !strings.Contains(string(output), "PASS all 13 production service-removal controls") {
 		t.Fatalf("production service-removal controls failed: %v\n%s", err, output)
 	}
 	t.Logf("%s", output)
+}
+
+func windowsRemovalFixtureContract(fixture string) error {
+	load := strings.Index(fixture, "Add-Type -AssemblyName System.ServiceProcess")
+	extract := strings.Index(fixture, "foreach ($name in @('Get-PulseService', 'Remove-PulseService'))")
+	if load < 0 || extract <= load ||
+		!strings.Contains(fixture, "$ExpectedStatus -is [System.ServiceProcess.ServiceControllerStatus]") {
+		return fmt.Errorf("SCM double must load and check the real service-status enum before production controls")
+	}
+	return nil
+}
+
+func TestInstallPS1ServiceRemovalFixtureLoadsRealControllerEnum(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := string(content)
+	if err := windowsRemovalFixtureContract(fixture); err != nil {
+		t.Fatal(err)
+	}
+	for _, boundary := range []string{"Add-Type -AssemblyName System.ServiceProcess", "$ExpectedStatus -is [System.ServiceProcess.ServiceControllerStatus]"} {
+		t.Run(boundary, func(t *testing.T) {
+			if err := windowsRemovalFixtureContract(strings.Replace(fixture, boundary, "", 1)); err == nil {
+				t.Fatal("accepted an unloaded or simulated enum")
+			}
+		})
+	}
+	if parentPath := os.Getenv("PULSE_WINDOWS_REMOVAL_FIXTURE_PARENT"); parentPath != "" {
+		parent, err := os.ReadFile(parentPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windowsRemovalFixtureContract(string(parent)); err == nil {
+			t.Fatal("accepted the exact parent's missing assembly precondition")
+		}
+		t.Log("rejected supplied parent fixture without the real enum precondition")
+	}
 }
 
 func windowsRemovalContract(script string) error {
