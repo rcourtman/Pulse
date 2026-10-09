@@ -13,6 +13,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
+import { getWorkloadHistoryNodeId } from './workloadTopology';
 
 import {
   buildInfrastructureHistoryChartMap,
@@ -35,6 +36,7 @@ interface WorkloadTableMetricHistoryOptions {
   prefetchGuests?: Accessor<readonly WorkloadGuest[]>;
   range: Accessor<WorkloadTableMetricHistoryRange>;
   selectedNode?: Accessor<string | null | undefined>;
+  nodes?: Accessor<Node[]>;
   // The rows this caller draws while `enabled`. Each estate-wide history is a
   // polled summary read, so a reader polls only the one its rows consume:
   // guest rows read the workloads summary, node rows the infrastructure
@@ -114,7 +116,10 @@ export function useWorkloadTableMetricHistory(
   const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode?.()));
   const workloadHistoryScope = createMemo(() => {
     if (options.series !== 'guests' || !options.enabled()) return null;
-    return buildHistoryScope(options.range(), selectedNodeScope());
+    return buildHistoryScope(
+      options.range(),
+      getWorkloadHistoryNodeId(selectedNodeScope(), options.nodes?.()),
+    );
   });
   const infrastructureHistoryScope = createMemo(() =>
     options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null,

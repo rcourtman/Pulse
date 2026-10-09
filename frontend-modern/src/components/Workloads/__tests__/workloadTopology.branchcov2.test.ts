@@ -41,24 +41,24 @@ describe('workloadTopology (branch coverage 2)', () => {
     it('exercises both `|| ""` fallback arms when instance and node are empty strings', () => {
       const guest = makeGuest(1, { instance: '', node: '' });
       // (guest.instance || '') and (guest.node || '') both take the falsy arm.
-      expect(workloadNodeScopeId(guest)).toBe('-');
+      expect(workloadNodeScopeId(guest)).toBe('');
     });
 
     it('keeps a present instance and falls back to empty for a missing node', () => {
       const guest = makeGuest(1, { instance: 'only-inst', node: '' });
       // instance truthy arm + node `|| ""` fallback arm.
-      expect(workloadNodeScopeId(guest)).toBe('only-inst-');
+      expect(workloadNodeScopeId(guest)).toBe('node|only-inst|');
     });
 
     it('falls back to empty for a missing instance and keeps a present node', () => {
       const guest = makeGuest(1, { instance: '', node: 'only-node' });
       // instance `|| ""` fallback arm + node truthy arm.
-      expect(workloadNodeScopeId(guest)).toBe('-only-node');
+      expect(workloadNodeScopeId(guest)).toBe('node||only-node');
     });
 
     it('trims whitespace on both segments when both are present', () => {
       const guest = makeGuest(1, { instance: '  inst  ', node: ' \tnode\t' });
-      expect(workloadNodeScopeId(guest)).toBe('inst-node');
+      expect(workloadNodeScopeId(guest)).toBe('node|inst|node');
     });
   });
 

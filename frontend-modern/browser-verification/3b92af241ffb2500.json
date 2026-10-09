@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "0c2a59986f88995f450a6613f54be5dfb5c51de0",
+  "verified_at": "2026-10-09T20:28:36.254Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadRouteModel.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "4ad3f504a50e548b7e85c2fe2dda20c4b1e1378b83b9abaf21d134e8126aa599",
+    "frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts": "5208ac125a2fc5b74c72e3cdf9f633ef43165b361acb1fa92a2b59161ca5ca4f",
+    "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts": "31839101d1d05429ade678e14eea951f2e2f90918f58d7862c6e1089faeae922",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "a94083c394865dc4d3a3c86020712846723e33765fe6b43e11c785ca65494aef",
+    "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts": "5abc4ebb20cb91ab9e2cde2872b8c0e2a6173338bc188317d0ad5848f4db6dc1",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "991fbadea0c5340c91e3c14d430dcd44a79c0ccc5cc601b99646e70437dd8d9b",
+    "frontend-modern/src/components/Workloads/workloadRouteModel.ts": "afd1778bf31cd50bdaf4fb2918271781081e8ee65fe4314885b9d8c012715ea2",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "cbbb572ef0a6f8dce2441352cf192a07a1e7ea6dc734e92d8240bb0218bba783",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts": "7ec4c6a86abbf537ca40464e877038d87dc46e8ab1a2147fed96fd1c25310e4f"
+  },
+  "routes": [
+    "/proxmox?tab=workloads",
+    "/proxmox?tab=workloads&agent=node%7Clab%7Ceast-pve1",
+    "/proxmox?tab=workloads&agent=lab-east-pve1",
+    "/proxmox?tab=workloads&agent=east-pve1"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Synthetic canonical resources and supplied nodes through real useWorkloadsState/WorkloadsFilter/WorkloadsSurface/WorkloadPanel/GuestRow with production CSS; not full authenticated App, backend or native acceptance.",
+    "Two supplied nodes share native ID lab-east-pve1 but have distinct instance/node tuples; grouped and flat guest rows retain own offline/running state and 13% of 8 GiB versus 3% of 32 GiB host-memory basis.",
+    "Light/dark desktop Chromium and mobile WebKit; ten final captures visually inspected.",
+    "Missing or duplicated parent withholds host-memory share as N/A; restoration resumes exact parent.",
+    "Ambiguous legacy bookmark remains visible removable Node filter with filtered-empty copy."
+  ],
+  "interactions": [
+    "distinct tuple groups; each row uses its own node power and host-memory denominator",
+    "inventory order cannot change parent attribution or remount the canonical row",
+    "flat rows retain the same validated parent",
+    "real Node filter selects only its tuple and serialises an unambiguous bookmark",
+    "scoped bookmark survives reload through production URL sync",
+    "missing/duplicated parent withholds host share; exact-parent restoration restores it",
+    "ambiguous legacy bookmark stays a visible removable filter, not a first-node selection or inventory outage; clearing restores both rows",
+    "unambiguous existing node-name hint still selects its node",
+    "Inspect all ten final screenshots; no horizontal overflow, browser/page errors or mutating synthetic API requests; browser and loopback server closed."
+  ]
+}

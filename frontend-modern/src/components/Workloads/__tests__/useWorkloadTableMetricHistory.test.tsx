@@ -317,4 +317,39 @@ describe('useWorkloadTableMetricHistory', () => {
       expect(screen.getByTestId('active-history-value')).toHaveTextContent('20');
     });
   });
+  it('resolves scoped selections to native chart IDs and drops ambiguous native filters', async () => {
+    const scopedNode = { ...node, id: 'native-b', instance: 'lab', name: 'east-pve1' };
+    const [inventory, setInventory] = createSignal<Node[]>([scopedNode]);
+    const workloadSpy = vi.spyOn(ChartsAPI, 'getWorkloadCharts').mockResolvedValue({
+      data: {},
+      dockerData: {},
+      guestTypes: {},
+      timestamp: 2,
+      stats: { oldestDataTimestamp: 1 },
+    });
+    render(() => {
+      useWorkloadTableMetricHistory({
+        enabled: () => true,
+        range: () => '1h',
+        series: 'guests',
+        selectedNode: () => 'node|lab|east-pve1',
+        nodes: inventory,
+      });
+      return <div />;
+    });
+    await waitFor(() =>
+      expect(workloadSpy).toHaveBeenCalledWith('1h', expect.any(AbortSignal), {
+        maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
+        nodeId: 'native-b',
+      }),
+    );
+    setInventory([scopedNode, { ...scopedNode, instance: 'lab-east', name: 'pve1' }]);
+    await waitFor(() =>
+      expect(workloadSpy).toHaveBeenLastCalledWith('1h', expect.any(AbortSignal), {
+        maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS,
+        nodeId: undefined,
+      }),
+    );
+    expect(workloadSpy).toHaveBeenCalledTimes(2);
+  });
 });
