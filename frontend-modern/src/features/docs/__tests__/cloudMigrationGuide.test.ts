@@ -30,7 +30,9 @@ describe('Cloud configuration-transfer help', () => {
       const heading = [...guide.querySelectorAll('h3')].find((node) => text(node) === name);
       expect(heading?.nextElementSibling?.tagName).toBe('OL');
       expect(heading?.nextElementSibling?.querySelectorAll('li')).toHaveLength(5);
-      expect(text(heading!.nextElementSibling!)).toContain('destination-local administrator access');
+      expect(text(heading!.nextElementSibling!)).toContain(
+        'destination-local administrator access',
+      );
       expect(text(heading!.nextElementSibling!)).toContain('API-token records');
     }
     expect(text(guide)).toContain('single-active cutover before importing');
@@ -55,7 +57,9 @@ describe('Cloud configuration-transfer help', () => {
       expect(link?.hasAttribute('data-doc-link')).toBe(true);
       expect(article(name).querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
-    expect(guide.querySelector('a[href="#verify-the-move-before-retiring-the-source"]')).not.toBeNull();
+    expect(
+      guide.querySelector('a[href="#verify-the-move-before-retiring-the-source"]'),
+    ).not.toBeNull();
     expect(guide.querySelector('#verify-the-move-before-retiring-the-source')).not.toBeNull();
   });
 });
