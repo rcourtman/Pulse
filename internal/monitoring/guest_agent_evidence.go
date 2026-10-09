@@ -35,7 +35,10 @@ func guestAgentEvidenceTime(prev *models.VM) time.Time {
 	}
 
 	if len(prev.Disks) > 0 && !strings.HasPrefix(prev.DiskStatusReason, "prev-") {
-		return prev.LastSeen
+		// Disk provenance was available before query eligibility had its own
+		// annotation. Do not import a known linked-agent or unknown-age reading
+		// as fresh QGA evidence just because the legacy VM row was refreshed.
+		return guestDiskObservationTime(prev)
 	}
 	return time.Time{}
 }

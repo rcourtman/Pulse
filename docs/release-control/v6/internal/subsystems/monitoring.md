@@ -24,7 +24,9 @@ useful guest metadata can establish fallback query eligibility. A later poll
 that preserves optional IP/OS/version strings does not renew that evidence.
 Internal `GuestAgentEvidence` crosses model, canonical and previous-state
 snapshots, including an explicit missing origin. Legacy direct snapshots import
-their receipt once; expired, missing and future origins cannot admit a fallback.
+their receipt once, while already annotated disk-only evidence uses its recorded
+filesystem origin, never a linked-agent origin or renewed VM receipt. Expired,
+missing and future origins cannot admit a fallback.
 The existing ten-minute boundary, authoritative unavailable status, metadata
 backoff and every-command backup-lock/shared uncertainty fences remain intact.
 Cached display identity remains available, but cannot upgrade a failed/empty

@@ -53,6 +53,23 @@ func testGuestAgentEvidenceOriginalAge(t *testing.T) {
 	if m.hasRecentGuestMetadataEvidence("pve", "node", 105, now) {
 		t.Fatal("future metadata admitted a guest query")
 	}
+	for _, tc := range []struct {
+		name string
+		disk models.GuestDiskObservation
+		want bool
+	}{
+		{"legacy-disk-only-original", models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-time.Minute)}, true},
+		{"legacy-disk-only-expired", models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-20 * time.Minute)}, false},
+		{"legacy-disk-only-unknown", models.GuestDiskObservation{Source: "guest-agent"}, false},
+		{"legacy-linked-agent-is-not-QGA", models.GuestDiskObservation{Source: "agent", ObservedAt: now}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prev := models.VM{Type: "qemu", LastSeen: now, Disks: []models.Disk{{Total: 1000, Used: 200}}, DiskObservation: tc.disk}
+			if got := hasRecentGuestAgentEvidence(&prev, now); got != tc.want {
+				t.Errorf("disk-only legacy eligibility=%t want=%t", got, tc.want)
+			}
+		})
+	}
 }
 
 func testGuestAgentEvidenceCanonicalContinuity(t *testing.T) {
