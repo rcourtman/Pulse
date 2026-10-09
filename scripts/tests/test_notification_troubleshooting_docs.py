@@ -188,6 +188,53 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         guide = (ROOT / "docs/WEBHOOKS.md").read_text()
         self.assertIn("TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty", guide)
 
+    def test_withheld_webhook_reply_preserves_verdict_and_unknown_receipt(self):
+        help_text = " ".join(section("Webhook response body is withheld", 4).split())
+        sender = (ROOT / "internal/notifications/webhook_response.go").read_text()
+        # Bind the help to the actual receiver-text boundary, not a generic
+        # claim that every error or export has been sanitised.
+        for marker in ("response body withheld", "details withheld", "Response body withheld",
+                       "read incomplete", "read limit reached"):
+            self.assertIn(marker, sender)
+            self.assertIn(marker, help_text)
+        for distinction in (
+            "deliberate privacy messages", "not the receiver's explanation",
+            "withholding alone does not mean that delivery failed", "HTTP 429",
+            "receiver may already have accepted the request", "retrying can duplicate",
+            "Neither HTTP 2xx nor a completed Test proves receipt", "queued alert delivery",
+            "not the response's contents or total size", "1 MiB",
+            "not proof that the response exceeded that cap", "complete empty reply",
+            "not byte counts of the alert Pulse sent", "Unknown receipt remains unknown",
+        ):
+            self.assertIn(distinction, help_text)
+        self.assertNotRegex(help_text, r"```|https?://|\bcurl\b|--token")
+
+    def test_withheld_reply_help_keeps_historical_evidence_private_without_replay(self):
+        help_text = " ".join(section("Webhook response body is withheld", 4).split())
+        for boundary in (
+            "Do not enable Debug, capture raw traffic", "weaken a safeguard",
+            "send another Test or queue retry", "receiver's existing record locally",
+            "normal authorised access", "manually redacted explanation",
+            "not response bodies, headers, payloads or credentials", "not replay",
+            "not retroactively scrubbed", "does not sanitise every other error or export",
+            "#inspect-notification-logs",
+        ):
+            self.assertIn(boundary, help_text)
+        link = "TROUBLESHOOTING.md#webhook-response-body-is-withheld"
+        guide = (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.assertIn(link, guide)
+        self.assertIn("#webhook-response-body-is-withheld", section("Recover retained delivery failures", 4))
+        triage = " ".join((ROOT / "docs/ISSUE_TRIAGE.md").read_text().split())
+        for boundary in (
+            "not missing evidence to request from a reporter", "supplied HTTP status",
+            "does not prove the receiver rejected the request", "not the sent payload size",
+            "never a raw response, Debug capture or replay", "not retroactively scrubbed",
+        ):
+            self.assertIn(boundary, triage)
+        for name in ("WEBHOOKS.md", "ISSUE_TRIAGE.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+
     def test_pause_is_cancellation_not_catchup_or_remote_containment(self):
         limits = " ".join(section("Pause and cancellation limits", 4).split())
         for boundary in (

@@ -922,10 +922,13 @@ without exhausting the retry budget; waiting alone will not resend it. See
 transient failures and the normal queued attempt limit.
 
 **Recent delivery activity** masks recognised credentials in URLs, **not all
-private information**. Provider error text can still include email addresses,
-private destinations or credentials echoed outside a URL; alert identifiers and
-resource names can also identify your infrastructure. Keep full entries, copied
-responses and screenshots private. A `REDACTED` marker does not make the rest
+private information**. Older records and other error sources can still include
+email addresses, private destinations or credentials echoed outside a URL;
+alert identifiers and resource names can also identify your infrastructure.
+Withheld webhook response text is intentional, not a reason to collect it again;
+see [withheld-response guidance](#webhook-response-body-is-withheld).
+Keep full entries, copied responses and screenshots private.
+A `REDACTED` marker does not make the rest
 safe to share. For a public report, extract only the relevant timestamp,
 delivery method, failure class, HTTP status or SMTP error code and a manually
 redacted error. See [notification log precautions](#inspect-notification-logs).
@@ -1015,6 +1018,39 @@ can echo credentials or private content in its response; do not post it wholesal
 or enable debug logging just to collect it. If needed, inspect
 [bounded notification logs](#inspect-notification-logs) and share only the
 consequential, manually redacted error.
+
+#### Webhook response body is withheld
+
+`response body withheld`, `details withheld` and **Response body withheld**
+are deliberate privacy messages, not the receiver's explanation of a failure.
+Alert-webhook receivers can echo tokens, alert content or private provider data
+in their replies. Pulse discards that response text instead of copying it into
+delivery errors, logs or a Test result. Do not enable Debug, capture raw traffic,
+weaken a safeguard or send another Test or queue retry to recover the text.
+
+Use the original timestamp, destination type, failure class and HTTP status
+from **Recent delivery activity**. An HTTP rejection still matters when its
+body is withheld; withholding alone does not mean that delivery failed.
+For example, HTTP 429 is still rate limiting, not missing diagnostic data.
+If the error says **failed to read response body**, reading the reply failed:
+the receiver may already have accepted the request, so retrying can duplicate
+it. Neither HTTP 2xx nor a completed Test proves receipt at the intended
+destination or the success of queued alert delivery.
+
+A Test summary such as `Response body withheld (128 bytes read)` records only
+how much Pulse read, not the response's contents or total size. **read incomplete**
+means the read failed; **read limit reached** means it reached the **1 MiB** cap,
+not proof that the response exceeded that cap. A complete empty reply may have
+no summary. These are not byte counts of the alert Pulse sent.
+
+If provider-specific detail is consequential, review the receiver's existing
+record locally using its normal authorised access. Share only the relevant
+error code or manually redacted explanation, not response bodies, headers,
+payloads or credentials. Unknown receipt remains unknown; do not replay the
+request to create evidence. Older logs and retained delivery errors are **not
+retroactively scrubbed**, and this safeguard does not sanitise every other error
+or export. Keep those private and follow the
+[log and export precautions](#inspect-notification-logs).
 
 #### Telegram Test works but real alerts say "message text is empty"
 
