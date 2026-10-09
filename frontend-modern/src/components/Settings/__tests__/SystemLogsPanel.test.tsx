@@ -20,6 +20,14 @@ describe('SystemLogsPanel architecture', () => {
     expect(diagnosticsPanelSource).toContain('flex min-h-11 sm:min-h-9 items-center');
     expect(systemLogsPanelSource).toContain('form-select min-h-11 sm:min-h-9');
     expect(systemLogsPanelSource).toContain('min-h-11 sm:min-h-9 min-w-11 sm:min-w-9');
-    expect(systemLogsPanelSource).toContain('min-h-11 sm:min-h-9 flex items-center');
+    expect(systemLogsPanelSource).toContain('size="settingsAction"');
+  });
+
+  it('keeps new lines immediately readable and support download on the themed button', () => {
+    expect(systemLogsPanelSource).not.toContain('animate-enter');
+    expect(systemLogsPanelSource).toContain('<Button');
+    expect(systemLogsPanelSource).toContain('variant="primaryFlat"');
+    expect(systemLogsPanelSource).not.toContain('bg-primary-600');
+    expect(systemLogsPanelSource).toContain('SYSTEM_LOGS_PANEL_COPY.bufferHelp');
   });
 });
