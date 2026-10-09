@@ -447,7 +447,14 @@ firing grouping are unchanged.
 
 Verification: `resolved_grouping_contract_test.go` establishes ordinary firing
 receipts then resolves fifteen alerts in one process, after manager restart,
-and across restart with pending recoveries. It checks unseen-destination and
+and across restart with pending recoveries. Receiver timestamps must respect
+one second from the first admitted occurrence in each group. An emission burst
+completed within that window must stay one group; emission/restart work spanning
+the window is not itself evidence of early delivery. A deliberate late-arrival
+case checks that an expired first group is not extended. Across groups every
+occurrence must appear once, in order within its group, with its start time and
+resolution timestamp intact. The fixture does not change production deadlines,
+rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
 rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
