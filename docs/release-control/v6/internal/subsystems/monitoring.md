@@ -17,6 +17,35 @@
 
 ## Purpose
 
+### Known Windows guests do not receive Linux-only memory reads
+
+An accepted guest OS reply identifying Windows suppresses the optional
+`/proc/meminfo` fallback for that instance/node/VM, including after an earlier
+failure cache expires. The classification has its own original OS observation
+time, bounded by the existing ten-minute guest evidence age; other useful
+network/version replies and retained display strings cannot renew it. Missing,
+future and expired origins do not suppress the existing fallback. A completed
+empty OS reply invalidates the classification; a subsequent Linux reply permits
+ordinary memory polling, including measured zero availability. An accepted OS
+outcome survives a later version-command deferral without publishing partial
+identity or renewing general QGA availability evidence.
+
+This avoids an inapplicable command that can start a shared uncertainty pause.
+It does not invent a negative memory observation or clear an existing pause.
+Independent status/balloon/linked-agent memory, filesystem-first ordering,
+unknown-OS compatibility and all command/backup-lock admission remain intact.
+The first unknown-OS poll can still attempt the existing Linux fallback; this
+change does not add a probe or infer an OS from a display name/configuration hint.
+
+`TestGuestWindowsMeminfoPollingContract` covers the real direct/cluster clients
+and both collectors after an actual OS read: repeated NTFS usage through zero,
+canonical/public read state, in-memory and persistent History, live CPU/memory,
+unchanged original caches, backup-lock deferral and unlocked resumption. Unit
+controls pin exact OS-name boundaries, original age/identity, partial-fetch
+evidence, Linux recovery and cache/source compatibility. These are synthetic
+source controls, not native QEMU-only Windows recovery, thaw, cross-process or
+restart containment, reporter resolution or release acceptance.
+
 ### QGA fallback eligibility keeps its original observation age
 
 A successful unlocked VM-status availability, usable filesystem reading or

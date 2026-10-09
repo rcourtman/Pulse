@@ -3166,6 +3166,10 @@ func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
 	t.Run("recent-evidence-without-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, true) })
 }
 
+func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
+	testGuestWindowsMeminfoPolling(t)
+}
+
 func TestGuestMemoryObservationContract(t *testing.T) {
 	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
 	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)

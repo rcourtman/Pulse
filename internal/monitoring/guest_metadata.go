@@ -44,6 +44,8 @@ type guestMetadataCacheEntry struct {
 	osVersion          string
 	agentVersion       string
 	fetchedAt          time.Time // Last accepted useful metadata, not the last attempt.
+	windowsGuest       bool      // An actual OS reply, not retained display identity.
+	osInfoObservedAt   time.Time // Network/version refreshes cannot renew OS evidence.
 	osInfoFailureCount int       // Track consecutive OS info failures
 	osInfoSkip         bool      // Skip OS info calls after repeated failures (refs #692)
 }
@@ -353,6 +355,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	// Skip OS info calls if we've seen repeated failures (refs #692 - OpenBSD qemu-ga issue)
 	osInfoFailureCount := cached.osInfoFailureCount
 	osInfoSkip := cached.osInfoSkip
+	windowsGuest, osInfoObservedAt := cached.windowsGuest, cached.osInfoObservedAt
 
 	if !osInfoSkip {
 		agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
@@ -394,15 +397,23 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			}
 		} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
 			extractedOSName, extractedOSVersion := extractGuestOSInfo(agentInfo)
+			windowsGuest, osInfoObservedAt = false, time.Time{}
 			if extractedOSName != "" || extractedOSVersion != "" {
 				osName, osVersion = extractedOSName, extractedOSVersion
 				metadataObserved = true
+				windowsGuest = guestOSIsWindows(extractedOSName)
+				osInfoObservedAt = time.Now()
 			}
 			osInfoFailureCount = 0 // Reset on success
 			osInfoSkip = false
-		} else if cached.osName == "" && cached.osVersion == "" {
-			osName = ""
-			osVersion = ""
+		} else {
+			// A complete empty reply is not a new observation of retained OS
+			// strings. Keep those strings for display, not meminfo admission.
+			windowsGuest, osInfoObservedAt = false, time.Time{}
+			if cached.osName == "" && cached.osVersion == "" {
+				osName = ""
+				osVersion = ""
+			}
 		}
 	} else {
 		// Skipping OS info call due to repeated failures
@@ -428,6 +439,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		entry := m.guestMetadataCache[key]
 		entry.osInfoFailureCount = osInfoFailureCount
 		entry.osInfoSkip = osInfoSkip
+		entry.windowsGuest, entry.osInfoObservedAt = windowsGuest, osInfoObservedAt
 		m.guestMetadataCache[key] = entry
 		m.guestMetadataMu.Unlock()
 		m.deferGuestMetadataRetry(key, time.Now())
@@ -461,6 +473,8 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		osVersion:          osVersion,
 		agentVersion:       agentVersion,
 		fetchedAt:          fetchedAt,
+		windowsGuest:       windowsGuest,
+		osInfoObservedAt:   osInfoObservedAt,
 		osInfoFailureCount: osInfoFailureCount,
 		osInfoSkip:         osInfoSkip,
 	}
