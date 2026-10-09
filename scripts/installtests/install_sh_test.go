@@ -4505,6 +4505,15 @@ func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
 	}
 }
 
+// Run the production selectors with bounded, offline transport doubles. This
+// does not run installer main, mutate services or establish native acceptance.
+func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T) {
+	out, err := exec.Command("python3", repoFile("scripts", "tests", "test_server_release_selection.py"), "-v").CombinedOutput()
+	if err != nil {
+		t.Fatalf("server release selection controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
@@ -4566,6 +4575,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		resolve_latest_release_tag_for_channel stable
@@ -4590,6 +4601,8 @@ func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *tes
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		if resolve_latest_release_tag_for_channel stable; then
@@ -4637,6 +4650,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
@@ -4667,7 +4682,7 @@ func TestResolveInstallScriptDownloadURLUsesRCReleaseTag(t *testing.T) {
 	curlStub := `#!/usr/bin/env bash
 for arg in "$@"; do
 	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
-		printf '%s\n' '[{"draft":false,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
+		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
 		exit 0
 	fi
 done
@@ -4684,6 +4699,8 @@ exit 1
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
 		UPDATE_CHANNEL=""
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
 		resolve_install_script_download_url
@@ -5456,6 +5473,8 @@ func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *tes
 		timeout() { return 1; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
@@ -5737,7 +5756,10 @@ exit 1
 		get_latest_release_from_redirect() { return 1; }
 ` + extractRootInstallShellFunction(t, "read_configured_update_channel") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_target_release") + `
 		resolve_target_release
 		printf '%s\n' "$LATEST_RELEASE"

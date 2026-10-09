@@ -7316,3 +7316,30 @@ machine setting. Cleanup restores only the captured prior setting, even when
 owned server teardown fails; an unconfirmed stop fails and retains the handle
 rather than reporting clean teardown. Real Windows execution and full terminal
 cleanup evidence still have to be returned by the existing native CI job.
+
+### Server-only installer release discovery (9 October 2026)
+
+The server installer uses one selector for its installer-script URL and server
+archive target. Automatic discovery admits only published Pulse server tags:
+three numeric version components, optionally followed by `-beta.N` or `-rc.N`.
+Chart-only and unrelated tags never become a server version. Stable additionally
+requires a false prerelease flag and a stable-shaped tag; preview keeps the
+existing published-list order and admits stable releases as well as previews.
+
+Selection consumes one complete top-level JSON array with each selected tag's
+own boolean draft/prerelease fields. Truncated, concatenated or failed transport
+output cannot contribute a tag. Missing or failed jq no longer permits text
+extraction that loses those fields. The existing public-redirect fallback checks
+the same server/channel tag scope; if neither route yields a candidate, discovery
+stops with connectivity/parser and exact-version guidance. Explicit pins and
+cached targets, automatic-downgrade refusal, signature verification, architecture
+admission and service/persistent-state boundaries remain unchanged.
+
+`TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata` executes the real
+sourced selectors with offline transport doubles through the tag, installer URL
+and archive-target consumers. Controls cover chart-before-preview ordering,
+drafts, stable/beta/RC channels, compact/pretty and malformed metadata, missing
+or failed parsers, failed transport with a plausible body, redirects, pins and
+downgrade refusal. Existing extracted-function tests include the shared selector.
+These are source-level selection controls, not native installation, published
+release acceptance or a repair to a third-party community helper.

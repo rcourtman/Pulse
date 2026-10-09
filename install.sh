@@ -340,26 +340,49 @@ is_stable_release_tag() {
     [[ "$tag" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]
 }
 
-latest_stable_release_tag_from_json() {
+is_pulse_release_tag() {
+    local tag="${1:-}"
+    tag="${tag#v}"
+
+    [[ "$tag" =~ ^[0-9]+[.][0-9]+[.][0-9]+(-(beta|rc)[.][0-9]+)?$ ]]
+}
+
+latest_pulse_release_tag_from_json() {
     local releases_json="${1:-}"
+    local channel="${2:-stable}"
     local latest_release=""
 
-    if [[ -z "$releases_json" ]]; then
+    if [[ -z "$releases_json" ]] || [[ "$channel" != stable && "$channel" != rc ]]; then
         return 1
     fi
 
-    if command -v jq >/dev/null 2>&1; then
-        latest_release=$(printf '%s' "$releases_json" | jq -r '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$")))][0].tag_name // empty' 2>/dev/null || true)
-    else
-        latest_release=$(printf '%s' "$releases_json" | grep -oE '"tag_name":[[:space:]]*"v?[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-    fi
+    # Tag-shaped text is not release metadata: regex extraction loses draft
+    # and prerelease ownership. Without a parser, use only the caller's checked
+    # public redirect (or an explicitly pinned version), never a guessed list.
+    command -v jq >/dev/null 2>&1 || return 1
+    latest_release=$(printf '%s' "$releases_json" | jq -er -s --arg channel "$channel" '
+        if length != 1 or (.[0] | type) != "array" then
+            error("Expected one release array")
+        else .[0] end
+        | [.[] | select(type == "object")
+            | select(.draft == false and (.prerelease | type) == "boolean")
+            | select(.tag_name | type == "string")
+            | select(.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+(-(beta|rc)\\.[0-9]+)?\\z"))
+            | select($channel == "rc" or (.prerelease == false
+                and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+\\z"))))]
+        | .[0].tag_name // empty
+    ' 2>/dev/null) || return 1
 
-    if is_stable_release_tag "$latest_release"; then
+    if is_pulse_release_tag "$latest_release"; then
         printf '%s\n' "$latest_release"
         return 0
     fi
 
     return 1
+}
+
+latest_stable_release_tag_from_json() {
+    latest_pulse_release_tag_from_json "${1:-}" stable
 }
 
 read_configured_update_channel() {
@@ -1018,53 +1041,36 @@ repo_web_url() {
 
 resolve_latest_release_tag_for_channel() {
     local channel="${1:-stable}"
-
-    if [[ "$channel" != "rc" ]]; then
-        local releases_json=""
-        local stable_release=""
-
-        if command -v timeout >/dev/null 2>&1; then
-            releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-        else
-            releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-        fi
-
-        stable_release=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
-        if [[ -n "$stable_release" ]]; then
-            printf '%s\n' "$stable_release"
-            return 0
-        fi
-
-        stable_release=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if is_stable_release_tag "$stable_release"; then
-            printf '%s\n' "$stable_release"
-            return 0
-        fi
-
-        return 1
-    fi
-
     local releases_json=""
-    if command -v timeout >/dev/null 2>&1; then
-        releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    else
-        releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    fi
+    local release=""
 
-    local rc_release=""
-    if [[ -n "$releases_json" ]]; then
-        if command -v jq >/dev/null 2>&1; then
-            rc_release=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
-        else
-            rc_release=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+    [[ "$channel" == stable || "$channel" == rc ]] || return 1
+    if command -v timeout >/dev/null 2>&1; then
+        if ! releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+            releases_json=""
+        fi
+    else
+        if ! releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+            releases_json=""
         fi
     fi
 
-    if [[ -z "$rc_release" || "$rc_release" == "null" ]]; then
-        return 1
+    release=$(latest_pulse_release_tag_from_json "$releases_json" "$channel" 2>/dev/null || true)
+    if [[ -n "$release" ]]; then
+        printf '%s\n' "$release"
+        return 0
     fi
 
-    printf '%s\n' "$rc_release"
+    release=$(get_latest_release_from_redirect 2>/dev/null || true)
+    if [[ "$channel" == rc ]] && is_pulse_release_tag "$release"; then
+        printf '%s\n' "$release"
+        return 0
+    elif [[ "$channel" == stable ]] && is_stable_release_tag "$release"; then
+        printf '%s\n' "$release"
+        return 0
+    fi
+
+    return 1
 }
 
 repo_release_docs_ref() {
@@ -3298,40 +3304,12 @@ resolve_target_release() {
         fi
     fi
 
-    local releases_json=""
-    if command -v timeout >/dev/null 2>&1; then
-        releases_json=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    else
-        releases_json=$(curl -s --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    fi
-
-    if [[ -n "$releases_json" ]]; then
-        if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
-            # Prerelease channel: get latest release (including prereleases, but skip drafts)
-            if command -v jq >/dev/null 2>&1; then
-                LATEST_RELEASE=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
-            else
-                LATEST_RELEASE=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
-        else
-            LATEST_RELEASE=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
-        fi
-    fi
+    # Installer-script URLs and server archives must select the same release.
+    LATEST_RELEASE=$(resolve_latest_release_tag_for_channel "$UPDATE_CHANNEL" 2>/dev/null || true)
 
     if [[ -z "$LATEST_RELEASE" ]]; then
-        print_info "GitHub API unavailable, trying alternative method..."
-        local redirect_version=""
-        redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if [[ "$UPDATE_CHANNEL" == "rc" && -n "$redirect_version" ]]; then
-            LATEST_RELEASE="$redirect_version"
-        elif is_stable_release_tag "$redirect_version"; then
-            LATEST_RELEASE="$redirect_version"
-        fi
-    fi
-
-    if [[ -z "$LATEST_RELEASE" ]]; then
-        print_error "Could not determine the latest Pulse release from GitHub"
-        print_info "GitHub may be unreachable or rate limiting. Retry later, or pin the release explicitly:"
+        print_error "Could not determine a published Pulse server release for the $UPDATE_CHANNEL channel"
+        print_info "Check GitHub connectivity and that jq is installed, or pin the release explicitly:"
         print_info "  bash install.sh --version vX.Y.Z"
         exit 1
     fi
