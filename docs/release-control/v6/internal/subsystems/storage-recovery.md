@@ -21,6 +21,15 @@
 
 ## Purpose
 
+### Shared guest disk evidence is not recovery-point identity
+
+The canonical Proxmox facet carries internal QGA filesystem source/time evidence
+for bounded monitoring fallback. It is omitted from JSON and does not change
+guest identity, backup attribution, storage selection or recovery-point keys.
+Complete guest observations replace a missing/expired origin rather than
+inheriting it. Canonical disk observation wire/identity and merge controls cover
+this shared type boundary; no native backup or recovery acceptance follows.
+
 ### PMG collection scope remains separate from backup recovery
 
 PMG settings readback emits explicit false dataset options; absence must not

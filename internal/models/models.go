@@ -261,6 +261,7 @@ type VM struct {
 	Disk               Disk                    `json:"disk"`
 	Disks              []Disk                  `json:"disks,omitempty"`
 	DiskStatusReason   string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	DiskObservation    GuestDiskObservation    `json:"-"`                          // Source-owned carry-forward evidence, not the latest poll time.
 	GuestAgentStatus   string                  `json:"guestAgentStatus,omitempty"` // QEMU guest-agent runtime status
 	GuestAgentExpected bool                    `json:"guestAgentExpected,omitempty"`
 	IPAddresses        []string                `json:"ipAddresses,omitempty"`
@@ -3228,6 +3229,14 @@ func (i GuestNetworkInterface) NormalizeCollections() GuestNetworkInterface {
 }
 
 // Disk represents disk usage
+// GuestDiskObservation keeps a QEMU filesystem reading's original source time
+// through internal snapshots. DiskStatusReason owns current/retained display
+// state; a linked Pulse agent remains a separate source. This is not wire data.
+type GuestDiskObservation struct {
+	Source     string
+	ObservedAt time.Time
+}
+
 type Disk struct {
 	Total      int64   `json:"total"`
 	Used       int64   `json:"used"`

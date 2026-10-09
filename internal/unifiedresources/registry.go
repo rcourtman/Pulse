@@ -4242,6 +4242,9 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 		// leave a recovered guest paused forever. Non-guest partial facets do
 		// not own these fields.
 		merged.DiskStatusReason = incoming.DiskStatusReason
+		// A completed guest observation also owns loss/recovery of its original
+		// filesystem evidence. Missing time must not inherit an older origin.
+		merged.DiskObservation = incoming.DiskObservation
 		merged.GuestAgentStatus = incoming.GuestAgentStatus
 		merged.GuestAgentExpected = incoming.GuestAgentExpected
 	}

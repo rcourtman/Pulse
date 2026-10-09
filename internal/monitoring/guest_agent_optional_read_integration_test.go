@@ -210,15 +210,10 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 							t.Fatal("completed unsupported reply prevented repeated fresh filesystem polls")
 						}
 					} else {
-						if withoutStatus || i == 2 {
-							if vm.Disk.Used != initial.Disk.Used || vm.DiskStatusReason != "prev-agent-cooldown" {
-								t.Fatalf("uncertainty lost eligible retained disk: %+v", vm.Disk)
-							}
-						} else if vm.Disk.Usage >= 0 || vm.DiskStatusReason != "agent-cooldown" {
-							// With no useful prior identity, a retained disk alone
-							// cannot repeatedly renew the evidence gate. Losing its
-							// display number is truthful unavailability, not zero.
-							t.Fatal("retained filesystem alone manufactured continuing guest evidence")
+						// Filesystem success owns its original age, independently
+						// of optional metadata support and the latest row refresh.
+						if vm.Disk.Used != initial.Disk.Used || vm.DiskStatusReason != "prev-agent-cooldown" || vm.DiskObservation != initial.DiskObservation {
+							t.Fatalf("uncertainty lost or renewed eligible retained disk: %+v", vm.Disk)
 						}
 						if vm.GuestAgentStatus != "deferred" {
 							t.Fatal("unavailable/retained disk concealed active guest deferral")

@@ -9,6 +9,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestGuestDiskObservationViewUsesOnlyItsOwnSource(t *testing.T) {
+	origin := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	vm := models.VM{VMID: 105, Type: "qemu", Status: "running", LastSeen: time.Now(), DiskObservation: origin}
+	resource, _ := resourceFromVM(vm)
+	view := VMView{r: &resource}
+	if view.DiskObservation() != origin {
+		t.Fatal("adapter/view replaced filesystem source time with the row's receipt time")
+	}
+	copy := cloneResource(&resource)
+	copy.Proxmox.DiskObservation.ObservedAt = time.Now()
+	if view.DiskObservation() != origin {
+		t.Fatal("cloned resource observation mutated the original view")
+	}
+	for _, empty := range []VMView{{}, {r: &Resource{}}} {
+		if empty.DiskObservation() != (models.GuestDiskObservation{}) {
+			t.Fatal("missing source manufactured filesystem evidence")
+		}
+	}
+}
+
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt(v int) *int       { return &v }
 

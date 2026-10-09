@@ -1124,6 +1124,13 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 	}
 }
 
+func TestGuestDiskObservationContract(t *testing.T) {
+	t.Run("legacy-origin-admission", testGuestDiskLegacyObservationAge)
+	t.Run("original-source-age", testGuestDiskOriginalObservationAge)
+	t.Run("repeated-canonical-polls", testGuestDiskRepeatedPollsAndCanonicalOrigin)
+	t.Run("ordinary-deferral-expiry-recovery", testGuestDiskOrdinaryDeferralExpiryAndRecovery)
+}
+
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"guest_host_agent_fallback.go": {

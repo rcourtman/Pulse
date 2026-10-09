@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+func TestGuestDiskObservationIsInternalSnapshotEvidence(t *testing.T) {
+	origin := GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	vm := VM{ID: "pve:node:105", VMID: 105, Type: "qemu", DiskObservation: origin,
+		Disk: Disk{Total: 1000, Used: 400, Free: 600, Usage: 40}, Disks: []Disk{{Total: 1000, Used: 400, Usage: 40}}}
+	copy := cloneVMs([]VM{vm})[0]
+	if copy.DiskObservation != origin {
+		t.Fatal("snapshot cloning lost the filesystem's original source time")
+	}
+	copy.DiskObservation.ObservedAt = time.Now()
+	copy.Disks[0].Used = 999
+	if vm.DiskObservation != origin || vm.Disks[0].Used != 400 {
+		t.Fatal("snapshot mutation changed source-owned evidence")
+	}
+	for name, value := range map[string]any{"model": vm, "frontend": vm.ToFrontend()} {
+		t.Run(name, func(t *testing.T) {
+			wire, err := json.Marshal(value)
+			if err != nil || strings.Contains(string(wire), "DiskObservation") || strings.Contains(string(wire), "diskObservation") || strings.Contains(string(wire), "ObservedAt") {
+				t.Fatalf("internal QGA evidence changed the public model/agent contract: %s / %v", wire, err)
+			}
+		})
+	}
+}
+
 func TestGuestMemoryObservationWireContract(t *testing.T) {
 	legacy := Memory{Total: 100, Used: 25, Free: 75, Usage: 25}
 	payload, err := json.Marshal(legacy)

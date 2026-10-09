@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### QEMU disk fallbacks retain their original filesystem source time
+
+A successful QGA filesystem read owns the disk observation's source and original
+receipt time. Internal model, canonical facet and previous-state copies preserve
+that evidence. Repeated polling, cached OS/version identity and an optional
+metadata failure cannot renew the existing ten-minute carry-forward window.
+Recent disk-only readings remain eligible without optional metadata; expired,
+future, missing or non-QGA origins do not. A legacy direct reading may use its
+receipt once; an already unavailable/retained legacy value with unknown origin
+cannot borrow the latest poll time. A new ordinary successful read restores the
+observation, including measured zero. Linked Pulse-agent disks retain their own
+source and precedence, not a fabricated QGA origin. Guest-command admission,
+backup safety, History and alert missing-observation rules remain unchanged.
+
+`TestGuestDiskObservationContract` covers original/legacy age boundaries,
+repeated canonical replacement, disk-only continuity, real-client deferral and
+expiry in cluster/node collectors, cancelled detail, current zero recovery,
+unchanged prior History and alert continuity. These are synthetic source checks,
+not native thaw, QEMU-only Windows acceptance or completion of #2439/#2619.
+
 ### Automatic Proxmox agent attribution preserves distinct FQDNs
 
 Hostname-only attribution uses the common full-hostname equivalence rule:
