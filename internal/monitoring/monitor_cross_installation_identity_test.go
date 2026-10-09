@@ -41,7 +41,10 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 			m.config = &config.Config{PVEInstances: []config.PVEInstance{
 				{Name: "Home", Host: "https://home.example:8006", IsCluster: classified, ClusterName: clusterName, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pmx1", Host: "https://pmx1:8006"}}},
 			}}
-			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			// Presentation coalescing intentionally declines a store-free
+			// registry: it cannot carry the operator's merge decisions. Exercise
+			// the production store-backed path, without persistent native state.
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore()))
 			m.SetResourceStore(adapter)
 			now := time.Now().UTC()
 			backupAt := now.Add(-time.Hour)
