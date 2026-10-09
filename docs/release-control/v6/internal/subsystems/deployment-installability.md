@@ -51,6 +51,16 @@ missing, mutable or malformed defaults and partial digests. This reconciles
 the native source check with the existing compose expression; it changes no
 image, Docker admission, installer behaviour, deadline or required CI gate.
 
+Every native Unix job executes these uncached source-only image checks after
+Go setup and before Node setup, frontend dependency acquisition/build or native
+runtime tests. A pin failure stops that job before those prerequisites; this
+preflight needs no generated frontend assets. Passing source still builds the
+real frontend and runs the unchanged exhaustive installer inventory, helper and
+agent tests and native execution. `TestNativeAgentRejectsBrokenImagesBeforeFrontendPreparation`
+guards ordering, all-Unix coverage, bounded actual selection, terminal failure
+and retention of the real frontend build. Source proof is not hosted timing or
+an installed result; containing native CI remains the operational check.
+
 ### Existing auto-update timers are discovered without changing consent
 
 Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.

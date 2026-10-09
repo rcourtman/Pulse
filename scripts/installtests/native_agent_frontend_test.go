@@ -16,6 +16,94 @@ type nativeAgentFrontendStep struct {
 	With             map[string]string
 	WorkingDirectory string `yaml:"working-directory"`
 	Run              string
+	ContinueOnError  bool `yaml:"continue-on-error"`
+}
+
+func validateNativeImagePreflight(steps []nativeAgentFrontendStep) error {
+	goAt, checkAt, nodeAt := -1, -1, -1
+	for i, step := range steps {
+		switch step.Name {
+		case "Set up Go":
+			goAt = i
+		case "Check immutable integration images before frontend preparation":
+			if checkAt >= 0 {
+				return fmt.Errorf("immutable integration image preflight must run once")
+			}
+			checkAt = i
+		case "Set up Node.js for native runtime test assets":
+			nodeAt = i
+		}
+	}
+	if goAt < 0 || checkAt <= goAt || nodeAt <= checkAt {
+		return fmt.Errorf("immutable image checks must follow Go setup and precede frontend preparation")
+	}
+	check := steps[checkAt]
+	if check.If != "matrix.unix" || check.ContinueOnError || check.WorkingDirectory != "" ||
+		strings.TrimSpace(check.Run) != "go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests" {
+		return fmt.Errorf("immutable image preflight must execute the uncached bounded source checks on every Unix platform and retain failure")
+	}
+	return validateNativeAgentFrontendPreparation(steps)
+}
+
+func TestNativeAgentRejectsBrokenImagesBeforeFrontendPreparation(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct{ Steps []nativeAgentFrontendStep }
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	steps := workflow.Jobs["native-agent"].Steps
+	if err := validateNativeImagePreflight(steps); err != nil {
+		t.Fatal(err)
+	}
+	checkAt, nodeAt := -1, -1
+	for i, step := range steps {
+		switch step.Name {
+		case "Check immutable integration images before frontend preparation":
+			checkAt = i
+		case "Set up Node.js for native runtime test assets":
+			nodeAt = i
+		}
+	}
+	for _, scenario := range []string{"missing", "late", "before Go", "Linux only", "hidden failure", "cached", "empty selection", "stub assets", "missing real build"} {
+		t.Run(scenario, func(t *testing.T) {
+			changed := append([]nativeAgentFrontendStep(nil), steps...)
+			switch scenario {
+			case "missing":
+				changed = append(changed[:checkAt], changed[checkAt+1:]...)
+			case "late":
+				changed[checkAt], changed[nodeAt] = changed[nodeAt], changed[checkAt]
+			case "before Go":
+				changed[checkAt], changed[checkAt-1] = changed[checkAt-1], changed[checkAt]
+			case "Linux only":
+				changed[checkAt].If = "runner.os == 'Linux'"
+			case "hidden failure":
+				changed[checkAt].ContinueOnError = true
+			case "cached":
+				changed[checkAt].Run = strings.Replace(changed[checkAt].Run, "-count=1 ", "", 1)
+			case "empty selection":
+				changed[checkAt].Run = strings.Replace(changed[checkAt].Run, "^TestIntegrationContainer", "^TestNonexistent", 1)
+			case "stub assets", "missing real build":
+				for i, step := range changed {
+					if step.Name == "Build real frontend assets for API-linked native tests" {
+						if scenario == "stub assets" {
+							changed[i].Run = "touch index.html"
+						} else {
+							changed = append(changed[:i], changed[i+1:]...)
+						}
+						break
+					}
+				}
+			}
+			if err := validateNativeImagePreflight(changed); err == nil {
+				t.Fatalf("accepted %s immutable-image preflight", scenario)
+			}
+		})
+	}
 }
 
 func validateNativeAgentFrontendTriggers(content []byte) error {
