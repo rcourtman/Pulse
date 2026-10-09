@@ -15,6 +15,34 @@
 
 ## Purpose
 
+
+### Workloads disk decorations follow the selected filesystem source
+
+`GuestRow` passes the shared `getWorkloadGuestDiskRead` classification to the
+stacked disk primitive, not just its explanatory text. Last-known filesystem
+values keep their bytes, percentage and geometry in every bar mode, but use a
+neutral fill in the cell and tooltip and cannot assert a live anomaly. Tooltip
+headings and per-disk titles identify those values as last known; their mount
+names and numbers use theme-aware text. An explicitly unavailable reading
+withholds usage and anomaly even when numeric carriers remain, while known
+capacity may remain inspectable as unknown usage, never measured zero.
+
+Current QEMU readings and independent current linked-agent filesystems retain
+threshold colours and anomaly behaviour. A linked-agent lease loss makes its
+own filesystems last known; a Proxmox deferral cannot withdraw a current agent
+reading. Unannotated host/platform callers and measured current zero retain
+their behaviour. Status text alone is not a freshness classifier. Source-state
+replacement updates the mounted shell and open tooltip without collection,
+History changes, timers, alert-record changes or timestamp renewal.
+
+Verification: `GuestRow.test.tsx`, `StackedDiskBar.test.tsx` and
+`stackedDiskBarModel.branchcov0712b.test.ts` check the source boundary, every
+mode, retained geometry, unavailable numeric carriers, current/unannotated/zero
+controls and reactive replacement. The parent-bound browser receipt covers
+real canonical mapping and Workloads rendering, desktop/phone and light/dark
+with synthetic observations. These proofs establish presentation, not native
+guest recovery, ordinary QEMU-only polling or release availability.
+
 ### Narrow Workloads identity during guest locks
 
 In narrow and phone layouts, the guest name and status occupy the first line;

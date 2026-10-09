@@ -76,8 +76,12 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
 }));
 
 vi.mock('../StackedDiskBar', () => ({
-  StackedDiskBar: (props: { statusMessage?: string }) => (
-    <div data-testid="disk-bar" data-status-message={props.statusMessage} />
+  StackedDiskBar: (props: { reading?: { state: string; message: string | null } }) => (
+    <div
+      data-testid="disk-bar"
+      data-reading-state={props.reading?.state}
+      data-reading-message={props.reading?.message}
+    />
   ),
 }));
 
@@ -833,6 +837,30 @@ describe('GuestRow', () => {
   });
 
   describe('visible filesystem read provenance', () => {
+    it('forwards source classification without withdrawing an independent agent reading', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ diskStatusReason: 'agent-cooldown', disksFromAgent: true, agentStale: false }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr');
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+      setGuest({ ...guest(), agentStale: true });
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'last-known');
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+        'data-reading-message',
+        'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+      );
+      setGuest({ ...guest(), agentStale: false });
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+      expect(container.querySelector('tr')).toBe(row);
+    });
+
     const history = {
       getGuestMetricSeries: () => [
         {
@@ -914,6 +942,16 @@ describe('GuestRow', () => {
           expect(notice).toHaveTextContent(`Using last known disk stats. ${message}`);
           expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
           expect(notice).not.toHaveAttribute('tabindex');
+          if (mode === 'bars') {
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-state',
+              'last-known',
+            );
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-message',
+              `Using last known disk stats. ${message}`,
+            );
+          }
         },
       );
 
@@ -1100,13 +1138,13 @@ describe('GuestRow', () => {
           </tbody>
         </table>
       ));
-      expect(screen.getByTestId('disk-bar')).not.toHaveAttribute('data-status-message');
+      expect(screen.getByTestId('disk-bar')).not.toHaveAttribute('data-reading-message');
       expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
 
       const lastKnown =
         'Using last known disk stats. The Pulse Agent in this guest stopped reporting.';
       setGuest(agentGuest({ agentStale: true }));
-      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', lastKnown);
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-message', lastKnown);
       let notice = container.querySelector('[data-workload-disk-read-status]');
       expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
       expect(notice).toHaveAttribute('title', lastKnown);
@@ -1405,7 +1443,7 @@ describe('GuestRow', () => {
           'title',
           expected,
         );
-        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', expected);
+        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-message', expected);
       },
     );
 
