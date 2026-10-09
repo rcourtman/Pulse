@@ -23,6 +23,79 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Internal QGA query-eligibility evidence
+
+The native Proxmox guest facet carries `GuestAgentEvidence` internally. A full
+guest observation replaces this value, including explicit absence; a partial
+non-guest facet does not own it. Cloning and the VM view preserve the original
+time for the monitor's previous-state input. Resource/VM JSON, identity,
+correlation and linked Pulse-agent precedence do not change.
+`TestGuestAgentEvidenceDoesNotChangeWireOrIdentity` and
+`TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge` check wire equality,
+identity equality, clone isolation and loss/recovery replacement. The full-wire
+comparison fixes the independent construction clock for otherwise identical
+inputs; it does not omit a changed public field.
+
+
+### Internal guest disk observation provenance
+
+A Proxmox VM facet preserves the successful filesystem read's original source
+and time through adapter, clone, typed view and previous-guest projection.
+Complete guest facets replace this evidence in both directions, including a
+missing/expired origin; partial non-guest facets cannot renew or clear it.
+Linked agent selection remains independent and cannot become QGA fallback
+proof. `DiskObservation` is internal only (`json:"-"`): no JSON, identity,
+History key, source-priority or agent report contract changes.
+
+`TestGuestDiskObservationDoesNotChangeWireOrIdentity`,
+`TestGuestDiskObservationViewUsesOnlyItsOwnSource` and
+`TestGuestDiskObservationMergeReplacesMissingAndDifferentSource` verify exact
+public facet equality, internal cloning, missing-source access and authoritative
+replacement. Monitoring's disk observation contract covers the ordinary poll
+and served-reason boundary. These checks do not establish installed recovery.
+
+### Guest views retain exact governance identity for configuration reads
+
+VM and system-container views expose cloned canonical policy/AI-safe metadata
+for their own resource. This lets guest-config reads retain the chosen identity
+when names repeat across installations without a second name-based resolution.
+The accessor exposes no raw resource or mutation; classification/redaction rules
+are unchanged. `TestGuestViewGovernanceIdentity` checks distinct same-name guests,
+policy cloning and nil-view handling. Tool controls check its use at the provider
+boundary; these are not native installation recovery.
+
+
+### Native guest admission replaces the previous canonical facet
+
+A complete native Proxmox guest observation (non-zero VMID) owns its filesystem
+read reason, guest-agent state and expectation in both directions. Repeated
+ingestion must publish a new cooldown even when the retained disk number is
+unchanged, and clear the reason/expectation when the native guest recovers or is
+disabled. Non-guest partial Proxmox facets do not own these fields. Numeric
+source selection, original memory observation times and identity stay unchanged.
+
+`TestProxmoxGuestReadAdmissionReplacesPreviousFacet` covers available, paused,
+recovered, offline and disabled transitions through repeated registry ingestion,
+typed/detached reads and JSON. Monitoring's connected optional-command proof
+also consumes that same live registry and production broadcast JSON while
+checking History withholding. Source clearance is not independent guest thaw,
+covered-filesystem writes or native monitoring recovery.
+
+### Collected alert subjects share current canonical ownership
+
+`AlertResourceReferenceResolver` exposes the current-inventory identity owner
+used by history correlation to runtime consumers. Supported producer child
+references bind through durable source identities only. Resolution reads the
+owner, canonical type and source targets under one registry read lock. It never
+uses display names or retained history aliases to resurrect a removed owner.
+An agent's disk, temperature, RAID and custom observations remain owned when an
+operator link folds the agent into a VM, container or node. The presence of the
+agent facet is required for that cross-type ownership. Patrol can therefore
+select the canonical owner without interpreting alert strings independently.
+`alert_scope_test.go` verifies the registry and both read adapters, rejected
+references and absent current owners. Scoped Patrol tests cover linked owners
+and conflicting unqualified source IDs.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through
@@ -504,6 +577,18 @@ here instead of the row's `LastSeen`. The accessor returns a copy of the recorde
 status and adds no freshness policy of its own.
 `TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
 split.
+`NodeView.SourceStatus(source)` and `DockerHostView.SourceStatus(source)` do
+the same for node and Docker host rows. A merged node row takes its linked
+agent's status when the sources merge, and once any sighting goes stale the
+stale pass recomputes the status from the sightings: `online` while one is
+current, `warning` when every one is stale. `warning` is also a status a row
+that still reports can carry (a degraded Docker host, a node whose linked agent
+reports storage risk). The metrics-history live
+fallback therefore reads these sightings alongside the row's `offline` and
+`unknown` status to decide whether a row's readings are current. The accessors
+return a copy of the recorded status and add no freshness policy.
+`TestView_NodeViewSourceStatusSeparatesMergedSources` and
+`TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded` pin them.
 
 ### Bounded incident-history selection
 
@@ -3029,6 +3114,23 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### Interface-associated display addresses
+
+VM and LXC projections retain the collector's interface-associated IP order in
+canonical identity and broadcast. Agent-host display address selection also
+recognises Podman interface names as secondary, retaining every address and the
+explicit `--report-ip` preference. The shared `pkg/netutil` name hint does not
+drop management bridges, bonds, VLANs or tunnels, prove a default route, or
+change the agent's separate MAC-based machine-ID fallback. The existing MAC
+metadata sequence keeps its legacy classifier; Podman preference affects only
+displayed IPs. No identity key or wire shape changes.
+`TestIssue2757AgentDisplayPrefersNonContainerInterfaces`
+and `TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses` bind Podman,
+management-interface, supplied identity and explicit-override controls to the
+production host adapter; monitoring's #2757 fixtures bind guest list/broadcast
+order and name/address/traffic association. Native readings and publication
+remain separate evidence.
 
 Discovery-led availability proposals present their evidence and canonical
 attachment boundary as short, complete sentences in both the inline card and
@@ -5735,8 +5837,14 @@ recovery timeline day, chart range, workspace `view`, inventory `state`,
 Recovery page. The Proxmox Backups tab owns its own day selection through
 `PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
 of `/api/recovery/*` payloads must still prefer canonical `platform` /
-`platforms` response fields over legacy `provider` aliases, which
-`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites at decode time.
+`platforms` response fields over legacy `provider` aliases. The frontend's
+only recovery-points reader is `useRecoveryPoints.ts`, and
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites `provider`,
+`subjectRef`, and `display.subjectLabel` onto `platform`, `itemRef`, and
+`display.itemLabel` at decode time. The TrueNAS Protection tab
+(`TrueNASProtectionTable.tsx`, `truenasPageModel.ts`) reads only those
+canonical fields; the normalized `RecoveryPoint` type does not declare the
+subject names.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request
@@ -6134,7 +6242,15 @@ over the path, and disk alerts are evaluated before their poll's disks reach
 the registry. A binding belongs to the reference string and would carry every
 row and every read of the path to whichever disk held it last. Each lifecycle
 row is owned on its own instead (`proxmoxDiskAlertOwner` in
-`internal/unifiedresources/pve_disk_alert_history.go`). The alert records the
+`internal/unifiedresources/pve_disk_alert_history.go`). The same ownership
+decision is exposed on immutable unified snapshots by
+`ProxmoxPhysicalDiskAlertOwner` for subject reports; the registry and snapshot
+entry points share the implementation, including ambiguity, moved paths,
+identity-less fallback and derived-ID collision checks
+(`TestProxmoxDiskAlertOwnerDecisions`). Reporting admits only the reference's
+canonical health/wearout alert identifiers and keeps resolution-window bounds
+(`TestReportPhysicalDiskAlertsFollowRecordedHardware` in `internal/api`).
+The alert records the
 evaluated disk's serial and WWN (`disk_serial`, `disk_wwn`), and
 `MonitorAdapter.RecordChange` writes the row under the one physical disk the
 registry knows by that hardware identity (`diskinventory.HardwareIdentityMatch`),
@@ -6882,11 +6998,11 @@ of durable state through it.
   as before. With links each monitor builds its own linked snapshot whenever
   the fixture data or links change (concurrent cache misses can each build
   one).
-- Exclusions are not carried, as before: the fixture graph makes its own
-  merges before the view seeds it, so fixtures that identity matching merged
-  stay merged ("Unlink replaces the pair's operator link"). Presentation
-  coalescing still honours them, because the broadcast takes the resource
-  store adapter's exclusions for every store-less view.
+- Exclusions are not carried by the fixture registry, as before. The
+  broadcast's presentation coalescing consults the monitor adapter's
+  exclusions, while the resources API's `ListForPresentation` consults its
+  own store-backed registry's exclusions. Neither can undo an automatic
+  identity merge already made inside the store-free fixture graph.
 - An agent linked into a guest leaves the agent listings (`Hosts()` lists
   agent-type rows only) and the guest carries its facet, as in live mode.
 
@@ -7155,6 +7271,20 @@ vCenter reports no signals. The Overview's own model, workload snapshot and
 navigation facets still come from the Overview query; the Health tab keeps
 the filterable table.
 
+### Correlated guest disks retain the independent agent source
+
+`VMView.LinkedAgentDisks`, `ContainerView.LinkedAgentDisks` and
+`HostView.CurrentAgentDisks` expose detached agent-owned filesystem inventory
+with the agent source's own receipt time, independently of agent memory.
+Missing, non-online, expired, stale, undated or future agent sources cannot
+supply current disks just because the platform row keeps reporting. The
+registry's configured source lease remains authoritative; this adds no new
+expiry duration. Existing `HostView.Disks` retains last-known presentation.
+
+`linked_agent_disks_test.go` covers selection, source timestamps, nil views
+and detached inventory across all three views. No public model field, inferred
+link, guest command or safety-pause clearance is introduced.
+
 ### Unlink replaces the pair's operator link
 
 `POST /api/resources/{id}/link` records a `ResourceLink`; unlink and
@@ -7280,9 +7410,11 @@ agent's SMART inventory as the node's disk fallback when the Proxmox disk
 query fails, the agent's disk-exclude patterns on the node's disks, and the
 node's linked agent that guest discovery, agent deployment and service
 discovery act on.
-Physical disks inside one host still join through
-`resolveLinkedPhysicalDisk` without reading exclusions; a node split puts the
-two sides' disks under different parents, so they no longer meet there.
+Physical disks inside one host join through `resolveLinkedPhysicalDisk`,
+which now honours their operator exclusions ("Operator split separates disks
+inside a linked host" above, upstream #2748). A node split also puts the two
+sides' disks under different parents, so they no longer meet there. The node
+split and the disk split remain independent operator decisions.
 Cluster- and hostname-derived IDs carry no source, so an exclusion recorded
 against another resource that derives the node's own ID (a Docker Swarm host
 reporting no machine key, named like the node in a swarm named like its
@@ -7313,11 +7445,12 @@ already has the link applied, so it cannot split the pair itself: an unlink
 shows on REST, `/api/state` and the websocket from the monitor's next
 registry rebuild, the same generation in which a new link reaches the
 broadcast. REST applies a new link at once, because its own registry applies
-the store's links on top of the seed. The mock-mode view applies the links
-the resource store's current generation loaded ("Mock-mode unified view
-applies operator links"), so mock mode follows the same timing. Mock fixtures
-that identity matching merged stay merged on every surface: the fixture graph
-is built without the store's exclusions.
+the store's links on top of the seed. The mock-mode view now applies the
+current monitor generation's operator links too ("Mock-mode unified view
+applies operator links" above), so a mock unlink likewise needs that
+monitor rebuild to remove the fold from the seed. Mock fixtures that identity
+matching merged stay merged on every surface: the fixture graph is built
+without the store's exclusions.
 
 The websocket broadcast coalesced host views with
 `CoalescePresentationHostResources`, which honours no exclusions, while the
@@ -7426,3 +7559,41 @@ system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
 sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
 keeps the handler on the registry's fold record.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
+
+### TrueNAS disk policy consumers use the disk's alert identity
+
+The AI/Patrol physical-disk consumers classify TrueNAS disks through
+`alerts.IsTrueNASDiskResource`, the same classifier as unified alert evaluation.
+They resolve temperature policy under the disk's canonical resource ID, not its
+parent system's synthetic agent ID. Merged agent/TrueNAS disks retain that
+classification; ordinary agent disks still follow their reporting host's policy.
+Registry identity, source precedence and retained-reading semantics are unchanged.
+`TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` exercise the unified registry
+projection and its consumer boundaries. Table/drawer frontend acceptance is described below and remains
+separate from these backend tests.
+
+### TrueNAS disk-specific heat presentation (8 October 2026)
+
+`TrueNASDiskTemperatureThresholdResolver` receives the disk resource (including
+its canonical ID), not just a disk type. The table's status dot, reason,
+Attention filter/count and drawer temperature row use the same resolved tiers.
+A retained temperature is not current heat under any override. Changing alert
+configuration updates those judgments without changing inventory identity.
+
+Verification: `truenasPageModel.test.ts`,
+`resourceDetailDrawerTrueNASModel.coverage2.test.ts` and
+`browser-tests/truenas-disk-thresholds.cjs` cover disk overrides, TrueNAS-wide
+limits, Off and last-known readings. Synthetic browser observations do not
+establish sustained native metrics, History, revocation or release availability.

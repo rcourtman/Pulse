@@ -70,16 +70,40 @@ verify_release_signature() {
 
 # Check if auto-updates are enabled
 check_auto_updates_enabled() {
-    # Check system.json for autoUpdateEnabled flag (note: no 's' - matches Go struct)
-    if [[ -f "$CONFIG_DIR/system.json" ]]; then
-        local enabled=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"autoUpdateEnabled"[[:space:]]*:[[:space:]]*true' || true)
-        local channel=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
-        if [[ -z "$enabled" ]]; then
+    # Consent must come from one complete object, not matching text in a
+    # truncated file, nested setting or quoted string. jq is already an
+    # installer dependency; without it, leave manual updates available but
+    # refuse to guess whether an unattended update was authorised.
+    if [[ -e "$CONFIG_DIR/system.json" || -L "$CONFIG_DIR/system.json" ]]; then
+        local settings="" enabled="" channel=""
+        if [[ ! -f "$CONFIG_DIR/system.json" ]] || ! command -v jq >/dev/null 2>&1; then
+            log error "Cannot verify auto-update configuration; a regular system.json and jq are required"
+            exit 1
+        fi
+        if ! settings=$(jq -er -s '
+            if length != 1 or (.[0] | type) != "object" then
+                error("expected one configuration object")
+            else .[0] end
+            | (.updateChannel | if . == null then "" else . end) as $channel
+            | if ((.autoUpdateEnabled // false) | type) != "boolean"
+                 or ($channel | type) != "string" then
+                error("invalid update settings")
+              else
+                [(.autoUpdateEnabled // false),
+                 ($channel | gsub("^\\s+|\\s+$"; "") | ascii_downcase)]
+                | @tsv
+              end
+        ' "$CONFIG_DIR/system.json" 2>/dev/null); then
+            log error "Cannot parse auto-update configuration; no unattended update attempted"
+            exit 1
+        fi
+        IFS=$'\t' read -r enabled channel <<< "$settings"
+        if [[ "$enabled" != "true" ]]; then
             log info "Auto-updates disabled in configuration"
             exit 0
         fi
-        if [[ "$channel" == "rc" ]]; then
-            log info "Prerelease channel detected; unattended auto-updates run only on stable"
+        if [[ -n "$channel" && "$channel" != "stable" ]]; then
+            log info "Non-stable channel detected; unattended auto-updates run only on stable"
             exit 0
         fi
     fi
@@ -91,23 +115,27 @@ check_auto_updates_enabled() {
     fi
 }
 
-# Get current version
+# Read version identity from the executable, never installation metadata. This
+# runs both before discovery and after installer success: a VERSION sidecar can
+# survive a failed replacement and cannot prove the new binary is usable.
 get_current_version() {
-    local version=""
-    
-    # Try to get version from binary
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
-        version=$("$INSTALL_DIR/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
+    local binary="" version_output="" first_line=""
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
+        binary="$INSTALL_DIR/bin/pulse"
+    elif [[ -e "$INSTALL_DIR/pulse" || -L "$INSTALL_DIR/pulse" ]]; then
+        binary="$INSTALL_DIR/pulse"
     fi
-    
-    # Fallback to VERSION file
-    if [[ -z "$version" ]] && [[ -f "$INSTALL_DIR/VERSION" ]]; then
-        version=$(cat "$INSTALL_DIR/VERSION" 2>/dev/null | tr -d '\n' || true)
+    if [[ -z "$binary" || ! -f "$binary" || ! -x "$binary" ]] ||
+       ! version_output=$(timeout --kill-after=1 5 "$binary" --version 2>/dev/null); then
+        echo unknown
+        return 0
     fi
-    
-    echo "${version:-unknown}"
+    first_line=${version_output%%$'\n'*}
+    if [[ "$first_line" =~ ^Pulse\ v?([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+        printf 'v%s\n' "${BASH_REMATCH[1]}"
+    else
+        echo unknown
+    fi
 }
 
 # The unattended updater installs public community builds. The separately
@@ -116,15 +144,29 @@ get_current_version() {
 # Pro installs update in-app through the license server download broker, or
 # manually via https://pulserelay.pro/download.html + install.sh --archive.
 installed_binary_is_pulse_pro() {
-    local binary=""
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+    local binary="" version_output="" first_line=""
+    # 0 = Pro (leave it alone), 1 = verified community, 2 = unknown (stop).
+    # A VERSION file cannot identify the edition, and a broken primary binary
+    # must not fall back to an unrelated legacy executable.
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
         binary="$INSTALL_DIR/bin/pulse"
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
+    elif [[ -e "$INSTALL_DIR/pulse" || -L "$INSTALL_DIR/pulse" ]]; then
         binary="$INSTALL_DIR/pulse"
     else
+        return 2
+    fi
+    if [[ ! -f "$binary" || ! -x "$binary" ]] ||
+       ! version_output=$(timeout --kill-after=1 5 "$binary" --version 2>/dev/null); then
+        return 2
+    fi
+    first_line=${version_output%%$'\n'*}
+    if [[ "$first_line" == 'Pulse Pro '* ]]; then
+        return 0
+    fi
+    if [[ "$first_line" =~ ^Pulse\ v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
         return 1
     fi
-    "$binary" --version 2>/dev/null | head -1 | grep -q '^Pulse Pro '
+    return 2
 }
 
 # Determine whether a tag is a semver pre-release.
@@ -173,92 +215,51 @@ pick_highest_stable_tag() {
     echo "$best"
 }
 
-# Get latest stable release from GitHub
+# Get latest stable release from GitHub. Maturity and tag must come from the
+# same complete release object, independent of JSON whitespace or field order.
 get_latest_stable_version() {
-    local latest_version=""
-    local release_json=""
-    local is_prerelease_flag=""
-
-    # Primary: highest stable version across the release list. GitHub's
-    # /releases/latest points at the most recently *created* stable release,
-    # and this repo interleaves v5-line maintenance releases with v6 releases
-    # (v5.1.36 shipped the day before v6.0.5) — so "latest" can be an older
-    # version line, which would strand v6 installs until the next v6 release.
-    #
-    # Each tag is only a candidate when its own release object says
-    # draft=false and prerelease=false (field order per object is
-    # tag_name → draft → prerelease, with body last, so a pending tag is
-    # confirmed or discarded before the next object's tag_name resets it).
-    # pick_highest_stable_tag then re-applies the fail-closed shape check.
-    local releases_json=""
-    releases_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=30" || true)
-    if [[ -n "$releases_json" ]] && [[ "$releases_json" != *"rate limit"* ]]; then
-        local line="" pending_tag="" stable_tags=""
-        while IFS= read -r line; do
-            if [[ "$line" == *'"tag_name":'* ]]; then
-                pending_tag=$(printf '%s' "$line" | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')
-            fi
-            if [[ "$line" == *'"draft": true'* ]] || [[ "$line" == *'"draft":true'* ]]; then
-                pending_tag=""
-            fi
-            if [[ "$line" == *'"prerelease":'* ]]; then
-                if [[ -n "$pending_tag" ]] && { [[ "$line" == *'"prerelease": false'* ]] || [[ "$line" == *'"prerelease":false'* ]]; }; then
-                    stable_tags+="$pending_tag"$'\n'
-                fi
-                pending_tag=""
-            fi
-        done <<< "$releases_json"
-        latest_version=$(printf '%s' "$stable_tags" | pick_highest_stable_tag)
-        if [[ -n "$latest_version" ]]; then
-            echo "$latest_version"
-            return 0
-        fi
-    fi
-
-    # Fallback: latest stable release (not pre-releases). `/releases/latest`
-    # already skips prereleases on GitHub's side, but we still parse and
-    # enforce the `prerelease` flag ourselves as a second line of defense.
-    release_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || true)
-
-    if [[ -n "$release_json" ]] && [[ "$release_json" != *"rate limit"* ]]; then
-        latest_version=$(echo "$release_json" | \
-            grep '"tag_name":' | \
-            head -1 | \
-            sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' || true)
-        is_prerelease_flag=$(echo "$release_json" | \
-            grep '"prerelease":' | \
-            head -1 | \
-            sed -E 's/.*"prerelease":[[:space:]]*(true|false).*/\1/' || true)
-
-        # Refuse if the API explicitly flags this release as a prerelease.
-        if [[ "$is_prerelease_flag" == "true" ]]; then
-            log error "GitHub /releases/latest returned a prerelease ($latest_version); refusing on stable channel"
-            echo ""
-            return 0
-        fi
-    fi
-
-    # Check if we got rate limited or failed
-    if [[ -z "$latest_version" ]] || [[ "$latest_version" == *"rate limit"* ]]; then
-        # Try direct GitHub latest URL as fallback
-        latest_version=$(curl -sI "https://github.com/$GITHUB_REPO/releases/latest" | \
-            grep -i '^location:' | \
-            sed -E 's|.*tag/([^[:space:]]+).*|\1|' | \
-            tr -d '\r' || true)
-    fi
-
-    # Final belt-and-braces: never hand back a prerelease-shaped tag even
-    # if an upstream path told us it was stable. The channel-pinning policy
-    # lives in the Go server (EffectiveAutoUpdateEnabled gates this timer on
-    # stable only); refusing prerelease tag shapes here ensures the unattended
-    # script cannot cross the major-version boundary on a corrupted API reply.
-    if [[ -n "$latest_version" ]] && is_prerelease_tag "$latest_version"; then
-        log error "GitHub returned prerelease-shaped tag ($latest_version) as latest; refusing on stable channel"
+    local endpoint="" release_json="" stable_tags="" latest_version=""
+    if ! command -v jq >/dev/null 2>&1; then
+        log error "jq is required to verify release metadata; no unattended update attempted"
         echo ""
         return 0
     fi
 
-    echo "${latest_version:-}"
+    # Prefer the highest stable in the list, not GitHub's creation ordering.
+    # If that read is unusable, /latest is a separate metadata-confirmed path.
+    # A redirect alone cannot prove draft/prerelease status and is not used.
+    for endpoint in 'releases?per_page=30' 'releases/latest'; do
+        if ! release_json=$(curl --disable --fail --silent --show-error \
+            --connect-timeout 5 --max-time 20 --proto '=https' \
+            "https://api.github.com/repos/$GITHUB_REPO/$endpoint"); then
+            continue
+        fi
+        # Slurp before selecting: truncated or concatenated JSON must not
+        # leak a previously parsed tag. Ignore only ineligible release objects;
+        # do not borrow missing flags from siblings, nested data or body text.
+        if ! stable_tags=$(jq -er -s --arg endpoint "$endpoint" '
+            if length != 1 then error("expected one release document") else .[0] end
+            | if $endpoint == "releases/latest" then
+                if type == "object" then [.] else error("expected a release object") end
+              else
+                if type == "array" then . else error("expected a release list") end
+              end
+            | if all(.[]; type == "object") then . else error("invalid release entry") end
+            | .[]
+            | select(.draft == false and .prerelease == false)
+            | select((.tag_name | type) == "string")
+            | .tag_name
+            | select(test("\\Av?[0-9]+\\.[0-9]+\\.[0-9]+\\z"))
+        ' <<< "$release_json" 2>/dev/null); then
+            continue
+        fi
+        latest_version=$(printf '%s\n' "$stable_tags" | pick_highest_stable_tag)
+        if [[ -n "$latest_version" ]]; then
+            echo "$latest_version"
+            return 0
+        fi
+    done
+    echo ""
 }
 
 # Compare versions (returns 0 if v1 > v2, 1 if v1 <= v2)
@@ -348,12 +349,13 @@ wait_for_service_active() {
 
 # Guarantee the Pulse service is left running after an update attempt if (and
 # only if) it was running beforehand. Invoked from perform_update's RETURN trap
-# so that no exit path — present or future — can leave Pulse stopped (#1630:
+# after pre-install failures or a verified update/recovery (#1630:
 # the install-failed rollback branch restored the backup but never restarted
 # the service). This matters doubly because the generated pulse-update.service
 # uses ExecCondition=systemctl is-active pulse.service: once Pulse is down,
 # every subsequent timer run is skipped and the install stays down until
-# someone intervenes. Always returns 0 (it runs under set -e in a trap).
+# someone intervenes. Incomplete recovery deliberately suppresses this backstop:
+# activating a partial restore would be unsafe. Always returns 0 in the trap.
 ensure_service_restarted() {
     local service_name=$1
     local service_was_active=$2
@@ -380,6 +382,14 @@ perform_update() {
     local service_name=$(detect_service_name)
     local installer_tmp=""
     local signature_tmp=""
+    local backup_dir=""
+    local retain_backup="false"
+    local restart_allowed="true"
+    local -a file_paths=("$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/pulse" "$INSTALL_DIR/VERSION")
+    local -a backup_names=(pulse-bin pulse-legacy VERSION)
+    local -a file_present=(false false false)
+    local -a restore_files=("" "" "")
+    local i
 
     # Capture whether Pulse was running before the update so we can guarantee it
     # comes back up afterwards (#1323: auto-update could leave it stopped on
@@ -389,13 +399,13 @@ perform_update() {
         service_was_active="true"
     fi
 
-    # Whatever way this function exits, never leave Pulse stopped when it was
-    # running before the update (#1630). Extended below once the installer
-    # tempfiles exist. The trap disarms itself on the first RETURN: a RETURN
+    # Keep the prior-active restart backstop (#1630), except when incomplete
+    # recovery requires manual intervention. The trap disarms itself on the
+    # first RETURN: a RETURN
     # trap is not scoped to the function that set it, so leaving it installed
     # makes it re-run when any later function returns — with these locals gone
     # that aborted the updater under set -u after a successful update (#2128).
-    trap 'ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
+    trap 'trap - RETURN; rm -f -- "${installer_tmp:-}" "${signature_tmp:-}" "${restore_files[@]}"; if [[ -n "$backup_dir" && "$retain_backup" == "false" ]]; then rm -rf -- "$backup_dir"; fi; if [[ "$restart_allowed" == "true" ]]; then ensure_service_restarted "$service_name" "$service_was_active"; fi' RETURN
 
     # Refuse to install a prerelease via the unattended updater. The stable
     # channel must never cross onto a tag like v6.0.0-rc.2, even if every
@@ -407,22 +417,33 @@ perform_update() {
 
     log info "Starting update to $new_version"
     
-    # Create backup of current installation
-    local backup_dir="/tmp/pulse-backup-$(date +%Y%m%d-%H%M%S)"
+    # main calls this function in an if condition, which disables errexit
+    # throughout it. Check every prerequisite explicitly before the installer
+    # can mutate anything. A private, unique directory also avoids collisions
+    # with another attempt or a pre-created path in the shared /tmp directory.
+    if [[ ! -f "${file_paths[0]}" && ! -f "${file_paths[1]}" ]]; then
+        log error "No installed Pulse binary to back up; refusing update"
+        return 1
+    fi
+    if ! backup_dir=$(mktemp -d /tmp/pulse-backup.XXXXXX); then
+        log error "Could not create rollback backup; refusing update"
+        return 1
+    fi
     log info "Creating backup in $backup_dir"
-    mkdir -p "$backup_dir"
-    
-    # Backup binary
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        cp -a "$INSTALL_DIR/bin/pulse" "$backup_dir/" || true
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
-        cp -a "$INSTALL_DIR/pulse" "$backup_dir/" || true
-    fi
-    
-    # Backup VERSION file
-    if [[ -f "$INSTALL_DIR/VERSION" ]]; then
-        cp -a "$INSTALL_DIR/VERSION" "$backup_dir/" || true
-    fi
+    for i in "${!file_paths[@]}"; do
+        if [[ -e "${file_paths[i]}" || -L "${file_paths[i]}" ]]; then
+            if [[ ! -f "${file_paths[i]}" || -L "${file_paths[i]}" ]]; then
+                log error "Unsupported rollback source ${file_paths[i]}; refusing update"
+                return 1
+            fi
+            if ! cp -a -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}" ||
+               ! cmp -s -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}"; then
+                log error "Could not verify rollback backup for ${file_paths[i]}; refusing update"
+                return 1
+            fi
+            file_present[i]=true
+        fi
+    done
     
     # Download update using install script (safest method)
     log info "Downloading and installing update"
@@ -441,9 +462,11 @@ perform_update() {
         fi
     fi
 
-    installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX)
-    signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
-    trap 'rm -f "${installer_tmp:-}" "${signature_tmp:-}"; ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
+    if ! installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX) ||
+       ! signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX); then
+        log error "Could not create installer verification files; refusing update"
+        return 1
+    fi
 
     if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
         log error "Failed to download installer from $install_script_url"
@@ -458,6 +481,7 @@ perform_update() {
     fi
     log info "Installer signature verified"
 
+    local update_accepted="false"
     if env \
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
@@ -467,11 +491,12 @@ perform_update() {
            log info "installer: $line"
        done; then
         
-        log info "Update successfully installed"
+        log info "Installer completed; verifying update"
         
         # Verify new version
-        local installed_version=$(get_current_version)
-        if [[ "$installed_version" == "$new_version" ]]; then
+        local installed_version
+        installed_version=$(get_current_version)
+        if [[ "$installed_version" != "unknown" && "${installed_version#v}" == "${new_version#v}" ]]; then
             log info "Version verified: $installed_version"
 
             # If Pulse was running before the update, make sure it is running
@@ -485,82 +510,72 @@ perform_update() {
 
                 if ! wait_for_service_active "$service_name" 20; then
                     log error "Pulse service did not come back up after update"
-
-                    log info "Restoring from backup"
-                    if [[ -f "$backup_dir/pulse" ]]; then
-                        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-                        else
-                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-                        fi
-                    fi
-                    if [[ -f "$backup_dir/VERSION" ]]; then
-                        cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-                    fi
-
-                    systemctl restart "$service_name" || true
-                    rm -rf "$backup_dir"
-                    return 1
+                else
+                    update_accepted="true"
                 fi
+            else
+                update_accepted="true"
             fi
-
-            # Clean up backup
-            rm -rf "$backup_dir"
-
-            return 0
         else
             log error "Version mismatch after update. Expected: $new_version, Got: $installed_version"
-            
-            # Restore from backup
-            log info "Restoring from backup"
-            if [[ -f "$backup_dir/pulse" ]]; then
-                if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                    cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-                else
-                    cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-                fi
-            fi
-            if [[ -f "$backup_dir/VERSION" ]]; then
-                cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-            fi
-            
-            # Restart service with old version
-            systemctl restart "$service_name" || true
-            
-            # Clean up backup
-            rm -rf "$backup_dir"
-            
-            return 1
         fi
     else
         log error "Update installation failed"
-        
-        # Restore from backup
-        log info "Restoring from backup"
-        if [[ -f "$backup_dir/pulse" ]]; then
-            if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-            else
-                cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-            fi
-        fi
-        if [[ -f "$backup_dir/VERSION" ]]; then
-            cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-        fi
+    fi
 
-        # Restart the restored binary if Pulse was running before the update.
-        # The installer stops the service before it can fail, so skipping this
-        # left Pulse down indefinitely (#1630); the RETURN trap above is the
-        # backstop if this path ever changes.
-        if [[ "$service_was_active" == "true" ]]; then
-            systemctl restart "$service_name" || true
-        fi
+    if [[ "$update_accepted" == "true" ]]; then
+        log info "Update successfully installed and verified"
+        return 0
+    fi
 
-        # Clean up backup
-        rm -rf "$backup_dir"
-
+    # One rollback path for installer, version and liveness failures. Keep the
+    # backup and suppress the RETURN-trap restart until every file is restored;
+    # starting a partially restored executable would hide the recovery failure.
+    retain_backup="true"
+    restart_allowed="false"
+    log info "Restoring from backup"
+    if ! systemctl stop "$service_name"; then
+        log error "Could not stop Pulse for rollback; backup retained at $backup_dir; manual recovery required"
         return 1
     fi
+
+    # Stage and compare all saved files before replacing any destination. Each
+    # replacement is a same-directory rename, not a truncating copy into a
+    # running executable or a symlink created by the failed installer.
+    for i in "${!file_paths[@]}"; do
+        if [[ "${file_present[i]}" == "true" ]]; then
+            if ! restore_files[i]=$(mktemp "${file_paths[i]}.rollback.XXXXXX") ||
+               ! cp -a -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}" ||
+               ! cmp -s -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}"; then
+                log error "Could not stage rollback for ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+                return 1
+            fi
+        fi
+    done
+    for i in "${!file_paths[@]}"; do
+        if [[ "${file_present[i]}" == "true" ]]; then
+            if [[ -d "${file_paths[i]}" ]] ||
+               ! mv -f -- "${restore_files[i]}" "${file_paths[i]}" ||
+               [[ ! -f "${file_paths[i]}" || -L "${file_paths[i]}" ]] ||
+               ! cmp -s -- "$backup_dir/${backup_names[i]}" "${file_paths[i]}"; then
+                log error "Could not restore ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+                return 1
+            fi
+        elif ! rm -f -- "${file_paths[i]}"; then
+            log error "Could not restore absence of ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+    done
+
+    if [[ "$service_was_active" == "true" ]]; then
+        if ! systemctl start "$service_name" || ! wait_for_service_active "$service_name" 20; then
+            log error "Restored Pulse could not be started; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+    fi
+    retain_backup="false"
+    log info "Previous installation restored"
+    return 1
 }
 
 # Main update check
@@ -576,10 +591,16 @@ main() {
         exit 0
     fi
 
-    # Never replace the Pulse Pro binary with a public community build
+    # Never replace a Pro or unidentified binary with a public community build.
     if installed_binary_is_pulse_pro; then
         log info "Pulse Pro binary detected; unattended community updates are disabled. Pro installs update in-app (license server download broker) or via https://pulserelay.pro/download.html"
         exit 0
+    else
+        local edition_status=$?
+        if [[ "$edition_status" != 1 ]]; then
+            log error "Cannot verify installed Pulse edition; no unattended update attempted. Use the matching signed archive for manual recovery."
+            exit 1
+        fi
     fi
 
     # Get current version

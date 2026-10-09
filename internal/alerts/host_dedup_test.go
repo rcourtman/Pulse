@@ -47,7 +47,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 
 		// Link a host agent to the node BEFORE checking the node
-		m.registerHostAgentNodeLink(agent)
+		testRegisterHostAgentNodeLink(m, agent)
 
 		// Verify host agent IS linked
 		if !m.hasHostAgentForNode("node/pi") {
@@ -80,7 +80,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 
 		// Register and then unregister
-		m.registerHostAgentNodeLink(agent)
+		testRegisterHostAgentNodeLink(m, agent)
 		m.unregisterHostAgentNodeLink(agent.agentID)
 
 		// Verify host agent is NOT linked
@@ -169,7 +169,7 @@ func TestHandleHostOfflineUnregistersNodeLink(t *testing.T) {
 	}
 
 	// Register the node link
-	m.registerHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: host.LinkedNodeID, cpu: true})
+	testRegisterHostAgentNodeLink(m, hostAgentNodeLink{agentID: host.ID, nodeID: host.LinkedNodeID, cpu: true})
 
 	if !m.hasHostAgentForNode("pve-offlinehost") {
 		t.Error("Expected host agent registered")
@@ -181,4 +181,10 @@ func TestHandleHostOfflineUnregistersNodeLink(t *testing.T) {
 	if m.hasHostAgentForNode("pve-offlinehost") {
 		t.Error("Expected host agent to be unregistered after HandleHostOffline")
 	}
+}
+
+// testRegisterHostAgentNodeLink applies a link the way CheckHost does, as the
+// agent's newest report.
+func testRegisterHostAgentNodeLink(m *Manager, link hostAgentNodeLink) {
+	m.applyHostAgentNodeLink(link, m.beginHostAgentReport(link.agentID))
 }

@@ -603,12 +603,11 @@ func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testi
 	assertLatencySLO(t, "GetPhysicalDiskTemperatureCharts(native-history fallback)", latencies, target)
 }
 
-// The disk temperature charts pad a short series to now with the disk's
-// current reading. A retained last-known temperature (a disk in standby, a host
-// agent past its reporting lease) is not a reading taken now: the samples
-// stored while the disk was live stay as they are, and a disk with none gets no
-// series rather than a flat line at the retained value.
-func TestDiskTemperatureChartsPadOnlyWithCollectedReading(t *testing.T) {
+// A temperature, current or retained, cannot supply historical timestamps.
+// Keep only observed samples, including single-point histories. Collected
+// readings retain disk metadata even without history; retained-only readings do
+// not add empty entries. Neither may restore synthetic two-point padding.
+func TestDiskTemperatureChartsRetainOnlyObservedSamples(t *testing.T) {
 	now := time.Now().UTC()
 	standby := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
 	silent := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason)}
@@ -637,13 +636,14 @@ func TestDiskTemperatureChartsPadOnlyWithCollectedReading(t *testing.T) {
 		t.Fatalf("silent agent disk series = %+v (found %v), want only its stored 44C sample at %s", silentEntry.Temperature, ok, sampledAt)
 	}
 	live, ok := charts["LIVE-NO-HISTORY"]
-	if !ok || len(live.Temperature) != 2 {
-		t.Fatalf("live disk series = %+v (found %v), want the padded 2-point sparkline", live.Temperature, ok)
+	if !ok || len(live.Temperature) != 0 || live.Name != "WDC WD80EFAX" || live.Node != "node-a" {
+		t.Fatalf("live disk = %+v (found %v), want its metadata with no fabricated history", live, ok)
 	}
-	for _, point := range live.Temperature {
-		if point.Value != 38 {
-			t.Fatalf("live disk padded with %.0f, want its collected 38C", point.Value)
-		}
+	m.metricsHistory.AddDiskMetric("LIVE-NO-HISTORY", "smart_temp", 37, sampledAt)
+	live, ok = m.GetPhysicalDiskTemperatureCharts(time.Hour)["LIVE-NO-HISTORY"]
+	if !ok || len(live.Temperature) != 1 || live.Temperature[0].Value != 37 ||
+		!live.Temperature[0].Timestamp.Equal(sampledAt) {
+		t.Fatalf("live disk series = %+v (found %v), want only its observed 37C sample at %s", live.Temperature, ok, sampledAt)
 	}
 }
 

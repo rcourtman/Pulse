@@ -27,13 +27,20 @@ if history:
     env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
 program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
 child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
-if history: os.write(master, (p["command"] + "\n").encode())
 os.close(slave)
 output = b""
 sent = False
+command_sent = False
+exit_sent = False
+command_ready = not history
+command_tail = b""
+send_tail_at = 0
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
+    if command_tail and time.monotonic() >= send_tail_at:
+        os.write(master, command_tail)
+        command_tail = b""
     if ready:
         try: chunk = os.read(master, 65536)
         except OSError as e:
@@ -41,10 +48,36 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
-        if output.endswith(b"(paste at this prompt, not in the command): ") and not sent:
+        if history and output.endswith(b"PULSE_TEST$ "):
+            if not command_sent:
+                # Readline also disables echo while editing a command. A
+                # control-byte marker (not its echoed shell source) proves the
+                # whole command was parsed before a prompt can accept input.
+                submitted = b"printf '\\036PULSE_COMMAND_READY\\037'; " + (p["command"] + "\n").encode()
+                if p.get("split_command"):
+                    suffix = b"(paste at this prompt, not in the command): "
+                    at = submitted.index(suffix) + len(suffix)
+                    os.write(master, submitted[:at])
+                    command_tail = submitted[at:]
+                    send_tail_at = time.monotonic() + .2
+                else:
+                    os.write(master, submitted)
+                command_sent = True
+            elif not exit_sent:
+                # Do not queue shell input while the bootstrap/installer still
+                # owns the terminal or may be restoring its input mode.
+                os.write(master, b"exit\n")
+                exit_sent = True
+        if b"\x1ePULSE_COMMAND_READY\x1f" in output:
+            command_ready = True
+        # The interactive shell also echoes the copied command, which contains
+        # this prompt literal. A PTY read may end there before the command has
+        # even run. Never deliver a credential while terminal echo is enabled:
+        # the real bootstrap disables it before printing the input prompt.
+        silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
+        if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and silent and not sent:
             os.write(master, (p["input"] + "\n").encode())
             sent = True
-            if history: os.write(master, b"exit\n")
     if child.poll() is not None and not ready: break
 else:
     os.killpg(child.pid, signal.SIGKILL)
@@ -379,6 +412,81 @@ func TestPrivateBootstrapInteractiveHistoryContainsCommandButNotToken(t *testing
 	if strings.Contains(string(hist), token) || strings.Contains(string(out), token) {
 		t.Fatal("silent input entered shell history or terminal output")
 	}
+}
+
+// A complete, matching prompt printed before private input is ready must not
+// release the fixture's credential. This makes the echoed-command chunk race
+// deterministic, without relaxing the real output/history/argv leak checks.
+func TestPrivateBootstrapPTYWaitsForSilentPrompt(t *testing.T) {
+	root, env := bootstrapFixture(t, recordingInstaller)
+	token := strings.Repeat("g", 32)
+	command := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pve", IncludeInstallType: true})
+	prompt := "Pulse agent token (paste at this prompt, not in the command): "
+	// The fixture sees a prompt-shaped write while ECHO is still enabled, then
+	// the actual bootstrap downloads/preflights and owns the private prompt.
+	command = "printf %s " + posixShellQuote(prompt) + "; sleep 0.2; " + command
+	history := filepath.Join(root, "shell-history")
+	// Split the copied command exactly at its prompt literal while Readline
+	// owns the terminal. Echo-off alone must not release the credential there.
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history, "split_command": "yes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-c", bootstrapPTYRunner)
+	cmd.Stdin = strings.NewReader(string(payload))
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("private prompt bootstrap: %v\n%s", err, out)
+	}
+	hist, err := os.ReadFile(history)
+	if err != nil || !strings.Contains(string(hist), command) {
+		t.Fatal("history control did not record the copied command")
+	}
+	args, err := os.ReadFile(filepath.Join(root, "argv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), token) || strings.Contains(string(hist), token) || strings.Contains(string(args), token) {
+		t.Fatal("PTY fixture sent credential before the silent prompt")
+	}
+	captured, err := os.ReadFile(filepath.Join(root, "captured-token"))
+	if err != nil || string(captured) != token {
+		t.Fatal("private prompt did not receive the complete credential")
+	}
+	assertContainerBootstrapCleanup(t, root)
+}
+
+func TestPrivateBootstrapPTYWaitsForCallerBeforeExit(t *testing.T) {
+	installer := strings.Replace(recordingInstaller, `exit "${FAKE_INSTALL_EXIT:-0}"`, `
+if IFS= read -r -t 0.2 </dev/tty; then
+    echo "PTY fixture queued shell input while installer owns terminal" >&2
+    exit 55
+fi
+exit "${FAKE_INSTALL_EXIT:-0}"`, 1)
+	root, env := bootstrapFixture(t, installer)
+	token := strings.Repeat("h", 32)
+	command := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pve", IncludeInstallType: true})
+	history := filepath.Join(root, "shell-history")
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-c", bootstrapPTYRunner)
+	cmd.Stdin = strings.NewReader(string(payload))
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("caller hand-off bootstrap: %v\n%s", err, out)
+	}
+	hist, err := os.ReadFile(history)
+	if err != nil || !strings.Contains(string(hist), command) || !strings.HasSuffix(string(hist), "exit\n") {
+		t.Fatal("calling shell did not receive the command and subsequent exit")
+	}
+	if strings.Contains(string(out), token) || strings.Contains(string(hist), token) {
+		t.Fatal("private input reached terminal output or history")
+	}
+	assertContainerBootstrapCleanup(t, root)
 }
 
 // The public server installer is not the telemetry installer. If it is served

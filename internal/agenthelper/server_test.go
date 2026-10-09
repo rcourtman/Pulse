@@ -602,3 +602,29 @@ func TestAuditHookContainsMetadataOnly(t *testing.T) {
 		t.Fatal("result data reached audit metadata")
 	}
 }
+
+type fakeProxmoxV2Provider struct{ calls int }
+
+func (p *fakeProxmoxV2Provider) LXCFilesystems(context.Context) (json.RawMessage, error) {
+	return nil, &ProviderError{Code: ErrorProviderUnavailable, Message: "incomplete"}
+}
+func (p *fakeProxmoxV2Provider) LXCFilesystemsV2(context.Context) (json.RawMessage, error) {
+	p.calls++
+	return json.RawMessage(`{"inventory":{"status":"partial","containers":[{"vmid":100}],"omittedVmids":[102],"collectedAt":"2026-10-05T15:00:00Z"}}`), nil
+}
+
+func TestProxmoxV2DispatchIsTypedAndV1RemainsCompleteOnly(t *testing.T) {
+	provider := &fakeProxmoxV2Provider{}
+	server := newTestServer(t, NewRegistry(nil, provider), authorizedResolver(1000), nil)
+	request := validRequest(OperationProxmoxLXCFilesystems)
+	requireErrorCode(t, exchange(t, server, request), ErrorProviderUnavailable)
+	request.OperationVersion = OperationVersion2
+	if got := exchange(t, server, request); !got.Success || provider.calls != 1 {
+		t.Fatalf("v2 response=%+v, calls=%d", got, provider.calls)
+	}
+	request.Payload = json.RawMessage(`{"vmid":100}`)
+	requireErrorCode(t, exchange(t, server, request), ErrorInvalidRequest)
+	if provider.calls != 1 {
+		t.Fatal("caller-selected VMID reached provider")
+	}
+}

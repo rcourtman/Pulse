@@ -3,9 +3,12 @@ package proxmox
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
+	"unicode/utf8"
 )
 
 // Keep the wire status separate from the existing diagnostic text. In
@@ -13,32 +16,56 @@ import (
 type apiResponseError struct {
 	statusCode           int
 	guestCommandRejected bool
+	guestFailureReason   string
 	cause                error
 }
 
 func (e *apiResponseError) Error() string { return e.cause.Error() }
 func (e *apiResponseError) Unwrap() error { return e.cause }
 
+// GuestAgentErrorReason preserves observed HTTP/command evidence for callers
+// without treating numbers or instructions quoted in an error body as status.
+// It returns only existing fixed disk-status reasons, never provider text.
+func GuestAgentErrorReason(err error) string {
+	if reason := GuestAgentDeferredReason(err); reason != "" {
+		return reason
+	}
+	var response *apiResponseError
+	if !errors.As(err, &response) {
+		return ""
+	}
+	switch response.statusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "permission-denied"
+	case http.StatusInternalServerError:
+		if response.guestCommandRejected {
+			return response.guestFailureReason
+		}
+	}
+	return "agent-error"
+}
+
 // Only specific, complete terminal failures from the command endpoint allow
 // another command after an HTTP 500. An unexplained 5xx, even with a complete
 // body, does not establish that a serial QGA command has finished.
-func guestAgentTerminalFailure(path string, body []byte) bool {
+func guestAgentTerminalFailureReason(path string, body []byte) string {
 	_, vmid, ok := guestAgentPath(path)
 	if !ok {
-		return false
+		return ""
 	}
 	message, ok := guestAgentErrorMessage(body)
 	if !ok {
-		return false
+		return ""
 	}
 	commandPath := strings.SplitN(path, "?", 2)[0]
 	command := "guest-" + commandPath[strings.LastIndex(commandPath, "/")+1:]
 	message = strings.TrimPrefix(message, fmt.Sprintf("VM %d qmp command '%s' failed - ", vmid, command))
 	switch message {
-	case "QEMU guest agent is not running",
-		"unsupported command: " + command,
+	case "QEMU guest agent is not running":
+		return "agent-not-running"
+	case "unsupported command: " + command,
 		"The command " + command + " has not been found":
-		return true
+		return "agent-error"
 	}
 	// Preserve the existing OpenBSD OS-info skip rather than repeatedly probing
 	// its missing os-release file. Do not apply it to another guest command.
@@ -46,11 +73,11 @@ func guestAgentTerminalFailure(path string, body []byte) bool {
 		message = strings.TrimPrefix(message, "guest agent command failed: ")
 		for _, filename := range []string{"/etc/os-release", "/usr/lib/os-release"} {
 			if message == "Failed to open file '"+filename+"': No such file or directory" {
-				return true
+				return "agent-error"
 			}
 		}
 	}
-	return false
+	return ""
 }
 
 func guestAgentErrorMessage(body []byte) (string, bool) {
@@ -84,6 +111,33 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(text), true
+}
+
+// PVE guest-command success has one data dictionary. Preserve its existing
+// method-specific decoding (including empty/null result, object-style rows,
+// and partial row admission), but do not treat a proxy response, duplicate
+// envelope or case-insensitive overwrite as a completed reply. This is not
+// payload-to-command provenance or proof of native QGA completion/thaw.
+func guestAgentSuccessResponse(body []byte) bool {
+	if !utf8.Valid(body) {
+		return false
+	}
+	envelope, ok := guestAgentResponseFields(body, "data")
+	if !ok {
+		return false
+	}
+	data, ok := guestAgentResponseFields(envelope["data"])
+	if !ok {
+		return false
+	}
+	for name := range data {
+		for _, canonical := range []string{"result", "content", "truncated"} {
+			if name != canonical && strings.EqualFold(name, canonical) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Reject ambiguous envelopes (including duplicate keys and trailing values)

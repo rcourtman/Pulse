@@ -14,9 +14,9 @@ matches how this self-hosted instance authenticates:
   Pulse administrator. If the administrator deliberately kept local login as a
   fallback, they can open the Pulse URL with `?show_local=true`; this only
   reveals the existing local form and does not reset credentials.
-- **Temporary lockout**: wait for the lockout to expire. Another signed-in
-  administrator can use the lockout reset in Pulse; password recovery is not
-  required.
+- **Temporary lockout**: wait for the displayed lockout to expire. An authorised
+  administrator can use the [manual recovery API](../SECURITY.md#manual-recovery-admin);
+  this does not reset a password or bypass SSO.
 
 #### Recover the existing local administrator login
 
@@ -126,9 +126,62 @@ Do not post full service environments, `docker inspect` output or resolved
 only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
-- Check if Pulse is running.
-- Verify the port is open on your firewall.
-- **PBS**: Remember PBS uses port **8007** and requires **HTTPS**.
+
+Identify which connection failed before changing ports or credentials:
+
+- **Your browser cannot open Pulse:** check that the intended Pulse service or
+  container is running, then its actual listening port, container port mapping
+  and reverse proxy target. Pulse's default port is **7655**, but an existing
+  deployment can use a different one. Use the [port-change checks](#port-change-didnt-take-effect)
+  and [reverse proxy guide](REVERSE_PROXY.md) for that path; do not broadly open
+  firewall access or expose Pulse directly to bypass a proxy.
+- **Pulse opens, but a monitored platform request is refused:** check the
+  affected connection's saved hostname, scheme and port in **Settings →
+  Infrastructure**, and the network path **from the Pulse server**. Browser
+  access to the platform is a different path. Proxmox VE normally uses HTTPS
+  on **8006**; PBS uses HTTPS on **8007**. Other platforms use their saved
+  endpoint, not an assumed Proxmox port. Changing Pulse's listening port does
+  not repair this connection.
+
+A connection refusal is not an authentication response (**401/403**) or a
+certificate-validation error. Keep the original time and redacted error;
+do not replace credentials or disable TLS verification on a refusal alone.
+For a page that opens but has missing readings, use the
+[missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
+
+### CORS errors
+
+CORS controls whether a browser can read a response from a different origin.
+It is not Pulse's connection to Proxmox, PBS or TrueNAS, and it does not replace
+authentication, CSRF protection or TLS.
+
+In your browser's developer tools, compare the page's origin with the failed
+API request's origin and HTTP status. An origin consists of **scheme, host and
+port**: HTTP and HTTPS, or two different ports, are different origins. Review
+the original console error locally; a certificate failure, login redirect or
+401/403 response needs its own correction, not a broader CORS allowlist.
+
+- **Pulse UI and API share a public origin:** a same-origin reverse proxy needs
+  no CORS exception. Keep the API behind that proxy and correct its routing or
+  [trusted forwarded headers](REVERSE_PROXY.md#before-configuring-the-proxy);
+  do not expose the backend or add wildcard response headers to bypass it.
+- **A separate trusted browser app needs API access:** in **Settings → System →
+  Network → CORS Allowed Origins**, list only that app's exact origin, for
+  example `https://app.example.com:8443`. Do not include a path, trailing slash
+  or a hostname pattern. Multiple exact origins are comma-separated.
+  `ALLOWED_ORIGINS` overrides the saved setting; removing that environment
+  override does not erase an existing saved allowlist. Re-open settings after
+  saving and verify the effective value and the ordinary browser request.
+
+An empty policy grants no cross-origin browser permission. `*` allows any
+origin **without credentialed browser access**; it cannot fix a request that
+needs a browser session cookie. Do not disable authentication, CSRF protection
+or TLS verification to make such a request work. Iframe embedding and proxy
+authentication have separate settings; CORS is not their trust boundary.
+
+Keep cookies, authorization headers, API tokens and full network exports
+private. A report needs only the redacted error, HTTP status and relevant
+origins, not a credential-bearing request or HAR file.
 
 ---
 
@@ -137,13 +190,56 @@ only the relevant port numbers and a redacted error if help is needed.
 ### Authentication
 
 #### "Invalid username or password" after setup
-- **Docker Compose**: Did you escape the `$` signs in your hash? Use `$$2a$$...`.
-- **Truncated Hash**: Ensure your bcrypt hash is exactly 60 characters.
+
+When the local login form reports this error, stop repeated password guesses:
+failed attempts count against both the username and client IP. Privately check
+the existing username and the active credential source. Deployment-supplied
+`PULSE_AUTH_USER` and `PULSE_AUTH_PASS` take precedence over Pulse's generated
+`.env`, so changing only that file may leave the running password unchanged.
+
+A bcrypt hash must be complete (60 characters). Compose YAML interpolation,
+Docker `--env-file` and Pulse's generated `.env` use different quoting rules;
+do not blindly replace every `$` with `$$`. Follow the
+[authentication-file guidance](CONFIGURATION.md#private-docker-authentication-file)
+for your actual source, keeping hashes and resolved deployment configuration
+private. If the password is genuinely lost, use
+[deployment-specific recovery](#i-forgot-my-password), not setup or re-enrolment.
 
 #### Cannot login / 401 Unauthorized
-- Clear browser cookies.
-- Check if your IP is locked out (wait 15 mins).
-- If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
+
+Identify which request failed before clearing cookies or changing credentials:
+
+- **Browser session:** a 401 on an ordinary UI request can mean a missing or
+  expired session, not a wrong password. Open the same public Pulse URL in a
+  fresh browser session and sign in through the configured method. Preserve any
+  working administrator session; do not clear unrelated sites' cookies.
+- **SSO or proxy login:** use the identity-provider or Pulse administrator's
+  recovery path. Check the [proxy authentication guide](PROXY_AUTH.md) when the
+  proxy signs you in but Pulse rejects the request. A local lockout reset does
+  not repair an identity-provider account or missing trusted proxy headers.
+- **Local login form:** an **Account locked** response gives the remaining wait.
+  Lockout applies separately to username and client IP, normally for 15 minutes;
+  clearing cookies does not reset it. A **Too many requests** response (429) is
+  rate limiting, not proof that the password is wrong. Wait rather than retrying
+  rapidly, restarting Pulse or disabling authentication.
+- **API client:** a missing or invalid API token can cause 401 even when browser
+  login works. Check the token's status and intended permissions privately.
+  A 403 can instead mean insufficient permissions or failed CSRF protection;
+  do not disable those checks or reset the password to repair API access. Use
+  the [private header-file examples](../SECURITY.md#usage), never a token or
+  session cookie pasted into a command or URL.
+
+Manual lockout reset requires an authenticated administrator with
+`settings:write` authority; session requests also require CSRF protection. The
+[manual recovery API](../SECURITY.md#manual-recovery-admin) resets one username
+or IP identifier at a time, not a password, SSO account or every lockout. Do not
+assume resetting the username also clears a separately locked IP.
+
+For a report, retain the time, sign-in method, redacted error, HTTP status and
+request path (without query strings). Keep passwords, hashes, cookies, tokens,
+full headers, **Copy as cURL** commands and network exports private. A 401 alone
+does not justify deleting configuration, recreating the data volume or
+re-enrolling agents.
 
 #### Audit Log verification shows unsigned events
 
@@ -183,8 +279,40 @@ restore, not by overwriting today's history. Follow
 
 ### Monitoring Data
 
+#### Primary IP shows a Podman or Docker bridge address
+
+On a Proxmox VM or LXC, **Primary IP** is Pulse's selected address, not proof of
+the guest's default route or reachability from your browser. An agentless LXC
+uses the Proxmox collection path. When interface associations are supplied,
+Pulse prefers other guest interfaces to recognised local-container/overlay
+interfaces such as `podman0`; this is a display hint, not a physical-NIC test.
+Useful secondary addresses are retained, including a virtual-only guest's
+addresses. An unknown interface association remains unknown; address order
+does not establish the intended route. The Proxmox API and Pulse agent use
+different collection paths; an
+agent's correct address does not establish that the API-only view is correct.
+
+For access, use the intended guest address from your existing Proxmox network
+configuration rather than assuming the displayed first address is suitable.
+In **Workloads**, hover over the guest's network icon to inspect **Network
+Interfaces**: when supplied, interface names appear beside their addresses.
+The guest's details also show **Other IPs** when more than one address is
+available. An address list without interface names does not establish which
+interface it belongs to; keep that association unknown rather than guessing
+from its prefix or position. These views do not test routing or connectivity.
+
+Do not remove a working bridge, renumber the guest, reinstall or add an agent,
+recreate the monitored connection, or run a guest-agent probe just to change
+this display. For a report, retain the collection path and the interface/address
+relationship already observed. Keep actual addresses, MACs and hostnames
+private, using consistent aliases to preserve which address belongs to which
+interface; a raw network or configuration dump is not needed.
+
 #### Agent fleet update or identity issue
 
+- If readings became mixed after adding another Proxmox installation, start
+  with the [cross-installation identity checks](#monitoring-is-mixed-between-proxmox-installations),
+  not an agent update or re-enrolment command.
 - Open an outdated-agent notice or
   `/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
   copy the platform-specific command for each reported host. This is a manual
@@ -213,31 +341,213 @@ first step before platform-local cleanup.
 #### Filter Pulse's systemd journal by severity
 
 Current systemd installs preserve Pulse's structured log level as the journal
-priority. For example, show warnings and more important records with:
+priority. For warnings and more important records, use this bounded Bash reader
+on the Pulse host, with an account authorised to read its journal. In Proxmox
+LXC, run it inside the Pulse container, not on the Proxmox host. Substitute the
+actual service name (`pulse-backend` on some older installs) and original
+incident's time window; no new action or request ID is needed.
 
 ```bash
-sudo journalctl -u pulse -p warning
+# systemd / Proxmox LXC — warning and higher priority
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse -p warning --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
+This requires **GNU `timeout`**, reads at most 200 records from the last 15
+minutes and allows eight seconds plus a one-second termination grace. A failed
+or timed-out read is unavailable, not an empty warning search; no partial
+excerpt is shown. Stop if the utility or journal access is unavailable; do not
+use an unbounded substitute. These local excerpts are **not sanitised**; follow
+[log-sharing precautions](#inspect-notification-logs) before sharing any line.
+
 The stored message remains JSON (`"level":"warn"`, for example), while
-`PRIORITY` is available to `journalctl` and syslog forwarding. If a current
-Pulse warning appears only with `-p info`, inspect `systemctl cat pulse`; the
-installed service must contain `SyslogLevelPrefix=true` and
-`PULSE_LOG_JOURNAL_LEVEL_PREFIX=true`. Re-run the current signed installer to
-repair an older generated unit rather than adding a JSON-parsing wrapper.
+`PRIORITY` is available to `journalctl` and syslog forwarding. An empty filtered
+read does not prove that no warning occurred: an older generated unit may store
+all records at info priority. Use the [bounded unfiltered systemd reader](#inspect-notification-logs)
+to retain the original incident evidence instead. An administrator can check
+locally whether the service configuration contains `SyslogLevelPrefix=true` and
+`PULSE_LOG_JOURNAL_LEVEL_PREFIX=true`; do not post the full unit or environment,
+which can contain credentials. Do not reinstall or restart Pulse just to obtain
+logs. Repair an older generated unit through the current signed installer at a
+planned maintenance window, preserving the deployment's settings and data.
 
 #### VMs show "-" for disk usage
-- Read the disk value's explanation and observation time first; a dash is not
-  proof that the agent is missing.
+- Start with [current, retained and unavailable disk readings](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings).
+  A dash is not zero; a **Prior** number is not current free space. Clear numeric
+  disk conditions to inspect missing readings, not to change collection or access.
+  A filtered list or disk sort is not proof of complete monitoring.
 - Check the guest-local service, current VM Options and the configured API
   token's read permissions. Schedule any setup change or restart outside backups.
 - Do not run guest-agent probes during backup freeze/thaw. An OK backup task
   or an absent lock does not confirm thaw.
 - See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight;
-  it does not verify a fresh disk poll. If an affected installation needs to
-  pause monitoring, follow the [manual backup precaution](VM_DISK_MONITORING.md#pause-pulse-for-a-planned-freeze-enabled-backup).
-  It checks the server service and update timer before the backup, then requires
-  independent guest thaw confirmation before starting Pulse again.
+  it does not verify a fresh disk poll. For an affected installation, follow
+  the [manual backup precaution](VM_DISK_MONITORING.md#backup-safety) for your
+  actual server deployment: **systemd or Docker/Compose**. A planned pause is
+  **not incident recovery**, and stopping Pulse does not cancel a guest-agent
+  request already issued. If an existing operation's state is unknown, do not
+  start a backup on the strength of a stopped server or an elapsed wait.
+- Keep Pulse stopped until the backup has ended and independent post-backup
+  checks confirm **thaw, fresh successful workload writes to every filesystem
+  covered by the backup, and workload liveness**. Use established safe checks,
+  independent of Pulse and the QEMU Guest Agent; a console connection or a
+  successful read alone is not enough. If any check fails or is unavailable,
+  leave Pulse and its automatic updater paused and use the guest/platform's
+  recovery procedure, not new probes, forced writes or another backup.
+- After all checks pass, restore **only services and timers that were active
+  before the pause**, following the deployment-specific precaution. Unknown
+  pre-pause states are not permission to start them. **Pulse monitoring and
+  alerts are unavailable while stopped**; arrange independent outage coverage.
+
+#### Backup-age alerts were not evaluated
+
+The **Pulse** warning “Backup-age alerts were not evaluated because recovery
+data could not be read” means that Pulse could not complete that backup-age
+check. It is a monitoring failure, **not evidence that a backup failed**.
+Existing backup-age alerts are kept during the failed read; they are not a
+fresh assessment, and the absence of a new age alert does not establish that
+backups are current. A working connection or a visible backup row does not
+prove that age evaluation completed.
+
+Use the owning Proxmox/PBS installation's existing backup records and your
+established backup checks while evaluation is unavailable. Compare the same
+installation, guest type/ID, datastore, namespace and backup time; a matching
+VMID in another installation is not the same guest. For a separate Coverage
+disagreement, use the [backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected).
+
+Keep the warning's original time and message. On the actual Pulse server,
+use the existing [bounded log reader](#inspect-notification-logs) for the
+incident window, with the matching systemd or Docker deployment. The log
+message **Failed to list recovery rollups for backup alerts** can identify a
+failed evaluation read; a timeout does not by itself establish its cause.
+A failed log read is unavailable, not an empty successful search. Share only
+the running Pulse version, affected time window, warning and relevant manually
+redacted error. Keep credentials, private paths/hostnames, full logs, API
+responses and database files out of public reports.
+
+**A disappearing warning alone is not recovery.** Disabling alerts or backup-age
+checks, or setting both age thresholds to zero, can clear it without a
+successful evaluation. Keep the intended policy unchanged and observe ordinary
+polling; do not disable protection just to clear the warning. A successful age
+evaluation still does not establish backup completeness, verification, restore
+readiness or guest thaw.
+
+Do not restart or reinstall Pulse, clear History, delete/prune backup records,
+change database schema or increase timeouts just to diagnose this warning. Do
+not run a new backup, verification, restore, live diagnostics or guest-agent
+probe as a test. An OK backup task does not prove guest thaw; a frozen or
+unresponsive guest needs the separate [backup safety procedure](VM_DISK_MONITORING.md#backup-safety),
+including independent post-backup thaw, successful writes to every covered
+filesystem and workload liveness before restoring only previously active
+monitoring.
+
+#### Backup health disagrees with PBS
+
+A visible or Verified PBS backup is not the same reading as a workload's
+Coverage posture. Use the [backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected)
+to compare one affected row's explanation, Job, History and Access with the
+matching native PBS record. Do not run a new backup, restart or clear history
+just to diagnose the disagreement.
+
+#### Replication jobs are Pending, stale or missing
+
+**Proxmox → Replication** monitors storage replication between PVE nodes,
+not PBS backups. A replication result does not establish backup coverage,
+restore readiness or guest thaw. Use the owning Proxmox installation's
+existing replication status while Pulse's reading is uncertain.
+
+Start with **All** and clear the table's search. **No replication jobs match
+current filters** is different from an empty inventory, a missing tab or
+**Could not load replication jobs**. Record the actual message; a missing
+row is not proof that Proxmox deleted the job.
+
+| Observation in Pulse | What to compare | What it does not establish |
+| --- | --- | --- |
+| **Pending**, with current sync times | The same job's outcome, failures and error in Proxmox. Pulse can retain sync times without a usable outcome for its Healthy/Pending classification. | Pending alone does not prove a job is waiting or failed. A recent time, zero displayed failures or no displayed error alone does not prove success. |
+| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. A Healthy pill does not establish current inventory or a running scheduler. |
+| Empty inventory, missing tab or load error | Whether the expected jobs still exist in Proxmox, which Pulse connection owns them, and any displayed read error. | Missing or failed collection is unknown, not an empty healthy result. Correcting a status pill does not establish lifecycle or polling recovery. |
+
+For one affected job, expand its row using the control beside **Guest**;
+the details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
+and **Failures** even when narrow layouts hide table columns. Compare the
+owning installation, job/guest ID and source → target route with the existing
+native Proxmox replication view. Similar names or VMIDs in separate
+installations do not identify the same job. An unavailable native observation
+can be reported as unavailable; do not force a sync to obtain one.
+
+Treat **classification** and **stale or absent inventory after a lifecycle
+change** as separate symptoms. If a previous restart restored data, keep that
+observation and the now-working setup; do not repeat a restart, reboot or
+update to reproduce it. One current row does not prove every job recovered.
+
+For help, give the running Pulse/PVE versions, container image tag if relevant,
+the original sequence and time, which symptoms remain, and one matching job's
+Pulse versus native status, sync times, failures and redacted error. Include
+any already-observed recovery, without recreating missing original evidence.
+Use consistent placeholders for private installations, nodes and guest/job
+identities so the route remains comparable. Do not share tokens, full API
+responses, configuration, HAR exports or unredacted screenshots.
+
+Do not restart or upgrade Pulse, reboot nodes, change schedules, disable/re-enable
+jobs, recreate connections, widen token permissions or disable privilege
+separation just to diagnose the table. Do not run a new sync, backup, restore,
+live diagnostics or guest-agent probe as a test. A frozen or unresponsive
+guest needs the separate [backup safety procedure](VM_DISK_MONITORING.md#backup-safety),
+not these display checks.
+
+#### Monitoring is mixed between Proxmox installations
+
+Pulse is intended to monitor [multiple Proxmox installations](CONFIGURATION.md#multiple-proxmox-installations).
+Separate installations can reuse native node names and VMIDs. A distinct
+Pulse connection label or display name is not a repair for wrong attribution.
+
+If adding a connection led to node errors on the wrong node, unavailable
+backup status for overlapping VMIDs, or lost agent-backed Docker monitoring,
+treat each as an unresolved symptom. One restored view does not establish
+that the others recovered. Use **existing observations only**; if you already
+repaired the setup, keep that working setup and the original sequence rather
+than undoing the repair or repeating the addition.
+
+| Affected reading | Safe comparison | What it does not prove |
+| --- | --- | --- |
+| Node errors | Compare the affected node and observation time with that installation's own Proxmox view. | A similar node name or a different Pulse label does not establish which installation owns the error. |
+| Guest backup status | Compare one affected guest with the matching native Proxmox/PBS record: owning installation, guest type/VMID, datastore, namespace and backup time. Follow the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected). | The same VMID or a visible backup from another installation does not establish protection for this guest. |
+| Agent-backed Docker monitoring | In **Settings → Infrastructure → Agent Doctor**, inspect the affected host's existing **Last seen** and **Identity evidence**, including **Connection** and **Hostname** where available. Compare with the known Docker host, not a similar guest name. | Recent agent contact or a Healthy badge does not prove that the correct host's containers are visible or correctly attributed. Missing evidence is unknown, not proof that the agent stopped. |
+
+While attribution is uncertain, use each installation's own Proxmox/PBS
+views for node errors and backup status, and the Docker host's existing runtime
+view for container status. Do not make backup, restore or workload changes
+from a potentially misattributed Pulse reading.
+
+For a report, give the running server/agent versions, the original sequence,
+which of the three symptoms remain, and one affected pair's expected versus
+displayed origin and observation times where available. Use **consistent
+placeholders** such as `site-A`, `site-B`, `node-X` and `guest-100` across every
+view; say explicitly when the native names or VMIDs are equal. Keep actual
+addresses, hostnames, connection IDs and machine identities private. Do not
+share a full Agent Doctor report, configuration, API response, HAR export,
+token or unredacted screenshot. Unavailable original evidence can be reported
+as unavailable; do not recreate the incident to obtain it.
+
+Do not rename production nodes, change VMIDs or machine IDs, delete/re-add
+connections, re-enrol agents, rotate tokens, restart services or clear History
+just to diagnose this disagreement. Do not run live diagnostics, guest-agent
+probes, a new backup or a restore as an identity test. An OK backup does not
+prove thaw; a frozen or unresponsive guest needs the separate
+[backup safety procedure](VM_DISK_MONITORING.md#backup-safety), not these display checks.
 
 #### Temperature data missing
 - Compare the affected host's active agent version, last report, sensor and
@@ -280,6 +590,94 @@ leave the original host unchanged. Follow
 [Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
 precedence, systemd example and checks after restart.
 
+#### Memory use keeps growing
+
+A Proxmox LXC memory chart covers the container, not just Pulse. It can include
+other processes and filesystem cache; Docker's displayed memory also uses its
+own cache accounting. Neither is interchangeable with Pulse's resident memory
+(RSS), a Go heap size, or virtual address space (`VSZ` / `VmSize`). A large
+container reading alone does not establish a Pulse memory leak.
+
+For a responsive **Linux systemd / Proxmox LXC** install, take this small,
+read-only sample at a normally occurring high point. Run it **inside the Pulse
+container** for LXC, not on the Proxmox host. Substitute the actual service name
+(`pulse-backend` on older installs) in both `systemctl` calls. Use an account
+authorised to read these counters; a failed read is unavailable, not zero.
+
+```bash
+# systemd / Proxmox LXC: Pulse resident-memory sample
+(
+  set -eu
+  if timeout --kill-after=1s 8s bash <<'PULSE_MEMORY_SAMPLE'
+set -eu
+date -u +'%Y-%m-%dT%H:%M:%SZ'
+pid=$(systemctl show pulse --property=MainPID --value)
+case "$pid" in
+  ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+esac
+identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+if [ -z "$identity" ]; then
+  printf 'Process identity unavailable.\n' >&2; exit 1
+fi
+counters=$(awk '
+  $1 == "VmRSS:" || $1 == "RssAnon:" || $1 == "RssFile:" ||
+  $1 == "RssShmem:" || $1 == "VmSwap:" {
+    if (NF != 3 || $2 !~ /^[0-9]+$/ || $3 != "kB" || seen[$1]++) exit 1
+    print; fields++
+  }
+  END { if (fields != 5) exit 1 }
+' "/proc/$pid/status")
+current_pid=$(systemctl show pulse --property=MainPID --value)
+current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+if [ "$pid" != "$current_pid" ] || [ "$identity" != "$current_identity" ]; then
+  printf 'Pulse changed during collection; discard this sample.\n' >&2; exit 1
+fi
+printf 'Pulse process (PID and UTC start): %s\n%s\n' "$identity" "$counters"
+PULSE_MEMORY_SAMPLE
+  then
+    :
+  else
+    status=$?
+    printf 'Resident-memory sample unavailable; retain the error and stop sampling.\n' >&2
+    exit "$status"
+  fi
+)
+```
+
+The recipe requires GNU `timeout`: it gives the read-only sampling commands
+eight seconds, with a one-second termination grace, rather than leaving a hung
+reader running indefinitely. It does not stop or restart Pulse. A missing
+utility, timeout or reader error means the sample is unavailable; keep the
+failure, and do not remove the deadline or rerun it against an unresponsive
+installation. No complete process/counter sample is printed before every check
+succeeds; the initial UTC timestamp alone is not a memory result.
+
+Linux labels these values `kB`, meaning 1,024 bytes; divide by 1,024 for MiB.
+`VmRSS` is resident process memory, split into anonymous (`RssAnon`),
+file-backed (`RssFile`) and shared-memory (`RssShmem`) pages. `VmSwap` is swapped
+private anonymous memory, not additional resident memory or all container swap.
+These counters are approximate and not an atomic snapshot; a nonzero
+`RssFile` is not proof of a leak, and `RssAnon` is not specifically the Go heap.
+Missing fields on an older kernel make this recipe fail rather than invent
+values. If it fails or Pulse stops, retain that fact; do not loosen access
+controls or keep retrying against an unresponsive installation.
+
+Keep the sample time, PID/start time, running version, container memory limit,
+fleet size, polling interval and whether dashboards were open. If safe, compare
+another naturally occurring point with the **same PID and process start time**;
+record any restart or upgrade as a different run, not evidence that the cause
+was fixed. For Docker, the [bounded container statistics below](#excessive-cpu-writes-or-database-growth)
+retain the container start time and memory usage but do not measure Pulse RSS;
+do not assume its PID 1 is Pulse.
+
+Do not restart Pulse, drop caches, force garbage collection, change memory limits
+or delete history just to obtain a lower reading. If the container is near its
+limit or the host is unresponsive, stop sampling and prioritise safe recovery.
+Do not post a heap dump, profile, full `/proc` status or process command line:
+they can contain private details. Share only these counters and the relevant
+context after local review; existing screenshots remain useful if collection
+is unsafe.
+
 #### Excessive CPU, writes or database growth
 
 First distinguish **Pulse server activity**, agent activity and total host or
@@ -304,31 +702,81 @@ back to an older version does not make that data a clean older-version baseline.
 For a responsive **Linux systemd / Proxmox LXC** install, the following reads
 two process-I/O samples, waiting 60 seconds between them. Run it inside the
 Pulse container for LXC, not on the Proxmox host. Substitute the actual service
-name (`pulse-backend` on some older installs). Use an account authorised to
-read the process counters; no service restart or database access is needed.
+name (`pulse-backend` on some older installs) in both `systemctl` calls. Use an
+account already permitted to read the process counters. The collector does not
+elevate privileges or prompt: an unprivileged deadline cannot reliably stop a
+privileged reader. If access is denied, stop rather than changing privileges
+to make it pass; no service restart or database access is needed.
 
 ```bash
 # systemd / Proxmox LXC: bounded process-write samples
 (
-  set -e
-  for sample in 1 2; do
-    date -u +'%Y-%m-%dT%H:%M:%SZ'
-    pid=$(systemctl show pulse --property=MainPID --value)
-    case "$pid" in
-      ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
-    esac
-    TZ=UTC ps -p "$pid" -o pid=,lstart=
-    sudo awk '
-      $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" { print; fields++ }
-      END { if (fields != 2) exit 1 }
-    ' "/proc/$pid/io"
-    if [ "$sample" -eq 1 ]; then sleep 60; fi
-  done
+  set -eu
+  command -v timeout >/dev/null 2>&1 || {
+    printf 'Write samples unavailable: GNU timeout is required.\n' >&2; exit 1
+  }
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_WRITE_SAMPLES' 2>/dev/null
+set -eu
+read_sample() {
+  set -eu
+  pid=$(systemctl show pulse --property=MainPID --value)
+  case "$pid" in
+    ''|0|*[!0-9]*) exit 1 ;;
+  esac
+  identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  [ -n "$identity" ] || exit 1
+  start_ticks=$(awk '
+    { sub(/^.*\) /, ""); if ($20 !~ /^[0-9]+$/) exit 1; print $20; found++ }
+    END { if (found != 1) exit 1 }
+  ' "/proc/$pid/stat")
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  counters=$(awk '
+    $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" {
+      if (NF != 2 || $2 !~ /^[0-9]+$/ || seen[$1]++) exit 1
+      print; fields++
+    }
+    END { if (fields != 2) exit 1 }
+  ' "/proc/$pid/io")
+  current_pid=$(systemctl show pulse --property=MainPID --value)
+  current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  current_ticks=$(awk '
+    { sub(/^.*\) /, ""); if ($20 !~ /^[0-9]+$/) exit 1; print $20; found++ }
+    END { if (found != 1) exit 1 }
+  ' "/proc/$pid/stat")
+  [ "$pid" = "$current_pid" ] && [ "$identity" = "$current_identity" ] &&
+    [ "$start_ticks" = "$current_ticks" ] || exit 1
+  printf 'Identity: %s; start ticks=%s\nSample UTC: %s\n%s\n' \
+    "$identity" "$start_ticks" "$timestamp" "$counters"
+}
+first=$(read_sample)
+sleep 60
+second=$(read_sample)
+[ "${first%%$'\n'*}" = "${second%%$'\n'*}" ] || exit 1
+printf '%s\n\n%s\n' "$first" "$second"
+PULSE_WRITE_SAMPLES
+  ); then
+    printf '%s\n' "$samples"
+  else
+    status=$?
+    printf 'Write samples unavailable (exit %s); no complete pair. Stop sampling.\n' "$status" >&2
+    exit "$status"
+  fi
 )
 ```
 
-Compare `write_bytes` only when both samples have the same PID and process
-start time, no restart occurred, and the counter did not decrease. Divide the
+Each recipe requires **GNU `timeout`** and limits the complete two-sample
+collection, including the 60-second wait, to 80 seconds. At the deadline it
+kills its own read-only collection group, including readers that ignore TERM,
+not Pulse or Docker. This deliberate hard stop prevents a reader surviving after
+the collection shell exits. A missing utility, permission failure, timeout or changed identity
+makes the pair unavailable; no partial identity, counter or raw reader error is
+printed, and there is no unbounded fallback. Stop sampling on failure rather
+than removing the deadline or retrying against an unresponsive installation.
+
+The process recipe checks the same PID and process start time before and after
+each read and across both samples. Linux start ticks also distinguish PID reuse
+within one displayed second. These checks do not make the counters atomic.
+Compare `write_bytes` only when no restart occurred and the counter did not decrease. Divide the
 byte difference by the **actual elapsed seconds**. This is storage-accounted
 process I/O, not filesystem growth or physical SSD wear; cancelled writes and
 background writeback can differ from device measurements. Keep
@@ -338,24 +786,59 @@ day's total. Preserve the window and units with the result.
 
 For **Docker / Compose**, run this on the Docker host, replacing `pulse` with
 the running container name. It reads only the start time and selected statistics,
-not the container environment or configuration.
+not the container environment or configuration. Each stats call targets the
+full container ID, not a reusable name. The name must still resolve to the same
+running ID, start time and restart count after the read and across both samples;
+a replacement, restart or stopped container makes the pair unavailable.
 
 ```bash
 # Docker: bounded container statistics
 (
-  set -e
-  for sample in 1 2; do
-    date -u +'%Y-%m-%dT%H:%M:%SZ'
-    docker inspect --format 'Started={{.State.StartedAt}}' pulse
-    stats=$(docker stats --no-stream --format \
-      'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' pulse)
-    if [ -z "$stats" ]; then
-      printf 'Container statistics unavailable; no zero inferred.\n' >&2
-      exit 1
-    fi
-    printf '%s\n' "$stats"
-    if [ "$sample" -eq 1 ]; then sleep 60; fi
-  done
+  set -eu
+  command -v timeout >/dev/null 2>&1 || {
+    printf 'Container samples unavailable: GNU timeout is required.\n' >&2; exit 1
+  }
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_CONTAINER_SAMPLES' 2>/dev/null
+set -eu
+read_sample() {
+  set -eu
+  identity=$(docker inspect --type container --format \
+    '{{.Id}} {{.State.StartedAt}} {{.State.Running}} {{.RestartCount}}' pulse)
+  case "$identity" in *$'\n'*) exit 1 ;; esac
+  read -r id started running restarts extra <<< "$identity"
+  [ "${#id}" -eq 64 ] && [ "$running" = true ] && [ -z "$extra" ] || exit 1
+  case "$id" in *[!0-9a-f]*) exit 1 ;; esac
+  case "$started" in 0001-*) exit 1 ;; ????-??-??T??:??:??*Z) ;; *) exit 1 ;; esac
+  case "$restarts" in ''|*[!0-9]*) exit 1 ;; esac
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  stats=$(docker stats --no-stream --format \
+    'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' "$id")
+  case "$stats" in
+    *$'\n'*) exit 1 ;;
+    CPU=*%\ Memory=*\ /\ *\ BlockIO=*\ /\ *) ;;
+    *) exit 1 ;;
+  esac
+  cpu=${stats%% *}
+  [[ "${cpu#CPU=}" =~ ^[0-9]+([.][0-9]+)?%$ ]] || exit 1
+  case "$stats" in *--*) exit 1 ;; esac
+  current_identity=$(docker inspect --type container --format \
+    '{{.Id}} {{.State.StartedAt}} {{.State.Running}} {{.RestartCount}}' pulse)
+  [ "$identity" = "$current_identity" ] || exit 1
+  printf 'Identity: %s\nSample UTC: %s\n%s\n' "$identity" "$timestamp" "$stats"
+}
+first=$(read_sample)
+sleep 60
+second=$(read_sample)
+[ "${first%%$'\n'*}" = "${second%%$'\n'*}" ] || exit 1
+printf '%s\n\n%s\n' "$first" "$second"
+PULSE_CONTAINER_SAMPLES
+  ); then
+    printf '%s\n' "$samples"
+  else
+    status=$?
+    printf 'Container samples unavailable (exit %s); no complete pair. Stop sampling.\n' "$status" >&2
+    exit "$status"
+  fi
 )
 ```
 
@@ -416,9 +899,19 @@ alert was generated, routed or delivered to the intended recipient.
 - Open **Alerts → Notifications**. If **Notifications are paused** is shown,
   configured destinations and a successful test do not enable real delivery.
   Turn delivery on there only when you intend to send alerts.
-- Check the affected alert, the destination's **Enabled** state, minimum alert
-  severity and tag filters. Review quiet hours and any mute, acknowledgement or
-  maintenance policy before treating an absent attempt as a transport failure.
+- Check the affected alert, the destination's **Enabled** state and
+  [minimum severity and tag filters](CONFIGURATION.md#destination-severity-and-tag-routing).
+  Both must match: an empty tag filter does not bypass minimum severity, and
+  critical severity does not bypass a nonempty tag filter. Review the [quiet-hours schedule](CONFIGURATION.md#quiet-hours-and-notification-holds)
+  and [acknowledgement or snooze](CONFIGURATION.md#acknowledge-and-snooze-existing-alerts),
+  plus any mute or maintenance policy, before treating an absent attempt as a
+  transport failure. In **Alerts → Overview**, use **Show acknowledged** to find
+  hidden incidents; **Resume** ends a snooze but does not remove acknowledgement.
+- For a missing repeat or all-clear, review [alert reminders and recovery notifications](CONFIGURATION.md#alert-reminders-and-recovery-notifications).
+  Cooldown off stops ordinary reminders for the same occurrence; it does not
+  mean unlimited repeats. Recovery messages require eligible prior firing
+  delivery to that destination. Their absence does not establish whether the
+  workload recovered: check fresh readings and the incident state separately.
 - Use **Recent delivery activity** to correlate the original alert, destination
   and absolute timestamp, including held-notification reasons. An empty window
   is not proof of healthy delivery; an **unavailable** read is not an empty log.
@@ -427,9 +920,27 @@ alert was generated, routed or delivered to the intended recipient.
 #### Recover retained delivery failures
 
 Pulse shows a delivery warning for failed or dead-lettered notifications in its
-persistent queue, not for every recoverable retry. **Recent delivery activity**
-includes safely redacted provider errors; completed attempts remain for 7 days
-and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+persistent queue, not for every recoverable retry. Authentication,
+configuration and rejected failures stop automatic retries as soon as they are
+classified, even with attempts left. A terminal failure can therefore appear
+without exhausting the retry budget; waiting alone will not resend it. See
+[webhook retry behaviour](WEBHOOKS.md#-delivery-contract) for HTTP exceptions,
+transient failures and the normal queued attempt limit.
+
+**Recent delivery activity** masks recognised credentials in URLs, **not all
+private information**. Older records and other error sources can still include
+email addresses, private destinations or credentials echoed outside a URL;
+alert identifiers and resource names can also identify your infrastructure.
+Withheld webhook response text is intentional, not a reason to collect it again;
+see [withheld-response guidance](#webhook-response-body-is-withheld).
+Keep full entries, copied responses and screenshots private.
+A `REDACTED` marker does not make the rest
+safe to share. For a public report, extract only the relevant timestamp,
+delivery method, failure class, HTTP status or SMTP error code and a manually
+redacted error. See [notification log precautions](#inspect-notification-logs).
+
+Completed attempts remain for 7 days and dead-letter attempts for 30 days.
+Start with the failure class and timestamp:
 
 | Failure | Check before retrying |
 | --- | --- |
@@ -441,15 +952,55 @@ and dead-letter attempts for 30 days. Start with the failure class and timestamp
 | Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
 
 Save the corrected destination settings and send one test; check receipt at the
-intended destination. **Retry retained deliveries** gives terminal failures a
-fresh retry budget, but a destination that accepted an earlier attempt may
-receive a duplicate. Review the confirmation's delivery count and provider
-limits before retrying. A successful test does not itself retry retained items.
+intended destination. **Retained deliveries keep the destination settings saved
+when they were queued.** Editing a URL, recipient, credential, header or template
+does not replace that saved configuration. A test uses the edited settings;
+retrying an old delivery can still use the old endpoint or credential and fail
+again. If the old destination must no longer receive data, disable it rather
+than relying on a URL edit to redirect queued work. This is not a recall of
+requests already sent; see the [pause and cancellation limits](#pause-and-cancellation-limits).
+
+**Retry retained deliveries** gives all retained terminal failures a fresh retry
+budget, not just the destination you tested. Use it only when sending those
+original deliveries is still intended and their original settings remain
+appropriate, for example after a temporary provider outage. A destination that
+accepted an earlier attempt may receive a duplicate. Review the confirmation's
+delivery count and provider limits before retrying. A successful test does not
+itself retry retained items or prove that their saved settings now work. If
+uncertain, leave the failures retained and check the next normally occurring
+alert instead; do not use a batch retry to test a settings edit.
 
 Use **Dismiss retained failures** only when those deliveries should not be sent.
 Dismissal clears the warning without retrying them; delivery history remains.
 Neither action deletes the audit trail. Do not delete `notification_queue.db`
 or audit data to clear the warning.
+
+#### Pause and cancellation limits
+
+In **Alerts → Notifications**, global **Notifications paused** is not a
+store-and-forward hold. Monitoring continues, but pausing clears buffered alert
+groups and cancels pending queue deliveries for email, webhooks and Apprise,
+including recovery deliveries. **Turning delivery back on does not replay those
+cancelled deliveries.** Retained terminal failures are separate: pausing does
+not dismiss them or repair their saved destination settings.
+
+Disabling or removing an individual destination prevents a queued delivery that
+sees that policy from sending. A policy-skipped item is cancelled, not a
+successful provider delivery, and **Retry retained deliveries** does not replay
+cancelled items. Re-enabling a destination is not proof of catch-up or receipt.
+For a scheduled quiet period, use [Quiet hours](CONFIGURATION.md#quiet-hours-and-notification-holds)
+instead, reviewing its critical-alert exceptions and later re-evaluation; it
+still does not guarantee that every held message will be sent.
+
+**Pause, disable and removal do not guarantee cancellation of a request already
+in flight.** The receiver may accept it after the settings change. Neither a
+paused banner nor a cancelled queue row proves that the destination received no
+data, and Pulse cannot recall a message or delete the receiver's copy. Reconcile
+the original time with **Recent delivery activity** and the receiver's existing
+record, keeping both private; do not send another Test or replay a queue to
+check containment. If a destination credential was exposed, revoke it with
+the provider too: editing its URL or turning delivery off is not credential
+revocation and cannot undo an earlier disclosure.
 
 #### Emails not sending
 
@@ -474,16 +1025,75 @@ or enable debug logging just to collect it. If needed, inspect
 [bounded notification logs](#inspect-notification-logs) and share only the
 consequential, manually redacted error.
 
+#### Webhook response body is withheld
+
+`response body withheld`, `details withheld` and **Response body withheld**
+are deliberate privacy messages, not the receiver's explanation of a failure.
+Alert-webhook receivers can echo tokens, alert content or private provider data
+in their replies. Pulse discards that response text instead of copying it into
+delivery errors, logs or a Test result. Do not enable Debug, capture raw traffic,
+weaken a safeguard or send another Test or queue retry to recover the text.
+
+Use the original timestamp, destination type, failure class and HTTP status
+from **Recent delivery activity**. An HTTP rejection still matters when its
+body is withheld; withholding alone does not mean that delivery failed.
+For example, HTTP 429 is still rate limiting, not missing diagnostic data.
+If the error says **failed to read response body**, reading the reply failed:
+the receiver may already have accepted the request, so retrying can duplicate
+it. Neither HTTP 2xx nor a completed Test proves receipt at the intended
+destination or the success of queued alert delivery.
+
+A Test summary such as `Response body withheld (128 bytes read)` records only
+how much Pulse read, not the response's contents or total size. **read incomplete**
+means the read failed; **read limit reached** means it reached the **1 MiB** cap,
+not proof that the response exceeded that cap. A complete empty reply may have
+no summary. These are not byte counts of the alert Pulse sent.
+
+If provider-specific detail is consequential, review the receiver's existing
+record locally using its normal authorised access. Share only the relevant
+error code or manually redacted explanation, not response bodies, headers,
+payloads or credentials. Unknown receipt remains unknown; do not replay the
+request to create evidence. Older logs and retained delivery errors are **not
+retroactively scrubbed**, and this safeguard does not sanitise every other error
+or export. Keep those private and follow the
+[log and export precautions](#inspect-notification-logs).
+
+#### Telegram Test works but real alerts say "message text is empty"
+
+With the built-in Telegram template (no custom template), a blank or incorrect
+saved `Content-Type` can make Telegram ignore the JSON body. The HTTP 400 error
+does not by itself prove that Pulse omitted the `text` field. Test can supply
+the correct header even when real delivery uses the saved one.
+
+In **Alerts → Notifications**, edit that Telegram destination's **Custom
+headers**: set one static `Content-Type` header to `application/json` and remove
+any conflicting duplicate, including differently capitalised names. Save,
+leaving the bot URL, `chat_id`, template and grouping settings unchanged. Check
+whether the next normally occurring alert reaches the intended chat and compare
+its timestamp with **Recent delivery activity**; do not induce an alert or retry
+the old rejected batch to test this edit. Retained jobs keep their original
+settings as explained [above](#recover-retained-delivery-failures).
+
+For a custom template, check its JSON and required Telegram fields locally
+instead of assuming this built-in-template workaround applies. If reporting a
+continuing failure, share only the version, redacted delivery error, timestamp
+and whether a custom template is used. Keep the bot URL/token, chat ID and full
+notification configuration private.
+
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → Infrastructure → Platform connections** with a valid HTTPS URL,
-  API key, and the username that owns the key.
-- Check that the TrueNAS system is reachable from the Pulse server (default
-  HTTPS port).
-- Verify the API-key owner has read access, then use **Test Connection** in
-  Pulse. TrueNAS 25.04 and later should report the `jsonrpc-websocket`
-  transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
+
+The exact `truenas_unavailable` error (HTTP **500** or **503**) concerns Pulse's
+connection-management handler or configuration persistence, not proof of an
+appliance outage or an invalid TrueNAS API key. Keep the existing request's
+status/code and time, then inspect a bounded Pulse log excerpt locally. Do not
+rotate the key, recreate the connection or weaken TLS verification to clear it.
+
+Follow [TrueNAS error diagnosis](TRUENAS.md#truenas-service-unavailable) to
+separate this from an explicitly disabled integration or a failed live test.
+For missing or stale readings, use the [polling checks](TRUENAS.md#stale-truenas-data);
+a successful **Test Connection** does not prove collection has recovered.
 
 #### TrueNAS pools/datasets not appearing
 - TrueNAS data appears in the unified resource model and may take one configured
@@ -569,27 +1179,72 @@ information, including details echoed in errors or notes. Do not paste a
 Share only evidence relevant to the symptom; a screenshot or exact redacted
 error may be enough. See [Getting Help](#-getting-help).
 
+The **Support Bundle** download in **System Logs** is a different export: it can
+contain a complete log file or server buffer plus configuration and environment
+information. It is not the **GitHub (review first)** diagnostics export and is
+not limited to the lines visible in the panel. Keep the archive private and
+share only relevant, manually reviewed, redacted excerpts. See the
+[log-control and export limits](CONFIGURATION.md#log-levels).
+
 ### Inspect Notification Logs
 
-Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
-is needed, run only the command for your deployment, on the Pulse host with an
-account authorised to read its logs. For Proxmox LXC, run the systemd command
+For notification failures, prefer **Recent delivery activity** in **Alerts →
+Notifications**. These bounded Pulse log readers also apply to other server
+errors; a request ID is not required. If a local log is needed, run only the
+command for your deployment, on the Pulse host with an account authorised to
+read its logs. For Proxmox LXC, run the systemd command
 inside the Pulse container, not on the Proxmox host. Adjust the time window to
 the original incident and substitute your actual service or container name
 (`pulse-backend` on some older systemd installs). These examples read at most
 200 records from the last 15 minutes; they do not follow the log or send a test.
+Each requires **GNU `timeout`** and gives the reader eight seconds plus a
+one-second termination grace. If it is unavailable, stop rather than running
+an unbounded substitute. These are Bash examples; the enclosing subshell keeps
+an unavailable read from exiting your interactive shell.
 
 ```bash
 # systemd / Proxmox LXC
-journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
 ```bash
 # Docker
-docker logs --since 15m --tail 200 pulse
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 200 pulse 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
-Docker can write application logs to either stdout or stderr; inspect both.
+Application logs can be written to stdout or stderr; these commands collect
+both into one local excerpt, without preserving stdout/stderr attribution,
+and display it **only after the reader completes successfully**.
+A failed or timed-out read displays only an unavailable message and its exit
+code, not a partial excerpt that could be mistaken for complete evidence.
 Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
 and hide a failed read behind a matching partial line. A nonzero reader exit,
 access error or missing service/container is a failed read, not “no delivery
@@ -617,29 +1272,61 @@ Replace `abc123` below with the response's ID. Run only the command for your
 deployment, on the Pulse host using an account authorised to read its logs.
 These examples limit collection to the last 15 minutes and 1,000 lines; adjust
 the time window to the original incident rather than repeating the failed action.
+Like the notification-log examples above, these require **GNU `timeout`**,
+allow eight seconds plus a one-second termination grace, and search **only a
+successfully completed read**. A deadline or failure shows no partial match;
+missing `timeout` does not fall back to an unbounded reader.
 
 ```bash
 # systemd / Proxmox LXC
-set -o pipefail
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
 REQUEST_ID='abc123'
-journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager |
-  grep -F -- "$REQUEST_ID"
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+  else
+    exit 1
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
 ```bash
 # Docker
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
 REQUEST_ID='abc123'
-if pulse_logs=$(docker logs --since 15m --tail 1000 pulse 2>&1); then
-  printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 1000 pulse 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+  else
+    exit 1
+  fi
 else
-  printf '%s\n' "$pulse_logs" >&2
-  false
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
 fi
+)
 ```
 
 A log-reader failure is not an empty search result: resolve any access or
-container/service error locally first. Even a successful read with no match
-does not prove the request succeeded. At the default log level, this middleware
+container/service error locally first. Exit **124** means the reader exceeded
+the deadline; **137** can mean the termination grace also elapsed. Neither
+establishes that Pulse itself is hung. Do not restart Pulse or Docker, enable
+Debug, widen collection or repeat the failed action merely to obtain logs.
+Even a successful read with no match does not prove the request succeeded. At the default log level, this middleware
 logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
 at debug level. The selected window, retained logs or deployment may also differ.
 Keep the original response status, time and ID even when there is no matching log;
@@ -662,6 +1349,16 @@ required privilege on the affected resource path. Ask the Proxmox
 administrator to inspect both sides, including inherited ACLs and their
 propagation, for that VM, storage or node. An administrator session or
 user-only permission listing does not prove the token has access.
+
+First distinguish a missing privilege on an intended target from an
+**intentional access boundary**. Pulse 6.5.0 has no per-node include/exclude
+setting for a Proxmox API connection: cluster discovery can list nodes outside
+the token's authorised scope, and Pulse can still attempt to read them. Keep
+a department-scoped token restricted to its intended nodes; **do not grant
+access to other departments just to silence permission errors**. Table filters
+and alert suppression do not stop API polling. Connecting to another member
+of the same cluster does not limit discovery to that member. Denied readings
+are unavailable, not evidence that those nodes are down or unhealthy.
 
 Inspect the existing denial and compare it with the relevant read privileges:
 
@@ -756,9 +1453,13 @@ If you're still stuck:
    safe, use **Settings → Diagnostics → GitHub (review first)** for
    connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
    For a visual problem, a screenshot or the exact
-   error may be enough. If logs are needed, inspect a bounded local excerpt
-   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
-   not a full configuration or data-directory upload.
+   error may be enough. If logs are needed, use the
+   [bounded Pulse log readers](#inspect-notification-logs), choosing the command
+   for the Pulse server's deployment, not the monitored target. A record limit
+   alone does not bound a hung reader. If the read fails or times out, retain
+   that result; do not use an unbounded substitute or treat a partial excerpt
+   as complete. No request ID is required; do not repeat the failed action to
+   obtain one. Never upload a full configuration or data directory.
 4. **Review before posting**: even a sanitized export or screenshot can contain
    identifying details. Remove credentials, session cookies, webhook URLs and
    private host, network or personal information. Never post bootstrap/recovery

@@ -32,6 +32,69 @@ symptom: logs or sanitized diagnostics for connection and data failures, and
 screenshots or exact error text for visual failures. Do not make a reporter
 invent logs where none apply.
 
+For upgrades and regressions, keep the affected Pulse server version, agent
+version and monitored platform release separate. The pre-release form covers
+upgrades from stable v6 as well as earlier previews. Its optional **Last known
+working Pulse version** is a baseline only when the reporter observed the same
+behaviour working; an upgrade's starting version alone does not establish that.
+An API-only connection can have no agent. Accept "unknown" or an omitted optional
+field, and use existing evidence; do not ask for a downgrade, restart, reinstall
+or re-enrolment to obtain version context. Existing reports need no refile.
+
+The optional **OS / environment** field in both bug forms also distinguishes
+where readings come from: the platform API, a Pulse agent, or both. Retain the
+affected platform release, including TrueNAS SCALE versus CORE, separately from
+the Pulse and agent versions and the server OS. Different collection paths can
+supply different readings for the same target; a working agent view does not
+prove that the API view recovered. Use existing settings and observations;
+blank or "unknown" is valid. Do not request diagnostics, a probe, restart or
+connection change just to fill this context. Existing reports need no refile.
+
+Keep the Pulse server's installation separate from the affected target. A
+Docker-hosted Pulse server can monitor a VM, LXC or NAS; its installation type
+does not make Docker commands relevant to that target. Read later comments as
+well as the original title and screenshots before choosing diagnostics. When a
+report shifts to a different target, retain both topics rather than assuming
+the new symptom is the original defect or a duplicate.
+
+For reports involving several hosts or clusters, preserve which nodes share a
+cluster, which belong to independent installations, whether node names or guest
+IDs (VMIDs) repeat, and whether they share a backup destination. Display names
+and VMIDs are not globally unique; a distinct Pulse display name alone does not
+prove that every reading is isolated. Use consistent aliases for private names
+and addresses across the description, screenshots and logs, preserving which
+values repeat: cluster A/node 1 and standalone B/node 1 are distinct targets with
+the same native node name. Do not infer that a backup or agent belongs to one
+installation from a matching name or VMID alone, or classify a new report as a
+duplicate just because those identifiers overlap.
+
+Use relationships already supplied in the full thread and attachments. Unknown
+relationships remain unknown; do not ask for public hostnames, addresses or a
+configuration dump, or add, rename, remove or re-enrol anything to obtain this
+context. Existing reports need no refile. Retain every affected surface (for
+example, node errors, backup status and Docker monitoring); recovery in one does
+not establish recovery in the others.
+
+Keep the connection Host/URL, Pulse display name, native node/guest name and
+agent-reported hostname separate. A full connection hostname does not establish
+that guest or agent names are fully qualified. If the supplied evidence leaves
+that distinction consequential, ask only for the remembered short/full form
+and whether full domain suffixes differ, not the literal names; unknown is valid.
+Retain which guest has an agent and whether it remained connected when its
+Docker inventory disappeared. Only one guest having an agent does not make a
+shared guest name unique across the platform inventory. An ambiguous automatic
+link is not proof that agent reporting stopped. Do not install another agent,
+change a link or recreate the addition just to diagnose it; a repair for distinct
+full hostnames alone does not establish a fix for repeated short names.
+
+Missing readings and an unresponsive workload need different investigation and
+recovery paths. Use the reporter's existing observations of the workload's usual
+UI, not Pulse's displayed connection status, to distinguish them where possible.
+Responsiveness is not proof that every filesystem is writable or the workload
+is healthy. Accept "unknown" when it cannot safely be determined; do not ask for
+another update, backup or guest-agent probe to fill the gap. Existing reports
+need no refile: ask only for a consequential distinction not already supplied.
+
 Some failures cannot safely be reproduced: an update may have changed a
 container despite a failed banner, an alert storm may send more notifications,
 or another run may bring down a host. Accept the original sequence, observed
@@ -39,6 +102,46 @@ result, time and sanitized evidence; do not require a second attempt before
 triage. Where the installed state is uncertain, check it before suggesting
 another action. A diagnostics export is useful only when Pulse is running and
 collecting it is safe.
+
+For performance reports, retain what a reading measures before comparing it:
+Pulse process, container or whole host; units, measurement window and uptime;
+and the relevant CPU allocation or memory limit, fleet, polling and open
+dashboards. A process-start CPU average is not a recent window, and database
+size is not a write rate. The evidence field asks for these distinctions only
+where known, without making new collection a condition of reporting. Existing
+screenshots or an unavailable reading are valid evidence. Do not request raw
+profiles, heap dumps, databases or full process command lines in a public
+thread; use locally reviewed counter summaries, without restarting, creating
+load or changing polling or retention just to measure.
+
+For notification reports, distinguish an already-observed **Test** result from
+ordinary alert delivery: single, grouped/digest or resolved. A successful Test
+does not establish ordinary delivery or correct identity. Retain the destination
+type, built-in or custom template, original time and redacted error or missing
+host/resource context where already known; consistent private aliases preserve
+which hosts or resources repeat. Keep an alert appearing in Pulse, its queued
+attempt and the recipient's actual message as separate observations. Delivery
+can succeed while the subject or body still identifies the wrong resource.
+
+Use existing messages and queue details, including earlier comments, rather
+than asking for the same facts again. Queued messages can retain older settings;
+a current configuration screenshot does not establish the settings of an older
+attempt. Unknown evidence stays unknown, and existing reports need no refile.
+Do not request another Test, induced alert, queue retry/replay, queue clearing or
+notification-setting changes just to complete a report. Keep destination
+addresses, webhook URLs, chat IDs, tokens and full notification settings or
+payloads private, even when an error or screenshot contains them. A missing
+notification alone does not prove that alert evaluation failed; retain both
+symptoms when the thread supplies evidence for each.
+
+Treat webhook `response body withheld` or `details withheld` messages as
+intentional privacy boundaries, not missing evidence to request from a reporter.
+Use the supplied HTTP status, failure class and time; a response-read failure
+does not prove the receiver rejected the request. A Test's bounded response byte
+count is not the sent payload size or proof of receipt. If a provider-specific
+distinction matters, use an existing, locally reviewed error code or redacted
+explanation, never a raw response, Debug capture or replay. Historical errors
+and other exports are not retroactively scrubbed; the full entry remains private.
 
 ## Required disposition
 
@@ -74,6 +177,19 @@ fails quietly for legacy forms. It does not use keyword heuristics to invent
 topics or create issues automatically. A maintainer or triage agent reviews the
 source context, chooses the correct destination, creates links, and is
 accountable for the disposition.
+
+Before changing metadata, the synchronizer reads the current issue body and
+labels, rather than classifying a queued event's older report. A failed read
+stops the job without a stale-data fallback; closed issues and pull requests are
+not changed. It applies only individual label additions and removals, preserving
+unrelated and community-owned retest labels. Only a still-current declaration
+event can add `needs-decomposition`; a delayed event cannot restore a task that
+the maintainer has since cleared. Comments and superseded declarations still
+need whole-thread triage, not an automatic disposition.
+
+Version classification does not need the latest release and cannot establish
+relevant-fix availability. The synchronizer makes no release lookup, public
+comment, retest request or closure.
 
 This boundary is deliberate: preserving an explicit reporter declaration is
 safe to automate, while deciding whether two observations are one root cause is

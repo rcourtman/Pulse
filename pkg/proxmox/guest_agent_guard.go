@@ -68,7 +68,10 @@ func registerGuestAgentEndpoints(host string, endpoints []string) {
 		if err != nil {
 			continue
 		}
-		key := securityutil.AppendURLPath(u, "api2", "json").String()
+		key, valid := guestAgentEndpointKey(securityutil.AppendURLPath(u, "api2", "json").String())
+		if !valid {
+			continue
+		}
 		group[key] = true
 		for _, alias := range guestAgentGuards.aliases[key] {
 			group[alias] = true
@@ -84,16 +87,23 @@ func registerGuestAgentEndpoints(host string, endpoints []string) {
 }
 
 func acquireGuestAgent(endpoint string, vmid int) (func(bool), error) {
+	endpoint, valid := guestAgentEndpointKey(endpoint)
+	if !valid || vmid <= 0 {
+		return nil, &guestAgentDeferredError{reason: "invalid-guest-key"}
+	}
 	guestAgentGuards.Lock()
 	defer guestAgentGuards.Unlock()
 	now := time.Now()
-	if !now.Before(guestAgentGuards.nextCleanup) || len(guestAgentGuards.entries) >= maxGuestAgentGuardEntries {
+	cleanup := func() {
 		for key, entry := range guestAgentGuards.entries {
 			if !entry.busy && !now.Before(entry.until) {
 				delete(guestAgentGuards.entries, key)
 			}
 		}
 		guestAgentGuards.nextCleanup = now.Add(time.Minute)
+	}
+	if !now.Before(guestAgentGuards.nextCleanup) {
+		cleanup()
 	}
 	endpoints := guestAgentGuards.aliases[endpoint]
 	if len(endpoints) == 0 {
@@ -111,8 +121,24 @@ func acquireGuestAgent(endpoint string, vmid int) (func(bool), error) {
 		}
 		keys = append(keys, key)
 	}
-	if len(guestAgentGuards.entries)+len(keys) > maxGuestAgentGuardEntries {
-		return nil, &guestAgentDeferredError{reason: "agent-capacity"}
+	// Replacing an expired entry does not consume another slot. If new keys
+	// would exceed the bound, reclaim expired entries now rather than defer
+	// an otherwise eligible guest until the next periodic sweep. Never evict
+	// in-flight work or an unexpired uncertainty fence to make room.
+	additional := func() int {
+		count := 0
+		for _, key := range keys {
+			if _, exists := guestAgentGuards.entries[key]; !exists {
+				count++
+			}
+		}
+		return count
+	}
+	if len(guestAgentGuards.entries)+additional() > maxGuestAgentGuardEntries {
+		cleanup()
+		if len(guestAgentGuards.entries)+additional() > maxGuestAgentGuardEntries {
+			return nil, &guestAgentDeferredError{reason: "agent-capacity"}
+		}
 	}
 	for _, key := range keys {
 		guestAgentGuards.entries[key] = guestAgentGuardEntry{busy: true}
@@ -212,8 +238,7 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
 		}
-		if response.statusCode == http.StatusRequestTimeout ||
-			(response.statusCode >= 500 && !response.guestCommandRejected) {
+		if !guestAgentHTTPFailureCompleted(response) {
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-completion-unverified", cause: err}
 		}
@@ -233,6 +258,13 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 		uncertain = true
 		return nil, &guestAgentDeferredError{reason: "agent-redirect"}
 	}
+	// A completed HTTP body is not a completed QGA reply if it is malformed,
+	// ambiguous, or only a JSON prefix. Validate before releasing admission,
+	// not in the method decoder after another guest command can be queued.
+	if resp.StatusCode != http.StatusOK || !guestAgentSuccessResponse(body) {
+		uncertain = true
+		return nil, &guestAgentDeferredError{reason: "agent-completion-unverified"}
+	}
 	// A backup may have started while the command was in flight. Do not publish
 	// its payload as fresh telemetry if lock clearance cannot still be verified.
 	if err := c.verifyGuestAgentUnlocked(ctx, node, vmid); err != nil {
@@ -240,6 +272,23 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	return resp, nil
+}
+
+// A client-error class alone is not completion evidence: an intermediary can
+// report a conflict, early request or client disconnect after accepting work.
+// Keep the supported explicit request/access/command rejections as errors, but
+// fence every other status just like an unexplained server/gateway failure.
+func guestAgentHTTPFailureCompleted(response *apiResponseError) bool {
+	switch response.statusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+		http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusUnprocessableEntity,
+		http.StatusTooManyRequests:
+		return true
+	case http.StatusInternalServerError:
+		return response.guestCommandRejected
+	default:
+		return false
+	}
 }
 
 // Guest calls do not fail over or replay: another HTTP worker still addresses

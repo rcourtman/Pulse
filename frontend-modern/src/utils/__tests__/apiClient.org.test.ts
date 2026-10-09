@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   apiFetch,
+  apiClient,
   apiFetchJSON,
   clearApiToken,
   getApiToken,
@@ -40,6 +41,106 @@ describe('apiClient org context', () => {
     expect(headers['X-Pulse-Org-ID']).toBe('acme');
     expect(getOrgID()).toBe('acme');
     expect(window.sessionStorage.getItem('pulse_org_id')).toBe('acme');
+  });
+
+  it.each([400, 403, 429])('does not replay a confirmed mutation after HTTP %i', async (status) => {
+    setOrgID('tenant-a');
+    document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'invalid_org' }), {
+        status,
+        headers: { 'X-CSRF-Token': 'replacement-csrf', 'Retry-After': '1' },
+      }),
+    );
+    const response = await apiFetch('/api/ai/patrol/suppressions/rule_one', {
+      method: 'DELETE',
+      retry: false,
+      expectedOrgID: 'tenant-a',
+    });
+    expect(response.status).toBe(status);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('tenant-a');
+    expect(mockFetch.mock.calls[0][1].headers['X-CSRF-Token']).toBeTruthy();
+    expect(mockFetch.mock.calls[0][1].credentials).toBe('include');
+    expect(getOrgID()).toBe('tenant-a');
+    expect(mockFetch.mock.calls[0][1]).not.toHaveProperty('retry');
+    expect(mockFetch.mock.calls[0][1]).not.toHaveProperty('expectedOrgID');
+  });
+
+  it('binds default explicitly and stops stale confirmations or aborted dispatch', async () => {
+    setOrgID('default');
+    mockFetch.mockResolvedValue(new Response('[]'));
+    await apiFetch('/api/ai/patrol/suppressions', { retry: false, expectedOrgID: 'default' });
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+    setOrgID('tenant-b');
+    await expect(
+      apiFetch('/api/ai/patrol/suppressions/rule_one', {
+        method: 'DELETE',
+        expectedOrgID: 'default',
+        retry: false,
+      }),
+    ).rejects.toThrow('Organisation changed');
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      apiFetch('/api/ai/patrol/suppressions', {
+        expectedOrgID: 'tenant-b',
+        retry: false,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ retry: false }, { expectedOrgID: 'default' }])(
+    'rejects aborted dispatch before fetch for either strict opt-in %j',
+    async (options) => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        apiFetch('/api/state', { ...options, signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not fall back to another authentication method after a strict-session refusal', async () => {
+    setApiToken('synthetic-token');
+    setOrgID('tenant-a');
+    mockFetch.mockResolvedValue(new Response('{}', { status: 401 }));
+    const result = await apiFetch('/api/state', {
+      preferSessionAuth: true,
+      retry: false,
+      expectedOrgID: 'tenant-a',
+    });
+    expect(result.status).toBe(401);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-API-Token']).toBeUndefined();
+  });
+
+  it('checks the confirmed organisation again after asynchronous CSRF preparation', async () => {
+    setOrgID('tenant-a');
+    let finish!: (token: string) => void;
+    const preparation = vi.spyOn(apiClient as any, 'ensureCSRFToken').mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const tokenRead = vi.spyOn(apiClient as any, 'loadCSRFToken').mockReturnValueOnce(null);
+    try {
+      const pending = apiFetch('/api/ai/patrol/suppressions/rule_one', {
+        method: 'DELETE',
+        retry: false,
+        expectedOrgID: 'tenant-a',
+      });
+      setOrgID('tenant-b');
+      finish('synthetic-csrf');
+      await expect(pending).rejects.toThrow('Organisation changed');
+      expect(mockFetch).not.toHaveBeenCalled();
+    } finally {
+      preparation.mockRestore();
+      tokenRead.mockRestore();
+    }
   });
 
   it('reuses a server-issued org cookie when storage is empty', async () => {

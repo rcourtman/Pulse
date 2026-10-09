@@ -15,6 +15,124 @@
 
 ## Purpose
 
+### QGA query-eligibility provenance stays internal
+
+The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
+coordination, not agent input or a public field. It prevents retained guest
+identity from renewing fallback QGA eligibility. Agent enrollment, token and
+machine identity, reporting and linked Pulse-agent readings are unchanged.
+`TestGuestAgentEvidenceIsInternalSnapshotEvidence` checks snapshot isolation
+and omission from both model and frontend JSON.
+
+
+### QGA disk provenance stays outside the agent report contract
+
+The shared VM model carries an internal filesystem source/time observation for
+bounded QGA disk fallback. It is not agent input or a public JSON field; linked
+Pulse-agent disk evidence keeps its own source and precedence. Agent report,
+identity, enrollment and lifecycle contracts are unchanged.
+`TestGuestDiskObservationIsInternalSnapshotEvidence` verifies internal copy
+isolation and omission from both model and frontend JSON; the existing linked
+agent exclusion control now supplies an explicit original QGA observation.
+
+### Automatic provider links retain full hostname distinctions
+
+An agent report may automatically associate a short hostname with a unique
+Proxmox node/guest FQDN, or an FQDN with a short provider name. Two distinct
+FQDNs sharing a first label cannot link by hostname alone. Adding an independent
+provider with a different guest domain must not clear the original exact-FQDN
+link. Ambiguous bare names still yield no automatic link; operator-owned links,
+endpoint/network hints, token/machine identity and enrolment remain unchanged.
+
+`TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs` and the FQDN sequential
+addition cases in `TestCrossInstallationIdentitySurvivesStandaloneAddition`
+verify this attribution boundary and retained Docker inventory. Connection
+endpoint form does not prove guest hostname, reporter cause, native recovery or
+containing release availability.
+
+
+### PMG scope persistence does not change agent authority
+
+PMG scope booleans remain explicit when false in shared settings readback,
+so the existing PMG form does not re-enable collection through an omission.
+These dataset options still grant no agent or command authority.
+
+Shared node-settings and connection API code now preserves explicit PMG
+collection choices via the internal saved-scope discriminator and effective
+legacy default. This affects PMG API reads only: no agent enrolment, credential,
+command, install or helper lifecycle policy changes. PMG failed-save and scope
+readback controls live in `internal/api/configapi/pmg_scope_test.go`; installed
+agent acceptance remains independent.
+
+### Windows service removal is a prerequisite for destructive continuation
+
+The Windows installer shares one service-removal boundary between replacement
+and uninstall. An SCM read error is unknown, not absence: only the cmdlet's
+explicit service-not-found result authorises the already-removed path. An
+existing service must reach `Stopped` within 30 seconds, with a refreshed state
+read; a pending stop is awaited without requesting it again. The installer
+requests no forced dependent-service stop and kills no process.
+
+Controller handles are closed before `sc.exe delete`. Its exit must succeed,
+and fresh SCM reads must then confirm actual absence within 30 seconds;
+"marked for deletion" alone is insufficient. A failed read, stop, delete or
+absence observation exits nonzero before binary replacement, token/connection
+mutation, server deregistration or local erasure. Uninstall also reports local
+cleanup failure instead of declaring completion. Successful fresh install,
+replacement and repeated uninstall retain their existing enrolment semantics.
+
+`TestInstallPS1ServiceRemovalRefusesUnknownRuntimeBeforeMutation` pins both
+callers and adverse structural controls. `TestInstallPS1ServiceRemovalRuntime`
+executes the actual production functions with SCM failure/delay controls, using
+Windows PowerShell 5.1 in the existing native Windows job. A missing PowerShell
+runtime is an explicit skip, not native or mocked execution. The real Windows
+service lifecycle job remains required evidence for installed behaviour; these
+controls do not establish published-agent recovery or auto-update acceptance.
+
+### Installer identity recovery accounts for the whole legacy file
+
+The descriptor-safe collector command remains the primary agent-ID reader. Its
+root-owned legacy compatibility path accepts only one 1–128 character ID, with
+or without a final newline, from an owned 0600 regular file in an owned
+non-writable parent. Portable size inspection and a bounded read must account
+for every byte; a valid prefix cannot hide oversized state, another identity or
+a discarded NUL. Symlink/FIFO rejection, descriptor ownership/privacy and the
+real collector executable remain unchanged. This does not enrol an agent or
+establish installed recovery.
+
+`TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte` pins that fallback.
+`TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState` covers both
+readers, including a 0400 positive control that cannot use the legacy path.
+Its two-second probes retain build-versus-probe timings and cancel their whole
+fixture process group; `TestAgentIDRecoveryCancellationStopsDescendants` pins
+child termination and inherited-pipe completion, not a longer acceptance budget.
+
+### Shared origin and webhook edit boundaries
+
+The referenced `internal/api/` settings boundary treats explicit empty
+`allowedOrigins` as a durable clear and omitted values as unchanged. Effective
+GET values and deployment-owned overrides remain consistent; failed/rejected
+saves cannot change live trust. This does not change agent identity, enrolment,
+credential scope, execution permission, installer transport or TLS policy.
+Notification Create/Update/Test consistently reject unresolved saved masks and
+conflicting HTTP header identities before mutation or sending; literal edits,
+masked responses and persist-before-publish remain intact. Source verification
+uses `TestAllowedOrigins*` and `TestWebhookPlaceholderBoundaryAgreement` plus
+the existing settings/notification authority and ordinary-delivery controls.
+
+### Cluster installation keyboard continuity
+
+`ClusterAgentDeployDialog` keeps one mounted dismissal button while loading,
+selection, checking, installation and final results change its label. A focused
+Install action hands focus to that button before it disappears, without moving
+scroll; asynchronous completion never steals focus. Close/Cancel and the scoped
+installer hand-off remain available without starting another install, and
+closing an accepted run still does not cancel it. This is keyboard continuity,
+not a change to job admission, token scope or native installation acceptance.
+`frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx`
+pins delayed candidate responses, safe fallbacks and both successful and failed
+terminal projections alongside the live-connection confirmation flow.
+
 ### Alert projections carry a volatile metric status — issue #2068
 
 `models.Alert` gains an optional `metricStatus` (`models.MetricAlertStatus`)
@@ -67,18 +185,19 @@ system-information probe; no synthetic success establishes installed acceptance.
 
 ### Podman interval CPU evidence — issue #2447
 
-Every one-shot container stats response retains a cumulative CPU baseline,
-even when a positive Podman compatibility percentage takes precedence. Zero,
-absent or invalid percentages use the valid nanosecond/wall-clock interval,
-without Docker's host-core multiplier. First samples, counter resets and changes
-of container start time rebaseline rather than presenting lifetime CPU as current
-usage. Repeated or older read timestamps cannot move the baseline backwards.
-Positive native percentages keep the units established by #1391; a genuine idle
-counter interval remains zero. Report shapes, enrollment, runtime transport trust
-and command authority are unchanged. `TestCollectContainerPodmanCPUIntervals`
-in `internal/dockeragent/agent_internal_test.go` exercises decoding through the
-real collector, idle/advancing counters, start changes and Docker isolation.
-Synthetic controls do not establish a native Podman payload or reporter recovery.
+Every one-shot container stats response retains a cumulative CPU baseline.
+Podman uses only consecutive counter/read pairs, not its unbound compatibility
+`cpu` percentage, even when positive. The nanosecond/wall-clock interval keeps
+the 100%-per-core units established by #1391 without Docker's host-core multiplier;
+server ingestion alone converts to host capacity. Idle remains zero. First
+samples, resets and start changes rebaseline; start changes do so even across a
+backward clock. Duplicate or older reads in one lifetime cannot move its baseline
+backwards. Report shapes, enrollment, runtime transport trust and command authority
+are unchanged. `TestCollectContainerPodmanCPUIntervals` covers these boundaries
+through the real collector. `TestPodmanCPUCollectorHistoryAndAlerts` follows the
+final compressed report into authenticated ingestion, persistent HTTP History and
+alert units on 8- and 4-CPU hosts. Synthetic controls do not establish a native
+Podman payload, installed recovery or containing release.
 
 ### MD RAID required members and spares — issue #2369
 
@@ -632,7 +751,25 @@ least-privilege installs using that helper reported `provider_unavailable`
 on every report (#2511). Discovery hands the whole node back to `pct list`
 whenever it cannot establish a guest's state (no cgroup v2, an unreadable
 listing, config, cgroup or process, a search limit, or cancellation); only a
-guest without a cgroup counts as stopped. The fixed `lxc-info -n <vmid> -p`
+guest without a cgroup counts as stopped. Exactly 128 running guests remain
+admissible, but discovery must inspect the rest of the bounded config listing:
+a 129th running guest or an unestablished later guest makes discovery unavailable,
+not a truncated complete inventory. The existing bounded `pct list` fallback
+then either establishes the full node or remains degraded under PrivateNetwork.
+The init search checks the preferred `ns/init.scope` path before unrelated
+workload cgroups, even when either level has hundreds of siblings. Its bounded
+priority frontier permits at most 64 cgroup process reads and 4,096 candidate
+PIDs; reaching either limit without a verified init remains unknown, not stopped.
+Unreadable or cancelled traversal still fails closed. Width alone cannot prevent
+a verified init from supporting the existing pinned filesystem observation.
+`TestHelperProxmoxLXCInitSearchPrioritizesBoundedReads` connects wide-tree discovery
+to complete measured collection without IPC commands;
+`TestProxmoxLXCInitSearchKeepsBoundsAndIdentity` pins exact directory/PID limits,
+foreign VM and nested namespace rejection, unreadable input and cancellation.
+These are synthetic source controls, not installed helper or native PVE recovery.
+`TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory` covers 127/128/129
+running guests and stopped/unknown guests after the limit through discovery and
+collection. The fixed `lxc-info -n <vmid> -p`
 PID lookup remains for that path, and `pct df` remains the per-container
 fallback, including through the `--grant-pct` wrapper.
 `TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets` drives the collector
@@ -815,6 +952,15 @@ performance report and the reporting runtime snapshot leave it out of their
 disk tables. The performance report colours a collected reading by the
 tenant's alert disk temperature thresholds for the disk type, not a fixed line.
 
+The same lease bounds the host row's other readings in that API: once the
+host reads `offline`, an empty `agent` range returns no live CPU, memory, disk
+or sensor temperature point from the host row the expiry kept. An agent linked
+to a Proxmox node answers from that node row instead, under the node row's own
+checks. A Docker host that `evaluateDockerAgents` marks offline likewise stops
+answering with live points for itself and its containers, except that a Docker
+row merged with a reporting host agent shows the agent's status until its
+Docker sighting goes stale. The retained values stay last-known context.
+
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment
 and reassignment start a fresh reporting grace window; a result from the
@@ -963,6 +1109,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
+
+Proxmox helper operation v2 carries the shared `ProxmoxLXCInventory` completeness and bounded omitted-VMID contract. V1 stays strict complete-only. The collector tries v1 only after an explicit unsupported-v2 response, under one unchanged operation deadline; transport, authorization and provider failures never select a broader fallback.
 
 The shared monitor constructor also composes notification bootstrap: it loads
 saved alert policy and destinations, binds the alert owner's immutable
@@ -2819,6 +2967,13 @@ agent inventory, registration state, or command-channel readiness.
    recovered. That is report presentation only: the report never decides
    agent linkage, ownership of a metric, or agent freshness, and it adds no
    lifecycle state.
+   Reports on an `agent` resource (`internal/api/reporting_subject_alerts.go`)
+   read the agent's host ID from the unified resource's agent payload, only
+   when the agent source is present, to attach that agent's `agent:<host>`
+   alerts and component children beside the linked node's alerts. The
+   report reads linkage the registry already resolved; it never links,
+   unlinks, identifies or authorizes an agent, and it adds no lifecycle
+   state.
    The same isolation rule applies to Patrol investigation-record propagation
    through shared AI intelligence handlers and `internal/api/router.go`:
    lifecycle surfaces may observe the resulting resource context, but they must
@@ -3271,6 +3426,16 @@ token rotation, or removal state, and it records nothing about agents. Node
 connection tests target Proxmox, PBS, and PMG endpoints directly and never
 traverse an agent.
 
+### Audit reads during agent investigation
+
+The shared `internal/api/` audit read boundary rejects malformed or empty
+supplied RFC3339 start/end filters and non-increasing windows before reading
+agent-related events. List/export reject non-literal success booleans. It
+preserves absent filters, tenant selection, method/access/licence gates and
+existing export/summary non-pagination semantics. This changes only audit
+request validation, not agent identity, enrolment, collection or recovery.
+Fake-logger handler controls live in `internal/api/audit_filter_validation_test.go`.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
@@ -3279,6 +3444,8 @@ traverse an agent.
 4. Lifecycle setup, install, or fleet surfaces that invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and the retired `/auth/trial-activate` callback must stay closed on the ordinary self-hosted router rather than reappearing as lifecycle-local CTAs or retry paths.
 
 ## Completion Obligations
+
+`cmd/pulse-agent-helper/main_test.go`, `internal/agenthelper/server_test.go`, `internal/hostagent/privilege_helper_client_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must cover version negotiation, successful partial rows, all-failed/global-unavailable distinction, contradictory/overbound identities, degraded health and independent operation recovery. `scripts/installtests/safe_profile_migration_test.go` covers installer-managed helper replacement after effective-unit/socket validation and fatal restart failure. These source controls do not prove an installed upgrade or PVE recovery.
 
 ### VM command results describe the guest, not transport success
 
@@ -3687,6 +3854,39 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/hostagent/smartctl_discovery_test.go`.
 
 ## Current State
+
+### Registered Windows native-exit completion proof (8 October 2026)
+
+The workflow's seven immediate native exit checks and the lifecycle harness's
+five checks are verified from `scripts/installtests/install_ps1_test.go`, the
+registry-named completion proof for this boundary. The existing assertion
+methods have moved there unchanged from `native_windows_exit_test.go`; the
+shared parsers and native PowerShell execution controls remain in that file.
+Each removed guard and either `continue-on-error` mutation must still be
+rejected. No registry relaxation or runtime command change is made. Offline
+Linux source proof must retain PowerShell-unavailable skips; actual native
+Windows service lifecycle and exit propagation remain hosted CI obligations.
+
+
+Notification destination edits in the shared `internal/api/` subtree preserve
+only submitted masked values, honour neighbouring explicit map edits/removals
+and reject unrecoverable masks before publication. Restored custom-field
+credentials remain masked in the response. This is not an agent token rotation,
+identity change, installer permission or enrollment operation; those boundaries
+remain unchanged. The notification API's encrypted edit/reload and delivery
+controls cover this shared configuration-write boundary.
+
+### Disk History supplementation does not change agent lifecycle
+
+The disk History handler can replace a shallow API-backed thermal series with
+monitor-selected native history even when stored I/O exists. This read does
+not enrol, refresh, remove or grant an agent; it changes no agent identity,
+helper profile, report completeness or missing-series handling. Ordinary
+agent-backed stored metrics remain preferred when coverage is sufficient.
+The authenticated native-route control covers the store/native boundary.
+
+
+The partial-result path no longer discards every successful row when another guest fails. The helper remains in its private network on every platform; pmxcfs abstract IPC is still unavailable there on the reported PVE estate (#2511). That defect is not fixed by the partial protocol (#2513), and API monitoring remains the safe existing alternative. The earlier host-network proposal is not part of this implementation.
 
 ### Alert settings saves do not touch agent lifecycle
 
@@ -6571,8 +6771,15 @@ cluster, member, and coverage-summary install actions open
 server mints a per-node bootstrap credential for every target, so the dialog
 never renders, copies, or reuses a token and the operator never pastes one.
 The dialog folds target statuses into checking, installing, connecting,
-reporting, and failed, and it reports a node as installed only after the
-candidates projection shows that node with an agent. A finished deploy job
+connected, and failed. Its final badge says "Connected to Pulse", not "Reporting":
+the candidates projection must match the captured cluster ID and show both
+that exact node's saved agent link and a non-empty online source-agent entry
+for the same node. A saved link, a sibling's connection, or a finished job alone
+cannot trigger the installed callback. Missing/offline connection evidence
+remains connecting until the existing 90-second confirmation window expires,
+then says that Pulse has not confirmed a connected agent on the node and
+preserves the scoped installer fallback. This confirms connectivity, not fresh
+metrics, native installation or sustained reporting. A finished deploy job
 alone is not success, because targets can still be enrolling. Clusters with no
 connected agent, members Pulse has no address for, and failed targets hand off
 to the scoped manual installer (`/settings/infrastructure?add=linux-host`)
@@ -8237,6 +8444,15 @@ kept running on the Proxmox host). Three coupled guarantees:
    healthy even when the original waiter has gone, and reconnect/replay
    returns that exact receipt without a second mutation.
 
+The cancellation/reconnect integration fixture must not equate published
+registration with a ready runner. Each new client completes its real activated
+health write and a read-only receipt-query round trip before the fixture sends
+a mutation. A controlled failed-first activation proves this barrier across
+reconnect; the existing three-second readiness/start limits are unchanged.
+Runner and dispatch cleanup is installed before assertions and precedes test
+server shutdown, including failed starts. These are proof-fixture requirements,
+not changes to production admission, cancellation or replay authority.
+
 Proofs: `internal/agentexec/server_websocket_test.go`
 (`TestExecuteCommand_ExpiredContextNeverDispatches`,
 `TestExecuteCommand_AbandonedCommandSendsCancel`),
@@ -8245,7 +8461,8 @@ Proofs: `internal/agentexec/server_websocket_test.go`
 `TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches`,
 `TestTypedOperation_SocketDropAfterSendUnblocksDispatch`),
 `internal/hostagent/operation_receipt_websocket_integration_test.go`
-(`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`),
+(`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`,
+`TestReceiptRunnerReadinessWaitsForActivationReconnect`),
 `internal/hostagent/command_client_test.go`
 (`TestCommandClient_handleCancelCommand_CancelsRegisteredRequest`,
 `TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`,
@@ -8346,8 +8563,12 @@ cannot become an accidental re-enrollment transition.
 mock alert pass evaluated. When a runtime mock config change drops an agent
 from the estate, `evaluateMockHostAgents` routes it through the alert
 manager's `HandleHostRemoved`, the same alert boundary a deleted live agent
-crosses. Leaving mock mode routes every fixture agent through the same call,
-which also releases their hostname deduplication. Neither path writes a
+crosses. Fixture Docker hosts that leave the estate go through
+`HandleDockerHostRemoved` the same way. Leaving mock mode routes every fixture
+agent and Docker host through those calls, which also drops the agents' node
+links. The monitor also records the fixture's structural revision so a mock
+pass that predates an estate rebuild, or a disable and re-enable, cannot
+re-run that removal against the current fixture agents. Neither path writes a
 removal tombstone, revokes a token, touches continuity evidence or admits a
 report: fixture agents have no credentials or durable identity, and real
 reports stay discarded while mock mode is on.
@@ -9058,6 +9279,18 @@ carrying a prefixed attribute or namespace declaration named like a SAML
 attribute is refused. No agent
 registration, enrolment, install, update or removal path changed.
 
+### Mock-mode read views fold linked fixture agents
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+applies the operator's manual links (unified-resources contract, "Mock-mode
+unified view applies operator links"). A fixture agent the operator linked
+into a guest now folds into that guest in mock read views, as a linked agent
+already does in live mode, so host snapshots built from them
+(`HostsSnapshot`) stop listing it while the guest carries its facet. Agent
+registration, enrolment, report admission, removal, continuity and the
+fixture agent set itself are unchanged, and the view writes nothing to the
+resource store.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or
@@ -9095,3 +9328,39 @@ replaces that link, splitting the agent back out as unlink does. Agent
 registration, enrolment, install, update, removal, report identity and
 continuity are unchanged, and an agent's own declared node link still
 ignores exclusions.
+
+### Windows installer acceptance engine and absence (8 October 2026)
+
+Native installer parsing, service-removal failure controls and actual lifecycle
+execution use Windows PowerShell 5.1, never a PowerShell 7 substitute. A missing
+or mismatched engine on Windows fails rather than skips. The dedicated runner
+rejects pre-existing or unknown service/state instead of deleting it before the
+proof. Both first and repeated uninstall require independent SCM, binary, state
+and listener absence; only the exact SCM not-found identity/category proves
+absence. Failed listener enumeration remains a failure. This changes validation,
+not installer authority, transport, enrolment or host containment.
+
+`TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
+complete supplied parent and fourteen removed/changed controls. Native
+`TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
+functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
+the existing real lifecycle job then uses real SCM. Linux skips are explicit and
+do not establish a Windows parser, native runtime, reboot or installed result.
+
+Clean-runner admission checks service, binary, state and listener absence before
+machine-environment mutation. A rejected admission cannot clear a pre-existing
+machine setting. Cleanup restores only the captured prior setting, even when
+owned server teardown fails; an unconfirmed stop fails and retains the handle
+rather than reporting clean teardown. Real Windows execution and full terminal
+cleanup evidence still have to be returned by the existing native CI job.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.

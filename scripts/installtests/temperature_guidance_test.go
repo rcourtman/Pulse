@@ -99,10 +99,72 @@ func TestTemperatureGuidanceKeepsExistingSafetyAndSourceMeaning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"thermal_zone0` is not necessarily the CPU", "millidegrees", "not physical-disk SMART", "--token-file", "--local-only", "--ssh-known-hosts", "--remove-proxmox-access", "not a signed release asset", "not an empty reading"} {
+	for _, text := range []string{"thermal_zone0` is not necessarily the CPU", "millidegrees", "not physical-disk SMART", "--token-file", "--local-only", "--remove-proxmox-access", "not a signed release asset", "not an empty reading"} {
 		if !strings.Contains(string(doc), text) {
 			t.Fatalf("temperature guide loses existing scope or source distinction %q", text)
 		}
+	}
+	if err := temperatureCleanupRecipeScope(string(doc)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The current guide deliberately uses local-only cleanup, not remote key
+// cleanup or trust enrolment. Check the executable recipe, not whether prose
+// happens to mention an optional cluster-SSH flag from older instructions.
+func temperatureCleanupRecipeScope(doc string) error {
+	const helper = `"$HOME/.config/pulse/sensor-proxy-uninstall.sh"`
+	count := 0
+	for _, match := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(doc, -1) {
+		block := strings.ReplaceAll(match[1], "\\\n", " ")
+		if !strings.Contains(block, "bash "+helper) {
+			continue
+		}
+		count++
+		fields := strings.Fields(block)
+		if len(fields) != 4 || fields[0] != "bash" || fields[1] != helper ||
+			!((fields[2] == "--uninstall" && fields[3] == "--local-only") ||
+				(fields[2] == "--local-only" && fields[3] == "--uninstall")) {
+			return fmt.Errorf("temperature cleanup recipe must preserve local-only scope without extra operations")
+		}
+	}
+	if count != 1 {
+		return fmt.Errorf("temperature guide needs one explicit local-only cleanup recipe, got %d", count)
+	}
+	return nil
+}
+
+func TestTemperatureCleanupRecipeScopeRejectsBroaderOrMissingActions(t *testing.T) {
+	const command = `bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" --uninstall --local-only`
+	wrap := func(command string) string {
+		return "```bash\n" + command + "\n```\n"
+	}
+	for _, recipe := range []string{
+		command,
+		`bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" --local-only --uninstall`,
+		"bash \"$HOME/.config/pulse/sensor-proxy-uninstall.sh\" \\\n  --uninstall --local-only",
+	} {
+		// Warning prose can name dangerous flags without proposing their use.
+		doc := wrap(recipe) + "Do not add --purge or --remove-proxmox-access.\n"
+		if err := temperatureCleanupRecipeScope(doc); err != nil {
+			t.Fatalf("safe local cleanup rejected: %v", err)
+		}
+	}
+	for name, doc := range map[string]string{
+		"no action":      "Use local-only cleanup after planning maintenance.\n",
+		"remote cleanup": wrap(strings.Replace(command, " --local-only", "", 1)),
+		"purge":          wrap(command + " --purge"),
+		"remove access":  wrap(command + " --remove-proxmox-access"),
+		"cluster trust":  wrap(command + " --ssh-known-hosts /path/to/known_hosts"),
+		"replay":         wrap(command) + wrap(command),
+		"chained action": wrap(command + " && echo done"),
+		"prose impostor": wrap(strings.Replace(command, " --local-only", "", 1)) + "Keep --local-only.\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if temperatureCleanupRecipeScope(doc) == nil {
+				t.Fatal("unsafe or absent cleanup recipe passed")
+			}
+		})
 	}
 }
 

@@ -5,6 +5,27 @@ providers. Use it to find recorded artifacts, identify gaps in protection and
 check the source of a backup before using the provider's own recovery tools.
 Pulse does not restore workloads from these views.
 
+## Choose the right backup
+
+The **Recovery** settings panel and the platform backup views serve different
+jobs. Their backups are not interchangeable:
+
+| Backup | What it is for | What it does not establish |
+|---|---|---|
+| Provider backup, snapshot or replication artifact | Recovering a monitored workload through the provider's own tools; see [where to look](#where-to-look) | A successful task does not prove guest thaw or application recovery |
+| **Create Backup** in **Settings → System → Recovery** | Encrypted transfer of the [included Pulse configuration](MIGRATION.md#configuration-transfer) | Not a workload backup or a full Pulse installation backup; history and agent enrolment state are excluded |
+| Consistent filesystem/volume backup of Pulse | [Full-state recovery](MIGRATION.md#full-state-recovery), including retained history and the matching encryption key | Not a backup of the workloads Pulse monitors |
+| Updater installation snapshot | Version-specific [server update recovery](AUTO_UPDATE.md#what-an-update-snapshot-contains) | A recorded snapshot path does not prove a complete or consistent data backup |
+
+**Restore Backup** in the Recovery settings panel imports Pulse configuration,
+not a VM, container, dataset or PVC. Import **replaces** the included settings
+and API-token records; it does not merge them. Export the destination's existing
+configuration before importing, retain the original passphrase privately, and
+follow the [transfer and validation steps](MIGRATION.md#transfer-the-included-configuration).
+Do not import configuration, restore Pulse data or restart monitoring to clear
+a guest freeze or an incorrect backup badge. Follow the independent guest-safety
+checks below and the provider's recovery procedure instead.
+
 ## Where to look
 
 There is no top-level Recovery page. Open the existing platform view:
@@ -37,13 +58,36 @@ Keep these observations separate:
 | Protected posture | Current, linked evidence meets Pulse's protection policy | A recovery guarantee or permission to discard other backups |
 
 **A backup task's OK status is not confirmation that the guest has thawed.**
-For freeze-enabled Proxmox backups, stop Pulse before the backup and restart it
-only after independently confirming guest thaw. Pulse monitoring and alert
-delivery are unavailable while it is stopped. Do not send additional
-guest-agent commands during freeze/thaw to diagnose the problem, or disable
-filesystem freezing merely to make a task look successful. Follow the
-[backup safety precaution](VM_DISK_MONITORING.md#backup-safety); it is not a
-claim that Pulse has repaired or reproduced a native thaw failure.
+For an affected installation, use the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety) **before a planned
+freeze-enabled Proxmox backup**. It covers the actual server deployment and
+automatic updaters, not just a guest agent. A planned pause is not an incident
+recovery procedure, and stopping Pulse does not cancel a guest-agent request
+already issued. If an existing operation's state is unknown, do not start a
+backup on the strength of a stopped service or an elapsed waiting period.
+
+Keep Pulse stopped until the backup has ended and **independent post-backup
+checks confirm all three**:
+
+1. Guest thaw.
+2. Fresh successful workload writes to **every filesystem covered by the backup**.
+3. Workload liveness.
+
+Use the workload's established safe checks, independent of Pulse and the QEMU
+Guest Agent. An OK task, an absent lock, a console connection, a successful read
+or a write to only the OS disk is not enough. If any check fails or is
+unavailable, leave Pulse and its automatic updater paused and use the
+guest/platform's recovery procedure. Do not force writes, repeat a backup or
+send guest-agent probes to fill the gap.
+
+After all checks pass, restore **only services and timers that were active
+before the pause**. Unknown pre-pause states are not permission to start them.
+An updater must not restart a previously inactive server; follow the
+deployment-specific restoration steps in the precaution. **Pulse monitoring
+and alert delivery are unavailable while it is stopped**; arrange independent
+outage coverage. Do not disable filesystem freezing to make a task look
+successful. This precaution is not proof of a repaired or reproduced native
+thaw failure.
 
 Before relying on an artifact, confirm its provider, repository, workload
 identity and time in the provider's own tools. For recovery assurance, test a
@@ -99,6 +143,11 @@ A retained artifact can remain visible while posture is unknown. A running
 backup is not a new completed recovery point; inspect any earlier completed
 point separately rather than treating current activity as protection.
 
+For PBS artifacts that disagree with the health strip, use the
+[backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected)
+to compare one workload's explanation and provider evidence without running a
+new backup or changing stored history.
+
 ## Missing or inconsistent evidence
 
 1. Open the relevant platform view, clear its search and filters, and check the
@@ -117,8 +166,11 @@ point separately rather than treating current activity as protection.
 If the guest stopped responding during backup, preserve the task's warning or
 thaw error and the observations already available. Do not repeat the backup,
 reset the guest, or run active guest-agent probes just to reproduce it. Use
-the provider's recovery procedure and a separate trusted guest console to
-assess guest liveness and thaw, not Pulse's backup badge.
+the provider's recovery procedure; a separate trusted guest console can help
+assess the guest, but a console connection alone does not clear the precaution.
+Keep monitoring paused until the independent post-backup checks above confirm
+thaw, writes to every covered filesystem and workload liveness, not just until
+Pulse's backup badge looks healthy.
 
 When reporting missing records, share the failing view, running Pulse version,
 affected provider, time range, expected reading and relevant redacted error.

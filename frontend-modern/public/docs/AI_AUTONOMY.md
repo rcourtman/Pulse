@@ -44,11 +44,19 @@ one-off read, you can instead open the path in your signed-in administrator
 browser without extracting its cookie. There is no shared example password
 to configure or substitute into these commands.
 
-Read the current settings first (curl 7.76 or later, on the Pulse host):
+Define the [API guide's `pulse_api` helper](API.md#api-token-recommended)
+in the same Bash session before using these examples (curl 7.76 or later).
+It is local example code, not an installed Pulse command. Each call sends one
+request, prints only the HTTP status and saves the response to a new owner-only
+file, preserving earlier responses. It uses a five-second connection limit and
+a twenty-second whole-request limit, ignores local curl defaults and does not
+follow redirects or retry.
+
+These are separate operations, not a script to run from top to bottom. Read
+the current settings first, then inspect the reported private response file:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/ai/patrol/autonomy
+pulse_api GET /api/ai/patrol/autonomy
 ```
 
 The next command **changes Patrol mode**, not just connection health. Use it
@@ -56,20 +64,25 @@ only when you intend to enable investigation and queue fixes for approval on
 a plan with that capability. The API retains `autonomy_level` for compatibility:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request PUT --header 'Content-Type: application/json' --data-binary @- \
-  http://127.0.0.1:7655/api/ai/patrol/autonomy <<'JSON'
+pulse_api PUT /api/ai/patrol/autonomy <<'JSON'
 {"autonomy_level":"approval","investigation_budget":15,"investigation_timeout_sec":600}
 JSON
 ```
 
-For remote use, substitute your Pulse **HTTPS** URL and keep certificate
-verification enabled. Do not add `--insecure`, verbose/trace output or redirect
-following; keep `--disable` first to ignore local curl defaults. A nonzero exit,
-401 or 403 is a failed check, not evidence that a change was saved. Stop and
-resolve authentication, permissions or the reported error before proceeding;
-after an uncertain write, read the saved settings before retrying. Keep
-tokens, cookies and unredacted responses out of reports.
+The helper's loopback origin is for requests made on the Pulse host. For remote
+use, change the origin and protocol restriction **in the helper** as the API
+guide describes, using your Pulse **HTTPS** URL with certificate verification
+enabled. Do not add `--insecure`, verbose/trace output or redirect following.
+
+Inspect settings and error bodies privately; share only a relevant redacted
+error, never the response file, token or cookie. A nonzero exit, including HTTP
+401, 402 or 403, is not evidence that a change was saved. A partial response
+is not a complete settings result, and HTTP success is not proof of the
+effective mode or completed investigation. After an uncertain write, read the
+saved settings before retrying: a timeout or lost response can occur **after
+a change was applied**. If that read is unavailable, stop rather than repeat
+the write. Check the saved and effective Patrol mode on the Patrol page;
+licence and policy enforcement still apply.
 
 ### License Requirements
 
@@ -104,10 +117,13 @@ permission to change settings. Prefer the UI for one-off changes, and verify
 the saved **Chat action mode** there afterwards. Do not use a write as an
 authentication test.
 
+Use the same `pulse_api` helper defined above, with its private response file
+and request limits. Supporting PUT in the helper grants no additional access.
+If the response is lost, check the saved **Chat command mode** in the UI before
+deciding whether another change is needed; do not repeat the write blindly.
+
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request PUT --header 'Content-Type: application/json' --data-binary @- \
-  http://127.0.0.1:7655/api/settings/ai/update <<'JSON'
+pulse_api PUT /api/settings/ai/update <<'JSON'
 {"control_level":"controlled"}
 JSON
 ```

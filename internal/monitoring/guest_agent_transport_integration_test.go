@@ -17,8 +17,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
-func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
-	for _, kind := range []string{"lost reply", "redirect", "server error", "gateway error"} {
+func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ...string) {
+	for _, kind := range kinds {
 		t.Run(kind, func(t *testing.T) {
 			const mib = uint64(1024 * 1024)
 			var phase, calls, redirected atomic.Int32
@@ -35,11 +35,24 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
 						redirected.Add(1)
 					}
 					if phase.Load() == 1 && lost.CompareAndSwap(false, true) {
-						if kind == "server error" || kind == "gateway error" {
-							status := http.StatusInternalServerError
-							if kind == "gateway error" {
-								status = http.StatusBadGateway
-							}
+						switch kind {
+						case "malformed success":
+							fmt.Fprint(w, `{"data":{"result":`)
+							return
+						case "ambiguous success":
+							fmt.Fprint(w, `{"data":null,"data":{"result":[]}}`)
+							return
+						case "trailing success":
+							fmt.Fprint(w, `{"data":{"result":[]}} {}`)
+							return
+						}
+						if status := map[string]int{
+							"server error":           http.StatusInternalServerError,
+							"gateway error":          http.StatusBadGateway,
+							"conflict response":      http.StatusConflict,
+							"too early response":     http.StatusTooEarly,
+							"client closed response": 499,
+						}[kind]; status != 0 {
 							w.WriteHeader(status)
 							fmt.Fprint(w, "upstream unavailable")
 							return
@@ -111,7 +124,18 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
 			res.CPU = 0.2
 			for i := 0; i < 2; i++ {
 				deferred, source := build()
-				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != "prev-agent-cooldown" || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
+				wantReason := "prev-agent-cooldown"
+				if i == 0 {
+					// Filesystem now receives the original error, before optional
+					// reads observe the resulting shared cooldown.
+					wantReason = "prev-agent-completion-unverified"
+					if kind == "lost reply" {
+						wantReason = "prev-agent-timeout"
+					} else if kind == "redirect" {
+						wantReason = "prev-agent-redirect"
+					}
+				}
+				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != wantReason || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
 					t.Fatalf("uncertain command lost truthful continuity: source=%s vm=%+v", source, deferred)
 				}
 				if !reflect.DeepEqual(m.vmAgentMemCache[memKey], memory) || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], metadata) {

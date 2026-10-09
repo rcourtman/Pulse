@@ -81,6 +81,25 @@ func (v VMView) LinkedAgentMemory() (models.Memory, bool) {
 	return linkedAgentMemoryFromResource(v.r)
 }
 
+// LinkedAgentDisks reads the agent-owned inventory after host/guest correlation.
+// The platform row's LastSeen must never renew the agent's reporting lease.
+func (v VMView) LinkedAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
+}
+
+func linkedAgentDisksFromResource(r *Resource) ([]DiskInfo, time.Time, bool) {
+	if r == nil || r.Agent == nil || r.Agent.Stale || len(r.Agent.Disks) == 0 {
+		return nil, time.Time{}, false
+	}
+	status, ok := r.SourceStatus[SourceAgent]
+	// The registry owns configured lease expiry. A live platform source alone
+	// cannot make old, undated or future agent evidence current.
+	if !ok || status.Status != "online" || status.LastSeen.IsZero() || status.LastSeen.After(time.Now()) {
+		return nil, time.Time{}, false
+	}
+	return cloneDiskInfos(r.Agent.Disks), status.LastSeen, true
+}
+
 // linkedAgentMemoryFromResource reads the agent-owned memory sample attached to
 // a merged guest resource. Correlation removes the standalone host row, so the
 // guest view is the only place the agent sample survives (#1962, #2148).
@@ -115,6 +134,12 @@ func (v VMView) ID() string {
 		return ""
 	}
 	return v.r.ID
+}
+
+// GovernanceMetadata reads policy from this exact canonical guest rather
+// than resolving a potentially shared name in another installation.
+func (v VMView) GovernanceMetadata() (*ResourcePolicy, string) {
+	return CanonicalGovernanceMetadata(v.r)
 }
 
 func (v VMView) Name() string {
@@ -232,6 +257,21 @@ func (v VMView) DiskStatusReason() string {
 		return ""
 	}
 	return v.r.Proxmox.DiskStatusReason
+}
+
+// DiskObservation is internal source evidence, not resource freshness.
+func (v VMView) DiskObservation() models.GuestDiskObservation {
+	if v.r == nil || v.r.Proxmox == nil {
+		return models.GuestDiskObservation{}
+	}
+	return v.r.Proxmox.DiskObservation
+}
+
+func (v VMView) GuestAgentEvidence() models.GuestAgentEvidence {
+	if v.r == nil || v.r.Proxmox == nil {
+		return models.GuestAgentEvidence{}
+	}
+	return v.r.Proxmox.GuestAgentEvidence
 }
 
 func (v VMView) OSName() string {
@@ -428,6 +468,10 @@ func (v ContainerView) LinkedAgentMemory() (models.Memory, bool) {
 	return linkedAgentMemoryFromResource(v.r)
 }
 
+func (v ContainerView) LinkedAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
+}
+
 func (v ContainerView) String() string { return fmt.Sprintf("ContainerView(%s, %q)", v.ID(), v.Name()) }
 
 func (v ContainerView) ID() string {
@@ -435,6 +479,12 @@ func (v ContainerView) ID() string {
 		return ""
 	}
 	return v.r.ID
+}
+
+// GovernanceMetadata reads policy from this exact canonical guest rather
+// than resolving a potentially shared name in another installation.
+func (v ContainerView) GovernanceMetadata() (*ResourcePolicy, string) {
+	return CanonicalGovernanceMetadata(v.r)
 }
 
 func (v ContainerView) Name() string {
@@ -756,6 +806,18 @@ func (v NodeView) Status() ResourceStatus {
 		return ""
 	}
 	return v.r.Status
+}
+
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. A node row keeps an unreachable node's last readings, and a merged
+// row's status follows its highest-priority source, so consumers presenting
+// the row's readings as current must check the sightings here.
+func (v NodeView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
 }
 
 func (v NodeView) NodeName() string {
@@ -1207,6 +1269,12 @@ func (v HostView) Disks() []DiskInfo {
 		return nil
 	}
 	return cloneDiskInfos(v.r.Agent.Disks)
+}
+
+// CurrentAgentDisks excludes retained inventory whose source stopped reporting;
+// Disks still exposes that inventory for last-known presentation.
+func (v HostView) CurrentAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
 }
 
 func (v HostView) LinkedNodeID() string {
@@ -1853,6 +1921,18 @@ func (v DockerHostView) LastSeen() time.Time {
 		return time.Time{}
 	}
 	return v.r.LastSeen
+}
+
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. The registry marks a Docker host's source stale once its report is
+// overdue while the row keeps the last report, so consumers presenting the
+// row's readings or its containers' as current must check the source here.
+func (v DockerHostView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
 }
 
 func (v DockerHostView) CPUPercent() float64 {

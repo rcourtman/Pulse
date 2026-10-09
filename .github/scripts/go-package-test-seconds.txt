@@ -1,0 +1,35 @@
+# Non-API Go package race-test seconds on GitHub ubuntu-24.04.
+# Median of successful rest shards in Build and Test runs 37451091575
+# (b5444cf8) and 37451828694 (bd0ef398), collected 2026-10-06.
+# Package elapsed times overlap because go test runs packages concurrently;
+# these are balancing weights, not predicted wall-clock durations.
+# Weights move whole packages between the two existing required checks.
+# The checked-out go list supplies coverage, including new/unmeasured packages.
+# Stale entries cannot add, omit or duplicate a package. DEFAULT_WEIGHT is
+# the mean of measured test packages below 20 seconds in those same runs.
+# Refresh from complete passing rest-shard logs when imbalance returns.
+DEFAULT_WEIGHT 2.681
+github.com/rcourtman/pulse-go-rewrite/cmd/hashpw 22.616
+github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 35.681
+github.com/rcourtman/pulse-go-rewrite/internal/ai 30.231
+github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 20.800
+github.com/rcourtman/pulse-go-rewrite/internal/ai/tools 63.876
+github.com/rcourtman/pulse-go-rewrite/internal/alerts 27.456
+github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 34.133
+github.com/rcourtman/pulse-go-rewrite/internal/config 228.780
+github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 22.758
+github.com/rcourtman/pulse-go-rewrite/internal/mock 129.980
+github.com/rcourtman/pulse-go-rewrite/internal/monitoring 201.733
+github.com/rcourtman/pulse-go-rewrite/internal/notifications 121.213
+github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 23.478
+github.com/rcourtman/pulse-go-rewrite/internal/relay 70.288
+github.com/rcourtman/pulse-go-rewrite/internal/telemetry 38.002
+github.com/rcourtman/pulse-go-rewrite/internal/truenas 48.556
+github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 124.084
+github.com/rcourtman/pulse-go-rewrite/internal/updates 26.972
+github.com/rcourtman/pulse-go-rewrite/internal/websocket 27.300
+github.com/rcourtman/pulse-go-rewrite/pkg/auth 26.903
+github.com/rcourtman/pulse-go-rewrite/pkg/metrics 324.930
+github.com/rcourtman/pulse-go-rewrite/pkg/server 26.114
+github.com/rcourtman/pulse-go-rewrite/scripts/installtests 206.606
+github.com/rcourtman/pulse-go-rewrite/tests/migration 48.435

@@ -246,11 +246,16 @@ class DocumentationCurrentnessTest(unittest.TestCase):
 
         expected_fragments = (
             "primary automation API token",
-            "separate from your web login password",
-            "Revoking a token is safe for Pulse itself",
-            "immediately breaks any agent",
-            "script, kiosk, or integration still using that token",
-            "create and install a replacement token first",
+            "that Pulse instance, not your web login password",
+            "Give each agent, script, integration or display only the scopes it needs",
+            "Revoking a token stops consumers still using it from authenticating",
+            "For a planned rotation, create a least-privilege replacement",
+            "install it privately in each affected consumer",
+            "verify a fresh authenticated result before revoking the old token",
+            "Last-used metadata alone does not account for every consumer",
+            "Do not reinstall an agent or delete its saved identity",
+            "If a token or kiosk link has been exposed, revoke it promptly",
+            "Do not leave a leaked token active while arranging a gradual rotation",
         )
         for content in (config_doc, public_config_doc):
             prose = normalize_prose(content)

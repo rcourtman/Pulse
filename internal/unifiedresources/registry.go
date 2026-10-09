@@ -4237,6 +4237,17 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	}
 	if incoming.VMID != 0 {
 		merged.VMID = incoming.VMID
+		// A native guest facet is a complete observation of admission state.
+		// Retaining the previous reason/status can hide a newly paused read or
+		// leave a recovered guest paused forever. Non-guest partial facets do
+		// not own these fields.
+		merged.DiskStatusReason = incoming.DiskStatusReason
+		// A completed guest observation also owns loss/recovery of its original
+		// filesystem evidence. Missing time must not inherit an older origin.
+		merged.DiskObservation = incoming.DiskObservation
+		merged.GuestAgentEvidence = incoming.GuestAgentEvidence
+		merged.GuestAgentStatus = incoming.GuestAgentStatus
+		merged.GuestAgentExpected = incoming.GuestAgentExpected
 	}
 	if incoming.CPUs != 0 {
 		merged.CPUs = incoming.CPUs
@@ -6893,9 +6904,14 @@ func exclusionKey(a, b string) string {
 
 // Stable ordering helper for deterministic output.
 func sortResourcesByName(resources []Resource) {
-	sort.SliceStable(resources, func(i, j int) bool {
-		return CompareResourcesByCanonicalName(resources[i], resources[j]) < 0
-	})
+	if len(resources) < 2 {
+		return
+	}
+	keys := make([]resourceNameSortKey, len(resources))
+	for i := range resources {
+		keys[i] = resourceNameSortKey{canonicalResourceNameKey(resources[i].Name), resources[i].Type, resources[i].ID}
+	}
+	sort.Stable(resourceNameSort{resources, keys})
 }
 
 type namedResourceView interface {
@@ -6904,9 +6920,14 @@ type namedResourceView interface {
 }
 
 func sortNamedResourceViewsByName[T namedResourceView](views []T) {
-	sort.SliceStable(views, func(i, j int) bool {
-		return compareResourceNameIdentity(views[i].Name(), "", views[i].ID(), views[j].Name(), "", views[j].ID()) < 0
-	})
+	if len(views) < 2 {
+		return
+	}
+	keys := make([]resourceNameSortKey, len(views))
+	for i := range views {
+		keys[i] = resourceNameSortKey{name: canonicalResourceNameKey(views[i].Name()), id: views[i].ID()}
+	}
+	sort.Stable(namedResourceSort[T]{views, keys})
 }
 
 // ---------------------------------------------------------------------------

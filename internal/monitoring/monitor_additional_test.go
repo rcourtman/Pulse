@@ -2,7 +2,11 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"net"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -949,7 +953,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 			mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), config: &config.Config{}, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
 			prev := mon.previousGuestContextForInstance("pve-a")
 			raw := VMMemoryRaw{}
-			_, got, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-a", "firewall", "node1", 111, guestID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &raw)
+			_, got, source, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-a", "firewall", "node1", 111, guestID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &raw)
 			if got != tc.want {
 				t.Fatalf("used=%d source=%s want=%d", got, source, tc.want)
 			}
@@ -1001,7 +1005,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 				t.Fatal("correlated agent crossed instance boundary")
 			}
 			otherID := makeGuestID("pve-b", "node1", 111)
-			_, otherUsed, otherSource := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+			_, otherUsed, otherSource, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
 			if otherUsed != 8000 || otherSource != "status-mem" {
 				t.Fatalf("other instance inherited agent memory: used=%d source=%s", otherUsed, otherSource)
 			}
@@ -1087,7 +1091,7 @@ func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
 		{"pve-a", guestID, 2800, "agent"}, {"pve-b", otherID, 8000, "status-mem"},
 	} {
 		prev := mon.previousGuestContextForInstance(tc.instance)
-		_, used, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+		_, used, source, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
 		if used != tc.used || source != tc.source {
 			t.Fatalf("%s used=%d source=%s", tc.instance, used, source)
 		}
@@ -1794,4 +1798,194 @@ func TestNodeTemperatureStaysWithinSameNamedNodesSite(t *testing.T) {
 			t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
 		}
 	})
+}
+
+// Exercise the actual scheduler result, admission and health entry points.
+// No provider request, backup operation or database is involved in this control.
+func TestMonitorPersistentFailureBackoffAndRecovery(t *testing.T) {
+	m := &Monitor{
+		config:          &config.Config{},
+		circuitBreakers: make(map[string]*circuitBreaker),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
+	}
+	failed := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "offline"}
+	healthy := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "healthy"}
+	for failure := 1; failure <= 130; failure++ {
+		m.recordTaskResult(failed.InstanceType, failed.InstanceName, errors.New("connection timeout"))
+		if failure < 3 {
+			continue
+		}
+		cb := m.ensureBreaker(schedulerKey(failed.InstanceType, failed.InstanceName))
+		state, count, retryAt := cb.State()
+		if state != "open" || count != failure || !retryAt.After(time.Now()) || m.allowExecution(failed) {
+			t.Fatalf("failure %d lost scheduler containment: state=%s count=%d retry=%v", failure, state, count, retryAt)
+		}
+		if !m.allowExecution(healthy) {
+			t.Fatal("one failing connection blocked another instance")
+		}
+		health := m.SchedulerHealth()
+		if len(health.Breakers) != 1 || health.Breakers[0].Failures != failure || !health.Breakers[0].RetryAt.Equal(retryAt) || health.Breakers[0].State != "open" {
+			t.Fatalf("served scheduler health lost the owned retry fence: %+v", health.Breakers)
+		}
+		// Simulate reaching the scheduled retry without sleeping or polling a host.
+		if !cb.allow(retryAt) {
+			t.Fatal("due probe was not admitted")
+		}
+	}
+	m.recordTaskResult(failed.InstanceType, failed.InstanceName, nil)
+	if !m.allowExecution(failed) || len(m.SchedulerHealth().Breakers) != 0 {
+		t.Fatal("successful poll did not restore scheduler admission and health")
+	}
+	status := m.pollStatusMap[schedulerKey(failed.InstanceType, failed.InstanceName)]
+	if status.ConsecutiveFailures != 0 || !status.LastErrorAt.IsZero() || status.LastErrorMessage != "" || status.LastErrorCategory != "" || status.LastSuccess.IsZero() {
+		t.Fatalf("successful poll retained an outstanding failure: %+v", status)
+	}
+	for i := 0; i < 3; i++ {
+		m.recordTaskResult(failed.InstanceType, failed.InstanceName, errors.New("connection timeout"))
+	}
+	cb := m.ensureBreaker(schedulerKey(failed.InstanceType, failed.InstanceName))
+	if cb.retryInterval != 40*time.Second || m.allowExecution(failed) {
+		t.Fatal("new failure episode did not restart the original backoff")
+	}
+}
+
+func TestGuestConfigPlacement(t *testing.T) {
+	for _, kind := range []string{"vm", "container", "lxc"} {
+		for _, reverse := range []bool{false, true} {
+			for _, tc := range []struct {
+				name, instance, node, wantInstance, wantNode, failure string
+			}{
+				{name: "instance constraint", instance: "second", wantInstance: "second", wantNode: "node-b"},
+				{name: "node constraint", node: "node-b", wantInstance: "second", wantNode: "node-b"},
+				{name: "bare VMID ambiguous", failure: "ambiguous"},
+				{name: "unknown instance", instance: "absent", failure: "unable to resolve"},
+				{name: "unknown node", node: "absent", failure: "unable to resolve"},
+			} {
+				t.Run(kind+"/"+tc.name+"/reverse="+map[bool]string{true: "yes", false: "no"}[reverse], func(t *testing.T) {
+					state := models.NewState()
+					vms := []models.VM{{ID: "a", VMID: 105, Instance: "first", Node: "node-a"}, {ID: "b", VMID: 105, Instance: "second", Node: "node-b"}}
+					if reverse {
+						vms[0], vms[1] = vms[1], vms[0]
+					}
+					if kind == "vm" {
+						state.VMs = vms
+					} else {
+						for _, vm := range vms {
+							state.Containers = append(state.Containers, models.Container{ID: vm.ID, VMID: vm.VMID, Instance: vm.Instance, Node: vm.Node})
+						}
+					}
+					first := &guestConfigCoverageClient{vmConfig: map[string]interface{}{"origin": "first"}, containerConfig: map[string]interface{}{"origin": "first"}}
+					second := &guestConfigCoverageClient{vmConfig: map[string]interface{}{"origin": "second"}, containerConfig: map[string]interface{}{"origin": "second"}}
+					m := &Monitor{state: state, pveClients: map[string]PVEClientInterface{"first": first, "second": second}}
+					got, err := m.GetGuestConfig(context.Background(), kind, tc.instance, tc.node, 105)
+					if tc.failure != "" {
+						if err == nil || !strings.Contains(err.Error(), tc.failure) || got != nil || first.vmCalls+first.containerCalls+second.vmCalls+second.containerCalls != 0 {
+							t.Fatalf("unresolved identity reached a provider: result=%v err=%v", got, err)
+						}
+						return
+					}
+					if err != nil || got["origin"] != tc.wantInstance || second.lastNode != tc.wantNode || second.lastVMID != 105 || second.vmCalls+second.containerCalls != 1 || first.vmCalls+first.containerCalls != 0 {
+						t.Fatalf("placement constraint was not honoured: result=%v err=%v target=%s/%d", got, err, second.lastNode, second.lastVMID)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestGuestConfigPlacementCurrentInventory(t *testing.T) {
+	for _, kind := range []string{"vm", "container"} {
+		for _, empty := range []bool{false, true} {
+			t.Run(kind+"/empty="+map[bool]string{true: "yes", false: "no"}[empty], func(t *testing.T) {
+				legacy := models.NewState()
+				legacy.VMs = []models.VM{{ID: "stale-vm", VMID: 105, Instance: "old", Node: "old-node"}}
+				legacy.Containers = []models.Container{{ID: "stale-ct", VMID: 105, Instance: "old", Node: "old-node"}}
+				registry := unifiedresources.NewRegistry(nil)
+				if !empty {
+					registry.IngestSnapshot(models.StateSnapshot{
+						VMs:        []models.VM{{ID: "current-vm", VMID: 105, Instance: "current", Node: "current-node"}},
+						Containers: []models.Container{{ID: "current-ct", VMID: 105, Instance: "current", Node: "current-node"}},
+					})
+				}
+				old, current := &guestConfigCoverageClient{}, &guestConfigCoverageClient{}
+				m := &Monitor{state: legacy, resourceStore: unifiedresources.NewMonitorAdapter(registry), pveClients: map[string]PVEClientInterface{"old": old, "current": current}}
+				_, err := m.GetGuestConfig(context.Background(), kind, "", "", 105)
+				if empty {
+					if err == nil || current.vmCalls+current.containerCalls != 0 {
+						t.Fatal("empty current inventory fell back to stale placement")
+					}
+				} else if err != nil || current.lastNode != "current-node" || current.vmCalls+current.containerCalls != 1 {
+					t.Fatalf("current inventory did not own placement: %v", err)
+				}
+				if old.vmCalls+old.containerCalls != 0 {
+					t.Fatal("stale connection was read")
+				}
+			})
+		}
+	}
+}
+
+func TestGuestConfigPlacementAdverseAndDirect(t *testing.T) {
+	for _, kind := range []string{"vm", "container"} {
+		t.Run(kind, func(t *testing.T) {
+			failure := errors.New("provider read failed")
+			client := &guestConfigCoverageClient{vmErr: failure, containerErr: failure}
+			m := &Monitor{pveClients: map[string]PVEClientInterface{"chosen": client}}
+			_, err := m.GetGuestConfig(context.Background(), kind, "chosen", "chosen-node", 105)
+			if !errors.Is(err, failure) || client.lastNode != "chosen-node" || client.vmCalls+client.containerCalls != 1 {
+				t.Fatal("explicit placement or original provider failure was changed")
+			}
+			state := models.NewState()
+			state.VMs = []models.VM{{ID: "one", VMID: 105, Instance: "chosen", Node: "same-node"}, {ID: "two", VMID: 105, Instance: "other", Node: "same-node"}}
+			state.Containers = []models.Container{{ID: "one", VMID: 105, Instance: "chosen", Node: "same-node"}, {ID: "two", VMID: 105, Instance: "other", Node: "same-node"}}
+			m.state = state
+			_, err = m.GetGuestConfig(context.Background(), kind, "", "same-node", 105)
+			if err == nil || !strings.Contains(err.Error(), "ambiguous") || client.vmCalls+client.containerCalls != 1 {
+				t.Fatal("two installations sharing a node name were guessed")
+			}
+			state.VMs, state.Containers = []models.VM{{VMID: 105, Instance: "chosen"}}, []models.Container{{VMID: 105, Instance: "chosen"}}
+			_, err = m.GetGuestConfig(context.Background(), kind, "chosen", "", 105)
+			if err == nil || client.vmCalls+client.containerCalls != 1 {
+				t.Fatal("incomplete placement reached a provider")
+			}
+		})
+	}
+}
+
+type concurrentGuestConfigClient struct {
+	stubPVEClient
+	calls atomic.Int32
+}
+
+func (c *concurrentGuestConfigClient) GetVMConfig(_ context.Context, node string, vmid int) (map[string]interface{}, error) {
+	c.calls.Add(1)
+	return map[string]interface{}{"node": node, "vmid": vmid}, nil
+}
+
+func TestGuestConfigPlacementConcurrentSnapshot(t *testing.T) {
+	state := models.NewState()
+	state.UpdateVMsForInstance("chosen", []models.VM{{ID: "vm", VMID: 105, Instance: "chosen", Node: "a"}})
+	client := &concurrentGuestConfigClient{}
+	m := &Monitor{state: state, pveClients: map[string]PVEClientInterface{"chosen": client}}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			state.UpdateVMsForInstance("chosen", []models.VM{{ID: "vm", VMID: 105, Instance: "chosen", Node: "b"}})
+			state.UpdateVMsForInstance("chosen", []models.VM{{ID: "vm", VMID: 105, Instance: "chosen", Node: "a"}})
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		got, err := m.GetGuestConfig(context.Background(), "vm", "chosen", "", 105)
+		if err != nil || got["vmid"] != 105 || got["node"] != "a" && got["node"] != "b" {
+			t.Errorf("invalid concurrent snapshot: %v %v", got, err)
+		}
+	}
+	wg.Wait()
+	if client.calls.Load() != 100 {
+		t.Fatal("concurrent reads were replayed or lost")
+	}
 }

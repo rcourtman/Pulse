@@ -71,6 +71,9 @@ func (concurrencyThresholdProvider) GetStorageThreshold() float64   { return 92 
 func (concurrencyThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 70, 65
 }
+func (concurrencyThresholdProvider) GetTrueNASDiskTemperatureThreshold(string, string) (float64, float64) {
+	return 70, 65
+}
 
 type concurrencyMetricsHistoryProvider struct{}
 

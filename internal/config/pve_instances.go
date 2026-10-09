@@ -532,7 +532,7 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 		}
 
 		endpoint := &instances[ref.clusterIdx].ClusterEndpoints[ref.endpointIdx]
-		if ProxmoxFingerprintsConflict(instances[idx].Fingerprint, endpoint.Fingerprint) {
+		if !standalonePVEEndpointMatchProven(instances[idx], instances[ref.clusterIdx], *endpoint) {
 			continue
 		}
 		mergeClusterEndpointData(endpoint, ClusterEndpoint{
@@ -553,6 +553,37 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 	}
 
 	return mergedAny
+}
+
+// Discovery synthesizes endpoint.Host from the member's native node name.
+// That name can also resolve to a different standalone machine (#2681). Never
+// delete a connection on that coincidence alone: require an address, the saved
+// cluster authority, or matching per-endpoint certificate evidence. Unknown
+// fingerprints do not prove identity, and conflicting ones always veto a fold.
+func standalonePVEEndpointMatchProven(standalone, cluster PVEInstance, endpoint ClusterEndpoint) bool {
+	if ProxmoxFingerprintsConflict(standalone.Fingerprint, endpoint.Fingerprint) {
+		return false
+	}
+	key := normalizePVEEndpointIdentity(standalone.Host)
+	if key == "" {
+		return false
+	}
+	// The instance pin applies only to its saved authority, not every member.
+	// When that authority is the candidate, it also vetoes an endpoint whose
+	// own discovery pin is still unknown.
+	if key == normalizePVEEndpointIdentity(cluster.Host) && ProxmoxFingerprintsConflict(standalone.Fingerprint, cluster.Fingerprint) {
+		return false
+	}
+	for _, address := range []string{endpoint.Host, endpoint.IP, endpoint.IPOverride} {
+		if ipKey := endpointHostIdentityIP(address); ipKey != "" && key == ipKey {
+			return true
+		}
+	}
+	if key == normalizePVEEndpointIdentity(cluster.Host) {
+		return true
+	}
+	fp := normalizeProxmoxFingerprint(standalone.Fingerprint)
+	return fp != "" && fp == normalizeProxmoxFingerprint(endpoint.Fingerprint)
 }
 
 func removeMergedStandaloneInstances(instances []PVEInstance) []PVEInstance {

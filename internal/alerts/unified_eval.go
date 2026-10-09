@@ -279,7 +279,7 @@ func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) Threshol
 }
 
 // evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.
-func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions) {
+func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions, separatelyEvaluated ...string) {
 	if input == nil {
 		return
 	}
@@ -309,8 +309,60 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 		merged.Metadata = metadata
 		opts = &merged
 	}
-	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
+	candidates := buildUnifiedMetricCandidates(input, thresholds)
+	m.interruptUnobservedUnifiedMetrics(input, candidates, separatelyEvaluated)
+	for _, candidate := range candidates {
 		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
+	}
+}
+
+// An omitted/rejected metric is unknown, not a pause in its sustained-for
+// clock. Build candidates stays pure; dispatch owns interruption for metrics
+// this resource supports but cannot currently observe.
+func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput, candidates []unifiedMetricCandidate, separatelyEvaluated []string) {
+	if _, ok := unifiedMetricResourceType(input.Type); !ok {
+		return
+	}
+	metrics := [...]string{"cpu", "memory", "disk", "temperature", "diskRead", "diskWrite", "networkIn", "networkOut", "usage"}
+	m.mu.Lock()
+	intentChanged := false
+	for _, metric := range metrics {
+		separateOwner := false
+		for _, separateMetric := range separatelyEvaluated {
+			if metric == separateMetric {
+				separateOwner = true
+				break
+			}
+		}
+		if separateOwner {
+			continue
+		}
+		switch metric {
+		case "diskRead", "diskWrite", "networkIn", "networkOut":
+			if !supportsUnifiedIOMetrics(input.Type) {
+				continue
+			}
+		case "usage":
+			if !unifiedStorageUsageResourceType(input.Type) {
+				continue
+			}
+		}
+		observed := false
+		for _, candidate := range candidates {
+			if candidate.Spec.MetricThreshold.Metric == metric {
+				observed = true
+				break
+			}
+		}
+		if !observed {
+			if m.interruptMetricRunNoLock(input.ID, canonicalMetricSpecID(input.ID, metric), canonicalMetricStateID(input.ID, metric)) {
+				intentChanged = true
+			}
+		}
+	}
+	m.mu.Unlock()
+	if intentChanged {
+		m.saveActiveAlertsAsync("unified metric observation gap")
 	}
 }
 
@@ -461,11 +513,11 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 	return spec, spec.Validate()
 }
 
-func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) bool {
 	if spec.MetricThreshold == nil {
-		return
+		return false
 	}
-	m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
+	return m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
 }
 
 func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {

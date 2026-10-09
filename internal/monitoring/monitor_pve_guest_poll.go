@@ -85,8 +85,6 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	m.recordGuestMetrics(allVMs, allContainers, cycleStart)
 
-	m.pollReplicationStatusAsync(instanceName, client, allVMs)
-
 	log.Debug().
 		Str("instance", instanceName).
 		Int("vms", len(allVMs)).

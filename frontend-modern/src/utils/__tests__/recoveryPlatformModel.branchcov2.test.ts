@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getRecoveryPointPlatform,
-  getRecoveryRollupPlatforms,
   normalizeRecoveryPoint,
   normalizeRecoveryPointsResponse,
-  normalizeRecoveryRollup,
-  normalizeRecoveryRollupsResponse,
 } from '@/utils/recoveryPlatformModel';
 
 /**
@@ -51,35 +48,6 @@ describe('recoveryPlatformModel.branchcov2', () => {
       expect(getRecoveryPointPlatform(null)).toBe('');
       expect(getRecoveryPointPlatform(undefined)).toBe('');
       expect(getRecoveryPointPlatform({})).toBe('');
-    });
-  });
-
-  describe('getRecoveryRollupPlatforms', () => {
-    it('falls back to providers when platforms is an empty array', () => {
-      expect(getRecoveryRollupPlatforms({ platforms: [], providers: ['x'] })).toEqual(['x']);
-    });
-
-    it('falls back to providers when platforms is not an array', () => {
-      const malformed = {
-        platforms: 'nope',
-        providers: ['kubernetes'],
-      } as unknown as Parameters<typeof getRecoveryRollupPlatforms>[0];
-      expect(getRecoveryRollupPlatforms(malformed)).toEqual(['kubernetes']);
-    });
-
-    it('returns an empty array when both platforms and providers are absent', () => {
-      expect(getRecoveryRollupPlatforms({})).toEqual([]);
-      expect(getRecoveryRollupPlatforms(null)).toEqual([]);
-      expect(getRecoveryRollupPlatforms(undefined)).toEqual([]);
-    });
-
-    it('trims and filters blank entries from the resolved values', () => {
-      expect(getRecoveryRollupPlatforms({ platforms: ['  a  ', '', '   ', 'b'] })).toEqual([
-        'a',
-        'b',
-      ]);
-      // All entries normalize to empty -> filter(Boolean) yields [].
-      expect(getRecoveryRollupPlatforms({ platforms: ['   ', ''] })).toEqual([]);
     });
   });
 
@@ -229,19 +197,6 @@ describe('recoveryPlatformModel.branchcov2', () => {
     });
   });
 
-  describe('normalizeRecoveryRollup', () => {
-    it('returns a minimal rollup unchanged when optional fields are absent', () => {
-      const minimal = { rollupId: 'r-min', lastOutcome: 'warning' as const };
-      expect(normalizeRecoveryRollup(minimal)).toStrictEqual(minimal);
-    });
-
-    it('passes a null display through unchanged', () => {
-      expect(
-        normalizeRecoveryRollup({ rollupId: 'r1', lastOutcome: 'success', display: null }),
-      ).toStrictEqual({ rollupId: 'r1', lastOutcome: 'success', display: null });
-    });
-  });
-
   describe('normalizeRecoveryMeta (via response normalizers)', () => {
     it('passes valid finite numeric meta through unchanged', () => {
       const meta = { page: 2, limit: 50, total: 7, totalPages: 1 };
@@ -259,10 +214,10 @@ describe('recoveryPlatformModel.branchcov2', () => {
         } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
       ).toStrictEqual({ data: [], meta: defaults });
       expect(
-        normalizeRecoveryRollupsResponse({
+        normalizeRecoveryPointsResponse({
           data: [],
           meta: null,
-        } as unknown as Parameters<typeof normalizeRecoveryRollupsResponse>[0]),
+        } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
       ).toStrictEqual({ data: [], meta: defaults });
     });
   });
@@ -274,38 +229,6 @@ describe('recoveryPlatformModel.branchcov2', () => {
           data: 'not-an-array',
           meta: { page: NaN, limit: Infinity, total: 'twenty', totalPages: undefined },
         } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
-      ).toStrictEqual({
-        data: [],
-        meta: { page: 1, limit: 0, total: 0, totalPages: 1 },
-      });
-    });
-  });
-
-  describe('normalizeRecoveryRollupsResponse', () => {
-    it('normalizes an array of rollups and preserves finite meta', () => {
-      expect(
-        normalizeRecoveryRollupsResponse({
-          data: [
-            {
-              rollupId: 'r1',
-              lastOutcome: 'success',
-              providers: ['truenas'],
-            },
-          ],
-          meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
-        }),
-      ).toStrictEqual({
-        data: [{ rollupId: 'r1', lastOutcome: 'success', platforms: ['truenas'] }],
-        meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
-      });
-    });
-
-    it('returns empty data and default meta for a malformed payload', () => {
-      expect(
-        normalizeRecoveryRollupsResponse({
-          data: null,
-          meta: undefined,
-        } as unknown as Parameters<typeof normalizeRecoveryRollupsResponse>[0]),
       ).toStrictEqual({
         data: [],
         meta: { page: 1, limit: 0, total: 0, totalPages: 1 },

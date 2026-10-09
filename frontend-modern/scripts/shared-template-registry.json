@@ -1579,7 +1579,6 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
-        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
         { "path": "src/components/Settings/AISettingsDialogs.tsx" },
         { "path": "src/components/Settings/APITokenManager.tsx" },
         { "path": "src/components/Settings/AgentIntegrationsPanel.tsx" },

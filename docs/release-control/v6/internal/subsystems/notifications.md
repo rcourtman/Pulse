@@ -15,6 +15,60 @@
 
 ## Purpose
 
+### Webhook diagnostics withhold receiver-controlled text
+
+Ordinary and enhanced firing/recovery senders, including ntfy's plain-text
+recovery path, drain at most the existing 1 MiB response cap without retaining
+body bytes. Logs, delivery errors/history and the existing Test response carry
+structured status, bounded byte counts and incomplete/limit-reached facts, not
+arbitrary receiver text. Test keeps its status/string/error shape; a nonempty
+response string now explains that the body was withheld. ResponseLogging
+enables metadata only. Invalid Retry-After hints retain the fixed fallback
+diagnostic without copying the receiver's arbitrary header value. Valid hints
+still report their parsed bounded duration. Reaching the read cap does not
+claim the body exceeded it.
+
+HTTP status still owns rejection classification and retry decisions, Retry-After
+and actual attempt/final-status accounting survive, and incomplete 2xx replies
+remain failures. Body-read errors retain their original cause for errors.Is/As
+and classification, without formatting its possibly private prose. Requests,
+credentials, payload/occurrence identity, TLS/SSRF, destination scope, queue
+policy/persistence and existing operator retry authority are unchanged. Existing
+historical diagnostics are not rewritten or claimed to be scrubbed.
+
+`webhook_response_confidentiality_test.go` exercises the real ordinary/enhanced/
+ntfy/retry senders with in-memory HTTP responses: echoed credentials/alert text,
+successful/rejected responses, error-prose disclosure, final delivery history,
+unchanged requests and response closure. `webhook_response_metadata_test.go`
+checks empty/incomplete/at-cap/over-cap bodies and the Test summary.
+`webhook_response_retry_hint_test.go` preserves actual retry/fallback behaviour
+without disclosing invalid hint text. Existing
+Test/Gotify and ntfy HTTP-error controls retain status and request expectations
+with the new withheld response. These are synthetic source controls, not native
+provider acceptance or a cause/fix claim for reported notification failures.
+
+### Saved webhook identity is consistent for editing and Test
+
+Create, Update and Test share one resolver for masked header/custom-field and
+signing-secret values. Reject missing or ambiguous saved placeholders before
+persisting, changing live destinations or sending a test request. HTTP header
+identity is case-insensitive across the complete saved map, even where an exact
+spelling is present; conflicting submitted aliases cannot depend on map order.
+Custom fields retain exact, case-sensitive identity. A saved signing secret
+must be non-empty and not itself a placeholder to satisfy a signing mask.
+
+The replacement map still honours explicit add/change/delete and omitted keys;
+cleared headers are normalized away so the sender's JSON default survives.
+List/create/update responses remain masked. Create and unsaved Test reject masks
+instead of silently dropping credentials; a valid literal create still returns
+masked values. Saved-form Test uses the same resolved edit as Update but does
+not change live configuration or encrypted persistence. Persist-before-publish,
+SSRF/TLS policy, routing/scopes, notification pause honesty and already-admitted
+queue snapshots remain unchanged. Source controls
+`TestWebhookPlaceholderBoundaryAgreement` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` complement the existing real
+ordinary-delivery/restart/grouping controls; none proves native #2540 relief.
+
 ### Delivery health reconciliation follows the complete send transition
 
 The queue's automatic send worker records the retry/dead-letter outcome and
@@ -241,6 +295,31 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+### Masked destination edits preserve each submitted value independently
+
+Webhook editing restores each submitted `***REDACTED***` header/custom-field
+value from that destination, rather than replacing the entire submitted map.
+Explicit changes, additions, empty values and removals beside another masked
+credential survive live publication and encrypted reload. Header names match
+case-insensitively; custom fields retain exact, canonical service-specific names.
+An unknown, already-masked or ambiguous saved value fails with HTTP 400 before
+any save or live mutation. Omitted maps retain their existing replacement
+semantics. A response must not disclose a stored custom-field value restored
+from a mask; it echoes the canonical submitted value instead.
+
+`TestWebhookEditPreservesOnlyMaskedValues` and
+`TestWebhookEditRejectsUnrecoverableMasks` pin editing, deletion, blank values,
+case matching, no-mutation rejection and confidentiality.
+`TestWebhookMaskedEditPersistsAndDelivers` connects masked form reads/edits,
+encrypted save/reopen, ordinary grouped firing/recovery and disabling an active
+group to individual deliveries through the persistent sender. Built-in Telegram
+and custom Generic bodies retain all members, exact headers/fields and ordinary
+per-occurrence recovery receipts. This is loopback source proof, not native
+Telegram acceptance or a reproduction of the reporter's actual stored settings.
+Already admitted queue jobs keep their configuration snapshots and current
+pause/disable/removal checks; editing does not rewrite or replay them. The
+built-in template-header correction remains separate and unchanged.
 
 ### Apprise diagnostic confidentiality
 
@@ -1254,3 +1333,30 @@ the queued close through the normal entry points for ntfy, and renders Discord,
 both Teams cards, Mattermost, PagerDuty, a grouped Slack list, a grouped ntfy
 batch and email/Apprise content, plus the unchanged ordinary recovery wording
 and visuals.
+
+### Default email subjects retain bounded resource and host identity
+
+Single firing subjects retain severity/type and name the resource and its host.
+Digest subjects retain every severity count and include up to three distinct
+resource/host labels, sorted and deduplicated before shortening, with `+N more`
+for omitted labels (not omitted alerts). A host display name retains its raw
+host alongside it when they differ; absent node identity is `unknown host`,
+never an inferred connection/instance. An empty resource name falls back to its
+resource ID, then `Unknown resource`. Each supplied label/type is bounded to
+48 UTF-8 bytes, with visible truncation; controls/whitespace become spaces.
+Full body identities remain unchanged. Subjects are hints, not globally unique
+resource keys or proof of current host identity.
+
+Email-only recovery subjects carry the same bounded identity while preserving
+single resolved/moved and batch resolved wording. Occurrence threading,
+recovery receipt admission, routing, queue policy and other destination titles
+are unchanged. Both ordinary and attachment MIME construction encode Unicode
+subjects with RFC 2047 and fold at spaces/encoded-word boundaries; they still
+sanitize header line breaks. `email_subject_identity_test.go` checks the
+three-host collision, display/raw/missing identities, severity, deterministic
+bounds/overflow, full bodies, MIME decode/injection safety and normal
+single/grouped/recovery construction through an in-memory transport. This is
+source acceptance, not SMTP/Gmail delivery or an installed reporter retest.
+Literal ASCII encoded-word syntax in supplied names is itself MIME-encoded,
+so decoding the subject once preserves the name rather than interpreting it as
+another identity. The literal-encoded-word control covers both MIME builders.

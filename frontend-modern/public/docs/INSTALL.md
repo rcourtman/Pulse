@@ -275,6 +275,15 @@ The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sb
    ZFS/Ceph/mdadm detail, or other telemetry that requires local host access.
    See [Agent Security](AGENT_SECURITY.md).
 
+**API-only does not mean guest-agent-free.** VM filesystem and memory requests
+through QEMU Guest Agent can share the channel used by freeze-enabled backups.
+Read-only permissions do not prove backup safety. Do not add permissions,
+enable or restart an agent, or send manual guest-agent probes during a backup,
+freeze or thaw. Use the existing
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety). Stopping Pulse
+also stops its monitoring and alerts. An OK backup task does not prove
+successful thaw.
+
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 
 ---
@@ -292,21 +301,51 @@ Pulse can update the server runtime to the latest stable version.
 
 #### Manual Update
 
-| Platform | Command |
+An update briefly interrupts monitoring and alert delivery. Before changing the
+server, record its running version and edition, save the existing deployment
+definition privately, and keep a consistent [full-state backup](MIGRATION.md#full-state-recovery)
+of every effective data path with its matching keys. A configuration export or
+an updater snapshot alone is not a complete data backup. See
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model).
+
+| Platform | Procedure |
 |----------|---------|
-| **Docker** | `docker compose pull && docker compose up -d` |
-| **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
+| **Docker / Compose** | Follow [Docker server updates](DOCKER.md#-updates) from the original deployment, selecting the exact image and updating only the Pulse service. |
+| **Kubernetes** | Follow [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm) for the existing release, namespace, saved values and PVC; retain the chosen chart version and image edition. |
 | **Systemd / Proxmox LXC with the Pulse-owned helper** | `sudo /bin/update` |
 
 Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
 installed by the Pulse server installer. On Proxmox community-scripts
 containers, `/bin/update` can belong to a different updater that ignores
-`--version`. If the helper is absent or its owner is unknown, use the
+`--version`. If the helper is absent or its owner is unknown, stop before
+executing it. For a public Community server, review the
 [signed server-installer flow](#2-bare-metal--systemd) with `PULSE_VERSION` set
-to the exact target tag. The same ownership check applies to rollback. After
+to the exact target tag, first confirming the existing service and data/config
+paths; do not apply its default paths over a custom deployment or replace a
+private Pro runtime with a public build. Work inside the existing Pulse LXC,
+not on the Proxmox host. The same ownership check applies to rollback. After
 the service restarts, verify the installed version with `GET /api/version`.
 
-Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
+If a helper selects `helm-chart-*` instead of a Pulse server release, follow
+[Helm-chart selection checks](AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release)
+before another attempt. A chart is not a server archive, and adding
+`--version` to an unknown or download-failing helper does not prove an exact
+update. Do not recreate the LXC, provide a GitHub token or bypass signatures
+to clear that failure.
+
+For Docker without Compose, `docker restart` keeps the old image running.
+Select the target in the existing saved deployment and pull it successfully
+before stopping the current container. Recreate through that deployment with
+the same data mount, ports, credentials and other settings, not a fresh example
+command. If data is stored only in the container's writable layer, or an
+anonymous volume could be removed by `--rm`, stop here until it has a consistent
+backup and a checked persistent-data recovery path. Do not delete or prune
+volumes, or start a second Pulse against the same writable data.
+
+After rollout, check the running image, Pulse server version, service health
+and ordinary monitoring and alert delivery. If the update fails or its result
+is uncertain, check the current state before retrying; follow
+[Rollback](#rollback) without assuming that reverting an image restores data.
 
 The public image and commands above install the Community runtime. If the
 instance uses the private Pro runtime, keep it on the private image or archive

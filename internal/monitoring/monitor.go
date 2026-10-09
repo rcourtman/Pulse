@@ -1236,6 +1236,7 @@ type Monitor struct {
 	failureCounts              map[string]int
 	lastOutcome                map[string]taskOutcome
 	backoffCfg                 backoffConfig
+	rngMu                      sync.Mutex // Shared by poll backoff and concurrent guest metadata jitter.
 	rng                        *rand.Rand
 	maxRetryAttempts           int
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
@@ -1275,6 +1276,7 @@ type Monitor struct {
 	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
+	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
@@ -1313,6 +1315,7 @@ type Monitor struct {
 	guestMetadataCache         map[string]guestMetadataCacheEntry
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
+	guestMetadataInFlight      map[string]bool // Guarded by guestMetadataLimiterMu; released only on fetch completion.
 	guestMetadataSlots         chan struct{}
 	guestMetadataMinRefresh    time.Duration
 	guestMetadataRefreshJitter time.Duration
@@ -1345,6 +1348,8 @@ type Monitor struct {
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
 	mockHostAgentsMu          sync.Mutex
+	mockDockerHosts           map[string]models.DockerHost
+	mockFixtureRevision       uint64
 	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
 	mockModeFence             mockModeFence            // Keeps mode-dependent alert evaluations inside the epoch they read in
 	mockModeAligned           bool                     // Mock mode the alerts and state belong to; guarded by mockModeSwitchMu
@@ -1406,6 +1411,12 @@ type Monitor struct {
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A new runtime invalidates detached replication reads even when the old
+	// caller has not yet canceled its parent context.
+	for name, poll := range m.pveReplicationPolls {
+		poll.cancel()
+		delete(m.pveReplicationPolls, name)
+	}
 	m.runtimeCtx = ctx
 	m.wsHub = hub
 }
@@ -2851,6 +2862,8 @@ func (m *Monitor) updateBreakerMetric(instanceType InstanceType, instance string
 }
 
 func (m *Monitor) randomFloat() float64 {
+	m.rngMu.Lock()
+	defer m.rngMu.Unlock()
 	if m.rng == nil {
 		m.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
@@ -4761,7 +4774,7 @@ func (m *Monitor) endMockModeEpoch(enable bool) {
 	m.mockModeFence.advance()
 	m.alertManager.ClearActiveAlerts()
 	if !enable {
-		m.forgetMockHostAgents()
+		m.forgetMockFixtureHosts()
 	}
 	m.mu.Lock()
 	m.resetStateLocked()

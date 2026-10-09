@@ -31,6 +31,21 @@ Choosing Preview does not make a beta production-qualified. Pulse's unattended
 systemd updater remains Stable-only. See [Automatic updates](AUTO_UPDATE.md) for
 deployment-specific update behaviour.
 
+## Software releases and Helm charts
+
+The releases list contains both Pulse software and Helm charts. Software tags
+use `vX.Y.Z` for stable releases, with a prerelease suffix for previews. Tags
+starting with `helm-chart-` contain chart packaging for Kubernetes; they are not
+Pulse server archives and cannot update a systemd or Proxmox LXC server.
+
+List order does not establish the latest software release: a chart can be
+published after its corresponding server release. Choose the published software
+tag and its server assets for a server update, or use Pulse's **Settings → System
+→ Updates** selector. If a third-party helper chooses a chart tag, do not work
+around the failure by disabling signature verification or replacing the server
+with a chart asset. Follow the existing installation's
+[signed update route and helper ownership checks](AUTO_UPDATE.md#proxmoxve-lxc-manual).
+
 ## How releases are prepared
 
 Releases follow a fixed schedule rather than individual judgment.

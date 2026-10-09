@@ -547,8 +547,8 @@ func TestSendResolvedWebhookNtfyMultipleAlertsHTTPError(t *testing.T) {
 	if !strings.Contains(err.Error(), "ntfy webhook returned HTTP 503") {
 		t.Fatalf("expected HTTP status in error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "temporarily unavailable") {
-		t.Fatalf("expected response body in error, got %v", err)
+	if strings.Contains(err.Error(), "temporarily unavailable") || !strings.Contains(err.Error(), "response body withheld") {
+		t.Fatalf("provider text must be withheld while retaining the HTTP verdict: %v", err)
 	}
 
 	if gotMethod != http.MethodPut {

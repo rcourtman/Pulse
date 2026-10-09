@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -307,6 +308,7 @@ func TestSafeProfileValidatesEveryEffectiveSystemdBoundary(t *testing.T) {
 		{name: "helper service drop-in", unit: "pulse-agent-helper.service", property: "DropInPaths", value: "/etc/systemd/system/pulse-agent-helper.service.d/override.conf"},
 		{name: "helper executable", unit: "pulse-agent-helper.service", property: "ExecStart", value: "{ path=/tmp/helper ; argv[]=/tmp/helper ; }"},
 		{name: "helper private network", unit: "pulse-agent-helper.service", property: "PrivateNetwork", value: "no"},
+		{name: "helper unknown network isolation", unit: "pulse-agent-helper.service", property: "PrivateNetwork", value: ""},
 		{name: "helper common hardening", unit: "pulse-agent-helper.service", property: "ProtectKernelModules", value: "no"},
 		{name: "helper task limit", unit: "pulse-agent-helper.service", property: "TasksMax", value: "infinity"},
 		{name: "helper descriptor limit", unit: "pulse-agent-helper.service", property: "LimitNOFILE", value: "1048576"},
@@ -369,6 +371,102 @@ func TestTypedHelperProvisionChecksEffectiveUnitsBeforeSocketActivation(t *testi
 	}
 }
 
+func TestTypedHelperProvisionReplacesRunningHelperAfterValidatedUnit(t *testing.T) {
+	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
+	// The production activation target remains fixed. Translate just that
+	// comparison into this disposable filesystem, not the installer itself;
+	// the wrong-target control must still be refused before any unit operation.
+	fixedTargetCheck := `if [[ "${INSTALL_DIR}/${BINARY_NAME}" != "/usr/local/bin/pulse-agent" ]]; then`
+	if strings.Count(provision, fixedTargetCheck) != 1 {
+		t.Fatal("typed helper no longer enforces exactly one fixed activation target")
+	}
+	for _, mode := range []string{"success", "effective-unit-failure", "restart-failure", "wrong-target"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			mustMkdirAll(t, filepath.Join(root, "bin"), filepath.Join(root, "systemd"))
+			if err := os.WriteFile(filepath.Join(root, "bin", "pulse-agent"), []byte("fixture"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			script := `
+set -euo pipefail
+ROOT=` + strconv.Quote(root) + `
+MODE=` + strconv.Quote(mode) + `
+INSTALL_DIR="$ROOT/bin"
+if [[ "$MODE" == wrong-target ]]; then
+  INSTALL_DIR="$ROOT/other-bin"
+  mkdir -p "$INSTALL_DIR"
+  cp "$ROOT/bin/pulse-agent" "$INSTALL_DIR/pulse-agent"
+fi
+BINARY_NAME=pulse-agent
+LEAST_PRIVILEGE_USER=pulse-agent
+PRIVILEGED_HELPER_NAME=pulse-agent-helper
+PRIVILEGED_HELPER_BINARY_PATH="$ROOT/bin/pulse-agent-helper"
+PRIVILEGED_HELPER_SERVICE_UNIT="$ROOT/systemd/pulse-agent-helper.service"
+PRIVILEGED_HELPER_SOCKET_UNIT="$ROOT/systemd/pulse-agent-helper.socket"
+PRIVILEGED_HELPER_SOCKET_PATH="$ROOT/helper.sock"
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="$ROOT/quarantine"
+PRIVILEGED_HELPER_STATE_DIR="$ROOT/state"
+PRIVILEGED_HELPER_UPDATE_STAGING_DIR="$ROOT/staging"
+EXIT_GENERAL=1
+install() { :; }
+chown() { :; }
+chmod() { :; }
+append_service_env() { :; }
+log_info() { printf 'complete\n' >> "$ROOT/events"; }
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+safe_profile_verify_helper_effective_target() {
+  printf 'validate\n' >> "$ROOT/events"
+  test "$MODE" != effective-unit-failure
+}
+verify_privileged_helper_socket() { printf 'socket-identity\n' >> "$ROOT/events"; }
+systemctl() {
+  printf '%s\n' "$*" >> "$ROOT/events"
+  case "$*" in
+    daemon-reload|'enable --now pulse-agent-helper.socket') return 0 ;;
+    'restart pulse-agent-helper.service')
+      test "$MODE" != restart-failure || return 1
+      printf 'new-helper\n' > "$ROOT/running-helper"
+      return 0 ;;
+    *) return 2 ;;
+  esac
+}
+printf 'old-helper\n' > "$ROOT/running-helper"
+: > "$ROOT/events"
+` + extractInstallShellFunction(t, "render_privileged_helper_socket_unit") + "\n" +
+				extractInstallShellFunction(t, "render_privileged_helper_service_unit") + "\n" +
+				strings.Replace(provision, fixedTargetCheck, `if [[ "${INSTALL_DIR}/${BINARY_NAME}" != "$ROOT/bin/pulse-agent" ]]; then`, 1) + "\nprovision_typed_privileged_helper\n"
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			events, readErr := os.ReadFile(filepath.Join(root, "events"))
+			if readErr != nil {
+				t.Fatalf("installer fixture events: %v; execution=%v output=%s", readErr, err, out)
+			}
+			want := "daemon-reload\nvalidate\n"
+			if mode == "wrong-target" {
+				want = ""
+			} else if mode != "effective-unit-failure" {
+				want += "enable --now pulse-agent-helper.socket\nsocket-identity\nrestart pulse-agent-helper.service\n"
+			}
+			if mode == "success" {
+				want += "complete\n"
+			}
+			if string(events) != want || (err == nil) != (mode == "success") {
+				t.Fatalf("installer helper activation: events=%q want=%q err=%v output=%s", events, want, err, out)
+			}
+			if mode == "success" {
+				running, _ := os.ReadFile(filepath.Join(root, "running-helper"))
+				unit, _ := os.ReadFile(filepath.Join(root, "systemd", "pulse-agent-helper.service"))
+				if string(running) != "new-helper\n" || !strings.Contains(string(unit), "PrivateNetwork=true\n") {
+					t.Fatal("installer left the simulated predecessor active or did not preserve the isolated unit")
+				}
+			} else if mode == "restart-failure" && !strings.Contains(string(out), "Failed to restart the typed privileged helper") {
+				t.Fatalf("restart failure was not surfaced: %s", out)
+			} else if mode == "wrong-target" && !strings.Contains(string(out), "require the fixed /usr/local/bin/pulse-agent target") {
+				t.Fatalf("wrong activation target was not refused: %s", out)
+			}
+		})
+	}
+}
+
 func TestTypedHelperUnitRendersBoundedResources(t *testing.T) {
 	unitPath := filepath.Join(t.TempDir(), "pulse-agent-helper.service")
 	render := extractInstallShellFunction(t, "render_privileged_helper_service_unit")
@@ -390,6 +488,55 @@ render_privileged_helper_service_unit "` + unitPath + `" /usr/local/lib/pulse-ag
 	for _, directive := range []string{"TasksMax=64", "LimitNOFILE=256", "MemoryMax=256M"} {
 		if !strings.Contains(string(content), directive+"\n") {
 			t.Errorf("typed-helper unit omitted %s", directive)
+		}
+	}
+}
+
+// AF_UNIX-only socket filtering is not enforced on native 32-bit x86.
+// Rendering/admission controls must keep the independent private namespace
+// on every platform, not infer enforcement from an effective property string.
+// These are installer regressions, not execution of a native sandbox.
+func TestTypedHelperIsolationDoesNotDependOnArchitectureOrPVE(t *testing.T) {
+	for _, arch := range []string{"amd64", "arm64", "armv7", "armv6", "386", "unknown"} {
+		for _, pve := range []string{"false", "true"} {
+			t.Run(arch+"/pve="+pve, func(t *testing.T) {
+				unitPath := filepath.Join(t.TempDir(), "helper.service")
+				script := `
+set -euo pipefail
+ARCH=` + strconv.Quote(arch) + `
+ENABLE_PROXMOX=` + strconv.Quote(pve) + `
+PRIVILEGED_HELPER_NAME=pulse-agent-helper
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR=/var/lib/pulse-agent/update-quarantine
+PRIVILEGED_HELPER_STATE_DIR=/var/lib/pulse-agent-helper
+` + extractInstallShellFunction(t, "render_privileged_helper_service_unit") + `
+render_privileged_helper_service_unit ` + strconv.Quote(unitPath) + ` /usr/local/lib/pulse-agent/pulse-agent-helper
+`
+				if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+					t.Fatalf("render isolated helper: %v\n%s", err, out)
+				}
+				body, err := os.ReadFile(unitPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, directive := range []string{"PrivateNetwork=true", "RestrictAddressFamilies=AF_UNIX", "SystemCallArchitectures=native"} {
+					if strings.Count(string(body), directive+"\n") != 1 {
+						t.Fatalf("%s/%s did not preserve %s: %s", arch, pve, directive, body)
+					}
+				}
+				for _, value := range []string{"no", ""} {
+					gate := effectiveSystemdHarness(t, "pulse-agent-helper.service", "PrivateNetwork", value) + "\n" +
+						"ARCH=" + strconv.Quote(arch) + "\nENABLE_PROXMOX=" + strconv.Quote(pve) + "\n" +
+						safeProfileEffectiveSystemdFunctions(t) + `
+if safe_profile_verify_effective_target; then
+  echo 'host or unknown helper network was admitted' >&2
+  exit 1
+fi
+`
+					if out, err := exec.Command("bash", "-c", gate).CombinedOutput(); err != nil {
+						t.Fatalf("fail-closed helper admission: %v\n%s", err, out)
+					}
+				}
+			})
 		}
 	}
 }

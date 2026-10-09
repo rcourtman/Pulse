@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ca1b0f532abfdf40f2dd7cd575d9c45f7b4b45d9",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "d7baac724a0223fa6a9ad158307ee42a6d7b0201c27e6ea8d613abda1691ae63",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "d2c37178126d4192366507bd385e26ba3fc82b7d8b4ea28796bb5f5543dfaf4c"
+  },
+  "verified_at": "2026-10-08T09:35:17.320171Z",
+  "routes": [
+    "Production Patrol Inbox, Activity and Finding options mounted under a local Router with synthetic tenant-scoped API responses"
+  ],
+  "states": [
+    "Create narrow manual rule with written reason; retain unrelated and finding-backed historical decisions",
+    "Exact-ID and all-resource/category wildcard confirmation; Cancel safely focused",
+    "Lost DELETE response is uncertain, never retries or claims success; explicit reload reconciles absence",
+    "Access revocation and tenant switch invalidate pending confirmation and old data before mutation",
+    "Long reason remains scrollable with initial exact scope visible and stationary safe action footer"
+  ],
+  "interactions": [
+    "Real phone input creates, cancels and confirms deletion; pre-read, scoped DELETE and post-read preserve other decisions",
+    "Production Finding options exposes reason input and the same reversal link without another POST",
+    "Desktop confirmation and 320px phone exact/wildcard viewport images inspected after finite entrance animation",
+    "Native keyboard PageDown settles before Home returns to exact scrollTop zero; Escape closes without mutation"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": [
+    "Playwright 1.56.1 / Chromium",
+    "Playwright 1.56.1 / WebKit"
+  ],
+  "limits": "Presentation and synthetic local API evidence only. Eleven final captures inspected. No physical phone, hosted/installed session or revocation, native Patrol action, production deletion, publication or release acceptance."
+}

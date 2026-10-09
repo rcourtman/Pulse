@@ -23,6 +23,15 @@ Platform connections**. Add a host agent only after identifying a metric that
 the Proxmox API cannot provide. The complete capability matrix is in
 [Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
 
+**API-only does not mean no guest-agent commands.** Pulse can request VM
+filesystem and memory readings through Proxmox's QEMU Guest Agent API without a
+Pulse agent installed. Those reads share the channel used by freeze-enabled
+backups. For an affected installation, follow the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety), including the
+actual Pulse server and automatic updaters; stopping only a Pulse agent is not
+enough. An OK backup task does not prove guest thaw or application recovery.
+Do not run a backup or guest-agent probe just to test the monitoring setup.
+
 Generated Proxmox API setup uses a separate `pulse-monitor` account and token
 with monitoring ACLs. Review the generated script before running it, especially
 if your organization maintains its own Proxmox roles. Do not reuse an
@@ -116,12 +125,22 @@ covered in [Privacy](PRIVACY.md).
 
 For a controlled production installation:
 
-1. Choose an exact release tag rather than `latest`.
-2. Download `install.sh` and `install.sh.sshsig` from that release.
-3. Verify the installer with the published Ed25519 installer key and the
-   `pulse-install` namespace.
-4. Run the verified installer with the same pinned version.
-5. Install or upgrade agents with the per-host command shown by your own Pulse
+1. Record the current server version, edition and deployment configuration.
+   Choose an exact target release rather than `latest`, and retain a consistent
+   private backup of the actual data, matching keys and any external stores.
+   See [update and rollback boundaries](DEPLOYMENT_MODELS.md#updates-by-model):
+   replacing a binary or image does not reverse data migrations.
+2. Obtain the correct server edition. **Public GitHub release archives and the
+   public Docker image are Community builds**, even with an activation key.
+   Paid Pro, continuing Relay and legacy customers must use their private Pro
+   image or archive from the [existing download route](INSTALL.md). Do not
+   replace an installed paid runtime with a public build during an update.
+3. For a Community server installation, download `install.sh` and
+   `install.sh.sshsig` from the exact release. Verify the installer with the
+   published Ed25519 installer key and the `pulse-install` namespace before
+   running it with that same pinned version. Follow the edition-appropriate
+   [installation instructions](INSTALL.md), not a substitute installer.
+4. Install or upgrade agents with the per-host command shown by your own Pulse
    server under **Settings → Infrastructure → Install on a host**.
 
 The agent update path requires a server-provided SHA-256 checksum. Release
@@ -135,13 +154,23 @@ can verify the installer before execution. See [Installation](INSTALL.md) and
 [Agent Security](AGENT_SECURITY.md#supply-chain-boundary) for the commands and
 the documented v5-to-v6 first-update limitation.
 
-## Community, Relay, and Pro boundaries
+## Community and Pro boundaries
 
 Current self-hosted plans do not sell monitoring capacity by node, VM,
 container, or other child-resource volume. Community includes core self-hosted
-monitoring and seven days of metric history. Relay and Pro add capabilities
-such as remote access, longer history, Pulse Mobile, Patrol investigation and
-governed fixes, RBAC, audit logging, reporting, and centralized agent profiles.
+monitoring and seven days of metric history. Pro adds 90-day history, Patrol
+investigation and governed fixes, RBAC, audit logging, reporting and centralized
+agent profiles. SSO is included with Community and higher tiers.
+
+**Relay is no longer sold. Pulse Mobile and Relay retire on 31 March 2027.**
+Existing paired phones keep working until then; continuing Relay subscribers
+receive Pro features at their current price for as long as their subscription
+continues, including after the app retires. Relay connects the app, **not the
+web UI**. Use your own VPN or tunnel for remote web access. For alerts on your
+phone afterwards, add an ntfy, Gotify or Pushover destination under **Alerts**
+and open Pulse in your phone's browser. See [Relay / Pulse Mobile](RELAY.md)
+for existing pairing and security details; do not plan a new deployment around
+the retiring app.
 
 That means an estate with 50 Proxmox hosts does not need Pro merely to add the
 fiftieth host. Review the current [Plans and Entitlements](PULSE_PRO.md) for the
@@ -167,6 +196,8 @@ and measure their own workload.
 - [ ] Put Pulse on a dedicated VM, container, Kubernetes deployment, or host
   with durable storage and tested backups.
 - [ ] Pin and verify the server release before installation.
+- [ ] Preserve the server edition, matching keys and deployment configuration
+  when updating; a public Community build does not supply the private Pro runtime.
 - [ ] Enable HTTPS and restrict web/API access at the firewall or reverse
   proxy.
 - [ ] Start with a dedicated Proxmox API token and no host agents.
@@ -176,10 +207,23 @@ and measure their own workload.
   one cluster before adding the rest.
 - [ ] Add root agents only to hosts that need specific local telemetry; keep
   commands disabled unless there is a reviewed operational need.
-- [ ] Test loss-of-node, failed-backup, high-capacity, notification, credential
-  rotation, upgrade, backup, and restore paths.
+- [ ] Check existing inventory and provider identity before adding another
+  cluster; matching node names or VMIDs do not establish the same resource.
+  See [multiple installations](CONFIGURATION.md#multiple-proxmox-installations).
+- [ ] Exercise disruptive failure, upgrade and restore scenarios only on an
+  isolated non-production fixture with independent monitoring and a recovery
+  path. Do not induce node loss, a failed backup, a full disk or an alert storm
+  on live workloads as a rollout check. Normal Test notification success does
+  not establish ordinary, grouped or resolved alert delivery.
+- [ ] For affected freeze-enabled Proxmox backups, follow the backup safety
+  precaution above. Keep monitoring paused until independent checks confirm
+  thaw, fresh successful writes to every covered filesystem and workload
+  liveness; restore only services and timers active before the pause. Arrange
+  independent outage coverage while Pulse monitoring and alerts are unavailable.
 - [ ] Observe CPU, memory, database size, write rate, and dashboard latency
-  during the staged rollout, then set retention and polling to fit the estate.
+  during normal staged operation. Keep measurement windows and resource limits
+  comparable; database size is not a write rate. Do not prune history or change
+  polling to hide a fault; use [performance guidance](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
 - [ ] Record the Pulse version, enabled integrations, privileges, exposed
   ports, backup location, and rollback procedure in the site's runbook.
 

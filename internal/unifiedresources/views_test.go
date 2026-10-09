@@ -9,6 +9,46 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestGuestDiskObservationViewUsesOnlyItsOwnSource(t *testing.T) {
+	origin := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	vm := models.VM{VMID: 105, Type: "qemu", Status: "running", LastSeen: time.Now(), DiskObservation: origin}
+	resource, _ := resourceFromVM(vm)
+	view := VMView{r: &resource}
+	if view.DiskObservation() != origin {
+		t.Fatal("adapter/view replaced filesystem source time with the row's receipt time")
+	}
+	copy := cloneResource(&resource)
+	copy.Proxmox.DiskObservation.ObservedAt = time.Now()
+	if view.DiskObservation() != origin {
+		t.Fatal("cloned resource observation mutated the original view")
+	}
+	for _, empty := range []VMView{{}, {r: &Resource{}}} {
+		if empty.DiskObservation() != (models.GuestDiskObservation{}) {
+			t.Fatal("missing source manufactured filesystem evidence")
+		}
+	}
+}
+
+func TestGuestAgentEvidenceViewKeepsOnlyItsOriginalObservation(t *testing.T) {
+	origin := models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	vm := models.VM{VMID: 105, Type: "qemu", Status: "running", LastSeen: time.Now(), AgentVersion: "retained", GuestAgentEvidence: origin}
+	resource, _ := resourceFromVM(vm)
+	view := NewVMView(&resource)
+	if view.GuestAgentEvidence() != origin {
+		t.Fatal("adapter/view replaced original eligibility age with the poll time")
+	}
+	copy := cloneResource(&resource)
+	copy.Proxmox.GuestAgentEvidence.ObservedAt = time.Now()
+	if view.GuestAgentEvidence() != origin {
+		t.Fatal("cloned resource aliases source-owned eligibility evidence")
+	}
+	for _, empty := range []VMView{NewVMView(nil), NewVMView(&Resource{})} {
+		if empty.GuestAgentEvidence() != (models.GuestAgentEvidence{}) {
+			t.Fatal("missing guest facet invented eligibility evidence")
+		}
+	}
+}
+
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt(v int) *int       { return &v }
 
@@ -968,6 +1008,91 @@ func TestView_HostViewSourceStatusSeparatesAgentFromMergedRow(t *testing.T) {
 
 	var nilView HostView
 	if _, ok := nilView.SourceStatus(SourceAgent); ok {
+		t.Fatal("nil-backed view must report no source status")
+	}
+}
+
+// A node merged with a linked host agent takes the agent's status, so a
+// consumer judging whether the node's readings are current needs each
+// source's own sighting.
+func TestView_NodeViewSourceStatusSeparatesMergedSources(t *testing.T) {
+	now := time.Now().UTC()
+	agentLastReport := now.Add(-30 * time.Minute)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+			LastSeen: now, LinkedAgentID: "agent-1",
+		}},
+		Hosts: []models.Host{{
+			ID: "agent-1", Hostname: "node1", Status: "offline", LinkedNodeID: "pve1-node1",
+			IntervalSeconds: 30, LastSeen: agentLastReport,
+		}},
+	})
+
+	nodes := registry.Nodes()
+	if len(nodes) != 1 {
+		t.Fatalf("expected the agent and node to merge into one node row, got %d", len(nodes))
+	}
+	node := nodes[0]
+	if sighting, ok := node.SourceStatus(SourceProxmox); !ok || sighting.Status != "online" || !sighting.LastSeen.Equal(now) {
+		t.Fatalf("Proxmox sighting = %+v (ok=%v), want online at %v", sighting, ok, now)
+	}
+	if sighting, ok := node.SourceStatus(SourceAgent); !ok || sighting.Status != "stale" || !sighting.LastSeen.Equal(agentLastReport) {
+		t.Fatalf("agent sighting = %+v (ok=%v), want stale at %v", sighting, ok, agentLastReport)
+	}
+	if _, ok := node.SourceStatus(SourceDocker); ok {
+		t.Fatal("a source that never reported must not have a status")
+	}
+
+	var nilView NodeView
+	if _, ok := nilView.SourceStatus(SourceProxmox); ok {
+		t.Fatal("nil-backed view must report no source status")
+	}
+}
+
+// A Docker host past its reporting lease stays offline even after its source
+// sighting goes stale; a degraded host that still reports remains warning.
+// Preserve both the current row policy and each source's original receipt time.
+func TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{ID: "docker-silent", AgentID: "agent-silent", Hostname: "silent", Status: "offline", IntervalSeconds: 30, LastSeen: now.Add(-time.Hour), CPUUsage: 20},
+			{ID: "docker-degraded", AgentID: "agent-degraded", Hostname: "degraded", Status: "degraded", IntervalSeconds: 30, LastSeen: now, CPUUsage: 33},
+		},
+	})
+
+	views := make(map[string]*DockerHostView)
+	for _, view := range registry.DockerHosts() {
+		views[view.HostSourceID()] = view
+	}
+	for id, want := range map[string]struct {
+		row    ResourceStatus
+		source string
+		seen   time.Time
+	}{
+		"docker-silent":   {StatusOffline, "stale", now.Add(-time.Hour)},
+		"docker-degraded": {StatusWarning, "online", now},
+	} {
+		view := views[id]
+		if view == nil {
+			t.Fatalf("missing Docker host view %s", id)
+		}
+		if view.Status() != want.row {
+			t.Fatalf("%s status = %q, want %q", id, view.Status(), want.row)
+		}
+		if sighting, ok := view.SourceStatus(SourceDocker); !ok || sighting.Status != want.source || !sighting.LastSeen.Equal(want.seen) {
+			t.Fatalf("%s Docker sighting = %+v (ok=%v), want %s at %s", id, sighting, ok, want.source, want.seen)
+		}
+	}
+	if _, ok := views["docker-degraded"].SourceStatus(SourceProxmox); ok {
+		t.Fatal("a source that never reported must not have a status")
+	}
+
+	var nilView DockerHostView
+	if _, ok := nilView.SourceStatus(SourceDocker); ok {
 		t.Fatal("nil-backed view must report no source status")
 	}
 }
@@ -2387,6 +2512,42 @@ func TestVMViewDiskFromLinkedAgentFollowsSelectedMetricSource(t *testing.T) {
 	} {
 		if got := NewVMView(&Resource{Type: ResourceTypeVM, Metrics: tc.metrics}).DiskFromLinkedAgent(); got != tc.want {
 			t.Fatalf("DiskFromLinkedAgent(%+v) = %v, want %v", tc.metrics, got, tc.want)
+		}
+	}
+}
+
+func TestGuestViewGovernanceIdentity(t *testing.T) {
+	for _, kind := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
+		first := &Resource{ID: "first", Name: "duplicate", Type: kind, Tags: []string{"customer-data"}, Proxmox: &ProxmoxData{VMID: 105, Instance: "first", NodeName: "a"}}
+		second := &Resource{ID: "second", Name: "duplicate", Type: kind, Proxmox: &ProxmoxData{VMID: 105, Instance: "second", NodeName: "b"}}
+		metadata := func(resource *Resource) (*ResourcePolicy, string) {
+			if kind == ResourceTypeVM {
+				return NewVMView(resource).GovernanceMetadata()
+			}
+			return NewContainerView(resource).GovernanceMetadata()
+		}
+		firstPolicy, _ := metadata(first)
+		secondPolicy, _ := metadata(second)
+		if firstPolicy.Sensitivity == secondPolicy.Sensitivity {
+			t.Fatal("fixture does not distinguish same-name guest policies")
+		}
+		for _, resource := range []*Resource{first, second} {
+			wantPolicy, wantSummary := CanonicalGovernanceMetadata(resource)
+			gotPolicy, gotSummary := metadata(resource)
+			if !reflect.DeepEqual(gotPolicy, wantPolicy) || gotSummary != wantSummary {
+				t.Fatal("metadata did not belong to the selected view")
+			}
+			gotPolicy.Sensitivity = ResourceSensitivityPublic
+			if len(gotPolicy.Routing.Redact) > 0 {
+				gotPolicy.Routing.Redact[0] = "changed"
+			}
+			again, _ := metadata(resource)
+			if !reflect.DeepEqual(again, wantPolicy) {
+				t.Fatal("returned policy aliases the canonical guest")
+			}
+		}
+		if policy, summary := metadata(nil); policy != nil || summary != "" {
+			t.Fatal("nil view created policy evidence")
 		}
 	}
 }

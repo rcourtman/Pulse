@@ -14,6 +14,53 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
+func TestGuestDiskObservationMergeReplacesMissingAndDifferentSource(t *testing.T) {
+	original := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, DiskObservation: original, DiskStatusReason: "prev-agent-error"}
+	for _, tc := range []struct {
+		name     string
+		incoming ProxmoxData
+		want     models.GuestDiskObservation
+	}{
+		{"expired original clears", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent"}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"missing full guest origin clears", ProxmoxData{VMID: 105}, models.GuestDiskObservation{}},
+		{"current linked source does not inherit QGA", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "agent"}},
+		{"new successful filesystem read replaces", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"non-guest partial facet does not own origin", ProxmoxData{NodeDisplayName: "node"}, original},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.want
+			if !tc.incoming.DiskObservation.ObservedAt.IsZero() {
+				want.ObservedAt = tc.incoming.DiskObservation.ObservedAt
+			}
+			merged := mergeProxmoxData(existing, &tc.incoming)
+			if merged.DiskObservation != want || existing.DiskObservation != original {
+				t.Fatal("merge renewed/resurrected old evidence or mutated its source")
+			}
+		})
+	}
+}
+
+func TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge(t *testing.T) {
+	origin := models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, GuestAgentEvidence: origin}
+	for _, incoming := range []ProxmoxData{
+		{VMID: 105, GuestAgentEvidence: origin},
+		{VMID: 105, GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true}},
+		{VMID: 105},
+		{NodeDisplayName: "partial"},
+	} {
+		merged := mergeProxmoxData(existing, &incoming)
+		want := incoming.GuestAgentEvidence
+		if incoming.VMID == 0 {
+			want = origin
+		}
+		if merged.GuestAgentEvidence != want || existing.GuestAgentEvidence != origin {
+			t.Fatal("merge renewed/resurrected evidence or mutated its source")
+		}
+	}
+}
+
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 
@@ -290,8 +337,8 @@ func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
 					t.Helper()
 					for rebuild := 1; rebuild <= rebuilds; rebuild++ {
 						adapter.PopulateFromSnapshot(snapshot)
-						listed := adapter.GetAll()
-						broadcast, ok := adapter.CoalesceForPresentation(listed, nil)
+						listed, _, thresholds := adapter.GetAllWithMetricsTargetsAndStaleThresholds()
+						broadcast, ok := adapter.CoalesceForPresentation(listed, thresholds)
 						if !ok {
 							t.Fatal("store-backed adapter did not coalesce with its exclusions")
 						}
@@ -351,18 +398,25 @@ func TestOperatorSplitOverridesProxmoxNodeAgentLink(t *testing.T) {
 					t.Fatal(err)
 				}
 				assertViews("after relink", 2, nodeAgentRows{joined: merged.joined})
-				// The joined row records the relinked row it took in, so a
-				// report-merge of it names the relink's own pair.
-				folded := want.node
-				if folded == merged.joined {
-					folded = want.agent
-				}
-				recorded := false
-				for _, fold := range adapter.currentRegistry().ManualLinkFolds(merged.joined) {
-					recorded = recorded || (fold.HolderID == merged.joined && fold.FoldedID == folded)
-				}
-				if !recorded {
-					t.Fatalf("joined %s records no fold of relinked %s: %+v", merged.joined, folded, adapter.currentRegistry().ManualLinkFolds(merged.joined))
+				// The inferred join can consume the node row before manual
+				// links run. Its fold must still reach current succession and
+				// the API seed, rather than an obsolete registry-wide ID set.
+				seeded := NewRegistry(store)
+				seeded.IngestResources(adapter.GetAll())
+				for name, registry := range map[string]*ResourceRegistry{"monitor": adapter.currentRegistry(), "API seed": seeded} {
+					found := false
+					for _, fold := range registry.ManualLinkFolds(merged.joined) {
+						nodeFold := fold.HolderID == want.agent && fold.FoldedID == want.node && slices.Contains(fold.Sources, SourceProxmox)
+						agentFold := fold.HolderID == want.node && fold.FoldedID == want.agent && slices.Contains(fold.Sources, SourceAgent)
+						// A machine-keyless agent rejoins under the node's ID,
+						// so the same pair is folded in the opposite direction.
+						if nodeFold || agentFold {
+							found = true
+						}
+					}
+					if !found {
+						t.Fatalf("%s lost the relink's pair fold: %+v", name, registry.ManualLinkFolds(merged.joined))
+					}
 				}
 				// A rebuild that meets the agent first orders the joined row's
 				// hostnames the agent's way; persisting its pins must not

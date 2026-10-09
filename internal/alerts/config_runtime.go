@@ -11,11 +11,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// UpdateConfig updates the alert configuration.
+// UpdateConfig applies an owned copy of the alert configuration. The caller
+// retains its maps, slices and thresholds for encoding or further edits; only
+// another explicit update may change the running alert policy.
 func (m *Manager) UpdateConfig(config AlertConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.updateConfigLocked(config)
+	m.updateConfigLocked(config.Clone())
 }
 
 // ErrConfigSnapshot reports an update that was applied but could not be copied
@@ -97,6 +99,7 @@ func (m *Manager) updateConfigLocked(config AlertConfig) {
 
 	m.config = config
 	normalizeOverrides(m.config.Overrides)
+	m.reconcileHostAgentNodeLinksNoLock()
 
 	// Update cached quiet hours location
 	if m.config.Schedule.QuietHours.Enabled && m.config.Schedule.QuietHours.Timezone != "" {
@@ -124,8 +127,15 @@ func (m *Manager) updateConfigLocked(config AlertConfig) {
 		Interface("guestDefaults", config.GuestDefaults).
 		Msg("Alert configuration updated")
 
+	// Pending-only temperature runs have no active alert to re-evaluate.
+	// Disabling and re-enabling between reports must not reuse their grace.
+	if m.reevaluateHostDiskTemperaturePendingNoLock() {
+		m.saveActiveAlertsAsync("disk temperature pending policy disabled")
+	}
+
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
+	m.pruneHostSMARTDiskAbsencesNoLock()
 }
 
 // migrateActivationState handles backward compatibility for activation state.
@@ -480,6 +490,13 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			thresholds := m.resolveHostAlertThresholdsNoLock(alert, resourceID)
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+			if isHostSMARTRiskAlertType(metricType) {
+				smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
+				if hostSMARTRiskRulesOff(alert, smartThresholds, crcMinimumDelta) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)

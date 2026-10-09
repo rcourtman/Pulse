@@ -21,6 +21,12 @@ ALLOWED_BRANCH_TIP_DOC_URLS = {
     "https://github.com/rcourtman/Pulse/blob/main/docs/AI_TRANSPARENCY.md",
 }
 
+# This GitHub submission template needs the current contribution process, not
+# the process from an installed release. Do not admit that URL in runtime code
+# or broaden the exception to other links in the template.
+TEMPLATE_GUIDANCE_PATH = ".github/PULL_REQUEST_TEMPLATE.md"
+TEMPLATE_GUIDANCE_URL = "https://github.com/rcourtman/Pulse/blob/main/CONTRIBUTING.md#sharing-a-tested-patch"
+
 SKIP_DIR_NAMES = {
     ".claude",
     ".git",
@@ -68,7 +74,88 @@ def should_skip(rel_path: str) -> bool:
     return False
 
 
+def link_offenders(rel_path: str, content: str) -> list[str]:
+    for allowed_url in ALLOWED_BRANCH_TIP_DOC_URLS:
+        content = re.sub(
+            re.escape(allowed_url) + r"(?=$|[\s\"')>\]])", "", content
+        )
+    if rel_path == TEMPLATE_GUIDANCE_PATH:
+        content = re.sub(
+            re.escape(TEMPLATE_GUIDANCE_URL) + r"(?=$|[\s\"')>\]])", "", content
+        )
+    return [
+        f"{rel_path}: {match.group(0)}"
+        for pattern in FORBIDDEN_PATTERNS
+        if (match := pattern.search(content))
+    ]
+
+
 class RepoDocsLinkDriftTest(unittest.TestCase):
+    def test_current_contribution_link_is_limited_to_the_submission_template(self) -> None:
+        link = f"[Sharing a tested patch]({TEMPLATE_GUIDANCE_URL})."
+        self.assertEqual(link_offenders(TEMPLATE_GUIDANCE_PATH, link), [])
+        for path in (
+            "frontend-modern/src/utils/help.ts", "install.sh",
+            ".github/ISSUE_TEMPLATE/bug.md", ".github/workflows/helper.js",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(should_skip(path))
+                self.assertTrue(link_offenders(path, link))
+
+    def test_template_exception_cannot_admit_other_branches_targets_or_anchors(self) -> None:
+        for link in (
+            TEMPLATE_GUIDANCE_URL.replace("/main/", "/master/"),
+            TEMPLATE_GUIDANCE_URL.split("#", 1)[0],
+            TEMPLATE_GUIDANCE_URL.replace("sharing-a-tested-patch", "unrelated-section"),
+            TEMPLATE_GUIDANCE_URL + "-unrelated",
+            TEMPLATE_GUIDANCE_URL.replace("CONTRIBUTING.md#sharing-a-tested-patch", "SECURITY.md"),
+        ):
+            with self.subTest(link=link):
+                self.assertTrue(link_offenders(TEMPLATE_GUIDANCE_PATH, f"[Guide]({link})"))
+
+    def test_current_guidance_does_not_hide_an_additional_drifting_link(self) -> None:
+        content = f"[Patch]({TEMPLATE_GUIDANCE_URL}) [Other](https://github.com/rcourtman/Pulse/blob/main/SECURITY.md)"
+        self.assertTrue(link_offenders(TEMPLATE_GUIDANCE_PATH, content))
+
+    def test_immutable_and_shipped_runtime_docs_remain_valid(self) -> None:
+        for link in (
+            "https://github.com/rcourtman/Pulse/blob/v6.5.0/docs/CONFIGURATION.md",
+            "https://github.com/rcourtman/Pulse/blob/39043470bc9824b35e093aa51ddac11e7f30ef06/docs/CONFIGURATION.md",
+            "/docs/CONFIGURATION.md",
+        ):
+            with self.subTest(link=link):
+                self.assertEqual(link_offenders("frontend-modern/src/utils/help.ts", link), [])
+
+    def test_existing_current_triage_disclosure_exception_is_preserved(self) -> None:
+        for link in ALLOWED_BRANCH_TIP_DOC_URLS:
+            self.assertEqual(link_offenders("scripts/triage.py", link), [])
+
+    def test_current_contribution_policy_is_allowed_only_in_the_pr_template(self) -> None:
+        policy_url = TEMPLATE_GUIDANCE_URL
+        link = f"[Sharing a tested patch]({policy_url})."
+        self.assertEqual(link_offenders(".github/PULL_REQUEST_TEMPLATE.md", link), [])
+        for runtime_path in ("frontend-modern/src/help.ts", "internal/api/help.go", ".github/workflows/release.yml"):
+            with self.subTest(path=runtime_path):
+                self.assertTrue(link_offenders(runtime_path, link))
+
+    def test_policy_exception_does_not_allow_other_or_extended_branch_tip_links(self) -> None:
+        policy_url = TEMPLATE_GUIDANCE_URL
+        for url in (
+            "https://github.com/rcourtman/Pulse/blob/main/docs/API.md",
+            policy_url.replace("main", "master"),
+            policy_url.replace("Pulse", "AnotherRepo"),
+            policy_url.replace("#sharing-a-tested-patch", "#another-anchor"),
+            policy_url + "?extra=1",
+            policy_url + "-extra",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(link_offenders(".github/PULL_REQUEST_TEMPLATE.md", f"[Guide]({url})"))
+        self.assertFalse(should_skip(".github/PULL_REQUEST_TEMPLATE.md"))
+
+    def test_standing_triage_disclosure_remains_allowed(self) -> None:
+        for url in ALLOWED_BRANCH_TIP_DOC_URLS:
+            self.assertEqual(link_offenders("internal/api/help.go", f"[Triage]({url})"), [])
+
     def test_runtime_files_do_not_reference_branch_tip_docs(self) -> None:
         offenders: list[str] = []
 
@@ -85,13 +172,7 @@ class RepoDocsLinkDriftTest(unittest.TestCase):
             except UnicodeDecodeError:
                 continue
 
-            for allowed_url in ALLOWED_BRANCH_TIP_DOC_URLS:
-                content = content.replace(allowed_url, "")
-
-            for pattern in FORBIDDEN_PATTERNS:
-                match = pattern.search(content)
-                if match:
-                    offenders.append(f"{rel_path}: {match.group(0)}")
+            offenders.extend(link_offenders(rel_path, content))
 
         self.assertEqual(
             offenders,

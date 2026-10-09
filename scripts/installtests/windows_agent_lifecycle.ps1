@@ -14,6 +14,10 @@ param (
 )
 
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) {
+    throw 'Native Windows lifecycle proof requires Windows PowerShell 5.1.'
+}
+Write-Host "Lifecycle engine: Windows PowerShell $($PSVersionTable.PSVersion)"
 $serviceName = 'PulseAgent'
 $stateDir = Join-Path $env:ProgramData 'Pulse'
 $logFile = Join-Path $stateDir 'pulse-agent.log'
@@ -21,7 +25,7 @@ $proofStatePath = Join-Path $stateDir 'windows-lifecycle-proof.json'
 $baseUrl = "http://127.0.0.1:$Port"
 $serverProcess = $null
 $previousDisableAutoUpdate = $null
-$restoreAutoUpdateAtExit = $true
+$restoreAutoUpdateAtExit = $false
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -40,10 +44,14 @@ function Resolve-RequiredPath {
 }
 
 function Stop-LifecycleServer {
-    if ($null -ne $script:serverProcess -and -not $script:serverProcess.HasExited) {
-        Stop-Process -Id $script:serverProcess.Id -Force -ErrorAction SilentlyContinue
-        $script:serverProcess.WaitForExit(5000) | Out-Null
+    if ($null -eq $script:serverProcess) { return }
+    if (-not $script:serverProcess.HasExited) {
+        Stop-Process -Id $script:serverProcess.Id -Force -ErrorAction Stop
+        if (-not $script:serverProcess.WaitForExit(5000)) {
+            throw 'Owned lifecycle server did not stop before the cleanup deadline.'
+        }
     }
+    $script:serverProcess.Dispose()
     $script:serverProcess = $null
 }
 
@@ -51,6 +59,7 @@ function Start-LifecycleServer {
     param([string]$AgentPath)
     Stop-LifecycleServer
     $version = ((& $AgentPath --version 2>$null) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Lifecycle input version check failed (exit $LASTEXITCODE)." }
     if ([string]::IsNullOrWhiteSpace($version)) {
         throw "Could not read agent version from $AgentPath"
     }
@@ -111,6 +120,7 @@ function Assert-AgentRuntime {
         throw "Unexpected service state: $($service | ConvertTo-Json -Compress)"
     }
     $installedVersion = ((& "$env:ProgramFiles\Pulse\pulse-agent.exe" --version 2>$null) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Installed agent version check failed (exit $LASTEXITCODE)." }
     if ($installedVersion -ne $ExpectedVersion) {
         throw "Installed version is $installedVersion; expected $ExpectedVersion."
     }
@@ -126,10 +136,12 @@ function Assert-AgentRuntime {
         throw "Agent log does not contain startup evidence for $ExpectedVersion."
     }
     $recovery = (& sc.exe qfailure $serviceName 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Service recovery query failed (exit $LASTEXITCODE)." }
     if ([regex]::Matches($recovery, 'RESTART').Count -lt 3) {
         throw "Service recovery actions are incomplete: $recovery"
     }
     $failureFlag = (& sc.exe qfailureflag $serviceName 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Service failure-flag query failed (exit $LASTEXITCODE)." }
     if ($failureFlag -notmatch 'TRUE|1') {
         throw "Service non-crash recovery flag is not enabled: $failureFlag"
     }
@@ -155,10 +167,23 @@ function Assert-CrashRecovery {
     throw 'PulseAgent did not recover after its process was terminated.'
 }
 
-function Invoke-UninstallAndAssertClean {
-    Invoke-Installer -Label 'uninstall' -Arguments '-Uninstall $true -NonInteractive $true'
-    Start-Sleep -Seconds 2
-    if ($null -ne (Get-Service $serviceName -ErrorAction SilentlyContinue)) {
+# Absence is a specific SCM result, not an empty/suppressed failed query.
+function Get-LifecycleService {
+    try {
+        return Get-Service -Name $serviceName -ErrorAction Stop
+    } catch {
+        if ($_.FullyQualifiedErrorId.Split(',')[0] -eq 'NoServiceFoundForGivenName' -and
+            $_.CategoryInfo.Category -eq [System.Management.Automation.ErrorCategory]::ObjectNotFound) {
+            return $null
+        }
+        throw
+    }
+}
+
+function Assert-LifecycleAgentAbsent {
+    $remaining = Get-LifecycleService
+    if ($null -ne $remaining) {
+        $remaining.Dispose()
         throw 'PulseAgent service still exists after uninstall.'
     }
     if (Test-Path "$env:ProgramFiles\Pulse\pulse-agent.exe") {
@@ -167,8 +192,21 @@ function Invoke-UninstallAndAssertClean {
     if (Test-Path $stateDir) {
         throw 'Pulse Agent state directory still exists after uninstall.'
     }
-    if (Get-NetTCPConnection -LocalPort 9191 -State Listen -ErrorAction SilentlyContinue) {
+    # Enumerate first: a missing selected port must not turn access/query
+    # failure into apparently successful listener removal.
+    $listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {
+        $_.LocalPort -eq 9191 -and $_.State -eq 'Listen'
+    })
+    if ($listeners.Count -ne 0) {
         throw 'Pulse Agent readiness listener still exists after uninstall.'
+    }
+}
+
+function Invoke-UninstallAndAssertClean {
+    foreach ($label in @('uninstall', 'repeated uninstall')) {
+        Invoke-Installer -Label $label -Arguments '-Uninstall $true -NonInteractive $true'
+        Assert-LifecycleAgentAbsent
+        Write-Host "${label}: independent SCM, binary, state and listener absence confirmed."
     }
 }
 
@@ -198,14 +236,11 @@ try {
         return
     }
 
-    if (Get-Service $serviceName -ErrorAction SilentlyContinue) {
-        throw 'PulseAgent is already installed. Use a disposable runner or uninstall it before starting this proof.'
-    }
-    if (Test-Path $stateDir) {
-        throw "Pulse state already exists at $stateDir. Use a clean disposable runner."
-    }
-
+    # Fail closed on pre-existing state and observation errors before changing
+    # the machine environment or starting any test-owned process.
+    Assert-LifecycleAgentAbsent
     $previousDisableAutoUpdate = [Environment]::GetEnvironmentVariable('PULSE_DISABLE_AUTO_UPDATE', 'Machine')
+    $restoreAutoUpdateAtExit = $true
     [Environment]::SetEnvironmentVariable('PULSE_DISABLE_AUTO_UPDATE', 'true', 'Machine')
 
     $versionV1 = Start-LifecycleServer -AgentPath $resolvedAgentV1
@@ -233,8 +268,11 @@ try {
     Invoke-UninstallAndAssertClean
     Write-Host 'Full Windows service lifecycle proof passed.' -ForegroundColor Green
 } finally {
-    Stop-LifecycleServer
-    if ($restoreAutoUpdateAtExit) {
-        [Environment]::SetEnvironmentVariable('PULSE_DISABLE_AUTO_UPDATE', $previousDisableAutoUpdate, 'Machine')
+    try {
+        Stop-LifecycleServer
+    } finally {
+        if ($restoreAutoUpdateAtExit) {
+            [Environment]::SetEnvironmentVariable('PULSE_DISABLE_AUTO_UPDATE', $previousDisableAutoUpdate, 'Machine')
+        }
     }
 }

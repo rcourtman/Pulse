@@ -1,17 +1,43 @@
 package installtests
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
 
-func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
-	if err != nil {
-		t.Skip("pwsh not installed")
+// Windows proof is specifically the supported legacy engine. Missing or newer
+// PowerShell must not silently skip (or stand in for) Windows PowerShell 5.1.
+func nativeInstallerPowerShell(t *testing.T) string {
+	t.Helper()
+	binary := "pwsh"
+	if runtime.GOOS == "windows" {
+		binary = "powershell.exe"
 	}
+	powerShell, err := exec.LookPath(binary)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Fatal("native Windows installer proof requires Windows PowerShell 5.1")
+		}
+		t.Skip("PowerShell unavailable; native Windows installer proof remains unexecuted")
+	}
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+			`if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1) { throw 'Windows PowerShell 5.1 required' }; Write-Output $PSVersionTable.PSVersion.ToString()`)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("Windows installer proof selected the wrong engine: %v\n%s", err, output)
+		}
+		t.Logf("Windows PowerShell %s", strings.TrimSpace(string(output)))
+	}
+	return powerShell
+}
+
+func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
+	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "install.ps1")
 	cmd := exec.Command(pwsh,
@@ -58,10 +84,7 @@ func TestInstallPS1KeepsTLS13OptionalOnLegacyWindowsPowerShell(t *testing.T) {
 }
 
 func TestWindowsAgentLifecycleHarnessParsesWithPowerShell(t *testing.T) {
-	pwsh, err := exec.LookPath("pwsh")
-	if err != nil {
-		t.Skip("pwsh not installed")
-	}
+	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1")
 	cmd := exec.Command(pwsh,
@@ -115,15 +138,17 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
 		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,
 		`--self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile`,
-		`Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue`,
-		`$lifecycleStateDir = Join-Path $env:ProgramData 'Pulse'`,
-		`Remove-Item -Path $lifecycleStateDir -Recurse -Force`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("native Windows workflow must keep its governed lifecycle proof intact: %s", needle)
 		}
 	}
+	if strings.Contains(workflow, "Remove-Item -Path $lifecycleStateDir") ||
+		strings.Contains(workflow, "Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue") {
+		t.Fatal("native proof must reject pre-existing or unknown state, not erase it")
+	}
+
 }
 
 func TestNativeWindowsExecutesGeneratedInstallCommand(t *testing.T) {
@@ -515,7 +540,7 @@ func TestInstallPS1ClearsPersistedStateAfterUninstall(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`if (Test-Path $StateDir) {`,
-		`Remove-Item $StateDir -Recurse -Force -ErrorAction SilentlyContinue`,
+		`Remove-Item $StateDir -Recurse -Force -ErrorAction Stop`,
 		`Write-Host "Uninstallation complete." -ForegroundColor Green`,
 	}
 	for _, needle := range required {
@@ -547,5 +572,200 @@ func TestInstallPS1RequiresPinnedSignatureVerificationForReleaseDownloads(t *tes
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.ps1 missing signed-download verification contract: %s", needle)
 		}
+	}
+}
+
+// These native exit checks live with the registry-named Windows lifecycle
+// completion proof. Their shared parsers and native execution controls remain
+// in native_windows_exit_test.go; no check or adverse control is removed.
+func TestWindowsAgentLifecycleWorkflowChecksEveryNativeExit(t *testing.T) {
+	steps := nativeWindowsExitSteps(t)
+	guards, err := nativeWindowsExitGuards(steps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, guard := range guards {
+		t.Run(guard, func(t *testing.T) {
+			changed := append([]nativeWindowsExitStep(nil), steps...)
+			for i := range changed {
+				// Reproduce the parent's unchecked command at each boundary.
+				changed[i].Run = strings.Replace(changed[i].Run, guard, "", 1)
+			}
+			if _, err := nativeWindowsExitGuards(changed); err == nil {
+				t.Fatal("accepted a native failure that a later successful command could hide")
+			}
+		})
+	}
+	for _, stepName := range []string{"Build and execute native Windows agent", "Exercise native Windows service lifecycle"} {
+		t.Run(stepName+" cannot tolerate failure", func(t *testing.T) {
+			changed := append([]nativeWindowsExitStep(nil), steps...)
+			for i := range changed {
+				if changed[i].Name == stepName {
+					changed[i].ContinueOnError = true
+				}
+			}
+			if _, err := nativeWindowsExitGuards(changed); err == nil {
+				t.Fatal("accepted a continue-on-error native Windows proof")
+			}
+		})
+	}
+}
+
+func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guards, err := nativeWindowsHarnessExitGuards(string(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, guard := range guards {
+		t.Run(guard, func(t *testing.T) {
+			changed := strings.Replace(string(content), guard, "", 1)
+			if _, err := nativeWindowsHarnessExitGuards(changed); err == nil {
+				t.Fatal("accepted failed version/installer/service query evidence")
+			}
+		})
+	}
+}
+
+// Native PowerShell controls execute the production functions, not a separate
+// model. The Linux proof's missing runtime remains an explicit skip; the
+// existing Windows native workflow selects these tests and uses PowerShell 5.1.
+func TestInstallPS1ServiceRemovalRuntime(t *testing.T) {
+	powerShell := nativeInstallerPowerShell(t)
+	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+		repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"),
+		"-InstallerPath", repoFile("scripts", "install.ps1"))
+	output, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "PASS all 13 production service-removal controls") {
+		t.Fatalf("production service-removal controls failed: %v\n%s", err, output)
+	}
+	t.Logf("%s", output)
+}
+
+func windowsRemovalFixtureContract(fixture string) error {
+	load := strings.Index(fixture, "Add-Type -AssemblyName System.ServiceProcess")
+	extract := strings.Index(fixture, "foreach ($name in @('Get-PulseService', 'Remove-PulseService'))")
+	if load < 0 || extract <= load ||
+		!strings.Contains(fixture, "$ExpectedStatus -is [System.ServiceProcess.ServiceControllerStatus]") {
+		return fmt.Errorf("SCM double must load and check the real service-status enum before production controls")
+	}
+	return nil
+}
+
+func TestInstallPS1ServiceRemovalFixtureLoadsRealControllerEnum(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_service_removal_controls.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := string(content)
+	if err := windowsRemovalFixtureContract(fixture); err != nil {
+		t.Fatal(err)
+	}
+	for _, boundary := range []string{"Add-Type -AssemblyName System.ServiceProcess", "$ExpectedStatus -is [System.ServiceProcess.ServiceControllerStatus]"} {
+		t.Run(boundary, func(t *testing.T) {
+			if err := windowsRemovalFixtureContract(strings.Replace(fixture, boundary, "", 1)); err == nil {
+				t.Fatal("accepted an unloaded or simulated enum")
+			}
+		})
+	}
+	if parentPath := os.Getenv("PULSE_WINDOWS_REMOVAL_FIXTURE_PARENT"); parentPath != "" {
+		parent, err := os.ReadFile(parentPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windowsRemovalFixtureContract(string(parent)); err == nil {
+			t.Fatal("accepted the exact parent's missing assembly precondition")
+		}
+		t.Log("rejected supplied parent fixture without the real enum precondition")
+	}
+}
+
+func windowsRemovalContract(script string) error {
+	for _, needle := range []string{
+		`return Get-Service -Name $AgentName -ErrorAction Stop`,
+		`$_.FullyQualifiedErrorId.Split(',')[0] -eq 'NoServiceFoundForGivenName'`,
+		`$_.CategoryInfo.Category -eq [System.Management.Automation.ErrorCategory]::ObjectNotFound`,
+		`param([int]$TimeoutSeconds = 30)`,
+		`$service.Stop()`,
+		`$service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,`,
+		`[TimeSpan]::FromSeconds($TimeoutSeconds))`,
+		`$service.Refresh()`,
+		`throw "Service '$AgentName' is not confirmed stopped."`,
+		`} finally {`,
+		`$service.Dispose()`,
+		`throw "Failed to delete service '$AgentName': $scOutput"`,
+		`$remaining = Get-PulseService`,
+		`$remaining.Dispose()`,
+		`$elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds`,
+		`throw "Service '$AgentName' is still present after deletion.`,
+	} {
+		if !strings.Contains(script, needle) {
+			return fmt.Errorf("missing removal boundary %q", needle)
+		}
+	}
+	if strings.Contains(script, "Stop-Service") && strings.Contains(script, "Stop-Service $AgentName") {
+		return fmt.Errorf("unbounded or suppressed stop bypasses the shared boundary")
+	}
+	// Pin each real caller's refusal before any remote deregistration, binary
+	// mutation or state mutation. A helper test alone cannot prove its wiring.
+	for _, boundary := range []struct{ start, end, refusal string }{
+		{"# --- Uninstall Logic ---", "# Try to notify the Pulse server", "Cannot uninstall"},
+		{"# Confirm existing service stopped and absent", "# Move temp file to final location", "Cannot replace"},
+	} {
+		start := strings.Index(script, boundary.start)
+		end := strings.Index(script, boundary.end)
+		if start < 0 || end <= start {
+			return fmt.Errorf("missing caller mutation boundary %s", boundary.start)
+		}
+		gate := script[start:end]
+		call := strings.Index(gate, "Remove-PulseService")
+		refusal := strings.Index(gate, boundary.refusal)
+		if call < 0 || refusal <= call || !strings.Contains(gate[call:refusal], "} catch {") ||
+			!strings.Contains(gate[refusal:], "Exit 1") {
+			return fmt.Errorf("caller can continue after removal failure: %s", boundary.start)
+		}
+	}
+	return nil
+}
+
+func TestInstallPS1ServiceRemovalRefusesUnknownRuntimeBeforeMutation(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(content)
+	if err := windowsRemovalContract(script); err != nil {
+		t.Fatal(err)
+	}
+	for name, needle := range map[string]string{
+		"unknown is not absent":     `return Get-Service -Name $AgentName -ErrorAction Stop`,
+		"stop is observed":          `$service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,`,
+		"stopped is rechecked":      `throw "Service '$AgentName' is not confirmed stopped."`,
+		"delete exit is retained":   `throw "Failed to delete service '$AgentName': $scOutput"`,
+		"delete is not absence":     `$remaining = Get-PulseService`,
+		"pending delete is bounded": `$elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds`,
+		"uninstall refuses":         `Cannot uninstall`,
+		"replacement refuses":       `Cannot replace`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := windowsRemovalContract(strings.Replace(script, needle, "", 1)); err == nil {
+				t.Fatal("accepted a removed safety boundary")
+			}
+		})
+	}
+	// An exact-source proof can supply the complete actual parent as an
+	// independently hash-bound input. Do not make future CI depend on HEAD^.
+	if parentPath := os.Getenv("PULSE_WINDOWS_REMOVAL_PARENT"); parentPath != "" {
+		parent, err := os.ReadFile(parentPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windowsRemovalContract(string(parent)); err == nil {
+			t.Fatal("accepted the parent's suppressed stop/delete failures")
+		}
+		t.Log("rejected the complete supplied parent installer")
 	}
 }

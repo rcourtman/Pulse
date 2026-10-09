@@ -1,12 +1,18 @@
 package alerts
 
 import (
+	"encoding/json"
+	"math"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func boolPtr(v bool) *bool {
@@ -1563,6 +1569,429 @@ func TestDiskTemperatureThresholdMatchesCheckHostPolicy(t *testing.T) {
 	}
 }
 
+// An agent owns a usage metric only with usable evidence: it evaluated the
+// metric this report, or it still holds an alert or run for it. Configuration
+// alone is not coverage.
+func TestCheckNodeKeepsMetricsTheAgentCannotEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		node.CPU = 0.95
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		return m, node, host
+	}
+
+	t.Run("memory_unknown_from_the_start", func(t *testing.T) {
+		m, node, host := setup(t)
+		host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "memory")) {
+			t.Fatalf("expected the node to alert on memory while the agent has no memory reading")
+		}
+	})
+
+	t.Run("non_finite_cpu", func(t *testing.T) {
+		m, node, host := setup(t)
+		host.CPUUsage = math.NaN()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "cpu")) {
+			t.Fatalf("expected the node to alert on CPU while the agent reports no usable CPU value")
+		}
+	})
+}
+
+// Turning an agent threshold off releases its pending run even when the agent
+// reports no reading for that metric, so the old run cannot keep ownership and
+// leave the node silent.
+func TestDisabledAgentThresholdReleasesPendingRunWithoutReading(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"agent": {"memory": 300}}
+	m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	// 90% stays below the 95% critical level, which would bypass the delay.
+	node.Memory = models.Memory{Total: 100, Used: 90, Free: 10, Usage: 90}
+	host.Memory = node.Memory
+	agentResourceID := hostResourceID(host.ID)
+	agentMemorySpec := canonicalMetricSpecID(agentResourceID, "memory")
+
+	m.CheckHost(host)
+	m.mu.RLock()
+	pending := testCoreIsPending(m, agentResourceID, agentMemorySpec)
+	m.mu.RUnlock()
+	if !pending {
+		t.Fatalf("expected a pending agent memory run")
+	}
+
+	m.mu.Lock()
+	m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+	m.CheckHost(host)
+	m.CheckNode(node)
+
+	m.mu.RLock()
+	agentIncident := testCoreHasIncident(m, agentResourceID, agentMemorySpec)
+	nodeIncident := testCoreHasIncident(m, node.ID, canonicalMetricSpecID(node.ID, "memory"))
+	m.mu.RUnlock()
+	if agentIncident {
+		t.Fatalf("expected the disabled agent memory threshold to release its pending run")
+	}
+	if !nodeIncident {
+		t.Fatalf("expected the node to evaluate memory once the agent no longer covers it")
+	}
+}
+
+// Ownership follows the config at once and link updates apply in report order:
+// a config change revokes what it no longer supports without waiting for the
+// agent's next report, an older report can neither restore revoked ownership
+// nor remove a newer report's link, and a report started before the agent went
+// offline is stale.
+func TestHostAgentNodeLinkFollowsConfigAndReportOrder(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	node.CPU = 0.95
+	host.CPUUsage = 50
+
+	m.CheckHost(host)
+	m.CheckNode(node)
+	nodeCPUSpec := canonicalMetricSpecID(node.ID, "cpu")
+	m.mu.RLock()
+	evaluatedBefore := testCoreHasIncident(m, node.ID, nodeCPUSpec)
+	m.mu.RUnlock()
+	if evaluatedBefore {
+		t.Fatalf("expected the agent to own CPU before the config change")
+	}
+
+	// A report already in flight when agent alerts are disabled must not
+	// restore ownership once it lands.
+	inFlight := m.beginHostAgentReport(host.ID)
+
+	// No agent report follows the config change; the node must evaluate CPU on
+	// its very next check. (UpdateConfig restores the default activation delay,
+	// so the run is pending rather than firing.)
+	config := m.GetConfig()
+	config.DisableAllAgents = true
+	m.UpdateConfig(config)
+	m.CheckNode(node)
+	m.mu.RLock()
+	evaluatedAfter := testCoreHasIncident(m, node.ID, nodeCPUSpec)
+	m.mu.RUnlock()
+	if !evaluatedAfter {
+		t.Fatalf("expected the node to evaluate CPU right after agent alerts were disabled")
+	}
+
+	covering := hostAgentNodeLink{agentID: host.ID, nodeID: node.ID, cpu: true}
+	m.applyHostAgentNodeLink(covering, inFlight)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected a report evaluated before agent alerts were disabled not to restore ownership")
+	}
+
+	config.DisableAllAgents = false
+	m.UpdateConfig(config)
+	older := m.beginHostAgentReport(host.ID)
+	newer := m.beginHostAgentReport(host.ID)
+	m.applyHostAgentNodeLink(covering, newer)
+	m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: node.ID}, older)
+	if !m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected an older report not to remove the newer report's link")
+	}
+
+	olderCovering := m.beginHostAgentReport(host.ID)
+	newerRemoving := m.beginHostAgentReport(host.ID)
+	m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: node.ID}, newerRemoving)
+	m.applyHostAgentNodeLink(covering, olderCovering)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected an older report not to restore ownership a newer report removed")
+	}
+
+	beforeOffline := m.beginHostAgentReport(host.ID)
+	m.HandleHostOffline(host)
+	m.applyHostAgentNodeLink(covering, beforeOffline)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected a report started before the agent went offline not to re-register")
+	}
+}
+
+// An agent that reports unlinked hands its former node the usage metrics back
+// on the node's next check, even while the agent's own alert is still firing.
+func TestCheckNodeTakesBackMetricsWhenAgentUnlinks(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	node.CPU = 0.95
+	host.CPUUsage = 95
+
+	m.CheckHost(host)
+	m.CheckNode(node)
+	nodeCPU := canonicalMetricStateID(node.ID, "cpu")
+	if testHasActiveAlert(t, m, nodeCPU) {
+		t.Fatalf("expected the linked agent to own CPU")
+	}
+
+	host.LinkedNodeID = ""
+	m.CheckHost(host)
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, nodeCPU) {
+		t.Fatalf("expected the node to alert on CPU once its agent reports unlinked")
+	}
+}
+
+// An explicit disk override, including one inherited from the linked node,
+// beats the per-type DiskFillByType default; otherwise the node released its
+// disk alert to an agent applying a looser per-type threshold.
+func TestHostDiskOverrideBeatsDiskFillByType(t *testing.T) {
+	for _, overrideOn := range []string{"linked node", "agent"} {
+		t.Run(overrideOn, func(t *testing.T) {
+			m := newTestManager(t)
+			node, host := testNodeWithHostAgent()
+			overrideID := node.ID
+			if overrideOn == "agent" {
+				overrideID = host.ID
+			}
+			m.mu.Lock()
+			m.config.Enabled = true
+			m.config.TimeThresholds = map[string]int{}
+			m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+			m.config.DiskFillByType = map[string]HysteresisThreshold{"nvme": {Trigger: 92, Clear: 88}}
+			m.config.Overrides = map[string]ThresholdConfig{
+				overrideID: {Disk: &HysteresisThreshold{Trigger: 80, Clear: 75}},
+			}
+			m.mu.Unlock()
+			root := models.Disk{Mountpoint: "/", Device: "/dev/nvme0n1p2", Total: 100, Used: 85, Free: 15, Usage: 85}
+			host.Disks = []models.Disk{root}
+
+			m.CheckHost(host)
+			rootResourceID, _ := hostDiskResourceID(host, root)
+			if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
+				t.Fatalf("expected the 80%% %s disk override to raise the agent's root disk alert at 85%%", overrideOn)
+			}
+
+			// Config-save reevaluation must preserve the same explicit override
+			// when the upstream per-filesystem resolver is composed with agent
+			// ownership. The looser NVMe default must not clear this occurrence.
+			alertID := canonicalMetricStateID(rootResourceID, "disk")
+			before, _ := testLookupActiveAlert(t, m, alertID)
+			m.UpdateConfig(m.GetConfig())
+			after, exists := testLookupActiveAlert(t, m, alertID)
+			if !exists || after.StartTime != before.StartTime {
+				t.Fatalf("config save lost the %s disk override occurrence", overrideOn)
+			}
+			m.CheckHost(host)
+			if !testHasActiveAlert(t, m, alertID) {
+				t.Fatalf("next host report lost the %s disk override alert", overrideOn)
+			}
+		})
+	}
+}
+
+// Releasing a metric drops its explicit intent grace run too, so a later
+// resume does not activate at once on time counted while nothing evaluated.
+func TestReleaseCanonicalMetricAlertClearsIntentPending(t *testing.T) {
+	m := newTestManager(t)
+	spec, err := buildCanonicalMetricSpec("homelab-delly2", "delly2", "node", "cpu", nil)
+	if err != nil {
+		t.Fatalf("spec: %v", err)
+	}
+	trackingKey := canonicalTrackingKeyForSpec(spec, spec.ID)
+	m.mu.Lock()
+	m.intentPending[trackingKey] = IntentPendingState{
+		TrackingKey:    trackingKey,
+		ResourceID:     spec.ResourceID,
+		Signal:         MetricAlertIntentSignal("cpu"),
+		FirstMatchedAt: time.Now().Add(-10 * time.Minute),
+		LastObservedAt: time.Now().Add(-9 * time.Minute),
+	}
+	m.mu.Unlock()
+
+	m.releaseCanonicalMetricAlert(spec, "delly2", "delly2", "homelab", "node", 0, nil)
+
+	m.mu.RLock()
+	_, stillPending := m.intentPending[trackingKey]
+	m.mu.RUnlock()
+	if stillPending {
+		t.Fatalf("expected releasing the metric to clear its intent pending state")
+	}
+}
+
+// Missing storage observations break confirmation runs, not the occurrence.
+// Exercise the public evaluator and both live/shadow reducers, not seeded state.
+func TestStorageConnectivityObservationGaps(t *testing.T) {
+	for _, gap := range []string{"", "unknown", " UNKNOWN "} {
+		t.Run("activation/"+gap, func(t *testing.T) {
+			m := newShadowFeedManager(t)
+			s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+			other := s
+			other.ID = "storage-ab"
+			id := canonicalConnectivityStateID(s.ID)
+			m.CheckStorage(s)
+			m.CheckStorage(other)
+			s.Status = gap
+			m.CheckStorage(s)
+			s.Status = "unavailable"
+			m.CheckStorage(s)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("non-consecutive outage observations fired storage alert")
+			}
+			m.CheckStorage(other)
+			testRequireActiveAlert(t, m, canonicalConnectivityStateID(other.ID))
+			m.CheckStorage(s)
+			testRequireActiveAlert(t, m, id)
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("storage interruption diverged from shadow")
+			}
+		})
+		t.Run("recovery/"+gap, func(t *testing.T) {
+			m := newShadowFeedManager(t)
+			s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+			id := canonicalConnectivityStateID(s.ID)
+			for range 2 {
+				m.CheckStorage(s)
+			}
+			if err := m.AcknowledgeAlert(id, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			s.Status = "available"
+			m.CheckStorage(s)
+			before := testRequireActiveAlert(t, m, id).Clone()
+			s.Status = gap
+			m.CheckStorage(s)
+			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, id).Clone()) || m.GetResolvedAlert(id) != nil {
+				t.Fatal("missing connectivity changed acknowledged occurrence")
+			}
+			s.Status = "available"
+			m.CheckStorage(s)
+			if !testHasActiveAlert(t, m, id) {
+				t.Fatal("non-consecutive healthy observations resolved storage outage")
+			}
+			m.CheckStorage(s)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("fresh consecutive healthy observations failed to recover")
+			}
+			resolved := m.GetResolvedAlert(id)
+			if resolved == nil || !resolved.StartTime.Equal(before.StartTime) {
+				t.Fatal("confirmed recovery lost original occurrence")
+			}
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("storage recovery diverged from shadow")
+			}
+		})
+	}
+}
+
+func TestStorageConnectivityGapRestartsIntentGrace(t *testing.T) {
+	m := newShadowFeedManager(t)
+	var tick time.Duration
+	m.intentClock = func() time.Duration { return tick }
+	doc := NewAlertIntentPolicyDocument()
+	doc.Defaults[string(AlertIntentSignalOffline)] = AlertIntentRule{GraceSeconds: intPointer(60)}
+	if err := m.LoadIntentPolicies(doc); err != nil {
+		t.Fatal(err)
+	}
+	s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+	id := canonicalConnectivityStateID(s.ID)
+	m.CheckStorage(s)
+	tick = 40 * time.Second
+	m.CheckStorage(s)
+	s.Status = "unknown"
+	m.CheckStorage(s)
+	m.mu.RLock()
+	_, pending := m.intentPending[id]
+	_, ticking := m.intentRuntimeTicks[id]
+	m.mu.RUnlock()
+	if pending || ticking {
+		t.Error("missing status retained intent grace bookkeeping")
+	}
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(m.getAlertsDir(), intentPendingFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved []IntentPendingState
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 0 {
+		t.Fatalf("interrupted intent remained checkpointed: %s, %v", data, err)
+	}
+	s.Status = "offline"
+	for _, next := range []time.Duration{70, 90, 129} {
+		tick = next * time.Second
+		m.CheckStorage(s)
+		if testHasActiveAlert(t, m, id) {
+			t.Fatal("intent grace accrued across missing storage status")
+		}
+	}
+	tick = 130 * time.Second
+	m.CheckStorage(s)
+	testRequireActiveAlert(t, m, id)
+	if m.ShadowDivergences() != 0 {
+		t.Fatal("intent interruption diverged from shadow")
+	}
+}
+
+// Usage has delayed activation but immediate measured recovery. Do not invent
+// a recovery stability window to fit the memory/temperature timing fixtures.
+func TestStorageCapacityGapHoldsOccurrence(t *testing.T) {
+	for _, gap := range []string{"missing", "unconfirmed-zero", "negative", "offline", "unavailable"} {
+		t.Run(gap, func(t *testing.T) {
+			m, elapsed := continuityManager(t, false)
+			id, metric, observe := continuityObserver(t, m, "storage", gap)
+			alertID := canonicalMetricStateID(id, metric)
+			observe(95, false)
+			elapsed.Store(int64(time.Minute))
+			observe(95, false)
+			if err := m.AcknowledgeAlert(alertID, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			before := testRequireActiveAlert(t, m, alertID).Clone()
+			elapsed.Store(int64(2 * time.Minute))
+			observe(10, true)
+			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, alertID).Clone()) || m.GetResolvedAlert(alertID) != nil {
+				t.Fatal("missing capacity changed the acknowledged occurrence")
+			}
+			// A real, independently observed empty capacity can clear even
+			// while connectivity is unknown; neither channel stands in for the other.
+			empty := models.Storage{ID: id, Name: "backups", Status: "unknown", Total: 1000, Free: 1000}
+			m.CheckStorage(empty)
+			if testHasActiveAlert(t, m, alertID) {
+				t.Fatal("confirmed empty capacity did not recover immediately")
+			}
+			resolved := m.GetResolvedAlert(alertID)
+			if resolved == nil || !resolved.StartTime.Equal(before.StartTime) || resolved.Value != 0 {
+				t.Fatal("measured recovery lost the original occurrence or clearing value")
+			}
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("capacity interruption diverged from shadow")
+			}
+		})
+	}
+}
+
 // HostDiskTemperatureThreshold is the disk heat policy for a disk a host agent
 // reports, so it must agree with CheckHost on every host-level override: an
 // explicit Disk Temp override on the host (or the canonical resource its ID
@@ -1705,5 +2134,241 @@ func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 	var nilManager *Manager
 	if got := nilManager.HostDiskTemperatureThreshold(DiskTemperatureHost{ID: hostID}, "nvme"); got == nil || got.Trigger != 70 {
 		t.Fatalf("nil manager host policy = %+v, want the factory nvme 70", got)
+	}
+}
+
+// TrueNASDiskTemperatureThreshold is the disk heat policy for a TrueNAS disk,
+// so it must agree with the disk's temperature alert on every tier: the
+// disk's own override, then the TrueNAS-wide value, then the per-type policy.
+// A host override under the TrueNAS system's synthetic agent ID is not one of
+// them. Disable all TrueNAS silences the alert without changing the policy,
+// as the agent switches do for agent disks.
+func TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts(t *testing.T) {
+	disk := trueNASTemperatureDisk("nvme0n1", "nvme", 0)
+
+	const canonicalDiskID = "physical-disk:canonical-nvme0n1"
+	for _, tc := range []struct {
+		name     string
+		mutate   func(*AlertConfig)
+		setup    func(*Manager)
+		want     *HysteresisThreshold
+		off      bool
+		silenced bool
+	}{
+		{name: "per-type policy", want: &HysteresisThreshold{Trigger: 70, Clear: 65}},
+		{
+			name: "raised per-type trigger",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 75, Clear: 70}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+			},
+			want: &HysteresisThreshold{Trigger: 62, Clear: 57},
+		},
+		{
+			name: "per-disk override beats the TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{Trigger: 75, Clear: 70}}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "per-disk override without a clear value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{Trigger: 75}}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "per-disk override under the canonical identity",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{canonicalDiskID: {Temperature: &HysteresisThreshold{Trigger: 78, Clear: 73}}}
+			},
+			setup: func(m *Manager) {
+				m.SetResourceIntentIdentityResolver(func(resourceID string) (string, bool) {
+					return canonicalDiskID, resourceID == disk.ID
+				})
+			},
+			want: &HysteresisThreshold{Trigger: 78, Clear: 73},
+		},
+		{
+			name: "host override under the TrueNAS system ID does not reach its disks",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{"truenas-main": {DiskTemperature: &HysteresisThreshold{Trigger: 50, Clear: 45}}}
+			},
+			want: &HysteresisThreshold{Trigger: 70, Clear: 65},
+		},
+		{
+			name: "per-disk override switches the disk off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{}}}
+			},
+			off: true,
+		},
+		{
+			name: "per-disk override disables the disk's alerts",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Disabled: true}}
+			},
+		},
+		{
+			name: "TrueNAS-wide off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{}
+			},
+			off: true,
+		},
+		{
+			name: "TrueNAS Disks defaults disabled",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Disabled = true
+			},
+		},
+		{
+			name: "agent Disk Temp default off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{}
+			},
+			off: true,
+		},
+		{
+			name: "Disable all TrueNAS keeps the policy",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DisableAllTrueNAS = true
+			},
+			want:     &HysteresisThreshold{Trigger: 70, Clear: 65},
+			silenced: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := unifiedEvalBaseConfig()
+			cfg.TrueNASDiskDefaults = ThresholdConfig{}
+			if tc.mutate != nil {
+				tc.mutate(&cfg)
+			}
+			configureUnifiedEvalManager(t, m, cfg)
+			if tc.setup != nil {
+				tc.setup(m)
+			}
+
+			got := m.TrueNASDiskTemperatureThreshold(" "+disk.ID+" ", " NVMe")
+			switch {
+			case tc.off:
+				if got == nil || got.Trigger > 0 {
+					t.Fatalf("TrueNASDiskTemperatureThreshold = %+v, want a switched-off threshold", got)
+				}
+			case (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want):
+				t.Fatalf("TrueNASDiskTemperatureThreshold = %+v, want %+v", got, tc.want)
+			}
+
+			var alert *Alert
+			fires := func(temperature int) bool {
+				reading := disk
+				meta := *disk.PhysicalDisk
+				meta.Temperature = temperature
+				reading.PhysicalDisk = &meta
+				checkTrueNASTemperatureDisk(t, m, reading)
+				var firing bool
+				alert, firing = trueNASDiskTemperatureAlert(t, m, reading)
+				return firing
+			}
+			if tc.silenced {
+				if fires(99) {
+					t.Fatalf("alert fired at 99C with TrueNAS alerts disabled, active: %v", alertKeys(m))
+				}
+				return
+			}
+			if got == nil || got.Trigger <= 0 {
+				if fires(99) {
+					t.Fatalf("alert fired at 99C on a disk the policy judges no heat for, active: %v", alertKeys(m))
+				}
+				return
+			}
+			trigger := int(got.Trigger)
+			if fires(trigger - 1) {
+				t.Fatalf("alert fired at %dC, under the policy trigger %v", trigger-1, got.Trigger)
+			}
+			if !fires(trigger) {
+				t.Fatalf("alert stayed quiet at the policy trigger %dC, active: %v", trigger, alertKeys(m))
+			}
+			// The alert recovers at the clear value Patrol reads.
+			if alert.Threshold != got.Trigger || alert.Metadata["clearThreshold"] != got.Clear {
+				t.Fatalf("alert trigger/clear = %v/%v, want the policy %v/%v", alert.Threshold, alert.Metadata["clearThreshold"], got.Trigger, got.Clear)
+			}
+		})
+	}
+
+	// A disk whose type TrueNAS never reported follows the agent Disk Temp
+	// default, as its alert does.
+	t.Run("untyped disk", func(t *testing.T) {
+		m := newTestManager(t)
+		cfg := unifiedEvalBaseConfig()
+		cfg.TrueNASDiskDefaults = ThresholdConfig{}
+		cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 58, Clear: 53}
+		configureUnifiedEvalManager(t, m, cfg)
+		untypedDisk := trueNASTemperatureDisk("sdx", "", 58)
+		if got := m.TrueNASDiskTemperatureThreshold(untypedDisk.ID, ""); got == nil || got.Trigger != 58 || got.Clear != 53 {
+			t.Fatalf("untyped disk = %+v, want the agent default 58/53", got)
+		}
+		checkTrueNASTemperatureDisk(t, m, untypedDisk)
+		if _, firing := trueNASDiskTemperatureAlert(t, m, untypedDisk); !firing {
+			t.Fatalf("untyped disk at the agent default 58C raised no alert, active: %v", alertKeys(m))
+		}
+	})
+
+	m := configureDiskTempTypeHostManager(t)
+	m.TrueNASDiskTemperatureThreshold(disk.ID, "nvme").Trigger = 1
+	if got := m.TrueNASDiskTemperatureThreshold(disk.ID, "nvme"); got == nil || got.Trigger != 70 {
+		t.Fatalf("caller mutation reached the config: %+v", got)
+	}
+	var nilManager *Manager
+	if got := nilManager.TrueNASDiskTemperatureThreshold(disk.ID, "sata"); got == nil || got.Trigger != 55 {
+		t.Fatalf("nil manager TrueNAS disk policy = %+v, want the factory sata 55", got)
+	}
+}
+
+// IsTrueNASDiskResource names the disks the unified evaluator judges as
+// TrueNAS disks, the ones TrueNASDiskTemperatureThreshold resolves.
+func TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator(t *testing.T) {
+	agentDisk := unifiedresources.Resource{
+		ID: "physical-disk:host-1/nvme0n1", Type: unifiedresources.ResourceTypePhysicalDisk,
+		Sources:      []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DiskType: "nvme"},
+	}
+	trueNASFacetDisk := agentDisk
+	trueNASFacetDisk.TrueNAS = &unifiedresources.TrueNASData{}
+	mergedDisk := agentDisk
+	mergedDisk.Sources = []unifiedresources.DataSource{unifiedresources.SourceAgent, unifiedresources.SourceTrueNAS}
+	noMetaDisk := trueNASTemperatureDisk("sdy", "sata", 40)
+	noMetaDisk.PhysicalDisk = nil
+	trueNASSystem := unifiedresources.Resource{
+		ID: "agent:truenas-main", Type: unifiedresources.ResourceTypeAgent,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+	}
+	for name, tc := range map[string]struct {
+		resource unifiedresources.Resource
+		want     bool
+	}{
+		"TrueNAS-sourced disk": {resource: trueNASTemperatureDisk("sda", "sata", 40), want: true},
+		"TrueNAS facet disk":   {resource: trueNASFacetDisk, want: true},
+		"agent and TrueNAS":    {resource: mergedDisk, want: true},
+		"no disk metadata":     {resource: noMetaDisk, want: true},
+		"agent disk":           {resource: agentDisk},
+		"TrueNAS system":       {resource: trueNASSystem},
+	} {
+		if got := IsTrueNASDiskResource(tc.resource); got != tc.want {
+			t.Errorf("%s: IsTrueNASDiskResource = %v, want %v", name, got, tc.want)
+		}
+		input, ok := UnifiedResourceInputFromResource(tc.resource)
+		if evaluated := ok && input.Type == "truenas-disk"; evaluated != tc.want {
+			t.Errorf("%s: unified evaluator judges it as a TrueNAS disk = %v, want %v", name, evaluated, tc.want)
+		}
 	}
 }

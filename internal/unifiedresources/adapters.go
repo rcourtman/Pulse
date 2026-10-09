@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/netutil"
 )
 
 func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resource, ResourceIdentity) {
@@ -1842,6 +1843,8 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		LastBackup:         vm.LastBackup,
 		BackupInProgress:   vm.BackupInProgress,
 		DiskStatusReason:   vm.DiskStatusReason,
+		DiskObservation:    vm.DiskObservation,
+		GuestAgentEvidence: vm.GuestAgentEvidence,
 		GuestAgentStatus:   vm.GuestAgentStatus,
 		GuestAgentExpected: vm.GuestAgentExpected,
 		OSName:             vm.OSName,
@@ -3933,15 +3936,18 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 	var macs []string
 	// Agents report interfaces sorted by name, which places docker0/br-* bridges
 	// ahead of eth*/en*, and consumers treat the first IP as the host's primary
-	// address. Collect physical-looking interfaces first so bridge and overlay
-	// addresses never lead the list. Mirrors hostagent.isLikelyVirtualInterfaceName.
+	// address. Prefer interfaces without local-container/overlay names, keeping
+	// secondary-only hosts useful. This display hint is not a physical-NIC or
+	// default-route assertion and must not alter the agent's MAC-based identity.
 	for pass := 0; pass < 2; pass++ {
 		for _, iface := range interfaces {
-			if (pass == 0) == isLikelyVirtualInterfaceName(iface.Name) {
-				continue
-			}
-			if iface.MAC != "" {
+			// Preserve the old MAC sequence: the new Podman preference is
+			// only for displayed IPs, not another identity metadata change.
+			if (pass == 0) != isLikelyVirtualInterfaceName(iface.Name) && iface.MAC != "" {
 				macs = append(macs, iface.MAC)
+			}
+			if (pass == 0) == netutil.IsSecondaryInterfaceName(iface.Name) {
+				continue
 			}
 			for _, addr := range iface.Addresses {
 				ip := addr
@@ -3956,6 +3962,8 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 }
 
 func isLikelyVirtualInterfaceName(name string) bool {
+	// Legacy MAC metadata ordering, also used by the agent's machine-ID
+	// fallback. Keep Podman out of this classifier to preserve those identities.
 	name = strings.ToLower(strings.TrimSpace(name))
 	switch {
 	case name == "" || name == "lo":

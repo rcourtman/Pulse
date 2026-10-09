@@ -18,6 +18,52 @@
 
 ## Purpose
 
+### TLS pin failures remain local typed trust evidence
+
+`tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,
+normalisation, minimum TLS version and mismatch diagnostic, while returning a
+`FingerprintMismatchError` from the local verifier. Error wrapping retains the
+type; provider text repeating that diagnostic does not acquire it. Proxmox
+cluster first-use admission uses this distinction and never automatically
+replaces a known primary or member pin. `TestFingerprintVerifier_MismatchedFingerprint`
+in `pkg/tlsutil/tlsutil_test.go` checks digest identity, wrapping and rejection
+of quoted text; `TestClusterClientFingerprintTrustContract` supplies connected
+startup/recovery/first-use proof. CA verification and the existing explicit
+unverified-discovery modes are unchanged. No live security acceptance is claimed.
+
+### Existing PMG collection choices constrain provider reads
+
+The owning PMG collector honours the saved mail, queue, quarantine and domain
+switches at its read boundary. `PMGInstance.MonitoringConfigured` distinguishes
+new explicit all-off choices from old configurations that stored only zero
+booleans: those old ambiguous entries retain the existing mail-statistics
+default until a collection option is saved. This is not retrospective proof of
+intent or privacy. The discriminator survives encrypted node persistence and
+reload, covered in `TestPMGCollectionPersistenceDefaults` in `config_load_test.go`.
+Scope changes apply to subsequent polls, not requests already in flight;
+pausing remains the boundary for all ordinary reads. Authentication, TLS and
+permissions are unchanged, and no live mail/privacy acceptance is claimed.
+
+### Removing browser-origin trust is a durable explicit patch
+
+The system settings handler accepts an explicit empty string for
+`allowedOrigins` and applies it only after the durable save succeeds. Omitted
+origins do not reapply a different saved value to the runtime. Null and
+non-string values are invalid requests. GET presents the effective runtime
+policy, not a saved value concealed by a deployment override.
+
+Either existing override marker (`ALLOWED_ORIGINS` or `allowedOrigins`) keeps
+the deployment policy authoritative. A requested different value is rejected
+with `409 env_locked` before any part of the patch is persisted. The unchanged
+value sent by a disabled form field leaves underlying disk policy untouched
+and permits other settings to be saved. Clearing origins grants no CORS headers;
+production config reload does not revive removed trust. No change to the
+existing development localhost fallback or deployment environment precedence
+is made. CORS never replaces authentication, `settings:write`, CSRF, TLS or
+iframe policy. The `TestAllowedOrigins*` controls in
+`internal/api/system_settings_telemetry_test.go` cover real middleware responses,
+exact-list matching, protected writes, rejected/failed saves and reload.
+
 Assistant retained-history wiring uses the store belonging to its current
 monitor and read-only metric queries. Canonical identity resolution precedes
 store lookup, and ambiguous names fail with a request for canonical identity.
@@ -293,6 +339,8 @@ invisible to operators reviewing exactly what Pulse sends.
 55. `pkg/server/server.go`
 
 ## Shared Boundaries
+
+The generated typed helper and effective-unit admission retain `PrivateNetwork=true` on every platform, including native linux-386 and unknown architectures. `RestrictAddressFamilies=AF_UNIX` is additional hardening, not a portable proof of IP socket denial: systemd ignores this filter on native 32-bit x86. `SystemCallArchitectures=native` does not repair that ABI limitation.
 
 - Configured local-admin synchronisation is a runtime identity replacement, not an additive role grant: changing the configured identity removes the previous bypass, and clearing it during first-run reset clears that bypass. Configurable authorizers must synchronise identity updates with concurrent authorization reads; other users still require their own policy grants.
 
@@ -831,11 +879,15 @@ in `docs/PRIVACY.md` and `frontend-modern/public/docs/PRIVACY.md`, which
 
 ## Forbidden Paths
 
+Removing the helper's private network globally or for an unproved platform in order to reach pmxcfs is forbidden. Partial telemetry does not justify root/sudo fallback, caller-selected commands or paths, token exposure, wider socket families, or a healthy empty inventory after a failed list.
+
 1. Changing telemetry payload semantics without updating the canonical privacy disclosure.
 2. Letting security-facing settings copy or privacy guarantees drift between runtime behavior and the governed docs.
 3. Treating API token management, auth posture, or telemetry controls as generic settings-shell polish instead of explicit trust-surface behavior.
 
 ## Completion Obligations
+
+`scripts/installtests/safe_profile_migration_test.go` renders every shipped helper architecture plus an unknown case for PVE/non-PVE and rejects host/unknown effective network values; `scripts/installtests/secure_runtime_platform_matrix_test.go` binds truthful shipped documentation. These are renderer/admission regressions, not kernel enforcement proof. Any future host-IPC exception requires source-bound actual generated-child IPC success and IPv4/IPv6 creation denials with unsandboxed controls, plus owned active migration/rollback and identity evidence before acceptance.
 
 Split-port agent exposure is complete only when its exact allowlist covers
 report/config routes, command WebSocket admission, version/server bootstrap,
@@ -963,6 +1015,19 @@ tokens, and path-normalization variants.
     `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
+
+### Native disk History stays inside authenticated reads
+
+Store-backed single/all-metric disk History supplementation occurs only after
+the existing monitoring-read, tenant binding, resource selection and licensed
+window checks. Native reads use the current tenant's monitored provider, not
+a caller-selected host or credential. Failed store queries stay errors; a
+revoked or wrong-scope token cannot initiate native reads. The connected
+TrueNAS History route tests assert those refusals and unchanged native read
+counts before and after revocation. No write or cross-tenant fallback is added.
+
+
+This repair preserves the existing isolation boundary and introduces no host-IPC grant. Successful partial filesystem rows retain explicit completeness and degraded health; sanitized status exposes no raw provider errors. Native PVE recovery remains unproved. No old v6/v7 receipt is reinterpreted and no v8 qualification layer is introduced.
 
 ### Container diagnostics keeps copied material credential-free (1 October 2026)
 
@@ -3094,3 +3159,11 @@ the mock-mode synthetic series derived from that reading, when the temperature
 was not collected by the current observation. This only withholds a value the
 caller was already authorized to read; the route, its authentication and scope
 checks, tenant resolution and response shape are unchanged.
+
+The same endpoint also withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, and answers a lapsed agent linked to a Proxmox node from
+that node's row in the same monitor. This only withholds or substitutes values
+the caller could already read; the new `NodeView` and `DockerHostView`
+`SourceStatus` accessors expose no field beyond the delivery state the registry
+already records on the resource.

@@ -179,6 +179,11 @@ snapshots, not a shell, executable path, device path, VMID, daemon endpoint,
 environment, or caller-selected arguments. The helper
 service keeps `PrivateNetwork=true`, `RestrictAddressFamilies=AF_UNIX`,
 `NoNewPrivileges=true`, `ProtectSystem=strict`, and `ProtectHome=true`.
+The private network remains required on every architecture. In particular,
+systemd does not enforce `RestrictAddressFamilies` on native 32-bit x86;
+`SystemCallArchitectures=native` does not change that. The address-family
+property is not, by itself, proof that IP socket creation is denied. Do not
+remove `PrivateNetwork` to work around a telemetry failure.
 It also bounds the helper cgroup to `TasksMax=64`, `LimitNOFILE=256`, and
 `MemoryMax=256M`. These limits leave headroom for the typed helper and its
 short-lived platform tools while preventing an overridden or malformed request
@@ -187,6 +192,22 @@ from consuming unbounded process, descriptor, or memory resources.
 block devices. If the helper is missing, incompatible, or rejects a request,
 only the affected telemetry disappears; the collector does not fall back to
 sudo, root, or a broader local command path.
+
+Proxmox's `pct list` uses pmxcfs abstract Unix IPC, which is not reachable from
+the helper's private network namespace. On affected PVE hosts this leaves
+helper-backed LXC filesystem telemetry unavailable, while independent SMART
+and API monitoring can continue. Prefer the existing Proxmox API connection
+for the readings it provides; do not add a unit override or a root/sudo
+fallback. A successful SMART reading does not establish LXC helper health.
+
+When an inventory succeeds only partly, operation v2 preserves the collected
+rows and explicitly names omitted container IDs. The helper module stays
+degraded, and omitted containers cannot refresh old filesystem readings.
+Operation v1 remains complete-only; a newer collector uses it only when an
+older helper explicitly rejects v2. An unavailable inventory is not an empty
+healthy snapshot or zero disk usage. An installer-managed helper upgrade
+restarts the verified helper after checking the effective isolated unit and
+socket identity; a collector-only automatic update cannot replace its helper.
 
 The installer treats the effective systemd configuration as part of the safe
 profile boundary. The collector, helper service, helper socket, and an

@@ -175,12 +175,12 @@ Pulse includes a non-intrusive security warning system that helps you
 understand your security posture.
 
 ### Security Score
-Your instance receives a score from 0‑5 based on:
-- ✅ Credentials encrypted at rest (always enabled)
-- ✅ Export/import protection
-- ⚠️ Authentication enabled
-- ⚠️ HTTPS connection
-- ⚠️ Audit logging
+
+**Settings → Security → Overview** summarises authentication methods,
+API-token configuration, export protection, HTTPS and audit logging. These
+indicators describe configuration checks, not a complete security audit. A
+strong score does not establish that every file is encrypted, a backup is safe
+to share, or stored credentials can be recovered without their encryption key.
 
 ### Dismissing Warnings
 If you're comfortable with your security setup, you can dismiss warnings:
@@ -191,21 +191,61 @@ If you're comfortable with your security setup, you can dismiss warnings:
 ## Credential Security
 
 ### Encrypted at Rest (AES-256-GCM)
-- **Node credentials**: passwords and API tokens (`/etc/pulse/nodes.enc`)
-- **Email settings**: SMTP passwords (`/etc/pulse/email.enc`)
-- **Webhook data**: URLs and auth headers (`/etc/pulse/webhooks.enc`)
-- **Encryption key**: auto-generated (`/etc/pulse/.encryption.key`)
+
+Pulse encrypts configuration saved through its credential store. Examples in
+the **active data directory** include:
+
+| Stored configuration | File |
+| --- | --- |
+| Proxmox VE, PBS and PMG connection credentials | `nodes.enc` |
+| SMTP settings, including passwords | `email.enc` |
+| Webhook URLs and authentication headers | `webhooks.enc` |
+| TrueNAS and vSphere connection credentials | `truenas.enc`, `vmware.enc` |
+| AI provider credentials and SSO configuration | `ai.enc`, `sso.enc` |
+
+The directory is normally `/etc/pulse` for systemd or `/data` inside Docker;
+`PULSE_DATA_DIR` and deployment configuration can select another location.
+Use the existing deployment's actual data path, not an assumed default.
+
+### Encryption scope and recovery
+
+The auto-generated **`.encryption.key`** is stored alongside these files. It
+is key material, not an encrypted credential file. Anyone with the encrypted
+files **and their matching key** can decrypt them. Protect the entire data
+directory, mounted volume and recovery copies; encryption does not protect
+against an account or process that can read both. Pulse protects its key file
+with owner-only permissions (`0600`, with a `0700` parent directory); preserve
+the intended service ownership rather than granting wider access to fix a read
+failure.
+
+This is not whole-directory or whole-disk encryption. Deployment environment
+files, service definitions, agent token files, logs and history can still
+contain secrets or identifying details. Quick Security Setup saves a bcrypt
+password hash, but hashing an externally supplied plaintext `PULSE_AUTH_PASS`
+for use does not rewrite its original deployment source. Keep hashes and raw
+client credentials private too; see [private authentication configuration](docs/CONFIGURATION.md#private-docker-authentication-file).
+
+Keep encrypted files and their matching key together in a **private recovery
+backup**, not in a public attachment. Do not delete or regenerate the key, mix
+files from different instances, or reset the data directory to repair a
+decryption error. Preserve the existing files and reconcile the data path and
+matching backup first. A file copy alone is not verified recovery; follow the
+[server migration and restore guidance](docs/MIGRATION.md).
 
 ### Security Features
-- **Logs**: token values masked with `***` in all outputs
+- **Logs**: targeted masking and redaction are not a guarantee that every
+  output is safe to share. Free-text errors and historical records can contain
+  secrets or private details. Review excerpts locally; follow
+  [safe diagnostics collection](docs/TROUBLESHOOTING.md#collect-diagnostics-safely)
+  and the [log-sharing precautions](docs/TROUBLESHOOTING.md#inspect-notification-logs).
 - **API**: ordinary configuration reads redact stored credentials; newly issued
   tokens are deliberately revealed for their owner to save securely
 - **Export**: requires authentication (session, proxy auth, or `X-API-Token`
   header) to extract credentials
 - **Migration**: use passphrase-protected export/import (see
   [Migration Guide](docs/MIGRATION.md))
-- **Auto-migration**: unencrypted configs automatically migrate to encrypted
-  format
+- **Auto-migration**: supported legacy credential files migrate when loaded;
+  this does not scrub earlier backups or external deployment configuration
 
 ## Export/Import Protection
 
@@ -244,7 +284,8 @@ for sensitive data.
 ## Security Features Summary
 
 ### Core Protection
-- **Encryption**: credentials encrypted at rest (AES-256-GCM)
+- **Encryption**: credential-store files use AES-256-GCM, within the
+  [scope and recovery limits](#encryption-scope-and-recovery) above
 - **Export protection**: exports always encrypted with a passphrase
 - **Minimum passphrase**: 12 characters required for exports
 - **Security tab**: check status in *Settings → Security → Overview*
@@ -252,14 +293,16 @@ for sensitive data.
 ### Advanced Security (When Authentication Enabled)
 - **Password security**
   - Bcrypt hashing with cost factor 12 (60‑character hash)
-  - Passwords never stored in plain text
+  - Quick Security Setup persists the hash, not the password; external
+    deployment sources remain separately managed
   - Automatic hashing during security setup
   - **Critical**: bcrypt hashes must be exactly 60 characters
 - **API token security**
   - 64‑character hex tokens (32 bytes entropy)
   - SHA3-256 hashed before storage (64‑character hash)
   - Raw token shown only once
-  - Tokens never stored in plain text
+  - Pulse-issued token records store verification hashes; raw client and agent
+    token copies must remain private
   - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
 - **CSRF protection**: session-authenticated state changes require CSRF tokens;

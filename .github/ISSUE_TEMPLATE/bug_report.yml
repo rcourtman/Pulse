@@ -19,7 +19,12 @@ body:
     id: bug_description
     attributes:
       label: Describe the bug
-      description: What is broken, and what is the impact?
+      description: |
+        What is broken, where do you see it, and what is the impact? Distinguish the affected target (for example, a VM, LXC, Docker container, NAS or Pulse itself) from how the Pulse server is installed.
+        For missing readings, say whether the affected workload's usual UI was still responsive when the problem occurred. Use existing observations; write "unknown" if you cannot safely tell. Do not run another update, backup or guest-agent probe just to answer.
+
+        For reports involving several hosts or clusters, say which nodes share a cluster, which belong to independent installations, whether node names or guest IDs (VMIDs) repeat, and whether they share a backup destination.
+        Use consistent aliases for private names and addresses across the description, screenshots and logs; preserve which values repeat (for example, cluster A/node 1 and standalone B/node 1). Use existing observations, or write "unknown"; do not add, rename, remove or re-enrol anything just to answer.
       placeholder: A clear and concise description of the problem.
     validations:
       required: true
@@ -63,11 +68,20 @@ body:
       required: true
 
   - type: input
+    id: previous_version
+    attributes:
+      label: Last known working Pulse version
+      description: If you already observed the same behaviour working, give that version. The version before an upgrade is not necessarily a working baseline. Leave blank or write "unknown" if not known; do not downgrade, restart or repeat the action to find out.
+      placeholder: v6.x.y or unknown
+    validations:
+      required: false
+
+  - type: input
     id: agent_version
     attributes:
       label: Agent version
-      description: Exact agent version (or "none" if no agents are involved).
-      placeholder: v6.x.y or none
+      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      placeholder: v6.x.y, none, or unknown
     validations:
       required: true
 
@@ -84,6 +98,7 @@ body:
     id: install_type
     attributes:
       label: Installation type
+      description: How the Pulse server is installed, not the kind of workload being monitored.
       options:
         - Docker
         - Docker Compose
@@ -93,6 +108,15 @@ body:
         - Other
     validations:
       required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS / environment
+      description: Pulse server OS and, for platform-specific failures, the affected monitored platform and its release where known (for example, Proxmox VE 9.2 or TrueNAS SCALE 26 / CORE 13). Say whether the affected readings use the platform API, a Pulse agent, or both; keep this separate from the Pulse server's installation and version. Use existing settings or observations; leave blank or write "unknown" if unavailable. Do not run diagnostics, probe, restart or change a connection just to answer.
+      placeholder: Pulse on Debian 13; TrueNAS CORE 13.0-U6.1 via API, no Pulse agent
+    validations:
+      required: false
 
   - type: input
     id: installer_source
@@ -110,6 +134,12 @@ body:
       description: |
         Add relevant redacted logs or a reviewed GitHub diagnostics export for connection and data failures; for visual failures, a screenshot or exact error may be enough. Prefer existing evidence when new collection is unsafe.
         Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
+
+        For notification reports, distinguish an already-observed **Test** result from ordinary alert delivery: single, grouped/digest or resolved. Give the destination type (such as email or Telegram), built-in or custom template, original time and redacted error or missing host/resource context where known. A successful Test does not establish ordinary delivery or correct identity.
+        Use existing messages and queue details only; blank or "unknown" is valid. Do not send a Test, trigger an alert, retry/replay a queued message, clear the queue or change notification settings just to complete this report. Keep destination addresses, webhook URLs, chat IDs, tokens and full notification settings or payloads private.
+
+        For CPU, memory or disk-write reports, use existing readings or safe, passive observations. Say whether the reading covers the Pulse process, its container or the whole host, and give its units, measurement window and uptime. Include allocated CPUs or memory limit, fleet size, polling interval and open dashboards where relevant and known. A process-start CPU average is not a recent sampling window; database size is not a write rate.
+        Existing screenshots are useful; write "unavailable" when safe collection is not possible. Do not restart, create load or change polling or retention just to measure. Do not attach raw profiles, heap dumps, databases or full process command lines; summarise only relevant counters after local review.
     validations:
       required: false
 

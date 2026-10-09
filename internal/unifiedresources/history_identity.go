@@ -10,6 +10,76 @@ import (
 	"time"
 )
 
+// AlertResourceReference binds a collected alert subject to current canonical
+// inventory. Source targets are durable identities, never display names.
+type AlertResourceReference struct {
+	ResourceID    string
+	ResourceType  ResourceType
+	SourceTargets []SourceTarget
+}
+
+type AlertResourceReferenceResolver interface {
+	ResolveAlertResourceReference(string) (AlertResourceReference, bool)
+}
+
+// AlertResourceReferences captures current source ownership in one generation.
+// Scoped projections use this batch view instead of scanning every source
+// mapping once per resource when rebuilding a read-only registry.
+func (rr *ResourceRegistry) AlertResourceReferences() map[string]AlertResourceReference {
+	if rr == nil {
+		return nil
+	}
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	targets := rr.cachedSourceTargets
+	if rr.viewsDirty || targets == nil {
+		targets = rr.buildSourceTargetsIndexLocked()
+	}
+	bindings := make(map[string]AlertResourceReference, len(rr.resources))
+	for id, resource := range rr.resources {
+		bindings[id] = AlertResourceReference{ResourceID: id, ResourceType: resource.Type, SourceTargets: append([]SourceTarget(nil), targets[id]...)}
+	}
+	return bindings
+}
+
+// ResolveAlertResourceReference shares current-inventory identity with history
+// correlation. It never consults retained history bindings or matches names.
+// claimed is true for an inventory conflict as well as a successful binding;
+// conflicts have an empty ResourceID and must not fall back to another source.
+func (rr *ResourceRegistry) ResolveAlertResourceReference(ref string) (AlertResourceReference, bool) {
+	if rr == nil {
+		return AlertResourceReference{}, false
+	}
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	id, claimed := rr.resolveHistoryReferenceLocked(ref)
+	if id == "" {
+		return AlertResourceReference{}, claimed
+	}
+	resource := rr.resources[id]
+	if resource == nil {
+		return AlertResourceReference{}, true
+	}
+	var targets []SourceTarget
+	if !rr.viewsDirty && rr.cachedSourceTargets != nil {
+		targets = append([]SourceTarget(nil), rr.cachedSourceTargets[id]...)
+	} else {
+		targets = rr.collectSourceTargetsLocked(id, resource.Type)
+	}
+	return AlertResourceReference{ResourceID: id, ResourceType: resource.Type, SourceTargets: targets}, true
+}
+
+func (a *UnifiedAIAdapter) ResolveAlertResourceReference(ref string) (AlertResourceReference, bool) {
+	if a == nil || a.registry == nil {
+		return AlertResourceReference{}, false
+	}
+	return a.registry.ResolveAlertResourceReference(ref)
+}
+
+func (a *MonitorAdapter) ResolveAlertResourceReference(ref string) (AlertResourceReference, bool) {
+	return a.currentRegistry().ResolveAlertResourceReference(ref)
+}
+
 // legacyDockerHistoryIdentity accepts the source identifier emitted by Docker
 // alerts only when it contains a complete container ID. Names and short IDs
 // cannot establish durable identity after inventory removal.
@@ -128,7 +198,7 @@ func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceTyp
 	if rest, found := strings.CutPrefix(ref, "agent:"); found {
 		hostID, child, _ := strings.Cut(rest, "/")
 		kind, label, _ := strings.Cut(child, ":")
-		if hostID == "" || label == "" {
+		if hostID == "" || label == "" || strings.ContainsAny(label, "/\\") {
 			return "", "", false
 		}
 		switch kind {
@@ -160,12 +230,19 @@ func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceTyp
 // possibly ambiguously; an ambiguous or conflicting reference resolves to
 // nothing and must not follow a retained binding.
 func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID string, claimed bool) {
-	ref = CanonicalResourceID(ref)
-	if rr == nil || ref == "" {
+	if rr == nil {
 		return "", false
 	}
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
+	return rr.resolveHistoryReferenceLocked(ref)
+}
+
+func (rr *ResourceRegistry) resolveHistoryReferenceLocked(ref string) (resourceID string, claimed bool) {
+	ref = CanonicalResourceID(ref)
+	if ref == "" {
+		return "", false
+	}
 	if isDockerHistoryReference(ref) {
 		resourceID = rr.dockerHistoryOwnerLocked(ref)
 		return resourceID, resourceID != ""
@@ -181,7 +258,11 @@ func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID stri
 		// conflict: the event keeps its own reference.
 		owners := rr.durableHistoryMatchesLocked(ownerRef)
 		for id := range owners {
-			if len(owners) != 1 || CanonicalResourceType(rr.resources[id].Type) != ownerType {
+			owner := rr.resources[id]
+			// A linked agent retains ownership of its disk/sensor observations
+			// when its canonical resource is a VM, container or node.
+			typeMatches := CanonicalResourceType(owner.Type) == ownerType || (ownerType == ResourceTypeAgent && owner.Agent != nil)
+			if len(owners) != 1 || !typeMatches {
 				return "", true
 			}
 			matches[id] = struct{}{}

@@ -1540,6 +1540,13 @@ func buildScopeSection(scope *PatrolScope, effectiveIdentityAliases []string) st
 	if scope.AlertIdentifier != "" {
 		sb.WriteString(fmt.Sprintf("Alert Identifier: %s\n", scope.AlertIdentifier))
 	}
+	if ac := scope.AlertContext; ac != nil {
+		sb.WriteString(fmt.Sprintf("Collected alert subject: %q (%q)\nAlert: %s %s, value %.1f, threshold %.1f\nAlert message: %q\n",
+			ac.ResourceID, ac.ResourceName, ac.Level, ac.AlertType, ac.Value, ac.Threshold, ac.Message))
+		if ac.Mountpoint != "" || ac.Device != "" {
+			sb.WriteString(fmt.Sprintf("Alert filesystem: mountpoint %q, device %q.\n", ac.Mountpoint, ac.Device))
+		}
+	}
 	if scope.FindingID != "" {
 		sb.WriteString(fmt.Sprintf("Finding ID: %s\n", scope.FindingID))
 	}
@@ -2484,7 +2491,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				temperature:   tools.SplitDiskTemperature(r.PhysicalDisk.Temperature, r.PhysicalDisk.Collection),
 				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
 			}
-			row.temperatureLimits = snap.diskTemperatureLimits(physicalDiskTemperatureHost(r, owners), row.diskType)
+			row.temperatureLimits = physicalDiskTemperatureLimits(snap.thresholdProvider, r, owners)
 			rows = append(rows, row)
 		}
 		return rows
@@ -2658,7 +2665,7 @@ func patrolActiveAlertsInScope(snap patrolRuntimeState, scopedSet map[string]boo
 	}
 	alerts := make([]models.Alert, 0, len(snap.ActiveAlerts))
 	for _, alert := range snap.ActiveAlerts {
-		if seedIsInScope(scopedSet, alert.ResourceID) {
+		if patrolAlertBelongsToScope(snap, alert.ResourceID, scopedSet) {
 			alerts = append(alerts, alert)
 		}
 	}
@@ -2671,7 +2678,7 @@ func patrolResolvedAlertsInScope(snap patrolRuntimeState, scopedSet map[string]b
 	}
 	alerts := make([]models.ResolvedAlert, 0, len(snap.RecentlyResolved))
 	for _, resolved := range snap.RecentlyResolved {
-		if seedIsInScope(scopedSet, resolved.Alert.ResourceID) {
+		if patrolAlertBelongsToScope(snap, resolved.Alert.ResourceID, scopedSet) {
 			alerts = append(alerts, resolved)
 		}
 	}
@@ -3685,16 +3692,18 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	sb.WriteString(fmt.Sprintf("- Guest Memory warning: %.0f%%\n", thresholds.GuestMemWarning))
 	sb.WriteString(fmt.Sprintf("- Guest Disk warning: %.0f%%, critical: %.0f%%\n", thresholds.GuestDiskWarn, thresholds.GuestDiskCrit))
 	sb.WriteString(fmt.Sprintf("- Storage warning: %.0f%%, critical: %.0f%%\n", thresholds.StorageWarning, thresholds.StorageCritical))
-	if scope != nil && scope.Reason == TriggerReasonAlertFired && scope.AlertContext != nil {
+	if scope != nil && scope.AlertContext != nil && scope.Reason != TriggerReasonAlertCleared {
 		ac := scope.AlertContext
 		level := ac.Level
 		if level == "" {
 			level = "threshold"
 		}
-		sb.WriteString(fmt.Sprintf("Note: A live %s alert just fired on the scoped resource: %s = %.1f (threshold %.1f). "+
+		sb.WriteString(fmt.Sprintf("Note: This check investigates the collected %s alert on %q: %s = %.1f (threshold %.1f). "+
 			"Investigate the root cause of THIS breach specifically: what changed, whether it is transient or sustained, the blast radius on dependent workloads, and the concrete remediation. "+
 			"Reporting a finding for this breach is expected. It is the reason this patrol was triggered.\n\n",
-			level, ac.AlertType, ac.Value, ac.Threshold))
+			level, ac.ResourceName, ac.AlertType, ac.Value, ac.Threshold))
+	} else if scope != nil && scope.AlertContext != nil && scope.Reason == TriggerReasonAlertCleared {
+		sb.WriteString("Note: Verify that the collected alert's breach has resolved using current evidence.\n\n")
 	} else {
 		sb.WriteString("Note: The real-time alerting system monitors these thresholds continuously. Do NOT report findings for threshold breaches. Focus on trends, capacity planning, and issues alerts cannot detect.\n\n")
 	}

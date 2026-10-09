@@ -72,6 +72,42 @@ Pulse has collected; an absent tab is not proof of successful collection.
 For missing or stale data, use the [polling checks](#stale-truenas-data) before
 testing the connection or restarting.
 
+## Disk temperature and health
+
+In **TrueNAS → Storage**, read the disk's **Health** reason and details, not
+only its colour. Heat, native SMART faults and stale or missing readings are
+separate evidence. A cool disk can still have a SMART fault; a retained **last
+known** temperature is not a current reading, and no temperature is not zero.
+
+Check the saved rule in **Alerts → Thresholds → TrueNAS → TrueNAS Disks**:
+
+- A disk's own temperature override takes precedence over the **TrueNAS Disks**
+  default. With neither set, it inherits **Disk temperature by type**.
+- The inherited type policy is off when the agent **Disk Temp** default is off;
+  an explicit TrueNAS temperature rule can still enable it for TrueNAS disks.
+- Thresholds are in **°C**. Finish with **Save Changes**; an unsaved edit is not
+  the running rule. See [Off and inheritance](CONFIGURATION.md#metric-thresholds-off-and-inheritance).
+
+**Off is not recovery.** Switching off global or platform alerts silences
+alerts, not collection or disk-health evidence. Switching off a disk's
+Temperature rule disables that rule, not its native SMART faults. Acknowledging
+or dismissing a TrueNAS SMART alert does not repair the disk; its risk remains
+while TrueNAS still reports the condition.
+
+**Storage temperature judgement:** temperature colouring and its heat reason
+use the saved per-disk temperature override, then the TrueNAS-wide default,
+then the inherited agent/by-type policy. An Off or disabled temperature policy
+leaves the reading visible but unjudged; a last known reading is never current
+heat. A display mismatch is not proof that your saved rule failed. Compare the same disk, observation time and saved threshold with
+its existing TrueNAS reading and SMART state; do not raise thresholds, run new
+SMART tests, force a probe or restart merely to make the views agree.
+
+If reporting a mismatch, include only the disk type, saved threshold, redacted
+reason, time and whether the reading is current or last known. Use consistent
+aliases instead of hostnames, disk serials or device identifiers; keep the full
+diagnostics and configuration private. For missing or stale collection, use
+the [polling checks](#stale-truenas-data), not repeated connection tests.
+
 ## Multiple TrueNAS Systems
 
 Add as many TrueNAS connections as needed. Each connection is polled independently. Resources from all connected systems are merged into the unified view.
@@ -214,14 +250,34 @@ HTTP status and a manually redacted error, never the full response or headers.
 
 ### "TrueNAS service unavailable"
 
-- Check that the TrueNAS system is reachable from the Pulse server.
-- Verify the URL uses `https://`. Current TrueNAS releases require TLS for
-  remote API-key authentication.
-- Verify that the configured username owns the API key and has permission to
-  read the monitored methods.
-- Use **Test Connection** in Pulse. The connection's transport diagnostics
-  should report `jsonrpc-websocket` for TrueNAS 25.04 and later; do not test a
-  current appliance through the removed `/api/v2.0` REST endpoints.
+This exact Pulse error (`truenas_unavailable`, HTTP **500** or **503**) means
+Pulse's connection-management handler or configuration persistence is unavailable
+for that request. It does **not** establish that the TrueNAS appliance is down,
+that its API key is invalid, or that an ordinary poll failed.
+
+Keep the existing failed request's path, HTTP status, error code and time from
+your signed-in browser's **Developer tools → Network** panel; do not repeat a
+save, delete or test to collect them. Inspect a bounded Pulse startup/service
+log excerpt locally, using the readers below. Do not rotate the TrueNAS key,
+recreate the saved connection or weaken TLS verification to clear this error.
+Share only the Pulse version, request path, status/code and a manually redacted
+error, not the full response, configuration, key or session cookie.
+
+Distinguish these other results before choosing an action:
+
+- **`truenas_disabled` / HTTP 404**: Pulse's TrueNAS integration is explicitly
+  disabled. Check the intended `PULSE_ENABLE_TRUENAS` setting privately; this is
+  not an appliance outage or an instruction to override an intentional opt-out.
+- **`truenas_connection_failed` / HTTP 400**: a live connection test failed.
+  Use its retained error to distinguish reachability, TLS, API-key ownership or
+  read-permission problems. Keep HTTPS and certificate verification enabled;
+  TrueNAS 25.04 and later use `jsonrpc-websocket`, while recognized CORE 13
+  systems use legacy REST. Do not probe current TrueNAS through removed
+  `/api/v2.0` endpoints or repeatedly test to diagnose ordinary collection.
+- **Test succeeds but data is missing or stale**: Test reads system information
+  on a separate connection, not inventory or metric collection. Use the
+  [polling checks](#stale-truenas-data) and existing observation times instead
+  of changing credentials or treating the test time as recovered freshness.
 
 ### No data appearing after adding connection
 - Allow one configured polling cycle (60 seconds by default), not a fixed
@@ -231,16 +287,50 @@ HTTP status and a manually redacted error, never the full response or headers.
   the test succeeds. A successful test also does not establish live CPU, memory
   or History readings. The legacy REST diagnostic is expected for recognized
   CORE 13 systems; it is not itself a connection error.
-- Inspect a bounded local log excerpt for TrueNAS-related errors:
-  ```bash
-  journalctl -u pulse -n 100 --no-pager | grep -i truenas
-  # or
-  docker logs --tail 100 pulse 2>&1 | grep -i truenas
-  ```
-- If collection is safe, **Settings → Diagnostics → Export for GitHub
-  (sanitized)** can provide connection evidence. Review the export or log
-  excerpt before sharing: remove credentials, cookies, private hostnames,
-  addresses and webhook URLs. Do not upload configuration or credential files.
+- Preserve the existing error before testing or restarting. Follow the
+  [polling checks](#stale-truenas-data) to distinguish a completed failure from
+  missing or stale observations; a connection test is not a substitute.
+
+If a local log excerpt is needed, use the
+[bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs).
+Despite that section's notification heading, the unfiltered readers also
+cover TrueNAS polling and startup errors; no request ID is required. Choose
+only the reader for the deployment running **Pulse**, using an account
+authorised to read its logs. For Proxmox LXC, run it **inside the Pulse
+container**, not on the Proxmox host or the TrueNAS appliance. Substitute the
+actual service or container name (`pulse-backend` on some older systemd
+installs), and adjust the time window to the original incident.
+
+Those Bash recipes read at most 200 records from the last 15 minutes and
+require **GNU `timeout`**, with an eight-second deadline and one-second
+termination grace. A record limit alone does not bound a hung reader. If
+`timeout` is unavailable, stop; do not use an unbounded substitute. They do
+not follow logs, make API requests or change logging.
+
+Both output streams are captured because Docker can write application logs
+to stderr. An excerpt is shown only after a successful read; failure or
+timeout withholds partial output and reports the exit code. A nonzero reader
+exit, denied read or missing service/container is a failed read, not
+"no TrueNAS errors". Do not filter with `grep truenas`: relevant startup or
+storage errors may not contain that word. Even a successful empty read is
+inconclusive: check the window and selected instance, not the API key. Do not
+enable Debug or repeat the failing action just to collect more logs.
+
+Local logs are **not sanitised**. Share only the relevant timestamp, method,
+HTTP status or error category and a manually redacted error, not the whole
+excerpt. Remove credentials, cookies, secret URLs, private hostnames,
+addresses and personal information, including anything echoed in an error.
+Do not upload configuration or credential files.
+
+In **Settings → Diagnostics**, an existing result's download buttons reuse it
+without running the checks again; nothing is uploaded. Use **GitHub (review first)**
+for an export intended for sharing, but sanitisation does not guarantee that
+every error is safe to share. Open the downloaded file locally and review it
+before sharing; keep **Full (private)** private. **Run Diagnostics** makes live
+API and guest-agent requests:
+do not run it during a backup, freeze/thaw or an unresponsive-host incident
+merely to obtain an export. Keep the existing observations instead. See
+[safe diagnostics collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
 
 ### Inventory works but CPU, memory or History is missing
 

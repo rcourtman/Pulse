@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
@@ -38,17 +39,44 @@ type localProxmoxProvider struct {
 }
 
 func (p localProxmoxProvider) LXCFilesystems(ctx context.Context) (json.RawMessage, error) {
+	return p.lxcFilesystems(ctx, false)
+}
+
+func (p localProxmoxProvider) LXCFilesystemsV2(ctx context.Context) (json.RawMessage, error) {
+	return p.lxcFilesystems(ctx, true)
+}
+
+func (p localProxmoxProvider) lxcFilesystems(ctx context.Context, allowPartial bool) (json.RawMessage, error) {
 	collect := p.collect
 	if collect == nil {
 		collect = hostagent.CollectProxmoxLXCFilesystemsLocalResult
 	}
 	collection := collect(ctx)
-	if collection.Degraded {
+	if collection.Degraded && (!allowPartial || collection.Inventory == nil) {
 		return nil, &agenthelper.ProviderError{
 			Code:      agenthelper.ErrorProviderUnavailable,
 			Message:   "Proxmox LXC filesystem inventory is incomplete",
 			Retryable: true,
 		}
+	}
+	if collection.Inventory != nil {
+		if err := collection.Inventory.ValidateCollection(); err != nil ||
+			(allowPartial && collection.Inventory.Status == "") ||
+			(collection.Degraded != (collection.Inventory.Status == agentshost.ProxmoxLXCCollectionPartial)) ||
+			collection.FailedContainers != len(collection.Inventory.OmittedVMIDs) {
+			return nil, &agenthelper.ProviderError{Code: agenthelper.ErrorProviderUnavailable, Message: "Proxmox LXC filesystem inventory has invalid completeness", Retryable: true}
+		}
+	}
+	// V1 decoders are strict: do not add even complete-status fields to their
+	// response. A partial result never reaches an older collector as healthy.
+	if !allowPartial && collection.Inventory != nil {
+		legacy := struct {
+			Containers  []agentshost.ProxmoxLXCContainer `json:"containers"`
+			CollectedAt time.Time                        `json:"collectedAt"`
+		}{collection.Inventory.Containers, collection.Inventory.CollectedAt}
+		return json.Marshal(struct {
+			Inventory any `json:"inventory"`
+		}{legacy})
 	}
 	result, err := json.Marshal(struct {
 		Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`

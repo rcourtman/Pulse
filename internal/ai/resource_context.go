@@ -417,7 +417,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 						health = strings.ToUpper(strings.TrimSpace(disk.PhysicalDisk.Health))
 						// A retained last-known reading is not current heat.
 						collected := tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Collected
-						hot = diskTemperatureLimitsFor(thresholdProvider, physicalDiskTemperatureHost(disk, owners), disk.PhysicalDisk.DiskType).hot(collected)
+						hot = physicalDiskTemperatureLimits(thresholdProvider, disk, owners).hot(collected)
 					}
 					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || hot {
 						attention = append(attention, disk)

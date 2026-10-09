@@ -125,7 +125,7 @@ func TestGuestAlertUnavailableDiskInventoryIsNotRecovery(t *testing.T) {
 	}
 }
 
-func TestGuestAlertRetainedAggregateAndPendingCannotAdvance(t *testing.T) {
+func TestGuestAlertRetainedAggregateInterruptsPendingRun(t *testing.T) {
 	m := guestObservationManager(t)
 	vm := guestObservationVM()
 	vm.Disks = nil
@@ -149,8 +149,15 @@ func TestGuestAlertRetainedAggregateAndPendingCannotAdvance(t *testing.T) {
 	}
 	vm.Memory.Observation.State, vm.DiskStatusReason = "current", ""
 	m.CheckGuest(vm, "site")
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("fresh evidence must begin a new continuous delay")
+	}
+	m.mu.Lock()
+	m.core.ShiftPending(-2 * time.Minute)
+	m.mu.Unlock()
+	m.CheckGuest(vm, "site")
 	if len(m.GetActiveAlerts()) != 2 {
-		t.Fatal("fresh evidence must resume the existing delay policy")
+		t.Fatal("fresh continuous evidence must still complete the configured delay")
 	}
 }
 

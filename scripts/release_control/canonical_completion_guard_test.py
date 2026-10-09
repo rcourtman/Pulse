@@ -899,7 +899,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_auto_update_script_change_uses_deployment_script_policy(self):
+    def test_auto_update_script_change_uses_unattended_update_policy(self):
         required = infer_impacted_subsystems(["scripts/pulse-auto-update.sh"])
         self.assertEqual(set(required), {"deployment-installability"})
 
@@ -916,21 +916,59 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             installability["verification_requirements"],
             [
                 {
-                    "id": "deployment-script-runtime",
-                    "label": "deployment script runtime proof",
+                    "id": "unattended-update-runtime",
+                    "label": "unattended updater runtime proof",
                     "touched_runtime_files": ["scripts/pulse-auto-update.sh"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "scripts/installtests/install_docker_sh_test.go",
-                        "scripts/installtests/install_ps1_test.go",
-                        "scripts/installtests/install_sh_test.go",
+                        "scripts/installtests/pulse_auto_update_consent_test.go",
                         "scripts/installtests/pulse_auto_update_test.go",
-                        "scripts/installtests/root_install_sh_test.go",
                     ],
                 }
             ],
         )
+
+    def test_standalone_consent_proof_is_confined_to_unattended_updater(self):
+        rule = next(
+            rule for rule in load_subsystem_rules()
+            if rule["id"] == "deployment-installability"
+        )
+        proof = "scripts/installtests/pulse_auto_update_consent_test.go"
+        update_requirement = build_verification_requirements(
+            rule, ["scripts/pulse-auto-update.sh"]
+        )[0]
+        self.assertEqual(update_requirement["id"], "unattended-update-runtime")
+        self.assertEqual(
+            staged_verification_files_for_requirement(rule, update_requirement, [proof]),
+            [proof],
+        )
+        for unmatched in [[], ["scripts/installtests/unrelated_test.go"]]:
+            with self.subTest(unmatched=unmatched):
+                self.assertEqual(
+                    staged_verification_files_for_requirement(
+                        rule, update_requirement, unmatched
+                    ),
+                    [],
+                )
+        for runtime in [
+            "install.sh",
+            "scripts/install.ps1",
+            "scripts/install-docker.sh",
+            "scripts/install-container-agent.sh",
+            "docker-compose.yml",
+        ]:
+            with self.subTest(runtime=runtime):
+                requirements = build_verification_requirements(rule, [runtime])
+                self.assertTrue(requirements)
+                for requirement in requirements:
+                    self.assertNotEqual(requirement["id"], "unattended-update-runtime")
+                    self.assertEqual(
+                        staged_verification_files_for_requirement(
+                            rule, requirement, [proof]
+                        ),
+                        [],
+                    )
 
     def test_vite_config_change_uses_frontend_build_output_policy(self):
         required = infer_impacted_subsystems(["frontend-modern/vite.config.ts"])
@@ -1356,6 +1394,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
                         "internal/api/runtime_inventory_sources_test.go",
+                        "internal/api/truenas_disk_history_integration_test.go",
                         "pulse-enterprise:test/extensions_contract_test.go",
                     ],
                 }
@@ -2806,6 +2845,8 @@ None yet.
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/api/truenas_disk_history_integration_test.go",
+                        "internal/monitoring/disk_drawer_native_history_test.go",
                         "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
                         "internal/monitoring/monitor_metrics_slo_test.go",
                     ],
@@ -4229,6 +4270,11 @@ class DevPrepushScriptTest(unittest.TestCase):
             (repo / "scripts" / "dev-prepush.sh").write_text(
                 (REPO_ROOT / "scripts" / "dev-prepush.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
+            )
+            # This case checks per-commit contract binding, not browser proof.
+            # Real browser admission is exercised by test_dev_prepush_frontend.
+            (repo / "scripts" / "release_control" / "browser_verification_guard.py").write_text(
+                "import sys\nsys.exit(0)\n", encoding="utf-8",
             )
             (repo / "scripts" / "release_control" / "canonical_completion_guard.py").write_text(
                 """#!/usr/bin/env python3
