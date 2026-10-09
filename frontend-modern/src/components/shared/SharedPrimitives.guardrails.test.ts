@@ -4,6 +4,7 @@ import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { settingsDocumentationLinkViolations } from './__tests__/settingsDocumentationLinkContract';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
@@ -1844,7 +1845,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('ExternalTextLink');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AIProviderConfigurationSection.tsx',
-      'src/components/Settings/AIRuntimeControlsSection.tsx',
       'src/components/Settings/AISettingsDialogs.tsx',
       'src/components/Settings/APITokenManager.tsx',
       'src/components/Settings/AgentIntegrationsPanel.tsx',
@@ -1883,9 +1883,11 @@ describe('shared primitive guardrails', () => {
     expect(externalTextLinkSource).toContain('EXTERNAL_TEXT_LINK_REL');
     expect(externalTextLinkSource).toContain('target="_blank"');
     expect(externalTextLinkSource).toContain('rel={getExternalTextLinkRel');
+    // Removing an optional control may remove its whole documentation link.
+    // Check the surviving JSX without requiring that obsolete control back.
+    expect(settingsDocumentationLinkViolations(aiRuntimeControlsSectionSource)).toEqual([]);
     for (const source of [
       aiProviderConfigurationSectionSource,
-      aiRuntimeControlsSectionSource,
       aiSettingsDialogsSource,
       apiTokenManagerSource,
       agentIntegrationsPanelSource,
