@@ -567,8 +567,10 @@ check that the intended value persisted.
 
 For TrueNAS physical disks, read the [disk temperature and health guide](TRUENAS.md#disk-temperature-and-health)
 before changing a rule: heat, SMART faults and missing readings are different
-signals, and Storage display thresholds do not yet follow TrueNAS-wide or
-per-disk temperature overrides. Silencing an alert is not disk recovery.
+signals. Storage temperature colouring and heat reasons follow the saved
+per-disk override, then the TrueNAS-wide default, then the inherited by-type
+policy. Off leaves the temperature visible but unjudged; last known readings
+are not current heat. Silencing an alert is not disk recovery.
 
 ### Metric thresholds, Off and inheritance
 

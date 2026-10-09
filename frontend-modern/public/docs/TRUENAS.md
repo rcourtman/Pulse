@@ -94,10 +94,11 @@ Temperature rule disables that rule, not its native SMART faults. Acknowledging
 or dismissing a TrueNAS SMART alert does not repair the disk; its risk remains
 while TrueNAS still reports the condition.
 
-**Storage display limitation:** temperature colouring and its heat reason
-currently use the inherited agent/by-type policy, not the TrueNAS-wide or
-per-disk temperature override. A display mismatch is not proof that your saved
-rule failed. Compare the same disk, observation time and saved threshold with
+**Storage temperature judgement:** temperature colouring and its heat reason
+use the saved per-disk temperature override, then the TrueNAS-wide default,
+then the inherited agent/by-type policy. An Off or disabled temperature policy
+leaves the reading visible but unjudged; a last known reading is never current
+heat. A display mismatch is not proof that your saved rule failed. Compare the same disk, observation time and saved threshold with
 its existing TrueNAS reading and SMART state; do not raise thresholds, run new
 SMART tests, force a probe or restart merely to make the views agree.
 
