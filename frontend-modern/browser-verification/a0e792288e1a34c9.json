@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2e491f8b5b767bfb8c567dd07fd7c2750a5ebbbc",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "38d53d52decca63bb80afd7372ee8d2be0122dd476dcd7742dfc934c6f58af3a"
+  },
+  "routes": [
+    "/browser-tests/pbs-web-interface.html \u2014 real Backups server table and inline ResourceDetailDrawer, synthetic resources; not the full App"
+  ],
+  "states": [
+    "Two datastores per service; repeated PBS labels and a same-named linked host with a different URL",
+    "Invalid or absent URL; invalid, cleared and edited URL on surviving keyed rows",
+    "Real same-server details open, then closed; existing capacity and History identity unchanged"
+  ],
+  "interactions": [
+    "Native Tab/Enter and pointer/touch open only the explicit service-owned URL, intercepted before external navigation",
+    "Desktop keyboard Space and phone row touch open only the selected real inline drawer",
+    "Reorder datastores and same-labelled services, revoke URL, then edit; no old or host target substitution",
+    "Inspect seven screenshots, target bounds and horizontal overflow on light desktop and dark phone"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-09T10:12:00.970973Z",
+  "browser_evidence": "pulse-worker-browser frontend-modern/browser-tests/pbs-web-interface.cjs; Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0; two successful engine cases; seven inspected captures; completed browser/server closure. Source/fixture/lock hashes in retained outcome dossier. No off-origin request, live PBS, full-shell or release acceptance."
+}
