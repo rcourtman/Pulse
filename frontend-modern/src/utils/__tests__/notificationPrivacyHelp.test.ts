@@ -104,12 +104,7 @@ describe('notification evidence privacy help', () => {
         '#inspect-notification-logs',
         'notification log precautions',
       ],
-      [
-        'SYSTEMD_LOGS',
-        'TROUBLESHOOTING',
-        '#inspect-notification-logs',
-        'log-sharing precautions',
-      ],
+      ['SYSTEMD_LOGS', 'TROUBLESHOOTING', '#inspect-notification-logs', 'log-sharing precautions'],
       [
         'WEBHOOKS',
         'TROUBLESHOOTING',
