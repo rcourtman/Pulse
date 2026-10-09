@@ -282,16 +282,16 @@ describe('ProxmoxPageSurface contract', () => {
     const revealFrame = vi.spyOn(window, 'requestAnimationFrame');
 
     onShowGuests(node);
-    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('node|lab|pve1', 'pve');
     expect(revealFrame).toHaveBeenCalledTimes(1);
     revealFrame.mockClear();
-    mockSelectedNode.mockReturnValue('lab-pve1');
+    mockSelectedNode.mockReturnValue('node|lab|pve1');
     onShowGuests(node);
     expect(mockHandleNodeSelect).toHaveBeenLastCalledWith(null, null);
     expect(revealFrame).not.toHaveBeenCalled();
-    mockSelectedNode.mockReturnValue('lab-other');
+    mockSelectedNode.mockReturnValue('node|lab|other');
     onShowGuests(node);
-    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('node|lab|pve1', 'pve');
     expect(revealFrame).toHaveBeenCalledTimes(1);
     revealFrame.mockRestore();
   });

@@ -13,9 +13,29 @@ import {
   getWorkloadHostLabel,
   workloadHostScopeId,
   workloadNodeScopeId,
+  legacyWorkloadNodeScopeId,
 } from './workloadTopology';
 
 export type WorkloadNodeOption = WorkloadsFilterSelectOption;
+
+// A full scope wins over a label. Lossy legacy aliases and broad host hints
+// may select a node only when unique; an ambiguous hint stays a text filter.
+export const resolveWorkloadNodeHint = (
+  options: WorkloadNodeOption[],
+  hint: string,
+): WorkloadNodeOption | null => {
+  const value = hint.trim();
+  if (!value) return null;
+  const exact = options.filter((option) => option.value === value);
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  const legacy = options.filter((option) => legacyWorkloadNodeScopeId(option.value) === value);
+  if (legacy.length) return legacy.length === 1 ? legacy[0] : null;
+  const normalized = value.toLowerCase();
+  const labels = options.filter((option) => option.label.toLowerCase() === normalized);
+  if (labels.length) return labels.length === 1 ? labels[0] : null;
+  const partial = options.filter((option) => option.label.toLowerCase().includes(normalized));
+  return partial.length === 1 ? partial[0] : null;
+};
 
 export const deserializeWorkloadViewMode = (raw: unknown): ViewMode => {
   if (typeof raw !== 'string') return 'all';

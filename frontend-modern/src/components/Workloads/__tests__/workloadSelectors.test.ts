@@ -763,8 +763,8 @@ describe('workloadSelectors', () => {
       const comparator = createWorkloadSortComparator('name', 'asc');
       const grouped = groupWorkloads(guests, 'grouped', comparator);
 
-      expect(Object.keys(grouped).sort()).toEqual(['app-container:edge', 'cluster-a-node-a']);
-      expect(grouped['cluster-a-node-a'].map((g) => g.id)).toEqual(['vm-a', 'vm-b']);
+      expect(Object.keys(grouped).sort()).toEqual(['app-container:edge', 'node|cluster-a|node-a']);
+      expect(grouped['node|cluster-a|node-a'].map((g) => g.id)).toEqual(['vm-a', 'vm-b']);
     });
   });
 
@@ -920,7 +920,7 @@ describe('workloadSelectors', () => {
         instance: 'cluster-z',
       });
 
-      expect(getWorkloadGroupKey(vm)).toBe('inst-a-node-a');
+      expect(getWorkloadGroupKey(vm)).toBe('node|inst-a|node-a');
       expect(getWorkloadGroupKey(docker)).toBe('app-container:docker-edge');
       expect(getWorkloadGroupKey(k8s)).toBe('pod:worker-2');
     });
@@ -948,9 +948,9 @@ describe('workloadSelectors', () => {
   });
 
   describe('workloadNodeScopeId', () => {
-    it('builds node scope as instance-node with trimming', () => {
+    it('builds an encoded instance/node scope with trimming', () => {
       const guest = makeGuest(1, { instance: ' cluster-a ', node: ' node-a ' });
-      expect(workloadNodeScopeId(guest)).toBe('cluster-a-node-a');
+      expect(workloadNodeScopeId(guest)).toBe('node|cluster-a|node-a');
     });
   });
 

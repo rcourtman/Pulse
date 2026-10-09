@@ -50,7 +50,7 @@ import {
   buildNestedWorkloadContextByGuestId,
   type NestedWorkloadContextByGuestId,
 } from './nestedWorkloadContext';
-import { buildGuestParentNodeMapFromNodes } from './workloadTopology';
+import { buildGuestParentNodeMapFromNodes, workloadNodeScopeId } from './workloadTopology';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
@@ -234,17 +234,24 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
 
   const infrastructureNodes = createMemo<Node[]>(() => {
     const merged = new Map<string, Node>();
-    props.nodes.forEach((node) => merged.set(node.id, node));
+    const mergeNode = (node: Node) => {
+      // Two supplied nodes can share a lossy native ID. Keep their source
+      // tuples separate; only overlay snapshots for the same actual node.
+      const key = JSON.stringify([
+        node.id,
+        workloadNodeScopeId({ instance: node.instance, node: node.name }),
+      ]);
+      const existing = merged.get(key);
+      merged.set(key, existing ? { ...existing, ...node } : node);
+    };
+    props.nodes.forEach(mergeNode);
 
     if (workloadsEnabled()) {
       infrastructureResources()
         .filter(isProxmoxNodeResource)
         .map(nodeFromResource)
         .filter((node): node is Node => Boolean(node))
-        .forEach((node) => {
-          const existing = merged.get(node.id);
-          merged.set(node.id, existing ? { ...existing, ...node } : node);
-        });
+        .forEach(mergeNode);
     }
 
     return Array.from(merged.values());
@@ -546,6 +553,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     // Grouped node rows carry no metric cells, so this reader never polls
     // the infrastructure summary.
     series: 'guests',
+    nodes: infrastructureNodes,
   });
   const [workloadHistoryHintSeen, setWorkloadHistoryHintSeen] = usePersistentSignal<boolean>(
     STORAGE_KEYS.WORKLOADS_HISTORY_HINT_SEEN,

@@ -642,7 +642,7 @@ describe('workloadSelectors (branch coverage)', () => {
         instance: 'inst-1',
         node: 'node-1',
       });
-      expect(getWorkloadGroupKey(guest)).toBe('inst-1-node-1');
+      expect(getWorkloadGroupKey(guest)).toBe('node|inst-1|node-1');
     });
 
     it('falls back through contextLabel -> node -> instance -> namespace -> id', () => {
@@ -790,9 +790,9 @@ describe('workloadSelectors (branch coverage)', () => {
 
       const result = groupWorkloads(guests, 'grouped', null);
 
-      expect(Object.keys(result)).toEqual(['inst-nd']);
+      expect(Object.keys(result)).toEqual(['node|inst|nd']);
       // Original insertion order preserved (no comparator)
-      expect(result['inst-nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
+      expect(result['node|inst|nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
     });
 
     it('returns an empty object for empty guests in grouped mode', () => {
