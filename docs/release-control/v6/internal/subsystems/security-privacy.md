@@ -18,6 +18,19 @@
 
 ## Purpose
 
+### TLS pin failures remain local typed trust evidence
+
+`tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,
+normalisation, minimum TLS version and mismatch diagnostic, while returning a
+`FingerprintMismatchError` from the local verifier. Error wrapping retains the
+type; provider text repeating that diagnostic does not acquire it. Proxmox
+cluster first-use admission uses this distinction and never automatically
+replaces a known primary or member pin. `TestFingerprintVerifier_MismatchedFingerprint`
+in `pkg/tlsutil/tlsutil_test.go` checks digest identity, wrapping and rejection
+of quoted text; `TestClusterClientFingerprintTrustContract` supplies connected
+startup/recovery/first-use proof. CA verification and the existing explicit
+unverified-discovery modes are unchanged. No live security acceptance is claimed.
+
 ### Existing PMG collection choices constrain provider reads
 
 The owning PMG collector honours the saved mail, queue, quarantine and domain

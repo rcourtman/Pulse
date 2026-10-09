@@ -16,6 +16,17 @@ import (
 
 const minimumTLSVersion = tls.VersionTLS12
 
+// FingerprintMismatchError identifies a failed local certificate-pin check.
+// Provider response text mentioning a mismatch is not TLS trust evidence.
+type FingerprintMismatchError struct {
+	Expected string
+	Actual   string
+}
+
+func (e *FingerprintMismatchError) Error() string {
+	return fmt.Sprintf("certificate fingerprint mismatch: expected %s, got %s", e.Expected, e.Actual)
+}
+
 func verifyPresentedPeerCertificates(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	if len(rawCerts) == 0 {
 		return fmt.Errorf("no certificates presented by server")
@@ -107,8 +118,7 @@ func FingerprintVerifier(fingerprint string) *tls.Config {
 			actualFingerprint := hex.EncodeToString(fingerprint[:])
 
 			if actualFingerprint != expectedFingerprint {
-				return fmt.Errorf("certificate fingerprint mismatch: expected %s, got %s",
-					expectedFingerprint, actualFingerprint)
+				return &FingerprintMismatchError{Expected: expectedFingerprint, Actual: actualFingerprint}
 			}
 
 			return nil

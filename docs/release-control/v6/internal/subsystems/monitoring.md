@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Cluster recovery preserves established certificate pins
+
+Startup and unhealthy-endpoint recovery must not replace the configured primary
+fingerprint or a saved/previously captured member fingerprint after a TLS
+mismatch. No authenticated retry or unverified certificate capture is admitted
+for those known endpoints; their failure remains visible until the trusted
+certificate returns or the operator independently verifies and saves new trust.
+Equivalent URL spellings preserve the same pin without merging distinct scheme,
+port or base-path authorities.
+
+First-use trust remains available for a declared, previously untrusted member
+that fails the primary fingerprint check. Only the typed local TLS verifier
+failure admits this bootstrap, not a provider message quoting a mismatch.
+Capture itself sends no API credential. The subsequent API request verifies the
+captured pin. A competing capture cannot replace a pin established while its
+probe was in flight, and cancelled work cannot initiate or commit new trust.
+Runtime captures belong to the client, not the caller's saved fingerprint map.
+This does not add a certificate-management surface or persist new runtime trust.
+
+`TestClusterClientFingerprintTrustContract` checks changed and restored real TLS
+leaves through startup/recovery, token containment, known/equivalent pins,
+provider-text/undeclared/cancelled exclusions, concurrent first-use capture and
+ordinary first-use authenticated acceptance. The existing #1664 new-member
+control remains. These are secret-free loopback source proofs, not live cluster
+or installed acceptance, exploitation evidence or native guest recovery.
+
 ### Known Windows guests do not receive Linux-only memory reads
 
 An accepted guest OS reply identifying Windows suppresses the optional

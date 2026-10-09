@@ -560,8 +560,8 @@ func TestClusterClient_GetTaskLog(t *testing.T) {
 }
 
 // Issue #1664: refreshTOFUFingerprintAndRetry only refreshed endpoints that
-// already had a per-endpoint fingerprint entry, so it recovered certificate
-// rotation on known members but never first trust of a newly joined member.
+// already had a per-endpoint fingerprint entry, so a newly joined member could
+// never establish its first-use trust. Known-member rotation is not first use.
 // A new member has no entry and fell back to the primary's pinned
 // fingerprint forever.
 func TestClusterClient_TOFUFirstUse_TrustsNewMemberCert(t *testing.T) {
@@ -576,7 +576,7 @@ func TestClusterClient_TOFUFirstUse_TrustsNewMemberCert(t *testing.T) {
 	defer server.Close()
 
 	cfg := ClientConfig{
-		Host:        server.URL,
+		Host:        "https://primary.issue1664.invalid",
 		TokenName:   "root@pam!pulse",
 		TokenValue:  "secret",
 		Fingerprint: "DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF",
@@ -585,7 +585,17 @@ func TestClusterClient_TOFUFirstUse_TrustsNewMemberCert(t *testing.T) {
 	// no per-endpoint fingerprint entry, exactly like a freshly joined node.
 	cc := NewClusterClient("issue1664", cfg, []string{server.URL}, nil)
 
-	mismatch := errors.New("certificate fingerprint mismatch: expected DE:AD, got EF:B5")
+	pinnedConfig := cfg
+	pinnedConfig.Host = server.URL
+	pinned, err := NewClient(pinnedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pinned.httpClient.CloseIdleConnections()
+	_, mismatch := pinned.GetNodes(context.Background())
+	if !isFingerprintMismatchError(mismatch) {
+		t.Fatalf("expected a real TLS verifier mismatch, got %v", mismatch)
+	}
 	client, err, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), server.URL, 2*time.Second, mismatch)
 	if !refreshed {
 		t.Fatal("expected TOFU refresh to run for an endpoint with no stored fingerprint")
@@ -618,4 +628,9 @@ func TestClusterClient_TOFURefresh_IgnoresNonTLSMismatch(t *testing.T) {
 	if !errors.Is(err, plainErr) {
 		t.Fatalf("expected original error back, got %v", err)
 	}
+}
+
+// Keep the trust-boundary proof alongside cluster runtime qualification.
+func TestClusterClientFingerprintTrustContract(t *testing.T) {
+	testClusterClientFingerprintTrust(t)
 }

@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -150,6 +152,9 @@ func sanitizeEndpointError(errMsg string) string {
 	}
 
 	// TLS/certificate errors
+	if strings.Contains(lower, "fingerprint mismatch") {
+		return "TLS fingerprint changed - independently verify the certificate before updating the saved fingerprint"
+	}
 	if strings.Contains(lower, "certificate") || strings.Contains(lower, "x509") {
 		return "TLS certificate error - check SSL settings or add fingerprint"
 	}
@@ -173,14 +178,17 @@ func sanitizeEndpointError(errMsg string) string {
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
 func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
 	registerGuestAgentEndpoints(config.Host, endpoints)
-	if endpointFingerprints == nil {
-		endpointFingerprints = make(map[string]string)
+	// The client owns subsequent first-use captures. Do not mutate the caller's
+	// saved trust map or let another client overwrite it without our mutex.
+	ownedFingerprints := make(map[string]string, len(endpointFingerprints))
+	for endpoint, fingerprint := range endpointFingerprints {
+		ownedFingerprints[endpoint] = fingerprint
 	}
 	cc := &ClusterClient{
 		name:                 name,
 		clients:              make(map[string]*Client),
 		endpoints:            endpoints,
-		endpointFingerprints: endpointFingerprints,
+		endpointFingerprints: ownedFingerprints,
 		nodeHealth:           make(map[string]bool),
 		lastHealthCheck:      make(map[string]time.Time),
 		lastError:            make(map[string]string),
@@ -211,31 +219,76 @@ func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
 }
 
 func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) string {
-	if fp, ok := cc.endpointFingerprints[endpoint]; ok && fp != "" {
+	if fp, ok := cc.knownEndpointFingerprintLocked(endpoint); ok {
 		return fp
 	}
 	return cc.config.Fingerprint
 }
 
-func isFingerprintMismatchError(err error) bool {
-	return err != nil && strings.Contains(strings.ToLower(err.Error()), "fingerprint mismatch")
+func clusterEndpointKey(endpoint string) (string, bool) {
+	u, err := securityutil.NormalizeHTTPBaseURL(endpoint, "https")
+	if err != nil {
+		return "", false
+	}
+	// Reuse the origin/base-path identity used for guest coordination, without
+	// joining cluster aliases or changing the actual request/TLS authority.
+	return guestAgentEndpointKey(u.String())
 }
 
-// refreshTOFUFingerprintAndRetry refreshes a per-endpoint TOFU fingerprint after a mismatch and retries connectivity.
-// Returns (client, err, refreshed) where refreshed indicates whether TOFU refresh logic was applied.
+func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool) {
+	if fp := cc.endpointFingerprints[endpoint]; fp != "" {
+		return fp, true
+	}
+	key, valid := clusterEndpointKey(endpoint)
+	if !valid {
+		return "", false
+	}
+	for storedEndpoint, fp := range cc.endpointFingerprints {
+		if storedKey, ok := clusterEndpointKey(storedEndpoint); ok && storedKey == key && fp != "" {
+			return fp, true
+		}
+	}
+	return "", false
+}
+
+// Only a declared, previously untrusted member may use the primary pin as a
+// first-use bootstrap. A known member or the configured primary must keep its
+// established pin; recovery is never permission to replace it.
+func (cc *ClusterClient) canTrustMemberOnFirstUseLocked(endpoint string) bool {
+	key, valid := clusterEndpointKey(endpoint)
+	primary, primaryValid := clusterEndpointKey(cc.config.Host)
+	if !valid || !primaryValid || key == primary || cc.config.Fingerprint == "" {
+		return false
+	}
+	if _, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+		return false
+	}
+	for _, member := range cc.endpoints {
+		if memberKey, ok := clusterEndpointKey(member); ok && memberKey == key {
+			return true
+		}
+	}
+	return false
+}
+
+func isFingerprintMismatchError(err error) bool {
+	var mismatch *tlsutil.FingerprintMismatchError
+	return errors.As(err, &mismatch)
+}
+
+// refreshTOFUFingerprintAndRetry captures a new member's first-use pin, never
+// refreshes an established pin. Returns whether a pinned retry was attempted.
 func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, endpoint string, timeout time.Duration, lastErr error) (*Client, error, bool) {
-	if !isFingerprintMismatchError(lastErr) {
+	if ctx.Err() != nil || !isFingerprintMismatchError(lastErr) {
 		return nil, lastErr, false
 	}
 
-	// A member without a stored per-endpoint fingerprint fails against the
-	// base config's pinned fingerprint (the primary's). Cluster members carry
-	// their own certificates, so capture the member's fingerprint on first
-	// use just like discovery does, instead of pinning it to the primary's
-	// certificate forever.
 	cc.mu.RLock()
-	_, hasTOFU := cc.endpointFingerprints[endpoint]
+	firstUse := cc.canTrustMemberOnFirstUseLocked(endpoint)
 	cc.mu.RUnlock()
+	if !firstUse {
+		return nil, lastErr, false
+	}
 
 	newFingerprint, err := tlsutil.FetchFingerprint(endpoint)
 	if err != nil {
@@ -246,17 +299,26 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 			Msg("Failed to refresh TOFU fingerprint after mismatch")
 		return nil, lastErr, false
 	}
+	if ctx.Err() != nil {
+		return nil, lastErr, false
+	}
 
 	cc.mu.Lock()
-	cc.endpointFingerprints[endpoint] = newFingerprint
-	cc.mu.Unlock()
-
-	if hasTOFU {
-		log.Warn().
-			Str("cluster", cc.name).
-			Str("endpoint", endpoint).
-			Msg("Detected TLS certificate change; refreshed TOFU fingerprint")
+	captured := false
+	// A concurrent first-use capture may have established trust while the TLS
+	// probe was in flight. Use that winner's pin, not our later certificate.
+	if existing, known := cc.knownEndpointFingerprintLocked(endpoint); known {
+		newFingerprint = existing
 	} else {
+		if !cc.canTrustMemberOnFirstUseLocked(endpoint) {
+			cc.mu.Unlock()
+			return nil, lastErr, false
+		}
+		cc.endpointFingerprints[endpoint] = newFingerprint
+		captured = true
+	}
+	cc.mu.Unlock()
+	if captured {
 		log.Warn().
 			Str("cluster", cc.name).
 			Str("endpoint", endpoint).
