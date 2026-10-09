@@ -1,6 +1,7 @@
 import type { WorkloadGuest } from '@/types/workloads';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 
 // Exclusion-aware split of a free-text search. Terms prefixed with `-` hide
 // matching rows ("-watchtower" hides anything whose haystack contains
@@ -156,9 +157,12 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
     case 'cpu':
       value = getWorkloadCPUPercent('cpu' in guest ? guest.cpu : undefined) ?? 0;
       break;
-    case 'memory':
-      value = 'memory' in guest && guest.memory ? guest.memory.usage : 0;
+    case 'memory': {
+      const usage = getCurrentWorkloadMemoryUsage(guest);
+      if (usage === null) return false;
+      value = usage;
       break;
+    }
     case 'disk': {
       // Missing and retained reads are not zero (or current capacity).
       // Preserve the same provider/linked-agent freshness rule as the row.

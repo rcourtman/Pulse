@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import {
   computeWorkloadIOEmphasis,
@@ -1139,5 +1139,129 @@ describe('current guest disk selection', () => {
     expect(select([vm], 'disk>90')).toEqual([]);
     expect(getDiskUsagePercent(lxc)).toBe(95);
     expect(select([lxc], 'disk>90')).toEqual([lxc]);
+  });
+});
+
+describe('memory selection preserves displayed observation provenance', () => {
+  const guest = (id: string, usage: number, state = 'current'): WorkloadGuest =>
+    makeGuest(1, {
+      id,
+      name: id,
+      type: 'qemu',
+      workloadType: 'vm',
+      memory: {
+        total: 100,
+        used: usage,
+        free: 100 - usage,
+        usage,
+        observation: { state, source: 'guest-agent-meminfo', observedAt: '2026-10-08T00:00:00Z' },
+      },
+    });
+  const inventory = () => {
+    const unknown = guest('unknown', 99);
+    unknown.memory.observation = undefined;
+    const missing = guest('missing', 0);
+    missing.memory = undefined as unknown as WorkloadGuest['memory'];
+    return [
+      guest('retained', 99, 'last-known'),
+      unknown,
+      guest('current-high', 90),
+      guest('unavailable', 0, 'unavailable'),
+      missing,
+      guest('current-zero', 0),
+      guest('current-low', 10),
+    ];
+  };
+
+  it.each(['asc', 'desc'] as const)(
+    'keeps only current readings before retained and missing memory in %s order',
+    (direction) => {
+      const compare = createWorkloadSortComparator('memory', direction)!;
+      expect(
+        inventory()
+          .sort(compare)
+          .map((row) => row.id),
+      ).toEqual([
+        ...(direction === 'asc'
+          ? ['current-zero', 'current-low', 'current-high']
+          : ['current-high', 'current-low', 'current-zero']),
+        'missing',
+        'retained',
+        'unavailable',
+        'unknown',
+      ]);
+    },
+  );
+
+  it('qualifies host-share values before invoking the page-owned comparison', () => {
+    const memoryValue = vi.fn((row: WorkloadGuest) => (row.id === 'current-high' ? 5 : 50));
+    const compare = createWorkloadSortComparator('memory', 'desc', { memoryValue })!;
+    expect(
+      inventory()
+        .sort(compare)
+        .map((row) => row.id),
+    ).toEqual([
+      'current-low',
+      'current-zero',
+      'current-high',
+      'missing',
+      'retained',
+      'unavailable',
+      'unknown',
+    ]);
+    expect(
+      memoryValue.mock.calls.every(([row]) => row.memory.observation?.state === 'current'),
+    ).toBe(true);
+  });
+
+  it.each([undefined, null, NaN, Infinity, -1])(
+    'keeps a missing or invalid host-share value (%s) last in either direction',
+    (value) => {
+      const rows = [guest('zero', 0), guest('missing-host', 75), guest('high', 90)];
+      const memoryValue = (row: WorkloadGuest) =>
+        row.id === 'missing-host' ? value : row.memory.usage;
+      for (const direction of ['asc', 'desc'] as const) {
+        const compare = createWorkloadSortComparator('memory', direction, { memoryValue })!;
+        expect([...rows].sort(compare).map((row) => row.id)).toEqual([
+          ...(direction === 'asc' ? ['zero', 'high'] : ['high', 'zero']),
+          'missing-host',
+        ]);
+      }
+    },
+  );
+
+  it('keeps current memory independent of QEMU disk-read deferral', () => {
+    const value = {
+      ...guest('current', 90),
+      diskStatusReason: 'prev-vm-locked',
+      lock: 'backup',
+    };
+    const compare = createWorkloadSortComparator('memory', 'desc')!;
+    expect([guest('low', 10), value].sort(compare).map((row) => row.id)).toEqual([
+      'current',
+      'low',
+    ]);
+  });
+
+  it('updates numeric membership on same-identity source replacement without losing inventory access', () => {
+    const rows = inventory();
+    const filter = (searchTerm: string) =>
+      filterWorkloads({
+        guests: rows,
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm,
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      }).map((row) => row.id);
+    expect(filter('memory>85')).toEqual(['current-high']);
+    expect(filter('memory=0')).toEqual(['current-zero']);
+    expect(filter('name:retained')).toEqual(['retained']);
+    expect(filter('memory>85 OR name:retained')).toEqual(['retained', 'current-high']);
+    rows[0] = { ...rows[0], lastSeen: '2026-10-09T15:00:00Z' };
+    expect(filter('memory>85')).toEqual(['current-high']);
+    rows[0] = guest('retained', 99);
+    expect(filter('memory>85')).toEqual(['retained', 'current-high']);
   });
 });

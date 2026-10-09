@@ -37,6 +37,30 @@ touch through the existing drawer, checks long-name bounds, and rejects the curr
 parent with the same static fixture. No dev compiler or old terminated preview
 is replayed. Native recovery remains separate.
 
+### Workloads memory selection follows its displayed observation
+
+Memory sorting and numeric search use the same selected observation policy as
+Workloads row and drawer labels. Proxmox memory needs an explicit current state
+and usable original observation time. Last-known, unavailable, missing, future
+or unrecognised evidence cannot participate as current capacity; a reported
+current zero still can. Resource Last seen and QEMU disk-read deferrals cannot
+renew or withdraw independently observed memory. Valid unannotated unrelated
+platform readings retain their numeric behaviour.
+
+In either sort direction non-current or missing values follow all current
+readings, with the existing name/identity tiebreak. Host-capacity sorting first
+qualifies guest memory, then requires a finite non-negative comparison and a
+usable host total/used value; missing host capacity is not zero. Numeric search
+continues to compare guest usage percent, independently of the host display
+basis. Name search and OR conditions retain access to the whole inventory;
+same-identity source replacement updates selection without new collection.
+
+`workloadSelectors.test.ts`, its branch companion, `searchQuery.test.ts` and
+its branch companions, and `memoryObservation.test.ts` cover current/retained/
+unknown/invalid states, zero, original-time validity, host-share comparison,
+independent disk state and refresh membership. These are presentation/selection
+invariants, not native guest recovery, alert changes or release availability.
+
 **Memory freshness is preserved at the Workloads row boundary.**
 
 `GuestRow.tsx` qualifies selected memory once per reactive reading using the

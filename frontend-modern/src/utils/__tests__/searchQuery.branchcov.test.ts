@@ -109,25 +109,37 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
     expect(evaluateFilterStack(guestWithout(['cpu']), single(metric('cpu', '<', 1)))).toBe(true);
   });
 
-  it('memory: falsy/missing memory yields 0', () => {
-    // memory null -> guest.memory falsy -> 0; 0 > -1 true
+  it('memory: falsy/missing memory is not a measured zero', () => {
+    // Missing usage never satisfies a numeric comparison.
     expect(
       evaluateFilterStack(
         makeGuest({ memory: null as unknown as VM['memory'] }),
         single(metric('memory', '>', -1)),
       ),
-    ).toBe(true);
-    // memory key absent -> 0; 0 <= 0 true
+    ).toBe(false);
+    // An absent field cannot satisfy zero equality either.
     expect(evaluateFilterStack(guestWithout(['memory']), single(metric('memory', '<=', 0)))).toBe(
-      true,
+      false,
     );
   });
 
-  it('memory: compares the raw usage value when present', () => {
+  it('memory: compares a current reported percentage', () => {
     expect(
       evaluateFilterStack(
-        makeGuest({ memory: { usage: 900, total: 1000, used: 900, free: 100 } }),
-        single(metric('memory', '>', 500)),
+        makeGuest({
+          memory: {
+            usage: 90,
+            total: 1000,
+            used: 900,
+            free: 100,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
+        }),
+        single(metric('memory', '>', 85)),
       ),
     ).toBe(true);
   });
