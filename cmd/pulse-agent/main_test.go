@@ -1434,7 +1434,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("self-test", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-self-test"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-self-test"}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1442,7 +1442,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("invalid config", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-interval", "invalid"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-interval", "invalid"}, func(s string) string { return "" })
 		if err == nil {
 			t.Fatal("expected error for invalid config")
 		}
@@ -1450,7 +1450,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("version exits cleanly", func(t *testing.T) {
 		ctx := context.Background()
-		err := run(ctx, []string{"-version"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-version"}, func(s string) string { return "" })
 		if err != flag.ErrHelp {
 			t.Fatalf("expected flag.ErrHelp for -version, got %v", err)
 		}
@@ -1465,7 +1465,7 @@ func TestRun(t *testing.T) {
 		}()
 
 		// Use minimal config, no agents
-		err := run(ctx, []string{"-token", "T", "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
 		if err != nil && err != context.Canceled {
 			t.Errorf("expected nil or context.Canceled, got %v", err)
 		}
@@ -1492,7 +1492,7 @@ func TestRun(t *testing.T) {
 		}()
 
 		// Enable everything, but they will fail to init and log warnings, which is fine for coverage of run's branches
-		err := run(ctx, []string{"-token", "T", "-enable-host", "-enable-docker", "-enable-kubernetes", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
+		err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host", "-enable-docker", "-enable-kubernetes", "-health-addr", "127.0.0.1:0"}, func(s string) string { return "" })
 		if err != nil && err != context.Canceled && !strings.Contains(err.Error(), "disabled for test") {
 			t.Errorf("expected nil or context.Canceled or disabled for test, got %v", err)
 		}
@@ -1510,7 +1510,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("auto-detect podman", func(t *testing.T) {
@@ -1525,7 +1525,7 @@ func TestRun(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_ = run(ctx, []string{"-token", "T", "-enable-host=false"}, func(s string) string { return "" })
+		_ = run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-host=false"}, func(s string) string { return "" })
 	})
 
 	t.Run("goroutine error", func(t *testing.T) {
@@ -1566,7 +1566,7 @@ func TestDockerAutoDetectHonorsExplicitDisable(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	err := run(ctx, []string{"-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", ""}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-enable-host=false", "-enable-docker=false", "-enable-kubernetes=false", "-health-addr", ""}, func(s string) string { return "" })
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		t.Fatalf("run returned unexpected error: %v", err)
 	}
@@ -1681,10 +1681,12 @@ func TestRun_Success(t *testing.T) {
 	defer cancel()
 
 	// Run in a separate goroutine so we can wait for it
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
 		// Enable all agents
 		errCh <- run(ctx, []string{
+			"-state-dir", stateDir,
 			"-token", "T",
 			"-enable-host=true",
 			"-enable-docker=true",
@@ -1730,6 +1732,7 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 		return &mockRunnable{}, nil
 	}
 
+	stateDir := filepath.Join(t.TempDir(), "share", "CACHEDEV1_DATA", ".pulse-agent")
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -1737,17 +1740,17 @@ func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
 		"-token", "deadbeef",
 		"-enable-docker=false",
 		"-enable-kubernetes=false",
-		"-state-dir", "/share/CACHEDEV1_DATA/.pulse-agent",
+		"-state-dir", stateDir,
 	}, func(string) string { return "" })
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		t.Fatalf("run returned error: %v", err)
 	}
 
-	if updaterCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
-		t.Fatalf("updater state dir = %q, want %q", updaterCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
+	if updaterCfg.StateDir != stateDir {
+		t.Fatalf("updater state dir = %q, want %q", updaterCfg.StateDir, stateDir)
 	}
-	if hostCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
-		t.Fatalf("host agent state dir = %q, want %q", hostCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
+	if hostCfg.StateDir != stateDir {
+		t.Fatalf("host agent state dir = %q, want %q", hostCfg.StateDir, stateDir)
 	}
 }
 
@@ -2383,7 +2386,7 @@ func TestRun_AgentFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err := run(ctx, []string{"-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T", "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -2418,6 +2421,7 @@ func TestRun_PropagatesDisableCephToHostAgent(t *testing.T) {
 	defer cancel()
 
 	err := run(ctx, []string{
+		"-state-dir", t.TempDir(),
 		"-token", "T",
 		"-enable-host=true",
 		"-enable-docker=false",
@@ -2726,7 +2730,7 @@ func TestRun_WindowsServiceError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := run(ctx, []string{"-token", "T"}, func(s string) string { return "" })
+	err := run(ctx, []string{"-state-dir", t.TempDir(), "-token", "T"}, func(s string) string { return "" })
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -2761,9 +2765,10 @@ func TestRun_DockerRetry(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
-		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-state-dir", stateDir, "-token", "T", "-url", server.URL, "-enable-docker=true", "-enable-host=false"}, func(s string) string { return "" })
 	}()
 
 	select {
@@ -2865,10 +2870,11 @@ func TestRun_KubeRetry(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
+	stateDir := t.TempDir()
 	errCh := make(chan error)
 	go func() {
 		// Only enable kubernetes
-		errCh <- run(ctx, []string{"-token", "T", "-url", server.URL, "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
+		errCh <- run(ctx, []string{"-state-dir", stateDir, "-token", "T", "-url", server.URL, "-enable-kubernetes=true", "-enable-host=false", "-enable-docker=false"}, func(s string) string { return "" })
 	}()
 
 	select {
