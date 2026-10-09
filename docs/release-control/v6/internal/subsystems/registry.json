@@ -4485,6 +4485,7 @@
         ".github/workflows/release-dry-run.yml",
         ".github/workflows/release-lifecycle-rehearsal.yml",
         ".github/workflows/retry-release-convergence.yml",
+        ".github/workflows/test-e2e.yml",
         ".github/workflows/update-demo-server.yml",
         ".github/workflows/validate-release-assets.yml",
         "cmd/pulse-control-plane/main.go",
@@ -4545,6 +4546,7 @@
         "scripts/dev-deploy-agent.sh",
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
+        "scripts/e2e_test_images.py",
         "scripts/generate-release-notes.sh",
         "scripts/go-mod-download.sh",
         "scripts/hot-dev-bg.sh",
@@ -4598,6 +4600,7 @@
         "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
         "scripts/verify-github-release-integrity.sh",
+        "tests/integration/docker-compose.test.yml",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
@@ -5150,6 +5153,21 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/tests/test_go_mod_download.py"
+            ]
+          },
+          {
+            "id": "e2e-image-distribution",
+            "label": "same-run source-bound E2E image distribution proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/test-e2e.yml",
+              "scripts/e2e_test_images.py",
+              "tests/integration/docker-compose.test.yml"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_test_images.py"
             ]
           }
         ],
