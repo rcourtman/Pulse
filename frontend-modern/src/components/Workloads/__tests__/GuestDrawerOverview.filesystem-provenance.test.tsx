@@ -71,6 +71,40 @@ const filesystemRow = () => screen.getByText(path).closest('tr')!;
 afterEach(cleanup);
 
 describe('filesystem details do not promote retained usage to current health', () => {
+  it.each(['permission-denied', 'prev-permission-denied'])(
+    'shows scoped-access guidance for %s and clears it only on a new reading',
+    (reason) => {
+      const [value, setValue] = createSignal(guest({ diskStatusReason: reason }));
+      render(() => <GuestDrawerOverview {...props(value())} />);
+      const message = screen.getByText(/Do not widen intentionally scoped access/);
+      expect(message).toBeVisible();
+      expect(message).toHaveTextContent('If this VM is an intended monitoring target');
+      expect(message).toHaveTextContent('does not establish guest or filesystem health');
+      expect(message).toHaveTextContent('Defer access changes and live probes during backups');
+      const row = within(filesystemRow());
+      expect(row.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(
+        row.getByText(
+          reason.startsWith('prev-')
+            ? 'Last known 90% · 9.00 GB/10.0 GB · EXT4'
+            : 'Usage unavailable · ?/10.0 GB · EXT4',
+        ),
+      ).toBeVisible();
+      expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toHaveAttribute(
+        'href',
+        '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+      );
+      setValue(guest({ diskStatusReason: '' }));
+      expect(
+        screen.queryByText(/Do not widen intentionally scoped access/),
+      ).not.toBeInTheDocument();
+      expect(within(filesystemRow()).getByRole('progressbar')).toHaveAttribute(
+        'aria-valuenow',
+        '90',
+      );
+    },
+  );
+
   it.each(guestDiskDeferrals)(
     'keeps prev-%s values labelled, without a current utilization bar',
     (reason) => {
