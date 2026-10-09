@@ -46,7 +46,11 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                     self.assertNotIn("continue-on-error", step)
                     self.assertNotIn("if:", step)
                     self.assertNotIn("||", step)
-                self.assertIn("timeout-minutes: 10", install)
+                # WebKit's complete OS graph was still downloading when the
+                # former ten-minute cap killed a job before any test ran.
+                # Only that larger setup gets more aggregate acquisition time.
+                budget = 30 if job == "e2e" else 10
+                self.assertIn(f"timeout-minutes: {budget}\n", install)
                 self.assertIn("working-directory: tests/integration", install)
                 browsers = "chromium webkit" if job == "e2e" else "chromium"
                 self.assertIn(f"npx playwright install --with-deps {browsers}\n", install)
@@ -57,6 +61,9 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                     or step.startswith("Prove authenticated default")
                     or step.startswith("Run agent registration lifecycle")
                 ))
+                if job == "e2e":
+                    self.assertRegex(block, r"(?m)^    timeout-minutes: 60$")
+                    self.assertNotRegex(install, r"(?m)^        timeout-minutes: 10$")
 
     def test_all_browser_jobs_bound_setup_without_weakening_gates(self):
         self.assert_workflow_policy(WORKFLOW.read_text())
@@ -78,6 +85,8 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
         # Each mutation targets the fault, not an unrelated YAML assertion.
         for original, replacement in (
             ("        timeout-minutes: 10\n", ""),
+            ("        timeout-minutes: 30\n", "        timeout-minutes: 10\n"),
+            ("    timeout-minutes: 60\n", "    timeout-minutes: 90\n"),
             (INSTALL_POLICY, "echo no acquisition policy"),
             ("run: npx playwright install --with-deps chromium\n",
              "run: npx playwright install --with-deps chromium || true\n"),
