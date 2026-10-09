@@ -32,7 +32,9 @@ time for the monitor's previous-state input. Resource/VM JSON, identity,
 correlation and linked Pulse-agent precedence do not change.
 `TestGuestAgentEvidenceDoesNotChangeWireOrIdentity` and
 `TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge` check wire equality,
-identity equality, clone isolation and loss/recovery replacement.
+identity equality, clone isolation and loss/recovery replacement. The full-wire
+comparison fixes the independent construction clock for otherwise identical
+inputs; it does not omit a changed public field.
 
 
 ### Internal guest disk observation provenance

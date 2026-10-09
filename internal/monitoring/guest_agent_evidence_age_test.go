@@ -93,6 +93,50 @@ func testGuestAgentEvidenceCanonicalContinuity(t *testing.T) {
 	}
 }
 
+type guestEvidencePollClient struct {
+	metadataObservationClient
+	filesystems []proxmox.VMFileSystem
+}
+
+func (c *guestEvidencePollClient) GetVMStatus(context.Context, string, int) (*proxmox.VMStatus, error) {
+	return nil, nil
+}
+
+func (c *guestEvidencePollClient) GetVMFSInfo(context.Context, string, int) ([]proxmox.VMFileSystem, error) {
+	return c.filesystems, nil
+}
+
+func testGuestAgentEvidenceAcceptedReadOrigins(t *testing.T) {
+	for _, kind := range []string{"cached-metadata-empty-filesystem", "new-useful-metadata", "new-zero-filesystem"} {
+		t.Run(kind, func(t *testing.T) {
+			origin := time.Now().Add(-time.Minute)
+			cached := metadataObservationFixture(origin)
+			client := &guestEvidencePollClient{}
+			if kind == "new-useful-metadata" {
+				cached.fetchedAt = origin.Add(-20 * time.Minute)
+				client.version = "2.0"
+			}
+			if kind == "new-zero-filesystem" {
+				client.filesystems = []proxmox.VMFileSystem{{Mountpoint: "/", Type: "ext4", TotalBytes: 1000}}
+			}
+			m := &Monitor{rateTracker: NewRateTracker(), guestMetadataCache: map[string]guestMetadataCacheEntry{guestMetadataCacheKey("pve", "node", 105): cached}}
+			prev := models.VM{Type: "qemu", LastSeen: time.Now(), AgentVersion: "cached", GuestAgentEvidence: models.GuestAgentEvidence{Explicit: true, ObservedAt: origin}}
+			before := time.Now()
+			vm, _, _, _, _, ok := m.buildVMFromClusterResource(context.Background(), "pve", proxmox.ClusterResource{Type: "qemu", Node: "node", VMID: 105, Status: "running", MaxMem: 8000, MaxDisk: 1000}, client, "pve:node:105", nil, &prev)
+			if !ok {
+				t.Fatal("guest disappeared")
+			}
+			if kind == "cached-metadata-empty-filesystem" {
+				if vm.GuestAgentStatus == "available" || vm.GuestAgentEvidence.ObservedAt != origin || vm.AgentVersion != "1.0" || client.calls != 0 {
+					t.Fatalf("cached metadata renewed eligibility or availability: %+v / calls=%d", vm, client.calls)
+				}
+			} else if vm.GuestAgentStatus != "available" || vm.GuestAgentEvidence.ObservedAt.Before(before) || !hasRecentGuestAgentEvidence(&vm, time.Now()) {
+				t.Fatalf("current useful read did not restore its original eligibility time: %+v", vm)
+			}
+		})
+	}
+}
+
 // This body also runs on the exact parent: optional identity preservation is
 // not a new guest-agent observation. All HTTP endpoints here are synthetic.
 func testGuestAgentRetainedIdentityCannotRenewAdmission(t *testing.T) {

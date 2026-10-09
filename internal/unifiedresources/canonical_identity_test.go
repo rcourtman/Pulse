@@ -37,6 +37,9 @@ func TestGuestAgentEvidenceDoesNotChangeWireOrIdentity(t *testing.T) {
 	}
 	vm.GuestAgentEvidence = models.GuestAgentEvidence{}
 	legacyResource, legacyIdentity := resourceFromVM(vm)
+	// Construction captures the wall clock independently; hold that unrelated
+	// timestamp fixed while comparing every public byte of these same inputs.
+	legacyResource.UpdatedAt = resource.UpdatedAt
 	legacyWire, err := json.Marshal(legacyResource)
 	if err != nil || string(wire) != string(legacyWire) || !reflect.DeepEqual(identity, legacyIdentity) {
 		t.Fatal("internal admission evidence changed guest identity or public bytes")

@@ -335,7 +335,9 @@ func (m *Monitor) buildVMFromClusterResource(
 
 			state.guestAgentExpected = true
 			// Cached strings are display continuity, not a new successful read.
-			if state.guestAgentStatus != "deferred" && (state.diskFromAgent || m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, time.Now())) {
+			metadataAt := m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID)
+			metadataObserved := !metadataAt.Before(prePollTime) && !metadataAt.After(time.Now())
+			if state.guestAgentStatus != "deferred" && (state.diskFromAgent || metadataObserved) {
 				state.guestAgentStatus = "available"
 			}
 		}

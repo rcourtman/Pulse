@@ -28,7 +28,9 @@ their receipt once; expired, missing and future origins cannot admit a fallback.
 The existing ten-minute boundary, authoritative unavailable status, metadata
 backoff and every-command backup-lock/shared uncertainty fences remain intact.
 Cached display identity remains available, but cannot upgrade a failed/empty
-refresh to current availability. Linked Pulse-agent disks remain independent.
+refresh to current availability: a fallback needs a usable filesystem or useful
+metadata observed in that cycle to claim availability. Linked Pulse-agent disks
+remain independent.
 `TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
 repeated canonical replacement and both cluster/node collectors through a
 cancelled detail cycle, unavailable status, missing status and ordinary recovery
