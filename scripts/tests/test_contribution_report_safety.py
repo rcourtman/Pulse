@@ -17,6 +17,57 @@ def report_guidance() -> str:
 
 
 class ContributionReportSafetyTest(unittest.TestCase):
+    def contribution_surfaces(self):
+        return (
+            " ".join((ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split()),
+            " ".join((ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8").split()),
+        )
+
+    def test_no_new_external_pr_submission_instructions(self):
+        guide, template = self.contribution_surfaces()
+        for text in (guide, template):
+            with self.subTest(surface=text[:40]):
+                self.assertIn("not accepting unsolicited external pull requests", text)
+                self.assertNotRegex(text, r"(?i)(?:^|[.!?]\s+|\d+\.\s+)Open a PR\b")
+        self.assertNotIn("Submitting Requested Changes", guide)
+        self.assertNotIn("Every requested PR", guide)
+
+    def test_patch_is_optional_evidence_in_existing_issue(self):
+        guide, template = self.contribution_surfaces()
+        self.assertIn("## Sharing a tested patch", guide)
+        self.assertIn("**existing issue**", guide)
+        self.assertIn("do not open a new pull request", guide)
+        self.assertIn("not a condition of reporting", guide)
+        self.assertIn("not a promise that the change will be used", guide)
+        self.assertIn("https://github.com/rcourtman/Pulse/blob/main/CONTRIBUTING.md#sharing-a-tested-patch", template)
+        self.assertIn("Do not duplicate an existing report", template)
+
+    def test_old_requested_contributions_keep_their_disposition(self):
+        guide, template = self.contribution_surfaces()
+        self.assertIn("one requested in an earlier conversation", guide)
+        self.assertIn("reply and a disposition in its own thread", guide)
+        self.assertIn("equivalent maintainer fix with credit and a commit link", guide)
+        self.assertIn("already requested in an earlier conversation", template)
+        self.assertIn("reply and disposition in this thread", template)
+        for text in (guide, template):
+            with self.subTest(surface=text[:40]):
+                self.assertNotIn("please close it and open an issue instead", text)
+                self.assertIn("refile", text)
+        self.assertIn("Do not recreate it or refile evidence", guide)
+        self.assertIn("do not recreate the PR or refile its evidence", template)
+
+    def test_code_evidence_preserves_safety_and_publication_limits(self):
+        guide, template = self.contribution_surfaces()
+        for statement in (
+            "source version", "tests actually run and known limits",
+            "do not repeat an unsafe failure", "production installation",
+            "public branch also exposes its commit history",
+            "[SECURITY.md](SECURITY.md)", "fix reply credits its author",
+            "release availability and reporter confirmation remain separate facts",
+        ):
+            self.assertIn(statement, guide)
+        self.assertIn("test does not establish release availability", template)
+
     def test_collection_is_optional_and_distinct_from_downloading_a_result(self):
         text = " ".join(report_guidance().split())
         for statement in (

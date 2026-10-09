@@ -32,9 +32,17 @@ and installer tooling.
   repository.
 - Unsolicited pull requests may be closed without detailed review, even when the
   underlying idea is valid.
-- If I want code help on a specific issue, I will explicitly ask for it there.
-- Opening an issue first is the right path; it lets me confirm whether the
-  change fits the product direction before anyone spends time building a patch.
+- A report, diagnostic question or linked design is not an invitation to open
+  a pull request. You do not need to write a patch to report a problem.
+- If you already have a tested patch or branch, link it in the existing issue
+  as evidence, following [Sharing a tested patch](#sharing-a-tested-patch).
+  Maintainers handle implementation and source review through the project's
+  normal process; a supplied patch does not guarantee acceptance.
+- If a pull request already exists, especially one requested in an earlier
+  conversation, keep its link in that conversation. Do not recreate it or
+  refile evidence. It is owed a reply and a disposition in its own thread:
+  reviewed landing, or an equivalent maintainer fix with credit and a commit
+  link when the contribution is used.
 
 ## How To Make An Issue Useful
 
@@ -212,8 +220,10 @@ claims on the current documentation surface.
 
 ## Testing Expectations
 
-- Every requested PR should note the tests run (`go test`, frontend tests, or
-  `scripts/tests/run.sh`, as applicable).
+- Source changes and supplied patch evidence should note the tests actually run
+  (`go test`, frontend tests, or `scripts/tests/run.sh`, as applicable), the
+  source version and any untested behaviour. A passing test is not proof that
+  a change is available in a published release.
 - Add regression coverage when fixing bugs.
 - Mention manual verification steps (e.g., “Proxmox LXC installer tested on
   PVE 8.1”) if automated coverage is not feasible.
@@ -230,19 +240,22 @@ claims on the current documentation surface.
 
 ---
 
-## Submitting Requested Changes
+## Sharing a tested patch
 
-For maintainer-requested code help on a tracked issue:
+If you already have a patch or branch, link it from the **existing issue**;
+do not open a new pull request to submit it. Include the source version, the
+reported behaviour it changes, tests actually run and known limits. Existing
+test results are useful; do not repeat an unsafe failure or run against a
+production installation just to prepare a patch. A patch is optional evidence,
+not a condition of reporting and not a promise that the change will be used.
 
-1. Link the issue where the maintainer requested the patch.
-2. Fork + branch (`git checkout -b feature/my-change`).
-3. Make your edits and run relevant tests.
-4. Update docs and changelog entries as needed.
-5. Open a PR describing:
-   - What changed
-   - Why it changed
-   - Testing performed
-   - Rollout / migration concerns
+Review the linked branch, diff, logs and screenshots before sharing. Remove
+credentials, private configuration, diagnostics and identifying details; a
+public branch also exposes its commit history. Do not publish sensitive
+security evidence here; follow [SECURITY.md](SECURITY.md) instead.
 
-Reviewers will focus on correctness, security, and upgrade paths, so call out
-anything unusual up front.
+When a contribution is used, the fix reply credits its author and links the
+reviewed commit. A merged change is not necessarily in a published release;
+release availability and reporter confirmation remain separate facts. The
+development notes above are for local reproduction and validation, not an
+invitation to submit a pull request.
