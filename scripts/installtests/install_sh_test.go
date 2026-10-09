@@ -4514,6 +4514,19 @@ func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T)
 	}
 }
 
+// Exercise installer main only with confined transport and mutation doubles.
+// In particular, a mistaken remove choice exits before any real removal code.
+func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_menu.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("existing installer menu consent/target controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `

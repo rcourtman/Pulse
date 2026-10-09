@@ -793,7 +793,9 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 		`Update to $RC_VERSION (prerelease preview)`,
 		`--rc, --pre        Install latest prerelease preview version`,
 		`Prerelease channel detected in configuration`,
-		`Prerelease channel: get latest release (including prereleases, but skip drafts)`,
+		// Bind the menu to the complete server-release selector rather than
+		// requiring a removed, non-user-facing implementation comment.
+		`RC_VERSION=$(resolve_latest_release_tag_for_channel rc 2>/dev/null || true)`,
 	}
 	for _, needle := range requiredInstall {
 		if !strings.Contains(installScript, needle) {
