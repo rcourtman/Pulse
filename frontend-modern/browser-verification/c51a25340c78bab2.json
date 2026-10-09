@@ -1,7 +1,7 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "a6c9dc363e61e8e4f28d56250a0d6ba65d4233e5",
+  "base_sha": "19a0ff9b96ccd128c57b563030ebef034633119e",
   "changed_paths": [
     "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
     "frontend-modern/src/components/Workloads/workloadSelectors.ts",
@@ -37,7 +37,7 @@
       "height": 844
     }
   ],
-  "verified_at": "2026-10-09T15:55:20.856475+00:00",
+  "verified_at": "2026-10-09T15:55:20.856475Z",
   "browsers": [
     {
       "engine": "desktop",
