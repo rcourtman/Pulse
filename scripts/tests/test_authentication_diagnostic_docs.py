@@ -17,7 +17,8 @@ import threading
 import time
 import unittest
 
-from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
+from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl, recording_server,
+                                private_recording_server, request_helper)
 
 
 DOCUMENTS = {name: ROOT / f"docs/{name}.md" for name in ("AI_AUTONOMY", "PROXY_AUTH")}
@@ -32,6 +33,14 @@ EXPECTED_AI = (
 
 def blocks(name):
     return re.findall(r"```bash\n(.*?)```", DOCUMENTS[name].read_text(), re.DOTALL)
+
+
+def executable_ai_recipe(recipe):
+    # Exercise the shared guide helper, not a second implementation. Keep old
+    # direct-curl recipes runnable for the exact-parent regression control.
+    if "pulse_api " in recipe:
+        return request_helper() + "\n" + recipe
+    return recipe
 
 
 def markdown_section(source, heading):
@@ -85,8 +94,13 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                 shell = "\n".join(blocks(name))
                 self.assertNotRegex(shell, r"(?:admin:admin|\s-u\s|--user\b|X-Proxy-Secret:|\b\w*TOKEN=|--cookie\b)")
                 self.assertNotRegex(shell, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-                self.assertIn("curl --disable", shell)
-                self.assertIn("--header \"@", shell)
+                if name == "AI_AUTONOMY":
+                    self.assertEqual(len(blocks(name)), len(EXPECTED_AI))
+                    self.assertTrue(all(recipe.startswith("pulse_api ") for recipe in blocks(name)))
+                    self.assertNotIn("curl ", shell)
+                else:
+                    self.assertIn("curl --disable", shell)
+                    self.assertIn("--header \"@", shell)
 
     def test_docs_explain_permission_transport_and_end_to_end_limits(self):
         ai = DOCUMENTS["AI_AUTONOMY"].read_text()
@@ -103,6 +117,19 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         for name, doc in DOCUMENTS.items():
             self.assertEqual(doc.read_bytes(), (ROOT / f"frontend-modern/public/docs/{name}.md").read_bytes())
 
+    def test_ai_guidance_keeps_response_privacy_and_uncertain_writes_explicit(self):
+        guide = " ".join(DOCUMENTS["AI_AUTONOMY"].read_text().split())
+        for boundary in ("in the same Bash session", "not an installed Pulse command",
+                         "new owner-only file", "preserving earlier responses",
+                         "five-second connection", "twenty-second whole-request",
+                         "does not follow redirects or retry", "not a script to run",
+                         "in the helper", "redacted error", "partial response",
+                         "HTTP success is not proof", "after a change was applied",
+                         "If that read is unavailable, stop", "Supporting PUT in the helper grants no additional access",
+                         "do not repeat the write blindly"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, guide)
+
     def test_ai_recipes_send_only_the_intended_method_path_and_body(self):
         recipes = blocks("AI_AUTONOMY")
         self.assertEqual(len(recipes), len(EXPECTED_AI))
@@ -111,7 +138,8 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                 for recipe, (method, path, body) in zip(recipes, EXPECTED_AI):
                     with self.subTest(header=key, method=method, path=path), tempfile.TemporaryDirectory() as temporary:
                         before = len(requests)
-                        result = exercise_curl(self, Path(temporary), f"{key}: {value}", port, recipe)
+                        result = exercise_curl(self, Path(temporary), f"{key}: {value}", port,
+                                               executable_ai_recipe(recipe), private_response=True)
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
                         self.assertEqual(len(requests), before + 1)
                         sent_path, headers, sent_method, sent_body = requests[-1]
@@ -121,15 +149,49 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual(json.loads(sent_body) if body is not None else sent_body,
                                          body if body is not None else b"")
 
-    def test_ai_recipes_report_401_and_403_without_submitting_a_later_step(self):
-        for status in (401, 403):
-            with recording_server(status) as (port, requests):
+    def test_ai_recipes_keep_private_http_errors_without_submitting_a_later_step(self):
+        for status in (400, 401, 402, 403, 500, 503):
+            with private_recording_server(status) as (port, requests):
                 for recipe in blocks("AI_AUTONOMY"):
                     with self.subTest(status=status, recipe=recipe), tempfile.TemporaryDirectory() as temporary:
                         before = len(requests)
-                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port, recipe)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_ai_recipe(recipe), private_response=True)
                         self.assertEqual(result.returncode, 22)
                         self.assertEqual(len(requests), before + 1)
+                        self.assertIn(f"HTTP {status}".encode(), result.stdout)
+
+    def test_ai_recipes_keep_private_success_bodies_and_preserve_previous_responses(self):
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            for header in (f"X-API-Token: {TEST_TOKEN}", f"Authorization: Bearer {TEST_TOKEN}"):
+                for recipe, (method, path, body) in zip(blocks("AI_AUTONOMY"), EXPECTED_AI):
+                    with self.subTest(method=method, header=header.split(":")[0]):
+                        before = len(requests)
+                        result = exercise_curl(self, home, header, port,
+                                               executable_ai_recipe(recipe), private_response=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertIn(b"HTTP 200", result.stdout)
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+                        self.assertEqual(json.loads(requests[-1][3]) if body is not None else requests[-1][3],
+                                         body if body is not None else b"")
+            # One pre-existing file and one new private response per request.
+            self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 7)
+
+    def test_ai_recipes_do_not_follow_redirects_or_repeat_incomplete_writes(self):
+        for status, partial, expected_exit in ((302, False, 1), (200, True, 18)):
+            with private_recording_server(status, partial) as (port, requests):
+                for recipe, (method, path, body) in zip(blocks("AI_AUTONOMY"), EXPECTED_AI):
+                    with self.subTest(method=method, status=status, partial=partial), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_ai_recipe(recipe), private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1, "must not redirect or repeat a submitted write")
+                        self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+                        self.assertEqual(json.loads(requests[-1][3]) if body is not None else requests[-1][3],
+                                         body if body is not None else b"")
 
     def exercise_proxy(self, home, port, role, *, editor_exit=0, curl_exit=0):
         recipes = blocks("PROXY_AUTH")
