@@ -101,19 +101,39 @@ container updates are separate operations.
 
 ### ProxmoxVE LXC (Manual)
 
+Check which updater owns the installation before running a command. A container
+created with Proxmox community-scripts can have its own `/bin/update`; the path
+alone does not identify the Pulse-owned helper, and that updater can ignore
+`--version`.
+
+Run the following only if `/bin/update` was installed by the Pulse server
+installer:
+
 ```bash
 sudo /bin/update
 ```
 
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+If the helper is absent or its owner is unknown, use the
+[signed server-installer flow](INSTALL.md#2-bare-metal--systemd) with
+`PULSE_VERSION` set to the exact software tag. Follow the
+[backup and update precautions](INSTALL.md#manual-update) first. Agent updates
+still use the `/install.sh` command generated in **Settings → Infrastructure →
+Install on a host**.
+
+If a helper selects `helm-chart-*`, stop: that is a Helm chart release, not a
+Pulse server archive. Use a published software tag such as `vX.Y.Z`, not the
+first entry in the releases list; see
+[software releases and Helm charts](RELEASE_PROCESS.md#software-releases-and-helm-charts).
+For a running LXC, **Settings → System → Updates** uses Pulse's own release
+selector when an in-app update is offered. After a failed attempt, check the
+running version and service health before choosing another update route; do not
+repeat the failed helper or reinstall just to reproduce it.
 
 ### Systemd Service (Manual)
 
-```bash
-sudo /bin/update
-```
-
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+Use the same [helper ownership check and signed update route](#proxmoxve-lxc-manual)
+as an LXC installation. A helper at `/bin/update` is not proof of its provenance
+on a custom systemd install either.
 
 ### Source Build
 

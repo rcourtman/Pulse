@@ -1699,6 +1699,44 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("This also applies to rollback", server_updates)
         self.assertIn("Verify the installed version with `GET /api/version`", server_updates)
 
+    def test_manual_update_help_preserves_helper_ownership_and_software_identity(self) -> None:
+        automatic_updates = read("docs/AUTO_UPDATE.md")
+        lxc_updates = normalize_ws(
+            automatic_updates.split("### ProxmoxVE LXC (Manual)", 1)[1].split("\n### ", 1)[0]
+        )
+        systemd_updates = normalize_ws(
+            automatic_updates.split("### Systemd Service (Manual)", 1)[1].split("\n### ", 1)[0]
+        )
+        release_guide = normalize_ws(
+            read("docs/RELEASE_PROCESS.md").split("## Software releases and Helm charts", 1)[1]
+            .split("\n## ", 1)[0]
+        )
+
+        # The copied command must have its ownership condition before it, not
+        # an unconditional command followed by an assumed installer origin.
+        command_position = lxc_updates.index("sudo /bin/update")
+        self.assertIn(
+            "only if `/bin/update` was installed by the Pulse server installer",
+            lxc_updates[:command_position],
+        )
+        self.assertIn("that updater can ignore `--version`", lxc_updates)
+        self.assertIn("the helper is absent or its owner is unknown", lxc_updates)
+        self.assertIn("[signed server-installer flow](INSTALL.md#2-bare-metal--systemd)", lxc_updates)
+        self.assertIn("`PULSE_VERSION` set to the exact software tag", lxc_updates)
+        self.assertIn("[backup and update precautions](INSTALL.md#manual-update)", lxc_updates)
+        self.assertIn("check the running version and service health", lxc_updates)
+        self.assertIn("do not repeat the failed helper or reinstall just to reproduce it", lxc_updates)
+        self.assertIn("[helper ownership check and signed update route](#proxmoxve-lxc-manual)", systemd_updates)
+        self.assertNotIn("sudo /bin/update", systemd_updates)
+
+        self.assertIn("`helm-chart-*`", lxc_updates)
+        self.assertIn("not a Pulse server archive", lxc_updates)
+        self.assertIn("not the first entry in the releases list", lxc_updates)
+        self.assertIn("List order does not establish the latest software release", release_guide)
+        self.assertIn("cannot update a systemd or Proxmox LXC server", release_guide)
+        self.assertIn("disabling signature verification", release_guide)
+        self.assertIn("Settings → System → Updates", lxc_updates)
+
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()
