@@ -7,6 +7,7 @@ database, Docker socket, workload or destination is used.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/TROUBLESHOOTING.md"
@@ -156,12 +158,64 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
                 try:
                     # A reaped process or a zombie cannot keep running a reader.
                     remaining = state.read_text().rsplit(") ", 1)[1].split()[0]
-                except FileNotFoundError:
+                except (FileNotFoundError, ProcessLookupError):
+                    # Linux can reap the reader after /proc opens but before
+                    # read(), returning ESRCH rather than ENOENT. Both mean
+                    # this reader is gone; other observation errors still fail.
                     remaining = None
                 self.assertIn(remaining, (None, "Z"), "owned reader survived the collection deadline")
             log = directory / "calls.jsonl"
             calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
+
+    def observe_reader_state(self, observation: str | OSError):
+        """Drive the actual deadline assertion without sleeping or signalling."""
+        original_read_text = Path.read_text
+        reader_stat = Path("/proc/4321/stat")
+
+        def synthetic_collection(copied, env):
+            directory = Path(env["RECIPE_FIXTURE"])
+            (directory / "hung-reader.json").write_text(json.dumps({"pid": 4321}))
+            return subprocess.CompletedProcess(["synthetic collection"], 137, "", "unavailable")
+
+        def read_text(path, *args, **kwargs):
+            if path == reader_stat:
+                if isinstance(observation, OSError):
+                    raise observation
+                return observation
+            return original_read_text(path, *args, **kwargs)
+
+        with mock.patch(f"{__name__}.run_owned", side_effect=synthetic_collection), \
+                mock.patch.object(Path, "read_text", autospec=True, side_effect=read_text):
+            return self.exercise("docker", copied="synthetic command; never executed")
+
+    def test_deadline_readback_accepts_reader_reaped_before_open(self):
+        result, _ = self.observe_reader_state(FileNotFoundError(errno.ENOENT, "test-only missing reader"))
+        self.assert_unavailable(result)
+
+    def test_deadline_readback_accepts_reader_reaped_during_read(self):
+        result, _ = self.observe_reader_state(ProcessLookupError(errno.ESRCH, "test-only reaped reader"))
+        self.assert_unavailable(result)
+
+    def test_deadline_readback_accepts_nonrunning_zombie(self):
+        result, _ = self.observe_reader_state("4321 (test ) reader) Z 0 0 0")
+        self.assert_unavailable(result)
+
+    def test_deadline_readback_rejects_surviving_readers(self):
+        for state in ("R", "S", "D", "T"):
+            with self.subTest(state=state), self.assertRaisesRegex(AssertionError, "reader survived"):
+                self.observe_reader_state(f"4321 (test ) reader) {state} 0 0 0")
+
+    def test_deadline_readback_does_not_hide_other_observation_errors(self):
+        for error in (PermissionError(errno.EACCES, "test-only denied read"),
+                      OSError(errno.EIO, "test-only failed read")):
+            with self.subTest(error=type(error).__name__), self.assertRaises(type(error)):
+                self.observe_reader_state(error)
+
+    def test_deadline_readback_does_not_accept_malformed_observations(self):
+        for observation in ("", "4321 (reader)", "4321 (reader) "):
+            with self.subTest(observation=observation), self.assertRaises(IndexError):
+                self.observe_reader_state(observation)
 
     def assert_unavailable(self, result):
         self.assertNotEqual(result.returncode, 0)
