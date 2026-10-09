@@ -136,6 +136,28 @@ def run_owned(copied: str, env: dict[str, str]):
         return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
 
 
+def observe_owned_reader_exit(pid: int):
+    """Require termination, with bounded readback inside the existing 83s budget.
+
+    Closing the command's pipes is not a process-termination observation. Do
+    not accept a live state; allow at most half a second for readback to show
+    that this already-signalled synthetic reader is gone or cannot run.
+    """
+    deadline = time.monotonic() + 0.5
+    state = Path(f"/proc/{pid}/stat")
+    while True:
+        try:
+            remaining = state.read_text().rsplit(") ", 1)[1].split()[0]
+        except (FileNotFoundError, ProcessLookupError):
+            return None
+        if remaining == "Z":
+            return remaining
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return remaining
+        time.sleep(min(0.01, left))
+
+
 class PerformanceTroubleshootingDocsTest(unittest.TestCase):
     def exercise(self, deployment: str, *, counters: tuple[str, str] = DEFAULT_IO,
                  copied: str | None = None, **settings: str):
@@ -154,22 +176,14 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
             hung_reader = directory / "hung-reader.json"
             if hung_reader.exists():
                 pid = json.loads(hung_reader.read_text())["pid"]
-                state = Path(f"/proc/{pid}/stat")
-                try:
-                    # A reaped process or a zombie cannot keep running a reader.
-                    remaining = state.read_text().rsplit(") ", 1)[1].split()[0]
-                except (FileNotFoundError, ProcessLookupError):
-                    # Linux can reap the reader after /proc opens but before
-                    # read(), returning ESRCH rather than ENOENT. Both mean
-                    # this reader is gone; other observation errors still fail.
-                    remaining = None
+                remaining = observe_owned_reader_exit(pid)
                 self.assertIn(remaining, (None, "Z"), "owned reader survived the collection deadline")
             log = directory / "calls.jsonl"
             calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
 
     def observe_reader_state(self, observation: str | OSError):
-        """Drive the actual deadline assertion without sleeping or signalling."""
+        """Drive the actual assertion without a real recipe or signalling."""
         original_read_text = Path.read_text
         reader_stat = Path("/proc/4321/stat")
 
@@ -200,6 +214,35 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
     def test_deadline_readback_accepts_nonrunning_zombie(self):
         result, _ = self.observe_reader_state("4321 (test ) reader) Z 0 0 0")
         self.assert_unavailable(result)
+
+    def test_deadline_readback_requires_observed_exit_not_closed_pipes(self):
+        clock = [0.0]
+        states = ["4321 (reader) R 0", "4321 (reader) R 0", "4321 (reader) Z 0"]
+        with mock.patch.object(Path, "read_text", side_effect=states) as read, \
+                mock.patch.object(time, "monotonic", side_effect=lambda: clock[0]), \
+                mock.patch.object(time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0] + delay)):
+            self.assertEqual(observe_owned_reader_exit(4321), "Z")
+        self.assertEqual(read.call_count, 3)
+        self.assertEqual(clock[0], 0.02)
+
+    def test_deadline_readback_still_refuses_a_live_reader_after_bounded_wait(self):
+        clock = [0.0]
+        with mock.patch.object(Path, "read_text", return_value="4321 (reader) R 0"), \
+                mock.patch.object(time, "monotonic", side_effect=lambda: clock[0]), \
+                mock.patch.object(time, "sleep", side_effect=lambda delay: clock.__setitem__(0, clock[0] + delay)):
+            self.assertEqual(observe_owned_reader_exit(4321), "R")
+        self.assertAlmostEqual(clock[0], 0.5)
+
+    def test_deadline_readback_keeps_exit_and_observation_errors_distinct(self):
+        for error in (FileNotFoundError(errno.ENOENT, "test-only reaped"),
+                      ProcessLookupError(errno.ESRCH, "test-only reaped during read")):
+            with self.subTest(error=type(error).__name__), \
+                    mock.patch.object(Path, "read_text", side_effect=["4321 (reader) R 0", error]), \
+                    mock.patch.object(time, "sleep"):
+                self.assertIsNone(observe_owned_reader_exit(4321))
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError(errno.EACCES, "test-only denied")):
+            with self.assertRaises(PermissionError):
+                observe_owned_reader_exit(4321)
 
     def test_deadline_readback_rejects_surviving_readers(self):
         for state in ("R", "S", "D", "T"):
