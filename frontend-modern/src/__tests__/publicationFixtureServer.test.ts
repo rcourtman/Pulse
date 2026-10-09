@@ -13,7 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 it('passes the standalone publication fixture server suite', async () => {
   const { stdout, stderr } = await run(
     process.execPath,
-    ['--test', 'browser-tests/publication-fixture-server.test.cjs'],
+    ['--test', '--test-reporter=tap', 'browser-tests/publication-fixture-server.test.cjs'],
     { cwd: root, timeout: 25000, maxBuffer: 1024 * 1024 },
   );
   expect(stdout).toContain('# fail 0');
