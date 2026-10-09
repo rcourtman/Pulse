@@ -64,6 +64,66 @@ else:
 
 
 class UpdateRecoveryDocsTest(unittest.TestCase):
+    def assert_host_update_entry(self, text):
+        # The entry point must hand off to the ownership-checked procedure,
+        # not execute whichever program happens to be called /bin/update.
+        self.assertIn("](INSTALL.md#-updates)", text)
+        self.assertNotRegex(text, r"```(?:bash|sh|shell)\b")
+        self.assertNotRegex(text, r"\bsudo\s+/bin/update\b")
+
+    def test_manual_host_entries_do_not_execute_an_unidentified_helper(self):
+        lxc = section("AUTO_UPDATE", "ProxmoxVE LXC (Manual)", "###")
+        systemd = section("AUTO_UPDATE", "Systemd Service (Manual)", "###")
+        for entry in (lxc, systemd):
+            self.assert_host_update_entry(entry)
+            with self.assertRaises(AssertionError):
+                self.assert_host_update_entry(entry + "\n```bash\nsudo /bin/update\n```\n")
+        self.assertIn("inside the existing Pulse LXC", lxc)
+        self.assertIn("not on the Proxmox host", lxc)
+        self.assertIn("community-scripts installation", lxc)
+        self.assertIn("helper whose owner is unknown", systemd)
+        self.assertIn("default installation paths", systemd)
+
+    def test_chart_selection_help_preserves_evidence_and_exact_installer_trust(self):
+        text = " ".join(section("AUTO_UPDATE", "A helper selects a Helm-chart release", "###").split())
+        for phrase in (
+            "`vX.Y.Z`", "`helm-chart-*`", "not the Linux server archive",
+            "does not establish", "latest-release pointer is wrong",
+            "preserve the selected tag and error", "GitHub personal access token",
+            "bypass signatures", "unknown helper may ignore `--version`",
+            "download its installer before", "running version and service health",
+            "configuration, keys and history", "Do not recreate the LXC",
+            "exact `PULSE_VERSION`", "installed service and paths",
+            "Private Pro installations must retain their private runtime",
+            "not confirmation", "INSTALL.md#-updates", "#update-failed",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("```", text, "No alternate unverified download or repair recipe")
+
+        # The linked public installer recipe downloads both files from the
+        # selected release, not a moving /latest asset URL. Its executable
+        # download/signature failure controls live in test_signed_installer_docs.
+        recipes = [block for block in re.findall(r"```bash\n(.*?)```", guide("INSTALL"), re.S)
+                   if "ssh-keygen -Y verify" in block]
+        self.assertEqual(len(recipes), 2)
+        for recipe in recipes:
+            self.assertIn('/releases/download/${PULSE_VERSION}/install.sh"', recipe)
+            self.assertIn('/releases/download/${PULSE_VERSION}/install.sh.sshsig"', recipe)
+            self.assertNotIn("/latest/", recipe)
+
+    def test_install_update_link_keeps_helper_ownership_and_existing_paths(self):
+        text = " ".join(section("INSTALL", "Manual Update", "####").split())
+        for phrase in (
+            "helper is absent or its owner is unknown", "stop before executing it",
+            "existing service and data/config paths", "default paths over a custom deployment",
+            "private Pro runtime with a public build", "inside the existing Pulse LXC",
+            "AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release",
+            "unknown or download-failing helper", "Do not recreate the LXC",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     def exercise(self, recipe, **settings):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
