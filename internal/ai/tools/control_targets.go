@@ -133,59 +133,78 @@ func controlResourceTypeForKind(kind string) (unifiedresources.ResourceType, boo
 }
 
 // canonicalResourceForResolved maps a session-resolved resource back to its
-// unified-inventory record. It matches on the canonical ID that query tools
-// register as an alias, then on provider identity (Proxmox VMID on the same
-// node, app-container provider ID on the same host, agent name). It never
-// matches on host names, IP addresses, or tags, which the alias list also
-// carries: those are lookup conveniences, not identity, and a write must not
-// bind to a neighbour by accident.
+// unified-inventory record only when its identity is unambiguous. Provider
+// IDs and node/host names can recur across independent installations.
 func canonicalResourceForResolved(provider UnifiedResourceProvider, resolved ResolvedResourceInfo) (unifiedresources.Resource, bool) {
+	candidates := canonicalResourcesForResolved(provider, resolved)
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	return unifiedresources.Resource{}, false
+}
+
+// canonicalResourcesForResolved prefers canonical IDs over placement/name
+// hints, but collects every match at each tier. Conflicting canonical aliases
+// and ambiguous legacy placement must not be resolved by listing order.
+func canonicalResourcesForResolved(provider UnifiedResourceProvider, resolved ResolvedResourceInfo) []unifiedresources.Resource {
 	if provider == nil || resolved == nil {
-		return unifiedresources.Resource{}, false
+		return nil
 	}
 	resourceType, ok := controlResourceTypeForKind(firstNonEmptyString(resolved.GetKind(), resolved.GetResourceType()))
 	if !ok {
-		return unifiedresources.Resource{}, false
+		return nil
 	}
 	candidates := provider.GetByType(resourceType)
-	for _, alias := range resolved.GetAliases() {
+	var matches []unifiedresources.Resource
+	seen := make(map[string]bool)
+	addMatch := func(resource unifiedresources.Resource) {
+		id := strings.TrimSpace(resource.ID)
+		if id != "" && !seen[id] {
+			seen[id] = true
+			matches = append(matches, resource)
+		}
+	}
+	for _, alias := range append([]string{resolved.GetResourceID()}, resolved.GetAliases()...) {
 		alias = strings.TrimSpace(alias)
 		if alias == "" {
 			continue
 		}
 		for _, resource := range candidates {
 			if strings.EqualFold(strings.TrimSpace(resource.ID), alias) {
-				return resource, true
+				addMatch(resource)
 			}
 		}
+	}
+	if len(matches) > 0 {
+		return matches
 	}
 	switch resourceType {
 	case unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer:
 		vmid := resolved.GetVMID()
 		node := strings.TrimSpace(resolved.GetNode())
 		if vmid <= 0 {
-			return unifiedresources.Resource{}, false
+			return nil
 		}
 		for _, resource := range candidates {
 			if resource.Proxmox == nil || resource.Proxmox.VMID != vmid {
 				continue
 			}
 			if node == "" || strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), node) {
-				return resource, true
+				addMatch(resource)
 			}
 		}
 	case unifiedresources.ResourceTypeAppContainer:
 		providerUID := strings.TrimSpace(resolved.GetProviderUID())
 		host := strings.TrimSpace(resolved.GetTargetHost())
 		if providerUID == "" {
-			return unifiedresources.Resource{}, false
+			return nil
 		}
 		for _, resource := range candidates {
 			if !strings.EqualFold(strings.TrimSpace(appContainerProviderID(resource)), providerUID) {
 				continue
 			}
 			if host == "" || strings.EqualFold(strings.TrimSpace(canonicalAppContainerHost(resource)), host) {
-				return resource, true
+				addMatch(resource)
 			}
 		}
 	case unifiedresources.ResourceTypeAgent:
@@ -193,12 +212,12 @@ func canonicalResourceForResolved(provider UnifiedResourceProvider, resolved Res
 			name := strings.TrimSpace(resourceDisplayName(resource))
 			for _, alias := range resolved.GetAliases() {
 				if name != "" && strings.EqualFold(name, strings.TrimSpace(alias)) {
-					return resource, true
+					addMatch(resource)
 				}
 			}
 		}
 	}
-	return unifiedresources.Resource{}, false
+	return matches
 }
 
 // canonicalControlCandidates resolves a model-supplied reference against the
@@ -226,12 +245,11 @@ func canonicalControlCandidates(provider UnifiedResourceProvider, ref string) []
 }
 
 // resolveControlTarget binds a pulse_control reference to a canonical
-// resource. Session context is consulted first because it is what the model
-// just saw, but a reference that is absent from the session and resolves
-// uniquely in the unified inventory is registered and accepted: the inventory
-// is Pulse's own discovery, so demanding a second in-session "discovery" step
-// is an ordering accident, not a safety property. Capability, approval, and
-// execution stay with the shared action lifecycle.
+// resource. An explicit canonical ID wins over stale session aliases. Other
+// session references must have unambiguous current identity. A reference absent
+// from the session but unique in inventory is still accepted without a second
+// discovery step. Capability, approval and execution stay with the shared
+// action lifecycle.
 func (e *PulseToolExecutor) resolveControlTarget(ref, action string) (controlTarget, *CallToolResult) {
 	target := controlTarget{}
 	if e.resolvedContext != nil {
@@ -243,45 +261,44 @@ func (e *PulseToolExecutor) resolveControlTarget(ref, action string) (controlTar
 	}
 
 	if e.unifiedResourceProvider != nil {
-		if target.session != nil {
-			if resource, ok := canonicalResourceForResolved(e.unifiedResourceProvider, target.session); ok {
-				target.canonical = &resource
-			}
+		inventoryCandidates := canonicalControlCandidates(e.unifiedResourceProvider, ref)
+		if len(inventoryCandidates) == 1 && strings.EqualFold(strings.TrimSpace(inventoryCandidates[0].ID), strings.TrimSpace(ref)) {
+			resource := inventoryCandidates[0]
+			target.canonical = &resource
 		}
-		if target.canonical == nil {
-			candidates := canonicalControlCandidates(e.unifiedResourceProvider, ref)
+		if target.canonical == nil && target.session != nil {
+			candidates := canonicalResourcesForResolved(e.unifiedResourceProvider, target.session)
 			switch len(candidates) {
 			case 0:
 			case 1:
 				resource := candidates[0]
 				target.canonical = &resource
-				if target.session == nil && e.resolvedContext != nil {
-					if reg, ok := CanonicalHandoffResourceRegistration(e.unifiedResourceProvider, resource.ID, "", string(unifiedresources.ContractResourceType(resource)), ""); ok {
-						e.registerResolvedResourceWithExplicitAccess(reg)
-						if res, ok := e.resolvedContext.GetResolvedResourceByID(resource.ID); ok && res != nil {
-							target.session = res
-						} else if res, ok := e.resolvedContext.GetResolvedResourceByAlias(reg.Name); ok && res != nil {
-							target.session = res
-						}
-					}
-				}
 			default:
-				ids := make([]string, 0, len(candidates))
-				for _, candidate := range candidates {
-					ids = append(ids, fmt.Sprintf("%s (%s)", candidate.ID, unifiedresources.ContractResourceType(candidate)))
-				}
-				sort.Strings(ids)
-				result := NewToolResponseResult(NewToolBlockedError(
-					agentcapabilities.ErrCodeInvalidInput,
-					fmt.Sprintf("%d canonical resources are named %q; call pulse_control again with one of these canonical resource ids: %s.", len(candidates), ref, strings.Join(ids, ", ")),
-					map[string]interface{}{
-						"resource_id":     ref,
-						"action":          action,
-						"candidates":      ids,
-						"policy_boundary": "Ambiguous target reference. Retry with a canonical resource id from this list; this is a lookup detail, not a missing prerequisite.",
-					},
-				))
+				result := ambiguousControlTargetResult(ref, action, candidates)
 				return target, &result
+			}
+		}
+		if target.canonical == nil {
+			candidates := inventoryCandidates
+			switch len(candidates) {
+			case 0:
+			case 1:
+				resource := candidates[0]
+				target.canonical = &resource
+			default:
+				result := ambiguousControlTargetResult(ref, action, candidates)
+				return target, &result
+			}
+		}
+		if target.canonical != nil && target.session == nil && e.resolvedContext != nil {
+			resource := *target.canonical
+			if reg, ok := CanonicalHandoffResourceRegistration(e.unifiedResourceProvider, resource.ID, "", string(unifiedresources.ContractResourceType(resource)), ""); ok {
+				e.registerResolvedResourceWithExplicitAccess(reg)
+				if res, ok := e.resolvedContext.GetResolvedResourceByID(resource.ID); ok && res != nil {
+					target.session = res
+				} else if res, ok := e.resolvedContext.GetResolvedResourceByAlias(reg.Name); ok && res != nil {
+					target.session = res
+				}
 			}
 		}
 	}
@@ -312,6 +329,24 @@ func (e *PulseToolExecutor) resolveControlTarget(ref, action string) (controlTar
 	}
 
 	return target, nil
+}
+
+func ambiguousControlTargetResult(ref, action string, candidates []unifiedresources.Resource) CallToolResult {
+	ids := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		ids = append(ids, fmt.Sprintf("%s (%s)", candidate.ID, unifiedresources.ContractResourceType(candidate)))
+	}
+	sort.Strings(ids)
+	return NewToolResponseResult(NewToolBlockedError(
+		agentcapabilities.ErrCodeInvalidInput,
+		fmt.Sprintf("%d canonical resources match %q; call pulse_control again with one of these canonical resource ids: %s.", len(candidates), ref, strings.Join(ids, ", ")),
+		map[string]interface{}{
+			"resource_id":     ref,
+			"action":          action,
+			"candidates":      ids,
+			"policy_boundary": "Ambiguous target reference. Retry with a canonical resource id from this list; this is a lookup detail, not a missing prerequisite.",
+		},
+	))
 }
 
 // controlPlanFailureResult turns a planning error into tool evidence the model
