@@ -12,7 +12,13 @@ describe('systemLogsPresentation', () => {
     expect(SYSTEM_LOGS_PANEL_COPY).toEqual({
       title: 'System Logs',
       description: 'Stream live system logs and download support bundles.',
-      levelLabel: 'Log Level:',
+      levelLabel: 'Server Log Level:',
+      levelHelp:
+        'Changes logging for the whole Pulse server. Debug can include private guest names and paths. Keep the current level unless needed.',
+      displayHelp:
+        'Pause and Clear affect this display only. Monitoring and server logging continue. This is not a backup safety pause. Messages received while paused are not added to the display.',
+      bundleHelp:
+        'Support bundles include server logs, configuration and environment details, not just the lines shown here. Pausing or clearing this display does not remove them. Keep the archive private. Share only manually reviewed, redacted excerpts.',
       clearTitle: 'Clear Log Output',
       downloadLabel: 'Support Bundle',
       emptyState: 'Waiting for log output.',
