@@ -84,6 +84,12 @@ describe('notification evidence privacy help', () => {
         'notification log precautions',
       ],
       [
+        'TROUBLESHOOTING',
+        'TROUBLESHOOTING',
+        '#inspect-notification-logs',
+        'log-sharing precautions',
+      ],
+      [
         'WEBHOOKS',
         'TROUBLESHOOTING',
         '/docs/TROUBLESHOOTING#recover-retained-delivery-failures',
@@ -91,8 +97,10 @@ describe('notification evidence privacy help', () => {
       ],
     ];
     for (const [from, to, href, label] of cases) {
-      const link = guides[from].querySelector(`a[href="${href}"]`);
-      expect(link?.textContent).toBe(label);
+      // Different entry points can name the same precaution section. Verify
+      // each intended labelled link, not whichever happens to be first.
+      const links = Array.from(guides[from].querySelectorAll(`a[href="${href}"]`));
+      expect(links.map((link) => link.textContent)).toContain(label);
       expect(guides[to].querySelector(href.slice(href.indexOf('#')))).not.toBeNull();
     }
   });
