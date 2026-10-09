@@ -91,6 +91,11 @@ describe('notification evidence privacy help', () => {
         '#### Recover retained delivery failures',
         '#### Emails not sending',
       ),
+      SYSTEMD_LOGS: sectionArticle(
+        'TROUBLESHOOTING',
+        "#### Filter Pulse's systemd journal by severity",
+        '#### VMs show "-" for disk usage',
+      ),
     };
     const cases = [
       [
@@ -98,6 +103,12 @@ describe('notification evidence privacy help', () => {
         'TROUBLESHOOTING',
         '#inspect-notification-logs',
         'notification log precautions',
+      ],
+      [
+        'SYSTEMD_LOGS',
+        'TROUBLESHOOTING',
+        '#inspect-notification-logs',
+        'log-sharing precautions',
       ],
       [
         'WEBHOOKS',

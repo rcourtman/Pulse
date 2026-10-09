@@ -132,14 +132,14 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
     ).toBe(true);
   });
 
-  it('disk: falsy/missing disk yields 0', () => {
+  it('disk: falsy/missing disk does not match a low-usage condition', () => {
     expect(
       evaluateFilterStack(
         makeGuest({ disk: null as unknown as VM['disk'] }),
         single(metric('disk', '<', 1)),
       ),
-    ).toBe(true);
-    expect(evaluateFilterStack(guestWithout(['disk']), single(metric('disk', '<', 1)))).toBe(true);
+    ).toBe(false);
+    expect(evaluateFilterStack(guestWithout(['disk']), single(metric('disk', '<', 1)))).toBe(false);
   });
 
   it('uptime: running guest uses the uptime value', () => {

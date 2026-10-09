@@ -245,14 +245,13 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
       ).toBe(true);
     });
 
-    it('returns 0 when disk is null (falsy short-circuit)', () => {
-      // null disk -> 0 ; 0 <= 0 true
+    it('does not substitute zero when disk is null', () => {
       expect(
         evaluateFilterStack(
           makeGuest({ disk: null as unknown as VM['disk'] }),
           single(metric('disk', '<=', 0)),
         ),
-      ).toBe(true);
+      ).toBe(false);
     });
   });
 

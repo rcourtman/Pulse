@@ -3019,6 +3019,24 @@ precedence, reinterpret ratios above an arbitrary threshold, or replace an
 established provider history series; source authority and canonical identity
 convergence belong upstream in the unified-resource and monitoring contracts.
 
+Workloads disk selection follows the same guest-read freshness rule as the
+row and drawer in `frontend-modern/src/utils/workloadGuestPresentation.ts`.
+`workloadSelectors.ts` sorts current available readings before unavailable or
+last-known readings in **both** directions; retaining a labelled number for
+inspection does not promote it to a current capacity observation.
+`frontend-modern/src/utils/searchQuery.ts` must not match a numeric `disk`
+condition from absent, explicitly unavailable, negative-sentinel or non-finite
+usage, or from a non-current guest filesystem read. An actually reported zero
+still matches zero. The Workloads wrapper recognises the shared parser's
+existing numeric equality syntax instead of treating it as a name query.
+Linked Pulse Agent filesystems follow that agent's lease
+and stopped-guest boundary, not a failed Proxmox read; unrelated stale agent
+metadata must not suppress a current platform reading. Text/OR searches and
+unfiltered inventory remain available. These are selection rules, not health,
+thaw, collection-recovery or alert-policy verdicts. The selector and search
+regressions cover refusal/retention, same-identity fresh withdrawal, linked-agent
+precedence, both sort directions and unknown-versus-zero controls.
+
 Resource table rows that surface policy posture must show at most a single
 inline summary chip for blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
 `local-first` and redaction-only metadata belongs in Data Handling, detail, and

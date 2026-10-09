@@ -1026,3 +1026,118 @@ describe('workloadSelectors', () => {
     });
   });
 });
+
+describe('current guest disk selection', () => {
+  const diskGuest = (id: number, usage: number, overrides: Partial<WorkloadGuest> = {}) =>
+    makeGuest(id, {
+      type: 'qemu',
+      workloadType: 'vm',
+      status: 'running',
+      disk: { total: 100, used: usage, free: 100 - usage, usage },
+      ...overrides,
+    });
+  const select = (guests: WorkloadGuest[], searchTerm: string) =>
+    filterWorkloads({
+      guests,
+      searchTerm,
+      viewMode: 'all',
+      statusMode: 'all',
+      selectedNode: null,
+      selectedHostHint: null,
+      selectedKubernetesContext: null,
+    });
+
+  it.each(['prev-vm-locked', 'prev-agent-timeout', 'permission-denied', 'agent-cooldown'])(
+    'excludes %s numbers from disk sorting and numeric search without hiding inventory',
+    (diskStatusReason) => {
+      const guest = diskGuest(1, 95, { diskStatusReason });
+      expect(getDiskUsagePercent(guest)).toBeNull();
+      expect(select([guest], 'disk>90')).toEqual([]);
+      expect(select([guest], 'name:workload-1')).toEqual([guest]);
+      expect(select([guest], '')).toEqual([guest]);
+    },
+  );
+
+  it.each(['asc', 'desc'] as const)(
+    'keeps unavailable and retained readings after all current readings when sorting %s',
+    (direction) => {
+      const current = [diskGuest(1, 0), diskGuest(2, 40), diskGuest(3, 95)];
+      const unknown = [
+        diskGuest(4, 99, { diskStatusReason: 'prev-vm-locked' }),
+        diskGuest(5, 1, { diskStatusReason: 'agent-timeout' }),
+        diskGuest(6, 0, { disk: undefined as unknown as WorkloadGuest['disk'] }),
+      ];
+      const input = [unknown[0], current[1], unknown[2], current[2], unknown[1], current[0]];
+      const sorted = [...input].sort(createWorkloadSortComparator('disk', direction)!);
+      expect(sorted.slice(0, 3)).toEqual(direction === 'asc' ? current : [...current].reverse());
+      expect(new Set(sorted.slice(3))).toEqual(new Set(unknown));
+      expect(input[0]).toBe(unknown[0]);
+    },
+  );
+
+  it('restores filtering and sorting only when the same guest gets a current reading', () => {
+    const retained = diskGuest(1, 95, { diskStatusReason: 'prev-vm-locked' });
+    const peer = diskGuest(2, 40);
+    const current = { ...retained, diskStatusReason: undefined };
+    expect(select([retained, peer], 'disk>90')).toEqual([]);
+    expect([retained, peer].sort(createWorkloadSortComparator('disk', 'desc')!)).toEqual([
+      peer,
+      retained,
+    ]);
+    expect(select([current, peer], 'disk>90')).toEqual([current]);
+    expect([current, peer].sort(createWorkloadSortComparator('disk', 'desc')!)).toEqual([
+      current,
+      peer,
+    ]);
+    expect('diskStatusReason' in retained && retained.diskStatusReason).toBe('prev-vm-locked');
+  });
+
+  it('follows linked-agent filesystem freshness rather than the failed Proxmox read', () => {
+    const linked = diskGuest(1, 95, { disksFromAgent: true, diskStatusReason: 'agent-error' });
+    expect(getDiskUsagePercent(linked)).toBe(95);
+    expect(select([linked], 'disk>90')).toEqual([linked]);
+    const stale = { ...linked, agentStale: true };
+    expect(getDiskUsagePercent(stale)).toBeNull();
+    expect(select([stale], 'disk>90')).toEqual([]);
+    const stopped = { ...linked, status: 'stopped' };
+    expect(getDiskUsagePercent(stopped)).toBeNull();
+    expect(select([stopped], 'disk>90')).toEqual([]);
+    const platform = diskGuest(2, 95, { agentStale: true });
+    expect(getDiskUsagePercent(platform)).toBe(95);
+    expect(select([platform], 'disk>90')).toEqual([platform]);
+  });
+
+  it('does not invent zero from unavailable telemetry or a negative sentinel', () => {
+    const unavailable = diskGuest(1, 0, {
+      telemetryAvailability: {
+        cpu: true,
+        memory: true,
+        disk: false,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      },
+    });
+    const sentinel = diskGuest(2, -1);
+    for (const guest of [unavailable, sentinel]) {
+      expect(getDiskUsagePercent(guest)).toBeNull();
+      expect(select([guest], 'disk=0')).toEqual([]);
+    }
+    const zero = diskGuest(3, 0);
+    expect(getDiskUsagePercent(zero)).toBe(0);
+    expect(select([zero], 'disk=0')).toEqual([zero]);
+  });
+
+  it('recognises legacy qemu types and does not apply Proxmox refusal to LXC disk readings', () => {
+    const vm = diskGuest(1, 95, { workloadType: undefined, diskStatusReason: 'prev-vm-locked' });
+    const lxc = diskGuest(2, 95, {
+      type: 'lxc',
+      workloadType: 'system-container',
+      diskStatusReason: 'permission-denied',
+    });
+    expect(getDiskUsagePercent(vm)).toBeNull();
+    expect(select([vm], 'disk>90')).toEqual([]);
+    expect(getDiskUsagePercent(lxc)).toBe(95);
+    expect(select([lxc], 'disk>90')).toEqual([lxc]);
+  });
+});
