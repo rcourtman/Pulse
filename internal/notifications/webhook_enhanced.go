@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -503,6 +504,12 @@ func parseRetryAfterBackoff(retryAfter string, now time.Time) (time.Duration, bo
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry
 func isRetryableWebhookError(err error) bool {
+	// A local security/configuration refusal is authoritative too. In
+	// particular, retrying an origin-changing redirect cannot make it safe.
+	var declared *NotificationFailureError
+	if errors.As(err, &declared) && declared.Class != "" {
+		return declared.Class.Retryable()
+	}
 	// An explicit HTTP rejection takes precedence over diagnostic body text:
 	// a 403 mentioning "timeout" is not a transport timeout. Errors without
 	// a recognised status (including network failures) remain retryable below.
