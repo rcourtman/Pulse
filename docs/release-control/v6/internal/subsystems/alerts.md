@@ -4475,3 +4475,27 @@ resubmission and concurrent response encoding/update under the race detector.
 Existing snapshot, persistence, partial-update and threshold tests remain
 required. This is source ownership acceptance, not installed notification or
 guest-agent recovery evidence.
+
+### TrueNAS disk heat policy for Patrol and Assistant
+
+`Manager.TrueNASDiskTemperatureThreshold(resourceID, diskType)` resolves the
+`truenas-disk` tiers of `effectiveAlertPolicyNoLock`: the disk's canonical or
+identity-resolved override, then TrueNAS Disks defaults, then disk-type policy.
+A disabled disk/default or non-positive trigger leaves no heat policy.
+Global/platform alert switches silence alert evaluation without changing this
+policy, matching existing agent-disk semantics. Callers receive a copy; config
+normalisation, saved Off/custom/inherited values and alert severity are unchanged.
+`IsTrueNASDiskResource` uses the evaluator's classification, including merged
+agent/TrueNAS disks. Patrol/Assistant do not walk those disks to a synthetic
+TrueNAS system agent and accidentally apply an unrelated host override.
+Retained temperature readings remain unjudged, not affirmative recovery.
+
+Verification: `TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts`
+and `TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` in
+`internal/alerts/threshold_resolution_shared_test.go` cover tier, identity,
+Off/disabled, untyped, clone and nil-manager compatibility.
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` cover adapter, Patrol triage,
+verification and Assistant context while preserving agent-host overrides.
+Frontend table/drawer tiers remain a separate Web-owned change; this backend
+repair does not establish browser or native appliance acceptance.

@@ -6950,11 +6950,11 @@ of durable state through it.
   as before. With links each monitor builds its own linked snapshot whenever
   the fixture data or links change (concurrent cache misses can each build
   one).
-- Exclusions are not carried, as before: the fixture graph makes its own
-  merges before the view seeds it, so fixtures that identity matching merged
-  stay merged ("Unlink replaces the pair's operator link"). Presentation
-  coalescing still honours them, because the broadcast takes the resource
-  store adapter's exclusions for every store-less view.
+- Exclusions are not carried by the fixture registry, as before. The
+  broadcast's presentation coalescing consults the monitor adapter's
+  exclusions, while the resources API's `ListForPresentation` consults its
+  own store-backed registry's exclusions. Neither can undo an automatic
+  identity merge already made inside the store-free fixture graph.
 - An agent linked into a guest leaves the agent listings (`Hosts()` lists
   agent-type rows only) and the guest carries its facet, as in live mode.
 
@@ -7362,9 +7362,11 @@ agent's SMART inventory as the node's disk fallback when the Proxmox disk
 query fails, the agent's disk-exclude patterns on the node's disks, and the
 node's linked agent that guest discovery, agent deployment and service
 discovery act on.
-Physical disks inside one host still join through
-`resolveLinkedPhysicalDisk` without reading exclusions; a node split puts the
-two sides' disks under different parents, so they no longer meet there.
+Physical disks inside one host join through `resolveLinkedPhysicalDisk`,
+which now honours their operator exclusions ("Operator split separates disks
+inside a linked host" above, upstream #2748). A node split also puts the two
+sides' disks under different parents, so they no longer meet there. The node
+split and the disk split remain independent operator decisions.
 Cluster- and hostname-derived IDs carry no source, so an exclusion recorded
 against another resource that derives the node's own ID (a Docker Swarm host
 reporting no machine key, named like the node in a swarm named like its
@@ -7395,11 +7397,12 @@ already has the link applied, so it cannot split the pair itself: an unlink
 shows on REST, `/api/state` and the websocket from the monitor's next
 registry rebuild, the same generation in which a new link reaches the
 broadcast. REST applies a new link at once, because its own registry applies
-the store's links on top of the seed. The mock-mode view applies the links
-the resource store's current generation loaded ("Mock-mode unified view
-applies operator links"), so mock mode follows the same timing. Mock fixtures
-that identity matching merged stay merged on every surface: the fixture graph
-is built without the store's exclusions.
+the store's links on top of the seed. The mock-mode view now applies the
+current monitor generation's operator links too ("Mock-mode unified view
+applies operator links" above), so a mock unlink likewise needs that
+monitor rebuild to remove the fold from the seed. Mock fixtures that identity
+matching merged stay merged on every surface: the fixture graph is built
+without the store's exclusions.
 
 The websocket broadcast coalesced host views with
 `CoalescePresentationHostResources`, which honours no exclusions, while the
@@ -7508,3 +7511,27 @@ system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
 sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
 keeps the handler on the registry's fold record.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
+
+### TrueNAS disk policy consumers use the disk's alert identity
+
+The AI/Patrol physical-disk consumers classify TrueNAS disks through
+`alerts.IsTrueNASDiskResource`, the same classifier as unified alert evaluation.
+They resolve temperature policy under the disk's canonical resource ID, not its
+parent system's synthetic agent ID. Merged agent/TrueNAS disks retain that
+classification; ordinary agent disks still follow their reporting host's policy.
+Registry identity, source precedence and retained-reading semantics are unchanged.
+`TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` exercise the unified registry
+projection and its consumer boundaries. Table/drawer frontend acceptance remains
+with Web, not established by these backend tests.
