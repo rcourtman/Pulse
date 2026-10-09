@@ -2069,11 +2069,13 @@ Disks Global Defaults cell reads `By type` while unset
 default switches the policy off, and switching it on then stages an explicit
 TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
 trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
-The TrueNAS disk drawer tones a current reading from the same per-type trigger
-(`getDiskTemperatureThresholds` passed into `buildTrueNASDetailSections`), so it
-no longer judges heat from a fixed 55C. Judges that still differ: the TrueNAS
-storage table and drawer do not apply a TrueNAS-wide value or per-disk
-override.
+The TrueNAS storage table and disk drawer now judge current disk heat through
+`getTrueNASDiskTemperatureThresholds(disk)`: the disk's canonical-ID temperature
+override, then a TrueNAS-wide value, then the per-type policy. Disabled disks
+or TrueNAS Disks defaults and explicit Off values leave readings unjudged;
+retained values never count as current heat. The API-only disk does not inherit
+a host Disk Temp override or the agent alerts switch. Patrol/AI use the disk-specific backend resolver described below; the
+frontend and backend retain their own verification boundaries.
 `TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
 `TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
 `internal/alerts/unified_eval_test.go` pin the tiers and retained readings;
@@ -4497,5 +4499,22 @@ Off/disabled, untyped, clone and nil-manager compatibility.
 `TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` and
 `TestPatrolJudgesTrueNASDisksByTheirAlertTiers` cover adapter, Patrol triage,
 verification and Assistant context while preserving agent-host overrides.
-Frontend table/drawer tiers remain a separate Web-owned change; this backend
-repair does not establish browser or native appliance acceptance.
+Frontend table/drawer tiers use the Web resolver described below; these
+backend tests do not establish browser or native appliance acceptance.
+
+### TrueNAS disk display reconciliation (8 October 2026)
+
+The TrueNAS storage table and inline resource drawer resolve temperature by
+the disk resource's own `temperature` override, then `truenasDiskDefaults`,
+then the per-type disk policy. Explicit zero/negative thresholds or a disabled
+disk/TrueNAS default leave readings visible but unjudged. Host `diskTemperature`
+overrides and the agent alerts switch do not control API-only TrueNAS disks.
+The shared agent disk resolver and Proxmox `pulse-relaxed` guest resolution
+remain unchanged. Existing Off-save normalization and inherited TrueNAS
+threshold editors on main are retained, not replaced by the older PR stack.
+
+Verification: `src/utils/__tests__/metricThresholds.test.ts`,
+`src/features/truenas/__tests__/TrueNASStorageTopologyTable.test.tsx` and the
+production table/drawer fixture `browser-tests/truenas-disk-thresholds.cjs`.
+The containing backend also resolves the disk-specific tiers for Patrol.
+Frontend checks do not establish native appliance or notification recovery.

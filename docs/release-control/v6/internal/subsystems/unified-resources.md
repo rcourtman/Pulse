@@ -7550,5 +7550,19 @@ classification; ordinary agent disks still follow their reporting host's policy.
 Registry identity, source precedence and retained-reading semantics are unchanged.
 `TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` and
 `TestPatrolJudgesTrueNASDisksByTheirAlertTiers` exercise the unified registry
-projection and its consumer boundaries. Table/drawer frontend acceptance remains
-with Web, not established by these backend tests.
+projection and its consumer boundaries. Table/drawer frontend acceptance is described below and remains
+separate from these backend tests.
+
+### TrueNAS disk-specific heat presentation (8 October 2026)
+
+`TrueNASDiskTemperatureThresholdResolver` receives the disk resource (including
+its canonical ID), not just a disk type. The table's status dot, reason,
+Attention filter/count and drawer temperature row use the same resolved tiers.
+A retained temperature is not current heat under any override. Changing alert
+configuration updates those judgments without changing inventory identity.
+
+Verification: `truenasPageModel.test.ts`,
+`resourceDetailDrawerTrueNASModel.coverage2.test.ts` and
+`browser-tests/truenas-disk-thresholds.cjs` cover disk overrides, TrueNAS-wide
+limits, Off and last-known readings. Synthetic browser observations do not
+establish sustained native metrics, History, revocation or release availability.
