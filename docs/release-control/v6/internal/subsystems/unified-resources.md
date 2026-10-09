@@ -23,6 +23,20 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Internal QGA query-eligibility evidence
+
+The native Proxmox guest facet carries `GuestAgentEvidence` internally. A full
+guest observation replaces this value, including explicit absence; a partial
+non-guest facet does not own it. Cloning and the VM view preserve the original
+time for the monitor's previous-state input. Resource/VM JSON, identity,
+correlation and linked Pulse-agent precedence do not change.
+`TestGuestAgentEvidenceDoesNotChangeWireOrIdentity` and
+`TestGuestAgentEvidenceMergeAndCloneKeepsOriginalAge` check wire equality,
+identity equality, clone isolation and loss/recovery replacement. The full-wire
+comparison fixes the independent construction clock for otherwise identical
+inputs; it does not omit a changed public field.
+
+
 ### Internal guest disk observation provenance
 
 A Proxmox VM facet preserves the successful filesystem read's original source

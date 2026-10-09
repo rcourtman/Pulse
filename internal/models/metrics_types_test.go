@@ -30,6 +30,27 @@ func TestGuestDiskObservationIsInternalSnapshotEvidence(t *testing.T) {
 	}
 }
 
+func TestGuestAgentEvidenceIsInternalSnapshotEvidence(t *testing.T) {
+	origin := GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	vm := VM{ID: "pve:node:105", VMID: 105, Type: "qemu", GuestAgentEvidence: origin}
+	copy := cloneVMs([]VM{vm})[0]
+	if copy.GuestAgentEvidence != origin {
+		t.Fatal("snapshot cloning lost original eligibility evidence")
+	}
+	copy.GuestAgentEvidence.ObservedAt = time.Now()
+	if vm.GuestAgentEvidence != origin {
+		t.Fatal("snapshot mutation changed source-owned evidence")
+	}
+	for name, value := range map[string]any{"model": vm, "frontend": vm.ToFrontend()} {
+		t.Run(name, func(t *testing.T) {
+			wire, err := json.Marshal(value)
+			if err != nil || strings.Contains(string(wire), "Evidence") || strings.Contains(string(wire), "ObservedAt") {
+				t.Fatalf("internal evidence leaked into the public/agent contract: %s / %v", wire, err)
+			}
+		})
+	}
+}
+
 func TestGuestMemoryObservationWireContract(t *testing.T) {
 	legacy := Memory{Total: 100, Used: 25, Free: 75, Usage: 25}
 	payload, err := json.Marshal(legacy)

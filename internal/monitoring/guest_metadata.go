@@ -87,7 +87,18 @@ func (m *Monitor) hasRecentGuestMetadataEvidence(instanceName, nodeName string, 
 	if !ok || entry.fetchedAt.IsZero() || !guestMetadataCacheHasUsefulData(entry) {
 		return false
 	}
-	return now.Sub(entry.fetchedAt) < guestMetadataCacheEntryTTL(entry)
+	return !entry.fetchedAt.After(now) && now.Sub(entry.fetchedAt) < guestMetadataCacheEntryTTL(entry)
+}
+
+func (m *Monitor) guestMetadataEvidenceTime(instanceName, nodeName string, vmid int) time.Time {
+	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
+	m.guestMetadataMu.RLock()
+	entry := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if !guestMetadataCacheHasUsefulData(entry) {
+		return time.Time{}
+	}
+	return entry.fetchedAt
 }
 
 func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {

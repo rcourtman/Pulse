@@ -35,6 +35,7 @@ type vmBuildState struct {
 	diskObservation         models.GuestDiskObservation
 	guestAgentStatus        string
 	guestAgentExpected      bool
+	guestAgentEvidence      models.GuestAgentEvidence
 	individualDisks         []models.Disk
 	ipAddresses             []string
 	networkInterfaces       []models.GuestNetworkInterface
@@ -68,6 +69,10 @@ func (m *Monitor) applyVMStatusDetails(
 	res.Lock = status.Lock
 	state.detailedStatus = status
 	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
+	if status.Lock == "" && status.Agent.IsAvailable() {
+		now := time.Now()
+		renewGuestAgentEvidence(&state.guestAgentEvidence, observedAtOr(status.ObservedAt, now), now)
+	}
 	// Filesystem usage is cross-platform. Read it before optional Linux memory
 	// and metadata commands can start a shared uncertainty pause. Every command
 	// still verifies the same operation lock and is admitted only once.
@@ -146,6 +151,7 @@ func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName stri
 	}
 	if state.diskFromAgent {
 		state.diskObservation.ObservedAt = time.Now()
+		renewGuestAgentEvidence(&state.guestAgentEvidence, state.diskObservation.ObservedAt, state.diskObservation.ObservedAt)
 	}
 	if guestAgentDiskDeferred(state.diskStatusReason) {
 		state.guestAgentStatus = "deferred"
@@ -230,6 +236,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, prePollTime)
 
 	state := vmBuildState{
+		guestAgentEvidence:      retainGuestAgentEvidence(prevVM, prePollTime),
 		diskObservation:         models.GuestDiskObservation{Source: "guest-agent"},
 		memTotal:                res.MaxMem,
 		memUsed:                 res.Mem,
@@ -327,7 +334,10 @@ func (m *Monitor) buildVMFromClusterResource(
 			}
 
 			state.guestAgentExpected = true
-			if state.guestAgentStatus != "deferred" && (len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent) {
+			// Cached strings are display continuity, not a new successful read.
+			metadataAt := m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID)
+			metadataObserved := !metadataAt.Before(prePollTime) && !metadataAt.After(time.Now())
+			if state.guestAgentStatus != "deferred" && (state.diskFromAgent || metadataObserved) {
 				state.guestAgentStatus = "available"
 			}
 		}
@@ -372,6 +382,12 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	sampleTime := time.Now()
+	if res.Status == "running" {
+		renewGuestAgentEvidence(&state.guestAgentEvidence, m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID), sampleTime)
+	} else {
+		// A stopped guest supplies no current fallback eligibility evidence.
+		state.guestAgentEvidence = models.GuestAgentEvidence{Explicit: true}
+	}
 	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason = stabilizeGuestLowTrustDisk(
 		prevVM,
 		res.Status,
@@ -506,6 +522,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		GuestAgentStatus:   state.guestAgentStatus,
 		Lock:               res.Lock,
 		GuestAgentExpected: state.guestAgentExpected,
+		GuestAgentEvidence: state.guestAgentEvidence,
 		IPAddresses:        state.ipAddresses,
 		OSName:             state.osName,
 		OSVersion:          state.osVersion,

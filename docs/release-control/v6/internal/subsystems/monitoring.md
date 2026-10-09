@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### QGA fallback eligibility keeps its original observation age
+
+A successful unlocked VM-status availability, usable filesystem reading or
+useful guest metadata can establish fallback query eligibility. A later poll
+that preserves optional IP/OS/version strings does not renew that evidence.
+Internal `GuestAgentEvidence` crosses model, canonical and previous-state
+snapshots, including an explicit missing origin. Legacy direct snapshots import
+their receipt once, while already annotated disk-only evidence uses its recorded
+filesystem origin, never a linked-agent origin or renewed VM receipt. Expired,
+missing and future origins cannot admit a fallback.
+The existing ten-minute boundary, authoritative unavailable status, metadata
+backoff and every-command backup-lock/shared uncertainty fences remain intact.
+Cached display identity remains available, but cannot upgrade a failed/empty
+refresh to current availability: a fallback needs a usable filesystem or useful
+metadata observed in that cycle to claim availability. Linked Pulse-agent disks
+remain independent.
+`TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
+repeated canonical replacement and both cluster/node collectors through a
+cancelled detail cycle, unavailable status, missing status and ordinary recovery
+with measured-zero disk usage. This is synthetic source proof, not native thaw,
+QEMU-only Windows acceptance or reporter resolution.
+
+
 ### QEMU disk fallbacks retain their original filesystem source time
 
 A successful QGA filesystem read owns the disk observation's source and original

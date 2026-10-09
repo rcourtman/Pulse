@@ -29,6 +29,26 @@ func TestGuestDiskObservationViewUsesOnlyItsOwnSource(t *testing.T) {
 	}
 }
 
+func TestGuestAgentEvidenceViewKeepsOnlyItsOriginalObservation(t *testing.T) {
+	origin := models.GuestAgentEvidence{Explicit: true, ObservedAt: time.Now().Add(-time.Minute)}
+	vm := models.VM{VMID: 105, Type: "qemu", Status: "running", LastSeen: time.Now(), AgentVersion: "retained", GuestAgentEvidence: origin}
+	resource, _ := resourceFromVM(vm)
+	view := NewVMView(&resource)
+	if view.GuestAgentEvidence() != origin {
+		t.Fatal("adapter/view replaced original eligibility age with the poll time")
+	}
+	copy := cloneResource(&resource)
+	copy.Proxmox.GuestAgentEvidence.ObservedAt = time.Now()
+	if view.GuestAgentEvidence() != origin {
+		t.Fatal("cloned resource aliases source-owned eligibility evidence")
+	}
+	for _, empty := range []VMView{NewVMView(nil), NewVMView(&Resource{})} {
+		if empty.GuestAgentEvidence() != (models.GuestAgentEvidence{}) {
+			t.Fatal("missing guest facet invented eligibility evidence")
+		}
+	}
+}
+
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt(v int) *int       { return &v }
 

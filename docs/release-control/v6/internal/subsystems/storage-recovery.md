@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### Retained guest identity cannot renew QGA eligibility
+
+The shared VM's internal `GuestAgentEvidence` bounds eligibility when a fresh
+VM-status read is unavailable. Snapshot copy and canonical replacement keep
+its original time, including explicit missing evidence, without changing disk
+capacity, usage, History storage or linked-agent precedence. No JSON field,
+credential or command path is added.
+`TestGuestAgentEvidenceIsInternalSnapshotEvidence` checks the shared-model
+copy/wire boundary; `TestGuestAgentAdmissionEvidenceContract` covers expiry,
+unknown/future origins and ordinary zero-reading recovery through both collectors.
+Synthetic source proof does not establish native recovery or published availability.
+
+
 ### Shared guest disk evidence is not recovery-point identity
 
 The canonical Proxmox facet carries internal QGA filesystem source/time evidence
