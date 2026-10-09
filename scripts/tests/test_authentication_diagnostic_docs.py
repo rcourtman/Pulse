@@ -215,7 +215,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                        "existing administrator recovery path"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, proxy if phrase == "actual group separator" else quick)
-        boundary = proxy.split("## ⚠️ Header Trust Boundary", 1)[1].split("## 📦 Examples", 1)[0]
+        boundary = proxy.split("## ⚠ Header Trust Boundary", 1)[1].split("## 📦 Examples", 1)[0]
         for phrase in ("replace", "never append", "first", "username and configured role header",
                        "must also come from the successful authenticator", "not be reachable"):
             self.assertIn(phrase, boundary)
