@@ -7,23 +7,11 @@ on:
       - "docs/**"
       - "frontend-modern/public/docs/**"
       - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
       - "scripts/check_public_docs.py"
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
-      - "scripts/tests/run.sh"
-      - "scripts/tests/test_public_docs_workflow.py"
-      - "scripts/tests/test_production_rollout_docs.py"
-      - "scripts/tests/test_pmg_docs.py"
-      - "scripts/tests/test_agent_profile_docs.py"
-      - "scripts/tests/test_pbs_docs.py"
-      - "scripts/tests/test_audit_recovery_docs.py"
-      - "scripts/tests/test_notification_troubleshooting_docs.py"
-      - "scripts/tests/test_webhook_verification_docs.py"
-      - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
-      - "scripts/tests/test_vm_disk_diagnostics.py"
-      - "scripts/tests/test_memory_troubleshooting_docs.py"
-      - "scripts/tests/test_performance_troubleshooting_docs.py"
-      - "scripts/tests/test_troubleshooting_logs.py"
+      - "scripts/tests/**"
       - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
   push:
@@ -34,23 +22,11 @@ on:
       - "docs/**"
       - "frontend-modern/public/docs/**"
       - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
       - "scripts/check_public_docs.py"
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
-      - "scripts/tests/run.sh"
-      - "scripts/tests/test_public_docs_workflow.py"
-      - "scripts/tests/test_production_rollout_docs.py"
-      - "scripts/tests/test_pmg_docs.py"
-      - "scripts/tests/test_agent_profile_docs.py"
-      - "scripts/tests/test_pbs_docs.py"
-      - "scripts/tests/test_audit_recovery_docs.py"
-      - "scripts/tests/test_notification_troubleshooting_docs.py"
-      - "scripts/tests/test_webhook_verification_docs.py"
-      - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
-      - "scripts/tests/test_vm_disk_diagnostics.py"
-      - "scripts/tests/test_memory_troubleshooting_docs.py"
-      - "scripts/tests/test_performance_troubleshooting_docs.py"
-      - "scripts/tests/test_troubleshooting_logs.py"
+      - "scripts/tests/**"
       - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
 
@@ -62,7 +38,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  recipes:
+    name: Documentation recipes (${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Build and Test skips smoke for docs-only changes. Discover the complete
+      # current docs suite here, including privacy, authentication and recovery.
+      # Isolated shards retain all recipe deadlines without a longer CI path.
+      - name: Exercise documentation safety and diagnostic recipes
+        run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"
+
+  # Preserve the existing required check name and fail closed on every shard.
   check:
+    needs: recipes
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -70,6 +69,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Require every documentation recipe shard
+        env:
+          RECIPE_RESULT: ${{ needs.recipes.result }}
+        run: |
+          if [[ "$RECIPE_RESULT" != success ]]; then
+            echo "Documentation recipe shards did not all succeed: $RECIPE_RESULT" >&2
+            exit 1
+          fi
 
       - name: Validate public documentation
         run: python3 scripts/check_public_docs.py
@@ -82,22 +90,3 @@ jobs:
 
       - name: Check documentation safety workflow contract
         run: python3 scripts/tests/test_public_docs_workflow.py
-
-      # Build and Test intentionally skips its smoke suite for docs-only
-      # changes. Exercise the existing safety guidance and copied recipes here
-      # too, without installing frontend/Go dependencies or calling providers.
-      - name: Exercise backup safety and diagnostic recipes
-        run: |
-          scripts/tests/run.sh \
-            test_production_rollout_docs.py \
-            test_pmg_docs.py \
-            test_agent_profile_docs.py \
-            test_pbs_docs.py \
-            test_audit_recovery_docs.py \
-            test_notification_troubleshooting_docs.py \
-            test_webhook_verification_docs.py \
-            test_pve_backup_troubleshooting_docs.py \
-            test_vm_disk_diagnostics.py \
-            test_memory_troubleshooting_docs.py \
-            test_performance_troubleshooting_docs.py \
-            test_troubleshooting_logs.py
