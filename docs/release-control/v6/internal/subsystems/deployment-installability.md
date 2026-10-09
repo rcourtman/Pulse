@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Private, authenticated server-installer inputs
+
+Release archive downloads and their signature sidecars stay inside the same
+owner-only `mktemp -d` directory, not an unreserved filename in shared `/tmp`.
+The archive basename retains exact release inference for local/LXC handoff.
+Normal completion, failed download/admission and failed readiness remove only
+the owned archive and sidecar and an empty parent. A deliberate `--archive`
+input and its sidecar are never treated as owned download scratch.
+
+The piped Proxmox bootstrap downloads its installer, signature and transport
+diagnostic inside a separate owner-only directory. It resolves one exact
+installer URL, requires the existing pinned-key verifier, and admits the
+complete installer and its matching signature before any container copy or
+execution. Missing tools, metadata, signature, failed transfer or failed
+verification stop that path. A caller-supplied local installer remains the
+existing deliberate local-source route, not a claimed signed download.
+
+The bootstrap's EXIT cleanup retains both owned input directories across
+copy failures and interruption; it neither deletes a caller's local files nor
+recursively erases unexpected scratch content. Existing archive re-verification,
+architecture/version admission, staging-before-stop, service-state recovery,
+timer consent and removal quiescence remain unchanged.
+
+`TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated` runs actual
+staging, prefetch, download and whole-bootstrap functions with no-network and
+no-host-mutation doubles, real fixture SSH signatures, permissive/normal/private
+umasks, bad/missing signatures, failed transfers, allocation/readiness/admission/
+copy failures, interruption and caller-owned-file preservation. These are
+ordinary-user source controls, not root, native PVE/LXC or installed acceptance;
+complete exact-source CI and the existing safe native routes remain separate.
+
 ### Existing-installation menu actions require exact target and intent
 
 The root server installer's existing-installation menu admits stable/preview
