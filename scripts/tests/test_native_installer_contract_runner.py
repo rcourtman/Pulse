@@ -19,13 +19,23 @@ class NativeInstallerRunnerTest(unittest.TestCase):
     inventory = "TestInstaller\nTestRootInstallResetSafety\nExample\nFuzzInput\nTestFuture\nTestRootInstallResetFuture\nok\tpackage\n"
 
     def test_every_discovered_check_runs_once_in_one_group(self):
-        general, reset = runner.partition(self.inventory)
-        self.assertEqual(general, ["TestInstaller", "Example", "FuzzInput", "TestFuture"])
-        self.assertEqual(reset, ["TestRootInstallResetSafety", "TestRootInstallResetFuture"])
-        self.assertEqual(len(set(general + reset)), 6)
+        first, second, reset = runner.partition(self.inventory)
+        self.assertEqual(first, ["Example", "TestFuture"])
+        self.assertEqual(second, ["FuzzInput", "TestInstaller"])
+        self.assertEqual(reset, ["TestRootInstallResetFuture", "TestRootInstallResetSafety"])
+        selected = first + second + reset
+        self.assertEqual(len(selected), 6)
+        self.assertEqual(len(set(selected)), 6)
+        self.assertEqual(runner.GROUPS, ("general-0", "general-1", "reset"))
+
+    def test_groups_are_deterministic_for_reordered_inventory(self):
+        self.assertEqual(
+            runner.partition(self.inventory),
+            runner.partition("\n".join(reversed(self.inventory.splitlines()))),
+        )
 
     def test_missing_inventory_is_not_a_passing_empty_run(self):
-        for inventory in ("", "ok\tpackage\n", "TestInstaller\n", "TestRootInstallResetSafety\n"):
+        for inventory in ("", "ok\tpackage\n", "TestInstaller\n", "TestRootInstallResetSafety\n", "TestInstaller\nTestRootInstallResetSafety\n"):
             with self.subTest(inventory=inventory), self.assertRaises(ValueError):
                 runner.partition(inventory)
 
@@ -35,8 +45,8 @@ class NativeInstallerRunnerTest(unittest.TestCase):
                 runner.partition(self.inventory + name + "\n")
 
     def test_unicode_go_identifiers_remain_included(self):
-        general, _ = runner.partition(self.inventory + "TestΣ\n")
-        self.assertIn("TestΣ", general)
+        first, second, _ = runner.partition(self.inventory + "TestΣ\n")
+        self.assertIn("TestΣ", first + second)
 
     def run_main(self, fault=None):
         calls = []
@@ -59,12 +69,12 @@ class NativeInstallerRunnerTest(unittest.TestCase):
     def test_actual_commands_preserve_deadlines_count_and_complete_selection(self):
         calls = self.run_main()
         self.assertEqual(calls[0][0], ["go", "test", "-list", ".", runner.PACKAGE])
-        general, reset = runner.partition(self.inventory)
-        for (command, kwargs), names in zip(calls[1:], (general, reset)):
+        groups = runner.partition(self.inventory)
+        self.assertEqual(len(calls), 4)
+        for (command, kwargs), names in zip(calls[1:], groups):
             self.assertEqual(command, ["go", "test", "-count=1", "-timeout", "10m", "-run", "^(" + "|".join(names) + ")$", runner.PACKAGE])
             self.assertTrue(kwargs["check"])
             self.assertEqual(kwargs["cwd"], ROOT)
-        self.assertEqual(len(calls), 3)
 
     def test_inventory_failure_does_not_run_any_group(self):
         self.assertEqual(len(self.run_main(1)), 1)
@@ -74,6 +84,9 @@ class NativeInstallerRunnerTest(unittest.TestCase):
 
     def test_second_group_failure_remains_terminal(self):
         self.assertEqual(len(self.run_main(3)), 3)
+
+    def test_reset_group_failure_remains_terminal(self):
+        self.assertEqual(len(self.run_main(4)), 4)
 
 
 if __name__ == "__main__":
