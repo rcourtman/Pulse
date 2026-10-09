@@ -517,7 +517,7 @@ func TestClientStateBaselineAdvancesOnlyAfterDeltaIsQueued(t *testing.T) {
 func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 	state := models.EmptyStateFrontend()
 	state.ActiveAlerts = []models.Alert{{ID: "alert-temperature", Type: "temperature", Value: 85}}
-	setStatus := func(body string) {
+	setStatus := func(t *testing.T, body string) {
 		t.Helper()
 		state.ActiveAlerts[0].MetricStatus = nil
 		if body != "" {
@@ -528,7 +528,7 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 			state.ActiveAlerts[0].MetricStatus = &status
 		}
 	}
-	setStatus(`{"phase":"breaching","value":85,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:00:00Z","lastBreachAt":"2026-10-09T19:00:00Z"}`)
+	setStatus(t, `{"phase":"breaching","value":85,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:00:00Z","lastBreachAt":"2026-10-09T19:00:00Z"}`)
 	previous, err := buildClientStateSnapshot(state)
 	if err != nil {
 		t.Fatal(err)
@@ -557,7 +557,7 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 		{"no live status", "", ""},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			setStatus(step.body)
+			setStatus(t, step.body)
 			current, err := buildClientStateSnapshot(state)
 			if err != nil {
 				t.Fatal(err)
@@ -592,8 +592,8 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 }
 
 // Independent RFC 7396 receiver oracle for the alert's encoded keyed patch.
-// Keep it with this control: unrelated optional fixtures are not part of the
-// committed baseline used by an exact-source proof.
+// Keep it with this control: helpers in the separate websocket_test package
+// are not visible from package websocket.
 func applyMetricBreachTimeMergePatch(previous, patch map[string]any) map[string]any {
 	out := make(map[string]any, len(previous))
 	for key, value := range previous {
