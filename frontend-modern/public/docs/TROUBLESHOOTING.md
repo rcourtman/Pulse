@@ -282,10 +282,14 @@ restore, not by overwriting today's history. Follow
 #### Primary IP shows a Podman or Docker bridge address
 
 On a Proxmox VM or LXC, **Primary IP** is Pulse's selected address, not proof of
-the guest's default route or reachability from your browser. In an agentless
-LXC, the collected addresses can be sorted independently of their interfaces,
-so a `podman0` or Docker bridge address can appear before the intended `eth0`
-address. The Proxmox API and Pulse agent use different collection paths; an
+the guest's default route or reachability from your browser. An agentless LXC
+uses the Proxmox collection path. When interface associations are supplied,
+Pulse prefers other guest interfaces to recognised local-container/overlay
+interfaces such as `podman0`; this is a display hint, not a physical-NIC test.
+Useful secondary addresses are retained, including a virtual-only guest's
+addresses. An unknown interface association remains unknown; address order
+does not establish the intended route. The Proxmox API and Pulse agent use
+different collection paths; an
 agent's correct address does not establish that the API-only view is correct.
 
 For access, use the intended guest address from your existing Proxmox network
@@ -381,8 +385,10 @@ logs. Repair an older generated unit through the current signed installer at a
 planned maintenance window, preserving the deployment's settings and data.
 
 #### VMs show "-" for disk usage
-- Read the disk value's explanation and observation time first; a dash is not
-  proof that the agent is missing.
+- Start with [current, retained and unavailable disk readings](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings).
+  A dash is not zero; a **Prior** number is not current free space. Clear numeric
+  disk conditions to inspect missing readings, not to change collection or access.
+  A filtered list or disk sort is not proof of complete monitoring.
 - Check the guest-local service, current VM Options and the configured API
   token's read permissions. Schedule any setup change or restart outside backups.
 - Do not run guest-agent probes during backup freeze/thaw. An OK backup task
