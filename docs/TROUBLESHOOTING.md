@@ -1283,6 +1283,16 @@ administrator to inspect both sides, including inherited ACLs and their
 propagation, for that VM, storage or node. An administrator session or
 user-only permission listing does not prove the token has access.
 
+First distinguish a missing privilege on an intended target from an
+**intentional access boundary**. Pulse 6.5.0 has no per-node include/exclude
+setting for a Proxmox API connection: cluster discovery can list nodes outside
+the token's authorised scope, and Pulse can still attempt to read them. Keep
+a department-scoped token restricted to its intended nodes; **do not grant
+access to other departments just to silence permission errors**. Table filters
+and alert suppression do not stop API polling. Connecting to another member
+of the same cluster does not limit discovery to that member. Denied readings
+are unavailable, not evidence that those nodes are down or unhealthy.
+
 Inspect the existing denial and compare it with the relevant read privileges:
 
 - Inventory and metrics: `Sys.Audit` and `Datastore.Audit`, on the relevant

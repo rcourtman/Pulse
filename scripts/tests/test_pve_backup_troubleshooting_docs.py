@@ -81,6 +81,21 @@ class BackupAgeEvaluationDocsTest(unittest.TestCase):
 
 
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
+    def test_intentionally_restricted_cluster_is_not_an_access_repair_recipe(self):
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        section = trouble.split("### Check Permissions (Proxmox)\n", 1)[1].split("\n### ", 1)[0]
+        text = " ".join(section.split())
+        for distinction in ("intentional access boundary", "no per-node include/exclude",
+                            "department-scoped token restricted to its intended nodes",
+                            "do not grant access to other departments",
+                            "Table filters and alert suppression do not stop API polling",
+                            "does not limit discovery to that member",
+                            "unavailable, not evidence that those nodes are down or unhealthy"):
+            self.assertIn(distinction, text)
+        self.assertNotIn("```", section, "inspect existing denials, not another live probe")
+        self.assertEqual((ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+
     def test_replication_help_uses_existing_row_details_not_backup_commands(self):
         trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
         section = trouble.split("#### Replication jobs are Pending, stale or missing\n", 1)[1].split("\n#### ", 1)[0]
