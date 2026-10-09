@@ -287,10 +287,6 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': srcAlias,
     },
-    exclude: [
-      ...configDefaults.exclude,
-      'tests/integration/**',
-      '**/tests/integration/**',
-    ],
+    exclude: [...configDefaults.exclude, 'tests/integration/**', '**/tests/integration/**'],
   },
 }));
