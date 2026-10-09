@@ -34,6 +34,18 @@ def blocks(name):
     return re.findall(r"```bash\n(.*?)```", DOCUMENTS[name].read_text(), re.DOTALL)
 
 
+def markdown_section(source, heading):
+    # Emoji presentation selectors do not change the heading's meaning. Keep
+    # exact heading identity and uniqueness, rather than matching the whole doc
+    # when the intended safety section is missing or duplicated.
+    sections = re.findall(r"^## ([^\n]+)\n(.*?)(?=^## |\Z)", source, re.MULTILINE | re.DOTALL)
+    matching = [body for title, body in sections
+                if title.replace("\ufe0f", "") == heading.replace("\ufe0f", "")]
+    if len(matching) != 1:
+        raise AssertionError(f"Expected exactly one {heading} section, found {len(matching)}")
+    return " ".join(matching[0].split())
+
+
 @contextmanager
 def proxy_server(status):
     requests = []
@@ -203,8 +215,9 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                             self.assertNotIn(unexpected, headers)
 
     def test_proxy_setup_cannot_omit_role_choice_and_authenticated_boundary(self):
-        proxy = " ".join(DOCUMENTS["PROXY_AUTH"].read_text().split())
-        quick = proxy.split("## 🚀 Quick Start", 1)[1].split("## ⚙️ Configuration", 1)[0]
+        source = DOCUMENTS["PROXY_AUTH"].read_text()
+        proxy = " ".join(source.split())
+        quick = markdown_section(source, "🚀 Quick Start")
         for phrase in ("every proxy-authenticated user an administrator",
                        "PROXY_AUTH_ROLE_HEADER=X-Authentik-Groups",
                        "PROXY_AUTH_ADMIN_ROLE=<exact-idp-admin-group>",
@@ -215,10 +228,21 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                        "existing administrator recovery path"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, proxy if phrase == "actual group separator" else quick)
-        boundary = proxy.split("## ⚠️ Header Trust Boundary", 1)[1].split("## 📦 Examples", 1)[0]
+        boundary = markdown_section(source, "⚠ Header Trust Boundary")
         for phrase in ("replace", "never append", "first", "username and configured role header",
                        "must also come from the successful authenticator", "not be reachable"):
             self.assertIn(phrase, boundary)
+
+    def test_proxy_boundary_heading_preserves_identity_not_emoji_presentation(self):
+        source = DOCUMENTS["PROXY_AUTH"].read_text()
+        expected = markdown_section(source, "⚠ Header Trust Boundary")
+        self.assertIn("never append", expected)
+        self.assertEqual(markdown_section(source.replace("## ⚠ Header", "## ⚠️ Header"),
+                                          "⚠ Header Trust Boundary"), expected)
+        for changed in (source.replace("## ⚠ Header Trust Boundary", "## ⚠ Different Boundary"),
+                        source + "\n## ⚠️ Header Trust Boundary\nDuplicate section.\n"):
+            with self.subTest(changed=changed[-50:]), self.assertRaisesRegex(AssertionError, "exactly one"):
+                markdown_section(changed, "⚠ Header Trust Boundary")
 
     def test_provider_mappings_are_not_headers_only_deployment_recipes(self):
         proxy = " ".join(DOCUMENTS["PROXY_AUTH"].read_text().split())
