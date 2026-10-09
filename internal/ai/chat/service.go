@@ -205,13 +205,13 @@ func resolveEffectiveControlLevel(
 ) tools.ControlLevel {
 	if resolver != nil {
 		if resolved := strings.TrimSpace(resolver(cfg)); config.IsValidControlLevel(resolved) {
-			return tools.ControlLevel(resolved)
+			return tools.ControlLevel(config.AssistantControlLevel(resolved))
 		}
 	}
 	if cfg == nil {
 		return tools.ControlLevelReadOnly
 	}
-	return tools.ControlLevel(cfg.GetControlLevel())
+	return tools.ControlLevel(config.AssistantControlLevel(cfg.GetControlLevel()))
 }
 
 func controlLevelForRequestAutonomousMode(level tools.ControlLevel, requested *bool) tools.ControlLevel {
@@ -4440,10 +4440,9 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 func (s *Service) isAutonomousModeEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.autonomousMode {
-		return true
-	}
-	return s.cfg != nil && s.cfg.IsAutonomous()
+	// Non-interactive investigation mode is core-owned, not inherited from a
+	// legacy saved Assistant preference. Match the public chat turn posture.
+	return s.autonomousMode
 }
 
 // ExecuteAssistantTool executes a native Assistant registry tool directly by

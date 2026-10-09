@@ -15,6 +15,20 @@
 
 ## Purpose
 
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
+
+### Assistant control presentation does not change agent authority
+
+AI settings responses project legacy Assistant levels to planning for review;
+this grants no agent command, enrolment, identity or transport authority.
+Protected guests and authenticated execute authority still govern typed plans.
+Existing agent report/command and shared capability vocabularies remain
+unchanged, including their separate approval and entitlement enforcement.
+
 ### QGA query-eligibility provenance stays internal
 
 The shared VM model's `GuestAgentEvidence` is monitor-owned source-time

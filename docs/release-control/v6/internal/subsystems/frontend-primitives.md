@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Existing Assistant control selectors describe planning
+
+Settings and Chat have only Read-only and Ask first options. Legacy
+`autonomous`/`suggest` responses render Ask first without a permission warning
+or third execution mode; unknown values render Read-only. Settings compares
+normalised values before PUT so unrelated saves preserve a legacy preference.
+The two-option Chat menu keeps radio semantics, keyboard cycling/Escape/focus
+and saved-error recovery. Copy explains infrastructure plans in Actions and
+separate Patrol authority; it does not grant approval or execution. Existing
+scoped resource/alert/Patrol briefings and compact layouts remain intact.
+
 ### Shared alert breach-date presentation
 
 Existing attention and alert/history hover copy uses the validated

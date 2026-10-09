@@ -476,21 +476,26 @@ The assistant enforces multiple safety gates:
 
 ### Control Levels
 
-| Level | Behavior | Plan |
-|-------|----------|---------|
-| **Read-only** | AI can observe and query data only | Community |
-| **Controlled** | AI asks for approval before executing commands | Community |
-| **Autonomous** | AI executes actions without prompting | Pro / hosted Cloud |
+| Mode | Behaviour | Availability |
+|------|-----------|--------------|
+| **Read-only** | Assistant queries and explains; no infrastructure action planning | Community |
+| **Ask first** (`controlled`) | Assistant saves infrastructure action plans to **Actions** for your review | Community |
 
-### Using Approvals (Controlled Mode)
+Assistant chat does not execute these plans. Patrol's own mode and Autopilot
+policy are separate; changing Chat action mode grants no Patrol authority.
+Older saved `autonomous` preferences display as **Ask first**, not as permission
+to execute without approval. The stored preference and its existing entitlement
+checks are preserved for older clients.
 
-When control level is **Controlled**, write actions pause for approval:
+### Reviewing an Assistant action plan
 
-1. Tool returns `APPROVAL_REQUIRED: { approval_id, command, ... }`
-2. Agentic loop emits `approval_needed` SSE event
-3. UI shows approval card with the proposed command
-4. **Approve** to execute and verify, or **Deny** to cancel
-5. Only users with admin privileges can approve/deny
+1. Assistant submits a typed action for a resource advertising that capability.
+2. Pulse records the plan in **Actions**; planning is not execution.
+3. Open **Actions** to check the target, proposed operation, approval policy and expiry.
+4. An authorised operator reviews, approves where required, and runs the plan
+   through the existing action controls. Chat mode cannot bypass these checks.
+5. Read the recorded execution and independent verification result. A saved plan
+   or successful command alone does not establish recovery.
 
 ---
 

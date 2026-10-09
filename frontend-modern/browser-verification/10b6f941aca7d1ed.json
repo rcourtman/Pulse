@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "3d95193086fec4a67be03416b6f8c97065d4bc39",
+  "result": "passed",
+  "verified_at": "2026-10-09T23:24:34Z",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/utils/aiChatPresentation.ts",
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "113b1c6cb830937ebe6a7e7ea04f49b7a39ac773d62a0ab892e7d9afb4334de2",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "4a4aa69d0f77e8038b789856db8a9481d6a0f0149c69bbff20bc5d6f9f772d90",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "f09a682962332c2c69e2e5907c590c9bcd71f28af6c9b9a95ca21e009ee00e8b",
+    "frontend-modern/src/utils/aiChatPresentation.ts": "15de18883e31ecf4f618788c55ffa7fcc0a33cb97943878f739452cfd5f0379d",
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts": "a665545de89aa885e556c5ddb7f5da875d38ea76227549b22f34a2fb83e4771a"
+  },
+  "routes": [
+    "Existing AIAssistantSettings and AIChat in local /browser-tests/assistant-control-compatibility.html fixture",
+    "/settings/ai/assistant",
+    "/docs/AI#control-levels",
+    "/docs/AI_AUTONOMY#assistant-control-levels"
+  ],
+  "states": [
+    "Saved autonomous/suggest/controlled/read_only/unknown: truthful two-mode projection",
+    "Protected guest and Patrol policy preservation on unrelated save",
+    "Scoped alert attachment with explicit approval boundary",
+    "503 settings save failure retains displayed mode",
+    "Desktop light and WebKit phone dark/narrow light",
+    "Existing Docs with locally scrollable wide table"
+  ],
+  "interactions": [
+    "48 assertion groups: saved-config projection, no unrelated control/policy rewrites, keyboard menu wrap/Home/Escape/focus restoration",
+    "Explicit opt-out writes only control_level",
+    "Open real Docs from fixture links and read rendered planning/approval/verification guidance",
+    "16 screenshots visually inspected; table end reachable at 320px"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "notes": "Actual existing components and help, synthetic local API transport. No model/action execution, native saved-config persistence or release/deployment claim. Backend synthetic encrypted-persistence and access tests are a separate source proof."
+}

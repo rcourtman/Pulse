@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1399,5 +1400,45 @@ func TestAIConfigPatrolInvestigationBudgetIsAnEvidenceCallBudget(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), `"patrol_investigation_budget":12`) {
 		t.Fatalf("AI config lost investigation evidence budget: %s", payload)
+	}
+}
+
+func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
+	for _, level := range []string{ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous, "", "unknown"} {
+		for _, allowed := range []bool{false, true} {
+			t.Run(level+map[bool]string{true: "/entitled", false: "/unentitled"}[allowed], func(t *testing.T) {
+				cfg := NewDefaultAIConfig()
+				cfg.ControlLevel = level
+				cfg.PatrolAutonomyLevel = PatrolAutonomyFull
+				cfg.PatrolActionEmergencyStop = true
+				cfg.ProtectedGuests = []string{"vm-101"}
+				before := *cfg
+				want := ControlLevelReadOnly
+				if level == ControlLevelControlled || level == ControlLevelAutonomous {
+					want = ControlLevelControlled
+				}
+				if got := cfg.GetAssistantControlLevel(allowed); got != want {
+					t.Fatalf("interactive level = %s; want %s", got, want)
+				}
+				if !reflect.DeepEqual(before, *cfg) {
+					t.Fatal("projection mutated saved policy")
+				}
+				if cfg.IsAutonomous() != (level == ControlLevelAutonomous) {
+					t.Fatal("legacy approval-admission posture changed")
+				}
+				if cfg.GetPatrolAutonomyLevel() != PatrolAutonomyFull {
+					t.Fatal("Assistant projection changed Patrol mode")
+				}
+			})
+		}
+	}
+	var nilConfig *AIConfig
+	if nilConfig.GetAssistantControlLevel(true) != ControlLevelReadOnly {
+		t.Fatal("nil config must be read-only")
+	}
+	for _, unknown := range []string{"suggest", "AUTONOMOUS", " autonomous ", "not-a-mode"} {
+		if AssistantControlLevel(unknown) != ControlLevelReadOnly {
+			t.Fatalf("unmigrated input %q did not fail closed", unknown)
+		}
 	}
 }

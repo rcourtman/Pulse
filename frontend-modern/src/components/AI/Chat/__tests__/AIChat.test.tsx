@@ -3572,8 +3572,9 @@ describe('AIChat', () => {
       );
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
       expect(screen.getByText('Observes only')).toBeInTheDocument();
-      expect(screen.getByText('Asks before chat-only actions')).toBeInTheDocument();
-      expect(screen.getByText('Eligible chat-only actions')).toBeInTheDocument();
+      expect(screen.getByText('Plans actions for your review')).toBeInTheDocument();
+      expect(screen.queryByText('Eligible chat-only actions')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
       await waitFor(() => {
         expect(document.activeElement).toBe(
           screen.getByRole('menuitemradio', { name: /Read-only/ }),
@@ -3615,7 +3616,6 @@ describe('AIChat', () => {
       fireEvent.click(controlButton);
       const readOnlyOption = screen.getByRole('menuitemradio', { name: /Read-only/ });
       const askFirstOption = screen.getByRole('menuitemradio', { name: /Ask first/ });
-      const chatActionsOption = screen.getByRole('menuitemradio', { name: /Chat actions/ });
       await waitFor(() => {
         expect(document.activeElement).toBe(readOnlyOption);
       });
@@ -3624,15 +3624,15 @@ describe('AIChat', () => {
       expect(document.activeElement).toBe(askFirstOption);
 
       fireEvent.keyDown(askFirstOption, { key: 'End' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Home' });
+      fireEvent.keyDown(askFirstOption, { key: 'Home' });
       expect(document.activeElement).toBe(readOnlyOption);
 
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowUp' });
-      expect(document.activeElement).toBe(chatActionsOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(chatActionsOption, { key: 'Escape' });
+      fireEvent.keyDown(askFirstOption, { key: 'Escape' });
 
       await waitFor(() => {
         expect(
@@ -5701,45 +5701,29 @@ describe('AIChat', () => {
   // ── Autonomous warning ───────────────────────────────────────────────
 
   describe('autonomous warning', () => {
-    it('shows autonomous warning in the activity dock when control level is autonomous', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      renderChat();
-      await waitFor(() => {
-        const warning = screen.getByRole('status', {
-          name: 'Assistant chat actions warning',
+    it.each(['autonomous', 'suggest', 'controlled'])(
+      'shows saved %s as planning for review without a misleading execution warning',
+      async (level) => {
+        mockAIAPI.getSettings.mockResolvedValue({
+          model: 'gpt-4',
+          control_level: level,
+          discovery_enabled: true,
         });
-        expect(screen.getByTestId('assistant-activity-dock')).toContainElement(warning);
-        expect(warning).toHaveTextContent('Chat-only actions are allowed.');
-      });
-    });
-
-    it('shows Switch to Ask first button in autonomous warning row', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'autonomous',
-        autonomous_mode: true,
-        discovery_enabled: true,
-      });
-      renderChat();
-      await waitFor(() => {
+        renderChat();
+        await waitFor(() => expect(screen.getByText('Chat: Ask first')).toBeInTheDocument());
         expect(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        ).toBeInTheDocument();
+          screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
+        ).not.toBeInTheDocument();
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Assistant chat action mode: Ask first' }),
+        );
+        expect(screen.getAllByRole('menuitemradio')).toHaveLength(2);
         expect(
-          screen.getByRole('button', { name: 'Switch Assistant chat actions to Ask first' }),
-        ).toBeInTheDocument();
-        expect(
-          screen.getByRole('button', { name: 'Dismiss chat actions warning' }),
-        ).toBeInTheDocument();
-      });
-    });
+          screen.getByRole('menuitemradio', { name: /Plans actions for your review/ }),
+        ).toHaveAttribute('aria-checked', 'true');
+        expect(mockAIAPI.updateSettings).not.toHaveBeenCalled();
+      },
+    );
 
     it('keeps scoped dashboard handoffs approval-required without showing the autonomous warning', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
@@ -6485,7 +6469,7 @@ describe('AIChat', () => {
       expect(screen.getByText('1 follow-up queued')).toBeInTheDocument();
     });
 
-    it('keeps autonomous warning alongside active assistant streaming status', async () => {
+    it('keeps active streaming status without a retired autonomous warning', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -6511,9 +6495,12 @@ describe('AIChat', () => {
         expect(activityDock).toContainElement(
           screen.getByLabelText('Assistant active turn status'),
         );
-        expect(activityDock).toContainElement(
-          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
-        );
+        expect(
+          screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: 'Assistant chat action mode: Ask first' }),
+        ).toBeInTheDocument();
       });
     });
 

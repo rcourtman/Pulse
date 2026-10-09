@@ -1849,15 +1849,14 @@ func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
 
-// EffectiveControlLevel returns the Assistant control level that should be
-// exposed or enforced for the current entitlement state. The stored setting can
-// remain autonomous so it comes back if the entitlement returns, but runtime
-// execution without ai_autofix must stay in approval mode.
+// EffectiveControlLevel returns the interactive planning posture after existing
+// entitlement checks. Saved preferences stay intact, but no entitlement grants
+// Assistant chat approval or execution authority.
 func (h *AISettingsHandler) EffectiveControlLevel(ctx context.Context, settings *config.AIConfig) string {
 	if settings == nil {
 		return config.ControlLevelReadOnly
 	}
-	return settings.GetEffectiveControlLevel(
+	return settings.GetAssistantControlLevel(
 		h.GetAIService(ctx).HasLicenseFeature(ai.FeatureAIAutoFix),
 	)
 }
@@ -2342,7 +2341,7 @@ type AISettingsResponse struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`    // "read_only", "controlled", "autonomous"
+	ControlLevel    string   `json:"control_level"`    // "read_only" or "controlled" (interactive projection)
 	ProtectedGuests []string `json:"protected_guests"` // VMIDs/names that AI cannot control
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
@@ -2678,7 +2677,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		Providers:                 aiProviderDefinitionResponses(settings),
 		CostBudgetUSD30d:          settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
 		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
@@ -3070,7 +3069,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				return
 			}
 		}
-		settings.ControlLevel = level
+		// Older clients may echo the projected GET value on an unrelated save.
+		// Keep a legacy preference when the interactive mode did not change:
+		// rewriting it can alter the legacy service's raw-command approval gate.
+		if !(level == config.ControlLevelControlled && settings.GetControlLevel() == config.ControlLevelAutonomous) {
+			settings.ControlLevel = level
+		}
 	}
 
 	// Handle protected guests (nil = don't update)
@@ -3232,7 +3236,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		ConfiguredProviders:       settings.GetConfiguredProviders(),
 		Providers:                 aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
-		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
 		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.DiscoveryEnabled,
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
