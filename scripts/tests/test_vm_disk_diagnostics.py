@@ -525,15 +525,42 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertTrue(phrase in text, f"Missing safety explanation: {phrase}")
 
+    def assert_display_only_controls(self, state):
+        # Buffered lines are still browser-local. Follow the complete helper
+        # chain, not just the old one-line toggles, so a backend mutation in a
+        # pending-work helper cannot hide behind unchanged button handlers.
+        expected = {
+            "togglePaused": "if (!isPaused()) flushPendingLogs(); setIsPaused((prev) => !prev);",
+            "clearLogs": "resetPending(); setLogs([]);",
+            "resetPending": (
+                "pendingLogs = []; pendingCount = 0; pendingNext = 0; "
+                "if (renderFrame !== null) { cancelAnimationFrame(renderFrame); renderFrame = null; }"
+            ),
+            "flushPendingLogs": (
+                "if (disposed || pendingCount === 0) return; "
+                "const incoming = Array.from( { length: pendingCount }, "
+                "(_, index) => pendingLogs[(pendingNext - pendingCount + MAX_LOGS + index) % MAX_LOGS], ); "
+                "resetPending(); setLogs((prev) => [ "
+                "...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)), ...incoming, ]); "
+                "scrollToBottom();"
+            ),
+            "scrollToBottom": "if (logContainer) { logContainer.scrollTop = logContainer.scrollHeight; }",
+        }
+        for name, body in expected.items():
+            marker = f"const {name} = () => {{"
+            self.assertEqual(state.count(marker), 1, name)
+            actual = state.split(marker, 1)[1].split("\n  };", 1)[0]
+            actual = " ".join(re.sub(r"//[^\n]*", "", actual).split())
+            self.assertEqual(actual, body, name)
+        self.assertIn("if (disposed || isPaused()) return;", state)
+
     def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
         guide = " ".join(DOC.read_text().split("### Pause Pulse", 1)[0].split())
         self.contains(guide, "**Pause Stream**", "only pauses the browser display",
                       "does not stop the Pulse server", "guest-agent requests",
                       "actual server stop procedure")
         state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
-        toggle = state.split("const togglePaused = () => {", 1)[1].split("\n  };", 1)[0]
-        self.assertEqual(toggle.strip(), "setIsPaused((prev) => !prev);")
-        self.assertIn("if (disposed || isPaused()) return;", state)
+        self.assert_display_only_controls(state)
         self.assertIn("toggleTitle: 'Pause Stream'", (ROOT / "frontend-modern/src/utils/systemLogsPresentation.ts").read_text())
 
     def test_log_level_is_server_wide_not_a_browser_filter(self):
@@ -553,8 +580,28 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
                       "reduce server logging or erase the server's logs",
                       "VM_DISK_MONITORING.md#backup-safety")
         state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
-        clear = state.split("const clearLogs = () => {", 1)[1].split("\n  };", 1)[0]
-        self.assertEqual(clear.strip(), "setLogs([]);")
+        self.assert_display_only_controls(state)
+
+    def test_display_only_controls_reject_backend_calls_and_stale_pending_work(self):
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        for name, operation in (
+            ("togglePaused", "apiFetchJSON('/api/monitoring/stop', { method: 'POST' });"),
+            ("clearLogs", "apiFetchJSON('/api/logs', { method: 'DELETE' });"),
+            ("resetPending", "handleLevelChange('warn');"),
+            ("flushPendingLogs", "handleLevelChange('error');"),
+            ("scrollToBottom", "mutateServer();"),
+        ):
+            marker = f"const {name} = () => {{"
+            mutated = state.replace(marker, marker + "\n    " + operation)
+            with self.subTest(control=name), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(mutated)
+        for before, after in (
+            ("const clearLogs = () => {\n    resetPending();", "const clearLogs = () => {"),
+            ("if (disposed || isPaused()) return;", "if (disposed) return;"),
+            ("if (!isPaused()) flushPendingLogs();", "flushPendingLogs();"),
+        ):
+            with self.subTest(missing=before), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(state.replace(before, after))
 
     def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
         self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
