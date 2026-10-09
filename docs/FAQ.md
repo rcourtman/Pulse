@@ -252,6 +252,10 @@ port); `*` is not a login or proxy repair. Follow the
 [CORS checks](TROUBLESHOOTING.md#cors-errors) before broadening browser access.
 
 ### High memory usage?
+For a monitored VM, first check [guest memory, cache and available memory](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
+A high hypervisor footprint and one application's RSS measure different things;
+compare existing readings from the same guest and time, not the Proxmox node.
+
 First distinguish container usage from Pulse's resident memory (RSS); a high
 LXC or Docker chart alone does not establish a leak. Use the
 [read-only memory checks](TROUBLESHOOTING.md#memory-use-keeps-growing) for your

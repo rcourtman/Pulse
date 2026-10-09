@@ -595,6 +595,8 @@ pressure or an appliance fault. Check the appliance's own ordinary status where
 available. Do not install an agent, restart the VM or change its configuration
 solely to remove the reading. Pulse has no per-VM control here to replace one
 metric with an explicitly ignored reading.
+For a safe comparison, read [guest memory, cache and available memory](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
+Memory metric Off does not dismiss a separate Patrol finding.
 
 **Zero has different meanings in different fields.** A zero *metric trigger*
 disables the rule, but zero *powered-off tolerance* below means immediate
