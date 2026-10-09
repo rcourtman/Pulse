@@ -15,6 +15,42 @@
 
 ## Purpose
 
+### Existing auto-update timers are discovered without changing consent
+
+Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.
+It compares the first field of complete rows, including their state/preset
+columns, without regex matching or truncating custom instance names. A failed
+inventory's output is not proof of an installed timer.
+
+All five existing/new-install refresh consumers can therefore replace stale
+auto-update assets when a timer exists, without enabling/starting it or changing
+`system.json`. A configured timer or updater masked by a `/dev/null` symlink is
+an explicit operator stop. Before any asset staging, the shared writer also
+reads the effective state of both exact units using a bounded successful
+`systemctl` inventory. Persistent and runtime masks anywhere in systemd's unit
+search path retain the mask and every existing helper/unit/configuration asset,
+even when an `/etc` destination would shadow a `/run` mask or the caller's
+configured paths differ from the effective mask location. Failed, unavailable,
+malformed, duplicate or unknown inventory stops asset replacement; a successful
+empty inventory remains valid for first-time setup. This guard applies to normal
+refresh, explicit setup and the sandbox-repair asset writer, without changing
+service state or suggesting that enabling updates repairs a mask.
+Discovery is separate from enablement; version changes still require affirmative
+consent to set up automatic updates.
+
+`TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh` runs actual
+discovery, installer `main` and asset refresh together for version pins, source
+builds, menu updates/reinstalls and leftover fresh-install timers. Its controls
+cover enabled/disabled rows, exact-name impostors, long instance names, missing/
+failed/hung inventory, byte-preserved preferences and both unit masks. Real
+`systemctl --root` inventories with vendor units and effective `/run` or `/etc`
+masks compare the exact before/after states and complete fixture asset hashes
+through all five consumers, asset repair and setup. They also retain the normal
+enabled/disabled refresh controls. Where available, this real inventory reads
+only a temporary fixture filesystem.
+Manager operations and server installation remain doubles: this is source/flow
+proof, not native systemd activation, published installation or customer recovery.
+
 ### Private, authenticated server-installer inputs
 
 Release archive downloads and their signature sidecars stay inside the same

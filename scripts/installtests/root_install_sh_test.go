@@ -2256,6 +2256,28 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 		[]byte("#!/usr/bin/env bash\necho repaired-helper\n"), 0755); err != nil {
 		t.Fatalf("write release helper: %v", err)
 	}
+	// This is an asset-rendering/re-entry fixture, not admission to the host
+	// service manager. Supply a successful exact unmasked inventory and record
+	// the only permitted manager operation. Whole-installer controls exercise
+	// failed reads and effective masks using real fixture-root inventories.
+	toolsDir := filepath.Join(tmpDir, "tools")
+	if err := os.MkdirAll(toolsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	callsPath := filepath.Join(tmpDir, "systemctl-calls")
+	stub := `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "` + callsPath + `"
+case "$*" in
+    'list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service')
+        printf 'pulse-update.timer disabled enabled\npulse-update.service disabled enabled\n' ;;
+    daemon-reload) : ;;
+    *) echo "Unexpected fixture manager operation: $*" >&2; exit 97 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(toolsDir, "systemctl"), []byte(stub), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	installer, err := filepath.Abs(filepath.Join("..", "..", "install.sh"))
 	if err != nil {
@@ -2263,6 +2285,8 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 	}
 	cmd := exec.Command("bash", installer, "--repair-auto-update-units")
 	cmd.Env = append(os.Environ(),
+		"PATH="+toolsDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"PULSE_SERVICE_NAME=pulse",
 		"PULSE_INSTALL_DIR="+installDir,
 		"PULSE_CONFIG_DIR="+configDir,
 		"PULSE_AUTO_UPDATE_DEST="+autoUpdateDest,
@@ -2273,6 +2297,10 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("install.sh --repair-auto-update-units failed: %v\n%s", err, out)
+	}
+	calls, err := os.ReadFile(callsPath)
+	if err != nil || string(calls) != "list-unit-files --no-legend --no-pager --full -- pulse-update.timer pulse-update.service\ndaemon-reload\n" {
+		t.Fatalf("repair did not inspect both units before its only manager operation: %v\n%s", err, calls)
 	}
 
 	helper, err := os.ReadFile(autoUpdateDest)

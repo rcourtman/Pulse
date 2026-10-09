@@ -772,7 +772,15 @@ detect_service_name() {
 }
 
 update_timer_exists() {
-    command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${UPDATE_TIMER_UNIT}$"
+    command -v systemctl >/dev/null 2>&1 || return 1
+    local unit_files=""
+    # Rows also contain enablement/preset columns. Match the exact first field,
+    # not the whole row or a regex, and keep long custom unit names untruncated.
+    # A failed inventory must not admit even plausible partial stdout.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$UPDATE_TIMER_UNIT" 2>/dev/null); then
+        return 1
+    fi
+    awk -v unit="$UPDATE_TIMER_UNIT" '$1 == unit { found = 1 } END { exit !found }' <<< "$unit_files"
 }
 
 update_timer_enabled() {
@@ -4459,6 +4467,54 @@ migrate_auto_update_assets_outside_sandbox() {
     return 0
 }
 
+# A runtime mask may live in /run while we write /etc, and a persistent mask
+# may live outside a configured destination. Checking only those destination
+# symlinks can therefore override an effective operator stop. Inspect both
+# exact unit names before even staging assets, including sandbox repair/setup.
+auto_update_units_refreshable() {
+    local timer_path="$1" service_path="$2" asset=""
+    for asset in "$timer_path" "$service_path"; do
+        if [[ -L "$asset" && "$asset" -ef /dev/null ]]; then
+            print_info "Auto-update unit is deliberately masked ($asset); preserving the existing helper and units."
+            return 1
+        fi
+    done
+
+    local timer_unit service_unit unit_files=""
+    timer_unit="$(basename "$timer_path")"
+    service_unit="$(basename "$service_path")"
+    if ! command -v systemctl >/dev/null 2>&1 ||
+       ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$timer_unit" "$service_unit" 2>/dev/null); then
+        print_warn "Cannot confirm auto-update unit masks; preserving the existing helper and units."
+        return 1
+    fi
+
+    local unit="" state="" remainder="" seen_timer=false seen_service=false
+    while read -r unit state remainder; do
+        [[ -n "$unit" ]] || continue
+        if [[ "$unit" == "$timer_unit" && "$seen_timer" == false ]]; then
+            seen_timer=true
+        elif [[ "$unit" == "$service_unit" && "$seen_service" == false ]]; then
+            seen_service=true
+        else
+            print_warn "Unexpected auto-update unit inventory; preserving the existing helper and units."
+            return 1
+        fi
+        case "$state" in
+            masked|masked-runtime)
+                print_info "Auto-update unit is deliberately $state ($unit); preserving the existing helper and units."
+                return 1 ;;
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient) ;;
+            *)
+                print_warn "Cannot confirm auto-update unit state ($unit); preserving the existing helper and units."
+                return 1 ;;
+        esac
+    done <<< "$unit_files"
+    # A successful empty inventory is valid for first-time setup; failed or
+    # malformed stdout above is never treated as absence or consent.
+    return 0
+}
+
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -4472,6 +4528,7 @@ install_auto_update_assets() {
     local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
     local update_timer_unit
     update_timer_unit="$(basename "$update_timer_path")"
+    auto_update_units_refreshable "$update_timer_path" "$update_service_path" || return 1
     local auto_update_bin_dir update_unit_dir update_timer_dir
     auto_update_bin_dir="$(dirname "$auto_update_dest")"
     update_unit_dir="$(dirname "$update_service_path")"
@@ -4681,7 +4738,7 @@ setup_auto_updates() {
     fi
 
     if ! install_auto_update_assets; then
-        print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once the issue above is resolved."
+        print_warn "Continuing without automatic updates. Review the reported unit state or asset error before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
     fi
@@ -4734,7 +4791,7 @@ refresh_auto_updates() {
     print_info "Refreshing the installed auto-update helper..."
     if ! install_auto_update_assets; then
         print_warn "Could not refresh the auto-update helper; the previously installed one may be stale."
-        print_warn "Re-run install.sh with --enable-auto-updates to repair it."
+        print_warn "Review the reported unit state or asset error before retrying; enabling updates is not a mask repair."
     fi
     return 0
 }

@@ -3191,11 +3191,14 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
-// harness that executes it has to pull those in alongside it.
+// harness that executes it has to pull those in alongside it. These isolated
+// asset-rendering tests admit an unmasked inventory; the whole-installer Python
+// controls below exercise the actual effective-mask guard and all its callers.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
-	return extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
+	return "auto_update_units_refreshable() { return 0; }\n" +
+		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
 		extractRootInstallShellFunction(t, "install_auto_update_assets")
@@ -4537,6 +4540,19 @@ func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("installer private/authenticated temporary-input controls: %v\n%s", err, out)
+	}
+}
+
+// Execute discovery and every installer refresh consumer together. systemd
+// manager operations are confined doubles; real inventory uses a fixture root.
+func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_timer.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer timer discovery/refresh controls: %v\n%s", err, out)
 	}
 }
 

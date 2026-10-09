@@ -20,6 +20,7 @@ const entryPaths = [
   'browser-tests/patrol-rule-removal.html',
 ];
 const harnessPaths = [
+  'browser-tests/publication-fixture-source.cjs',
   'browser-tests/build-publication-fixtures.mjs',
   'browser-tests/publication-fixture-server.cjs',
   'browser-tests/guest-disk-provenance.cjs',

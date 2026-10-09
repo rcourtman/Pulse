@@ -337,10 +337,25 @@ async function journey(
         output,
         `${parent ? 'parent' : engine}-${width}-${visualOnly === 'long' ? 'long-' : ''}${name}.png`,
       );
+      const openDialog = page.getByRole('dialog');
+      const hasDialog = (await openDialog.count()) > 0;
+      if (hasDialog) {
+        // Use the same settled entrance state as the dedicated viewport cases.
+        // Otherwise the panel can still be offscreen above a painted backdrop.
+        await openDialog.evaluate((e) =>
+          e.getAnimations({ subtree: true }).forEach((animation) => {
+            try {
+              animation.finish();
+            } catch {}
+          }),
+        );
+      }
       await page.screenshot({
         path: file,
-        fullPage: !visualOnly,
-        animations: visualOnly ? 'disabled' : 'allow',
+        // Full-page capture can move a fixed overlay outside the expanded
+        // phone image. Capture the real viewport whenever a dialog is open.
+        fullPage: !visualOnly && !hasDialog,
+        animations: visualOnly || hasDialog ? 'disabled' : 'allow',
       });
       report.captures.push({ path: file.replace('/workspace/', ''), sha256: hash(file) });
       const dimensions = await page.evaluate(() => ({
@@ -493,6 +508,18 @@ async function journey(
           await page.waitForFunction(
             () => document.querySelector('[aria-label="Rule scope and reason"]').scrollTop > 0,
           );
+          // A positive offset is the beginning of native keyboard scrolling,
+          // not its completion. Do not send Home while PageDown still moves
+          // the region. Observe settled frames; retain the exact return-to-zero
+          // assertion below rather than hiding a failed keyboard return.
+          await page.waitForFunction(() => {
+            const region = document.querySelector('[aria-label="Rule scope and reason"]');
+            const top = region.scrollTop;
+            const previous = window.__patrolReasonScroll;
+            const stable = previous?.top === top ? previous.stable + 1 : 0;
+            window.__patrolReasonScroll = { top, stable };
+            return stable >= 8;
+          });
           const scrolled = await region.evaluate((e) => e.scrollTop);
           await capture('long-reason-scrolled');
           const footerAfter = await dialog
@@ -509,6 +536,7 @@ async function journey(
             scrollInput: input,
             scrollPosition: scrolled,
             keyboardHomeReturned: true,
+            pageDownSettledBeforeHome: true,
             stableFooter: true,
           };
           result.checks.push(

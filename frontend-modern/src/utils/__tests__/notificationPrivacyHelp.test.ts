@@ -12,7 +12,7 @@ const article = (name: string): HTMLElement => {
   element.innerHTML = renderDocMarkdown(read(`docs/${name}.md`), name);
   return element;
 };
-const sectionText = (name: string, start: string, end: string): string => {
+const sectionArticle = (name: string, start: string, end: string): HTMLElement => {
   const source = read(`docs/${name}.md`).split(start)[1]?.split(end)[0];
   expect(
     source,
@@ -20,8 +20,10 @@ const sectionText = (name: string, start: string, end: string): string => {
   ).toBeDefined();
   const element = document.createElement('article');
   element.innerHTML = renderDocMarkdown(source!, name);
-  return element.textContent!.replace(/\s+/g, ' ').trim();
+  return element;
 };
+const sectionText = (name: string, start: string, end: string): string =>
+  sectionArticle(name, start, end).textContent!.replace(/\s+/g, ' ').trim();
 const recoveryText = (): string =>
   sectionText(
     'TROUBLESHOOTING',
@@ -76,6 +78,18 @@ describe('notification evidence privacy help', () => {
       WEBHOOKS: article('WEBHOOKS'),
       TROUBLESHOOTING: article('TROUBLESHOOTING'),
     };
+    const entryPoints: Record<string, HTMLElement> = {
+      WEBHOOKS: sectionArticle(
+        'WEBHOOKS',
+        '**Retries and retained failures.**',
+        '**Correlation header.**',
+      ),
+      TROUBLESHOOTING: sectionArticle(
+        'TROUBLESHOOTING',
+        '#### Recover retained delivery failures',
+        '#### Emails not sending',
+      ),
+    };
     const cases = [
       [
         'TROUBLESHOOTING',
@@ -91,7 +105,7 @@ describe('notification evidence privacy help', () => {
       ],
     ];
     for (const [from, to, href, label] of cases) {
-      const link = guides[from].querySelector(`a[href="${href}"]`);
+      const link = entryPoints[from].querySelector(`a[href="${href}"]`);
       expect(link?.textContent).toBe(label);
       expect(guides[to].querySelector(href.slice(href.indexOf('#')))).not.toBeNull();
     }
