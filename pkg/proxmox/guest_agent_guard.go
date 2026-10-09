@@ -238,8 +238,7 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
 		}
-		if response.statusCode == http.StatusRequestTimeout ||
-			(response.statusCode >= 500 && !response.guestCommandRejected) {
+		if !guestAgentHTTPFailureCompleted(response) {
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-completion-unverified", cause: err}
 		}
@@ -273,6 +272,23 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	return resp, nil
+}
+
+// A client-error class alone is not completion evidence: an intermediary can
+// report a conflict, early request or client disconnect after accepting work.
+// Keep the supported explicit request/access/command rejections as errors, but
+// fence every other status just like an unexplained server/gateway failure.
+func guestAgentHTTPFailureCompleted(response *apiResponseError) bool {
+	switch response.statusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+		http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusUnprocessableEntity,
+		http.StatusTooManyRequests:
+		return true
+	case http.StatusInternalServerError:
+		return response.guestCommandRejected
+	default:
+		return false
+	}
 }
 
 // Guest calls do not fail over or replay: another HTTP worker still addresses
