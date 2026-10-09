@@ -686,7 +686,7 @@ export function GuestRow(props: GuestRowProps) {
                         aggregateDisk={props.guest.disk}
                         anomaly={diskAnomaly()}
                         thresholds={diskThresholds()}
-                        statusMessage={diskUsageRead().message ?? undefined}
+                        reading={diskUsageRead()}
                       />
                     }
                   >

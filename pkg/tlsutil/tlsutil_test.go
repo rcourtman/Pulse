@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -106,6 +108,17 @@ func TestFingerprintVerifier_MismatchedFingerprint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mismatch") {
 		t.Errorf("Error message should mention mismatch, got: %v", err)
+	}
+	var mismatch *FingerprintMismatchError
+	if !errors.As(fmt.Errorf("request failed: %w", err), &mismatch) || mismatch.Expected != wrongFP {
+		t.Fatal("local pin failure lost its typed trust evidence through wrapping")
+	}
+	actual := sha256.Sum256(mockCert)
+	if mismatch.Actual != hex.EncodeToString(actual[:]) {
+		t.Fatal("typed mismatch changed the observed certificate identity")
+	}
+	if errors.As(errors.New(err.Error()), &mismatch) {
+		t.Fatal("quoted error text created verifier evidence")
 	}
 }
 
