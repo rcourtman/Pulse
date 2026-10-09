@@ -92,6 +92,17 @@ func NewRegistryWithProviders(smart SMARTProvider, proxmox ProxmoxProvider, prov
 		result, err := proxmox.LXCFilesystems(ctx)
 		return validateProviderResult(result, err)
 	})
+	proxmoxV2, supportsV2 := proxmox.(ProxmoxProviderV2)
+	if supportsV2 {
+		registry.add(OperationProxmoxLXCFilesystems, OperationVersion2, true, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
+			var request emptyOperationRequest
+			if err := decodePayload(payload, &request); err != nil {
+				return nil, invalidPayloadError(err)
+			}
+			result, err := proxmoxV2.LXCFilesystemsV2(ctx)
+			return validateProviderResult(result, err)
+		})
+	}
 	registry.add(OperationContainerInventory, OperationVersion1, providers.Containers != nil, func(ctx context.Context, payload json.RawMessage) (json.RawMessage, *ResponseError) {
 		var request emptyOperationRequest
 		if err := decodePayload(payload, &request); err != nil {

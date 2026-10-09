@@ -74,6 +74,49 @@ class PatrolRuleHelpTests(unittest.TestCase):
     def test_shipped_help_matches_source(self):
         self.assertEqual(GUIDE.read_bytes(), SHIPPED_GUIDE.read_bytes())
 
+    def test_rule_controls_precede_the_older_console_workaround(self):
+        guide = GUIDE.read_text()
+        current, older = guide.split("##### Older builds without rule controls\n", 1)
+        self.assertIn("##### Use the rule controls when available", current)
+        self.assertIn("**Patrol → Activity**", current)
+        self.assertNotIn("```javascript", current)
+        self.assertIn("In v6.4.5", older)
+        self.assertIn("without an upgrade or restart", older)
+        self.assertIn("not a way around denied access", older)
+
+    def test_documented_controls_match_the_existing_production_flow(self):
+        guide = GUIDE.read_text().split("##### Older builds without rule controls\n", 1)[0]
+        ui = (ROOT / "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx").read_text()
+        for label in ["Suppression rules", "Remove rule", "Remove this rule", "Cancel",
+                      "Reload rules", "Rule ID", "All resources", "All categories"]:
+            with self.subTest(label=label):
+                self.assertIn(f"**{label}**", guide)
+                self.assertIn(label, ui)
+        for path in ["components/AI/FindingsPanel.tsx",
+                     "features/patrol/PatrolAttentionWorkbench.tsx"]:
+            creator = (ROOT / "frontend-modern/src" / path).read_text()
+            self.assertIn("Manage suppression rules", creator)
+        self.assertIn("**Manage suppression rules**", guide)
+        self.assertIn("/patrol/activity#patrol-suppression-rules", ui)
+
+    def test_uncertain_ui_results_require_readback_not_console_deletion(self):
+        guide = GUIDE.read_text().split("##### Older builds without rule controls\n", 1)[0]
+        self.assertIn("selected row disappears", guide)
+        self.assertIn("**Rule removed**", guide)
+        self.assertIn("check that exact\n   ID before trying again", guide)
+        self.assertIn("lost response does not prove deletion failed", guide)
+        self.assertIn("do not bypass the failure with the console workaround", guide)
+        self.assertIn("organisation or access change", guide)
+        self.assertIn("Other rules may\nstill cover the same scope", guide)
+
+    def test_help_distinguishes_manual_rules_from_individual_dismissals(self):
+        guide = GUIDE.read_text().split("##### Older builds without rule controls\n", 1)[0]
+        self.assertIn("not a separately created\nrule", guide)
+        self.assertIn("automatically reopen previously dismissed", guide)
+        self.assertIn("other rules and finding history intact", guide)
+        self.assertIn("**Reopen finding**", guide)
+        self.assertIn("**Finding options\nand history**", guide)
+
     def test_cancel_is_read_only_and_hides_finding_decisions(self):
         result = self.run_snippet()
         self.assert_no_delete(result)

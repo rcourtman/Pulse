@@ -41,20 +41,24 @@ func webhookGuidePSATemplate(t *testing.T) string {
 }
 
 type guideMember struct {
-	ID         string `json:"alertId"`
-	StartedAt  string `json:"startedAt"`
-	Severity   string `json:"severity"`
-	ResourceID string `json:"resourceId"`
-	Resource   string `json:"resource"`
-	Summary    string `json:"summary"`
+	ID                  string `json:"alertId"`
+	StartedAt           string `json:"startedAt"`
+	Severity            string `json:"severity"`
+	ResourceID          string `json:"resourceId"`
+	Resource            string `json:"resource"`
+	Summary             string `json:"summary"`
+	ResolutionReason    string `json:"resolutionReason"`
+	SuccessorResourceID string `json:"successorResourceId"`
+	SuccessorName       string `json:"successorName"`
 }
 
 type guidePayload struct {
-	Event      string        `json:"event"`
-	TenantID   string        `json:"tenantId"`
-	StartedAt  string        `json:"startedAt"`
-	AlertCount int           `json:"alertCount"`
-	Members    []guideMember `json:"alerts"`
+	Event        string        `json:"event"`
+	TenantID     string        `json:"tenantId"`
+	StartedAt    string        `json:"startedAt"`
+	AlertCount   int           `json:"alertCount"`
+	Members      []guideMember `json:"alerts"`
+	NotRecovered *bool         `json:"notRecovered"`
 }
 
 type guideRequest struct {
@@ -113,8 +117,8 @@ func TestWebhookGuidePSALifecycle(t *testing.T) {
 	require.Equal(t, "alert", first.Event)
 	require.Equal(t, "synthetic-tenant", first.TenantID)
 	require.Equal(t, 1, first.AlertCount)
-	require.Equal(t, guideMember{alert.ID, start.Format(time.RFC3339Nano), "warning",
-		alert.ResourceID, alert.ResourceName, alert.Message}, first.Members[0])
+	require.Equal(t, guideMember{ID: alert.ID, StartedAt: start.Format(time.RFC3339Nano), Severity: "warning",
+		ResourceID: alert.ResourceID, Resource: alert.ResourceName, Summary: alert.Message}, first.Members[0])
 
 	// A synthetic retry retains the member identity even when rendering anew.
 	require.NoError(t, manager.sendGroupedWebhook(webhook, []*alerts.Alert{alert}))
@@ -172,6 +176,86 @@ func TestWebhookGuidePSAGroupMembershipAndInfo(t *testing.T) {
 	require.Equal(t, "info", resolved.Members[2].Severity)
 }
 
+func TestWebhookGuidePSACloseReasons(t *testing.T) {
+	start := time.Date(2026, 10, 7, 3, 0, 0, 123456789, time.UTC)
+	recovered := &alerts.Alert{ID: "node::metric-threshold:cpu", StartTime: start,
+		ResourceID: "node", ResourceName: "synthetic-node", Node: "synthetic-node",
+		Level: alerts.AlertLevelWarning, Type: "cpu", Value: 95, Threshold: 90,
+		Message: "Original high CPU reading"}
+	moved := recovered.Clone()
+	moved.ID = "node::metric-threshold:memory"
+	moved.Type = "memory"
+	moved.Message = "Original high memory reading"
+	moved.Resolution = &alerts.AlertResolution{Reason: alerts.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-\"id\"\\path", SuccessorName: "agent \"name\"\né — 警告"}
+	missingSuccessor := moved.Clone()
+	missingSuccessor.Resolution.SuccessorResourceID = ""
+	missingSuccessor.Resolution.SuccessorName = ""
+	unknown := moved.Clone()
+	unknown.Resolution.Reason = alerts.AlertResolutionReason("future-\"reason\"\n")
+
+	for _, tc := range []struct {
+		name         string
+		members      []*alerts.Alert
+		firing       bool
+		notRecovered bool
+	}{
+		{"firing-is-not-recovery", []*alerts.Alert{recovered}, true, false},
+		{"ordinary-recovery", []*alerts.Alert{recovered}, false, false},
+		{"moved-still-above-threshold", []*alerts.Alert{moved}, false, true},
+		{"recovered-primary-moved-member", []*alerts.Alert{recovered, moved}, false, true},
+		{"moved-primary-recovered-member", []*alerts.Alert{moved, recovered}, false, true},
+		{"missing-successor", []*alerts.Alert{missingSuccessor}, false, true},
+		// The batch flag recognises current reasons only. Preserve an unknown
+		// member reason even when the flag is false; it is not a health verdict.
+		{"unknown-reason-preserved", []*alerts.Alert{unknown}, false, false},
+		{"nil-member-skipped", []*alerts.Alert{nil, recovered, moved}, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, webhook, requests := webhookGuideSender(t, webhookGuidePSATemplate(t))
+			if tc.firing {
+				require.NoError(t, manager.sendGroupedWebhook(webhook, tc.members))
+			} else {
+				require.NoError(t, manager.sendResolvedWebhook(webhook, tc.members, start.Add(time.Minute)))
+			}
+			request, payload := webhookGuideRead(t, requests)
+			require.NotNil(t, payload.NotRecovered, "copied payload must distinguish missing from false")
+			require.Equal(t, tc.notRecovered, *payload.NotRecovered)
+			require.Equal(t, map[bool]string{true: "alert", false: "resolved"}[tc.firing], payload.Event)
+
+			var raw struct {
+				Members []map[string]json.RawMessage `json:"alerts"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(request.body), &raw))
+			index := 0
+			for _, member := range tc.members {
+				if member == nil {
+					continue
+				}
+				require.Less(t, index, len(payload.Members))
+				got := payload.Members[index]
+				require.Equal(t, member.ID, got.ID)
+				require.Equal(t, member.StartTime.UTC().Format(time.RFC3339Nano), got.StartedAt)
+				require.Equal(t, member.Message, got.Summary, "member message is not a recovery summary")
+				for _, key := range []string{"resolutionReason", "successorResourceId", "successorName"} {
+					require.Contains(t, raw.Members[index], key, "an empty known field must differ from an older missing field")
+				}
+				wantReason, wantID, wantName := "", "", ""
+				if member.Resolution != nil {
+					wantReason = string(member.Resolution.Reason)
+					wantID = member.Resolution.SuccessorResourceID
+					wantName = member.Resolution.SuccessorName
+				}
+				require.Equal(t, wantReason, got.ResolutionReason)
+				require.Equal(t, wantID, got.SuccessorResourceID)
+				require.Equal(t, wantName, got.SuccessorName)
+				index++
+			}
+			require.Len(t, payload.Members, index)
+		})
+	}
+}
+
 func TestWebhookGuideShortTemplateEscapesStrings(t *testing.T) {
 	section := strings.SplitN(webhookGuide(t), "### Sample PSA payloads", 2)[0]
 	block := regexp.MustCompile("(?s)```http\\nPOST /api/notifications/webhooks\\nX-Pulse-Org-ID:.*?\\n\\n(.*?)\\n```").FindStringSubmatch(section)
@@ -190,4 +274,54 @@ func TestWebhookGuideShortTemplateEscapesStrings(t *testing.T) {
 	require.Equal(t, alert.ID, payload["alertId"])
 	require.Equal(t, "warning: "+alert.ResourceName+" "+alert.Message, payload["summary"])
 	require.Equal(t, alert.StartTime.Format(time.RFC3339), payload["startedAt"])
+}
+
+func webhookGuideExamplePayload(t *testing.T) string {
+	t.Helper()
+	sections := strings.SplitN(webhookGuide(t), "**Example Payload:**", 2)
+	require.Len(t, sections, 2)
+	block := regexp.MustCompile("(?s)```json\\n(.*?)\\n```").FindStringSubmatch(sections[1])
+	require.Len(t, block, 2)
+	return block[1]
+}
+
+func TestWebhookGuideExamplePayloadEscapesAlertText(t *testing.T) {
+	for _, message := range []struct {
+		name, text       string
+		value, wantValue float64
+	}{
+		{"simple-test", "A simple test notification", 0, 0},
+		{"quoted-name", `Resource "synthetic-host" is unavailable`, 95.25, 95.3},
+		{"backslash-path", `Synthetic path C:\backup\reports`, 12.5, 12.5},
+		{"multiline", "Synthetic first line\nsecond line\r\nthird\tcolumn", 1, 1},
+		{"unicode", "Synthetic é host — 警告", 0.0286, 0},
+		{"member-injection", `Synthetic text", "injected": true, "other": "value`, 99, 99},
+	} {
+		t.Run(message.name, func(t *testing.T) {
+			manager, webhook, requests := webhookGuideSender(t, webhookGuideExamplePayload(t))
+			alert := &alerts.Alert{ID: "synthetic-example", ResourceName: "synthetic-host",
+				Level: alerts.AlertLevelWarning, Message: message.text, Value: message.value}
+			require.NoError(t, manager.sendGroupedWebhook(webhook, []*alerts.Alert{alert}))
+			request, _ := webhookGuideRead(t, requests)
+			var payload map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(request.body), &payload))
+			require.Len(t, payload, 2, "alert text must not add JSON members")
+			require.Equal(t, "Alert: warning - "+message.text, payload["text"])
+			require.Equal(t, message.wantValue, payload["value"], "preserve the sender's one-decimal numeric value")
+		})
+	}
+}
+
+func TestWebhookGuideExamplePayloadEscapesRecoveryText(t *testing.T) {
+	manager, webhook, requests := webhookGuideSender(t, webhookGuideExamplePayload(t))
+	alert := &alerts.Alert{ID: "synthetic-example", ResourceName: "synthetic \"host\"\nwith \\ path",
+		Node: "synthetic-node", Level: alerts.AlertLevelWarning, Value: 0,
+		StartTime: time.Date(2026, 10, 6, 4, 0, 0, 0, time.UTC)}
+	require.NoError(t, manager.sendResolvedWebhook(webhook, []*alerts.Alert{alert}, alert.StartTime.Add(time.Minute)))
+	request, _ := webhookGuideRead(t, requests)
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(request.body), &payload))
+	require.Len(t, payload, 2)
+	require.Equal(t, "Alert: warning - "+alert.ResourceName+" on "+alert.Node+" is now healthy", payload["text"])
+	require.Equal(t, float64(0), payload["value"])
 }

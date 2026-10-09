@@ -2,12 +2,17 @@ package alerts
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestHostCustomSensorAlertLifecycle(t *testing.T) {
@@ -412,7 +417,7 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
 		for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
 			m.CheckHost(host)
-			wantPending := report < hostDiskTemperatureAbsenceConfirmations
+			wantPending := false // A single omission interrupts pending evidence, not firing alerts.
 			if pending := sdaPending(); pending != wantPending {
 				t.Fatalf("report %d: pending sda run = %v, want %v", report, pending, wantPending)
 			}
@@ -1186,6 +1191,646 @@ func TestHostChildAlertsSurviveProxmoxNodeCleanup(t *testing.T) {
 	for _, alertType := range childTypes {
 		if !hasAlertType(m.GetActiveAlerts(), alertType) {
 			t.Errorf("Proxmox node cleanup removed an agent %s alert", alertType)
+		}
+	}
+}
+
+// Disabling between two reports is a real policy interval even when there is
+// no firing alert for UpdateConfig to visit. Linked overrides keep precedence.
+func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		for _, scope := range []string{"global", "agent-default", "all-agents", "host", "host-disabled", "node", "vm", "container", "type", "unrelated"} {
+			t.Run(fmt.Sprintf("%s/explicit=%v", scope, explicit), func(t *testing.T) {
+				m, elapsed := continuityManager(t, explicit)
+				host := hostWithSMARTDiskTemp("pending-temp", "custom", 85)
+				host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID = "site:node", "site:node:101", "site:node:102"
+				id := hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)
+				m.CheckHost(host)
+				if incident, ok := continuityIncident(m, id, "diskTemperature"); !ok || incident.State != reducer.StatePending {
+					t.Fatalf("no initial pending run: %+v %v", incident, ok)
+				}
+				cfg := m.GetConfig()
+				switch scope {
+				case "global":
+					cfg.Enabled = false
+				case "agent-default":
+					cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0}
+				case "host-disabled":
+					cfg.Overrides[host.ID] = ThresholdConfig{Disabled: true}
+				case "all-agents":
+					cfg.DisableAllAgents = true
+				case "host":
+					cfg.Overrides[host.ID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "node":
+					cfg.Overrides[host.LinkedNodeID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "vm":
+					host.LinkedNodeID = "" // The linked node override must not mask the VM.
+					m.CheckHost(host)
+					cfg.Overrides[host.LinkedVMID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "container":
+					host.LinkedNodeID, host.LinkedVMID = "", ""
+					m.CheckHost(host)
+					cfg.Overrides[host.LinkedContainerID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "type":
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
+				case "unrelated":
+					cfg.Schedule.QuietHours.Timezone = "UTC"
+				}
+				m.UpdateConfig(cfg)
+				_, pending := continuityIncident(m, id, "diskTemperature")
+				if pending != (scope == "unrelated") {
+					t.Fatalf("after save pending=%v; unrelated saves alone must preserve evidence", pending)
+				}
+				if scope == "unrelated" {
+					return
+				}
+				cfg.Enabled, cfg.DisableAllAgents = true, false
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+				cfg.Overrides = map[string]ThresholdConfig{}
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
+				m.UpdateConfig(cfg)
+				elapsed.Store(int64(2 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("re-enable inherited the pre-disable start")
+				}
+				elapsed.Store(int64(2*time.Minute + 59*time.Second))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("fresh grace fired early")
+				}
+				elapsed.Store(int64(3 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 1 {
+					t.Fatal("fresh continuous breach never fired")
+				}
+				m.mu.RLock()
+				defer m.mu.RUnlock()
+				if len(m.hostDiskTempPendingContexts) != 0 {
+					t.Fatal("context outlived the pending run")
+				}
+			})
+		}
+	}
+}
+
+func TestDiskTemperaturePendingRestartContextIsNotInvented(t *testing.T) {
+	m, elapsed := continuityManager(t, true)
+	host := hostWithSMARTDiskTemp("restored-temp", "sata", 85)
+	id := hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)
+	m.CheckHost(host)
+	m.mu.Lock()
+	// Persisted intent carries grace but not host link/type context. Reducer
+	// pending incidents are not restored; this is the actual restart shape.
+	m.core.Reset()
+	m.hostDiskTempPendingContexts = nil
+	key := canonicalMetricStateID(id, "diskTemperature")
+	_, pending := m.intentPending[key]
+	m.mu.Unlock()
+	if !pending {
+		t.Fatal("explicit intent control did not retain grace")
+	}
+	m.UpdateConfig(m.GetConfig())
+	m.mu.RLock()
+	_, pending = m.intentPending[key]
+	m.mu.RUnlock()
+	if pending {
+		t.Fatal("save retained grace whose link/type enablement is unknown")
+	}
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckHost(host)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("restored grace fired without fresh evidence")
+	}
+}
+
+func TestDiskTemperatureCurrentCollectionAndOverrideControls(t *testing.T) {
+	for _, provenance := range []string{"legacy", "available", "other-field-only"} {
+		t.Run(provenance, func(t *testing.T) {
+			m, elapsed := continuityManager(t, false)
+			host := hostWithSMARTDiskTemp("current-temp", "sata", 85)
+			switch provenance {
+			case "available":
+				host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+			case "other-field-only":
+				host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Serial: diskinventory.Available("smartctl")}
+			}
+			m.CheckHost(host)
+			elapsed.Store(int64(time.Minute))
+			m.CheckHost(host)
+			if len(m.GetActiveAlerts()) != 1 {
+				t.Fatal("continuous accepted temperature did not fire")
+			}
+		})
+	}
+	t.Run("host override wins over disabled type", func(t *testing.T) {
+		m, elapsed := continuityManager(t, false)
+		host := hostWithSMARTDiskTemp("override-temp", "custom", 85)
+		cfg := m.GetConfig()
+		cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
+		cfg.Overrides[host.ID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 80, Clear: 70}}
+		m.UpdateConfig(cfg)
+		m.CheckHost(host)
+		m.UpdateConfig(m.GetConfig())
+		elapsed.Store(int64(time.Minute))
+		m.CheckHost(host)
+		if len(m.GetActiveAlerts()) != 1 {
+			t.Fatal("save discarded an enabled explicit override")
+		}
+	})
+}
+
+func TestDiskTemperaturePendingContextCleanup(t *testing.T) {
+	for _, removal := range []bool{false, true} {
+		t.Run(fmt.Sprintf("removed=%v", removal), func(t *testing.T) {
+			m, _ := continuityManager(t, false)
+			host := hostWithSMARTDiskTemp("pending-cleanup", "custom", 85)
+			m.CheckHost(host)
+			m.mu.RLock()
+			tracked := len(m.hostDiskTempPendingContexts)
+			m.mu.RUnlock()
+			if tracked != 1 || len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("control must have pending context and no active alert")
+			}
+			if removal {
+				m.HandleHostRemoved(host)
+			} else {
+				m.ClearActiveAlerts()
+			}
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			if len(m.hostDiskTempPendingContexts) != 0 || m.hostDiskTemperaturePendingNoLock(hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)) {
+				t.Fatal("pending context/state outlived its host or explicit clear")
+			}
+		})
+	}
+}
+
+// Feed only synthetic telemetry through the real CheckHost, config and callback
+// paths. No collector, smartctl process, native host or notification provider.
+type smartLifecycleFixture struct {
+	m                *Manager
+	host             models.Host
+	healthID, wearID string
+	initial          map[string]Alert
+	fires            atomic.Int32
+	recoveries       chan *ResolvedAlert
+}
+
+func newSMARTLifecycleFixture(t *testing.T) *smartLifecycleFixture {
+	t.Helper()
+	m := newEventLogManager(t)
+	cfg := m.GetConfig()
+	cfg.FlappingEnabled = false
+	cfg.Schedule.Cooldown = 0
+	cfg.Schedule.MaxAlertsHour = 0
+	cfg.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 80, Clear: 70}}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 0, "diskTemperature": 0}}
+	m.mu.Unlock()
+	used, pending := 96, int64(2)
+	host := models.Host{ID: "smart-lifecycle", Hostname: "storage", Status: "online",
+		Disks: []models.Disk{{Mountpoint: "/data", Device: "/dev/sda1", Total: 1000, Used: 950, Usage: 95}},
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "/dev/sda", Type: "sata", Health: "FAILED", Temperature: 95, Attributes: &models.SMARTAttributes{PercentageUsed: &used, PendingSectors: &pending}},
+			{Device: "/dev/sdb", Type: "sata", Health: "PASSED", Temperature: 20},
+		}},
+	}
+	resourceID, _ := hostSMARTDiskResourceID(host, host.Sensors.SMART[0])
+	f := &smartLifecycleFixture{m: m, host: host,
+		healthID: buildCanonicalStateID(resourceID, resourceID+"-disk-health"),
+		wearID:   buildCanonicalStateID(resourceID, resourceID+"-disk-wearout"),
+		initial:  make(map[string]Alert), recoveries: make(chan *ResolvedAlert, 32),
+	}
+	m.SetAlertCallback(func(a *Alert) {
+		if a.ID == f.healthID || a.ID == f.wearID {
+			f.fires.Add(1)
+		}
+	})
+	m.SetResolvedAlertCallback(func(r *ResolvedAlert) {
+		if r.Alert.ID == f.healthID || r.Alert.ID == f.wearID {
+			f.recoveries <- r
+		}
+	})
+	m.CheckHost(host)
+	for _, id := range []string{f.healthID, f.wearID} {
+		f.initial[id] = *testRequireActiveAlert(t, m, id)
+	}
+	if f.fires.Load() != 2 {
+		t.Fatalf("initial risk callbacks = %d, want 2", f.fires.Load())
+	}
+	return f
+}
+
+func (f *smartLifecycleFixture) held(t *testing.T) {
+	t.Helper()
+	for _, id := range []string{f.healthID, f.wearID} {
+		a := testRequireActiveAlert(t, f.m, id)
+		if !a.StartTime.Equal(f.initial[id].StartTime) {
+			t.Fatalf("%s was replaced by a new occurrence", id)
+		}
+	}
+	if f.fires.Load() != 2 {
+		t.Fatalf("missing report refired risk notifications: %d", f.fires.Load())
+	}
+	for _, e := range queryAlertEvents(t, f.m, eventlog.Filter{Types: []string{eventlog.TypeResolved}}) {
+		if e.AlertID == f.healthID || e.AlertID == f.wearID {
+			t.Fatalf("missing evidence published recovery: %+v", e)
+		}
+	}
+}
+
+func (f *smartLifecycleFixture) resolved(t *testing.T, ids ...string) {
+	t.Helper()
+	want := make(map[string]bool)
+	for _, id := range ids {
+		if testHasActiveAlert(t, f.m, id) {
+			t.Fatalf("risk alert remains active: %s", id)
+		}
+		want[id] = true
+	}
+	for range ids {
+		select {
+		case r := <-f.recoveries:
+			if !want[r.Alert.ID] || !r.Alert.StartTime.Equal(f.initial[r.Alert.ID].StartTime) {
+				t.Fatalf("wrong recovery occurrence: %+v", r)
+			}
+			delete(want, r.Alert.ID)
+		case <-time.After(3 * time.Second):
+			t.Fatal("ordinary recovery callback did not complete")
+		}
+	}
+	for _, id := range ids {
+		events := queryAlertEvents(t, f.m, eventlog.Filter{AlertID: id, Types: []string{eventlog.TypeResolved}})
+		if len(events) != 1 {
+			t.Fatalf("%s has %d resolution events, want 1", id, len(events))
+		}
+	}
+}
+
+func TestHostSMARTRiskMissingReportsPreserveOccurrenceAndCallbacks(t *testing.T) {
+	f := newSMARTLifecycleFixture(t)
+	if err := f.m.AcknowledgeAlert(f.healthID, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	present := f.host.Sensors.SMART
+	// Both risk families on one disk must count once per report, not twice.
+	for _, list := range [][]models.HostDiskSMART{nil, {present[1]}, {present[1]}, nil, {present[1]}, present, nil, present} {
+		f.host.Sensors.SMART = list
+		f.m.CheckHost(f.host)
+		f.held(t)
+		if !testRequireActiveAlert(t, f.m, f.healthID).Acknowledged {
+			t.Fatal("acknowledgement lost during observation gap")
+		}
+	}
+	// Standby and unavailable health/wear fields are presence, not recovery.
+	f.host.Sensors.SMART = []models.HostDiskSMART{{Device: "/dev/sda", Standby: true}, present[1]}
+	f.m.CheckHost(f.host)
+	f.held(t)
+	f.host.Sensors.SMART[0].Standby = false
+	f.m.CheckHost(f.host)
+	f.held(t)
+	used, pending := 10, int64(0)
+	f.host.Sensors.SMART[0] = models.HostDiskSMART{Device: "/dev/sda", Health: "PASSED", Temperature: 20, Attributes: &models.SMARTAttributes{PercentageUsed: &used, PendingSectors: &pending}}
+	f.m.CheckHost(f.host)
+	f.resolved(t, f.healthID, f.wearID)
+	if f.fires.Load() != 2 {
+		t.Fatalf("healthy recovery refired: %d", f.fires.Load())
+	}
+	t.Log("empty/partial/standby/unknown reports preserved occurrence and acknowledgement; fresh complete evidence recovered once")
+}
+
+func TestHostSMARTRiskDepartureRequiresFreshConsecutiveReports(t *testing.T) {
+	for _, gap := range []string{"empty", "expiry", "present"} {
+		t.Run(gap, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			present := f.host.Sensors.SMART
+			f.host.Sensors.SMART = []models.HostDiskSMART{present[1]}
+			for i := 0; i < 2; i++ {
+				f.m.CheckHost(f.host)
+				f.held(t)
+			}
+			switch gap {
+			case "empty":
+				f.host.Sensors.SMART = nil
+				f.m.CheckHost(f.host)
+			case "expiry":
+				f.m.HandleHostTelemetryExpired(f.host)
+			case "present":
+				f.host.Sensors.SMART = present
+				f.m.CheckHost(f.host)
+			}
+			f.held(t)
+			f.host.Sensors.SMART = []models.HostDiskSMART{present[1]}
+			for i := 1; i <= 3; i++ {
+				f.m.CheckHost(f.host)
+				if i < 3 {
+					f.held(t)
+				}
+			}
+			f.resolved(t, f.healthID, f.wearID)
+			if f.fires.Load() != 2 {
+				t.Fatalf("departure refired %d callbacks", f.fires.Load())
+			}
+		})
+	}
+}
+
+func TestHostSMARTRiskRulesDisableBetweenReports(t *testing.T) {
+	f := newSMARTLifecycleFixture(t)
+	cfg := f.m.GetConfig()
+	off := 0
+	cfg.AgentDefaults.SMARTHealthFailure = &off
+	f.m.UpdateConfig(cfg)
+	f.held(t) // Pending sectors remain enabled; disabling only one cause is not recovery.
+	zero := int64(0)
+	cfg.AgentDefaults.SMARTPending = &zero
+	f.m.UpdateConfig(cfg)
+	f.resolved(t, f.healthID)
+	if !testHasActiveAlert(t, f.m, f.wearID) {
+		t.Fatal("health policy disabled unrelated wearout")
+	}
+	// A missing report cannot resurrect it. Re-enable before another report;
+	// only fresh failing evidence may reactivate it, under the unchanged
+	// stateful refire/cooldown history policy.
+	f.host.Sensors.SMART = nil
+	f.m.CheckHost(f.host)
+	if testHasActiveAlert(t, f.m, f.healthID) {
+		t.Fatal("missing report raised disabled health")
+	}
+	on, one := 1, int64(1)
+	cfg.AgentDefaults.SMARTHealthFailure = &on
+	cfg.AgentDefaults.SMARTPending = &one
+	f.m.UpdateConfig(cfg)
+	f.m.CheckHost(f.host)
+	if testHasActiveAlert(t, f.m, f.healthID) {
+		t.Fatal("re-enable raised health without evidence")
+	}
+	used, pending := 96, int64(2)
+	f.host.Sensors.SMART = []models.HostDiskSMART{{Device: "/dev/sda", Health: "FAILED", Attributes: &models.SMARTAttributes{PercentageUsed: &used, PendingSectors: &pending}}}
+	f.m.CheckHost(f.host)
+	a := testRequireActiveAlert(t, f.m, f.healthID)
+	if !a.StartTime.Equal(f.initial[f.healthID].StartTime) || !a.LastSeen.After(f.initial[f.healthID].LastSeen) || f.fires.Load() != 3 {
+		t.Fatalf("fresh evidence must refire once within the existing cooldown: start %v, prior %v, seen %v, prior %v, callbacks %d", a.StartTime, f.initial[f.healthID].StartTime, a.LastSeen, f.initial[f.healthID].LastSeen, f.fires.Load())
+	}
+}
+
+func TestHostSMARTRiskEmptyReportHonoursRuleOffAndLegacyUnknowns(t *testing.T) {
+	for _, metadata := range []string{"current", "legacy", "unknown"} {
+		t.Run(metadata, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			off, zero := 0, int64(0)
+			f.m.mu.Lock()
+			f.m.config.AgentDefaults.SMARTHealthFailure = &off
+			f.m.config.AgentDefaults.SMARTPending = &zero
+			if metadata != "current" {
+				a, _ := f.m.getActiveAlertNoLock(f.healthID)
+				if metadata == "legacy" {
+					delete(a.Metadata, "riskCodes")
+				} else {
+					a.Metadata["riskCodes"] = []interface{}{"future-code"}
+				}
+			}
+			f.m.mu.Unlock()
+			f.host.Sensors.SMART = nil
+			f.m.CheckHost(f.host)
+			if metadata == "current" {
+				f.resolved(t, f.healthID)
+			} else {
+				f.held(t)
+			}
+			if !testHasActiveAlert(t, f.m, f.wearID) {
+				t.Fatal("wearout was disabled with health")
+			}
+		})
+	}
+}
+
+func TestHostSMARTRiskFilesystemAndHostLifecycleStayIndependent(t *testing.T) {
+	for _, action := range []string{"filesystem-absent", "node-link", "removed", "host-disabled", "agents-disabled", "host-isolation"} {
+		t.Run(action, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			switch action {
+			case "filesystem-absent":
+				fsID, _ := hostDiskResourceID(f.host, f.host.Disks[0])
+				id := canonicalMetricStateID(fsID, "disk")
+				testRequireActiveAlert(t, f.m, id)
+				f.host.Disks = nil
+				f.host.Sensors.SMART = nil
+				f.m.CheckHost(f.host)
+				if testHasActiveAlert(t, f.m, id) {
+					t.Fatal("filesystem absence incorrectly held usage")
+				}
+				f.held(t)
+			case "host-isolation":
+				other := f.host
+				other.ID = "smart-lifecycle-other"
+				f.m.CheckHost(other)
+				other.Sensors.SMART = []models.HostDiskSMART{other.Sensors.SMART[1]}
+				for i := 0; i < 3; i++ {
+					f.m.CheckHost(other)
+				}
+				f.held(t)
+			default:
+				present := f.host.Sensors.SMART
+				f.host.Sensors.SMART = []models.HostDiskSMART{present[1]}
+				f.m.CheckHost(f.host)
+				f.held(t)
+				switch action {
+				case "node-link":
+					f.host.LinkedNodeID = "pve-node"
+					f.host.Sensors.SMART = nil
+					f.m.CheckHost(f.host)
+				case "removed":
+					f.m.HandleHostRemoved(f.host)
+				case "host-disabled":
+					cfg := f.m.GetConfig()
+					cfg.Overrides[f.host.ID] = ThresholdConfig{Disabled: true}
+					f.m.UpdateConfig(cfg)
+				case "agents-disabled":
+					cfg := f.m.GetConfig()
+					cfg.DisableAllAgents = true
+					f.m.UpdateConfig(cfg)
+				}
+				f.resolved(t, f.healthID, f.wearID)
+				// Returning ownership gets a new occurrence and a fresh departure run.
+				f.host.LinkedNodeID = ""
+				cfg := f.m.GetConfig()
+				cfg.DisableAllAgents = false
+				delete(cfg.Overrides, f.host.ID)
+				f.m.UpdateConfig(cfg)
+				f.host.Sensors.SMART = present
+				f.m.CheckHost(f.host)
+				f.host.Sensors.SMART = []models.HostDiskSMART{present[1]}
+				for i := 0; i < 2; i++ {
+					f.m.CheckHost(f.host)
+					testRequireActiveAlert(t, f.m, f.healthID)
+					testRequireActiveAlert(t, f.m, f.wearID)
+				}
+			}
+		})
+	}
+}
+
+func TestHostSMARTRiskFilesystemIdentityCannotSubstituteInventory(t *testing.T) {
+	for _, direction := range []string{"SMART-only", "filesystem-only"} {
+		t.Run(direction, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			f.host.Disks[0].Mountpoint = "/sda"
+			f.m.CheckHost(f.host)
+			diskResourceID, _ := hostDiskResourceID(f.host, f.host.Disks[0])
+			riskResourceID, _ := hostSMARTDiskResourceID(f.host, f.host.Sensors.SMART[0])
+			if diskResourceID != riskResourceID {
+				t.Fatal("control must share the disk resource ID")
+			}
+			usageID := canonicalMetricStateID(diskResourceID, "disk")
+			testRequireActiveAlert(t, f.m, usageID)
+			if direction == "SMART-only" {
+				f.host.Disks = nil
+				f.m.CheckHost(f.host)
+				if testHasActiveAlert(t, f.m, usageID) {
+					t.Fatal("SMART identity held missing filesystem usage")
+				}
+				f.held(t)
+			} else {
+				f.host.Sensors.SMART = []models.HostDiskSMART{f.host.Sensors.SMART[1]}
+				for i := 1; i <= 3; i++ {
+					f.m.CheckHost(f.host)
+					testRequireActiveAlert(t, f.m, usageID)
+					if i < 3 {
+						f.held(t)
+					}
+				}
+				f.resolved(t, f.healthID, f.wearID)
+			}
+		})
+	}
+}
+
+func TestHostSMARTRiskRestartAndGlobalPauseRestartDeparture(t *testing.T) {
+	for _, gap := range []string{"restart", "global-pause"} {
+		t.Run(gap, func(t *testing.T) {
+			f := newSMARTLifecycleFixture(t)
+			if err := f.m.AcknowledgeAlert(f.healthID, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			f.host.Sensors.SMART = []models.HostDiskSMART{f.host.Sensors.SMART[1]}
+			for i := 0; i < 2; i++ {
+				f.m.CheckHost(f.host)
+				f.held(t)
+			}
+			cfg := f.m.GetConfig()
+			if gap == "restart" {
+				dir := filepath.Dir(f.m.alertsDir)
+				f.m.Stop() // Actual checkpoint and ordinary persisted-alert restoration.
+				f.m = NewManagerWithDataDir(dir)
+				t.Cleanup(f.m.Stop)
+				store, err := eventlog.OpenInMemory()
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.m.SetEventLog(store) // Observe post-restart lifecycle, not nonexistent old in-memory events.
+				f.m.UpdateConfig(cfg)
+				f.m.SetAlertCallback(func(a *Alert) {
+					if a.ID == f.healthID || a.ID == f.wearID {
+						f.fires.Add(1)
+					}
+				})
+				f.m.SetResolvedAlertCallback(func(r *ResolvedAlert) {
+					if r.Alert.ID == f.healthID || r.Alert.ID == f.wearID {
+						f.recoveries <- r
+					}
+				})
+			} else {
+				cfg.Enabled = false
+				f.m.UpdateConfig(cfg)
+				cfg.Enabled = true
+				f.m.UpdateConfig(cfg)
+			}
+			for i := 1; i <= 3; i++ {
+				f.m.CheckHost(f.host)
+				if i < 3 {
+					f.held(t)
+					if !testRequireActiveAlert(t, f.m, f.healthID).Acknowledged {
+						t.Fatal("gap lost persisted acknowledgement")
+					}
+				}
+			}
+			f.resolved(t, f.healthID, f.wearID)
+		})
+	}
+}
+
+// Upstream's shared Unraid readings must retain reviewed pending-grace
+// ownership even when no SMART row exists; genuine gaps still restart grace.
+func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		for _, gap := range []string{"continuous", "spun-down", "omitted", "type-off"} {
+			t.Run(fmt.Sprintf("%s/explicit=%v", gap, explicit), func(t *testing.T) {
+				m, elapsed := continuityManager(t, explicit)
+				disk := models.HostUnraidDisk{Name: "disk1", Device: "sda", Serial: "CONTINUITY-1", Transport: "sata", Temperature: 85}
+				if gap == "type-off" {
+					// Canonical SATA zero triggers are restored to defaults on save.
+					// Custom transport entries support disabling through UpdateConfig.
+					disk.Transport = "custom"
+				}
+				host := unraidTempHost(nil, disk)
+				id := hostDiskTemperatureResourceID(host.ID, "sda")
+				// The inventory also has its separate array-health alert.
+				// Judge only the disk-temperature occurrence under test.
+				alertID := canonicalMetricStateID(id, "diskTemperature")
+				m.CheckHost(host)
+				if incident, ok := continuityIncident(m, id, "diskTemperature"); !ok || incident.State != reducer.StatePending {
+					t.Fatalf("no initial pending Unraid run: %+v %v", incident, ok)
+				}
+				elapsed.Store(int64(30 * time.Second))
+				switch gap {
+				case "continuous":
+					m.CheckHost(host)
+				case "spun-down":
+					host.Unraid.Disks[0].Temperature = 0
+					m.CheckHost(host)
+					host.Unraid.Disks[0] = disk
+				case "omitted":
+					host.Unraid.Disks = nil
+					m.CheckHost(host)
+					host.Unraid.Disks = []models.HostUnraidDisk{disk}
+				case "type-off":
+					cfg := m.GetConfig()
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
+					m.UpdateConfig(cfg)
+					if threshold := m.DiskTemperatureThreshold(disk.Transport); threshold != nil && threshold.Trigger > 0 {
+						t.Fatalf("type-off fixture did not disable temperature alerts: %+v", threshold)
+					}
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
+					m.UpdateConfig(cfg)
+				}
+				elapsed.Store(int64(time.Minute))
+				m.CheckHost(host)
+				if gap == "continuous" {
+					if !testHasActiveAlert(t, m, alertID) {
+						t.Fatal("live Unraid-only reports lost continuous pending grace")
+					}
+					return
+				}
+				if testHasActiveAlert(t, m, alertID) {
+					t.Fatal("Unraid gap inherited earlier pending grace")
+				}
+				elapsed.Store(int64(119 * time.Second))
+				m.CheckHost(host)
+				if testHasActiveAlert(t, m, alertID) {
+					t.Fatal("fresh Unraid grace fired early")
+				}
+				elapsed.Store(int64(2 * time.Minute))
+				m.CheckHost(host)
+				if !testHasActiveAlert(t, m, alertID) {
+					t.Fatal("fresh continuous Unraid breach did not fire")
+				}
+			})
 		}
 	}
 }

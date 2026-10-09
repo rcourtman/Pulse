@@ -92,7 +92,7 @@ func shouldCarryForwardPreviousGuestMemory(prev *GuestMemorySnapshot, currentSta
 	if prev.Memory.Total <= 0 || prev.Memory.Used < 0 {
 		return false
 	}
-	if prev.RetrievedAt.IsZero() || now.Sub(prev.RetrievedAt) > guestMemoryCarryForwardMaxAge {
+	if !guestMemorySnapshotWithinAge(prev, now, guestMemoryCarryForwardMaxAge) {
 		return false
 	}
 
@@ -123,7 +123,7 @@ func shouldCarryForwardHealthyGuestLowTrustMemory(prev *GuestMemorySnapshot, cur
 	if prev.Memory.Total <= 0 || prev.Memory.Used < 0 {
 		return false
 	}
-	if prev.RetrievedAt.IsZero() || now.Sub(prev.RetrievedAt) > guestMemoryHealthyGuestMaxAge {
+	if !guestMemorySnapshotWithinAge(prev, now, guestMemoryHealthyGuestMaxAge) {
 		return false
 	}
 	if currentTotal == 0 || prev.Memory.Total != int64(currentTotal) {
@@ -147,4 +147,24 @@ func shouldCarryForwardHealthyGuestLowTrustMemory(prev *GuestMemorySnapshot, cur
 	}
 
 	return true
+}
+
+// The diagnostic snapshot is refreshed on every poll, including when it only
+// carries an old reading forward. It cannot extend the lifetime of that reading.
+// Legacy direct readings can use their receipt time once; a legacy retained
+// value has lost its original age and cannot borrow the latest poll's time.
+func guestMemorySnapshotWithinAge(prev *GuestMemorySnapshot, now time.Time, maxAge time.Duration) bool {
+	observation := prev.Memory.Observation
+	observedAt := observation.ObservedAt
+	if observation.State != "" || observation.Source != "" || !observedAt.IsZero() {
+		if observation.State != "current" && observation.State != "last-known" {
+			return false
+		}
+	} else {
+		if CanonicalMemorySource(prev.MemorySource) == "previous-snapshot" {
+			return false
+		}
+		observedAt = prev.RetrievedAt
+	}
+	return !observedAt.IsZero() && !observedAt.After(now) && now.Sub(observedAt) <= maxAge
 }

@@ -261,6 +261,8 @@ type VM struct {
 	Disk               Disk                    `json:"disk"`
 	Disks              []Disk                  `json:"disks,omitempty"`
 	DiskStatusReason   string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	DiskObservation    GuestDiskObservation    `json:"-"`                          // Source-owned carry-forward evidence, not the latest poll time.
+	GuestAgentEvidence GuestAgentEvidence      `json:"-"`                          // Original eligibility evidence, independent of retained identity.
 	GuestAgentStatus   string                  `json:"guestAgentStatus,omitempty"` // QEMU guest-agent runtime status
 	GuestAgentExpected bool                    `json:"guestAgentExpected,omitempty"`
 	IPAddresses        []string                `json:"ipAddresses,omitempty"`
@@ -3225,6 +3227,23 @@ func (i GuestNetworkInterface) NormalizeCollections() GuestNetworkInterface {
 		i.Addresses = []string{}
 	}
 	return i
+}
+
+// GuestDiskObservation keeps a QEMU filesystem reading's original source time
+// through internal snapshots. DiskStatusReason owns current/retained display
+// state; a linked Pulse agent remains a separate source. This is not wire data.
+type GuestDiskObservation struct {
+	Source     string
+	ObservedAt time.Time
+}
+
+// GuestAgentEvidence bounds fallback query eligibility when VM status is
+// unavailable. Explicit distinguishes an observed lack of evidence from a
+// legacy snapshot; an ordinary VM poll must not renew retained metadata.
+// This is internal coordination, not agent input or public wire data.
+type GuestAgentEvidence struct {
+	Explicit   bool
+	ObservedAt time.Time
 }
 
 // Disk represents disk usage

@@ -25,7 +25,7 @@ type EnhancedWebhookConfig struct {
 	RetryCount      int                    `json:"retryCount"`
 	FilterRules     WebhookFilterRules     `json:"filterRules"`
 	CustomFields    map[string]interface{} `json:"customFields"`    // For template variables
-	ResponseLogging bool                   `json:"responseLogging"` // Log response for debugging
+	ResponseLogging bool                   `json:"responseLogging"` // Log structured response metadata, never provider text
 }
 
 // WebhookFilterRules defines filtering for this webhook
@@ -336,7 +336,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					} else {
 						log.Debug().
 							Str("webhook", webhook.Name).
-							Str("retryAfter", retryAfter).
 							Msg("invalid Retry-After header; falling back to exponential backoff")
 					}
 				}
@@ -577,10 +576,10 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)", webhookEventID(testAlert.ID, "alert"))
 	if err != nil {
 		if result != nil {
-			return result.statusCode, result.body, err
+			return result.statusCode, result.responseSummary(), err
 		}
 		return 0, "", err
 	}
 
-	return result.statusCode, result.body, nil
+	return result.statusCode, result.responseSummary(), nil
 }

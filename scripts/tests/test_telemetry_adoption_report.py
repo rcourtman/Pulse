@@ -2120,6 +2120,76 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     expected_signal_conversion,
                 )
 
+    def test_pulse_intelligence_sparse_rows_parse_only_supplied_signals(self) -> None:
+        row = {
+            "install_id": "synthetic",
+            "received_at": "2026-07-23 12:00:00",
+            "paid_license": False,
+            "pulse_intelligence_loop_configured": "yes",
+            "pulse_intelligence_patrol_new_findings_30d": "2",
+            "pulse_intelligence_approved_action_successes_30d": "invalid",
+            "unrelated": 99,
+        }
+        # Full projections include explicit nulls; sparse older exports omit
+        # them. Neither should spend parser calls on unavailable signals.
+        projected = dict.fromkeys(report.REPORT_ROW_COLUMNS)
+        projected.update(row)
+        for supplied in (row, projected):
+            with self.subTest(projected=len(supplied) > len(row)):
+                with mock.patch.object(
+                    report, "parse_optional_bool", wraps=report.parse_optional_bool
+                ) as parse_bool, mock.patch.object(
+                    report,
+                    "parse_optional_nonnegative_int",
+                    wraps=report.parse_optional_nonnegative_int,
+                ) as parse_count:
+                    actual = report.pulse_intelligence_row_analysis_keys(supplied)
+                self.assertEqual(parse_bool.call_args_list, [mock.call("yes")])
+                self.assertCountEqual(
+                    parse_count.call_args_list, [mock.call("2"), mock.call("invalid")]
+                )
+                expected_cohorts = {
+                    key for key, _, bool_fields, count_fields
+                    in report.PULSE_INTELLIGENCE_OUTCOME_COHORTS
+                    if report.pulse_intelligence_row_matches_cohort(
+                        row, bool_fields, count_fields
+                    )
+                }
+                expected_groups = report.pulse_intelligence_row_signal_groups(row)
+                self.assertEqual(actual[0], expected_cohorts)
+                self.assertEqual(
+                    report.pulse_intelligence_derive_signal_groups(actual[1]),
+                    expected_groups,
+                )
+
+    def test_pulse_intelligence_sparse_analysis_preserves_all_field_coercions(self) -> None:
+        values = (None, True, False, 0, 1, -1, 0.5, "2", "yes", "no", " ", "bad", [], {})
+        fields = set(report.PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS) | set(
+            report.PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS
+        )
+        # The independent helpers walk the declared cohorts/groups, not the
+        # optimized field maps. Cover every field, including group-only fields.
+        for field in sorted(fields):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    row = {field: value, "undeclared_signal": True}
+                    expected_cohorts = {
+                        key for key, _, bool_fields, count_fields
+                        in report.PULSE_INTELLIGENCE_OUTCOME_COHORTS
+                        if report.pulse_intelligence_row_matches_cohort(
+                            row, bool_fields, count_fields
+                        )
+                    }
+                    expected_groups = report.pulse_intelligence_row_signal_groups(row)
+                    actual_cohorts, actual_groups = (
+                        report.pulse_intelligence_row_analysis_keys(row)
+                    )
+                    self.assertEqual(actual_cohorts, expected_cohorts)
+                    self.assertEqual(
+                        report.pulse_intelligence_derive_signal_groups(actual_groups),
+                        expected_groups,
+                    )
+
     def test_pulse_intelligence_production_scale_performance_guard(self) -> None:
         now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
         rows: list[dict[str, object]] = []
@@ -2149,12 +2219,21 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 latest_by_install[install_id] = row
 
         original_parse_received_at = report.parse_received_at
+        parse_calls = 0
+
+        def counting_parse_received_at(value):
+            nonlocal parse_calls
+            parse_calls += 1
+            return original_parse_received_at(value)
+
         started = time.perf_counter()
+        # Count the invariant without timing/retaining 120,000 Mock call
+        # records. Keep the real parser, dataset, aggregation and time budget.
         with mock.patch.object(
             report,
             "parse_received_at",
-            wraps=original_parse_received_at,
-        ) as parse_received_at:
+            new=counting_parse_received_at,
+        ):
             analyses = report.analyze_pulse_intelligence_rows(rows)
             report.summarize_pulse_intelligence_outcome_cohorts(
                 rows,
@@ -2171,7 +2250,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         elapsed = time.perf_counter() - started
 
         self.assertEqual(len(analyses), install_count)
-        self.assertEqual(parse_received_at.call_count, len(rows))
+        self.assertEqual(parse_calls, len(rows))
         self.assertLess(
             elapsed,
             8.0,

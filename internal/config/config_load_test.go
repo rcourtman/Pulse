@@ -690,3 +690,37 @@ func TestPVEInstanceVerifySSLExplicitRoundTrips(t *testing.T) {
 	assert.False(t, legacy.VerifySSL)
 	assert.False(t, legacy.VerifySSLExplicit, "a record without the field is not an explicit choice")
 }
+
+func TestPMGCollectionPersistenceDefaults(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		cfg      PMGInstance
+		wantMail bool
+	}{
+		{"legacy-default", PMGInstance{}, true},
+		{"legacy-selected-queues", PMGInstance{MonitorQueues: true}, false},
+		{"explicit-all-off", PMGInstance{MonitoringConfigured: true}, false},
+		{"explicit-mail", PMGInstance{MonitoringConfigured: true, MonitorMailStats: true}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.cfg.Name = "gateway"
+			tc.cfg.Host = "https://example.invalid:8006"
+			cp := NewConfigPersistence(t.TempDir())
+			if err := cp.SaveNodesConfig(nil, nil, []PMGInstance{tc.cfg}); err != nil {
+				t.Fatal(err)
+			}
+			// New persistence owner models restart, not reuse of in-memory flags.
+			loaded, err := NewConfigPersistence(cp.configDir).LoadNodesConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(loaded.PMGInstances) != 1 {
+				t.Fatal("scope missing after reload")
+			}
+			got := loaded.PMGInstances[0]
+			if got.MonitoringConfigured != tc.cfg.MonitoringConfigured || got.MailStatsEnabled() != tc.wantMail || got.MonitorQueues != tc.cfg.MonitorQueues {
+				t.Fatalf("scope after restart=%+v", got)
+			}
+		})
+	}
+}

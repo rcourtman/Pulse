@@ -8,11 +8,14 @@ import {
 } from '@/utils/format';
 import { getMetricColorRgba, getMetricSeverity } from '@/utils/metricThresholds';
 import type { MetricDisplayThresholds, MetricSeverity } from '@/utils/metricThresholds';
+import type { MemoryObservationPresentation } from '@/utils/memoryObservation';
 
 export interface StackedMemoryBarProps {
   used: number;
   total: number;
   unavailable?: boolean;
+  /** Already classified by the owning surface; never infer freshness from capacity. */
+  reading?: Pick<MemoryObservationPresentation, 'state' | 'message'> | null;
   percentOnly?: number;
   /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
   cache?: number;
@@ -55,7 +58,9 @@ export interface StackedMemoryBarPresentation {
   showSublabel: boolean;
   showSwapBar: boolean;
   swapBarPercent: number;
+  swapBarColor: string;
   tooltipRows: StackedMemoryTooltipRow[];
+  tooltipMessage?: string;
   tooltipTitle: string;
   unavailable: boolean;
 }
@@ -76,6 +81,16 @@ const MEMORY_COLORS = {
   swap: 'rgba(168, 85, 247, 0.6)',
 };
 
+const RETAINED_MEMORY_COLOR = 'rgba(148, 163, 184, 0.5)';
+
+const isMemoryUnavailable = (props: StackedMemoryBarProps): boolean =>
+  props.unavailable === true || props.reading?.state === 'unavailable';
+
+// A retained value can still explain the last report, but it cannot assert
+// today's pressure or anomaly. Unannotated platform bars keep their behaviour.
+const isMemoryCurrent = (props: StackedMemoryBarProps): boolean =>
+  !isMemoryUnavailable(props) && (!props.reading || props.reading.state === 'current');
+
 // Cache can never exceed the non-used pages; clamp so a momentarily
 // inconsistent snapshot (used drifting past total - cache) cannot push the
 // segments or the reconciliation row past 100%.
@@ -86,7 +101,7 @@ function getEffectiveCache(props: StackedMemoryBarProps): number {
 }
 
 function getUtilizationPercent(props: StackedMemoryBarProps): number {
-  if (props.unavailable) return 0;
+  if (isMemoryUnavailable(props)) return 0;
   if (props.total > 0) {
     return (props.used / props.total) * 100;
   }
@@ -100,7 +115,7 @@ function getSegments(
   props: StackedMemoryBarProps,
   utilizationPercent: number,
 ): StackedMemorySegment[] {
-  if (props.unavailable) {
+  if (isMemoryUnavailable(props)) {
     return [];
   }
   if (props.total <= 0) {
@@ -109,7 +124,9 @@ function getSegments(
     }
     return [
       {
-        color: getMetricColorRgba(utilizationPercent, 'memory', props.thresholds),
+        color: isMemoryCurrent(props)
+          ? getMetricColorRgba(utilizationPercent, 'memory', props.thresholds)
+          : RETAINED_MEMORY_COLOR,
         label: 'Utilization',
         leftPercent: 0,
         widthPercent: utilizationPercent,
@@ -129,7 +146,9 @@ function getSegments(
   const segments: StackedMemorySegment[] = [];
   if (props.used > 0) {
     segments.push({
-      color: getMetricColorRgba(severityPercent, 'memory', props.thresholds),
+      color: isMemoryCurrent(props)
+        ? getMetricColorRgba(severityPercent, 'memory', props.thresholds)
+        : RETAINED_MEMORY_COLOR,
       label: 'Active',
       leftPercent: 0,
       widthPercent: usedPercent,
@@ -139,7 +158,7 @@ function getSegments(
   // Reclaimable buff/cache rides between active and the balloon limit, like v5.
   if (cache > 0) {
     segments.push({
-      color: MEMORY_COLORS.cache,
+      color: isMemoryCurrent(props) ? MEMORY_COLORS.cache : RETAINED_MEMORY_COLOR,
       label: 'Reclaimable',
       leftPercent: usedPercent,
       widthPercent: cachePercent,
@@ -154,7 +173,7 @@ function getSegments(
     );
     if (balloonLimitPercent > 0 && balloon > usedPlusCache) {
       segments.push({
-        color: MEMORY_COLORS.balloon,
+        color: isMemoryCurrent(props) ? MEMORY_COLORS.balloon : RETAINED_MEMORY_COLOR,
         label: 'Balloon',
         leftPercent: usedPercent + cachePercent,
         widthPercent: balloonLimitPercent,
@@ -175,18 +194,18 @@ function getTooltipRows(
   const hasActiveBallooning = props.total > 0 && balloon > 0 && balloon < props.total;
   const hasSwap = (props.swapTotal || 0) > 0;
 
-  if (props.unavailable) {
+  if (isMemoryUnavailable(props)) {
     rows.push({
       borderTop: false,
       label: 'Usage',
-      labelClass: 'text-slate-400',
+      labelClass: 'text-muted',
       value: 'Unavailable',
     });
     if (props.total > 0) {
       rows.push({
         borderTop: true,
         label: 'Total',
-        labelClass: 'text-slate-400',
+        labelClass: 'text-muted',
         value: formatBytes(props.total),
       });
     }
@@ -198,7 +217,9 @@ function getTooltipRows(
     rows.push({
       borderTop: false,
       label: 'Used',
-      labelClass: USED_LABEL_CLASS[getMetricSeverity(severityPercent, 'memory', props.thresholds)],
+      labelClass: isMemoryCurrent(props)
+        ? USED_LABEL_CLASS[getMetricSeverity(severityPercent, 'memory', props.thresholds)]
+        : 'text-muted',
       value: formatBytes(props.used),
     });
 
@@ -206,7 +227,7 @@ function getTooltipRows(
       rows.push({
         borderTop: true,
         label: props.comparisonTotalLabel,
-        labelClass: 'text-slate-400',
+        labelClass: 'text-muted',
         value: formatBytes(props.total),
       });
       return rows;
@@ -216,7 +237,7 @@ function getTooltipRows(
       rows.push({
         borderTop: true,
         label: 'Reclaimable cache',
-        labelClass: 'text-amber-400',
+        labelClass: isMemoryCurrent(props) ? 'text-amber-400' : 'text-muted',
         value: formatBytes(cache),
       });
     }
@@ -225,7 +246,7 @@ function getTooltipRows(
       rows.push({
         borderTop: true,
         label: 'Balloon Limit',
-        labelClass: 'text-blue-400',
+        labelClass: isMemoryCurrent(props) ? 'text-blue-400' : 'text-muted',
         value: formatBytes(balloon),
       });
     }
@@ -236,7 +257,7 @@ function getTooltipRows(
     rows.push({
       borderTop: true,
       label: 'Free',
-      labelClass: 'text-slate-400',
+      labelClass: 'text-muted',
       value: formatBytes(Math.max(0, ceiling - props.used - cache)),
     });
 
@@ -246,7 +267,7 @@ function getTooltipRows(
       rows.push({
         borderTop: true,
         label: props.cacheInclusiveLabel ?? 'Used with cache',
-        labelClass: 'text-slate-500 italic',
+        labelClass: isMemoryCurrent(props) ? 'text-slate-500 italic' : 'text-muted',
         value: formatPercent(((props.used + cache) / props.total) * 100),
       });
     }
@@ -254,16 +275,16 @@ function getTooltipRows(
     rows.push({
       borderTop: true,
       label: 'Utilization',
-      labelClass: 'text-blue-300',
+      labelClass: isMemoryCurrent(props) ? 'text-blue-300' : 'text-muted',
       value: displayLabel,
     });
   }
 
-  if (props.total > 0 && hasSwap) {
+  if (!isMemoryUnavailable(props) && props.total > 0 && hasSwap) {
     rows.push({
       borderTop: true,
       label: 'Swap',
-      labelClass: 'text-amber-400',
+      labelClass: isMemoryCurrent(props) ? 'text-amber-400' : 'text-muted',
       value: `${formatBytes(props.swapUsed || 0)} / ${formatBytes(props.swapTotal || 0)}`,
     });
   }
@@ -278,15 +299,16 @@ export function buildStackedMemoryBarPresentation(
   props: StackedMemoryBarProps,
   containerWidth: number,
 ): StackedMemoryBarPresentation {
+  const unavailable = isMemoryUnavailable(props);
+  const current = isMemoryCurrent(props);
+  const anomaly = current ? props.anomaly : undefined;
   const utilizationPercent = getUtilizationPercent(props);
   const displayLabel = formatPercent(utilizationPercent);
   const displaySublabel =
-    !props.unavailable && props.total > 0
-      ? `${formatBytes(props.used)}/${formatBytes(props.total)}`
-      : '';
-  const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
+    !unavailable && props.total > 0 ? `${formatBytes(props.used)}/${formatBytes(props.total)}` : '';
+  const anomalyRatio = formatAnomalyRatio(anomaly) ?? '';
   // The anomaly marker shares the label's line whenever it renders.
-  const anomalyMarker = props.anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
+  const anomalyMarker = anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
   const showSublabel =
     displaySublabel.length > 0 &&
     containerWidth >=
@@ -294,23 +316,25 @@ export function buildStackedMemoryBarPresentation(
         LABEL_PADDING_PX;
 
   return {
-    anomalyClass: props.anomaly
-      ? (ANOMALY_SEVERITY_CLASS[props.anomaly.severity] ?? 'text-yellow-400')
+    anomalyClass: anomaly
+      ? (ANOMALY_SEVERITY_CLASS[anomaly.severity] ?? 'text-yellow-400')
       : 'text-yellow-400',
-    anomalyDescription: props.anomaly?.description,
+    anomalyDescription: anomaly?.description,
     anomalyRatio,
     displayLabel,
     displayPercentValue: utilizationPercent,
     displaySublabel,
     segments: getSegments(props, utilizationPercent),
     showSublabel,
-    showSwapBar: (props.swapTotal || 0) > 0 && (props.swapUsed || 0) > 0,
+    showSwapBar: !unavailable && (props.swapTotal || 0) > 0 && (props.swapUsed || 0) > 0,
     swapBarPercent:
-      props.swapTotal && props.swapTotal > 0
+      !unavailable && props.swapTotal && props.swapTotal > 0
         ? Math.min(((props.swapUsed || 0) / props.swapTotal) * 100, 100)
         : 0,
+    swapBarColor: current ? 'rgb(168 85 247)' : RETAINED_MEMORY_COLOR,
     tooltipRows: getTooltipRows(props, displayLabel),
+    tooltipMessage: props.reading?.message,
     tooltipTitle: props.tooltipTitle ?? 'Memory Composition',
-    unavailable: props.unavailable === true,
+    unavailable,
   };
 }

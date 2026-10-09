@@ -20,7 +20,97 @@
 
 ## Purpose
 
+### Systemd backup-pause help separates shutdown from remote completion
+
+The existing systemd precaution reads the stop result as well as the inactive
+service state. A newly stopped server requires a normal zero process exit;
+timeout, signal, non-zero or unknown results do not permit a planned backup.
+Previously inactive servers stay inactive, and failures must not be cleared
+to make the check pass. Even a successful shutdown does not cancel or prove
+completion of an already-issued guest-agent request. Existing guest/backup
+operations must finish normally, without new probes; unknown state, a disk
+dash, a cooldown or a waiting period is not completion evidence.
+
+`backupSafetyHelp.test.ts` verifies the rendered bounded state command, failure
+and in-flight gates, prior-state restoration and shipped mirror. This changes
+existing help, not service configuration, native shutdown/QGA recovery or
+release availability. The independent post-backup thaw/write/liveness and
+only-prior-active restoration boundary remains unchanged.
+
+### Container backup-pause help preserves identity and prior state
+
+The existing VM Disk Monitoring guide also covers a standalone Docker or plain
+Compose Pulse server, linked from the Docker guide and the systemd precaution.
+It identifies the original server container(s), discloses the monitoring/alert
+outage, requires suspended external restart controls and same-ID stopped-state
+readback before a planned backup. Stopped state never proves an earlier guest
+request completed. Incident recovery and controller-managed replacement are
+outside this manual sequence.
+
+Restoration requires independent post-backup thaw, fresh successful workload
+writes on every covered filesystem and liveness. Only previously running,
+existing container IDs and previously active automatic jobs may be restored;
+unknown state, missing IDs, failed startup or unknown restart behaviour keep
+automation paused. No image, restart-policy, mounted data, guest operation or
+diagnostic permission changes. Bounded state templates omit environment/config
+secrets. `dockerBackupSafetyHelp.test.ts` exercises rendered commands, gates,
+cross-links and shipped mirrors; this is help validation, not a Docker daemon,
+installed guest recovery, native acceptance or release proof.
+
+### Narrow Workloads identity during guest locks
+
+In narrow and phone layouts, the guest name and status occupy the first line;
+the unchanged backup evidence control moves below the name, retaining its
+44 px touch target. The guest lock occupies a separate, wrapping line below
+that identity. It must not consume the name's
+horizontal space or spill into the adjacent metrics. The full lock remains
+visible; a long name keeps its full title and existing truncation. Wider layouts
+keep the inline lock. Disclosure, first-touch row activation and memory
+observation source/time are unchanged. This is presentation only: a backup lock
+or successful backup never proves guest recovery.
+
+`GuestRow.test.tsx` checks layout structure, lock updates and existing action
+ownership. `browser-tests/build-guest-row-lock-fixture.mjs` compiles the real row,
+stylesheet and drawer before bounded static browser execution. Use
+`node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`
+to read the exact parent row from Git; no manually supplied control is accepted.
+`browser-tests/guest-row-lock-identity.cjs` measures the rendered name/lock at 320 and 390 px in bars and sparklines, and exercises keyboard/first
+touch through the existing drawer, checks long-name bounds, and rejects the current
+parent with the same static fixture. No dev compiler or old terminated preview
+is replayed. Native recovery remains separate.
+
+### Confirmed operations opt out of silent transport fallback
+
+The shared API client accepts expectedOrgID and retry:false for confirmed
+Patrol manual-rule removal. It pins and rechecks the selected organisation at
+dispatch, respects cancellation after asynchronous CSRF preparation and makes
+no automatic auth/tenant/CSRF/rate-limit replay. Existing caller defaults are
+unchanged. Tests exercise these safeguards with real request options.
+
+Patrol manual-rule confirmation keeps its title and safe Cancel/Remove controls outside a keyboard-focusable scrolling scope/reason region. Long multiline reasons cannot clip identifiers or the action footer on a narrow viewport. The region permits both keyboard and pointer review without changing confirmation state or sending a mutation.
+
+
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
+
+**Workloads rows preserve memory observation provenance.**
+
+Workloads rows use the same selected-memory qualification as both drawers.
+Retained and freshness-unknown values keep a visible cue in bars, sparklines,
+the hover History lens and host-capacity mode; compact layouts shorten only the
+visible label, not the accessible original source/time explanation. Sparkline
+accessible values never call retained, unknown or unavailable memory current.
+Unavailable numeric carriers remain N/A while recorded History stays intact.
+An independent qualified memory reading is not paused by a disk deferral.
+Neither Last seen, backup completion nor running power state renews memory.
+Unannotated unrelated platforms and actual zero readings retain their meaning.
+
+`GuestRow.test.tsx`, `MetricMiniSparkline.test.tsx` and
+`memoryObservation.test.ts` pin these boundaries, with existing drawer, adapter
+and History suites. `browser-tests/guest-row-memory-provenance.cjs` checks real
+production rows and drawers, visible/accessible labels, pointer/touch/keyboard,
+light/dark and narrow/desktop layouts using synthetic observations only.
+Presentation acceptance does not establish native thaw, covered-filesystem
+writes, guest liveness, service restoration or reporter recovery.
 
 ### Drawer attention detail line and temperature alert floor — issue #2068
 
@@ -8746,6 +8836,23 @@ for missing data. Tooltips reserve room for a wrapped local timestamp and readin
 fixture cover navigation, bounds, focus exit, refresh and replacement. Synthetic
 browser proof does not establish native collector or assistive-device acceptance.
 
+### Shared History window control access
+
+Each visible shared chart window selector is a named group for its metric (or
+"History window" when no label is supplied). Exactly the current period carries
+`aria-pressed=true`; switching one chart must not change another chart's selected
+state. Period buttons retain native keyboard/touch behaviour and explicit
+`type=button`, so changing the window cannot submit an enclosing form. A hidden
+selector exposes neither a group nor controls.
+
+The header, summary and existing period choices wrap within their chart on
+narrow screens instead of forcing horizontal overflow. This changes neither
+available periods, subscriptions, History ownership nor sample interpretation.
+Mounted `HistoryChart.test.tsx` and the production-component
+`browser-tests/history-window-controls.cjs` cover selection, scope, native input,
+form non-submission and phone layout. Synthetic observations are not native
+PBS/NAS, physical device or assistive-device acceptance.
+
 ### Shared History request-state honesty
 
 An empty successful response states only that the selected time range has no
@@ -8889,3 +8996,46 @@ title as a muted line (`data-thresholds-defaults-summary`) that wraps only
 between items on phones and truncates from `sm` up, and is hidden while
 `isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
 composing per-section strings.
+
+### Passive alternative for unavailable Proxmox guest disks (6 October 2026)
+
+The existing disk guide offers already-present Machines filesystem readings and
+History as an interim view, with same-guest identity and metric-age checks.
+Recent agent contact and retained History do not establish current disk usage;
+working Machines readings do not repair Proxmox collection or prove correlation
+or thaw. No new agent installation, guest restart/restore, pause bypass or active
+probe is prescribed. Independent thaw, every-covered-filesystem writes and
+liveness remain the backup restoration boundary. The shipped mirror and
+`backupSafetyHelp.test.ts` validate the rendered guidance and anchor; both new
+controls reject the original parent guide. No runtime or wire contract changes.
+
+### PBS protection disagreement help (6 October 2026)
+
+The existing PBS guide separates visible/matched/verified backup artifacts from
+subject-linked protection assessment and independent restore or guest recovery
+proof. Its passive Coverage check uses the shipped Job, History and Access
+labels, existing PBS records and scoped redacted reporting. No task is induced,
+no identity/permission/retention setting is changed and no policy cause is
+assumed. Frozen/unresponsive guests retain independent post-backup thaw, writes
+on every covered filesystem, liveness and only-prior-active restoration with
+the monitoring/alert outage disclosed.
+
+`pbsProtectionHelp.test.ts` checks the production Markdown renderer, ordered
+passive steps, evidence distinctions, safety link/target, disclosure and exact
+shipped mirror. Exact-parent controls reject the old guide. This is safe help
+maintenance, not a collector/classifier repair, browser acceptance, native
+backup/recovery proof or published availability.
+
+### TrueNAS heat uses the configured disk policy (8 October 2026)
+
+The production TrueNAS storage table and inline resource drawer pass each
+disk's canonical resource ID through the alerts store. Type defaults, a
+TrueNAS-wide value and the disk override produce one consistent status/reason
+and temperature tone; retained values stay muted and unjudged. The existing
+keyboard disclosure and phone table layouts are preserved.
+
+Verification: `TrueNASStorageTopologyTable.test.tsx`, the drawer model tests,
+and `browser-tests/truenas-disk-thresholds.cjs` exercise desktop Chromium and
+phone WebKit, config refresh, Attention filtering and keyboard disclosure.
+The fixture imports the production store/table/drawer/CSS but uses synthetic
+HTTP and readings; it is not full-shell, appliance or published acceptance.

@@ -189,7 +189,7 @@ func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration 
 
 // GetDiskMetricsForChart returns physical-disk metrics optimized for chart
 // display, preferring in-memory data for freshness and falling back to the
-// persistent store when coverage is shallow.
+// persistent store and source-native temperature history when coverage is shallow.
 func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, duration time.Duration) []MetricPoint {
 	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
 	if mock.IsMockEnabled() {
@@ -204,6 +204,14 @@ func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, d
 	if converted, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
 		if candidate := converted[metricType]; shouldPreferMetricSeries(best, candidate, duration) {
 			best = cloneMetricSeries(candidate)
+		}
+	}
+	if metricType == "smart_temp" && !hasSufficientChartSeriesCoverage(best, duration) {
+		if nativePoints := m.nativePhysicalDiskTemperatureHistory(duration)[resourceID]; len(nativePoints) > 0 {
+			nativePoints = lttb(nativePoints, chartDownsampleTarget)
+			if shouldPreferMetricSeries(best, nativePoints, duration) {
+				best = cloneMetricSeries(nativePoints)
+			}
 		}
 	}
 
@@ -266,13 +274,11 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 
 	// Phase 1: Collect disk metadata and resource IDs.
 	type diskMeta struct {
-		resourceID string
-		name       string
-		node       string
-		instance   string
-		// collectedTemperature is the reading the current observation took,
-		// or 0 when the disk only retains a last-known value.
-		collectedTemperature int
+		resourceID           string
+		name                 string
+		node                 string
+		instance             string
+		temperatureCollected bool
 	}
 	var disks []diskMeta
 	for _, disk := range readState.PhysicalDisks() {
@@ -295,16 +301,12 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		if name == "" {
 			name = strings.TrimSpace(disk.DevPath())
 		}
-		collectedTemperature := 0
-		if diskinventory.TemperatureCollected(disk.Temperature(), disk.Collection()) {
-			collectedTemperature = disk.Temperature()
-		}
 		disks = append(disks, diskMeta{
 			resourceID:           resourceID,
 			name:                 name,
 			node:                 strings.TrimSpace(disk.Node()),
 			instance:             strings.TrimSpace(disk.Instance()),
-			collectedTemperature: collectedTemperature,
+			temperatureCollected: diskinventory.TemperatureCollected(disk.Temperature(), disk.Collection()),
 		})
 	}
 
@@ -352,22 +354,12 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			}
 		}
 
-		// Sparklines require >= 2 points. If the store returned 0 or 1 points
-		// but the disk has a live temperature reading, pad to 2 points so the
-		// chart can render (flat line at current temperature). A retained
-		// last-known temperature (standby, a silent host agent) is not a
-		// reading taken now, so the stored samples stay as they are and a
-		// disk with none has no series.
-		if len(tempPoints) < 2 {
-			if d.collectedTemperature > 0 {
-				now := time.Now()
-				tempPoints = []MetricPoint{
-					{Timestamp: now.Add(-60 * time.Second), Value: float64(d.collectedTemperature)},
-					{Timestamp: now, Value: float64(d.collectedTemperature)},
-				}
-			} else if len(tempPoints) == 0 {
-				continue
-			}
+		// Neither a current nor a retained temperature is two historical
+		// observations. Keep empty and single-point histories intact instead
+		// of inventing a flat line. A collected reading still supplies current
+		// disk metadata; a retained-only reading with no history supplies none.
+		if len(tempPoints) == 0 && !d.temperatureCollected {
+			continue
 		}
 
 		result[d.resourceID] = DiskChartEntry{

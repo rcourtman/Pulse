@@ -20,19 +20,23 @@ func TestSequencedIDsStayUniqueUnderConcurrentMinting(t *testing.T) {
 	generators := []struct {
 		prefix string
 		mint   func() string
+		uuid   bool
 	}{
-		{"inc-", generateIncidentID},
-		{"inc-evt-", generateIncidentEventID},
-		{"rem-", generateRecordID},
-		{"mem-", generateMemoryID},
-		{"inc-mem-", generateIncidentMemoryID},
-		{"pat-mem-", generatePatternMemoryID},
+		{"inc-", generateIncidentID, true},
+		{"inc-evt-", generateIncidentEventID, true},
+		{"rem-", generateRecordID, false},
+		{"mem-", generateMemoryID, false},
+		{"inc-mem-", generateIncidentMemoryID, false},
+		{"pat-mem-", generatePatternMemoryID, false},
 	}
 	const goroutines, perGoroutine = 16, 150
 
 	for _, gen := range generators {
 		t.Run(strings.TrimSuffix(gen.prefix, "-"), func(t *testing.T) {
 			shape := regexp.MustCompile("^" + regexp.QuoteMeta(gen.prefix) + `\d{14}-[1-9]\d*$`)
+			if gen.uuid {
+				shape = regexp.MustCompile("^" + regexp.QuoteMeta(gen.prefix) + `[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+			}
 			minted := make([][]string, goroutines)
 			start := make(chan struct{})
 			var wg sync.WaitGroup

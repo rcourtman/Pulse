@@ -174,19 +174,6 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
-async function getLatestStableVersion(github, context, core) {
-  try {
-    const latest = await github.rest.repos.getLatestRelease({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-    });
-    return normalizeVersion(latest.data.tag_name || latest.data.name || "");
-  } catch (error) {
-    core.warning(`Could not determine latest release: ${error.message}`);
-    return null;
-  }
-}
-
 function buildTriageState(issue, core, latestVersion) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
@@ -200,7 +187,7 @@ function buildTriageState(issue, core, latestVersion) {
 
   const reportedVersion = extractPulseVersion(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
-  core.info(`Latest stable release: ${latestVersion || "unknown"}`);
+  if (latestVersion) core.info(`Latest stable release: ${latestVersion}`);
 
   return {
     labelNames,
@@ -249,21 +236,38 @@ async function applyLabelDelta(github, context, issue, before, after) {
 }
 
 async function syncLabels({ github, context, core }) {
-  const issue = context.payload.issue;
-  const latestVersion = await getLatestStableVersion(github, context, core);
+  const eventIssue = context.payload.issue;
+  // Jobs can start after another edit, comment or Community disposition.
+  // Read the report and its labels together; never fall back to stale event
+  // metadata when this read fails.
+  const { data: issue } = await github.rest.issues.get({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: eventIssue.number,
+  });
+  if (!issue || issue.number !== eventIssue.number) {
+    throw new Error("Current issue identity did not match the triage event");
+  }
+  if (issue.state !== "open" || issue.pull_request) {
+    core.info("Report is no longer an open issue. Skipping label sync.");
+    return;
+  }
   const {
     labelNames,
     nextLabels,
     reportedVersion,
     hasAdditionalActionableTopics,
     isBugLike,
-  } = buildTriageState(issue, core, latestVersion);
+  } = buildTriageState(issue, core, null);
 
   // A form declaration creates a review task only when it is new. A later
   // empty field cannot prove that comment topics were dispositioned, and an
-  // unrelated edit must not restore a label Community deliberately cleared.
+  // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
-  const newlyDeclared = hasAdditionalActionableTopics === true && (
+  const eventIsCurrent = typeof issue.updated_at === "string" &&
+    issue.body === eventIssue.body &&
+    issue.updated_at === eventIssue.updated_at;
+  const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
       classifyAdditionalActionableTopics(previousBody) !== true)

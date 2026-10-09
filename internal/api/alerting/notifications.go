@@ -422,41 +422,26 @@ func maskedWebhookResponse(webhook notifications.WebhookConfig) map[string]inter
 	return whMap
 }
 
-// restoreMaskedWebhookSecrets replaces each masked value in an incoming
-// webhook with the saved value of the same header, custom field or signing
-// secret. Restoring per key keeps any value the user typed in the same edit;
-// a masked key with no saved value is dropped, so the mask is never stored or
-// sent as a real value.
-func restoreMaskedWebhookSecrets(incoming, saved notifications.WebhookConfig) notifications.WebhookConfig {
-	incoming.Headers = restoreMaskedWebhookValues(incoming.Headers, saved.Headers)
-	incoming.CustomFields = restoreMaskedWebhookValues(incoming.CustomFields, saved.CustomFields)
+// restoreMaskedWebhookSecrets is the shared Create/Update/Test policy. A mask
+// means keep this saved value, not discard the field or store the placeholder.
+// Reject missing/ambiguous saved identities before persistence or any test send.
+func restoreMaskedWebhookSecrets(incoming, saved notifications.WebhookConfig) (notifications.WebhookConfig, error) {
+	var err error
+	incoming.Headers, err = restoreStrictMaskedWebhookValues(incoming.Headers, saved.Headers, true)
+	if err != nil {
+		return notifications.WebhookConfig{}, err
+	}
+	incoming.CustomFields, err = restoreStrictMaskedWebhookValues(incoming.CustomFields, saved.CustomFields, false)
+	if err != nil {
+		return notifications.WebhookConfig{}, err
+	}
 	if incoming.SigningSecret == maskedWebhookSecret {
+		if saved.SigningSecret == "" || saved.SigningSecret == maskedWebhookSecret {
+			return notifications.WebhookConfig{}, fmt.Errorf("no saved value for masked signing secret")
+		}
 		incoming.SigningSecret = saved.SigningSecret
 	}
-	return incoming
-}
-
-func restoreMaskedWebhookValues(incoming, saved map[string]string) map[string]string {
-	if len(incoming) == 0 {
-		return incoming
-	}
-	restored := make(map[string]string, len(incoming))
-	for key, value := range incoming {
-		if value != maskedWebhookSecret {
-			restored[key] = value
-			continue
-		}
-		if savedValue, ok := saved[key]; ok {
-			restored[key] = savedValue
-		}
-	}
-	return restored
-}
-
-// stripMaskedWebhookSecrets drops masked values from a webhook that has no
-// saved counterpart, such as a create or an unsaved form test.
-func stripMaskedWebhookSecrets(webhook notifications.WebhookConfig) notifications.WebhookConfig {
-	return restoreMaskedWebhookSecrets(webhook, notifications.WebhookConfig{})
+	return notifications.NormalizeWebhookConfig(incoming), nil
 }
 
 // CreateWebhook creates a new webhook
@@ -479,7 +464,11 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	webhook = notifications.NormalizeWebhookConfig(stripMaskedWebhookSecrets(webhook))
+	webhook, err = restoreMaskedWebhookSecrets(webhook, notifications.WebhookConfig{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
@@ -510,7 +499,56 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// UpdateWebhook updates an existing webhook
+// restoreStrictMaskedWebhookValues resolves only submitted placeholders. The editor
+// sends a replacement map: explicit edits and omitted keys must not be undone
+// just because another value is still masked. Header names are case-insensitive;
+// custom-field names are not. Never store a placeholder without a saved value.
+func restoreStrictMaskedWebhookValues(incoming, existing map[string]string, headers bool) (map[string]string, error) {
+	if incoming == nil {
+		return nil, nil
+	}
+	// Build the full HTTP identity index, even if an exact spelling exists:
+	// a legacy case-varied alias must not override or conceal a conflicting value.
+	savedHeaders := make(map[string]string)
+	ambiguousHeaders := make(map[string]bool)
+	if headers {
+		for key, value := range existing {
+			identity := strings.ToLower(key)
+			if previous, found := savedHeaders[identity]; found && previous != value {
+				ambiguousHeaders[identity] = true
+			}
+			savedHeaders[identity] = value
+		}
+	}
+	resolved := make(map[string]string, len(incoming))
+	incomingHeaders := make(map[string]string)
+	for key, value := range incoming {
+		identity := strings.ToLower(key)
+		if value == maskedWebhookSecret {
+			stored, found := existing[key]
+			if headers {
+				if ambiguousHeaders[identity] {
+					return nil, fmt.Errorf("ambiguous saved value for masked header %q", key)
+				}
+				stored, found = savedHeaders[identity]
+			}
+			if !found || stored == maskedWebhookSecret {
+				return nil, fmt.Errorf("no saved value for masked field %q", key)
+			}
+			value = stored
+		}
+		if headers {
+			if previous, found := incomingHeaders[identity]; found && previous != value {
+				return nil, fmt.Errorf("ambiguous submitted values for header %q", key)
+			}
+			incomingHeaders[identity] = value
+		}
+		resolved[key] = value
+	}
+	return resolved, nil
+}
+
+// UpdateWebhook updates an existing webhook.
 func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	h.configMu.Lock()
 	defer h.configMu.Unlock()
@@ -550,8 +588,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
 
-	// The edit form sends back the masked values GetWebhooks returned for
-	// anything the user did not retype; those keep their saved values.
+	// Restore each masked value returned by GetWebhooks, not its entire map.
 	existingWebhooks := manager.GetWebhooks()
 	found := false
 	for _, existing := range existingWebhooks {
@@ -566,7 +603,11 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 			if routingPresence.MinimumSeverity == nil {
 				webhook.MinimumSeverity = existing.MinimumSeverity
 			}
-			webhook = restoreMaskedWebhookSecrets(webhook, existing)
+			webhook, err = restoreMaskedWebhookSecrets(webhook, existing)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			break
 		}
 	}
@@ -574,7 +615,6 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, fmt.Sprintf("webhook not found: %s", webhookID), http.StatusNotFound)
 		return
 	}
-	webhook = notifications.NormalizeWebhookConfig(webhook)
 
 	// Validate webhook URL
 	if err := manager.ValidateWebhookURL(webhook.URL); err != nil {
@@ -917,7 +957,11 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	basicWebhook = notifications.NormalizeWebhookConfig(restoreMaskedWebhookSecrets(basicWebhook, saved))
+	basicWebhook, err = restoreMaskedWebhookSecrets(basicWebhook, saved)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// Try to extract service from body if present
 	var serviceCheck struct {

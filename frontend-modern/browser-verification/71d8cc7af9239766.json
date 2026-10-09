@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "2003e843d089f3c8d542bdd66aac4ac148e3572c",
+  "verified_at": "2026-10-06T11:11:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx": "1e4ad1c5905528ebf5fd21f0dfb504bcf9f5c3740b718f56f084d70881f99822"
+  },
+  "routes": [
+    "/settings/system/network",
+    "/settings/system/network?override=1",
+    "/docs/FAQ",
+    "/docs/TROUBLESHOOTING#cors-errors"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Actual NetworkBoundarySettingsSection, Docs, router and source stylesheet using existing cors-guidance fixture. Chromium141.0.7390.37/light desktop and WebKit26.0/dark phone with Playwright1.56.1. Six captures inspected. This is a sentence-punctuation repair after copy lint failure, not changed CORS runtime policy.",
+    "The same-origin/exact-origin and wildcard credential limits are readable and associated with the CORS input through aria-describedby. Empty editable field and managed environment override retain their exact values and dirty-state semantics.",
+    "No horizontal page overflow or console/page errors. This is not settings persistence, saved-effective reversal, native CORS, login, CSRF, TLS, proxy, installed, published or physical-device acceptance."
+  ],
+  "interactions": [
+    "Keyboard input preserves two exact trusted origins and marks the existing form changed. The environment-overridden field remains disabled and unchanged.",
+    "Keyboard Enter follows the real FAQ and troubleshooting CORS links, scrolls/focuses the heading and renders the actual shipped docs.",
+    "Completed script closes each browser and awaits server.close in its finally block; client exit0. No independent detached descendant audit is inferred."
+  ]
+}

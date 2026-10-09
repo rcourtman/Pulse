@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise TrueNAS connection recipes without putting credentials in argv.
+"""Exercise TrueNAS connection and diagnostic recipes safely.
 
 All credentials are synthetic. HTTP checks require the offline source-proof VM.
+Log-reader controls establish bounds and exit handling, not native NAS recovery
+or automatic redaction.
 """
 
 from contextlib import contextmanager
@@ -16,6 +18,8 @@ import subprocess
 import tempfile
 import threading
 import unittest
+
+from test_troubleshooting_logs import exercise_log_recipe
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,10 +71,177 @@ class TrueNASDocsTest(unittest.TestCase):
         text = DOC.read_text()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", text, re.DOTALL))
         self.assertNotRegex(bash, r"Authorization:|Bearer\s|\$TOKEN|apiKey|--insecure")
-        self.assertIn("journalctl -u pulse -n 100 --no-pager", bash)
-        self.assertIn("docker logs --tail 100 pulse 2>&1", bash)
         self.assertIn("does not establish a live reading", text)
         self.assertIn("Do not upload a full browser network capture", text)
+
+    def disk_health_section(self):
+        text = DOC.read_text()
+        heading = "## Disk temperature and health\n"
+        self.assertIn(heading, text, "disk-health interpretation must have a reachable guide")
+        return text.split(heading, 1)[1].split("## Multiple TrueNAS Systems", 1)[0]
+
+    def test_disk_health_guidance_separates_reading_rule_and_recovery(self):
+        prose = " ".join(self.disk_health_section().split())
+        for boundary in (
+            "Heat, native SMART faults and stale or missing readings are separate evidence",
+            "last known** temperature is not a current reading", "no temperature is not zero",
+            "Alerts → Thresholds → TrueNAS → TrueNAS Disks", "own temperature override",
+            "takes precedence", "inherits **Disk temperature by type**",
+            "agent **Disk Temp** default is off", "explicit TrueNAS temperature rule",
+            "Thresholds are in **°C**", "**Save Changes**", "unsaved edit is not the running rule",
+            "**Off is not recovery.**", "not collection or disk-health evidence",
+            "disables that rule, not its native SMART faults", "does not repair the disk",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+        self.assertNotIn("```", self.disk_health_section(), "no new live diagnostic recipe")
+
+    def test_disk_display_mismatch_has_a_passive_private_reporting_route(self):
+        prose = " ".join(self.disk_health_section().split())
+        for boundary in (
+            "**Storage temperature judgement:**", "inherited agent/by-type policy",
+            "saved per-disk temperature override, then the TrueNAS-wide default",
+            "reading visible but unjudged", "last known reading is never current heat",
+            "not proof that your saved rule failed", "same disk, observation time and saved threshold",
+            "existing TrueNAS reading and SMART state", "do not raise thresholds",
+            "run new SMART tests", "force a probe or restart", "only the disk type",
+            "redacted reason, time", "current or last known", "consistent aliases",
+            "keep the full diagnostics and configuration private", "not repeated connection tests",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+        self.assertNotIn("Storage display limitation", prose)
+        config = ROOT / "docs/CONFIGURATION.md"
+        config_prose = " ".join(config.read_text().split())
+        self.assertIn("TRUENAS.md#disk-temperature-and-health", config_prose)
+        self.assertIn("per-disk override, then the TrueNAS-wide default, then the inherited by-type policy",
+                      config_prose)
+        self.assertIn("Off leaves the temperature visible but unjudged", config_prose)
+        self.assertIn("last known readings are not current heat", config_prose)
+        self.assertNotIn("do not yet follow", config_prose)
+        self.assertEqual(config.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
+
+    def log_section(self):
+        return DOC.read_text().split("### No data appearing after adding connection\n", 1)[1].split(
+            "### Inventory works but CPU, memory or History is missing", 1)[0]
+
+    def log_recipes(self):
+        # Follow the actual local help link, not an unrelated test fixture or
+        # a second copy of the shell commands in this guide.
+        links = re.findall(r"\[bounded Pulse log readers\]\(([^)]+)\)", self.log_section())
+        self.assertEqual(links, ["TROUBLESHOOTING.md#inspect-notification-logs"])
+        self.assertNotIn("```", self.log_section(), "do not leave an unbounded alternate reader")
+        target = ROOT / "docs" / links[0].split("#", 1)[0]
+        self.assertEqual(target.read_bytes(), (ROOT / "frontend-modern/public/docs" / target.name).read_bytes())
+        section = target.read_text().split("### Inspect Notification Logs\n", 1)[1].split("\n### ", 1)[0]
+        blocks = re.findall(r"```bash\n(.*?)```", section, re.DOTALL)
+        self.assertEqual(len(blocks), 2, "one bounded reader per deployment")
+        return {"docker" if "# Docker" in block else "journalctl": block for block in blocks}
+
+    def exercise_log(self, reader, recipe, *, exitcode=0, **settings):
+        result, argv = exercise_log_recipe(reader, recipe, exit_code=exitcode, **settings)
+        self.assertEqual(argv is None, bool(settings.get("missing_timeout")))
+        return result, argv
+
+    def test_log_recipes_bound_the_read_and_keep_unfiltered_output(self):
+        expected = {
+            "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"],
+            "docker": ["logs", "--since", "15m", "--tail", "200", "pulse"],
+        }
+        self.assertEqual(set(self.log_recipes()), set(expected))
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, argv = self.exercise_log(reader, recipe, stdout="startup failed\n",
+                                                stderr="TrueNAS collection failed\n")
+                self.assertEqual(argv, expected[reader])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertCountEqual(result.stdout.splitlines(), ["startup failed", "TrueNAS collection failed"])
+                self.assertEqual(result.stderr, "")
+                self.assertNotRegex(recipe, r"\b(?:grep|curl|inspect|restart|printenv)\b|--follow")
+                self.assertIn("--signal=TERM --kill-after=1s 8s", recipe)
+
+    def test_log_reader_failure_is_preserved_even_with_a_matching_partial_line(self):
+        for reader, recipe in self.log_recipes().items():
+            for output in ("", "TrueNAS polling\n"):
+                with self.subTest(reader=reader, output=output):
+                    result, _ = self.exercise_log(reader, recipe, stdout=output,
+                                                  stderr="synthetic access failure\n", exitcode=2)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Log read unavailable (exit 2)", result.stderr)
+                    self.assertNotIn("synthetic access failure", result.stderr)
+
+    def test_hung_readers_withhold_partial_nas_output_at_the_real_deadline(self):
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n", hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_reader_ignoring_term_is_killed_after_the_grace_period(self):
+        result, _ = self.exercise_log("docker", self.log_recipes()["docker"],
+                                     stdout="TrueNAS polling\n", hang="ignore-term")
+        self.assertEqual(result.returncode, 137, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 137)", result.stderr)
+
+    def test_missing_timeout_stops_before_reading_without_an_unbounded_fallback(self):
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, argv = self.exercise_log(reader, recipe, missing_timeout=True)
+                self.assertIsNone(argv)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
+
+    def test_legacy_pipelines_demonstrate_the_masked_reader_failure(self):
+        legacy = {
+            "journalctl": "journalctl -u pulse -n 100 --no-pager | grep -i truenas",
+            "docker": "docker logs --tail 100 pulse 2>&1 | grep -i truenas",
+        }
+        for reader, recipe in legacy.items():
+            with self.subTest(reader=reader):
+                result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n",
+                                              stderr="synthetic access failure\n", exitcode=2)
+                self.assertEqual(result.returncode, 0, "old recipe must expose the masked failure")
+                self.assertIn("TrueNAS polling", result.stdout)
+        result, _ = self.exercise_log("docker", legacy["docker"], stdout="storage init failed\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "", "old filter discards related non-TrueNAS errors")
+
+    def test_empty_or_sensitive_logs_are_not_claimed_to_be_safe_or_healthy(self):
+        for reader, recipe in self.log_recipes().items():
+            result, _ = self.exercise_log(reader, recipe)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout + result.stderr, "")
+            result, _ = self.exercise_log(reader, recipe, stderr="synthetic-secret-echo\n")
+            self.assertIn("synthetic-secret-echo", result.stdout)
+        prose = " ".join(self.log_section().split())
+        for boundary in ("inside the Pulse container", "actual service or container name",
+                         "failed read, not", "successful empty read is inconclusive",
+                         "not sanitised", "not the whole excerpt", "manually redacted",
+                         "anything echoed in an error", "enable Debug",
+                         "record limit alone does not bound a hung reader", "GNU `timeout`",
+                         "eight-second deadline and one-second termination grace",
+                         "no request ID is required", "only after a successful read",
+                         "withholds partial output", "do not use an unbounded substitute"):
+            self.assertIn(boundary, prose)
+
+    def test_diagnostics_export_guidance_uses_current_copy_and_preserves_live_check_boundary(self):
+        text = " ".join(self.log_section().split())
+        copy = (ROOT / "frontend-modern/src/utils/diagnosticsPresentation.ts").read_text()
+        for field in ("exportFullLabel", "exportGithubLabel", "runActionLabel"):
+            label = re.search(rf"{field}: '([^']+)'", copy).group(1)
+            self.assertIn(label, text)
+        for boundary in ("without running the checks again", "nothing is uploaded",
+                         "review it before sharing", "keep **Full (private)** private",
+                         "makes live API and guest-agent requests", "during a backup, freeze/thaw",
+                         "unresponsive-host incident", "Keep the existing observations",
+                         "TROUBLESHOOTING.md#collect-diagnostics-safely"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("Export for GitHub (sanitized)", text)
 
     def test_core_graph_guidance_distinguishes_request_from_reply(self):
         text = DOC.read_text().split("### Inventory works but CPU, memory or History is missing", 1)[1]

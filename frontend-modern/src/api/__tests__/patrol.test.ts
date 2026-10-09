@@ -13,6 +13,8 @@ import {
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
   createSuppressionRuleFromFinding,
+  getSuppressionRules,
+  deleteManualSuppressionRule,
   reopenFinding,
   resolveFinding,
   triggerPatrolRun,
@@ -33,6 +35,59 @@ describe('patrol api', () => {
   beforeEach(() => {
     apiFetchJSONMock.mockReset();
     apiFetchJSONMock.mockResolvedValue([] as any);
+  });
+
+  const manual = {
+    id: 'rule_vm/101_backup_1',
+    created_from: 'manual',
+    resource_id: 'vm/101',
+    category: 'backup',
+    description: 'Off-site copies',
+    created_at: '2026-10-05T12:00:00Z',
+  };
+  it('reads the exact organisation without fallback or retry, including a nil empty store', async () => {
+    const signal = new AbortController().signal;
+    apiFetchJSONMock.mockResolvedValueOnce([manual]);
+    await expect(getSuppressionRules('tenant-a', signal)).resolves.toEqual([manual]);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/suppressions', {
+      expectedOrgID: 'tenant-a',
+      retry: false,
+      signal,
+    });
+    apiFetchJSONMock.mockResolvedValueOnce(null);
+    await expect(getSuppressionRules('default')).resolves.toEqual([]);
+  });
+  it.each([{}, [null], [{ ...manual, id: '' }], [manual, manual], [{ ...manual, category: 7 }]])(
+    'rejects an invalid collection instead of presenting false absence: %j',
+    async (value) => {
+      apiFetchJSONMock.mockResolvedValueOnce(value as any);
+      await expect(getSuppressionRules('tenant-a')).rejects.toThrow('invalid rule list');
+    },
+  );
+  it('removes exactly one encoded manual identity, never a finding-backed or unknown-origin row', async () => {
+    const signal = new AbortController().signal;
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true });
+    await deleteManualSuppressionRule(manual, 'tenant-a', signal);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/ai/patrol/suppressions/rule_vm%2F101_backup_1',
+      {
+        method: 'DELETE',
+        expectedOrgID: 'tenant-a',
+        retry: false,
+        signal,
+      },
+    );
+    for (const row of [
+      { ...manual, id: 'finding_123' },
+      { ...manual, created_from: 'suppress' },
+      { ...manual, finding_id: '123' },
+    ])
+      await expect(deleteManualSuppressionRule(row, 'tenant-a')).rejects.toThrow('Only manually');
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+  });
+  it('requires an explicit successful deletion response', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ success: false });
+    await expect(deleteManualSuppressionRule(manual, 'tenant-a')).rejects.toThrow('not confirmed');
   });
 
   it('uses the retained-objective contract with encoded identities and revisions', async () => {

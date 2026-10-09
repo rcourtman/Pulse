@@ -71,6 +71,12 @@ type ThresholdProvider interface {
 	// agent reports. A host with no ID means no agent reports the disk. A zero
 	// trigger means disk temperature alerting is off for it.
 	GetDiskTemperatureThreshold(host alerts.DiskTemperatureHost, diskType string) (trigger, clear float64)
+	// GetTrueNASDiskTemperatureThreshold returns the disk temperature alert
+	// trigger and clear values (°C) for one TrueNAS disk, given its resource
+	// ID and type: the disk's own override, then the TrueNAS-wide value, then
+	// the per-type policy, as its temperature alert resolves them. A zero
+	// trigger means disk temperature alerting is off for it.
+	GetTrueNASDiskTemperatureThreshold(resourceID, diskType string) (trigger, clear float64)
 }
 
 // AlertResolver provides the ability to review and resolve alerts

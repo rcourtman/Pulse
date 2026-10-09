@@ -464,9 +464,10 @@ class VMDiskHelpTest(unittest.TestCase):
             "systemctl show pulse-update.timer pulse-update.service \\\n"
             "  --property=Id,LoadState,ActiveState,MainPID",
             "sudo systemctl stop pulse.service\n"
-            "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
+            "systemctl show pulse.service \\\n"
+            "  --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus",
             "sudo systemctl start pulse.service\nsystemctl is-active pulse.service",
-            "sudo systemctl start pulse-update.timer",
+            "sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer",
         ])
         for block in bash_examples(guide.replace(precaution, "", 1)):
             self.assertNotRegex(block, r"\b(curl|wget|qm agent|pveum|systemctl)\b")
@@ -478,6 +479,7 @@ class VMDiskHelpTest(unittest.TestCase):
                           "systemctl restart pulse.service"),
             guide.replace("sudo systemctl stop pulse.service", "sudo systemctl restart pulse.service"),
             guide.replace("sudo systemctl start pulse-update.timer", "qm agent 100 ping"),
+            guide.replace(",Result,ExecMainCode,ExecMainStatus", ""),
             guide + "\n```bash\nsystemctl stop pulse.service\n```\n",
             guide.replace("sudo bash ./scripts/test-vm-disk.sh 100", "curl https://example.invalid"),
         ]
@@ -496,6 +498,140 @@ class VMDiskHelpTest(unittest.TestCase):
             self.assertIn(phrase, guide)
         self.assert_guide_commands(guide)
         self.assertNotIn("GUEST_AGENT_FSINFO_TIMEOUT=", guide)
+
+    def test_shutdown_readback_is_not_guest_request_completion_or_a_forced_stop(self):
+        precaution = " ".join(guide_section(
+            DOC.read_text(), "Pause Pulse for a planned freeze-enabled backup"
+        ).split())
+        for phrase in (
+            "`Result=success`", "`ExecMainCode=1`", "`ExecMainStatus=0`",
+            "Do not force-kill Pulse or clear its failed state",
+            "an old exit result is not evidence of a new shutdown",
+            "Stopping Pulse does not cancel a guest-agent request already issued",
+            "If their state is unknown, do not start the backup",
+        ):
+            self.assertIn(phrase, precaution)
+
+
+class ServerLogSafetyDocsTest(unittest.TestCase):
+    """Check help against existing controls, not browser or native recovery."""
+
+    def log_help(self):
+        guide = (ROOT / "docs/CONFIGURATION.md").read_text()
+        return " ".join(guide.split("#### Log Levels\n", 1)[1].split("\n| Variable |", 1)[0].split())
+
+    def contains(self, text, *phrases):
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(phrase in text, f"Missing safety explanation: {phrase}")
+
+    def assert_display_only_controls(self, state):
+        # Buffered lines are still browser-local. Follow the complete helper
+        # chain, not just the old one-line toggles, so a backend mutation in a
+        # pending-work helper cannot hide behind unchanged button handlers.
+        expected = {
+            "togglePaused": "if (!isPaused()) flushPendingLogs(); setIsPaused((prev) => !prev);",
+            "clearLogs": "resetPending(); setLogs([]);",
+            "resetPending": (
+                "pendingLogs = []; pendingCount = 0; pendingNext = 0; "
+                "if (renderFrame !== null) { cancelAnimationFrame(renderFrame); renderFrame = null; }"
+            ),
+            "flushPendingLogs": (
+                "if (disposed || pendingCount === 0) return; "
+                "const incoming = Array.from( { length: pendingCount }, "
+                "(_, index) => pendingLogs[(pendingNext - pendingCount + MAX_LOGS + index) % MAX_LOGS], ); "
+                "resetPending(); setLogs((prev) => [ "
+                "...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)), ...incoming, ]); "
+                "scrollToBottom();"
+            ),
+            "scrollToBottom": "if (logContainer) { logContainer.scrollTop = logContainer.scrollHeight; }",
+        }
+        for name, body in expected.items():
+            marker = f"const {name} = () => {{"
+            self.assertEqual(state.count(marker), 1, name)
+            actual = state.split(marker, 1)[1].split("\n  };", 1)[0]
+            actual = " ".join(re.sub(r"//[^\n]*", "", actual).split())
+            self.assertEqual(actual, body, name)
+        self.assertIn("if (disposed || isPaused()) return;", state)
+
+    def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
+        guide = " ".join(DOC.read_text().split("### Pause Pulse", 1)[0].split())
+        self.contains(guide, "**Pause Stream**", "only pauses the browser display",
+                      "does not stop the Pulse server", "guest-agent requests",
+                      "actual server stop procedure")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assert_display_only_controls(state)
+        self.assertIn("toggleTitle: 'Pause Stream'", (ROOT / "frontend-modern/src/utils/systemLogsPresentation.ts").read_text())
+
+    def test_log_level_is_server_wide_not_a_browser_filter(self):
+        self.contains(self.log_help(), "server-wide logging threshold", "not a browser-only filter",
+                      "`warn` also suppresses `info` operational records",
+                      "absence of a log line is not evidence that an event did not occur",
+                      "`LOG_LEVEL` takes precedence at startup")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleSetLevel", 1)[1]
+        self.assertIn("logging.SetGlobalLevel(level)", handler)
+        self.assertIn("settings.LogLevel = level", handler)
+        loader = (ROOT / "internal/config/config.go").read_text()
+        self.assertIn('if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {\n\t\tcfg.LogLevel = logLevel', loader)
+
+    def test_display_controls_do_not_delete_logs_or_reduce_server_logging(self):
+        self.contains(self.log_help(), "**Pause Stream**", "**Clear Log Output**",
+                      "only affect the browser display", "do not stop monitoring",
+                      "reduce server logging or erase the server's logs",
+                      "VM_DISK_MONITORING.md#backup-safety")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assert_display_only_controls(state)
+
+    def test_display_only_controls_reject_backend_calls_and_stale_pending_work(self):
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        for name, operation in (
+            ("togglePaused", "apiFetchJSON('/api/monitoring/stop', { method: 'POST' });"),
+            ("clearLogs", "apiFetchJSON('/api/logs', { method: 'DELETE' });"),
+            ("resetPending", "handleLevelChange('warn');"),
+            ("flushPendingLogs", "handleLevelChange('error');"),
+            ("scrollToBottom", "mutateServer();"),
+        ):
+            marker = f"const {name} = () => {{"
+            mutated = state.replace(marker, marker + "\n    " + operation)
+            with self.subTest(control=name), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(mutated)
+        for before, after in (
+            ("const clearLogs = () => {\n    resetPending();", "const clearLogs = () => {"),
+            ("if (disposed || isPaused()) return;", "if (disposed) return;"),
+            ("if (!isPaused()) flushPendingLogs();", "flushPendingLogs();"),
+        ):
+            with self.subTest(missing=before), self.assertRaises(AssertionError):
+                self.assert_display_only_controls(state.replace(before, after))
+
+    def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
+        self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
+                      "configuration and environment information", "not just the visible lines",
+                      "Keep the archive private", "manually reviewed, redacted excerpts",
+                      "not a guarantee that all content is safe to publish")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleDownloadBundle", 1)[1].split("type SetLogLevelRequest", 1)[0]
+        for source in ('os.Open(h.config.LogFile)', 'zipWriter.Create("pulse.log")',
+                       'io.Copy(wr, f)', 'zipWriter.Create("pulse-tail.log")',
+                       'logging.GetBroadcaster().GetHistory()', 'zipWriter.Create("system-info.json")',
+                       'h.config.DeepCopy()', 'os.Environ()'):
+            self.assertIn(source, handler)
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assertIn("window.location.href = '/api/logs/download'", state)
+        trouble = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split("### Collect diagnostics safely\n", 1)[1].split("### Inspect Notification Logs", 1)[0].split())
+        self.contains(trouble, "**Support Bundle**", "different export",
+                      "not the **GitHub (review first)** diagnostics export",
+                      "not limited to the lines visible", "CONFIGURATION.md#log-levels")
+
+    def test_debug_guidance_preserves_working_monitoring_and_private_evidence(self):
+        self.contains(self.log_help(), "Start with the current level", "raw guest-filesystem responses",
+                      "private names or paths", "do not enable it just to obtain a report",
+                      "previous working level", "without repeating the stall",
+                      "not proof that the underlying problem is fixed",
+                      "TROUBLESHOOTING.md#inspect-notification-logs")
+    def test_safety_help_is_shipped_without_new_diagnostic_commands(self):
+        for name in ("VM_DISK_MONITORING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+        self.assertNotIn("```", self.log_help(), "reuse bounded readers, not another copied command")
 
 
 if __name__ == "__main__":

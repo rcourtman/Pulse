@@ -38,6 +38,7 @@ Three replacement `rawData` frames per view change rendered names, rather than
 merely waiting on a timer with unchanged content.
 
 Assertions cover:
+
 - Coverage: fewer rendered rows than the inventory (windowing enabled), non-zero
   scroll, expanded restore evidence, focused expansion button and route retained.
 - By date: changed workload name, non-zero scroll, focused navigation link and route
@@ -55,6 +56,42 @@ Narrow-width interaction is keyboard-driven, not touch or Brave qualification.
 The test does not cover Settings Manage editing, Authentication strategy selection,
 expansion padding, arbitrary inventory churn/reordering, or a deployed release.
 Passing is not grounds to close the mixed report #1869.
+
+## Final guest and Patrol presentation fixtures
+
+Prepare the existing guest filesystem, memory, reading-help and Patrol-rule
+fixtures once, before browser execution, from `frontend-modern`:
+
+```sh
+node browser-tests/build-publication-fixtures.mjs
+npm run test -- browser-tests/publication-fixture-server.test.mjs
+```
+
+The server regression uses Vitest's runner and is included in `npm test`.
+The command above also runs its binding, listener and cleanup checks on their
+own. The server checks exercise only a locally owned loopback listener and
+synthetic temporary files; no standalone Node bridge is needed.
+
+The four corresponding browser runners use the resulting static bundles in
+`tmp/publication-final-static` at the repository root. They no longer compile
+or start Vite inside the browser process tree. Rebuild after source changes:
+the server refuses altered imported sources, Tailwind scan inputs, the dependency
+lock, runner code, compiled assets or the shipped safety document before listening.
+Only bound assets and the explicit reading-help Docs route are served; missing
+JS, CSS and Markdown stay errors rather than receiving an HTML fallback.
+
+The builder's `prepared-not-browser-verified` result and the server tests are
+preparation evidence only. Desktop/phone interactions, inspected captures,
+own-parent and final-content receipts still require a real browser pass. No
+native guest-agent, thaw, filesystem-write, installed or publication acceptance
+is established by compiling these synthetic fixtures.
+
+The isolated browser copy has no Git store. When preparing its preview there,
+pass `--source-sha <full SHA>` with the source owner's externally checked HEAD.
+The binding marks this as `supplied-for-isolated-copy`, not a Git observation.
+The default remains an actual Git HEAD read, with no silent fallback. Verify
+the binding's source and artifact hashes against the assigned tree before using
+the preview as evidence; a supplied SHA alone establishes no source identity.
 
 ## CI and release evidence
 

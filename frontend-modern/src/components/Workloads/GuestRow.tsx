@@ -34,6 +34,7 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
+import { getWorkloadMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
@@ -170,12 +171,45 @@ export function GuestRow(props: GuestRowProps) {
   const memoryDisplayTotal = createMemo(() =>
     isHostMemoryBasis() ? hostMemoryTotal() : (props.guest.memory?.total ?? 0),
   );
+  const memoryReading = createMemo(() =>
+    getWorkloadMemoryObservationPresentation(props.guest, { includeCurrent: false }),
+  );
   const memoryDisplayUnavailable = createMemo(
     () =>
       !telemetryAvailable('memory') ||
       props.guest.memory?.usageUnavailable === true ||
+      memoryReading()?.state === 'unavailable' ||
       (isHostMemoryBasis() && hostMemoryTotal() <= 0),
   );
+  const memoryReadStatus = createMemo(() => {
+    const reading = memoryReading();
+    if (!reading || reading.state === 'current') return undefined;
+    return {
+      message: reading.message,
+      label:
+        reading.state === 'last-known'
+          ? usesCompactTableLayout()
+            ? 'Prior'
+            : 'Last known'
+          : reading.state === 'unavailable'
+            ? usesCompactTableLayout()
+              ? 'N/A'
+              : 'Unavailable'
+            : usesCompactTableLayout()
+              ? 'Unknown'
+              : 'Freshness unknown',
+      valueLabelContext:
+        reading.state === 'last-known'
+          ? ('last known' as const)
+          : reading.state === 'unavailable'
+            ? ('unavailable' as const)
+            : ('freshness unknown' as const),
+    };
+  });
+  const memoryValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
+    memoryDisplayUnavailable()
+      ? 'unavailable'
+      : (memoryReadStatus()?.valueLabelContext ?? 'current');
   const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));
   const nestedWorkloadCueLabel = createMemo(() => {
     const context = props.nestedWorkloadContext;
@@ -258,6 +292,7 @@ export function GuestRow(props: GuestRowProps) {
         memoryDisplayBasis: props.memoryDisplayBasis,
         parentMemoryTotal: props.parentMemoryTotal,
       }),
+      valueLabelContext: () => memoryValueLabelContext(),
     });
   const renderDiskSparkline = () =>
     renderMetricSparkline('disk', {
@@ -370,51 +405,60 @@ export function GuestRow(props: GuestRowProps) {
                 onPreviewClear={() => props.onHoverChange?.(null)}
               />
             </Show>
-            <div class="flex items-center gap-1.5 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <ResourceNameWithWebInterfaceLink
-                  name={props.guest.name}
-                  url={customUrl()}
-                  class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
-                  nameClass="truncate text-[11px] font-medium text-base-content select-none"
-                />
-                {/* Show backup indicator in name cell only if backup column is hidden */}
-                <Show when={!isColVisible('backup') && supportsBackup()}>
-                  <BackupIndicator
-                    guestName={props.guest.name}
-                    lastBackup={props.guest.lastBackup}
-                    isTemplate={props.guest.template}
-                    backupRunning={props.guest.backupInProgress}
-                  />
-                </Show>
-                <Show when={nestedWorkloadCueLabel()}>
-                  <span
-                    class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
-                    data-testid="nested-workload-cue"
-                    title={nestedWorkloadCueLabel()}
-                    aria-label={nestedWorkloadCueLabel()}
-                  >
-                    <BoxIcon class="h-3 w-3" aria-hidden="true" />
-                    <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
-                  </span>
-                </Show>
-              </div>
-            </div>
-
-            <Show when={lockLabel()}>
-              <span
-                class="text-[10px] font-medium text-muted uppercase tracking-wide whitespace-nowrap"
-                title={`Guest is locked (${lockLabel()})`}
+            <div
+              class={`min-w-0 ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-2'}`}
+            >
+              <div
+                class={`flex items-center gap-1.5 min-w-0 ${usesCondensedIdentity() ? 'w-full' : ''}`}
               >
-                Lock: {lockLabel()}
-              </span>
-            </Show>
+                <StatusDot
+                  variant={guestStatus().variant}
+                  title={guestStatus().label}
+                  ariaLabel={guestStatus().label}
+                  size="xs"
+                  class={usesCondensedIdentity() ? 'self-start mt-1.5' : undefined}
+                />
+                <div
+                  class={`min-w-0 group/name ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-1.5'}`}
+                >
+                  <ResourceNameWithWebInterfaceLink
+                    name={props.guest.name}
+                    url={customUrl()}
+                    class={`min-w-0 ${usesCondensedIdentity() ? 'w-full [&>a]:hidden' : ''}`}
+                    nameClass="truncate text-[11px] font-medium text-base-content select-none"
+                  />
+                  {/* Show backup indicator in name cell only if backup column is hidden */}
+                  <Show when={!isColVisible('backup') && supportsBackup()}>
+                    <BackupIndicator
+                      guestName={props.guest.name}
+                      lastBackup={props.guest.lastBackup}
+                      isTemplate={props.guest.template}
+                      backupRunning={props.guest.backupInProgress}
+                    />
+                  </Show>
+                  <Show when={nestedWorkloadCueLabel()}>
+                    <span
+                      class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
+                      data-testid="nested-workload-cue"
+                      title={nestedWorkloadCueLabel()}
+                      aria-label={nestedWorkloadCueLabel()}
+                    >
+                      <BoxIcon class="h-3 w-3" aria-hidden="true" />
+                      <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
+                    </span>
+                  </Show>
+                </div>
+              </div>
+
+              <Show when={lockLabel()}>
+                <span
+                  class={`max-w-full text-[10px] font-medium text-muted uppercase tracking-wide ${usesCondensedIdentity() ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}
+                  title={`Guest is locked (${lockLabel()})`}
+                >
+                  Lock: {lockLabel()}
+                </span>
+              </Show>
+            </div>
           </div>
         </td>
 
@@ -543,7 +587,11 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="memory">
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            data-workload-col="memory"
+            title={memoryReadStatus()?.message}
+          >
             <Show
               when={isSparklineMode()}
               fallback={
@@ -556,6 +604,7 @@ export function GuestRow(props: GuestRowProps) {
                           used={props.guest.memory?.used || 0}
                           total={memoryDisplayTotal()}
                           unavailable={memoryDisplayUnavailable()}
+                          reading={memoryReading()}
                           percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
                           cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
                           cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
@@ -592,6 +641,18 @@ export function GuestRow(props: GuestRowProps) {
               }
             >
               {renderMemorySparkline()}
+            </Show>
+            <Show when={memoryReadStatus()}>
+              {(status) => (
+                <p
+                  data-workload-memory-read-status
+                  class="mt-0.5 text-center text-[10px] leading-none text-muted"
+                  title={status().message}
+                >
+                  <span aria-hidden="true">{status().label}</span>
+                  <span class="sr-only">{status().message}</span>
+                </p>
+              )}
             </Show>
           </td>
         </Show>

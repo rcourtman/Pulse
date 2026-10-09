@@ -203,7 +203,7 @@ Controls runtime behavior like logging, polling intervals, and UI preferences. L
   "logLevel": "info",             // debug, info, warn, error
   "autoUpdateEnabled": false,     // Enable auto-update checks
   "adaptivePollingEnabled": false, // Smart polling for large clusters
-  "allowedOrigins": "",           // CORS allowlist (single origin or "*")
+  "allowedOrigins": "",           // CORS: empty or comma-separated exact origins
   "allowEmbedding": false,        // Allow iframe embedding
   "allowedEmbedOrigins": "",      // Comma-separated origins for iframe embedding
   "webhookAllowedPrivateCIDRs": "" // Allowlist for private webhook targets
@@ -222,15 +222,15 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `pvePollingInterval` | PVE polling interval |
 | `pbsPollingInterval` | PBS polling interval |
 | `pmgPollingInterval` | PMG polling interval |
-| `backupPollingInterval` | Backup polling interval (`0` = auto) |
-| `backupPollingEnabled` | Enable backup polling |
+| `backupPollingInterval` | Backup-record polling interval (`0` = auto, not disabled). See [Backup polling and guest safety](#backup-polling-and-guest-safety). |
+| `backupPollingEnabled` | Enable scheduled backup-record collection, not a guest-agent pause. See [Backup polling and guest safety](#backup-polling-and-guest-safety). |
 | `adaptivePollingEnabled` | Enable adaptive polling |
 | `adaptivePollingBaseInterval` | Base interval for adaptive polling |
 | `adaptivePollingMinInterval` | Minimum adaptive polling interval |
 | `adaptivePollingMaxInterval` | Maximum adaptive polling interval |
 | `connectionTimeout` | API connection timeout |
 | `logLevel` | Server log level (`debug`, `info`, `warn`, `error`) |
-| `allowedOrigins` | CORS allowlist (single origin or `*`) |
+| `allowedOrigins` | CORS: empty grants no cross-origin browser permission; comma-separated exact origins allow credentialed browser requests. `*` allows any origin without credentials. |
 | `allowEmbedding` | Allow iframe embedding |
 | `allowedEmbedOrigins` | Comma-separated `frame-ancestors` allowlist |
 | `webhookAllowedPrivateCIDRs` | Allowlist for private webhook targets |
@@ -279,11 +279,36 @@ Environment variables take precedence over `system.json`.
 | Level | Description |
 | ------- | ------------- |
 | `error` | Only errors and critical issues |
-| `warn` | Errors + warnings (recommended for minimal logging) |
+| `warn` | Errors + warnings; suppresses info and debug records |
 | `info` | Standard operational messages (startup, connections, alerts) |
 | `debug` | Verbose output including per-guest/storage polling details |
 
-> **Tip**: If your syslog is being flooded with Pulse messages, set `LOG_LEVEL=warn` to significantly reduce log volume while still capturing important events.
+The **Log Level** control in **Settings → Support → System Logs** changes the
+server-wide logging threshold, not a browser-only filter. The saved level is
+used at startup unless your deployment sets `LOG_LEVEL`: `LOG_LEVEL` takes
+precedence at startup. `info` is the default. Choosing `warn` can reduce volume,
+but `warn` also suppresses `info` operational records; absence of a log line is
+not evidence that an event did not occur.
+
+Start with the current level and the [bounded log readers](TROUBLESHOOTING.md#inspect-notification-logs).
+Debug can produce much more output, including raw guest-filesystem responses
+and private names or paths; do not enable it just to obtain a report. If the
+interface stalls after enabling Debug, return to the previous working level
+through your deployment's existing log-level control, without repeating the
+stall. A responsive interface afterwards is not proof that the underlying
+problem is fixed; retain the original time, affected view and redacted error.
+
+**Pause Stream** and **Clear Log Output** only affect the browser display. They
+do not stop monitoring, reduce server logging or erase the server's logs. A
+**Paused** log view is not a [backup safety pause](VM_DISK_MONITORING.md#backup-safety).
+
+**Support Bundle** downloads a complete configured log file, or the retained
+server log buffer when no log file can be opened, plus configuration and
+environment information. It is not just the visible lines: pausing or clearing
+the display does not remove those records from the download. Some secrets are
+masked, but that is not a guarantee that all content is safe to publish. Keep
+the archive private and share only relevant, manually reviewed, redacted excerpts,
+not the whole bundle.
 
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
@@ -293,7 +318,7 @@ Environment variables take precedence over `system.json`.
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
 | `PULSE_AGENT_CONFIG_PUBLIC_KEYS` | Comma-separated base64 Ed25519 public keys (raw 32-byte or PKIX-encoded) trusted by agents. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED` | Require signed remote config payloads (set on Pulse and agents). | `false` |
-| `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
+| `ALLOWED_ORIGINS` | Overrides the saved CORS allowlist with comma-separated exact origins. `*` permits any origin without credentialed browser access; not a login/proxy repair. | *(unset)* |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `DISCOVERY_SUBNET` | CIDR or `auto` | `auto` |
 | `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker-host`, `docker-bridge`, `lxc-privileged`, `lxc-unprivileged`) | `auto` |
@@ -335,6 +360,20 @@ PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 ```
 
 Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report` and establish their command channel at `wss://agents.example.com:7656/api/agent/ws`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener. If command execution is enabled, both routes must traverse the same proxy/firewall path; a successful report does not prove that the WebSocket is admitted.
+
+### Multiple Proxmox installations
+
+Pulse is intended to monitor multiple Proxmox clusters and standalone nodes
+through separate saved Proxmox connections. Native node names and VMIDs can
+repeat across independent installations; a matching name or VMID alone does
+not identify the same resource.
+
+A distinct Pulse connection name helps you recognise the saved connection.
+Neither that label nor a [cluster member display name](#proxmox-cluster-node-display-names)
+renames the native Proxmox node or VMID, or repairs incorrect attribution.
+If node errors, backup status or agent-backed Docker monitoring become mixed
+after adding a connection, use the [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+Do not rename production nodes or repeat the addition as a diagnostic.
 
 ### Proxmox Cluster Node Display Names
 
@@ -379,8 +418,8 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
 | `CONNECTION_TIMEOUT` | API connection timeout | `60s` |
 | `BACKUP_POLLING_CYCLES` | Poll cycles between backup checks | `10` |
-| `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
-| `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
+| `ENABLE_BACKUP_POLLING` | Enable scheduled backup-record collection, not a guest-agent pause. See [Backup polling and guest safety](#backup-polling-and-guest-safety). | `true` |
+| `BACKUP_POLLING_INTERVAL` | Backup-record polling interval (`0` = auto, not disabled). See [Backup polling and guest safety](#backup-polling-and-guest-safety). | `0` (Auto) |
 | `ENABLE_TEMPERATURE_MONITORING` | Enable temperature monitoring (where supported) | `true` |
 | `SSH_PORT` | SSH port for temperature collection over SSH | `22` |
 | `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
@@ -399,6 +438,42 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker discovery; when set, only these guests are socket-probed and inventoried. Empty means all running LXCs are eligible when detection or inventory is enabled | *(unset)* |
 | `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 | `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`; invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
+
+### Backup polling and guest safety
+
+The Recovery panel's **Enable backup polling** switch (`backupPollingEnabled`,
+or `ENABLE_BACKUP_POLLING`) controls whether Pulse schedules collection of
+Proxmox/PBS backup records and guest snapshots. **Turning it off does not pause
+ordinary PVE monitoring or its QEMU Guest Agent disk, memory and metadata
+reads.** It does not stop Proxmox or PBS from running backup jobs, and changing
+the setting does not cancel work already in flight. Do not use this switch as
+a freeze-enabled backup safety precaution.
+
+`backupPollingInterval` and `BACKUP_POLLING_INTERVAL` control that collection's
+cadence. **`0` means automatic cadence, not disabled.** Longer intervals delay
+backup evidence refresh; disabled polling leaves it unrefreshed. A retained
+backup row or posture is not proof of a current observation, a successful
+restore or guest thaw. Check the matching workload, datastore, namespace and
+artifact time in the provider's own tools before relying on it; do not clear
+history or run another backup to repair a Pulse display. Environment overrides
+take precedence over `system.json` and lock the corresponding UI controls.
+Schedule configuration changes outside backup or freeze/thaw windows.
+
+For an affected installation, follow the deployment-specific
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety) before a planned
+freeze-enabled backup: pause the actual Pulse server and prevent its updater or
+deployment controller from restarting it. This is not incident recovery, and
+stopping Pulse does not cancel a guest-agent request already issued. Keep Pulse
+stopped until the backup has ended and independent post-backup checks confirm
+**thaw, fresh successful workload writes to every filesystem covered by the
+backup, and workload liveness**. Use established checks independent of Pulse
+and the QEMU Guest Agent, not new probes or forced writes. If any check fails or
+is unavailable, leave Pulse and its updater paused and use the guest/platform's
+recovery procedure. After all checks pass, restore **only services and timers
+that were active before the pause**; do not guess unknown pre-pause states.
+**Pulse monitoring and alerts are unavailable while stopped**: arrange
+independent outage coverage. This precaution does not establish a fixed
+monitoring defect.
 
 ### Logging Overrides
 
@@ -484,9 +559,70 @@ For remote scraping with `PULSE_METRICS_TOKEN`, prefer a local scraper, tunnel, 
 
 ## 🔔 Alerts (`alerts.json`)
 
-Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear thresholds) to prevent flapping.
+Manage alert rules in **Alerts → Thresholds**. Choose the platform and resource
+before editing; a group default can affect many resources, while a custom
+resource override takes precedence. Finish the edit and use **Save Changes**;
+an unsaved value is not the running policy. Reload after a successful save to
+check that the intended value persisted.
 
-**Managed via UI**: Alerts → Thresholds
+For TrueNAS physical disks, read the [disk temperature and health guide](TRUENAS.md#disk-temperature-and-health)
+before changing a rule: heat, SMART faults and missing readings are different
+signals. Storage temperature colouring and heat reasons follow the saved
+per-disk override, then the TrueNAS-wide default, then the inherited by-type
+policy. Off leaves the temperature visible but unjudged; last known readings
+are not current heat. Silencing an alert is not disk recovery.
+
+### Metric thresholds, Off and inheritance
+
+For numeric metric rules such as CPU, memory and disk usage:
+
+| Setting | Meaning |
+| --- | --- |
+| Positive metric threshold | Enables that metric rule at the entered value, subject to other alert policies. Read the column's unit: percentages, temperatures and throughput are not interchangeable. |
+| Metric **Off** | Disables that metric rule, not collection of its readings. Use the On/Off control rather than an empty input to disable it. |
+| Blank per-resource metric value | Inherits the group default; it does **not** mean Off. An inherited Off default remains Off. |
+| Saved numeric metric trigger `0` or a negative value | Disables that metric rule. Zero does **not** mean “alert on any usage”. Older saved rules may use `0`; the current metric Off control writes `-1`. |
+
+**Metric Off is not a metric-hiding control.** The reading remains visible; Off
+does not mark it **ignored** or **N/A**, nor prove that the workload is healthy.
+For an appliance VM whose hypervisor memory reading does not represent useful
+guest memory pressure, turn off only that VM's **Memory** metric rule if those
+alerts are unwanted. Keep its CPU, disk, backup and uptime monitoring in place;
+do not disable the whole resource or global alerts to quiet one metric.
+
+A near-100% hypervisor memory reading alone does not establish guest memory
+pressure or an appliance fault. Check the appliance's own ordinary status where
+available. Do not install an agent, restart the VM or change its configuration
+solely to remove the reading. Pulse has no per-VM control here to replace one
+metric with an explicitly ignored reading.
+
+**Zero has different meanings in different fields.** A zero *metric trigger*
+disables the rule, but zero *powered-off tolerance* below means immediate
+eligibility on an authoritative stopped observation. Do not copy one field's
+meaning into another. Platform/resource alert switches, offline alerts and
+notification delivery have their own controls.
+
+Usage rules have separate trigger and clear values (hysteresis), so a small
+drop below the trigger does not repeatedly close and reopen the alert. In the
+manual CPU example below, `trigger: 90` and `clear: 80` mean:
+
+- A fresh evaluated value of **90% or higher** is eligible to activate the alert.
+- An already active alert stays active **above 80%**, even at 85%.
+- A fresh evaluated value of **80% or lower** is eligible to clear it.
+
+Configured evaluation windows and activation/recovery delays still apply;
+these are not promises of immediate notifications. The excerpt illustrates a
+saved rule, not the clear value produced by every UI edit.
+
+Disabling a metric can close its existing alert even while usage remains high.
+That disappearance is a policy change, **not measured recovery**. Missing or
+stale readings are not a healthy zero either. Check fresh readings and the
+workload before judging recovery; do not lower thresholds, create load or stop
+a workload just to test the rule. To quiet notifications without disabling a
+metric rule, review [Quiet hours](#quiet-hours-and-notification-holds) and their
+critical-alert exceptions. Check [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+separately: a saved threshold or a successful destination Test does not prove
+ordinary alert delivery.
 
 ### VM and container powered-off tolerance
 
@@ -508,8 +644,166 @@ This tolerance delays activation; it does not disable powered-off monitoring.
 Use the existing guest offline-alert toggle when a guest should never produce
 powered-off alerts.
 
+### Destination severity and tag routing
+
+Open **Alerts → Notifications** and edit the email or webhook destination.
+For ordinary firing alerts, an enabled destination must match **both** its
+**Minimum alert severity** and **Resource tag routing**. Matching one does not
+bypass the other, or the separate notification schedules and holds.
+
+| Minimum alert severity | Eligible firing levels |
+| --- | --- |
+| **All alerts** | Informational, warning and critical alerts; other policies still apply. |
+| **Warnings and critical alerts** | Warning and critical alerts, not informational alerts. |
+| **Critical alerts only** | Critical alerts, not warning or informational alerts. |
+
+These are minimums, not exclusive channels. A critical alert can match both a
+**Warnings and critical alerts** destination and a **Critical alerts only**
+destination. There is no warning-only severity setting; tag filters select
+resources, not a severity exclusion. Each destination is evaluated independently,
+so one alert can go to more than one destination. Grouped alerts are filtered
+member by member: a critical member does not make the group's warning members
+eligible for a critical-only destination.
+
+An empty tag filter removes the **resource-tag restriction only**. It does not
+override minimum severity, paused delivery, a disabled destination or other
+notification policies. With tags selected:
+
+- **Match all tags** requires every selected tag on the same alert's routing
+  metadata. **Match any tag** requires at least one. An alert without usable
+  routing tags does not match a nonempty filter.
+- Matching is exact, ignoring case and surrounding whitespace; it does not
+  interpret wildcards, prefixes or regular expressions. A tag named `critical`
+  is a resource tag, not an alert-severity rule.
+- Proxmox resource tags use their tag text. Docker container and service labels
+  become `key:value` tags, or `key` when the value is empty: the label
+  `env=prod` is matched by `env:prod`, not just `prod`.
+
+For example, select `env:prod` and `team:ops`, **Match all tags**, and
+**Warnings and critical alerts**. A warning or critical alert carrying both
+tags is eligible for that destination. An informational alert with both tags
+is not. A critical alert carrying only `env:prod` also fails this filter;
+critical severity does not bypass tag routing. Choosing **Match any tag** would
+allow either tag, but would still exclude informational alerts.
+
+A successful **Test** does not exercise ordinary alert routing. Check an
+already occurring alert and [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+instead of creating an outage, removing filters or changing workload labels
+just to test delivery. Missing delivery is not evidence that the workload is
+healthy. Recovery uses the successful firing receipt for the same occurrence
+and destination, rather than reapplying changed tags or minimum severity;
+the separate [recovery controls and holds](#alert-reminders-and-recovery-notifications)
+still apply. Retained queued work also [keeps its saved destination settings](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+
+### Alert reminders and recovery notifications
+
+Open **Alerts → Schedule**. These controls govern notification eligibility, not
+when a threshold first activates or when fresh readings clear an incident.
+Save changes and reload to confirm the running settings.
+
+| Control | Effect |
+| --- | --- |
+| **Alert cooldown** on | **Cooldown period** is the minimum interval, in minutes, before an existing alert can send an ordinary reminder after its last notification. It does not delay the first eligible notification. |
+| **Alert cooldown** off | Stops ordinary reminders for the same alert occurrence after its first notification. Off does **not** mean “send on every poll” or “no rate limit”, and it does not turn off monitoring or initial delivery. |
+| **Max alerts / hour** | Limits ordinary notifications per workload/metric combination over a rolling hour, not across the whole installation. Saving cooldown as off retains this separate limit; it does not remove it. |
+| **Recovery notifications** on | Enables eligible recovery messages for destinations with a recorded successful firing delivery for that same alert occurrence. It does not send an all-clear to every configured destination. |
+| **Recovery notifications** off | Stops recovery messages, not detection of recovery or closure of the incident in Pulse. |
+
+For example, with a **30-minute** cooldown, an alert last notified at **10:00**
+is not eligible for an ordinary reminder before **10:30**. That is a minimum
+interval, not a promise of a message at 10:30: the alert must still be active
+and its other policies must permit delivery. Severity changes and configured
+escalation are handled separately; cooldown off is not a way to silence them.
+The hourly limit is not a count of provider requests: delivery retries and
+multiple recipients are separate from alert eligibility.
+
+Recovery follows the configured grouping window too, so it need not send
+immediately when the incident clears. A destination that never successfully
+received that occurrence's firing notification is not eligible for its recovery.
+A successful delivery record means provider acceptance, **not that a person
+read the message**. Acknowledgement, snooze, quiet hours, destination settings
+and provider failures can also prevent recovery delivery; enabling the toggle
+does not bypass those controls.
+
+**A missing reminder or recovery message is not a workload health check.** Check
+fresh readings and the incident's state in **Alerts → Overview** or **History**,
+then correlate [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+Keep these policies distinct from [acknowledgement and snooze](#acknowledge-and-snooze-existing-alerts),
+[quiet hours](#quiet-hours-and-notification-holds) and
+[retrying retained failures](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+Do not lower thresholds, create load or stop a workload to test reminders or
+recovery messages; inspect the next normally occurring incident instead.
+
+### Acknowledge and snooze existing alerts
+
+In **Alerts → Overview**, these actions apply to an existing incident, not its
+threshold rule. Monitoring continues; neither action repairs the workload or
+confirms recovery.
+
+| Action | Effect |
+| --- | --- |
+| **Acknowledge** | Marks the incident as seen. While acknowledged, further firing notifications, escalation and its recovery notification are suppressed. The underlying alert can remain active. |
+| **Unacknowledge** | Removes that acknowledgement. Normal notification policies apply again; this is not a guaranteed immediate resend. |
+| **Snooze** | Pauses notifications and escalation for this incident until the selected time, including critical notifications. Monitoring can still detect recovery during the snooze. |
+| **Resume** | Ends this incident's snooze early. It does not remove an acknowledgement or clear the underlying alert. |
+
+Acknowledged alerts are hidden from the default active list and excluded from
+its **Active** count. Use **Show acknowledged** to inspect them and
+**Unacknowledge** only when they need attention again. **No unacknowledged
+alerts** does not mean every workload recovered. Before **Acknowledge all**, read
+the count and scope: the toolbar applies to all unacknowledged active alerts;
+a group's button applies to that group, including its collapsed related alerts.
+Use the individual action when only one incident has been reviewed.
+
+Choose a **Snooze** duration on the incident's card and check its **Snoozed until**
+time. **Until tomorrow at 9:00** uses the browser's local timezone, not the
+[quiet-hours timezone](#quiet-hours-and-notification-holds). On expiry or
+**Resume**, an acknowledged incident remains acknowledged; remove that hold
+separately if intended. Other schedules, routing, cooldowns and destination
+settings still apply, so ending a snooze is not proof of delivery or a promise
+to replay missed notifications.
+
+These incident actions are not **Dismiss retained failures** or **Retry retained
+deliveries**. They do not retry a failed notification. Check fresh readings and
+the workload for recovery, and [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+for delivery. Do not create an outage or lower thresholds to test an action.
+
+### Quiet hours and notification holds
+
+Open **Alerts → Schedule → Quiet hours** to enable a notification quiet period.
+Choose the start and end times, an IANA timezone such as `Europe/London`, and
+**Quiet days**. No selected days means no quiet period, even when enabled.
+Times are interpreted in the selected timezone, not your browser's timezone.
+
+Quiet hours hold **non-critical notifications**; they do not stop monitoring,
+clear the alert or confirm recovery. Critical notifications remain eligible
+unless you explicitly select their **Suppress categories** (Performance,
+Storage or Offline). Selecting a category also holds its critical
+notifications, including urgent failures; leave it unchecked when those must
+still reach you. Other routing, mute and delivery policies still apply.
+
+A window can cross midnight. Days refer to the **current local calendar day**:
+with only Monday selected, `22:00`–`06:00` covers Monday's early morning and
+late evening, not Tuesday's early morning. Select Tuesday too if that part of
+the night must be quiet. The configured end minute is included: an end of
+`06:00` remains quiet through `06:00:59`.
+
+Eligible queued notifications are held for re-evaluation when the quiet period
+ends. This is not a promise to send every held item at that instant: current
+alert state, destination settings, other policies and provider failures still
+matter. Use [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+to distinguish a quiet-hours hold from a failed delivery; a settings Test skips
+the queue and does not validate this schedule. Do not create an outage to test
+it.
+
+The example below makes every day quiet from `22:00` through the `06:00` end
+minute in `Europe/London`, while leaving critical categories unsuppressed.
+Quiet hours are **off by default**. This is an illustrative excerpt, not a
+complete `alerts.json`: prefer the UI, and preserve existing rules and settings
+rather than replacing the file with this example.
+
 <details>
-<summary><strong>Manual Configuration (JSON)</strong></summary>
+<summary><strong>Manual Configuration (JSON excerpt)</strong></summary>
 
 ```json
 {
@@ -521,7 +815,22 @@ powered-off alerts.
     "quietHours": {
       "enabled": true,
       "start": "22:00",
-      "end": "06:00"
+      "end": "06:00",
+      "timezone": "Europe/London",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": true,
+        "sunday": true
+      },
+      "suppress": {
+        "performance": false,
+        "storage": false,
+        "offline": false
+      }
     }
   }
 }

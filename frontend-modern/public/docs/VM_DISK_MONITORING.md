@@ -13,11 +13,20 @@ There is a [report of a VM remaining frozen despite an OK backup task](https://g
 The reported command-ID collision is not established as a reproduced cause.
 
 If your installation is affected, stop the Pulse service before the backup
-and restart it only after independently confirming the guest has thawed, using
-your existing guest console or workload checks. **Pulse monitoring and alerts
-are unavailable while it is stopped.** An OK backup task or an absent VM lock
+and keep it stopped until the backup has ended and independent checks confirm
+**thaw, fresh successful writes to every filesystem covered by the backup, and
+workload liveness**. Use your established guest-console or workload checks, not
+Pulse readings or guest-agent probes. Restore only services and timers that were
+active before the pause. **Pulse monitoring and alerts are unavailable while it
+is stopped.** An OK backup task or an absent VM lock
 does not prove thaw succeeded. This is a temporary precaution, not a claim
 that the monitoring defect is fixed.
+
+**Pause Stream** in **System Logs** only pauses the browser display. It does not
+stop the Pulse server, its polling or guest-agent requests. Changing the log
+level is not a monitoring pause either. Use the actual server stop procedure
+below for your deployment; a **Paused** log view is not evidence that monitoring
+has stopped.
 
 Do not test freeze/thaw commands, clear backup locks, disable backup freezing
 or force-reset a guest as a disk-monitoring diagnostic. Those operations can
@@ -29,6 +38,8 @@ redacted error, rather than repeat a potentially harmful backup for a report.
 This manual precaution is for an affected **systemd installation**, before a
 scheduled backup starts. It is **not a recovery procedure** for a backup already
 in progress or an unresponsive guest, and **not an automatic backup hook**.
+For a Docker or Compose server, use the [container pause procedure](#pause-a-docker-or-compose-server-for-a-planned-backup) instead;
+the systemd commands below do not stop a containerised Pulse server.
 
 1. **Identify the Pulse server service.** Run these commands on the machine
    running the Pulse server: for Proxmox LXC, **inside the Pulse LXC**,
@@ -70,7 +81,8 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
 
    ```bash
    sudo systemctl stop pulse.service
-   systemctl show pulse.service --property=LoadState,ActiveState,MainPID
+   systemctl show pulse.service \
+     --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus
    ```
 
    Require `LoadState=loaded`, `ActiveState=inactive` and `MainPID=0` after a
@@ -79,15 +91,46 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
    **Pulse monitoring and alerts are unavailable while stopped.** Do not run
    an update, start another Pulse instance or reboot its host during the pause.
 
+   For a server stopped in this step, also require `Result=success`,
+   `ExecMainCode=1` (normal process exit) and `ExecMainStatus=0`. A timeout,
+   signal termination, non-zero exit or unavailable shutdown result needs
+   normal maintenance before the backup. Do not force-kill Pulse or clear its
+   failed state to satisfy this check. Leave a previously inactive server
+   inactive; an old exit result is not evidence of a new shutdown.
+
+   **Stopping Pulse does not cancel a guest-agent request already issued.**
+   Even a successful process exit does not prove that an earlier request
+   finished inside Proxmox or the guest. Let existing guest/backup operations
+   finish normally before the planned backup, using your established task and
+   workload checks, not new guest-agent probes. If their state is unknown,
+   do not start the backup on the strength of a stopped service or an arbitrary
+   waiting period. A disk dash or cooldown is not evidence of completion.
+
 4. **Verify the guest independently, then restore only what you paused.**
    Keep Pulse stopped until the backup has ended **and** your established
-   guest-console or workload checks confirm thaw, including **fresh successful
-   workload writes** to the filesystems covered by the backup. A console
-   connection or a successful read alone is not enough. If thaw cannot be
-   confirmed, leave Pulse stopped and use the guest/platform's recovery
-   procedure; do not repeat the backup or use guest-agent probes to test it.
+   guest-console or workload checks confirm all three: **thaw**, **fresh successful
+   workload writes to every filesystem covered by the backup**, and **workload
+   liveness**. Use evidence from **after the backup ended**, independent of Pulse
+   and the QEMU Guest Agent. A console connection or a successful read alone is
+   not enough; neither is a write to only the OS disk when the backup covers
+   other filesystems. Use the workload's normal safe checks, not forced writes,
+   test-file commands or a new freeze/thaw cycle. If any check is unavailable or
+   fails, leave Pulse stopped and use the guest/platform's recovery procedure;
+   do not repeat the backup or use guest-agent probes to test it.
 
-   Only after that confirmation, if Pulse was active beforehand:
+   Apply the recorded pre-pause states separately:
+
+   | Pulse server before pause | Update timer before pause | Restore after all safety checks pass |
+   | --- | --- | --- |
+   | Active | Active | Start Pulse and confirm it is active; then restore and check the timer. |
+   | Active | Inactive | Start Pulse and confirm it is active; leave the timer inactive. |
+   | Inactive | Active | Leave Pulse inactive. Restore the timer only if its installed updater is confirmed not to start an inactive Pulse server; otherwise keep it paused until that behaviour is resolved through normal maintenance. |
+   | Inactive | Inactive | Leave both inactive. |
+
+   If either pre-pause state is unknown, do not guess or start either unit;
+   establish the original states before restoring.
+
+   Only after all safety checks pass, if Pulse was active beforehand:
 
    ```bash
    sudo systemctl start pulse.service
@@ -96,16 +139,131 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
 
    `active` confirms service startup, not proof that polling or alerts have
    recovered. Check normal observation times in Pulse without Run Diagnostics
-   or manual guest-agent probes. Restore the update timer **only if it was
-   active beforehand**, after Pulse has started:
+   or manual guest-agent probes. If startup fails or its state is unknown, keep
+   the timer paused and resolve the startup failure through normal maintenance.
+   Restore the update timer **only if it was active beforehand**, using the
+   matching row above:
 
    ```bash
    sudo systemctl start pulse-update.timer
+   systemctl is-active pulse-update.timer
    ```
+
+   Require `active` for a timer you restored. A persistent timer may run a missed
+   update immediately, so do not restore it before the safety checks. The current
+   Pulse installer makes its updater skip an inactive Pulse server; an older or
+   customised installed unit may differ. A timer's `active` state does not prove
+   that an update or monitoring succeeded.
 
    Leave previously inactive services/timers inactive. Arrange independent
    outage coverage and repeat the precaution for each affected backup window;
    this manual sequence does not schedule future pauses or prove a fix.
+
+### Pause a Docker or Compose server for a planned backup
+
+This is a manual precaution for an affected **standalone Docker or plain Compose
+Pulse server**, before a scheduled freeze-enabled backup. It is **not incident
+recovery or an automatic backup hook**. Swarm, Kubernetes and other controllers
+need their own supported pause controls: stopping a container alone does not
+stop a controller from replacing it. Do not use this procedure if you cannot
+prevent another server from polling the affected guests.
+
+**Pulse monitoring and alerts are unavailable while stopped.** Arrange
+independent outage coverage. A container stop does not cancel a guest-agent
+request already issued; let any existing guest/backup operation finish normally
+before the planned backup. If that state is unknown, do not start the backup on
+the strength of a stopped container.
+
+1. **Identify the existing Pulse server container on its Docker host**, not a
+   monitored workload, the backed-up VM or a Pulse Agent container. For Compose,
+   use the original project directory and the same project/file options used to
+   deploy it. The example service is `pulse`; substitute your actual service:
+
+   ```bash
+   docker compose ps --all --quiet pulse
+   ```
+
+   Record every returned server container ID privately. An empty list or a
+   failed command is not proof that monitoring has stopped. For a `docker run`
+   installation, identify the existing server through its saved deployment.
+   Set the ID explicitly, then read only its identity and state:
+
+   ```bash
+   PULSE_CONTAINER_ID='paste-the-recorded-server-container-id'
+   docker inspect --format 'Id={{.Id}} Running={{.State.Running}} Paused={{.State.Paused}} Restarting={{.State.Restarting}} Status={{.State.Status}} Pid={{.State.Pid}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' "$PULSE_CONTAINER_ID"
+   ```
+
+   Record whether this exact container was running before the pause. Require a
+   stable state: either running and not paused/restarting, or already exited
+   with PID 0. If it is paused, restarting, being replaced or its state cannot
+   be read, resolve that through the deployment's normal controls first. Repeat
+   the state check for every server; do not infer another container's state.
+   Do not share full `docker inspect`, container environments or resolved
+   Compose configuration: they can contain credentials.
+
+2. **Prevent a deployment or updater from restarting/replacing Pulse.** Do not
+   install, update, recreate the server, run `docker compose up` or reboot the
+   Docker host during this window. Pause any automatic updater or deployment
+   job using its supported controls, recording whether it was active first.
+   Let an in-progress update finish normally; do not interrupt an installation.
+   The supplied Compose example uses `restart: unless-stopped`, but that does
+   not prevent an external updater or another operator from starting Pulse.
+   Do not change the restart policy, image, mounts or saved deployment as a
+   substitute for these checks.
+
+3. **Stop each previously running server and verify the same ID is stopped.**
+   Docker commands on the recorded existing container also work for a plain
+   Compose deployment; they do not recreate its configuration or data volume:
+
+   ```bash
+   docker stop --timeout 60 "$PULSE_CONTAINER_ID"
+   docker inspect --format 'Id={{.Id}} Running={{.State.Running}} Paused={{.State.Paused}} Restarting={{.State.Restarting}} Status={{.State.Status}} Pid={{.State.Pid}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' "$PULSE_CONTAINER_ID"
+   ```
+
+   Require a successful stop and readback of the **same recorded ID** with
+   `Running=false`, `Paused=false`, `Restarting=false`, `Status=exited` and
+   `Pid=0`. For a server stopped in this step, also require `ExitCode=0` and
+   `OOMKilled=false`; a non-zero exit (including 137 after forced termination)
+   or unknown shutdown result needs normal maintenance before the backup.
+   Leave an already stopped server stopped. If stopping times out,
+   fails, the identity changes or any state is unknown, do not start the backup.
+   Do not delete/recreate a container, remove volumes or force-kill it to clear
+   this check. Docker can terminate a process after its stop timeout; stopped
+   state alone does not prove graceful shutdown or completion of earlier guest
+   requests. Preserve a shutdown failure for normal maintenance, not a forced
+   backup test.
+
+4. **Keep every server stopped until independent recovery checks pass.** The
+   backup must have ended, and evidence from **after it ended**, independent of
+   Pulse and the QEMU Guest Agent, must confirm **thaw, fresh successful workload
+   writes to every filesystem covered by the backup, and workload liveness**.
+   Use the workload's established safe checks, not forced writes, test files or
+   another freeze/thaw cycle. An OK backup, an absent lock, a console connection
+   or a successful read alone is not enough. If any check fails or is unavailable,
+   leave Pulse and its automatic updater paused and use the platform's recovery
+   procedure, without guest-agent probes or repeating the backup.
+
+   Only for a container recorded as running before the pause, start that
+   **same existing ID**, then repeat the bounded state readback from step 1:
+
+   ```bash
+   docker start "$PULSE_CONTAINER_ID"
+   ```
+
+   Require the original ID, `Running=true`, `Paused=false`, `Restarting=false`
+   and `Status=running`. A previously stopped container stays stopped; if its
+   original state is unknown, do not guess. Do not use a blanket Compose start
+   or `up` to restore a mixture of previously running and stopped servers. If
+   the original container is missing or startup fails, keep automation paused
+   and resolve that through normal maintenance rather than creating another
+   server against the same data.
+
+   Running state is not proof of healthy collection or alert delivery. Check
+   normal observation times in Pulse without Run Diagnostics or guest-agent
+   probes. Restore only automatic jobs that were active before the pause, after
+   verifying they will not start a previously inactive server. Unknown original
+   job state or restart behaviour means leave that job paused. Repeat the
+   precaution for each affected backup window; this is not proof of a fix.
 
 ## 🚀 Setup
 
@@ -135,6 +293,13 @@ privilege separation or recreate the token to diagnose a missing reading. See
 inspection and repair boundary. A permitted read does not prove disk freshness,
 responsiveness or thaw.
 
+First check whether the VM is an intended monitoring target. Keep intentionally
+restricted access unchanged; do not widen the token's scope just to clear a
+permission error on an excluded guest. A denied filesystem read is unavailable,
+not evidence that the guest or filesystem is unhealthy. Review or change access
+only for intended targets, through normal administration outside backups or
+guest incidents. Table filters and alert suppression do not stop API polling.
+
 | Collection | Proxmox VE 9+ | Proxmox VE 8 |
 | --- | --- | --- |
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
@@ -146,10 +311,94 @@ custom monitoring role if the required read privileges are absent.
 
 ## 🔧 Troubleshooting
 
+### Current, retained and unavailable disk readings
+
+In **Workloads**, read the disk cell's explanation or open the guest's details
+and look under **Filesystems → Status**. Compact rows use **Prior** and **N/A**;
+wider rows use **Last known** and **Unavailable**. Where an observation time is
+shown, keep it with the reading; an unavailable time leaves freshness unknown.
+
+| Reading | What it establishes |
+| --- | --- |
+| Current filesystem usage | Usage for the reported guest and filesystem, from its collection source. It does not establish that every filesystem is covered or that a backup can be restored. |
+| **Prior**, **Last known**, or **Using last known disk stats** | Retained evidence, not current free space. A visible number or History sample does not make it fresh. |
+| **N/A**, **Unavailable**, a dash, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
+
+**A numeric disk search or disk sort is not a monitoring-coverage check.** To
+review missing readings, clear numeric disk conditions and restrictive table
+filters, then use the existing name search or unfiltered inventory. Inspect the
+same guest's explanation and filesystem rows, not just the first or last row
+in a disk sort. A guest absent from a filtered result is not evidence of low
+usage, deletion or healthy monitoring. Clearing a display filter neither changes
+access nor stops API polling; keep intentionally restricted targets restricted.
+
+An existing linked Pulse Agent can supply current filesystem readings while
+Proxmox guest reads are deferred. Conversely, a stale agent can leave retained
+values. Compare the collection source, same guest identity and filesystem; a
+working Machines view does not prove that the QEMU-only path recovered. Use
+[existing Machines readings](#use-existing-machines-readings-without-changing-the-guest)
+only with those distinctions, without installing another agent.
+
+Use normally collected observations and the guest's established filesystem
+view for capacity decisions. Do not run Diagnostics, guest-agent probes,
+a backup or a restart to turn an unknown reading into a number. Do not bypass a
+guest-read pause or widen token access. None of these display states proves
+thaw or successful workload writes; [Backup safety](#backup-safety) still applies.
+
+### A missing reading is not an installation diagnosis
+
+[Check the reading's context](#current-retained-and-unavailable-disk-readings)
+before treating a dash or a retained number as a setup failure.
+
+Pulse's **“agent not running”** disk explanation means Proxmox could not query
+the guest agent. It can also cover a general guest-agent HTTP 500 response; it
+does not establish whether an agent is absent or stopped. An unknown explanation
+establishes neither. **Do not install, enable or restart an agent solely to clear
+a disk dash.**
+
+Read [Backup safety](#backup-safety) before changing anything. During a backup,
+freeze/thaw or an unresponsive-guest incident, defer setup and live probes and
+use the guest/platform's established recovery procedure. A running VM, an absent
+lock or an OK backup does not prove thaw. Keep the monitoring-outage precaution
+until independent checks confirm thaw, fresh successful writes to **every
+filesystem covered by the backup** and workload liveness. Restore only services
+and timers that were previously active.
+
+When the guest is responsive and outside those conditions, review its existing
+agent configuration and guest-local service through your normal console. Use
+[Setup](#-setup) only if it actually needs configuration and the guest OS has a
+supported QEMU Guest Agent. The Linux package name is not a Windows or Android
+installation instruction. If no supported agent is available, use the guest's
+own filesystem tools; missing Pulse usage is unknown, not zero.
+
+### Use existing Machines readings without changing the guest
+
+The Proxmox disk view and an in-guest **Pulse Agent** use different collection
+paths. A paused Proxmox guest-agent read does not mean the Pulse Agent has
+stopped reporting. If the affected VM **already has a Pulse Agent** and an
+existing entry in **Machines**, check that view's filesystem readings and
+History before changing anything in the guest.
+
+Confirm the Machines entry belongs to the **same guest**, using its existing
+identity and host details, not a similar name alone. Check the filesystem and
+its observation time: a retained History sample or an agent's recent contact
+is not proof of a current disk reading. Use available, current readings there
+as an interim view; this does not repair the missing Proxmox reading or prove
+that the two entries are linked correctly. If the guest has no existing Pulse
+Agent entry or no current filesystem readings, use its own filesystem tools
+through your normal interface. **Do not install another agent, restart services,
+restore a VM or force guest-agent checks just to recover these readings.**
+
+This alternative does **not** relax [Backup safety](#backup-safety). A responsive
+guest, running agent services, working Machines readings or an expired cooldown
+is not proof of thaw and successful writes to every filesystem covered by the
+backup. Keep the monitoring-outage precaution until those independent checks
+pass; do not clear or bypass a guest-read pause to test recovery.
+
 | Observation | Useful next check |
 | --- | --- |
 | **Disk shows “-”** | Read its explanation and observation time. Check the owning host, current VM options, guest-local service and configured API token access. |
-| **Permission denied** | Review the token and account's effective read privileges on that VM, including privilege-separated token ACLs. A successful root command would not disprove this error. |
+| **Permission denied** | First check whether this VM is an intended monitoring target. Preserve intentionally restricted access. For intended targets only, review the token and account's effective read privileges, including privilege-separated token ACLs, outside backups or guest incidents. A successful root command would not disprove this error; a denied read does not establish guest or filesystem health. |
 | **Timeout or backup lock** | Check the existing backup/task timeline and guest workload locally. Defer active guest-agent probes; increasing a timeout is not a contention or thaw repair. |
 | **Rocky Linux / RHEL memory missing** | Review `/etc/sysconfig/qemu-ga` inside the guest. File-read restrictions can explain memory collection failure; they do not by themselves prove why filesystem usage is absent. Change the guest's allowlist or restart its agent only through your normal maintenance procedure, outside backups. |
 | **Windows service stopped** | Check the QEMU Guest Agent service inside Windows. Schedule any restart outside backups. |

@@ -19424,7 +19424,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 	spamQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-spam")
 	virusQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-virus")
 
-	t.Run("nil quarantine clears alerts", func(t *testing.T) {
+	t.Run("nil quarantine preserves alerts", func(t *testing.T) {
 		m := newTestManager(t)
 
 		// Create an existing quarantine alert
@@ -19453,11 +19453,11 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		_, virusExists := testLookupActiveAlert(t, m, virusQuarantineState)
 		m.mu.RUnlock()
 
-		if spamExists {
-			t.Error("spam alert should be cleared when quarantine is nil")
+		if !spamExists {
+			t.Error("spam alert must be preserved when quarantine is nil")
 		}
-		if virusExists {
-			t.Error("virus alert should be cleared when quarantine is nil")
+		if !virusExists {
+			t.Error("virus alert must be preserved when quarantine is nil")
 		}
 	})
 

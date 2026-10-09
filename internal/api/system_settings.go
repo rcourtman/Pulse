@@ -380,6 +380,12 @@ func applyDiscoveryConfigOverrides(current config.DiscoveryConfig, cfgMap map[st
 
 // validateSystemSettings validates settings before applying them
 func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]interface{}) error {
+	if value, present := rawRequest["allowedOrigins"]; present {
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("allowedOrigins must be a string (use an empty string for same-origin only)")
+		}
+	}
+
 	if val, ok := rawRequest["reportBranding"]; ok {
 		settings, ok := val.(map[string]interface{})
 		if !ok {
@@ -713,6 +719,8 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 			Msg("Loaded system settings for API response")
 
 		settings.UpdateChannel = config.EffectiveUpdateChannel(settings.UpdateChannel, h.config.UpdateChannel)
+		// Expose the effective policy, including deployment overrides and clears.
+		settings.AllowedOrigins = h.config.AllowedOrigins
 		// Always expose effective backup polling configuration
 		settings.PVEPollingInterval = int(h.config.PVEPollingInterval.Seconds())
 		settings.BackupPollingInterval = int(h.config.BackupPollingInterval.Seconds())
@@ -866,6 +874,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	// A disabled deployment-owned field is still included by the settings form.
+	// Accept an unchanged value without copying the override into system.json;
+	// reject attempts to change it, before persisting any part of the patch.
+	_, allowedOriginsUpdated := rawRequest["allowedOrigins"]
+	allowedOriginsLocked := h.config.EnvOverrides["ALLOWED_ORIGINS"] || h.config.EnvOverrides["allowedOrigins"]
+	if allowedOriginsUpdated && allowedOriginsLocked && updates.AllowedOrigins != h.config.AllowedOrigins {
+		writeErrorResponse(w, http.StatusConflict, "env_locked", "allowedOrigins is locked by the ALLOWED_ORIGINS environment variable", nil)
+		return
+	}
+
 	// Start with existing settings
 	settings := *existingSettings
 	discoveryConfigUpdated := false
@@ -886,7 +904,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["backupPollingInterval"]; ok {
 		settings.BackupPollingInterval = updates.BackupPollingInterval
 	}
-	if updates.AllowedOrigins != "" {
+	if allowedOriginsUpdated && !allowedOriginsLocked {
 		settings.AllowedOrigins = updates.AllowedOrigins
 	}
 	if _, ok := rawRequest["connectionTimeout"]; ok {
@@ -1026,7 +1044,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		}
 		h.config.PVEPollingInterval = newInterval
 	}
-	if settings.AllowedOrigins != "" {
+	if allowedOriginsUpdated && !allowedOriginsLocked {
 		h.config.AllowedOrigins = settings.AllowedOrigins
 	}
 	if settings.ConnectionTimeout > 0 {

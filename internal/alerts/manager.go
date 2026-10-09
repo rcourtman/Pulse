@@ -78,6 +78,8 @@ type Manager struct {
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
+	hostDiskTempPendingContexts  map[string]hostDiskTempContext  // Only live pending temperature runs; config saves need link/type identity
+	hostSMARTRiskAbsences        map[string]int                  // Consecutive non-empty reports omitting a SMART risk resource
 	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
@@ -106,6 +108,9 @@ type Manager struct {
 	// linked to and the usage metrics the agent evaluates for it. The node
 	// releases only those metrics and keeps evaluating the rest itself.
 	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
+	// Ordering survives link removal so an older in-flight report cannot restore it.
+	hostAgentReportSeq   map[string]uint64
+	hostAgentLinkApplied map[string]uint64
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -248,6 +253,8 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
 		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
+		hostAgentReportSeq:              make(map[string]uint64),
+		hostAgentLinkApplied:            make(map[string]uint64),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,

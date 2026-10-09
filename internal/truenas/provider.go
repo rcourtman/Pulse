@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -396,39 +397,28 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 	}
 
 	diskScope := systemSourceID(p.connectionID, snapshot.System.Hostname)
-	identifiers := make([]string, 0, len(snapshot.Disks))
-	metricIDsByIdentifier := make(map[string]string, len(snapshot.Disks)*3)
-	for _, disk := range snapshot.Disks {
-		metricID := trueNASDiskMetricResourceID(diskScope, disk)
-		if metricID == "" {
-			continue
-		}
-		if name := strings.TrimSpace(disk.Name); name != "" {
-			identifiers = append(identifiers, name)
-		}
-		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
-			if _, exists := metricIDsByIdentifier[key]; !exists {
-				metricIDsByIdentifier[key] = metricID
-			}
-		}
-	}
-	identifiers = dedupeStrings(identifiers)
+	identifiers, metricIDsByIdentifier := trueNASDiskHistoryIdentities(diskScope, snapshot.Disks)
 	if len(identifiers) == 0 {
 		return nil, nil
 	}
 
 	nativeHistory, err := historyFetcher.DiskTemperatureHistory(ctx, identifiers, duration)
-	if err != nil {
+	if len(nativeHistory) == 0 {
 		return nil, err
 	}
-	if len(nativeHistory) == 0 {
-		return nil, nil
+	// Inventory may change while the RPC is in flight. Never attach an old
+	// disk's series to a replacement occupying the same native device name.
+	currentSnapshot := p.Snapshot()
+	if currentSnapshot == nil {
+		return nil, err
 	}
+	currentDiskScope := systemSourceID(p.connectionID, currentSnapshot.System.Hostname)
+	_, currentMetricIDs := trueNASDiskHistoryIdentities(currentDiskScope, currentSnapshot.Disks)
 
 	historyByMetricID := make(map[string][]TimeSeriesPoint, len(nativeHistory))
 	for identifier, points := range nativeHistory {
 		metricID := metricIDsByIdentifier[strings.TrimSpace(identifier)]
-		if metricID == "" || len(points) == 0 {
+		if metricID == "" || currentMetricIDs[strings.TrimSpace(identifier)] != metricID || len(points) == 0 {
 			continue
 		}
 		copied := make([]TimeSeriesPoint, len(points))
@@ -436,9 +426,35 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 		historyByMetricID[metricID] = copied
 	}
 	if len(historyByMetricID) == 0 {
-		return nil, nil
+		return nil, err
 	}
-	return historyByMetricID, nil
+	return historyByMetricID, err
+}
+
+func trueNASDiskHistoryIdentities(diskScope string, disks []Disk) ([]string, map[string]string) {
+	identifiers := make([]string, 0, len(disks))
+	metricIDs := make(map[string]string, len(disks)*3)
+	counts := make(map[string]int, len(disks))
+	for _, disk := range disks {
+		counts[trueNASDiskMetricResourceID(diskScope, disk)]++
+	}
+	for _, disk := range disks {
+		metricID := trueNASDiskMetricResourceID(diskScope, disk)
+		if metricID == "" || counts[metricID] != 1 {
+			continue
+		}
+		if name := strings.TrimSpace(disk.Name); name != "" {
+			identifiers = append(identifiers, name)
+		}
+		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
+			if existing, exists := metricIDs[key]; exists && existing != metricID {
+				metricIDs[key] = "" // ambiguous aliases stay unusable
+			} else if !exists {
+				metricIDs[key] = metricID
+			}
+		}
+	}
+	return dedupeStrings(identifiers), metricIDs
 }
 
 // Close releases resources held by the active fetcher, if supported.
@@ -605,7 +621,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
-					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
+					Disk: poolDiskMetric(pool),
 				},
 				// TrueNAS has no disabled state for an imported pool, so
 				// Enabled is always true; Active follows whether the pool is
@@ -2088,10 +2104,27 @@ func aggregatePoolUsage(pools []Pool) (int64, int64) {
 	var total int64
 	var used int64
 	for _, pool := range pools {
+		// A known boot pool or one available data pool is not the complete
+		// host's storage usage. Keep per-pool readings, but omit the host
+		// aggregate if any pool is unknown or the byte sum would overflow.
+		if !poolUsageKnown(pool) || total > math.MaxInt64-pool.TotalBytes {
+			return 0, 0
+		}
 		total += pool.TotalBytes
 		used += pool.UsedBytes
 	}
 	return total, used
+}
+
+func poolUsageKnown(pool Pool) bool {
+	return pool.TotalBytes > 0 && pool.UsedBytes >= 0 && pool.UsedBytes <= pool.TotalBytes
+}
+
+func poolDiskMetric(pool Pool) *unifiedresources.MetricValue {
+	if !poolUsageKnown(pool) {
+		return nil
+	}
+	return diskMetric(pool.TotalBytes, pool.UsedBytes)
 }
 
 // systemSourceID keys an API-added TrueNAS system by the configured

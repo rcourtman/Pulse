@@ -73,6 +73,12 @@ func (m *mockThresholdProvider) GetDiskTemperatureThreshold(_ alerts.DiskTempera
 	return 0, 0
 }
 
+// GetTrueNASDiskTemperatureThreshold judges a TrueNAS disk by the same
+// per-type table, as a TrueNAS disk with no override or TrueNAS-wide value is.
+func (m *mockThresholdProvider) GetTrueNASDiskTemperatureThreshold(_ string, diskType string) (float64, float64) {
+	return m.GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{}, diskType)
+}
+
 type mockUnifiedResourceProvider struct {
 	UnifiedResourceProvider
 	getAllFunc            func() []unifiedresources.Resource

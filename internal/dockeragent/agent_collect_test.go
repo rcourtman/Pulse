@@ -426,11 +426,12 @@ func TestCollectContainer(t *testing.T) {
 		}
 	})
 
-	t.Run("podman uses reported cpu percent from compat stats payload", func(t *testing.T) {
+	t.Run("podman interval wins over conflicting compat percentage", func(t *testing.T) {
+		epoch := time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)
 		inspect := baseInspect()
 		inspect.State = &containertypes.State{
 			Running:   true,
-			StartedAt: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
+			StartedAt: epoch.Add(-time.Minute).Format(time.RFC3339Nano),
 		}
 
 		agent := &Agent{
@@ -441,7 +442,8 @@ func TestCollectContainer(t *testing.T) {
 					totalUsage:  100_000_000,
 					systemUsage: 1_000_000_000,
 					onlineCPUs:  16,
-					read:        time.Now().Add(-time.Second),
+					read:        epoch.Add(-time.Second),
+					startedAt:   epoch.Add(-time.Minute),
 				},
 			},
 			docker: &fakeDockerClient{
@@ -479,8 +481,8 @@ func TestCollectContainer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if container.CPUPercent != 0.32 {
-			t.Fatalf("expected podman cpu percent 0.32 from payload, got %f", container.CPUPercent)
+		if container.CPUPercent != 3 {
+			t.Fatalf("expected Podman interval CPU 3%% despite cpu:0.32, got %f", container.CPUPercent)
 		}
 	})
 

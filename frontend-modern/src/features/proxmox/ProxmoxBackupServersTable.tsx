@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
@@ -538,9 +539,12 @@ export function ProxmoxBackupServersTable(props: {
                               controlsId={detailRowId()}
                               onToggle={() => detail.toggle(rowIdentity)}
                             />
-                            <div class="min-w-0 truncate" title={row.serverName}>
-                              {row.serverName}
-                            </div>
+                            <ResourceNameWithWebInterfaceLink
+                              name={row.serverName}
+                              url={row.resource.customUrl}
+                              class="min-w-0 flex-1"
+                              nameClass="block min-w-0 flex-1 truncate"
+                            />
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>

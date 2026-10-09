@@ -88,11 +88,12 @@ test_get_latest_stable_version_prefers_highest_over_created_order() {
     if [[ "$url" == *"/releases?per_page="* ]]; then
       cat <<'EOF'
 [
-  { "tag_name": "v5.1.37", "prerelease": false },
-  { "tag_name": "helm-chart-6.0.5", "prerelease": true },
-  { "tag_name": "v6.0.5", "prerelease": false },
-  { "tag_name": "v6.0.5-rc.4", "prerelease": true },
-  { "tag_name": "v6.0.4", "prerelease": false }
+  { "tag_name": "v5.1.37", "draft": false, "prerelease": false },
+  { "tag_name": "helm-chart-6.0.5", "draft": false, "prerelease": false },
+  { "tag_name": "v99.0.0", "draft": true, "prerelease": false },
+  { "tag_name": "v6.0.5", "draft": false, "prerelease": false },
+  { "tag_name": "v6.0.5-rc.4", "draft": false, "prerelease": true },
+  { "tag_name": "v6.0.4", "draft": false, "prerelease": false }
 ]
 EOF
       return 0
@@ -110,6 +111,30 @@ EOF
     return 1
   fi
   return 0
+}
+
+test_get_latest_stable_version_rejects_incomplete_maturity() {
+  # Missing fields must remain unknown, not default to published stable.
+  # Both transport paths are confined; this test makes no provider request.
+  curl() {
+    local url="${*: -1}"
+    case "$url" in
+      */releases\?per_page=*)
+        printf '%s\n' '[{"tag_name":"v99.0.0","prerelease":false},{"tag_name":"v99.0.1","draft":false}]'
+        ;;
+      */releases/latest)
+        printf '%s\n' '{"tag_name":"v99.0.0","prerelease":false}'
+        ;;
+      *) echo "unexpected curl call in test: $*" >&2; return 1 ;;
+    esac
+  }
+  local got
+  got=$(get_latest_stable_version)
+  unset -f curl
+  if [[ -n "$got" ]]; then
+    echo "incomplete maturity must not select an unattended update, got $got" >&2
+    return 1
+  fi
 }
 
 test_perform_update_restores_backup_when_service_stays_down() {
@@ -170,6 +195,9 @@ INSTALLER
   # never comes back up; start also fails -> perform_update must restore + fail.
   local is_active_calls=0
   systemctl() {
+    # The rollback must stop the service before replacing its executable.
+    # Stopping succeeds; only activation/liveness is the injected failure.
+    if [[ "$1" == "stop" ]]; then return 0; fi
     if [[ "$1" == "is-active" ]]; then
       ((is_active_calls += 1))
       if (( is_active_calls == 1 )); then
@@ -323,6 +351,7 @@ INSTALLER
         AUTOUPDATE_TEST_UP="yes"
         return 0
         ;;
+      stop) AUTOUPDATE_TEST_UP="no"; return 0 ;;
     esac
     return 1
   }
@@ -442,6 +471,7 @@ main() {
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
   assert_success "pick_highest_stable_tag ignores list order and prereleases" test_pick_highest_stable_tag_ignores_list_order_and_prereleases
   assert_success "get_latest_stable_version prefers highest version over created order" test_get_latest_stable_version_prefers_highest_over_created_order
+  assert_success "get_latest_stable_version refuses incomplete maturity" test_get_latest_stable_version_rejects_incomplete_maturity
   assert_success "perform_update restores backup when service stays down" test_perform_update_restores_backup_when_service_stays_down
   assert_success "ensure_service_restarted no-ops when service was inactive" test_ensure_service_restarted_noops_when_service_was_inactive
   assert_success "ensure_service_restarted starts a stopped service" test_ensure_service_restarted_starts_stopped_service

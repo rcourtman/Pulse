@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Show, createSignal } from 'solid-js';
 import type { AIChatExplanationRequest } from '@/stores/aiChat';
@@ -7,6 +7,10 @@ import type { QueuedFollowUp } from '../hooks/useChat';
 import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
 import aiChatSource from '../index.tsx?raw';
 import { logger } from '@/utils/logger';
+// Vitest hoists vi.hoisted/vi.mock before these imports. Collect the component
+// here so cold Vite transforms do not consume a functional setup-hook budget.
+import { AIChat, resetAIChatComposerDraftStashForTests } from '../index';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
 
@@ -483,22 +487,6 @@ vi.mock('@/stores/websocket-global', () => ({
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({ byType: mockByType, resources: mockResources }),
 }));
-
-// ── Lazy import after mocks ────────────────────────────────────────────────
-
-let AIChat: typeof import('../index').AIChat;
-let resetAIChatComposerDraftStashForTests: typeof import('../index').resetAIChatComposerDraftStashForTests;
-let resetAIRuntimeState: typeof import('@/stores/aiRuntimeState').resetAIRuntimeState;
-
-beforeAll(async () => {
-  const [chatModule, runtimeModule] = await Promise.all([
-    import('../index'),
-    import('@/stores/aiRuntimeState'),
-  ]);
-  AIChat = chatModule.AIChat;
-  resetAIChatComposerDraftStashForTests = chatModule.resetAIChatComposerDraftStashForTests;
-  resetAIRuntimeState = runtimeModule.resetAIRuntimeState;
-});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

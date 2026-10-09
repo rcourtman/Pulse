@@ -2279,13 +2279,18 @@ def pulse_intelligence_row_analysis_keys(
 ) -> tuple[set[str], set[str]]:
     cohort_keys: set[str] = set()
     signal_groups: set[str] = set()
-    for field in PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS:
-        if not parse_optional_bool(row.get(field)):
+    # Older schemas and sparse exports omit most signals. Intersect in C rather
+    # than parsing every absent field for every heartbeat; explicit nulls have
+    # the same no-signal meaning. Keep the existing parsers for supplied values.
+    for field in row.keys() & PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD.keys():
+        value = row[field]
+        if value is None or not parse_optional_bool(value):
             continue
         cohort_keys.update(PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD[field])
         signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_BOOL_KEYS_BY_FIELD[field])
-    for field in PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS:
-        if parse_optional_nonnegative_int(row.get(field)) <= 0:
+    for field in row.keys() & PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD.keys():
+        value = row[field]
+        if value is None or parse_optional_nonnegative_int(value) <= 0:
             continue
         cohort_keys.update(PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD[field])
         signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_COUNT_KEYS_BY_FIELD[field])

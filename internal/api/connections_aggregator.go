@@ -296,7 +296,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 	enabled := !inst.Disabled
 	surfaces := []string{"mailStats", "queues", "quarantine", "domainStats"}
 	scope := map[string]bool{
-		"mailStats":   inst.MonitorMailStats,
+		"mailStats":   inst.MailStatsEnabled(),
 		"queues":      inst.MonitorQueues,
 		"quarantine":  inst.MonitorQuarantine,
 		"domainStats": inst.MonitorDomainStats,

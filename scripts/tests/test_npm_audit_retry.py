@@ -20,7 +20,8 @@ SCRIPT = ROOT / "scripts" / "npm-audit-retry.sh"
 
 class NpmAuditRetryTest(unittest.TestCase):
     def run_check(
-        self, mode: str, *arguments: str, require: str = "true", report=None
+        self, mode: str, *arguments: str, require: str = "true", report=None,
+        attempts: int = 3, attempt_timeout: int = 60, max_seconds: int = 240,
     ):
         with tempfile.TemporaryDirectory() as directory:
             fake_bin = Path(directory)
@@ -45,6 +46,26 @@ class NpmAuditRetryTest(unittest.TestCase):
                     case "$FAKE_NPM_MODE" in
                       success)
                         printf '%s\n' "$clean"
+                        exit 0
+                        ;;
+                      clean-failure)
+                        printf '%s\n' "$clean"
+                        exit 42
+                        ;;
+                      clean-signal)
+                        printf '%s\n' "$clean"
+                        kill -TERM "$$"
+                        ;;
+                      clean-hang)
+                        printf '%s\n' "$clean"
+                        exec sleep 300
+                        ;;
+                      vulnerability-hang)
+                        printf '%s\n' "$vulnerable"
+                        exec sleep 300
+                        ;;
+                      vulnerability-success)
+                        printf '%s\n' "$vulnerable"
                         exit 0
                         ;;
                       transient-success)
@@ -81,6 +102,10 @@ class NpmAuditRetryTest(unittest.TestCase):
                         cat "$FAKE_NPM_REPORT"
                         exit 1
                         ;;
+                      captured-clean)
+                        cat "$FAKE_NPM_REPORT"
+                        exit 0
+                        ;;
                       garbage)
                         echo 'not json'
                         exit 1
@@ -99,9 +124,9 @@ class NpmAuditRetryTest(unittest.TestCase):
                     "FAKE_NPM_COUNT": str(count),
                     "FAKE_NPM_MODE": mode,
                     "FAKE_NPM_REPORT": str(report_path),
-                    "NPM_AUDIT_ATTEMPTS": "3",
-                    "NPM_AUDIT_ATTEMPT_TIMEOUT": "60",
-                    "NPM_AUDIT_MAX_SECONDS": "240",
+                    "NPM_AUDIT_ATTEMPTS": str(attempts),
+                    "NPM_AUDIT_ATTEMPT_TIMEOUT": str(attempt_timeout),
+                    "NPM_AUDIT_MAX_SECONDS": str(max_seconds),
                     "NPM_AUDIT_CMD": str(fake_npm),
                     "NPM_AUDIT_REQUIRE_RESULT": require,
                     "NPM_AUDIT_RETRY_DELAY": "0",
@@ -114,6 +139,7 @@ class NpmAuditRetryTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
             recorded_calls = (
                 calls.read_text(encoding="utf-8").splitlines()
@@ -178,6 +204,56 @@ class NpmAuditRetryTest(unittest.TestCase):
             ["audit --json"] * 2,
         )
         self.assertIn("retrying", result.stdout)
+
+    def test_zero_summary_from_a_failed_or_signalled_audit_is_not_clean(self) -> None:
+        for mode in ["clean-failure", "clean-signal"]:
+            for require in ["true", "false"]:
+                with self.subTest(mode=mode, require=require):
+                    result, calls = self.run_check(mode, "all", require=require)
+                    self.assertEqual(result.returncode, 1 if require == "true" else 0,
+                                     result.stdout)
+                    self.assertEqual(calls, ["audit --json"] * 3, result.stdout)
+                    self.assertIn("could not reach the advisory endpoint", result.stdout)
+                    self.assertNotIn("no vulnerabilities", result.stdout)
+                    self.assertNotIn("vulnerabilities present", result.stdout)
+                    self.assertIn("::error::" if require == "true" else "::warning::",
+                                  result.stdout)
+                    self.assertIn("status 42" if mode == "clean-failure" else "status 143",
+                                  result.stdout)
+
+    def test_zero_summary_written_before_timeout_is_not_clean(self) -> None:
+        for require in ["true", "false"]:
+            with self.subTest(require=require):
+                result, calls = self.run_check(
+                    "clean-hang", "production", require=require,
+                    attempts=1, attempt_timeout=1, max_seconds=5,
+                )
+                self.assertEqual(result.returncode, 1 if require == "true" else 0,
+                                 result.stdout)
+                self.assertEqual(calls, ["audit --json --omit=dev"], result.stdout)
+                self.assertIn("was stopped", result.stdout)
+                self.assertIn("could not reach the advisory endpoint", result.stdout)
+                self.assertNotIn("no vulnerabilities", result.stdout)
+                self.assertIn("::error::" if require == "true" else "::warning::",
+                              result.stdout)
+
+    def test_positive_findings_survive_zero_exit_or_timeout_without_requery(self) -> None:
+        for mode in ["vulnerability-success", "vulnerability-hang"]:
+            for require in ["true", "false"]:
+                with self.subTest(mode=mode, require=require):
+                    result, calls = self.run_check(
+                        mode, "all", require=require,
+                        attempts=3, attempt_timeout=1, max_seconds=5,
+                    )
+                    self.assertEqual(result.returncode, 1 if require == "true" else 0,
+                                     result.stdout)
+                    self.assertEqual(calls, ["audit --json"], result.stdout)
+                    self.assertIn("vulnerabilities present", result.stdout)
+                    self.assertNotIn("no vulnerabilities", result.stdout)
+                    self.assertNotIn("retrying", result.stdout)
+                    self.assertNotIn("could not reach the advisory endpoint", result.stdout)
+                    self.assertIn("::error::" if require == "true" else "::warning::",
+                                  result.stdout)
 
     def test_does_not_retry_a_vulnerability_report(self) -> None:
         result, calls = self.run_check("vulnerability", "all")
@@ -404,7 +480,7 @@ class NpmAuditRetryTest(unittest.TestCase):
             },
             "vulnerabilities": {},
         }
-        result, calls = self.run_check("captured-report", "all", report=report)
+        result, calls = self.run_check("captured-clean", "all", report=report)
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(calls, ["audit --json"])
         self.assertIn("no vulnerabilities", result.stdout)

@@ -668,8 +668,24 @@ func (m *Monitor) publishPBSConnectionOutcome(instance models.PBSInstance, pollE
 	}
 }
 
+// pmgPollClient is the existing read-only PMG collection boundary.
+type pmgPollClient interface {
+	GetVersion(context.Context) (*pmg.VersionInfo, error)
+	GetClusterStatus(context.Context, bool) ([]pmg.ClusterStatusEntry, error)
+	GetQueueStatus(context.Context, string) (*pmg.QueueStatusEntry, error)
+	ListBackups(context.Context, string) ([]pmg.BackupEntry, error)
+	GetMailStatistics(context.Context, string) (*pmg.MailStatistics, error)
+	GetMailCount(context.Context, int) ([]pmg.MailCountEntry, error)
+	GetSpamScores(context.Context) ([]pmg.SpamScore, error)
+	GetQuarantineStatus(context.Context, string) (*pmg.QuarantineStatus, error)
+	ListRelayDomains(context.Context) ([]pmg.RelayDomainEntry, error)
+	GetDomainStatistics(context.Context, int64, int64) ([]pmg.DomainStatisticsEntry, error)
+}
+
+var _ pmgPollClient = (*pmg.Client)(nil)
+
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
-func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client *pmg.Client) {
+func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client pmgPollClient) {
 	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
 
 	start := time.Now()
@@ -716,13 +732,20 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		log.Debug().Str("instance", instanceName).Msg("polling PMG instance")
 	}
 
+	// Each poll uses one saved scope snapshot. A later edit/pause applies to
+	// the next poll and does not revoke requests already in flight.
 	var instanceCfg *config.PMGInstance
-	for idx := range m.config.PMGInstances {
-		if m.config.PMGInstances[idx].Name == instanceName {
-			instanceCfg = &m.config.PMGInstances[idx]
-			break
+	config.Mu.RLock()
+	if m.config != nil {
+		for _, cfg := range m.config.PMGInstances {
+			if cfg.Name == instanceName {
+				snapshot := cfg
+				instanceCfg = &snapshot
+				break
+			}
 		}
 	}
+	config.Mu.RUnlock()
 
 	if instanceCfg == nil {
 		log.Error().Str("instance", instanceName).Msg("PMG instance config not found")
@@ -775,7 +798,16 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, true)
 	m.resetAuthFailures(instanceName, "pmg")
 
+	// A successful version read establishes connection health, not complete
+	// downstream collection. Preserve missing readings and report failed polls.
+	recordReadError := func(operation string, err error) {
+		if err != nil {
+			pollErr = stderrors.Join(pollErr, errors.WrapAPIError(operation, instanceName, err, 0))
+		}
+	}
+
 	cluster, err := client.GetClusterStatus(ctx, true)
+	recordReadError("pmg_cluster_status", err)
 	if err != nil {
 		if debugEnabled {
 			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
@@ -799,24 +831,27 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 			backupNodes[entry.Name] = struct{}{}
 
-			// Fetch queue status for this node
-			if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
-				if debugEnabled {
-					log.Debug().Err(qErr).
-						Str("instance", instanceName).
-						Str("node", entry.Name).
-						Msg("Failed to fetch PMG queue status")
-				}
-			} else if queueData != nil {
-				total := queueData.Active.Int64() + queueData.Deferred.Int64() + queueData.Hold.Int64() + queueData.Incoming.Int64()
-				node.QueueStatus = &models.PMGQueueStatus{
-					Active:    queueData.Active.Int(),
-					Deferred:  queueData.Deferred.Int(),
-					Hold:      queueData.Hold.Int(),
-					Incoming:  queueData.Incoming.Int(),
-					Total:     int(total),
-					OldestAge: queueData.OldestAge.Int64(),
-					UpdatedAt: time.Now(),
+			if instanceCfg.MonitorQueues {
+				// Fetch queue status for this node
+				if queueData, qErr := client.GetQueueStatus(ctx, entry.Name); qErr != nil {
+					recordReadError("pmg_queue_status", qErr)
+					if debugEnabled {
+						log.Debug().Err(qErr).
+							Str("instance", instanceName).
+							Str("node", entry.Name).
+							Msg("Failed to fetch PMG queue status")
+					}
+				} else if queueData != nil {
+					total := queueData.Active.Int64() + queueData.Deferred.Int64() + queueData.Hold.Int64() + queueData.Incoming.Int64()
+					node.QueueStatus = &models.PMGQueueStatus{
+						Active:    queueData.Active.Int(),
+						Deferred:  queueData.Deferred.Int(),
+						Hold:      queueData.Hold.Int(),
+						Incoming:  queueData.Incoming.Int(),
+						Total:     int(total),
+						OldestAge: queueData.OldestAge.Int64(),
+						UpdatedAt: time.Now(),
+					}
 				}
 			}
 
@@ -842,6 +877,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 		backups, backupErr := client.ListBackups(ctx, nodeName)
 		if backupErr != nil {
+			recordReadError("pmg_backups", backupErr)
 			if debugEnabled {
 				log.Debug().Err(backupErr).
 					Str("instance", instanceName).
@@ -877,87 +913,99 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			Msg("PMG backups polled")
 	}
 
-	if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
-		log.Warn().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail statistics")
-	} else if stats != nil {
-		pmgInst.MailStats = &models.PMGMailStats{
-			Timeframe:            "day",
-			CountTotal:           stats.Count.Float64(),
-			CountIn:              stats.CountIn.Float64(),
-			CountOut:             stats.CountOut.Float64(),
-			SpamIn:               stats.SpamIn.Float64(),
-			SpamOut:              stats.SpamOut.Float64(),
-			VirusIn:              stats.VirusIn.Float64(),
-			VirusOut:             stats.VirusOut.Float64(),
-			BouncesIn:            stats.BouncesIn.Float64(),
-			BouncesOut:           stats.BouncesOut.Float64(),
-			BytesIn:              stats.BytesIn.Float64(),
-			BytesOut:             stats.BytesOut.Float64(),
-			GreylistCount:        stats.GreylistCount.Float64(),
-			JunkIn:               stats.JunkIn.Float64(),
-			AverageProcessTimeMs: stats.AvgProcessSec.Float64() * 1000,
-			RBLRejects:           stats.RBLRejects.Float64(),
-			PregreetRejects:      stats.Pregreet.Float64(),
-			UpdatedAt:            time.Now(),
+	if instanceCfg.MailStatsEnabled() {
+		if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
+			recordReadError("pmg_mail_statistics", err)
+			log.Warn().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail statistics")
+		} else if stats != nil {
+			pmgInst.MailStats = &models.PMGMailStats{
+				Timeframe:            "day",
+				CountTotal:           stats.Count.Float64(),
+				CountIn:              stats.CountIn.Float64(),
+				CountOut:             stats.CountOut.Float64(),
+				SpamIn:               stats.SpamIn.Float64(),
+				SpamOut:              stats.SpamOut.Float64(),
+				VirusIn:              stats.VirusIn.Float64(),
+				VirusOut:             stats.VirusOut.Float64(),
+				BouncesIn:            stats.BouncesIn.Float64(),
+				BouncesOut:           stats.BouncesOut.Float64(),
+				BytesIn:              stats.BytesIn.Float64(),
+				BytesOut:             stats.BytesOut.Float64(),
+				GreylistCount:        stats.GreylistCount.Float64(),
+				JunkIn:               stats.JunkIn.Float64(),
+				AverageProcessTimeMs: stats.AvgProcessSec.Float64() * 1000,
+				RBLRejects:           stats.RBLRejects.Float64(),
+				PregreetRejects:      stats.Pregreet.Float64(),
+				UpdatedAt:            time.Now(),
+			}
 		}
+
+		if counts, err := client.GetMailCount(ctx, 86400); err != nil {
+			recordReadError("pmg_mail_count", err)
+			if debugEnabled {
+				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail count data")
+			}
+		} else if len(counts) > 0 {
+			points := make([]models.PMGMailCountPoint, 0, len(counts))
+			for _, entry := range counts {
+				ts := time.Unix(entry.Time.Int64(), 0)
+				points = append(points, models.PMGMailCountPoint{
+					Timestamp:   ts,
+					Count:       entry.Count.Float64(),
+					CountIn:     entry.CountIn.Float64(),
+					CountOut:    entry.CountOut.Float64(),
+					SpamIn:      entry.SpamIn.Float64(),
+					SpamOut:     entry.SpamOut.Float64(),
+					VirusIn:     entry.VirusIn.Float64(),
+					VirusOut:    entry.VirusOut.Float64(),
+					RBLRejects:  entry.RBLRejects.Float64(),
+					Pregreet:    entry.PregreetReject.Float64(),
+					BouncesIn:   entry.BouncesIn.Float64(),
+					BouncesOut:  entry.BouncesOut.Float64(),
+					Greylist:    entry.GreylistCount.Float64(),
+					Index:       entry.Index.Int(),
+					Timeframe:   "hour",
+					WindowStart: ts,
+				})
+			}
+			pmgInst.MailCount = points
+		}
+
+		if scores, err := client.GetSpamScores(ctx); err != nil {
+			recordReadError("pmg_spam_scores", err)
+			if debugEnabled {
+				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG spam score distribution")
+			}
+		} else if len(scores) > 0 {
+			buckets := make([]models.PMGSpamBucket, 0, len(scores))
+			for _, bucket := range scores {
+				buckets = append(buckets, models.PMGSpamBucket{
+					Score: bucket.Level,
+					Count: float64(bucket.Count.Int()),
+				})
+			}
+			pmgInst.SpamDistribution = buckets
+		}
+
 	}
 
-	if counts, err := client.GetMailCount(ctx, 86400); err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail count data")
+	if instanceCfg.MonitorQuarantine {
+		spamStatus, spamErr := client.GetQuarantineStatus(ctx, "spam")
+		virusStatus, virusErr := client.GetQuarantineStatus(ctx, "virus")
+		recordReadError("pmg_spam_quarantine", spamErr)
+		recordReadError("pmg_virus_quarantine", virusErr)
+		// Totals and growth require both categories. Never publish a failed
+		// category as zero or clear its alert using a partial observation.
+		if spamErr == nil && virusErr == nil && spamStatus != nil && virusStatus != nil {
+			pmgInst.Quarantine = &models.PMGQuarantineTotals{
+				Spam: int(spamStatus.Count.Int64()), Virus: int(virusStatus.Count.Int64()),
+			}
 		}
-	} else if len(counts) > 0 {
-		points := make([]models.PMGMailCountPoint, 0, len(counts))
-		for _, entry := range counts {
-			ts := time.Unix(entry.Time.Int64(), 0)
-			points = append(points, models.PMGMailCountPoint{
-				Timestamp:   ts,
-				Count:       entry.Count.Float64(),
-				CountIn:     entry.CountIn.Float64(),
-				CountOut:    entry.CountOut.Float64(),
-				SpamIn:      entry.SpamIn.Float64(),
-				SpamOut:     entry.SpamOut.Float64(),
-				VirusIn:     entry.VirusIn.Float64(),
-				VirusOut:    entry.VirusOut.Float64(),
-				RBLRejects:  entry.RBLRejects.Float64(),
-				Pregreet:    entry.PregreetReject.Float64(),
-				BouncesIn:   entry.BouncesIn.Float64(),
-				BouncesOut:  entry.BouncesOut.Float64(),
-				Greylist:    entry.GreylistCount.Float64(),
-				Index:       entry.Index.Int(),
-				Timeframe:   "hour",
-				WindowStart: ts,
-			})
-		}
-		pmgInst.MailCount = points
 	}
-
-	if scores, err := client.GetSpamScores(ctx); err != nil {
-		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG spam score distribution")
-		}
-	} else if len(scores) > 0 {
-		buckets := make([]models.PMGSpamBucket, 0, len(scores))
-		for _, bucket := range scores {
-			buckets = append(buckets, models.PMGSpamBucket{
-				Score: bucket.Level,
-				Count: float64(bucket.Count.Int()),
-			})
-		}
-		pmgInst.SpamDistribution = buckets
-	}
-
-	quarantine := models.PMGQuarantineTotals{}
-	if spamStatus, err := client.GetQuarantineStatus(ctx, "spam"); err == nil && spamStatus != nil {
-		quarantine.Spam = int(spamStatus.Count.Int64())
-	}
-	if virusStatus, err := client.GetQuarantineStatus(ctx, "virus"); err == nil && virusStatus != nil {
-		quarantine.Virus = int(virusStatus.Count.Int64())
-	}
-	pmgInst.Quarantine = &quarantine
 
 	if instanceCfg.MonitorDomainStats {
 		if domains, err := client.ListRelayDomains(ctx); err != nil {
+			recordReadError("pmg_relay_domains", err)
 			if debugEnabled {
 				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG relay domains")
 			}
@@ -975,6 +1023,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		end := time.Now()
 		start := end.Add(-24 * time.Hour)
 		if stats, err := client.GetDomainStatistics(ctx, start.Unix(), end.Unix()); err != nil {
+			recordReadError("pmg_domain_statistics", err)
 			if debugEnabled {
 				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG domain statistics")
 			}

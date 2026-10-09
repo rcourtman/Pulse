@@ -3234,6 +3234,7 @@
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },
@@ -4545,6 +4546,7 @@
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
         "scripts/generate-release-notes.sh",
+        "scripts/go-mod-download.sh",
         "scripts/hot-dev-bg.sh",
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
@@ -4953,6 +4955,20 @@
             ]
           },
           {
+            "id": "unattended-update-runtime",
+            "label": "unattended updater runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/pulse-auto-update.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/pulse_auto_update_consent_test.go",
+              "scripts/installtests/pulse_auto_update_test.go"
+            ]
+          },
+          {
             "id": "deployment-script-runtime",
             "label": "deployment script runtime proof",
             "match_prefixes": [],
@@ -4961,8 +4977,7 @@
               "install.sh",
               "scripts/install-container-agent.sh",
               "scripts/install-docker.sh",
-              "scripts/install.ps1",
-              "scripts/pulse-auto-update.sh"
+              "scripts/install.ps1"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5122,6 +5137,19 @@
             "exact_files": [
               ".github/scripts/tests/test_demo_runtime_transaction.py",
               "scripts/installtests/demo_transaction_test.go"
+            ]
+          },
+          {
+            "id": "go-module-download-runtime",
+            "label": "exact Docker Go module-download recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/go-mod-download.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_go_mod_download.py"
             ]
           }
         ],
@@ -6080,6 +6108,7 @@
               "internal/monitoring/monitor_pbs_coverage_test.go",
               "internal/monitoring/monitor_pmg_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_disk_history_scope_test.go",
               "internal/monitoring/truenas_poller_test.go"
             ]
           },
@@ -6117,6 +6146,7 @@
               "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
+              "internal/truenas/pool_capacity.go",
               "internal/truenas/provider.go",
               "internal/truenas/subscription.go",
               "internal/truenas/telemetry.go",
@@ -6128,12 +6158,17 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/resourceapi/resources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_pool_capacity_test.go",
               "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
               "internal/truenas/core_reporting_test.go",
+              "internal/truenas/disk_history_identity_test.go",
+              "internal/truenas/disk_history_netdata_test.go",
+              "internal/truenas/pool_capacity_test.go",
               "internal/truenas/provider_pool_health_contract_test.go",
               "internal/truenas/provider_test.go",
               "internal/truenas/transport_test.go"
@@ -6149,6 +6184,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/api/truenas_disk_history_integration_test.go",
+              "internal/monitoring/disk_drawer_native_history_test.go",
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
               "internal/monitoring/monitor_metrics_slo_test.go"
             ]
@@ -6854,6 +6891,7 @@
         "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
         "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
         "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+        "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx",
         "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
@@ -7022,6 +7060,19 @@
               "frontend-modern/src/utils/__tests__/patrolFormat.test.ts",
               "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-manual-rule-reversal",
+            "label": "Patrol manual-rule reversal proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/patrol/__tests__/PatrolSuppressionRules.test.tsx"
             ]
           }
         ],

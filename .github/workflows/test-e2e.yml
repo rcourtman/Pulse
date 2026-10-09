@@ -12,6 +12,8 @@ on:
       - 'tests/integration/**'
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
+      - 'scripts/playwright-apt.conf'
+      - 'scripts/tests/test_playwright_acquisition.py'
   push:
     branches:
       - main
@@ -24,6 +26,8 @@ on:
       - 'tests/integration/**'
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
+      - 'scripts/playwright-apt.conf'
+      - 'scripts/tests/test_playwright_acquisition.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -46,6 +50,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Fail before installs, Docker builds or the eight-shard fan-out.
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
+      - name: Validate browser dependency acquisition policy
+        run: python3 scripts/tests/test_playwright_acquisition.py
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -82,6 +93,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Fail before installs, Docker builds or the eight-shard fan-out.
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -95,13 +110,21 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # Apply only to this disposable hosted runner, never the maintainer host.
+      # Keep the provider's repositories and apt authentication unchanged.
+      - name: Bound browser OS dependency acquisition
+        run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
+
       - name: Install locked dependencies
         run: |
           npm ci --prefix tests/integration
           npm ci --prefix frontend-modern
           npm ci --prefix internal/cloudcp/portal/frontend
-          cd tests/integration
-          npx playwright install --with-deps chromium
+
+      - name: Install Playwright browser and OS dependencies
+        timeout-minutes: 10
+        working-directory: tests/integration
+        run: npx playwright install --with-deps chromium
       - name: Validate offline issuer boundaries
         working-directory: tests/integration
         run: >-
@@ -148,7 +171,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: tests/integration/package-lock.json
 
+      # Apply only to this disposable hosted runner, never the maintainer host.
+      # Keep the provider's repositories and apt authentication unchanged.
+      - name: Bound browser OS dependency acquisition
+        run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
+
       - name: Install Playwright dependencies
+        timeout-minutes: 10
         working-directory: tests/integration
         run: |
           npm ci
@@ -297,13 +326,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # Fail before installs, Docker builds or the eight-shard fan-out.
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           package-manager-cache: false
 
+      # Apply only to this disposable hosted runner, never the maintainer host.
+      # Keep the provider's repositories and apt authentication unchanged.
+      - name: Bound browser OS dependency acquisition
+        run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
+
       - name: Install Playwright dependencies
+        timeout-minutes: 10
         working-directory: tests/integration
         run: |
           npm ci

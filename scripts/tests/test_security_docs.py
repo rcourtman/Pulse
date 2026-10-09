@@ -156,6 +156,54 @@ class SecurityDocsTest(unittest.TestCase):
         self.assertIn("docs/TROUBLESHOOTING.md#i-forgot-my-password", guide)
         self.assertNotIn("### What's **Not** Encrypted", guide)
 
+    def test_encrypted_file_examples_match_the_actual_store_and_data_path(self):
+        guide = " ".join(DOC.read_text().split())
+        persistence = (ROOT / "internal/config/persistence.go").read_text()
+        crypto = (ROOT / "internal/crypto/crypto.go").read_text()
+        for filename in ("nodes.enc", "email.enc", "webhooks.enc", "truenas.enc",
+                         "vmware.enc", "ai.enc", "sso.enc"):
+            with self.subTest(filename=filename):
+                self.assertIn(f'resolveLeaf("{filename}")', persistence)
+                self.assertIn(f"`{filename}`", guide)
+        self.assertRegex(crypto, r'encryptionKeyFileName\s*=\s*"\.encryption\.key"')
+        for boundary in ("active data directory", "`PULSE_DATA_DIR`", "`/etc/pulse`",
+                         "`/data`", "existing deployment's actual data path"):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("/etc/pulse/nodes.enc", guide)
+
+    def test_key_scope_and_recovery_never_imply_safe_public_or_unmatched_copies(self):
+        guide = " ".join(DOC.read_text().split())
+        for boundary in ("stored alongside", "not an encrypted credential file",
+                         "matching key", "can decrypt", "entire data directory",
+                         "private recovery backup", "not in a public attachment",
+                         "owner-only", "0600", "0700", "service ownership",
+                         "Do not delete or regenerate the key", "mix files from different instances",
+                         "Preserve the existing files", "not verified recovery",
+                         "docs/MIGRATION.md"):
+            self.assertIn(boundary, guide)
+
+    def test_deployment_credentials_and_unencrypted_evidence_remain_private(self):
+        guide = " ".join(DOC.read_text().split())
+        for boundary in ("not whole-directory or whole-disk encryption",
+                         "environment files", "service definitions", "agent token files",
+                         "logs and history", "bcrypt", "plaintext `PULSE_AUTH_PASS`",
+                         "does not rewrite", "original deployment source",
+                         "hashes and raw client credentials private",
+                         "does not scrub earlier backups", "external deployment configuration"):
+            self.assertIn(boundary, guide)
+        for overclaim in ("Passwords never stored in plain text", "Tokens never stored in plain text",
+                          "Credentials encrypted at rest (always enabled)"):
+            self.assertNotIn(overclaim, guide)
+
+    def test_security_score_and_log_masking_are_not_disclosure_guarantees(self):
+        guide = " ".join(DOC.read_text().split())
+        for boundary in ("not a complete security audit", "every file is encrypted",
+                         "not a guarantee", "Free-text errors and historical records",
+                         "Review excerpts locally", "#collect-diagnostics-safely",
+                         "#inspect-notification-logs"):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("token values masked with `***` in all outputs", guide)
+
 
 if __name__ == "__main__":
     unittest.main()

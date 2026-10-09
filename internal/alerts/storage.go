@@ -88,6 +88,8 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 	} else if connectivityStatus != "" && connectivityStatus != "unknown" {
 		// Clear any existing offline alert if storage is back online
 		m.clearStorageOfflineAlert(storage)
+	} else {
+		m.interruptStorageConnectivityRun(storage.ID)
 	}
 	// Missing connectivity evidence must not count as a healthy observation.
 	// Capacity and pool health below remain independently observable.
@@ -110,6 +112,8 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 	confirmedEmpty := storage.Usage == 0 && storage.Total > 0 && storage.Used == 0 && storage.Free == storage.Total
 	if connectivityStatus != "offline" && connectivityStatus != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
 		m.evaluateStorageCapacity(storage, thresholds, trend)
+	} else {
+		m.interruptMetricRunIDs(storage.ID, canonicalMetricSpecID(storage.ID, "usage"), canonicalMetricStateID(storage.ID, "usage"))
 	}
 
 	// Check ZFS pool status if this is ZFS storage
@@ -117,6 +121,21 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 		m.checkZFSPoolHealth(storage)
 	} else {
 		m.clearStorageZFSAlerts(storage)
+	}
+}
+
+// A missing status is not a healthy poll, nor another outage confirmation.
+// Preserve a firing occurrence while restarting both consecutive-observation
+// runs and any pending intent grace. Capacity remains independently observable.
+func (m *Manager) interruptStorageConnectivityRun(resourceID string) {
+	m.mu.Lock()
+	for _, state := range m.mirrorStatesNoLock() {
+		state.InterruptDiscreteRun(resourceID, canonicalConnectivitySpecID(resourceID))
+	}
+	intentChanged := m.clearIntentPendingNoLock(canonicalConnectivityStateID(resourceID))
+	m.mu.Unlock()
+	if intentChanged {
+		m.saveActiveAlertsAsync("storage connectivity observation gap")
 	}
 }
 

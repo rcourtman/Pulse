@@ -131,6 +131,39 @@ für inside-guest Docker/Podman-Sichtbarkeit, Host-SMART-/Temperaturdaten,
 lokale ZFS-/Ceph-/mdadm-Details oder andere Telemetrie nötig, die lokalen
 Host-Zugriff braucht.
 
+### Proxmox: Sicherheit bei Backups
+
+**API-only bedeutet nicht ohne Gastagent.** Abfragen von VM-Dateisystemen und
+Arbeitsspeicher über den QEMU Guest Agent können denselben Kanal wie Backups mit
+Dateisystem-Freeze nutzen. Nur Leserechte zu haben, beweist keine Backup-Sicherheit.
+Während Backup, Freeze/Thaw oder einer Störung eines nicht reagierenden Gasts
+keine zusätzlichen Rechte vergeben, Agenten installieren oder neu starten und
+keine manuellen Gastagent-Abfragen senden.
+
+Für betroffene Installationen gilt die englische
+[Backup-Sicherheitsvorkehrung](../../VM_DISK_MONITORING.md#backup-safety) **vor
+einem geplanten Backup mit Dateisystem-Freeze**. Sie berücksichtigt den
+Pulse-Server und automatische Updater, nicht nur den Gastagenten. Sie ist keine
+Wiederherstellungsanleitung für einen laufenden Vorfall. Das Stoppen von Pulse
+bricht bereits gesendete Gastagent-Aufrufe nicht ab. **Während Pulse gestoppt
+ist, stehen Monitoring und Warnmeldungen nicht zur Verfügung**; unabhängige
+Überwachung vorsehen.
+
+Ein Backup-Ergebnis **OK** beweist nicht, dass der Gast wieder aufgetaut ist.
+Pulse pausiert lassen, bis das Backup beendet ist und unabhängige Prüfungen
+**nach dessen Ende**, ohne Pulse oder QEMU Guest Agent, alle drei Punkte bestätigen:
+
+1. Die Dateisysteme sind wieder aufgetaut.
+2. Frische, erfolgreiche Schreibvorgänge der Workloads auf **jedem vom Backup erfassten Dateisystem**.
+3. Die Workloads funktionieren.
+
+Fehlt eine Prüfung oder schlägt sie fehl, die Pause beibehalten und das
+Wiederherstellungsverfahren der Plattform verwenden. Eine Konsolenverbindung
+oder ein erfolgreicher Lesezugriff genügt nicht. Erst nach allen Prüfungen nur
+die Dienste und Timer wiederherstellen, die **vor der Pause aktiv waren**;
+unbekannte vorherige Zustände sind keine Erlaubnis zum Starten. Keine Backup-Sperren
+löschen oder Freeze deaktivieren, um ein Monitoringproblem zu testen.
+
 ## Wo geht es weiter?
 
 - [Installation Guide](../../INSTALL.md) für vollständige Installationspfade.

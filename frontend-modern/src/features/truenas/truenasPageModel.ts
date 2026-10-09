@@ -728,16 +728,18 @@ export function mapTrueNASIncidentSeverity(
 }
 
 /**
- * Resolves a disk type's alert disk temperature thresholds: the alerts store's
- * `getDiskTemperatureThresholds`. Without one, disk heat is not judged.
+ * Resolves the temperature thresholds that judge a TrueNAS disk: the alerts
+ * store's `getTrueNASDiskTemperatureThresholds`, which applies the disk's own
+ * override, then the TrueNAS-wide value, then its type's policy, as the disk's
+ * temperature alert does. Without one, disk heat is not judged.
  */
 export type TrueNASDiskTemperatureThresholdResolver = (
-  diskType: string,
+  disk: Pick<Resource, 'id' | 'physicalDisk'>,
 ) => MetricDisplayThresholds | null;
 
-// Disk risk carries no heat, so a disk whose current reading has reached its
-// type's alert trigger is judged here, by the same policy as the Physical
-// Disks Running Hot verdict. Returns the heat reason, or null.
+// Disk risk carries no heat, so a disk whose current reading has reached the
+// trigger its temperature alert fires at is judged here. Returns the heat
+// reason, or null.
 function getTrueNASDiskHeatSummary(
   resource: Resource,
   resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
@@ -745,7 +747,7 @@ function getTrueNASDiskHeatSummary(
   const disk = resource.physicalDisk;
   if (!resolveDiskTemperatureThresholds || resource.type !== 'physical_disk' || !disk) return null;
   const temperature = disk.temperature ?? 0;
-  const thresholds = resolveDiskTemperatureThresholds(disk.diskType || '');
+  const thresholds = resolveDiskTemperatureThresholds(resource);
   return isPhysicalDiskRunningHot({ temperature, collection: disk.collection }, thresholds)
     ? getPhysicalDiskHeatSummary(temperature, thresholds)
     : null;

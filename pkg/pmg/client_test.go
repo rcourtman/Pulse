@@ -797,3 +797,43 @@ func TestClientClusterStatusNoParam(t *testing.T) {
 		t.Fatalf("GetClusterStatus failed: %v", err)
 	}
 }
+
+type pmgCollectionTransport func(*http.Request) (*http.Response, error)
+
+func (f pmgCollectionTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestPMGCollectionMissingObjectData(t *testing.T) {
+	for _, body := range []string{`{}`, `{"data":null}`, `{"data":0}`, `{"data":[]}`, `invalid`} {
+		t.Run(body, func(t *testing.T) {
+			client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+			})}}
+			if v, err := client.GetVersion(context.Background()); err == nil || v != nil {
+				t.Fatalf("version=%+v err=%v", v, err)
+			}
+			if v, err := client.GetMailStatistics(context.Background(), ""); err == nil || v != nil {
+				t.Fatalf("mail=%+v err=%v", v, err)
+			}
+			if v, err := client.GetQueueStatus(context.Background(), "one"); err == nil || v != nil {
+				t.Fatalf("queue=%+v err=%v", v, err)
+			}
+			if v, err := client.GetQuarantineStatus(context.Background(), "spam"); err == nil || v != nil {
+				t.Fatalf("quarantine=%+v err=%v", v, err)
+			}
+		})
+	}
+}
+func TestPMGCollectionObservedZeroData(t *testing.T) {
+	client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":{"count":0,"active":0,"deferred":0,"hold":0,"incoming":0}}`)), Request: r}, nil
+	})}}
+	if v, err := client.GetMailStatistics(context.Background(), ""); err != nil || v == nil || v.Count.Float64() != 0 {
+		t.Fatalf("mail=%+v err=%v", v, err)
+	}
+	if v, err := client.GetQueueStatus(context.Background(), "one"); err != nil || v == nil || v.Active.Int64() != 0 {
+		t.Fatalf("queue=%+v err=%v", v, err)
+	}
+	if v, err := client.GetQuarantineStatus(context.Background(), "spam"); err != nil || v == nil || v.Count.Int64() != 0 {
+		t.Fatalf("quarantine=%+v err=%v", v, err)
+	}
+}

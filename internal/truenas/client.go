@@ -545,7 +545,7 @@ func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
 }
 
 func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
-	var response []map[string]any
+	var response []poolStateResponse
 	if err := c.queryRPC(ctx, "pool.query", &response); err != nil {
 		return nil, err
 	}
@@ -563,7 +563,7 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 // GetBootPool returns the boot pool from boot.get_state. The endpoint is
 // separate from pool.query on supported CORE and SCALE releases.
 func (c *Client) GetBootPool(ctx context.Context) (*Pool, error) {
-	var response map[string]any
+	var response poolStateResponse
 	legacy, err := c.useLegacyREST(ctx)
 	if err != nil {
 		return nil, err
@@ -619,6 +619,7 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 	}
 	vdevs, diskMembers := poolTopologyFromTopology(topology)
 	readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
+	total, used, free := poolCapacity(item, properties)
 
 	pool := Pool{
 		ID:             id,
@@ -627,9 +628,9 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 		Status:         status,
 		StatusCode:     strings.TrimSpace(readStringAny(item, "status_code", "statusCode")),
 		StatusDetail:   strings.TrimSpace(readStringAny(item, "status_detail", "statusDetail")),
-		TotalBytes:     readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
-		UsedBytes:      readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
-		FreeBytes:      readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+		TotalBytes:     total,
+		UsedBytes:      used,
+		FreeBytes:      free,
 		ReadErrors:     readErrors,
 		WriteErrors:    writeErrors,
 		ChecksumErrors: checksumErrors,
@@ -637,15 +638,6 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 		VDevs:          vdevs,
 		IsBoot:         isBoot,
 		DiskMembers:    diskMembers,
-	}
-	if pool.TotalBytes == 0 {
-		pool.TotalBytes = readInt64Any(properties, "size", "total", "total_bytes", "totalBytes")
-	}
-	if pool.UsedBytes == 0 {
-		pool.UsedBytes = readInt64Any(properties, "allocated", "used", "used_bytes", "usedBytes")
-	}
-	if pool.FreeBytes == 0 {
-		pool.FreeBytes = readInt64Any(properties, "free", "free_bytes", "freeBytes", "available")
 	}
 	return pool, true
 }
@@ -973,6 +965,7 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 		}
 		vdevs, diskMembers := poolTopologyFromTopology(topology)
 		readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
+		total, used, free := poolRESTCapacity(item)
 
 		pools = append(pools, Pool{
 			ID:             id,
@@ -981,9 +974,9 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 			Status:         strings.TrimSpace(item.Status),
 			StatusCode:     strings.TrimSpace(item.StatusCode),
 			StatusDetail:   strings.TrimSpace(item.StatusDetail),
-			TotalBytes:     item.Size,
-			UsedBytes:      item.Allocated,
-			FreeBytes:      item.Free,
+			TotalBytes:     total,
+			UsedBytes:      used,
+			FreeBytes:      free,
 			ReadErrors:     readErrors,
 			WriteErrors:    writeErrors,
 			ChecksumErrors: checksumErrors,
@@ -2407,8 +2400,10 @@ type trueNASCollectionUpdate struct {
 }
 
 type trueNASAppStatsEvent struct {
-	AppName  string                   `json:"app_name"`
-	CPUUsage int64                    `json:"cpu_usage"`
+	AppName string `json:"app_name"`
+	// SCALE reports a percentage as a JSON number, including fractional and
+	// idle 0.0 values. Integer decoding rejects the whole event and session.
+	CPUUsage float64                  `json:"cpu_usage"`
 	Memory   int64                    `json:"memory"`
 	Networks []trueNASAppNetworkStats `json:"networks"`
 	BlkIO    trueNASAppBlkIOStats     `json:"blkio"`
@@ -2747,7 +2742,7 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 			}
 
 			appStats := AppStats{
-				CPUPercent:      float64(field.CPUUsage),
+				CPUPercent:      field.CPUUsage,
 				MemoryBytes:     field.Memory,
 				BlockReadBytes:  field.BlkIO.Read,
 				BlockWriteBytes: field.BlkIO.Write,
@@ -3090,7 +3085,53 @@ func (c *trueNASRPCClient) getDiskTemperatureHistory(ctx context.Context, identi
 	if err != nil {
 		return nil, err
 	}
-	return parseReportingDiskTemperatureHistory(response), nil
+	history := boundedDiskTemperatureHistory(response, identifiers, start, end)
+
+	// SCALE can have disk samples in Netdata while reporting.get_data
+	// successfully returns no series for those disks (#2519). Fill only those
+	// missing series, once, in the same operation budget and time window. An
+	// RPC/permission/transport failure above is not an empty-series result and
+	// must never cause another method or transport to be tried.
+	missingGraphs := make([]map[string]any, 0, len(identifiers))
+	missingIdentifiers := make([]string, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		if len(history[identifier]) == 0 {
+			missingGraphs = append(missingGraphs, map[string]any{"name": "disktemp", "identifier": identifier})
+			missingIdentifiers = append(missingIdentifiers, identifier)
+		}
+	}
+	if len(missingGraphs) == 0 {
+		return history, nil
+	}
+	response, err = c.getReportingDataForMethod(ctx, "reporting.netdata_get_data", missingGraphs, reportingRangeQuery(start, end))
+	if err != nil {
+		// Preserve independently successful series with the failure. Consumers
+		// may show them, but cannot turn an omitted disk into a healthy zero.
+		return history, err
+	}
+	for identifier, points := range boundedDiskTemperatureHistory(response, missingIdentifiers, start, end) {
+		if history == nil {
+			history = make(map[string][]TimeSeriesPoint)
+		}
+		history[identifier] = points
+	}
+	return history, nil
+}
+
+func boundedDiskTemperatureHistory(responses []trueNASReportingGetDataResponse, identifiers []string, start, end int64) map[string][]TimeSeriesPoint {
+	parsed := parseReportingDiskTemperatureHistory(responses)
+	history := make(map[string][]TimeSeriesPoint)
+	for _, identifier := range identifiers {
+		for _, point := range parsed[identifier] {
+			if timestamp := point.Timestamp.Unix(); timestamp >= start && timestamp <= end {
+				history[identifier] = append(history[identifier], point)
+			}
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
 }
 
 func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[string]any) ([]trueNASReportingGetDataResponse, error) {
@@ -3111,6 +3152,10 @@ func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[st
 }
 
 func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	return c.getReportingDataForMethod(ctx, "reporting.get_data", graphs, query)
+}
+
+func (c *trueNASRPCClient) getReportingDataForMethod(ctx context.Context, method string, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
@@ -3126,7 +3171,7 @@ func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs
 		query,
 	}
 	var response []trueNASReportingGetDataResponse
-	if err := c.call(ctx, "reporting.get_data", params, &response); err != nil {
+	if err := c.call(ctx, method, params, &response); err != nil {
 		return nil, err
 	}
 	return response, nil
@@ -4835,9 +4880,9 @@ type poolResponse struct {
 	Status       string          `json:"status"`
 	StatusCode   string          `json:"status_code"`
 	StatusDetail string          `json:"status_detail"`
-	Size         int64           `json:"size"`
-	Allocated    int64           `json:"allocated"`
-	Free         int64           `json:"free"`
+	Size         json.RawMessage `json:"size"`
+	Allocated    json.RawMessage `json:"allocated"`
+	Free         json.RawMessage `json:"free"`
 	Topology     json.RawMessage `json:"topology"`
 	Scan         json.RawMessage `json:"scan"`
 }

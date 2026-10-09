@@ -302,6 +302,52 @@ private keys. If help is needed, provide only the HTTP status, relevant redacted
 error and which expected reading is missing. Do not clear History or recreate a
 working connection to make missing data look resolved.
 
+### Backups are visible but Coverage says Unprotected
+
+The **Backup health** strip and the backup list answer different questions.
+If they disagree, use **PBS's own backup and verification records** for the
+same guest while checking Pulse's assessment; do not assume either a failed
+backup or working protection from the strip alone.
+
+| Observation in Pulse | What it does not establish |
+| --- | --- |
+| **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
+| **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
+| **Protected**, **Attention**, **Unprotected** or **Unknown** | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
+
+Check one affected guest without changing its setup:
+
+1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
+   protection explanation and the PBS **Job**, **History** and **Access**
+   evidence. Access describes permissions; if provider evidence is absent,
+   record that rather than interpreting it as healthy. These are backup
+   evidence states, not the PBS host's CPU/metrics History chart.
+2. Compare the listed backup with the existing record in PBS: server,
+   datastore, namespace (including root), guest type/ID and backup time.
+   Independent PVE installations can reuse an ID; confirm the owning
+   installation too. A **guest snapshot** is not a PBS backup. Check the
+   existing backup task and verification result in PBS, not just the last
+   time Pulse refreshed.
+3. If the records still disagree, report the Pulse version, one guest's
+   protection explanation, PBS Job/History/Access values and the matching
+   backup's time and verification result. Use consistent placeholders for
+   private server, datastore, namespace and guest identities. Do not share
+   tokens, full API responses, HAR exports, or screenshots with secrets.
+
+Do not delete backups, clear History, change retention or freshness settings,
+recreate tokens/connections, restart or downgrade Pulse, or run a new backup,
+verification or restore just to clear the strip. Missing or contradictory
+Pulse evidence needs investigation, not a destructive diagnostic or an
+assumed freshness-policy cause. Use your established backup checks meanwhile.
+
+**An OK backup task or a Verified label does not prove the guest thawed.** If a
+backup left a guest unresponsive or frozen, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+and the platform's established recovery procedure, not this display check.
+Keep affected Pulse monitoring stopped until independent post-backup checks
+confirm thaw, fresh successful writes to every filesystem covered by the
+backup and workload liveness; restore only services and timers active before
+the pause. Monitoring and alerts are unavailable while Pulse is stopped.
+
 ### PBS is connected but History stays empty
 
 Open **Proxmox → Backups → Backup Server → History**, not a datastore or the
@@ -364,10 +410,47 @@ separate symptom is missing filesystem information in a PVE VM row.
 
 ### Slow Backup Loading
 
-If you notice slow loading for PBS storage accessed via PVE:
-- This often happens with encrypted PBS datastores
-- The fix is to add PBS directly (this guide)
-- Direct PBS connections bypass the slow PVE content listing
+A slow backup list does not establish an encrypted-datastore or PVE-proxy
+cause. First distinguish the affected reading, without changing the setup:
+
+- **Slow Proxmox → Backups list:** note the source indicator on an existing
+  affected row. **PBS** means direct PBS inventory. **PVE file** means PVE
+  storage inventory, which can include a PBS-backed target; that badge alone
+  does not identify the storage type or prove a direct PBS connection exists.
+  See [Data Source Indicator](#data-source-indicator). A loaded row does not
+  prove that every backup, job or History reading is current.
+- **“Backup-age alerts were not evaluated” warning:** this is a failed monitoring
+  check, not evidence that a backup failed. Follow the
+  [evaluation warning checks](TROUBLESHOOTING.md#backup-age-alerts-were-not-evaluated).
+  Adding a connection or making the list load does not establish that this
+  separate evaluation recovered.
+- **PVE or PBS inventory “loading”/“unavailable” notice:** the list and counts
+  are incomplete even if the other inventory loaded. Missing rows do not mean
+  no backups exist. Record which source is affected and its existing error;
+  do not repeatedly press Retry to test recovery.
+- **Wrong installation, overlapping guest IDs or conflicting Coverage:** use
+  the [backup health checks](#backups-are-visible-but-coverage-says-unprotected)
+  and [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+  Keep the existing connections and records while comparing their origin.
+
+For a report, retain the Pulse version, affected view, source indicator,
+observed loading duration and relevant existing redacted error. Use consistent
+placeholders for private server, datastore, namespace and guest identities;
+do not share full responses, HAR exports or credentials. If loading makes
+Pulse unresponsive, stop and retain the observations already available, rather
+than repeatedly refreshing or running diagnostics.
+
+A direct PBS connection is an optional planned setup change when backups are
+currently available only through PVE passthrough and you need the additional
+API-backed readings described above. It bypasses PVE's proxy listing for those
+direct observations; it is **not a guaranteed performance or evaluation fix**.
+Check for an existing direct connection first and verify the owning PBS server
+before adding anything. Keep certificate verification and privilege separation
+enabled, and confirm the expected datastores and readings after normal polling.
+Do not add or recreate connections, install an agent, restart Pulse, clear
+History, change retention/polling limits, or run a backup, verification or restore
+just to diagnose slow loading. Use the existing native backup records meanwhile;
+a loaded list or an OK task is not proof of restore readiness or guest thaw.
 
 ### Duplicate Backups
 
@@ -378,6 +461,11 @@ If the same backup remains listed twice, report those redacted distinctions and
 whether each entry came from direct PBS or PVE passthrough. Do not delete backups
 or change retention to hide a display problem.
 
+If overlapping VMIDs also coincide with wrong-node errors or lost agent-backed
+Docker monitoring after adding another Proxmox connection, use the
+[cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+A duplicate-backup check alone does not resolve those other symptoms.
+
 ---
 
 ## Data Source Indicator
@@ -385,12 +473,26 @@ or change retention to hide a display problem.
 Under **Proxmox → Backups** (`/proxmox/backups`), PBS backups show a data source
 indicator. There is no current top-level Recovery page:
 
-- **"PBS"** badge alone = Direct PBS connection (full data)
-- **"PBS via PVE"** = Passthrough via PVE storage (limited data)
+The **By date** view's **Source** labels describe the collection origin:
 
-When the same backup is reconciled across both sources, Pulse prefers the
-direct PBS observation. Check the actual source and expected readings after
-adding the connection; the presence of a badge alone is not collection proof.
+| Source | What it means |
+| --- | --- |
+| **PBS** | Direct snapshot inventory from Proxmox Backup Server. It does not prove that every backup, job or History reading is current. |
+| **PVE file** | A backup file or volume reported by Proxmox VE storage. This can include a PBS-backed storage target; the label alone does not identify the storage type or establish a direct PBS connection. Compare the row's location with the existing PVE storage configuration. |
+| **Snapshot** | A Proxmox VE guest snapshot, not a separate backup. It does not count as independent backup coverage. |
+
+Do not look for an old **PBS via PVE** badge in this table. For a PBS-backed
+PVE file, the source explanation identifies a backup volume reported by PVE
+from a PBS-backed storage target. If that explanation is unavailable, keep the
+origin unknown rather than inferring it from a matching guest ID or name.
+
+A source label is not a protection, verification, restore or thaw result.
+**PVE/PBS inventory loading or unavailable** notices mean counts are incomplete,
+not that missing backups do not exist. Existing PBS and PVE observations can
+refer to the same backup; compare their owning installation, storage,
+namespace, guest type/ID and time before treating records as duplicates. See
+[Duplicate Backups](#duplicate-backups) and the
+[backup health checks](#backups-are-visible-but-coverage-says-unprotected).
 
 ---
 

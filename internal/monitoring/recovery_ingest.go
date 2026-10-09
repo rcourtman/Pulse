@@ -53,7 +53,13 @@ func (m *Monitor) coalescePendingRecoveryIngest(batch recoveryIngestBatch) bool 
 	}
 	for i := len(m.recoveryIngestPending) - 1; i >= 0; i-- {
 		pendingKey, pendingOK := m.recoveryIngestPending[i].coalesceKey()
-		if pendingOK && pendingKey == key {
+		if !pendingOK {
+			// An incomplete poll/event is an ordered fact, not a replaceable
+			// full snapshot. Moving a later complete (possibly empty) inventory
+			// before it could reinsert old points after authoritative deletion.
+			return false
+		}
+		if pendingKey == key {
 			m.recoveryIngestPending[i] = batch
 			return true
 		}

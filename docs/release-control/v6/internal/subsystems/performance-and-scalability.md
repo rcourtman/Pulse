@@ -15,6 +15,69 @@
 
 ## Purpose
 
+### Narrow Workloads identity during guest locks
+
+In narrow and phone layouts, the guest name and status occupy the first line;
+the unchanged backup evidence control moves below the name, retaining its
+44 px touch target. The guest lock occupies a separate, wrapping line below
+that identity. It must not consume the name's
+horizontal space or spill into the adjacent metrics. The full lock remains
+visible; a long name keeps its full title and existing truncation. Wider layouts
+keep the inline lock. Disclosure, first-touch row activation and memory
+observation source/time are unchanged. This is presentation only: a backup lock
+or successful backup never proves guest recovery.
+
+`GuestRow.test.tsx` checks layout structure, lock updates and existing action
+ownership. `browser-tests/build-guest-row-lock-fixture.mjs` compiles the real row,
+stylesheet and drawer before bounded static browser execution. Use
+`node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`
+to read the exact parent row from Git; no manually supplied control is accepted.
+`browser-tests/guest-row-lock-identity.cjs` measures the rendered name/lock at 320 and 390 px in bars and sparklines, and exercises keyboard/first
+touch through the existing drawer, checks long-name bounds, and rejects the current
+parent with the same static fixture. No dev compiler or old terminated preview
+is replayed. Native recovery remains separate.
+
+### Workloads memory selection follows its displayed observation
+
+Memory sorting and numeric search use the same selected observation policy as
+Workloads row and drawer labels. Proxmox memory needs an explicit current state
+and usable original observation time. Last-known, unavailable, missing, future
+or unrecognised evidence cannot participate as current capacity; a reported
+current zero still can. Resource Last seen and QEMU disk-read deferrals cannot
+renew or withdraw independently observed memory. Valid unannotated unrelated
+platform readings retain their numeric behaviour.
+
+In either sort direction non-current or missing values follow all current
+readings, with the existing name/identity tiebreak. Host-capacity sorting first
+qualifies guest memory, then requires a finite non-negative comparison and a
+usable host total/used value; missing host capacity is not zero. Numeric search
+continues to compare guest usage percent, independently of the host display
+basis. Name search and OR conditions retain access to the whole inventory;
+same-identity source replacement updates selection without new collection.
+
+`workloadSelectors.test.ts`, its branch companion, `searchQuery.test.ts` and
+its branch companions, and `memoryObservation.test.ts` cover current/retained/
+unknown/invalid states, zero, original-time validity, host-share comparison,
+independent disk state and refresh membership. These are presentation/selection
+invariants, not native guest recovery, alert changes or release availability.
+
+**Memory freshness is preserved at the Workloads row boundary.**
+
+`GuestRow.tsx` qualifies selected memory once per reactive reading using the
+shared drawer policy. Non-current rows keep a visible/accessibility cue through
+bars, sparklines, the History lens and host-capacity mode. An unavailable
+numeric carrier is not a current value; retained History paths stay unchanged.
+Source-time qualification never uses Last seen or a filesystem deferral,
+and same-guest observation updates do not remount the row or request History.
+No collection, chart sampling, sorting, retention or alert threshold changes.
+
+`GuestRow.test.tsx` (memory observation provenance),
+`MetricMiniSparkline.test.tsx`, `memoryObservation.test.ts` and the existing
+drawer/History suites pin this boundary. The production browser fixture
+`browser-tests/guest-row-memory-provenance.cjs` checks touch/pointer/keyboard
+and narrow/desktop layouts with synthetic observations, not native recovery.
+
+
 Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
 
 ### Guest drawer alert copy formats backend status only
@@ -2934,6 +2997,28 @@ hot paths. The shell keeps its fitted percentage/capacity label on a
 semi-opaque surface scrim with base-content contrast so segment colors cannot
 make the small readout illegible; this remains CSS presentation only and adds
 no measurement or per-row runtime work.
+The Workloads memory bar consumes the same already-classified observation as
+the row's freshness cue (`memoryObservation.ts`), without deriving freshness
+from capacity, Last seen, another metric or a host-relative denominator.
+Only a current observation may colour memory as live pressure or show its
+anomaly badge. Last-known and unknown observations keep their percentage,
+composition, balloon and swap geometry for inspection, in a neutral tone;
+their composition tooltip carries the original source/time caveat. A current
+linked-agent memory observation remains current while QEMU disk reads defer.
+Tooltip headings, numeric values and neutral labels use theme-aware text so
+the source caveat and composition remain readable on both light and dark surfaces.
+An unavailable reading, including the shared bar's explicit unavailable input,
+emits no swap indicator, swap usage tooltip or anomaly badge even when retained
+numeric carriers are present. Known capacity may still explain that absence.
+Unannotated unrelated-platform callers keep current behaviour and measured
+zero remains zero. Alert records, thresholds, evaluation and historical series
+are unchanged: withholding a live decoration neither dismisses an alert nor
+establishes guest recovery. `stackedMemoryBarModel.test.ts`,
+`StackedMemoryBar.test.tsx` and `GuestRow.test.tsx` verify neutral retention,
+unavailable carriers, current controls, host/percentage-only paths and reactive
+same-guest replacement. Browser acceptance uses the canonical Workloads mapper
+and surface at desktop and phone widths, with source-owned memory independent
+of QEMU disk deferral; it is not native guest or installed acceptance.
 The dashboard metric bar now follows that same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in
@@ -2979,6 +3064,24 @@ multiply the CPU observation. Workloads consumers must not infer source
 precedence, reinterpret ratios above an arbitrary threshold, or replace an
 established provider history series; source authority and canonical identity
 convergence belong upstream in the unified-resource and monitoring contracts.
+
+Workloads disk selection follows the same guest-read freshness rule as the
+row and drawer in `frontend-modern/src/utils/workloadGuestPresentation.ts`.
+`workloadSelectors.ts` sorts current available readings before unavailable or
+last-known readings in **both** directions; retaining a labelled number for
+inspection does not promote it to a current capacity observation.
+`frontend-modern/src/utils/searchQuery.ts` must not match a numeric `disk`
+condition from absent, explicitly unavailable, negative-sentinel or non-finite
+usage, or from a non-current guest filesystem read. An actually reported zero
+still matches zero. The Workloads wrapper recognises the shared parser's
+existing numeric equality syntax instead of treating it as a name query.
+Linked Pulse Agent filesystems follow that agent's lease
+and stopped-guest boundary, not a failed Proxmox read; unrelated stale agent
+metadata must not suppress a current platform reading. Text/OR searches and
+unfiltered inventory remain available. These are selection rules, not health,
+thaw, collection-recovery or alert-policy verdicts. The selector and search
+regressions cover refusal/retention, same-identity fresh withdrawal, linked-agent
+precedence, both sort directions and unknown-versus-zero controls.
 
 Resource table rows that surface policy posture must show at most a single
 inline summary chip for blocking `local-only`/`restricted` posture; non-blocking `sensitive` +

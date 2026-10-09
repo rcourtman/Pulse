@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import type { MemoryObservationPresentation } from '@/utils/memoryObservation';
 import { StackedMemoryBar } from './StackedMemoryBar';
 
 let resizeCallback: ResizeObserverCallback | undefined;
@@ -52,6 +54,57 @@ describe('StackedMemoryBar', () => {
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
     expect(getSegments(container)).toHaveLength(0);
   });
+
+  it.each(['last-known', 'unknown'] as const)(
+    'uses neutral %s bars and restores live decoration only with a current reading',
+    (state) => {
+      const [reading, setReading] = createSignal<MemoryObservationPresentation>({
+        state,
+        summary: 'Retained reading',
+        message: 'Not a current measurement.',
+      });
+      const { container } = render(() => (
+        <StackedMemoryBar
+          used={90}
+          total={100}
+          swapUsed={10}
+          swapTotal={20}
+          reading={reading()}
+          anomaly={{
+            resource_id: 'vm-100',
+            resource_name: 'test-vm',
+            resource_type: 'vm',
+            metric: 'memory',
+            current_value: 90,
+            baseline_mean: 30,
+            baseline_std_dev: 5,
+            z_score: 12,
+            severity: 'critical',
+            description: 'Memory usage 3x above baseline',
+          }}
+        />
+      ));
+      const bar = getSegments(container)[0];
+      const shell = container.firstElementChild;
+      expect(screen.getByText('90%')).toBeInTheDocument();
+      expect(bar).toHaveAttribute('fill', 'rgba(148, 163, 184, 0.5)');
+      expect(getSwapBar(container)).toHaveAttribute('fill', 'rgba(148, 163, 184, 0.5)');
+      expect(screen.queryByText('3.0x')).not.toBeInTheDocument();
+
+      setReading({ ...reading(), state: 'current', message: 'Current.' });
+      expect(container.firstElementChild).toBe(shell);
+      expect(getSegments(container)[0]).toHaveAttribute('fill', 'rgba(239, 68, 68, 0.6)');
+      expect(getSwapBar(container)).toHaveAttribute('fill', 'rgb(168 85 247)');
+      expect(screen.getByText('3.0x')).toBeInTheDocument();
+
+      setReading({ ...reading(), state: 'unavailable', message: 'Unavailable.' });
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      expect(screen.queryByText('90%')).not.toBeInTheDocument();
+      expect(screen.queryByText('3.0x')).not.toBeInTheDocument();
+      expect(getSwapBar(container)).toBeNull();
+      expect(getSegments(container)).toEqual([]);
+    },
+  );
 
   it('renders 0% when both used and total are 0', () => {
     render(() => <StackedMemoryBar used={0} total={0} />);

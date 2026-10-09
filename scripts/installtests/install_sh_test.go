@@ -1,6 +1,7 @@
 package installtests
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -3190,11 +3191,14 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
-// harness that executes it has to pull those in alongside it.
+// harness that executes it has to pull those in alongside it. These isolated
+// asset-rendering tests admit an unmasked inventory; the whole-installer Python
+// controls below exercise the actual effective-mask guard and all its callers.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
-	return extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
+	return "auto_update_units_refreshable() { return 0; }\n" +
+		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
 		extractRootInstallShellFunction(t, "install_auto_update_assets")
@@ -4366,7 +4370,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `helper_args=()`) || !strings.Contains(got, `helper_args=("$@")`) {
 		t.Fatalf("update helper missing passthrough helper args:\n%s", got)
 	}
-	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
+	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--prerelease|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
 		t.Fatalf("update helper missing auto-selector guard for explicit flags:\n%s", got)
 	}
 	if !strings.Contains(got, `extra_args+=("${helper_args[@]}")`) {
@@ -4374,6 +4378,9 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	}
 	if !strings.Contains(got, `extra_args+=(--rc)`) {
 		t.Fatalf("update helper missing rc channel forwarding:\n%s", got)
+	}
+	if !strings.Contains(got, `extra_args+=(--stable)`) {
+		t.Fatalf("update helper must bind the parsed stable channel before the installer rereads configuration:\n%s", got)
 	}
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured repo installer url:\n%s", got)
@@ -4501,6 +4508,54 @@ func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
 	}
 }
 
+// Run the production selectors with bounded, offline transport doubles. This
+// does not run installer main, mutate services or establish native acceptance.
+func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T) {
+	out, err := exec.Command("python3", repoFile("scripts", "tests", "test_server_release_selection.py"), "-v").CombinedOutput()
+	if err != nil {
+		t.Fatalf("server release selection controls: %v\n%s", err, out)
+	}
+}
+
+// Exercise installer main only with confined transport and mutation doubles.
+// In particular, a mistaken remove choice exits before any real removal code.
+func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_menu.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("existing installer menu consent/target controls: %v\n%s", err, out)
+	}
+}
+
+// Execute the real staging and container-bootstrap functions with confined
+// transports/host commands and real fixture signatures, never a live LXC.
+func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_temporary_inputs.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer private/authenticated temporary-input controls: %v\n%s", err, out)
+	}
+}
+
+// Execute discovery and every installer refresh consumer together. systemd
+// manager operations are confined doubles; real inventory uses a fixture root.
+func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_timer.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer timer discovery/refresh controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
@@ -4562,6 +4617,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		resolve_latest_release_tag_for_channel stable
@@ -4586,6 +4643,8 @@ func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *tes
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 		if resolve_latest_release_tag_for_channel stable; then
@@ -4633,6 +4692,8 @@ exit 1
 			printf '%s\n' v6.0.0-rc.2
 		}
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
@@ -4663,7 +4724,7 @@ func TestResolveInstallScriptDownloadURLUsesRCReleaseTag(t *testing.T) {
 	curlStub := `#!/usr/bin/env bash
 for arg in "$@"; do
 	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
-		printf '%s\n' '[{"draft":false,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
+		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.2"},{"draft":false,"prerelease":false,"tag_name":"v5.9.0"}]'
 		exit 0
 	fi
 done
@@ -4680,6 +4741,8 @@ exit 1
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
 		UPDATE_CHANNEL=""
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
 		resolve_install_script_download_url
@@ -5452,6 +5515,8 @@ func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *tes
 		timeout() { return 1; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
@@ -5733,7 +5798,10 @@ exit 1
 		get_latest_release_from_redirect() { return 1; }
 ` + extractRootInstallShellFunction(t, "read_configured_update_channel") + `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
+` + extractRootInstallShellFunction(t, "is_pulse_release_tag") + `
+` + extractRootInstallShellFunction(t, "latest_pulse_release_tag_from_json") + `
 ` + extractRootInstallShellFunction(t, "latest_stable_release_tag_from_json") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_target_release") + `
 		resolve_target_release
 		printf '%s\n' "$LATEST_RELEASE"
@@ -8033,5 +8101,61 @@ grep -qx 'saved installer' "$PWD/state/install.sh"
 	cmd.Dir = t.TempDir()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("lifecycle ownership: %v\n%s", err, out)
+	}
+}
+
+func agentIDRecoveryShell(t *testing.T, binaryPath, root, path string) string {
+	t.Helper()
+	return `
+        set -euo pipefail
+        COLLECTOR_LIFECYCLE_BINARY_PATH="` + binaryPath + `"
+        INSTALL_DIR="` + root + `"
+        BINARY_NAME="absent-legacy-agent"
+        LEAST_PRIVILEGE_USER="pulse-agent-test-missing"
+` + extractLifecycleTrustShellFunctions(t) + `
+` + extractInstallShellFunction(t, "collector_lifecycle_binary") + `
+` + extractInstallShellFunction(t, "read_agent_id_file_safely") + `
+        read_agent_id_file_safely "` + path + `"
+    `
+}
+
+func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		name string
+		body []byte
+		want string
+	}{
+		{"newline", []byte("agent-safe-123\n"), "agent-safe-123"},
+		{"no-newline", []byte("agent-safe-123"), "agent-safe-123"},
+		{"maximum", []byte(strings.Repeat("a", 128) + "\n"), strings.Repeat("a", 128)},
+		{"oversized-valid-prefix", []byte("agent-safe-123\n" + strings.Repeat("a", 5000)), ""},
+		{"second-identity", []byte("agent-safe-123\nother-agent\n"), ""},
+		{"nul-with-newline", []byte("agent-safe-123\x00\n"), ""},
+		{"nul-without-newline", []byte("agent-safe-123\x00"), ""},
+		{"carriage-return", []byte("agent-safe-123\r\n"), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(root, tc.name)
+			if err := os.WriteFile(path, tc.body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", agentIDRecoveryShell(t, "", root, path))
+			cmd.WaitDelay = time.Second
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("legacy recovery deadline expired: %v exit=%v", ctx.Err(), err)
+			}
+			if tc.want != "" {
+				if err != nil || string(out) != tc.want+"\n" {
+					t.Fatalf("valid legacy identity rejected: %v output=%q", err, out)
+				}
+			} else if err == nil || len(out) != 0 {
+				t.Fatalf("legacy recovery accepted or disclosed corrupt state: %v output=%q", err, out)
+			}
+		})
 	}
 }

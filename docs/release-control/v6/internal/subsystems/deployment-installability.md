@@ -15,6 +15,367 @@
 
 ## Purpose
 
+### Existing auto-update timers are discovered without changing consent
+
+Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.
+It compares the first field of complete rows, including their state/preset
+columns, without regex matching or truncating custom instance names. A failed
+inventory's output is not proof of an installed timer.
+
+All five existing/new-install refresh consumers can therefore replace stale
+auto-update assets when a timer exists, without enabling/starting it or changing
+`system.json`. A configured timer or updater masked by a `/dev/null` symlink is
+an explicit operator stop. Before any asset staging, the shared writer also
+reads the effective state of both exact units using a bounded successful
+`systemctl` inventory. Persistent and runtime masks anywhere in systemd's unit
+search path retain the mask and every existing helper/unit/configuration asset,
+even when an `/etc` destination would shadow a `/run` mask or the caller's
+configured paths differ from the effective mask location. Failed, unavailable,
+malformed, duplicate or unknown inventory stops asset replacement; a successful
+empty inventory remains valid for first-time setup. This guard applies to normal
+refresh, explicit setup and the sandbox-repair asset writer, without changing
+service state or suggesting that enabling updates repairs a mask.
+Discovery is separate from enablement; version changes still require affirmative
+consent to set up automatic updates.
+
+`TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh` runs actual
+discovery, installer `main` and asset refresh together for version pins, source
+builds, menu updates/reinstalls and leftover fresh-install timers. Its controls
+cover enabled/disabled rows, exact-name impostors, long instance names, missing/
+failed/hung inventory, byte-preserved preferences and both unit masks. Real
+`systemctl --root` inventories with vendor units and effective `/run` or `/etc`
+masks compare the exact before/after states and complete fixture asset hashes
+through all five consumers, asset repair and setup. They also retain the normal
+enabled/disabled refresh controls. Where available, this real inventory reads
+only a temporary fixture filesystem.
+Manager operations and server installation remain doubles: this is source/flow
+proof, not native systemd activation, published installation or customer recovery.
+
+### Private, authenticated server-installer inputs
+
+Release archive downloads and their signature sidecars stay inside the same
+owner-only `mktemp -d` directory, not an unreserved filename in shared `/tmp`.
+The archive basename retains exact release inference for local/LXC handoff.
+Normal completion, failed download/admission and failed readiness remove only
+the owned archive and sidecar and an empty parent. A deliberate `--archive`
+input and its sidecar are never treated as owned download scratch.
+
+The piped Proxmox bootstrap downloads its installer, signature and transport
+diagnostic inside a separate owner-only directory. It resolves one exact
+installer URL, requires the existing pinned-key verifier, and admits the
+complete installer and its matching signature before any container copy or
+execution. Missing tools, metadata, signature, failed transfer or failed
+verification stop that path. A caller-supplied local installer remains the
+existing deliberate local-source route, not a claimed signed download.
+
+The bootstrap's EXIT cleanup retains both owned input directories across
+copy failures and interruption; it neither deletes a caller's local files nor
+recursively erases unexpected scratch content. Existing archive re-verification,
+architecture/version admission, staging-before-stop, service-state recovery,
+timer consent and removal quiescence remain unchanged.
+
+`TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated` runs actual
+staging, prefetch, download and whole-bootstrap functions with no-network and
+no-host-mutation doubles, real fixture SSH signatures, permissive/normal/private
+umasks, bad/missing signatures, failed transfers, allocation/readiness/admission/
+copy failures, interruption and caller-owned-file preservation. These are
+ordinary-user source controls, not root, native PVE/LXC or installed acceptance;
+complete exact-source CI and the existing safe native routes remain separate.
+
+### Existing-installation menu actions require exact target and intent
+
+The root server installer's existing-installation menu admits stable/preview
+targets through the same complete, published server-only release selector as its
+installer and archive downloads. Chart tags, drafts, malformed metadata and
+failed transport output must not become offered versions. Explicit version pins
+remain a separate deliberate route; signature and archive admission are unchanged.
+
+Without interactive input (including Docker), only a newer release in the
+requested/configured channel may select an update. Selection uses the actual
+available row, never an assumed option number: absent or current versions can
+otherwise move preview, reinstall or removal into that number. A current selected
+version is an unchanged no-op; unavailable metadata or an automatic downgrade
+returns nonzero before readiness, backup, auto-update consent or any mutation.
+Preview following the newest stable preserves the preview channel preference.
+Beta/RC revision ordering is numeric within the same stage, so `.10` upgrades
+`.9` and the reverse remains an automatic rollback refusal.
+
+Interactive update, removal and cancellation retain their displayed meanings.
+Explicit reinstall pins the known current server version rather than discovering
+and installing latest; an unknown current version requires a deliberate exact
+pin instead. Removal still requires the independent all-unit quiescence checks.
+
+`TestRootInstallExistingMenuRequiresExactAutomaticIntent` executes eighteen
+ordinary-user controls against actual sourced installer `main`, with confined
+release transport and stopped mutation boundaries. They cover disappearing rows,
+both automatic entry paths, channel intent, chart/draft/metadata refusal, automatic
+rollback refusal, exact reinstall and deliberate removal/cancel. The same controls
+fail the prior menu; they do not establish native systemd, signed installation,
+published availability or customer recovery.
+
+### Windows replacement and removal refuse uncertain service state
+
+Before replacing an agent binary or changing its token/connection state, and
+before uninstall deregistration or erasure, `scripts/install.ps1` must confirm
+the existing PulseAgent service stopped and actually removed. Only explicit
+SCM not-found establishes absence. Stop completion and post-delete absence
+each have a 30-second bound; stop/read/delete failures retain the old binary
+and agent state and return nonzero. Deletion success while SCM still lists a
+service is not completion. Local uninstall erasure errors also return nonzero,
+without a success message. No forced dependent-service stop, PID kill or trust
+relaxation is introduced.
+
+The registered Windows installer tests pin both mutation boundaries, their
+refusal exits and mocked production-function controls. The existing native
+Windows job runs those controls under PowerShell 5.1 and then the real
+install/update/uninstall lifecycle. Linux source tests cannot establish native
+SCM acceptance and retain a missing-runtime skip explicitly.
+
+### Server removal requires every affected unit to be quiescent
+
+Both the existing-installation menu and `--uninstall` must stop and disable the
+instance's update timer, in-flight update service and server before deleting any
+server executable, configuration, persistent data or unit file. Default-instance
+removal also reconciles both historical server names; an explicit instance name
+must not touch another server's units. An applicable local sensor-proxy footprint
+is quiesced before server deletion, and checked again before its own removal.
+
+Bounded systemd reads must establish known load state, explicit inactivity and
+non-enabled unit-file state. A genuinely absent inactive unit is a no-op. Failed,
+empty, transitional, still-active or still-enabled observations, ignored stop or
+disable, and unknown load/enablement state block deletion. All targets are read
+back again after the stop sequence. No uncertain or partially stopped sequence
+is automatically restarted; diagnostics require service-state reconciliation.
+Configuration-removal consent in the menu is unchanged. This does not redesign
+`--reset`, grant host execution or establish installed recovery.
+
+`TestRootInstallRemovalPreservesFilesOnUnconfirmedUnits`,
+`TestRootInstallRemovalQuiescesUpdaterAndAliases` and
+`TestRootInstallRemovalKeepsOtherInstanceUntouched` exercise both actual sourced
+entrypoints with stateful, per-test systemd doubles and confined file removals.
+These include timer reactivation/re-enablement, the in-flight updater, default
+aliases, masked/failed/inactive/absent units and local legacy stop refusal.
+A failed legacy-key rename also propagates when invoked conditionally, preserving
+the original key file rather than reporting completion after an ignored error.
+`TestRootInstallSensorProxyCleanupRejectsFailedKeyReplacement` executes that
+boundary. Native systemd/removal acceptance remains separate from source fixtures.
+
+### Legacy installer identity recovery is a whole-file decision
+
+An installer recovering a pre-descriptor-helper agent-ID file accepts exactly
+one bounded ID and its optional final newline. It must not accept a plausible
+first line from an oversized, multi-line or NUL-bearing file. Portable byte-size
+inspection precedes the bounded shell read, and every file byte must be accounted
+for. Existing root-boundary ownership/mode/parent checks and descriptor-first
+selection remain in force; no signature, service, token or enrolment rule changes.
+
+`TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte` verifies normal and
+maximum-length compatibility alongside rejected valid-prefix corruptions. The
+Unix real-agent controls keep their independent two-second watchdog, with
+process-group cancellation and separate build/probe timings. These source
+fixtures do not establish signed native installation, persistence or recovery.
+
+### Legacy sensor cleanup requires observed stopped targets
+
+The legacy sensor uninstaller must confirm each existing unit has stopped and
+was disabled before removing keys, mounts or files. Missing units are a no-op;
+failed or unknown service observation/stop/disable blocks further cleanup.
+Local container enumeration must succeed. Only current (pre-snapshot) legacy
+mount entries are eligible: snapshots and unrelated mounts remain unchanged.
+For each affected exact container, a successful status read must identify
+running or stopped. Previously running targets require a successful bounded
+stop and an explicit stopped readback; every subsequent configuration mutation
+requires a fresh stopped readback. Unknown state or failed stop means no edits
+or restart of that target. A failed `pct set` never falls back to direct edits.
+Direct legacy-line removal preserves file ownership/mode and reports errors.
+
+Only a previously running target may be restarted after cleanup or a confirmed
+mutation failure, and its running state must be observed. Lost stopped state
+prevents both further edits and automatic restoration. Failed enumeration,
+container edits/restoration, service cleanup or reload returns nonzero and
+cannot report whole cleanup complete. Incomplete container cleanup preserves
+legacy files and API access for local recovery. This does not remove the need
+for the guide's planned outage, backups and independent workload checks.
+
+`TestUninstallSensorProxyMountSafety`, `TestUninstallSensorProxyServiceSafety`
+and `TestUninstallSensorProxyMainReportsIncompleteLocalCleanup` execute isolated
+shell fixtures for status/stop/set/edit/start failures, lost state, only-prior-
+active restoration, snapshots, absent units and completion propagation. Only
+the fixed config directory is substituted; lifecycle tools are mocks, not native
+Proxmox or installed systemd acceptance. Remote SSH trust, purge consent and
+API-user removal opt-in remain unchanged.
+
+### Audit report cleanup belongs to the original invoking process
+
+The npm audit wrapper retains a captured advisory until the parent classifies
+it. An early-stopped watchdog can inherit the parent's zero subshell counter;
+that counter alone cannot authorise report deletion. The EXIT hook instead
+asks a direct `/bin/sh` child whether its actual parent PID is the invoking
+script's PID. This keeps the report in an inherited trap while retaining parent
+cleanup on Linux and native Bash 3.2. Strict findings still fail; unchanged-graph
+findings still warn with their captured detail. No advisory policy, endpoint,
+retry budget or severity threshold changes.
+
+`TestNpmAuditReportCleanupRemainsParentOwned` executes the actual hook with
+normal and pre-initialisation child counters, rejects the prior counter-only
+and unconditional hooks, and checks parent cleanup. The existing native-scope
+argument controls continue to require findings, exact argv and a single audit.
+
+### Community auto-updates require a verified installed edition
+
+Before release discovery or installation, the unattended updater requires a
+regular executable in the primary or, only when absent, legacy binary path.
+Its `--version` probe must exit successfully within five seconds, with a
+one-second KILL backstop. A `Pulse Pro` first line leaves the paid runtime
+untouched; only the public `Pulse vX.Y.Z` version format admits community
+updates. Failed, missing, non-executable or unrecognised binaries stop with a
+manual-recovery message. A VERSION file is not edition evidence, and a broken
+primary executable cannot defer to a legacy community executable. Probe output
+is not included in the error message. Signed assets, consent and rollback
+requirements remain unchanged.
+
+`scripts/installtests/pulse_auto_update_consent_test.go` also executes this
+edition boundary: primary/legacy precedence, successful and failed version
+output, a real TERM-resistant probe deadline, and the actual `main` flow's
+release-discovery/installer boundary with a plausible VERSION fallback.
+`TestAutoUpdateEditionGateStopsMainBeforeDownloads` proves that unknown and Pro
+editions cause no release read or installer action, while a recognised community
+binary still reaches both. These ordinary-user shell fixtures do not establish
+installed systemd, paid customer or native update acceptance.
+
+### Unattended update acceptance requires executable version evidence
+
+After the signed installer returns success, the unattended updater requires the
+selected primary (or, only when absent, legacy) executable to report a recognised
+community version on its first line and exit successfully within five seconds,
+with a one-second KILL backstop. Optional build details on later lines remain
+valid. An optional `v` prefix is normalised for comparison with the exact target.
+VERSION sidecars, failed or empty probes, other editions/brands and versions
+embedded in later lines cannot establish successful replacement. Unknown version
+identity or a mismatch enters the existing verified rollback transaction, never
+success. The same bounded read is used before release discovery.
+
+`TestAutoUpdateBackupTransaction` executes real local signed installers that
+return success but leave each adverse executable beside a target VERSION file.
+It checks failure, restored original bytes/modes/metadata/configuration and
+only-prior-active service restoration, with valid build-detail and unprefixed
+community controls. `TestAutoUpdateVersionProbeHasHardDeadline` exercises a real
+TERM-resistant executable. These are source fixtures, not native systemd or
+installed customer recovery. Consent, signatures and rollback gates are unchanged.
+
+### Unattended update consent comes from complete configuration
+
+When `system.json` exists, the unattended updater requires one complete JSON
+object and the top-level boolean `autoUpdateEnabled`. Matching text in nested
+settings, strings, truncated JSON or multiple documents is not consent. Missing
+or null opt-in remains disabled. The top-level channel is trimmed and
+case-normalised: only stable or its legacy empty/default value admits an
+unattended update; RC and unknown channels do not. Invalid field types,
+unreadable/nonregular configuration and a missing `jq` fail before any release
+download or installer action, without printing configuration contents. `jq` is
+already an installer dependency; manual updates remain available if its optional
+installation failed. The legacy no-configuration, enabled-timer opt-in and the
+independent disabled-timer gate remain unchanged.
+
+The standalone `scripts/installtests/pulse_auto_update_consent_test.go` remains
+part of the ordinary installer suite and can also run with
+`cd scripts/installtests && go test -race pulse_auto_update_consent_test.go`,
+without the installer package's application imports or local listeners.
+`TestAutoUpdateRequiresCompleteTopLevelConsent` executes the actual shell gate
+against valid and adverse configuration bytes, including padded RC and nested
+opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
+consent, missing parser and nonregular configuration. These are source-level
+ordinary-user fixtures, not installed timer/systemd or update acceptance.
+The registry binds the standalone verifier only to the unattended updater's
+runtime policy. It cannot satisfy the archive, PowerShell, Docker or other
+installer policies; their existing exact verification obligations remain.
+
+### Server replacement requires admitted bytes and a confirmed inactive service
+
+The server installer's archive path verifies the signature, extracts the
+payload, checks its target architecture, copies the executable to a private
+staging directory on the destination filesystem, sets its permissions/owner,
+and checks its successful, five-second-bounded version result **before**
+stopping Pulse. A missing/unreadable or mismatched version fails admission.
+This applies to downloads and local `--archive` inputs; rejected local archives
+are retained. No failed admission changes installed binary bytes/modes,
+VERSION, source-build marker or persistent configuration. Temporary extraction
+and executable staging are removed. Signed-file checks remain mandatory.
+
+Manual version changes, menu updates and reinstalls must not stop the service
+before archive admission or source compilation, so staging failures do not
+create an outage. Immediately before binary replacement, the detected service
+must return an explicit `inactive` state. An `active` or `failed` unit is stopped
+with the existing five-second command bound and read back; only `inactive`
+admits replacement. A failed unit does not imply prior workload liveness.
+
+Failed/timed-out reads or stops, transitional states and malformed/empty results
+refuse replacement without an automatic restart or retry. Both replacement paths
+atomically rename their fully prepared executable over the live path, rather than
+moving away the old executable or retrying extraction after deleting it. A
+failed rename leaves the previous binary and metadata intact; only a service
+confirmed stopped after being `active` is started again, with bounded active
+readback. An inactive/failed service is not started by this failure recovery.
+Recovery cannot turn the failed update into success. Successful replacement
+preserves prior-active attribution for the existing post-update liveness check.
+
+The opt-in source-build path also stages the compiled executable, its mode and
+owner on the destination filesystem before stopping Pulse. It requires a
+successful five-second-bounded, nonblank `--version` result and a nonempty
+source revision before admission; development versions need not match a release
+tag. Build or staging faults preserve the running service and installed bytes,
+modes, VERSION, source-build marker and configuration. Its single atomic rename
+uses the same prior-active-only failure recovery. It must not move aside the
+live executable, copy over it or remove a pre-existing `pulse.old` recovery file.
+Source-build temporary directories are removed on admission, stop and rename
+failures. This does not add signed-release trust to an opt-in source build.
+
+`scripts/tests/test_server_installer_stop.py` now executes the actual archive
+installer with real tar/copy/rename bytes and fixture-only signing/architecture,
+service and ownership boundaries. Download/local admission failures, partial
+staging copies, version exits/timeouts, uncertain stops, atomic rename faults,
+prior-active-only recovery/readback and retained bytes/modes/configuration are
+checked, along with source-build admission/atomic-rename/recovery faults and all
+three manual staging-failure flows. The source ordering and no-live-copy
+obligations are also checked in `TestRootInstallScriptStagesUpdateBeforeStoppingService`.
+The existing root-installer ordering and update-resilience tests remain
+independent controls. These ordinary-user fixtures do not establish signature
+cryptography, native systemd/installed upgrade acceptance, ancillary-agent
+transaction rollback or filesystem/data rollback; those obligations remain
+separate.
+
+### Shipped documentation is checked before CI dependency work
+
+Build and Test checks every shipped Markdown mirror immediately after the
+`changes` job's checkout, before classification can admit frontend, backend,
+script/build or benchmark work. Core E2E does the same before dependency setup
+in tier selection and both independent provisioning jobs; a failing tier check
+does not admit the eight browser shards. Existing check names, secret scanning,
+Public docs validation, test coverage and failure verdicts remain unchanged.
+
+The check is blocking and unconditional, including dispatches. It uses the
+whole-tree mode of `scripts/check_docs_mirror.py`, not staged-only tolerance.
+`TestCIDocsMirrorPreflight` parses all four actual workflow entrypoints and
+executes their command with the real checker: stale or orphaned shipped guides
+stop before a dependency-work marker, while identical copies allow it. This
+prevents deterministic documentation faults from consuming expensive CI work;
+local controls do not establish hosted queue-time improvement or publication.
+
+### Native helper verification follows helper-only changes
+
+Unified Agent Native Verification admits helper command, protocol, shared
+filesystem-prober and update-signature changes on both PRs and main, alongside
+the existing host wire paths. Its x64 and ARM64 Linux jobs run the full five
+helper-boundary packages with race detection and uncached, bounded tests, then
+build the actual helper command. A failing test or build is not advisory.
+`TestNativeHelperWorkflowCoversChangedSourceAndLinuxBoundaries` rejects each
+missing trigger, platform, package, build and concealed failure.
+
+These are ordinary-user native source tests. They do not install or launch a
+root helper, relax `PrivateNetwork`, qualify a release, establish signed
+old-helper migration/rollback or reproduce PVE/QGA workload recovery. Those
+installed acceptance obligations remain separate.
+
 ### Report intake remains safe without unreleased documentation
 
 The bug and prerelease report forms carry their collection and attachment
@@ -182,6 +543,33 @@ which prints only package lines and the output of failing or unfinished tests
 (as plain `go test` does), exits non-zero on any failure behind `pipefail`,
 and writes each top-level test's seconds to an `internal-api-test-seconds-N`
 artifact that is uploaded even when the shard fails.
+The same existing artifact includes a `<seconds-file>.failures.json` observation
+index, available when its shard ends rather than when every workflow job ends.
+It records failed and unfinished top-level source-test identities separately,
+known package terminal actions and non-JSON line counts. It exports no assertion
+text, package output or parameterised subtest names. Each identity list is capped
+at 256 ASCII source names of at most 256 characters, with observed/omitted counts;
+missing package completion remains explicit. The artifact's run/source binding
+must be reconciled before using the index. Empty lists alone are not a pass,
+and this does not replace terminal logs, diagnose failures, grant a retry or
+change test selection, race/vet coverage or required check names.
+`test_api_failure_index.py` exercises failure/unfinished/package-only/unknown,
+privacy and bounds controls; the existing Go shard contract verifies the index
+beside unchanged timing output.
+The recorder itself must now fail incomplete or inconsistent execution evidence,
+even when the producer exits zero: it requires exactly one passing package
+completion, no malformed events, and non-repeated complete top-level executions.
+Each CI shard supplies its exact source-derived selection in a `.selected` file
+and its `go list` package identity. Every selected test must start and finish
+exactly once, without another test or package substituting for it. Explicit
+per-test skips remain completed observations; a skipped package is not a passed
+shard. Missing/unexpected source names use the same bounded, payload-free index
+rules above. The selection is retained in the existing artifact but excluded
+from timing refreshes by its non-`.txt` suffix. Real credential-free Go race JSON
+controls cover pass, skip, fuzz seeds and examples, ordinary failure, a zero-exit
+producer omitting selected tests, and a truncated package completion. This
+strengthens CI evidence admission, not installed or native acceptance; cached
+Go events remain subject to the existing Go cache semantics.
 `.github/scripts/refresh-internal-api-test-seconds.py --run <id>` downloads
 those artifacts with `gh run download`, takes each test's median across the
 given runs, and rewrites the weights file with `DEFAULT_WEIGHT` set to the mean
@@ -989,6 +1377,8 @@ release-latency optimization.
 105. `scripts/dependency_advisory_watch.py`
 
 ## Shared Boundaries
+
+Installer-managed helper upgrades restart the verified executable after effective isolated-unit and fixed socket-identity validation. Daemon reload or enabling an already-active socket alone does not replace an old process. Failure to restart aborts the installer and uses the existing safe-profile recovery transaction; collector-only updates still cannot replace the helper or unit.
 
 `frontend-modern/src/utils/localStorage.ts` is a shared browser-preference key
 registry, not deployment state. Workload presentation preferences added there,
@@ -2088,7 +2478,12 @@ artifact-selection behaviour.
    later authoring template.
    The rootful qualification source manifest retains the complete compiled
    install-test package, including the release-notes helper and its exact
-   authored-copy fixture. Accepting grouped notes must not silently narrow
+   authored-copy fixture, copied-API/temperature/MSP/container-CPU guidance,
+   native guidance tools, native-agent frontend prerequisite controls and demo
+   transaction tests. Every compiled installer
+   test must appear in the manifest's exact paths even though recursive
+   production roots exclude `_test.go`; the real manifest reader must hash
+   each of those files. Accepting new installer tests must not silently narrow
    that attested source boundary.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed
@@ -2603,6 +2998,8 @@ artifact-selection behaviour.
 
 ## Completion Obligations
 
+`scripts/installtests/safe_profile_migration_test.go` covers activation ordering, old-helper replacement, effective-unit failure, restart failure and fixed-target refusal in a disposable shell harness, alongside isolation rendering/admission for 386 and unknown platforms. Actual active-helper forward/reverse migration, protected state/identity and prior-active restoration still require authorized native execution; shell stubs are not that proof.
+
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery across Linux and FreeBSD/rc.d, including single-dash v5 agent flags, non-procfs process inspection, and the rule that upgraded service args use `--token-file` instead of raw `--token`.
@@ -2727,6 +3124,61 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+### Registered Windows native-exit completion proof (8 October 2026)
+
+The workflow's seven immediate native exit checks and the lifecycle harness's
+five checks are verified from `scripts/installtests/install_ps1_test.go`, the
+registry-named completion proof for this boundary. The existing assertion
+methods have moved there unchanged from `native_windows_exit_test.go`; the
+shared parsers and native PowerShell execution controls remain in that file.
+Each removed guard and either `continue-on-error` mutation must still be
+rejected. No registry relaxation or runtime command change is made. Offline
+Linux source proof must retain PowerShell-unavailable skips; actual native
+Windows service lifecycle and exit propagation remain hosted CI obligations.
+
+
+### Server reset observes every writer before deleting configuration (8 October 2026)
+
+The root installer's existing `--reset` intent retains the binary and unit
+files. Before changing services or data it records bounded, usable load,
+active and enablement states for its timers, in-flight updaters and servers.
+Default historical `pulse`/`pulse-backend` writers sharing configuration are
+included; an explicit custom instance affects only its selected units.
+Missing optional units are inert; a missing selected server, failed/empty
+query, unknown or transitioning state refuses reset before any mutation.
+
+Timers stop before updaters, which stop before servers. Only enabled timers
+are temporarily disabled, preserving persistent versus runtime enablement;
+server/updater enablement is never changed. Roles are recorded explicitly, not
+inferred from service-name suffixes: a custom server named `*-update` is still
+a server and must regain prior liveness. Stop/disable results require
+readback and every writer is reconciled again immediately before deletion.
+A failed stop, changed unit identity, reactivation or enablement drift preserves
+configuration, reports incomplete reset and never attempts automatic restart.
+A failed deletion leaves services/timers stopped for manual reconciliation.
+
+After deletion only prior-active servers are restarted, with observed active
+state and unchanged load/enablement required before timers are restored.
+Prior-inactive/failed servers stay stopped. Timers regain their recorded
+active and enabled states, with final readback required for completion. An
+interrupted updater is deliberately **not replayed**, and this is reported.
+Any restoration failure is an incomplete action, not success. This is bounded
+quiescence, not an exclusive lock against an independent administrator starting
+a unit after observation; concurrent manual lifecycle operations remain unsafe.
+
+`server_reset_safety_test.go` executes the actual sourced reset path against
+stateful on-disk systemctl doubles and fixture-only deletion. It covers all
+writer observations, ignored stops/disablement, readback failure, reactivation,
+prior state/runtime enablement, updater non-replay, restoration/deletion failures,
+optional-unit absence, mixed idle-server/active-timer restoration and custom-instance
+isolation. Stalled observation and stop controls exercise the real timeout deadline.
+The root installer test
+also pins bounds on every systemd call. These are offline source controls, not
+native systemd, signed-installer or installed reset acceptance.
+
+
+The helper remains network-isolated on all targets, and restart activates the installer-owned replacement rather than retaining old code after reload. Published security guidance discloses the PVE IPC limitation and partial-result semantics. This is not a published release or installed PVE acceptance.
 
 ### Demo runtime footprint qualification
 
@@ -2997,6 +3449,37 @@ Firefox 110) the platform tables already required.
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` now rejects
 any locked `braces` copy, so the advisory cannot return through a later
 dependency, and drops the `autoprefixer` floor because the package is gone.
+
+### Reviewed npm-minor-patch refresh (5 Oct 2026)
+
+The `frontend-modern` refresh of the existing six-package group (#2352) raises
+`lucide-solid` 0.545.0 -> 0.577.0, `@types/node` 26.6.2 -> 26.6.3,
+`typescript-eslint` and its parser/plugin 8.70.0 -> 8.71.0, and the exact
+`prettier` pin 3.9.8 -> 3.9.9. Every locked typescript-eslint helper follows
+8.71.0. Official metadata and whole-tarball SHA512 observations establish the
+selected package identities, not their installed behaviour or an audit verdict.
+The formatter patch preserves spaces between copied code and prose when shell
+variables contain dollar signs. `dependencyTooling.test.ts` exercises that real
+formatter case and rejects a stale installed formatter.
+
+The formatter control loads the Node package through native `createRequire`,
+so it exercises the same parser-bearing implementation as repository tooling.
+Vite's unchanged browser conditions otherwise select the parser-free standalone
+bundle even in a Node test environment; no production resolver or assertion is
+weakened to accommodate that distinction.
+
+`dependencySecurity.test.ts` raises the reviewed locked floors, checks every
+nested typescript-eslint copy against its wrapper, and permits only an exact
+stable Prettier 3.x pin at or above 3.9.9 whose lock matches the declaration.
+Its positive/negative controls distinguish a reviewed patch from a downgrade,
+range, prerelease or unreviewed major. Existing DOMPurify, Vitest, YAML,
+brace-expansion and nanoid floors remain; `braces` remains absent. Tailwind 4,
+jscpd 5, the ES2022 library declaration, Playwright 1.56.1 and every unrelated
+module/override are unchanged. The icon library still ships in the UI; the
+other five declarations are development-only. No new UI, installer, signing,
+release-selection, promotion or rollback boundary is introduced. Full exact-graph
+checks, the strict full-graph audit and fresh representative browser rendering
+remain necessary before acceptance; a prepared lock or acquisition is not proof.
 
 ### Reviewed @types/node 26.6.2 refresh
 
@@ -4081,6 +4564,22 @@ Vitest migration must preserve test assertions while using constructable
 constructor mocks and explicit standalone mock-history cleanup. Dependency
 updates must retain the required full-graph audit rather than suppressing it.
 
+The October deserialization/parsing advisory floors are Seroval `1.6.3`
+(GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp), postcss-selector-parser `7.1.6`
+(GHSA-rj75-hqrm-r3gf), and source-map-js `1.2.2` (GHSA-68fv-2mgg-jv7q).
+Maintained-major overrides apply to every copy, without downgrading Solid,
+typography, Tailwind, or the other reviewed dependency floors. The Seroval
+override intentionally supersedes Solid's `~1.5.4` requirement; the unchanged
+seroval-plugins `1.5.5` peer accepts Seroval `^1.0`. The selector-parser override
+intentionally supersedes typography's exact `6.0.10` dependency. Such overrides
+require actual consumer compatibility, not just a version assertion:
+`dependencyTooling.test.ts` checks shared consumer resolution, cyclic/plugin
+serialization, typography pseudo placement, named maps and PostCSS source
+content. `dependencySecurity.test.ts` checks all three manifest/lock floors,
+including nested copies. Exact acquired-graph source/build/browser validation
+and the complete hosted audit remain distinct obligations; official patch
+metadata and a lockfile do not by themselves clear an audit failure.
+
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
@@ -4937,6 +5436,43 @@ miswritten upstream signal cannot cross a stable-channel install onto a
 preview tag. Dedicated prerelease-refusal tests in
 `scripts/installtests/pulse_auto_update_test.go` are the owned proof surface
 for that guard.
+Unattended release discovery must bind a stable-shaped tag to explicit JSON
+`draft=false` and `prerelease=false` in the same complete top-level release
+object. Whitespace, key ordering, nested/body data, sibling objects, truncated
+or concatenated documents and partial failed HTTP output cannot establish
+maturity. The list remains highest-version-first; its fallback must be a
+complete independently confirmed `/releases/latest` object, never a redirect
+alone. Missing `jq` stops before transport. Both HTTPS API reads ignore ambient
+curl configuration and have five-second connect/twenty-second overall bounds.
+`TestAutoUpdateReleaseMetadataAdmission` and
+`TestAutoUpdateReleaseMetadataRequiresParserBeforeTransport` in
+`scripts/installtests/pulse_auto_update_test.go` own this proof. Signature,
+edition, consent, backup, service-restoration and installation gates remain
+separate and unchanged.
+### Manual update channel admission (7 October 2026)
+
+The installed `update` helper selects a saved release channel only from one
+complete `system.json` object and its top-level `updateChannel`. Missing, null
+or empty channels retain the stable default; recognised strings are trimmed
+and case-normalised. Nested or quoted settings cannot opt into RC. Malformed,
+multiple, non-object or unknown-channel configuration, a non-regular path or
+missing jq stops before downloading or executing the installer, with explicit
+`--stable`/`--rc` recovery guidance and no configuration rewrite. A missing file
+retains the default. Explicit existing selectors (including `--prerelease`)
+and the existing source-build marker keep precedence over saved configuration.
+The helper forwards both parsed channels explicitly, including the stable
+default for an existing file, so the containing installer cannot reinterpret
+that same configuration through its older saved-preference reader.
+
+`TestManualUpdateChannelAdmission` generates and executes the actual helper
+against local transport fixtures and genuinely signed installer/sidecar bytes.
+It checks final arguments and the actual installer channel-selection functions,
+pre-download refusal, configuration preservation, selector/marker precedence
+and signature rejection. This is bounded source
+acceptance, not installed upgrade, native service restoration or published
+release acceptance. The installer, archive, signing, rollback and service gates
+remain unchanged.
+
 That same boundary also owns operator-facing management entry points for
 existing self-hosted installs: the installer's printed update/reset/uninstall
 commands and the active install or upgrade docs must route supported
@@ -4994,8 +5530,13 @@ must never be introduced; only an unreachable endpoint is
 retried. A nonempty package-finding map or any positive integer
 summary count must fail immediately, even when the total is missing or
 contradicts that evidence; a later response must not replace a known finding.
-A clean verdict requires all six known summary counts to be integer zero,
-no endpoint error and an absent or empty package-finding map. Booleans,
+A clean verdict requires the same audit command to exit zero, all six known
+summary counts to be integer zero, no endpoint error and an absent or empty
+package-finding map. A zero summary written before a nonzero exit or signal
+is unavailable evidence, not a clean audit. Positive findings still take
+precedence even when the command exits zero or is stopped; they must not be
+retried in search of a different verdict. Diagnostics retain the observed
+command status without attributing an unknown signal initiator. Booleans,
 strings, nulls, negative counts and partial summaries are not zero-finding
 evidence. Without positive evidence, malformed reports retain the existing
 bounded outage policy, never a clean verdict. Summary diagnostics may print
@@ -5011,8 +5552,11 @@ it must not trigger another request. `scripts/tests/test_npm_audit_retry.py`
 executes changed-second-response, missing-detail, escaping and single-request
 fixtures, including production argument forwarding and findings accompanied by
 transport errors, positive package/severity evidence with missing or zero
-totals, malformed zero summaries under both outage modes, and metadata
-annotation injection. Retrying is bounded by wall clock and not by attempt count alone,
+totals, malformed zero summaries under both outage modes, failed/signalled
+zero summaries, zero and positive reports written before a real watchdog stop,
+and metadata annotation injection. The shell smoke provider models a clean
+report with exit zero and findings with exit one, like npm's terminal contract.
+Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for
 10m56s and cancelled the Frontend job at its own timeout with every test
@@ -6236,6 +6780,20 @@ workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
 This upgrade is independent of the grouped signing/Docker/Tailscale updates.
 
+### Native agent API-linked test assets
+
+Every native agent runtime matrix job prepares the locked frontend dependencies
+and runs the real embedded-asset build before Go tests. Connected Docker-agent
+tests import the API package, whose embed is a compile-time prerequisite; an
+empty directory or placeholder page is not a substitute. Windows reuses that
+same dependency installation for its generated PowerShell command proof.
+The embedded build invokes the installed Vite CLI with the current Node
+executable, rather than spawning a Windows `.cmd` shim or resolving via npx.
+`TestNativeAgentWorkflowBuildsRealFrontendBeforeRuntime` checks ordering and
+all-platform coverage, with missing, conditional, late and stub-build controls.
+Linux source checks and Windows cross-compilation do not establish hosted
+Windows runtime or service-lifecycle acceptance.
+
 ### Published MSP evaluation bundle guidance
 
 The MSP guide and its shipped mirror select the signed v6.4.1 provider archive,
@@ -6370,6 +6928,51 @@ covers the recorded snapshot and its removal. Local shell suites
 (`test-pulse-auto-update.sh`, `test-install-update-resilience.sh`,
 `test-script-reference-integrity.sh`) pass; hosted Go installtest execution
 remains required and is not claimed here.
+
+### Verified unattended-update backup and owned rollback
+
+`scripts/pulse-auto-update.sh` runs `perform_update` as a conditional, so Bash
+`errexit` is not a substitute for explicit snapshot and restore checks. Before
+executing the signed installer it must have a private unique rollback directory
+and successful, byte-compared copies of every existing regular binary at both
+supported install paths and the optional `VERSION` file. Missing binaries,
+symlinks/non-regular snapshot sources, allocation/copy/comparison failures and
+failed download/signature verification stop before installer mutation. An
+unneeded pre-mutation snapshot and verification files are removed on return.
+
+Installer failure, mismatched version and failure to restore a previously active
+service share one rollback path. It stops the service, stages and compares all
+saved files before any replacement, and renames each into its recorded original
+path without following a new symlink or treating a directory as a destination.
+Every restored destination must itself be regular and byte-equal to its saved
+copy before recovery may activate the service or discard the backup.
+Files absent before the attempt remain absent after recovery, including the
+legacy/current binary alternative and `VERSION`. Archive copies preserve modes,
+ownership, timestamps and extended attributes supported by the filesystem; a
+content-only copy is not the metadata recovery contract. A
+partial restore must not invoke the RETURN restart backstop. The backup remains
+with a manual-recovery diagnostic if stop, staging, replacement, absence restore
+or prior-active service recovery fails. It is discarded only after complete
+recovery, or after the replacement version and required liveness are verified.
+Previously inactive services are not started by rollback. The RETURN trap still
+disarms itself and cannot leak locals into a later caller's return.
+
+This strengthens the existing binary/version recovery guarantee, not full
+configuration, database, power-loss or authenticated/native acceptance. Stable
+selection, Pro exclusion, signature identity/key/namespace, opt-in policy and
+the installer's own configuration backup remain unchanged.
+
+Verification: `scripts/installtests/pulse_auto_update_test.go`
+`TestAutoUpdateBackupTransaction` executes the complete updater under the real
+conditional caller with locally signed installers, real executable version reads
+and file operations, and bounded fake download/systemd boundaries. It covers
+snapshot admission, all three original failure paths, both binary layouts and
+absence, retained recovery failures, symlink/directory/non-regular replacement,
+file modes and an explicit extended-attribute fixture (unavailability is a skip),
+prior-active-only restoration, configuration/identity preservation and trap
+cleanup. Exact-parent negative controls must reject ignored snapshot failures
+and loss of the backup after a failed restore. Synthetic proof is not a deployed
+update, native systemd migration or reporter confirmation.
 
 ### Governed dependency floors for the go-minor-patch group
 
@@ -6647,6 +7250,39 @@ helper and `npm-audit-retry.sh` against the 1 October 2026 heads selected
 `release/v6.4` (`GHSA-p98j-92pf-mc4p`) and `release/v6.5`
 (`brace-expansion` and DOMPurify advisories). The hosted run is not yet claimed.
 
+
+### Backend test compilation before CI fan-out
+
+Build and Test links every Linux Go test binary with the same race instrumentation
+as its backend shards before those shards start runtime work. The compile-only
+job uses the declared Go toolchain, credential-free checkout and a test embed
+stub. `scripts/compile-go-tests.sh` replaces binary execution with `/bin/true`;
+it must not run package initialisers, TestMain, tests or examples. Its success
+is compilation evidence only, never a runtime, vet, real-frontend or installed
+acceptance verdict. Full required race-test shards retain those responsibilities.
+
+The diff classifier reserves this admission for Go source/manifests, backend
+embedded files and its own workflow/scripts. Unavailable diffs fail open into
+full compilation. Frontend-only changes do not pay for this Go-only preflight
+(the measured VM pass took 386 seconds); their existing backend runtime
+checks still run. `scripts/go-test-compile-required.sh` consumes the complete
+file list without an early-close/SIGPIPE path.
+
+A failed, cancelled, skipped or unknown compile result when compilation is required must
+fail the unchanged required backend check names, not let dependency skipping
+report success. Documentation-only changes still expand those named checks and
+accept the deliberately skipped compiler, as do changes outside Go compilation. Frontend and independent secret-scan
+work do not wait for compilation; their existing audit rules remain unchanged.
+
+`scripts/tests/test_go_test_compilation.py` exercises the actual compiler on
+inert multi-package fixtures, rejects a test-only removed API and a normal-source
+compile defect, and proves init/TestMain/test/example code is never executed.
+It executes both matrix prerequisite scripts against successful and adverse
+results and the documentation-only skip. `TestCITestCompilationPreservesChecks`
+retains the required names, full race execution and separate dependency audit.
+These proofs establish CI source admission, not hosted queue-time relief.
+
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
@@ -6673,3 +7309,135 @@ unbound to filesystem-observation code that it actually executes. The closure
 test enumerates all repository-local dependencies of the install-test binary,
 collector and helper and reports every missing package together. No qualification
 gate, source exclusion or production permission is relaxed by this correction.
+
+
+### Aligned Go patch graph (5 October 2026)
+
+`go.mod` and `go.sum` move only `github.com/klauspost/compress` to 1.20.1
+and Kubernetes `api`, `apimachinery` and `client-go` together to 0.37.1.
+Other dependencies, compiler pin, installer inputs and managed runtime
+orchestration stay unchanged; retained older checksums are not pruned.
+The dev-runtime proof rejects missing checksum pairs, a downgrade below these
+reviewed floors and a split Kubernetes trio. These structural controls do not
+establish compatibility or package availability. Exact committed-graph
+acquisition must verify the new Go module/checksum content before a fresh
+worker selects it. Acceptance additionally requires the existing actual
+metrics wire/decompression and Kubernetes agent controls, managed-runtime
+smoke tests, read-only graph tests/vet and real server/agent builds at the same
+source. No install, release or native Kubernetes acceptance is implied by a
+manifest edit or acquisition receipt.
+
+### Complete CI dependency-change classification (6 October 2026)
+
+Build and Test consumes the complete changed-file list before choosing the
+existing strict frontend audit. An early manifest, lock or audit-runner match
+must remain `frontend_deps=true` even when later files exceed the shell pipe
+buffer; a producer SIGPIPE must never select inherited-advisory warning mode.
+Exact strict paths, unknown-base fail-wide behaviour and unchanged-graph warning
+policy stay the same. A failed Git diff produces no successful classification.
+
+`TestFrontendChangeClassificationPreservesStrictAudit` executes the actual YAML
+shell with bounded offline Git-result fixtures, including large early/late
+matches, documentation/code controls, lookalikes and unavailable bases. Its
+downstream controls run the real audit script: the same critical fixture blocks
+a changed graph and warns only for an unchanged graph. It makes no registry
+request and does not clear an existing advisory or establish hosted acceptance.
+
+### Native Windows command verdicts (6 October 2026)
+
+The native agent and service-lifecycle workflow checks each build, version,
+self-test and lifecycle command immediately. PowerShell's final exit handling
+alone can hide an earlier native failure behind a later successful command.
+The service harness also checks captured version and service-query exits before
+accepting their text. Exit regressions cover all twelve boundaries (seven
+workflow commands and five harness commands) and reject tolerant steps;
+Windows CI also executes the actual guards against failed and successful native
+processes, including the unguarded masking control. An unavailable local
+PowerShell is an explicit skip, not native acceptance. Installer behaviour,
+service-state exclusions and the existing lifecycle checks are unchanged.
+
+### Native frontend graph admission (7 October 2026)
+
+The existing native-agent jobs install the locked frontend graph and build real
+API-linked assets on every platform. Windows additionally executes generated
+installation commands using that graph's test runtime in PowerShell 5.1. Both
+PR and main path filters therefore include the frontend manifest and lockfile,
+even when no Go or command-generator file changes. Ordinary UI-only edits do
+not gain a new full native matrix trigger.
+
+`TestNativeAgentWorkflowAdmitsFrontendGraphChanges` decodes each event and rejects
+either omitted graph input or a later exclusion. Existing real-build ordering,
+Linux helper, Windows exit/service and installer checks remain unchanged. This
+is admission coverage, not a local Windows/macOS verdict or installed recovery.
+
+### Bounded Docker module-proxy recovery (7 October 2026)
+
+The Docker backend builder uses `scripts/go-mod-download.sh` with the same
+`go.mod`, `go.sum`, Go toolchain, proxy/sum database and module/build caches.
+Only a failed download whose every diagnostic matches the observed HTTPS
+HTTP/2 `stream error ... INTERNAL_ERROR; received from peer` may run again.
+There are at most three attempts, each terminated at 180 seconds with a
+five-second KILL backstop, with two- and four-second delays. Every failed attempt's output remains visible. Access
+refusals, checksum/integrity errors, unknown or mixed diagnostics, missing tools,
+timeouts and signals stop with the observed nonzero exit; an exhausted transport
+failure never becomes a success. No alternate endpoint or graph rewrite exists.
+
+`test_go_mod_download.py` executes the actual Docker RUN command and POSIX shell
+helper with controlled Go outcomes, including recovery, exhaustion and refusal
+precedence. Script smoke discovers it automatically. The existing Docker build
+contract checks the helper staging, unchanged cache/graph inputs and bounded
+command. These are offline command proofs, not a hosted Docker build, public
+proxy recovery, E2E acceptance or installed customer result. The hosted checks
+still have to build the image and execute the unchanged suites.
+
+### Windows installer acceptance engine and absence (8 October 2026)
+
+Native installer parsing, service-removal failure controls and actual lifecycle
+execution use Windows PowerShell 5.1, never a PowerShell 7 substitute. A missing
+or mismatched engine on Windows fails rather than skips. The dedicated runner
+rejects pre-existing or unknown service/state instead of deleting it before the
+proof. Both first and repeated uninstall require independent SCM, binary, state
+and listener absence; only the exact SCM not-found identity/category proves
+absence. Failed listener enumeration remains a failure. This changes validation,
+not installer authority, transport, enrolment or host containment.
+
+`TestWindowsAgentLifecycleRequiresExactEngineAndIndependentAbsence` rejects the
+complete supplied parent and fourteen removed/changed controls. Native
+`TestWindowsAgentLifecycleObservationRuntime` executes the actual harness
+functions with fourteen no-mutation absence/failure/repeated-uninstall/owned-cleanup controls;
+the existing real lifecycle job then uses real SCM. Linux skips are explicit and
+do not establish a Windows parser, native runtime, reboot or installed result.
+
+Clean-runner admission checks service, binary, state and listener absence before
+machine-environment mutation. A rejected admission cannot clear a pre-existing
+machine setting. Cleanup restores only the captured prior setting, even when
+owned server teardown fails; an unconfirmed stop fails and retains the handle
+rather than reporting clean teardown. Real Windows execution and full terminal
+cleanup evidence still have to be returned by the existing native CI job.
+
+### Server-only installer release discovery (9 October 2026)
+
+The server installer uses one selector for its installer-script URL and server
+archive target. Automatic discovery admits only published Pulse server tags:
+three numeric version components, optionally followed by `-beta.N` or `-rc.N`.
+Chart-only and unrelated tags never become a server version. Stable additionally
+requires a false prerelease flag and a stable-shaped tag; preview keeps the
+existing published-list order and admits stable releases as well as previews.
+
+Selection consumes one complete top-level JSON array with each selected tag's
+own boolean draft/prerelease fields. Truncated, concatenated or failed transport
+output cannot contribute a tag. Missing or failed jq no longer permits text
+extraction that loses those fields. The existing public-redirect fallback checks
+the same server/channel tag scope; if neither route yields a candidate, discovery
+stops with connectivity/parser and exact-version guidance. Explicit pins and
+cached targets, automatic-downgrade refusal, signature verification, architecture
+admission and service/persistent-state boundaries remain unchanged.
+
+`TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata` executes the real
+sourced selectors with offline transport doubles through the tag, installer URL
+and archive-target consumers. Controls cover chart-before-preview ordering,
+drafts, stable/beta/RC channels, compact/pretty and malformed metadata, missing
+or failed parsers, failed transport with a plausible body, redirects, pins and
+downgrade refusal. Existing extracted-function tests include the shared selector.
+These are source-level selection controls, not native installation, published
+release acceptance or a repair to a third-party community helper.

@@ -64,7 +64,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
               width={swapBarWidth()}
               height="18"
               rx="2"
-              fill="rgb(168 85 247)"
+              fill={presentation().swapBarColor}
             />
           </Show>
         </svg>
@@ -96,9 +96,12 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
       <TooltipPortal when={state.tooltipVisible()} x={state.tip.pos().x} y={state.tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
+          <div class="font-medium mb-1 text-base-content border-b border-border pb-1">
             {presentation().tooltipTitle}
           </div>
+          <Show when={presentation().tooltipMessage}>
+            <p class="mb-2 max-w-xs text-xs text-muted">{presentation().tooltipMessage}</p>
+          </Show>
           <For each={presentation().tooltipRows}>
             {(row) => (
               <div
@@ -106,7 +109,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 classList={{ 'border-t border-border': row.borderTop }}
               >
                 <span class={row.labelClass}>{row.label}</span>
-                <span class="whitespace-nowrap text-slate-300">{row.value}</span>
+                <span class="whitespace-nowrap text-base-content">{row.value}</span>
               </div>
             )}
           </For>
