@@ -3,6 +3,10 @@ param([Parameter(Mandatory = $true)][string]$InstallerPath)
 $ErrorActionPreference = 'Stop'
 $AgentName = 'PulseAgent'
 
+# Real Get-Service loads this assembly before returning a ServiceController.
+# Our SCM double must supply the same enum without making a real service read.
+Add-Type -AssemblyName System.ServiceProcess
+
 # Load only the production boundary. No administrator check, download, real
 # SCM call or installer mutation runs in this failure-control harness.
 $errors = $null
@@ -89,6 +93,7 @@ foreach ($script:scenario in $scenarios) {
     $script:controller | Add-Member ScriptMethod WaitForStatus {
         param($ExpectedStatus, [TimeSpan]$Timeout)
         $script:events.Add('wait')
+        Assert-Control ($ExpectedStatus -is [System.ServiceProcess.ServiceControllerStatus]) 'wait did not receive the real service-status enum'
         Assert-Control ($ExpectedStatus.ToString() -eq 'Stopped') 'waited for a non-stopped state'
         $expectedTimeout = 30
         if ($script:scenario -eq 'delete-pending') { $expectedTimeout = 0 }
