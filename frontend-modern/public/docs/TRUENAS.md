@@ -72,6 +72,41 @@ Pulse has collected; an absent tab is not proof of successful collection.
 For missing or stale data, use the [polling checks](#stale-truenas-data) before
 testing the connection or restarting.
 
+## Disk temperature and health
+
+In **TrueNAS → Storage**, read the disk's **Health** reason and details, not
+only its colour. Heat, native SMART faults and stale or missing readings are
+separate evidence. A cool disk can still have a SMART fault; a retained **last
+known** temperature is not a current reading, and no temperature is not zero.
+
+Check the saved rule in **Alerts → Thresholds → TrueNAS → TrueNAS Disks**:
+
+- A disk's own temperature override takes precedence over the **TrueNAS Disks**
+  default. With neither set, it inherits **Disk temperature by type**.
+- The inherited type policy is off when the agent **Disk Temp** default is off;
+  an explicit TrueNAS temperature rule can still enable it for TrueNAS disks.
+- Thresholds are in **°C**. Finish with **Save Changes**; an unsaved edit is not
+  the running rule. See [Off and inheritance](CONFIGURATION.md#metric-thresholds-off-and-inheritance).
+
+**Off is not recovery.** Switching off global or platform alerts silences
+alerts, not collection or disk-health evidence. Switching off a disk's
+Temperature rule disables that rule, not its native SMART faults. Acknowledging
+or dismissing a TrueNAS SMART alert does not repair the disk; its risk remains
+while TrueNAS still reports the condition.
+
+**Storage display limitation:** temperature colouring and its heat reason
+currently use the inherited agent/by-type policy, not the TrueNAS-wide or
+per-disk temperature override. A display mismatch is not proof that your saved
+rule failed. Compare the same disk, observation time and saved threshold with
+its existing TrueNAS reading and SMART state; do not raise thresholds, run new
+SMART tests, force a probe or restart merely to make the views agree.
+
+If reporting a mismatch, include only the disk type, saved threshold, redacted
+reason, time and whether the reading is current or last known. Use consistent
+aliases instead of hostnames, disk serials or device identifiers; keep the full
+diagnostics and configuration private. For missing or stale collection, use
+the [polling checks](#stale-truenas-data), not repeated connection tests.
+
 ## Multiple TrueNAS Systems
 
 Add as many TrueNAS connections as needed. Each connection is polled independently. Resources from all connected systems are merged into the unified view.
