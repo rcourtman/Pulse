@@ -429,12 +429,18 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     createWorkloadSortComparator(sortKey() || '', sortDirection(), {
       memoryValue: (guest) => {
         if (workloadMemoryDisplayBasis() !== 'host') {
-          return guest.memory?.usage ?? 0;
+          return guest.memory?.usage;
         }
         const hostTotal =
           memoryParentNodeByGuestId()[getCanonicalWorkloadId(guest)]?.memory?.total ?? 0;
-        const used = guest.memory?.used ?? 0;
-        return hostTotal > 0 && Number.isFinite(used) ? (used / hostTotal) * 100 : 0;
+        const used = guest.memory?.used;
+        return Number.isFinite(hostTotal) &&
+          hostTotal > 0 &&
+          typeof used === 'number' &&
+          Number.isFinite(used) &&
+          used >= 0
+          ? (used / hostTotal) * 100
+          : null;
       },
     }),
   );

@@ -22,6 +22,7 @@ import {
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 import {
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
@@ -336,6 +337,12 @@ export const createWorkloadSortComparator = (
     numeric: true,
     sensitivity: 'base',
   });
+  const memorySortValue = (guest: WorkloadGuest): number | null => {
+    const usage = getCurrentWorkloadMemoryUsage(guest);
+    if (usage === null) return null;
+    const value = options.memoryValue ? options.memoryValue(guest) : usage;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  };
 
   return (a: WorkloadGuest, b: WorkloadGuest): number => {
     let aVal: SortValue = null;
@@ -348,8 +355,8 @@ export const createWorkloadSortComparator = (
       aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
       bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
-      aVal = options.memoryValue ? (options.memoryValue(a) ?? 0) : a.memory?.usage || 0;
-      bVal = options.memoryValue ? (options.memoryValue(b) ?? 0) : b.memory?.usage || 0;
+      aVal = memorySortValue(a);
+      bVal = memorySortValue(b);
     } else if (sortKey === 'disk') {
       aVal = getDiskUsagePercent(a);
       bVal = getDiskUsagePercent(b);

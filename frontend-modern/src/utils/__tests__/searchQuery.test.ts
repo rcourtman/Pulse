@@ -244,11 +244,23 @@ describe('evaluateFilterStack', () => {
       expect(result).toBe(false);
     });
 
-    it('evaluates memory usage threshold (absolute value)', () => {
-      const vm = createVM({ memory: { usage: 1800, total: 2000, used: 1800, free: 200 } });
-      const stack = parseFilterStack('memory<2000');
+    it('evaluates current memory percentage threshold', () => {
+      const vm = createVM({
+        memory: {
+          usage: 90,
+          total: 2000,
+          used: 1800,
+          free: 200,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-10-08T00:00:00Z',
+          },
+        },
+      });
+      const stack = parseFilterStack('memory<95');
       const result = evaluateFilterStack(vm, stack);
-      expect(result).toBe(true); // 1800 < 2000
+      expect(result).toBe(true); // 90% < 95%
     });
 
     it('evaluates disk usage threshold', () => {
@@ -501,5 +513,93 @@ describe('disk filter freshness and unknown values', () => {
     expect(matches(retained, 'disk>90 AND name:retained')).toBe(false);
     expect(matches(retained, 'cpu=0')).toBe(true);
     expect(matches(retained, 'name:retained')).toBe(true);
+  });
+});
+
+describe('memory filters use current percentages, not retained capacity or missing zero', () => {
+  const guest = (memory: WorkloadGuest['memory']): WorkloadGuest =>
+    ({
+      id: 'fixture-memory',
+      name: 'retained-memory',
+      vmid: 101,
+      node: 'pve1',
+      instance: 'fixture',
+      type: 'qemu',
+      memory,
+    }) as WorkloadGuest;
+  const current = (usage: number): WorkloadGuest['memory'] => ({
+    usage,
+    total: 100,
+    used: usage,
+    free: 100 - usage,
+    observation: { state: 'current', source: 'agent', observedAt: '2026-10-08T00:00:00Z' },
+  });
+  const matches = (row: WorkloadGuest, query: string) =>
+    evaluateFilterStack(row, parseFilterStack(query));
+
+  it.each(['>0', '>=0', '<100', '<=100', '=0', '==0'])(
+    'does not match memory%s for non-current or missing readings',
+    (comparison) => {
+      const rows = [
+        guest(undefined as unknown as WorkloadGuest['memory']),
+        guest({ ...current(0), usageUnavailable: true }),
+        guest({ ...current(95), observation: undefined }),
+        guest({
+          ...current(95),
+          observation: { state: 'last-known', source: 'agent', observedAt: '2026-10-08T00:00:00Z' },
+        }),
+        guest({ ...current(0), observation: { state: 'unavailable', source: 'agent' } }),
+        guest({
+          ...current(95),
+          observation: { state: 'current', source: 'agent', observedAt: 'invalid' },
+        }),
+        guest({
+          ...current(95),
+          observation: { state: 'current', source: 'agent', observedAt: '2099-01-01T00:00:00Z' },
+        }),
+        ...[-1, NaN, Infinity, 101].map((usage) => guest(current(usage))),
+      ];
+      const telemetryMissing = guest(current(0));
+      telemetryMissing.telemetryAvailability = {
+        cpu: true,
+        memory: false,
+        disk: true,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      };
+      rows.push(telemetryMissing);
+      for (const row of rows) expect(matches(row, `memory${comparison}`)).toBe(false);
+    },
+  );
+
+  it('preserves valid zero and all percentage operators for a current reading', () => {
+    expect(matches(guest(current(0)), 'memory=0')).toBe(true);
+    const row = guest(current(90));
+    for (const query of [
+      'memory>85',
+      'memory>=90',
+      'memory<95',
+      'memory<=90',
+      'memory=90',
+      'memory==90',
+    ]) {
+      expect(matches(row, query)).toBe(true);
+    }
+    expect(matches(row, 'memory<90')).toBe(false);
+    expect(matches(row, 'memory>90')).toBe(false);
+  });
+
+  it('keeps text access and unrelated platform readings without inventing provenance', () => {
+    const row = guest({ ...current(95), observation: { state: 'last-known', source: 'agent' } });
+    expect(matches(row, 'memory>85 OR name:retained')).toBe(true);
+    expect(matches(row, 'memory>85 AND name:retained')).toBe(false);
+    const vmware = {
+      ...guest({ ...current(90), observation: undefined }),
+      platformScopes: ['vmware-vsphere'],
+    };
+    expect(matches(vmware, 'memory>85')).toBe(true);
+    const docker = { ...vmware, type: 'docker', vmid: 0, platformScopes: ['docker'] };
+    expect(matches(docker, 'memory>85')).toBe(true);
   });
 });
