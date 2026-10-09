@@ -86,6 +86,13 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 
 ## Manual Update Methods
 
+Before updating, record the running server version and edition, preserve the
+existing deployment definition privately, and keep a consistent
+[full-state backup](MIGRATION.md#full-state-recovery) with its matching keys.
+An update interrupts monitoring and alert delivery. Follow
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model);
+do not update during a backup, freeze/thaw or an unresponsive-guest incident.
+
 ### Docker
 
 Use [Docker server updates](DOCKER.md#-updates). Change the configured image to
@@ -101,19 +108,45 @@ container updates are separate operations.
 
 ### ProxmoxVE LXC (Manual)
 
-```bash
-sudo /bin/update
-```
-
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+Work **inside the existing Pulse LXC**, not on the Proxmox host or a monitored
+guest. Follow the [existing-installation update procedure](INSTALL.md#-updates),
+including its helper-ownership check. On a community-scripts installation,
+`/bin/update` can be a different updater; its filename does not establish that
+it uses Pulse's signed installer or accepts an exact target version.
 
 ### Systemd Service (Manual)
 
-```bash
-sudo /bin/update
-```
+Follow the [existing-installation update procedure](INSTALL.md#-updates) using
+the actual installed server service, paths and update helper. Do not run a
+helper whose owner is unknown or apply default installation paths over a
+custom deployment. Server updates do not install or update `pulse-agent`;
+agent installation commands come from **Settings → Infrastructure → Install
+on a host**.
 
-`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+### A helper selects a Helm-chart release
+
+A Pulse server release uses a tag such as `vX.Y.Z`. A `helm-chart-*` release
+contains a Kubernetes chart, not the Linux server archive. A helper selecting
+a chart does not establish that Pulse's server release is missing or that
+GitHub's latest-release pointer is wrong; preserve the selected tag and error.
+
+Do not supply a GitHub personal access token, bypass signatures or change
+permissions to make that helper continue. An unknown helper may ignore
+`--version`; even a Pulse-owned helper must download its installer before the
+installer can apply that option. Adding the flag is not proof of an exact or
+successful update.
+
+Before another attempt, check the running version and service health and
+preserve the existing container, configuration, keys and history. Do not
+recreate the LXC or install a second server to recover from release selection.
+For a public Community server, the
+[existing-installation procedure](INSTALL.md#-updates) links the signed
+server-installer flow with an exact `PULSE_VERSION`; use it only after checking
+the installed service and paths. Private Pro installations must retain their
+private runtime, not substitute that public installer. Use
+[update failure checks](#update-failed) if the attempted update's result is
+uncertain. Guidance is not confirmation that the helper or installation is
+repaired.
 
 ### Source Build
 

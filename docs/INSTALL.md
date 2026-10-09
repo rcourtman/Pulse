@@ -317,10 +317,21 @@ an updater snapshot alone is not a complete data backup. See
 Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
 installed by the Pulse server installer. On Proxmox community-scripts
 containers, `/bin/update` can belong to a different updater that ignores
-`--version`. If the helper is absent or its owner is unknown, use the
+`--version`. If the helper is absent or its owner is unknown, stop before
+executing it. For a public Community server, review the
 [signed server-installer flow](#2-bare-metal--systemd) with `PULSE_VERSION` set
-to the exact target tag. The same ownership check applies to rollback. After
+to the exact target tag, first confirming the existing service and data/config
+paths; do not apply its default paths over a custom deployment or replace a
+private Pro runtime with a public build. Work inside the existing Pulse LXC,
+not on the Proxmox host. The same ownership check applies to rollback. After
 the service restarts, verify the installed version with `GET /api/version`.
+
+If a helper selects `helm-chart-*` instead of a Pulse server release, follow
+[Helm-chart selection checks](AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release)
+before another attempt. A chart is not a server archive, and adding
+`--version` to an unknown or download-failing helper does not prove an exact
+update. Do not recreate the LXC, provide a GitHub token or bypass signatures
+to clear that failure.
 
 For Docker without Compose, `docker restart` keeps the old image running.
 Select the target in the existing saved deployment and pull it successfully
