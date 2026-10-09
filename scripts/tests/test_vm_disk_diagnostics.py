@@ -513,5 +513,79 @@ class VMDiskHelpTest(unittest.TestCase):
             self.assertIn(phrase, precaution)
 
 
+class ServerLogSafetyDocsTest(unittest.TestCase):
+    """Check help against existing controls, not browser or native recovery."""
+
+    def log_help(self):
+        guide = (ROOT / "docs/CONFIGURATION.md").read_text()
+        return " ".join(guide.split("#### Log Levels\n", 1)[1].split("\n| Variable |", 1)[0].split())
+
+    def contains(self, text, *phrases):
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(phrase in text, f"Missing safety explanation: {phrase}")
+
+    def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
+        guide = " ".join(DOC.read_text().split("### Pause Pulse", 1)[0].split())
+        self.contains(guide, "**Pause Stream**", "only pauses the browser display",
+                      "does not stop the Pulse server", "guest-agent requests",
+                      "actual server stop procedure")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        toggle = state.split("const togglePaused = () => {", 1)[1].split("\n  };", 1)[0]
+        self.assertEqual(toggle.strip(), "setIsPaused((prev) => !prev);")
+        self.assertIn("if (disposed || isPaused()) return;", state)
+        self.assertIn("toggleTitle: 'Pause Stream'", (ROOT / "frontend-modern/src/utils/systemLogsPresentation.ts").read_text())
+
+    def test_log_level_is_server_wide_not_a_browser_filter(self):
+        self.contains(self.log_help(), "server-wide logging threshold", "not a browser-only filter",
+                      "`warn` also suppresses `info` operational records",
+                      "absence of a log line is not evidence that an event did not occur",
+                      "`LOG_LEVEL` takes precedence at startup")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleSetLevel", 1)[1]
+        self.assertIn("logging.SetGlobalLevel(level)", handler)
+        self.assertIn("settings.LogLevel = level", handler)
+        loader = (ROOT / "internal/config/config.go").read_text()
+        self.assertIn('if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {\n\t\tcfg.LogLevel = logLevel', loader)
+
+    def test_display_controls_do_not_delete_logs_or_reduce_server_logging(self):
+        self.contains(self.log_help(), "**Pause Stream**", "**Clear Log Output**",
+                      "only affect the browser display", "do not stop monitoring",
+                      "reduce server logging or erase the server's logs",
+                      "VM_DISK_MONITORING.md#backup-safety")
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        clear = state.split("const clearLogs = () => {", 1)[1].split("\n  };", 1)[0]
+        self.assertEqual(clear.strip(), "setLogs([]);")
+
+    def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
+        self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
+                      "configuration and environment information", "not just the visible lines",
+                      "Keep the archive private", "manually reviewed, redacted excerpts",
+                      "not a guarantee that all content is safe to publish")
+        handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleDownloadBundle", 1)[1].split("type SetLogLevelRequest", 1)[0]
+        for source in ('os.Open(h.config.LogFile)', 'zipWriter.Create("pulse.log")',
+                       'io.Copy(wr, f)', 'zipWriter.Create("pulse-tail.log")',
+                       'logging.GetBroadcaster().GetHistory()', 'zipWriter.Create("system-info.json")',
+                       'h.config.DeepCopy()', 'os.Environ()'):
+            self.assertIn(source, handler)
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assertIn("window.location.href = '/api/logs/download'", state)
+        trouble = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split("### Collect diagnostics safely\n", 1)[1].split("### Inspect Notification Logs", 1)[0].split())
+        self.contains(trouble, "**Support Bundle**", "different export",
+                      "not the **GitHub (review first)** diagnostics export",
+                      "not limited to the lines visible", "CONFIGURATION.md#log-levels")
+
+    def test_debug_guidance_preserves_working_monitoring_and_private_evidence(self):
+        self.contains(self.log_help(), "Start with the current level", "raw guest-filesystem responses",
+                      "private names or paths", "do not enable it just to obtain a report",
+                      "previous working level", "without repeating the stall",
+                      "not proof that the underlying problem is fixed",
+                      "TROUBLESHOOTING.md#inspect-notification-logs")
+    def test_safety_help_is_shipped_without_new_diagnostic_commands(self):
+        for name in ("VM_DISK_MONITORING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+        self.assertNotIn("```", self.log_help(), "reuse bounded readers, not another copied command")
+
+
 if __name__ == "__main__":
     unittest.main()

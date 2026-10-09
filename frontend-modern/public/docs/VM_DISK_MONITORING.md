@@ -22,6 +22,12 @@ is stopped.** An OK backup task or an absent VM lock
 does not prove thaw succeeded. This is a temporary precaution, not a claim
 that the monitoring defect is fixed.
 
+**Pause Stream** in **System Logs** only pauses the browser display. It does not
+stop the Pulse server, its polling or guest-agent requests. Changing the log
+level is not a monitoring pause either. Use the actual server stop procedure
+below for your deployment; a **Paused** log view is not evidence that monitoring
+has stopped.
+
 Do not test freeze/thaw commands, clear backup locks, disable backup freezing
 or force-reset a guest as a disk-monitoring diagnostic. Those operations can
 affect workloads or backup consistency. Preserve the existing backup task and

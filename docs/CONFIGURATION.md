@@ -279,11 +279,36 @@ Environment variables take precedence over `system.json`.
 | Level | Description |
 | ------- | ------------- |
 | `error` | Only errors and critical issues |
-| `warn` | Errors + warnings (recommended for minimal logging) |
+| `warn` | Errors + warnings; suppresses info and debug records |
 | `info` | Standard operational messages (startup, connections, alerts) |
 | `debug` | Verbose output including per-guest/storage polling details |
 
-> **Tip**: If your syslog is being flooded with Pulse messages, set `LOG_LEVEL=warn` to significantly reduce log volume while still capturing important events.
+The **Log Level** control in **Settings → Support → System Logs** changes the
+server-wide logging threshold, not a browser-only filter. The saved level is
+used at startup unless your deployment sets `LOG_LEVEL`: `LOG_LEVEL` takes
+precedence at startup. `info` is the default. Choosing `warn` can reduce volume,
+but `warn` also suppresses `info` operational records; absence of a log line is
+not evidence that an event did not occur.
+
+Start with the current level and the [bounded log readers](TROUBLESHOOTING.md#inspect-notification-logs).
+Debug can produce much more output, including raw guest-filesystem responses
+and private names or paths; do not enable it just to obtain a report. If the
+interface stalls after enabling Debug, return to the previous working level
+through your deployment's existing log-level control, without repeating the
+stall. A responsive interface afterwards is not proof that the underlying
+problem is fixed; retain the original time, affected view and redacted error.
+
+**Pause Stream** and **Clear Log Output** only affect the browser display. They
+do not stop monitoring, reduce server logging or erase the server's logs. A
+**Paused** log view is not a [backup safety pause](VM_DISK_MONITORING.md#backup-safety).
+
+**Support Bundle** downloads a complete configured log file, or the retained
+server log buffer when no log file can be opened, plus configuration and
+environment information. It is not just the visible lines: pausing or clearing
+the display does not remove those records from the download. Some secrets are
+masked, but that is not a guarantee that all content is safe to publish. Keep
+the archive private and share only relevant, manually reviewed, redacted excerpts,
+not the whole bundle.
 
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |

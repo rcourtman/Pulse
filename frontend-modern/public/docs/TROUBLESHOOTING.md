@@ -1112,6 +1112,13 @@ information, including details echoed in errors or notes. Do not paste a
 Share only evidence relevant to the symptom; a screenshot or exact redacted
 error may be enough. See [Getting Help](#-getting-help).
 
+The **Support Bundle** download in **System Logs** is a different export: it can
+contain a complete log file or server buffer plus configuration and environment
+information. It is not the **GitHub (review first)** diagnostics export and is
+not limited to the lines visible in the panel. Keep the archive private and
+share only relevant, manually reviewed, redacted excerpts. See the
+[log-control and export limits](CONFIGURATION.md#log-levels).
+
 ### Inspect Notification Logs
 
 For notification failures, prefer **Recent delivery activity** in **Alerts →
