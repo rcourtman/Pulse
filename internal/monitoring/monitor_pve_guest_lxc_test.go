@@ -297,13 +297,17 @@ func assertIssue2757GuestWire(t *testing.T, monitor *Monitor, nativeID string, w
 	if !parentFound {
 		t.Fatalf("guest parent does not name the supplying node: %s", *listed.ParentID)
 	}
-	if !reflect.DeepEqual(facet.NetworkInterfaces, listed.Proxmox.NetworkInterfaces) || len(facet.NetworkInterfaces) != len(interfaces) {
+	if len(facet.NetworkInterfaces) != len(interfaces) || len(listed.Proxmox.NetworkInterfaces) != len(interfaces) {
 		t.Fatalf("listing/broadcast lost named interfaces: %+v", facet.NetworkInterfaces)
 	}
 	for i, iface := range interfaces {
-		wire := facet.NetworkInterfaces[i]
-		if wire.Name != iface.Name || wire.MAC != iface.MAC || !slices.Equal(wire.Addresses, iface.Addresses) || wire.RXBytes != uint64(max(0, iface.RXBytes)) || wire.TXBytes != uint64(max(0, iface.TXBytes)) {
-			t.Fatalf("interface association or traffic changed: %+v, want %+v", wire, iface)
+		// Empty address collections are omitted on the JSON wire and may be
+		// normalised to [] in memory. Compare their values on both surfaces;
+		// keep every name/address/traffic/owner assertion, not nil-vs-empty.
+		for _, wire := range []unifiedresources.NetworkInterface{listed.Proxmox.NetworkInterfaces[i], facet.NetworkInterfaces[i]} {
+			if wire.Name != iface.Name || wire.MAC != iface.MAC || !slices.Equal(wire.Addresses, iface.Addresses) || wire.RXBytes != uint64(max(0, iface.RXBytes)) || wire.TXBytes != uint64(max(0, iface.TXBytes)) {
+				t.Fatalf("interface association or traffic changed: %+v, want %+v", wire, iface)
+			}
 		}
 	}
 }
