@@ -17,6 +17,18 @@
 
 ## Purpose
 
+### Existing memory origins cannot be renewed by AI consumers
+
+AI query/context/fact consumers now retain the selected guest observation and
+explicit availability. The existing local VM/system-container memory observer
+judges pressure only from a qualified selected sample and applies its age bound
+to that original observation, not a fresh resource LastSeen from another source.
+Unknown pressure is an evidence-gap wake, not a measured threshold breach or
+recovery. `TestPatrolObserverGuestMemoryOrigin` and
+`TestGuestMemoryEvidenceUsesSelectedMetricOnly` cover these consumption boundaries.
+Collectors, guest commands, native leases, shared safety pauses, History storage
+and configured thresholds remain unchanged; this is not native #2762 recovery.
+
 ### Guest memory evidence survives typed consumers
 
 The monitor's existing guest memory observation remains source-owned when

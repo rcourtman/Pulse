@@ -2587,3 +2587,26 @@ func TestGuestViewMemoryObservationKeepsSelectedOrigin(t *testing.T) {
 		})
 	}
 }
+
+func TestGuestMemoryEvidenceUsesSelectedMetricOnly(t *testing.T) {
+	now := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	selected := models.MemoryObservation{State: "last-known", Source: "agent", ObservedAt: now.Add(-time.Hour)}
+	r := Resource{LastSeen: now, UpdatedAt: now,
+		Proxmox: &ProxmoxData{Memory: &models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: now}}},
+		Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 24, Observation: selected}},
+	}
+	for _, read := range []func() GuestMemoryEvidence{
+		func() GuestMemoryEvidence { return NewVMView(&r).MemoryEvidence(now) },
+		func() GuestMemoryEvidence { return NewContainerView(&r).MemoryEvidence(now) },
+	} {
+		e := read()
+		if e.PressureKnown || e.State != "last-known" || e.Source != selected.Source || e.ObservedAt != selected.ObservedAt {
+			t.Fatalf("raw facet or fresh row replaced selected origin: %+v", e)
+		}
+		r.Metrics.Memory = nil
+		if e = read(); e.Available || e.PressureKnown || e.State != "unavailable" {
+			t.Fatal("missing selected metric borrowed raw facet")
+		}
+		r.Metrics.Memory = &MetricValue{Percent: 24, Observation: selected}
+	}
+}
