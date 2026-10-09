@@ -83,11 +83,8 @@ class AdminDocsTest(unittest.TestCase):
                 for step in steps:
                     self.assertNotRegex(step, r"(?:\b\w*TOKEN=|Authorization:|X-API-Token:|Bearer\s|--cookie\b)")
                     self.assertNotRegex(step, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-                    if name in ("AUDIT_LOGGING", "RBAC"):
-                        self.assertIn("pulse_api ", step)
-                        self.assertNotIn("curl ", step)
-                    else:
-                        self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', step)
+                    self.assertIn("pulse_api ", step)
+                    self.assertNotIn("curl ", step)
                     if re.search(r"(?:--request|pulse_api) (POST|PUT)", step):
                         self.assertIn("--data-binary @-", request_helper() if "pulse_api " in step else step)
                         self.assertIn("<<'JSON'", step)
@@ -152,15 +149,11 @@ class AdminDocsTest(unittest.TestCase):
                             self.assertEqual(result.returncode, 22, result.stderr.decode())
                             self.assertEqual(len(requests), before + 1)
                             self.assertNotIn(b"Saved private export", result.stdout)
-                            # curl preserves an error body, in stdout or the requested file.
-                            exports = list(Path(temporary).glob("*/audit-export.json"))
-                            if name in ("AUDIT_LOGGING", "RBAC"):
-                                responses = list((Path(temporary) / ".config/pulse").glob("api-response.*"))
-                                self.assertEqual(len(responses), 1)
-                                output = responses[0].read_bytes()
-                                self.assertNotIn(b'{"fixture":true}', result.stdout)
-                            else:
-                                output = exports[0].read_bytes() if exports else result.stdout
+                            # Every guide preserves the error in a private response file.
+                            responses = list((Path(temporary) / ".config/pulse").glob("api-response.*"))
+                            self.assertEqual(len(responses), 1)
+                            output = responses[0].read_bytes()
+                            self.assertNotIn(b'{"fixture":true}', result.stdout)
                             self.assertIn(b'{"fixture":true}', output)
 
     def test_audit_reads_keep_private_success_bodies_in_new_owner_only_files(self):
@@ -254,6 +247,60 @@ class AdminDocsTest(unittest.TestCase):
                                                executable_recipe("RBAC", step), private_response=True)
                         self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
                         self.assertEqual(len(requests), before + 1, "an uncertain mutation must not be repeated or redirected")
+
+    def test_org_guidance_preserves_private_bounded_reads_and_session_mutations(self):
+        guide = (DOCS / "MULTI_TENANT.md").read_text()
+        for boundary in ("in the same Bash session", "not an installed Pulse command",
+                         "five-second", "twenty-second", "does not follow redirects or retry",
+                         "owner-only file", "redacted", "partial file", "not a complete list",
+                         "HTTP 401/402/403", "do not", "widen a token",
+                         "mutations token-authenticated", "signed-in UI", "CSRF"):
+            self.assertIn(boundary, guide)
+        for step in recipes("MULTI_TENANT"):
+            self.assertRegex(step, r"^pulse_api GET /api/orgs/")
+            self.assertNotIn("curl ", step)
+
+    def test_org_reads_keep_private_success_bodies_in_new_owner_only_files(self):
+        steps = recipes("MULTI_TENANT")
+        self.assertEqual(len(steps), len(EXPECTED["MULTI_TENANT"]))
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory(prefix="org docs ") as temporary:
+            home = Path(temporary)
+            for header in (f"X-API-Token: {TEST_TOKEN}", f"Authorization: Bearer {TEST_TOKEN}"):
+                for step, (method, path, _) in zip(steps, EXPECTED["MULTI_TENANT"]):
+                    with self.subTest(path=path, header=header.split(":")[0]):
+                        before = len(requests)
+                        result = exercise_curl(self, home, header, port,
+                                               executable_recipe("MULTI_TENANT", step), private_response=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+                        self.assertEqual(requests[-1][3], b"", "organization reads send no mutation body")
+                        self.assertIn(b"HTTP 200", result.stdout)
+            # Four reads retain four new files without overwriting the old response.
+            self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 5)
+
+    def test_org_reads_keep_private_http_errors_and_fail_without_retry(self):
+        for status in (400, 401, 402, 403, 500, 503):
+            with private_recording_server(status) as (port, requests):
+                for step in recipes("MULTI_TENANT"):
+                    with self.subTest(status=status, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("MULTI_TENANT", step), private_response=True)
+                        self.assertEqual(result.returncode, 22, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertIn(f"HTTP {status}".encode(), result.stdout)
+
+    def test_org_reads_refuse_redirect_success_and_incomplete_transfer_retry(self):
+        for status, partial, expected_exit in ((302, False, 1), (200, True, 18)):
+            with private_recording_server(status, partial) as (port, requests):
+                for step in recipes("MULTI_TENANT"):
+                    with self.subTest(status=status, partial=partial, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("MULTI_TENANT", step), private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1, "do not follow redirects or retry partial reads")
 
 
 if __name__ == "__main__":
