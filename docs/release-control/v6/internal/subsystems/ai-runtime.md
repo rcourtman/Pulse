@@ -39,8 +39,9 @@ current zero and real high pressure both retain their meaning. Other platforms
 without Proxmox observations keep their existing selected readings.
 
 Full, quiet and condensed inventory and actual triage seeds preserve these
-qualifications, including unflagged running guests. The no-flag rollup is not a
-health verdict. Native guest runtime status, rather than canonical collection
+qualifications, including unflagged running guests within the existing analysis scope. Guest
+analysis opt-outs do not acquire the new evidence section. The no-flag rollup is
+not a health verdict. Native guest runtime status, rather than canonical collection
 status, owns running/paused/stopped eligibility. A snapshot-only alert review
 cannot auto-resolve a memory alert from unknown guest pressure; independently
 verified current recovery and removed-resource handling remain separate.

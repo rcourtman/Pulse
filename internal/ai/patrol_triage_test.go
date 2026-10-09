@@ -74,7 +74,7 @@ func TestTriageThresholdChecksState_UsesReadStateWhenLegacySlicesEmpty(t *testin
 						},
 						Metrics: &unifiedresources.ResourceMetrics{
 							CPU:    &unifiedresources.MetricValue{Percent: 70},
-							Memory: &unifiedresources.MetricValue{Percent: 92},
+							Memory: &unifiedresources.MetricValue{Percent: 92, Observation: models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: time.Now().Add(-time.Minute)}},
 							Disk:   &unifiedresources.MetricValue{Percent: 85},
 						},
 					})

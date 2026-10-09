@@ -43,3 +43,19 @@ func TestPatrolGuestMemoryReadingBoundaries(t *testing.T) {
 		t.Fatal("collection warning changed native runtime state")
 	}
 }
+
+func TestPatrolGuestMemorySeedScopeAndOptOut(t *testing.T) {
+	at := time.Now().UTC().Add(-time.Minute)
+	snapshot := models.StateSnapshot{VMs: []models.VM{
+		{ID: "included", Name: "included", VMID: 100, Type: "qemu", Status: "running", Memory: patrolMemoryFixture(96, "current", "status-mem", at)},
+		{ID: "excluded", Name: "excluded", VMID: 101, Type: "qemu", Status: "running", Memory: patrolMemoryFixture(96, "current", "status-mem", at)},
+	}}
+	snap := newPatrolRuntimeState(snapshot)
+	if section := patrolGuestMemoryEvidenceSection(snap, nil, PatrolConfig{AnalyzeGuests: false}); section != "" {
+		t.Fatal("guest analysis opt-out acquired memory evidence")
+	}
+	section := patrolGuestMemoryEvidenceSection(snap, map[string]bool{"included": true}, PatrolConfig{AnalyzeGuests: true})
+	if !strings.Contains(section, "included") || strings.Contains(section, "excluded") {
+		t.Fatalf("memory evidence escaped its existing scope: %s", section)
+	}
+}

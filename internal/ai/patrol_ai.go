@@ -1153,7 +1153,7 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, seedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(seedSet))},
-		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, p.buildScopedSetForRuntime(scope, snap))},
+		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, p.buildScopedSetForRuntime(scope, snap), cfg)},
 
 		// P2 — triage already preserves the flagged set, so these sections can
 		// summarize under tighter provider-derived retry budgets.
@@ -1211,7 +1211,7 @@ func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *P
 
 		// P1 — always include (typically compact).
 		{priority: 1, name: "previous_run", content: p.seedPreviousRun(now)},
-		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, scopedSet)},
+		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, scopedSet, cfg)},
 
 		// P2 — summarize when needed.
 		{

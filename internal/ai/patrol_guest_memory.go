@@ -22,7 +22,10 @@ func patrolGuestRuntimeStatus(runtime string, status unifiedresources.ResourceSt
 	return string(status)
 }
 
-func patrolGuestMemoryEvidenceSection(snap patrolRuntimeState, scopedSet map[string]bool) string {
+func patrolGuestMemoryEvidenceSection(snap patrolRuntimeState, scopedSet map[string]bool, cfg PatrolConfig) string {
+	if !cfg.AnalyzeGuests {
+		return ""
+	}
 	if gaps := patrolGuestMemoryGaps(patrolGuestInventoryRows(snap, scopedSet, nil)); gaps != "" {
 		return "# Guest memory evidence\n" + gaps + "\n\n"
 	}
