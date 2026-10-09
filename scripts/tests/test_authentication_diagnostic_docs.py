@@ -17,7 +17,7 @@ import threading
 import time
 import unittest
 
-from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl, recording_server,
+from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl,
                                 private_recording_server, request_helper)
 
 
@@ -133,7 +133,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
     def test_ai_recipes_send_only_the_intended_method_path_and_body(self):
         recipes = blocks("AI_AUTONOMY")
         self.assertEqual(len(recipes), len(EXPECTED_AI))
-        with recording_server() as (port, requests):
+        with private_recording_server() as (port, requests):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                 for recipe, (method, path, body) in zip(recipes, EXPECTED_AI):
                     with self.subTest(header=key, method=method, path=path), tempfile.TemporaryDirectory() as temporary:
