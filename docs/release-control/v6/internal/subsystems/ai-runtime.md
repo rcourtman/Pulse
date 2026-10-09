@@ -25,6 +25,25 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Assistant action plans do not guess an installation from session placement
+
+An explicit current canonical resource ID takes precedence over stale session
+aliases in `pulse_control`. Without one, session-to-inventory binding must have
+one canonical match: repeated VMID/node pairs, container-ID/host pairs, agent
+names or conflicting canonical aliases cannot select the first listed resource.
+Ambiguity returns the canonical alternatives with the tool error bit before
+calling the action planner, including for an older session-only reference.
+The advertised-action projection omits these ambiguous targets too.
+
+Unique placement, canonical aliases and inventory-only lookup remain usable
+without another discovery step. Inventory-only canonical lookup retains session
+registration. Capability checks, approval policy and execution remain with the
+existing action lifecycle; these source controls establish no native action or
+cross-installation monitoring recovery.
+`control_target_identity_test.go` covers both inventory orders, all four control
+resource kinds, conflicting aliases, planning refusal, stale-session canonical
+override, unique placement and session continuity.
+
 ### Guest-config tools require an unambiguous resource identity
 
 The existing VM/system-container configuration tool selects an exact canonical
