@@ -7,6 +7,7 @@ import {
   matchesSearchTermSplit,
 } from '@/utils/searchQuery';
 import type { VM } from '@/types/api';
+import type { WorkloadGuest } from '@/types/workloads';
 
 describe('parseFilter', () => {
   it('parses metric conditions with > operator', () => {
@@ -427,5 +428,78 @@ describe('evaluateFilterStack', () => {
       expect(matchesSearchTermSplit('host docker-a online', split)).toBe(true);
       expect(matchesSearchTermSplit('host truenas-a online', split)).toBe(false);
     });
+  });
+});
+
+describe('disk filter freshness and unknown values', () => {
+  const guest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
+    id: 'fixture-vm',
+    vmid: 101,
+    name: 'retained-vm',
+    node: 'pve1',
+    instance: 'fixture',
+    type: 'qemu',
+    workloadType: 'vm',
+    status: 'running',
+    cpu: 0,
+    cpus: 1,
+    memory: { usage: 0, total: 100, used: 0, free: 100 },
+    disk: { usage: 95, total: 100, used: 95, free: 5 },
+    networkIn: 0,
+    networkOut: 0,
+    diskRead: 0,
+    diskWrite: 0,
+    uptime: 1,
+    template: false,
+    lastBackup: 0,
+    tags: [],
+    lock: '',
+    lastSeen: '2026-10-09T11:33:33Z',
+    ...overrides,
+  });
+  const matches = (vm: WorkloadGuest, query: string) =>
+    evaluateFilterStack(vm, parseFilterStack(query));
+
+  it.each(['>0', '>=0', '<100', '<=100', '=0', '==0'])(
+    'does not match disk%s when the reading is absent, invalid or not current',
+    (comparison) => {
+      const unknown = [
+        guest({ disk: undefined as unknown as WorkloadGuest['disk'] }),
+        guest({ disk: { total: 0, used: 0, free: 0 } as WorkloadGuest['disk'] }),
+        guest({ disk: { usage: -1, total: 100, used: 95, free: 5 } }),
+        guest({ disk: { usage: NaN, total: 100, used: 95, free: 5 } }),
+        guest({ disk: { usage: Infinity, total: 100, used: 95, free: 5 } }),
+        guest({ diskStatusReason: 'prev-vm-locked' }),
+        guest({ diskStatusReason: 'permission-denied' }),
+        guest({
+          telemetryAvailability: {
+            cpu: true,
+            memory: true,
+            disk: false,
+            networkIO: true,
+            diskIO: true,
+            uptime: true,
+          },
+        }),
+      ];
+      for (const vm of unknown) expect(matches(vm, `disk${comparison}`)).toBe(false);
+    },
+  );
+
+  it('preserves valid reported zero and numeric disk comparisons', () => {
+    expect(matches(guest({ disk: { usage: 0, total: 100, used: 0, free: 100 } }), 'disk=0')).toBe(
+      true,
+    );
+    expect(matches(guest(), 'disk>90')).toBe(true);
+    expect(matches(guest(), 'disk<90')).toBe(false);
+    expect(matches(guest(), 'disk>=95 AND name:retained')).toBe(true);
+  });
+
+  it('keeps OR text matches and other metrics independent of unavailable disk readings', () => {
+    const retained = guest({ diskStatusReason: 'prev-vm-locked' });
+    expect(matches(retained, 'disk>90 OR name:retained')).toBe(true);
+    expect(matches(retained, 'disk>90 AND name:retained')).toBe(false);
+    expect(matches(retained, 'cpu=0')).toBe(true);
+    expect(matches(retained, 'name:retained')).toBe(true);
   });
 });

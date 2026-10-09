@@ -4,7 +4,12 @@ import {
   type IODistributionStats,
   type WorkloadIOEmphasis,
 } from './guestRowModel';
-import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
+import {
+  parseFilter,
+  parseFilterStack,
+  evaluateFilterStack,
+  splitSearchExclusions,
+} from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
@@ -16,6 +21,7 @@ import {
   workloadMatchesViewMode,
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 import {
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
@@ -240,7 +246,12 @@ export const filterWorkloads = ({
     const exclusions: string[] = [];
 
     searchParts.forEach((part) => {
-      if (part.includes('>') || part.includes('<') || part.includes(':')) {
+      if (
+        part.includes('>') ||
+        part.includes('<') ||
+        part.includes(':') ||
+        parseFilter(part).type === 'metric'
+      ) {
         filters.push(part);
       } else {
         const split = splitSearchExclusions(part);
@@ -273,7 +284,16 @@ export const filterWorkloads = ({
 
 export const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
   const disk = guest?.disk;
-  if (!disk) return null;
+  // The row may retain a clearly labelled last-known number. It must not
+  // compete with current readings when sorting capacity, in either direction.
+  if (
+    !disk ||
+    guest.telemetryAvailability?.disk === false ||
+    getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current' ||
+    (typeof disk.usage === 'number' && disk.usage < 0)
+  ) {
+    return null;
+  }
 
   const clamp = (value: number) => Math.min(100, Math.max(0, value));
 

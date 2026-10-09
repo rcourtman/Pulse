@@ -1,5 +1,6 @@
-import type { VM, Container } from '@/types/api';
-import { getWorkloadCPUPercent } from '@/utils/workloads';
+import type { WorkloadGuest } from '@/types/workloads';
+import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 
 // Exclusion-aware split of a free-text search. Terms prefixed with `-` hide
 // matching rows ("-watchtower" hides anything whose haystack contains
@@ -146,7 +147,7 @@ export function parseFilterStack(searchString: string): FilterStack {
   return { filters, operators };
 }
 
-type FilterableItem = VM | Container;
+type FilterableItem = WorkloadGuest;
 
 function evaluateMetricCondition(guest: FilterableItem, condition: MetricCondition): boolean {
   let value: number;
@@ -158,9 +159,20 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
     case 'memory':
       value = 'memory' in guest && guest.memory ? guest.memory.usage : 0;
       break;
-    case 'disk':
-      value = 'disk' in guest && guest.disk ? (guest.disk.usage ?? 0) : 0;
+    case 'disk': {
+      // Missing and retained reads are not zero (or current capacity).
+      // Preserve the same provider/linked-agent freshness rule as the row.
+      if (
+        guest.telemetryAvailability?.disk === false ||
+        getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current'
+      ) {
+        return false;
+      }
+      const usage = guest.disk?.usage;
+      if (typeof usage !== 'number' || !Number.isFinite(usage) || usage < 0) return false;
+      value = usage;
       break;
+    }
     case 'uptime':
       // Uptime in seconds (only for running VMs/containers)
       value =
