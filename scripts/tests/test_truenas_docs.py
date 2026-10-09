@@ -74,6 +74,46 @@ class TrueNASDocsTest(unittest.TestCase):
         self.assertIn("does not establish a live reading", text)
         self.assertIn("Do not upload a full browser network capture", text)
 
+    def disk_health_section(self):
+        text = DOC.read_text()
+        heading = "## Disk temperature and health\n"
+        self.assertIn(heading, text, "disk-health interpretation must have a reachable guide")
+        return text.split(heading, 1)[1].split("## Multiple TrueNAS Systems", 1)[0]
+
+    def test_disk_health_guidance_separates_reading_rule_and_recovery(self):
+        prose = " ".join(self.disk_health_section().split())
+        for boundary in (
+            "Heat, native SMART faults and stale or missing readings are separate evidence",
+            "last known** temperature is not a current reading", "no temperature is not zero",
+            "Alerts → Thresholds → TrueNAS → TrueNAS Disks", "own temperature override",
+            "takes precedence", "inherits **Disk temperature by type**",
+            "agent **Disk Temp** default is off", "explicit TrueNAS temperature rule",
+            "Thresholds are in **°C**", "**Save Changes**", "unsaved edit is not the running rule",
+            "**Off is not recovery.**", "not collection or disk-health evidence",
+            "disables that rule, not its native SMART faults", "does not repair the disk",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+        self.assertNotIn("```", self.disk_health_section(), "no new live diagnostic recipe")
+
+    def test_disk_display_mismatch_has_a_passive_private_reporting_route(self):
+        prose = " ".join(self.disk_health_section().split())
+        for boundary in (
+            "**Storage display limitation:**", "inherited agent/by-type policy",
+            "not the TrueNAS-wide or per-disk temperature override",
+            "not proof that your saved rule failed", "same disk, observation time and saved threshold",
+            "existing TrueNAS reading and SMART state", "do not raise thresholds",
+            "run new SMART tests", "force a probe or restart", "only the disk type",
+            "redacted reason, time", "current or last known", "consistent aliases",
+            "keep the full diagnostics and configuration private", "not repeated connection tests",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, prose)
+        config = ROOT / "docs/CONFIGURATION.md"
+        self.assertIn("TRUENAS.md#disk-temperature-and-health", config.read_text())
+        self.assertEqual(config.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
+
     def log_section(self):
         return DOC.read_text().split("### No data appearing after adding connection\n", 1)[1].split(
             "### Inventory works but CPU, memory or History is missing", 1)[0]

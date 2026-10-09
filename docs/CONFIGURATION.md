@@ -565,6 +565,11 @@ resource override takes precedence. Finish the edit and use **Save Changes**;
 an unsaved value is not the running policy. Reload after a successful save to
 check that the intended value persisted.
 
+For TrueNAS physical disks, read the [disk temperature and health guide](TRUENAS.md#disk-temperature-and-health)
+before changing a rule: heat, SMART faults and missing readings are different
+signals, and Storage display thresholds do not yet follow TrueNAS-wide or
+per-disk temperature overrides. Silencing an alert is not disk recovery.
+
 ### Metric thresholds, Off and inheritance
 
 For numeric metric rules such as CPU, memory and disk usage:
