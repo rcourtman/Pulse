@@ -2797,6 +2797,17 @@ compare_versions() {
     elif [[ -n "$suffix_v1" ]] && [[ -z "$suffix_v2" ]]; then
         return 2  # v1 (rc) < v2 (stable)
     elif [[ -n "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
+        # Published preview revisions are numeric: rc.10 follows rc.9, not
+        # vice versa. Keep the existing lexical fallback for other suffixes.
+        if [[ "$suffix_v1" =~ ^(beta|rc)[.][0-9]+$ && "$suffix_v2" =~ ^(beta|rc)[.][0-9]+$ && "${suffix_v1%.*}" == "${suffix_v2%.*}" ]]; then
+            local revision_v1="${suffix_v1##*.}" revision_v2="${suffix_v2##*.}"
+            if (( 10#$revision_v1 > 10#$revision_v2 )); then
+                return 1
+            elif (( 10#$revision_v1 < 10#$revision_v2 )); then
+                return 2
+            fi
+            return 0
+        fi
         # Both have suffixes, compare them lexicographically
         if [[ "$suffix_v1" > "$suffix_v2" ]]; then
             return 1
@@ -5079,19 +5090,13 @@ main() {
             return 0
         fi
         
-        # Get both stable and RC versions
-        # Try GitHub API first, but have a fallback - with timeout protection
+        # Use the same complete, server-only metadata admission as downloads.
+        # A chart tag or a draft must never become an existing-install action.
         local STABLE_VERSION=""
         STABLE_VERSION=$(resolve_latest_release_tag_for_channel stable 2>/dev/null || true)
-        
-        # For RC, we need the API, so if it fails just use empty
         local RC_VERSION=""
-        if command -v timeout >/dev/null 2>&1; then
-            RC_VERSION=$(timeout 10 curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        else
-            RC_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        fi
-        
+        RC_VERSION=$(resolve_latest_release_tag_for_channel rc 2>/dev/null || true)
+
         # Determine default update channel
         UPDATE_CHANNEL="stable"
         
@@ -5110,12 +5115,15 @@ main() {
         
         # Show update options based on available versions
         local menu_option=1
+        local stable_choice="" rc_choice=""
         if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
+            stable_choice=$menu_option
             echo "${menu_option}) Update to $STABLE_VERSION (stable)"
             ((menu_option++))
         fi
         
         if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
+            rc_choice=$menu_option
             echo "${menu_option}) Update to $RC_VERSION (prerelease preview)"
             ((menu_option++))
         fi
@@ -5129,27 +5137,59 @@ main() {
         
         # Try to read user choice interactively
         # safe_read handles both normal and piped input (via /dev/tty)
+        local automatic_choice=false
+        local requested_channel="$UPDATE_CHANNEL"
         if [[ "$IN_DOCKER" == "true" ]]; then
             # In Docker, always auto-select
             print_info "Docker environment detected. Auto-selecting update option."
-            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
-                choice=2  # RC version
-            else
-                choice=1  # Stable version
-            fi
+            automatic_choice=true
         elif safe_read "Select option [1-${max_option}]: " choice; then
             # Successfully read user choice (either from stdin or /dev/tty)
             : # Do nothing, choice was set
         else
             # safe_read failed - truly non-interactive
             print_info "Non-interactive mode detected. Auto-selecting update option."
-            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
-                choice=2  # RC version
-            else
-                choice=1  # Stable version
-            fi
+            automatic_choice=true
         fi
         
+        if [[ "$automatic_choice" == true ]]; then
+            # Rows disappear when a release is unavailable or already installed.
+            # Fixed option numbers could then select preview, reinstall or REMOVE.
+            # Only a newer release in the requested channel is an automatic action.
+            local automatic_release="$STABLE_VERSION"
+            choice="$stable_choice"
+            if [[ "$requested_channel" == rc ]]; then
+                automatic_release="$RC_VERSION"
+                if [[ "$RC_VERSION" == "$STABLE_VERSION" ]]; then
+                    choice="$stable_choice"
+                else
+                    choice="$rc_choice"
+                fi
+            fi
+            if [[ -z "$automatic_release" ]]; then
+                print_error "Cannot determine a published Pulse server release for the $requested_channel channel. Existing installation is unchanged; check connectivity and jq, or deliberately choose an exact version with --version."
+                return 1
+            fi
+            if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != unknown ]]; then
+                local automatic_compare=0
+                compare_versions "$automatic_release" "$CURRENT_VERSION" || automatic_compare=$?
+                case "$automatic_compare" in
+                    0)
+                        print_info "$CURRENT_VERSION is already the selected $requested_channel release. Existing installation is unchanged."
+                        return 0
+                        ;;
+                    2)
+                        print_error "Selected release $automatic_release is older than $CURRENT_VERSION; refusing to downgrade automatically. Existing installation is unchanged; use --version only for a deliberate rollback."
+                        return 1
+                        ;;
+                esac
+            fi
+            if [[ -z "$choice" ]]; then
+                print_error "No update option matches the selected release. Existing installation is unchanged."
+                return 1
+            fi
+        fi
+
         # Debug: Check if choice was read correctly
         if [[ -z "$choice" ]]; then
             print_error "No option selected. Exiting."
@@ -5201,6 +5241,12 @@ main() {
             action="cancel"
         fi
         
+        # Preview can legitimately select the newest stable release. Do not
+        # silently turn that requested preview channel into a stable preference.
+        if [[ "$automatic_choice" == true && "$action" == update ]]; then
+            UPDATE_CHANNEL="$requested_channel"
+        fi
+
         # Debug: Show what action was determined
         # print_info "DEBUG: Action determined: ${action:-'none'}"
         
@@ -5251,6 +5297,11 @@ main() {
                 exit 0
                 ;;
             reinstall)
+                if ! is_pulse_release_tag "$CURRENT_VERSION"; then
+                    print_error "Cannot reinstall an unknown current server version. Existing installation is unchanged; deliberately choose an exact version with --version."
+                    return 1
+                fi
+                LATEST_RELEASE="$CURRENT_VERSION"
                 offer_existing_auto_updates
 
                 backup_existing

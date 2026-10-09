@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Existing-installation menu actions require exact target and intent
+
+The root server installer's existing-installation menu admits stable/preview
+targets through the same complete, published server-only release selector as its
+installer and archive downloads. Chart tags, drafts, malformed metadata and
+failed transport output must not become offered versions. Explicit version pins
+remain a separate deliberate route; signature and archive admission are unchanged.
+
+Without interactive input (including Docker), only a newer release in the
+requested/configured channel may select an update. Selection uses the actual
+available row, never an assumed option number: absent or current versions can
+otherwise move preview, reinstall or removal into that number. A current selected
+version is an unchanged no-op; unavailable metadata or an automatic downgrade
+returns nonzero before readiness, backup, auto-update consent or any mutation.
+Preview following the newest stable preserves the preview channel preference.
+Beta/RC revision ordering is numeric within the same stage, so `.10` upgrades
+`.9` and the reverse remains an automatic rollback refusal.
+
+Interactive update, removal and cancellation retain their displayed meanings.
+Explicit reinstall pins the known current server version rather than discovering
+and installing latest; an unknown current version requires a deliberate exact
+pin instead. Removal still requires the independent all-unit quiescence checks.
+
+`TestRootInstallExistingMenuRequiresExactAutomaticIntent` executes eighteen
+ordinary-user controls against actual sourced installer `main`, with confined
+release transport and stopped mutation boundaries. They cover disappearing rows,
+both automatic entry paths, channel intent, chart/draft/metadata refusal, automatic
+rollback refusal, exact reinstall and deliberate removal/cancel. The same controls
+fail the prior menu; they do not establish native systemd, signed installation,
+published availability or customer recovery.
+
 ### Windows replacement and removal refuse uncertain service state
 
 Before replacing an agent binary or changing its token/connection state, and
