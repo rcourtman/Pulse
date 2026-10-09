@@ -9259,6 +9259,18 @@ carrying a prefixed attribute or namespace declaration named like a SAML
 attribute is refused. No agent
 registration, enrolment, install, update or removal path changed.
 
+### Mock-mode read views fold linked fixture agents
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+applies the operator's manual links (unified-resources contract, "Mock-mode
+unified view applies operator links"). A fixture agent the operator linked
+into a guest now folds into that guest in mock read views, as a linked agent
+already does in live mode, so host snapshots built from them
+(`HostsSnapshot`) stop listing it while the guest carries its facet. Agent
+registration, enrolment, report admission, removal, continuity and the
+fixture agent set itself are unchanged, and the view writes nothing to the
+resource store.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or
@@ -9321,3 +9333,14 @@ machine setting. Cleanup restores only the captured prior setting, even when
 owned server teardown fails; an unconfirmed stop fails and retains the handle
 rather than reporting clean teardown. Real Windows execution and full terminal
 cleanup evidence still have to be returned by the existing native CI job.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
