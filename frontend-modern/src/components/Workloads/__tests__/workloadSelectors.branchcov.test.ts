@@ -521,13 +521,13 @@ describe('workloadSelectors (branch coverage)', () => {
       ).toBe(100);
     });
 
-    it('returns 0 for usage of 0 and clamps negative usage to 0', () => {
+    it('keeps a reported zero but treats negative usage as unavailable', () => {
       expect(
         getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 0, free: 100, usage: 0 } })),
       ).toBe(0);
       expect(
         getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 0, free: 100, usage: -5 } })),
-      ).toBe(0);
+      ).toBeNull();
     });
 
     it('falls back to used/total when usage is non-finite (Infinity)', () => {

@@ -13,6 +13,7 @@ import Play from 'lucide-solid/icons/play';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Terminal from 'lucide-solid/icons/terminal';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { Button } from '@/components/shared/Button';
 import { useSystemLogsPanelState } from './useSystemLogsPanelState';
 
 export const SystemLogsPanel: Component = () => {
@@ -74,15 +75,17 @@ export const SystemLogsPanel: Component = () => {
                 <Trash2 size={18} aria-hidden="true" />
               </button>
               <div class="h-6 w-px bg-surface-hover mx-2"></div>
-              <button
+              <Button
                 type="button"
                 onClick={state.handleDownload}
                 aria-describedby={bundleHelpId}
-                class="min-h-11 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
+                variant="primaryFlat"
+                size="settingsAction"
+                class="gap-2"
               >
                 <Download size={16} aria-hidden="true" />
                 <span>{SYSTEM_LOGS_PANEL_COPY.downloadLabel}</span>
-              </button>
+              </Button>
             </div>
           </div>
           <div class="space-y-2 text-sm text-muted">
@@ -100,7 +103,7 @@ export const SystemLogsPanel: Component = () => {
           >
             <For each={state.logs()}>
               {(log) => (
-                <div class="animate-enter border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded-sm">
+                <div class="border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded-sm">
                   <span class={getSystemLogLineClass(log)}>{log}</span>
                 </div>
               )}
@@ -121,6 +124,7 @@ export const SystemLogsPanel: Component = () => {
               {streamPresentation().label}
             </span>
           </div>
+          <p class="text-xs text-muted px-1 pt-2">{SYSTEM_LOGS_PANEL_COPY.bufferHelp}</p>
         </div>
       </OperationsPanel>
     </div>

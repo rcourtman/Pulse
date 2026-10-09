@@ -14,10 +14,7 @@ const frontendDevPort = Number(
 const backendProtocol = process.env.PULSE_DEV_API_PROTOCOL ?? 'http';
 const backendHost = process.env.PULSE_DEV_API_HOST ?? '127.0.0.1';
 const backendPort = Number(
-  process.env.PULSE_DEV_API_PORT ??
-  process.env.FRONTEND_PORT ??
-  process.env.PORT ??
-  7655,
+  process.env.PULSE_DEV_API_PORT ?? process.env.FRONTEND_PORT ?? process.env.PORT ?? 7655,
 );
 
 const backendUrl =
@@ -31,9 +28,7 @@ const backendWsUrl =
       parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
       return parsed.toString();
     } catch {
-      return backendUrl
-        .replace(/^http:\/\//i, 'ws://')
-        .replace(/^https:\/\//i, 'wss://');
+      return backendUrl.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
     }
   })();
 
@@ -51,11 +46,7 @@ export default defineConfig(({ mode }) => ({
   // the whole app incl. all Settings panels and every locale) at cold start,
   // defeating route-level code splitting on slow devices. Dynamic-import SRI
   // is still enforced through the generated import map integrity block.
-  plugins: [
-    tailwindcss(),
-    solid(),
-    sri({ algorithm: 'sha384', preloadDynamicChunks: false }),
-  ],
+  plugins: [tailwindcss(), solid(), sri({ algorithm: 'sha384', preloadDynamicChunks: false })],
   resolve: {
     alias: {
       '@': srcAlias,
@@ -296,10 +287,6 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': srcAlias,
     },
-    exclude: [
-      ...configDefaults.exclude,
-      'tests/integration/**',
-      '**/tests/integration/**',
-    ],
+    exclude: [...configDefaults.exclude, 'tests/integration/**', '**/tests/integration/**'],
   },
 }));
