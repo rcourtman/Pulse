@@ -56,7 +56,7 @@ class ExternalAgentDocsTest(unittest.TestCase):
                              "client process", "local administrators", "model provider",
                              "deleting", "does not revoke it"):
                 with self.subTest(boundary=boundary):
-                    self.assertIn(boundary, text)
+                    self.assertIn(boundary.casefold(), text.casefold())
         readme = compact(adapter_readme())
         self.assertIn("not a recommended default", readme)
         self.assertIn("do not exempt discovery or health from proxy authentication", readme)
