@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Existing auto-update timers are discovered without changing consent
+
+Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.
+It compares the first field of complete rows, including their state/preset
+columns, without regex matching or truncating custom instance names. A failed
+inventory's output is not proof of an installed timer.
+
+All five existing/new-install refresh consumers can therefore replace stale
+auto-update assets when a timer exists, without enabling/starting it or changing
+`system.json`. A configured timer or updater masked by a `/dev/null` symlink is
+an explicit operator stop: refresh retains the mask and all existing assets.
+Discovery is separate from enablement; version changes still require affirmative
+consent to set up automatic updates.
+
+`TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh` runs actual
+discovery, installer `main` and asset refresh together for version pins, source
+builds, menu updates/reinstalls and leftover fresh-install timers. Its controls
+cover enabled/disabled rows, exact-name impostors, long instance names, missing/
+failed/hung inventory, byte-preserved preferences and both unit masks. Where
+available, real `systemctl --root` reads only a temporary fixture filesystem.
+Manager operations and server installation remain doubles: this is source/flow
+proof, not native systemd activation, published installation or customer recovery.
+
 ### Private, authenticated server-installer inputs
 
 Release archive downloads and their signature sidecars stay inside the same
