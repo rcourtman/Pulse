@@ -63,9 +63,11 @@ describe('notification evidence privacy help', () => {
 
   it('warns at the webhook retry entry point without promising a fully safe error', () => {
     const text = retryText();
+    expect(text).toContain('masks recognised URL credentials, not all private information');
     expect(text).toContain(
-      'masks recognised URL credentials, not arbitrary provider text or private infrastructure details',
+      'Older records and other error sources can retain provider text or private infrastructure details; they are not retroactively scrubbed',
     );
+    expect(text).toContain('Alert-webhook response text is deliberately withheld');
     expect(text).toContain('Keep full errors and screenshots private');
     expect(text).toContain('before sharing a manually redacted excerpt');
     expect(text).toContain(
