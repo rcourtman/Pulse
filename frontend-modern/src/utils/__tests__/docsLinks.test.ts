@@ -23,6 +23,7 @@ import selfHostedCommercialRecoverySectionSource from '@/components/Settings/Sel
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
+import { settingsDocumentationLinkViolations } from '@/components/shared/__tests__/settingsDocumentationLinkContract';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -844,7 +845,9 @@ describe('docsLinks', () => {
     expect(securityWarningSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/docs/',
     );
-    expect(aiRuntimeControlsSectionSource).toContain('TERMS_DOC_URL');
+    // This section may remove its only Terms link with the control it explains.
+    // Any surviving link must still use the shared primitive and shipped route.
+    expect(settingsDocumentationLinkViolations(aiRuntimeControlsSectionSource)).toEqual([]);
     expect(aiRuntimeControlsSectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
