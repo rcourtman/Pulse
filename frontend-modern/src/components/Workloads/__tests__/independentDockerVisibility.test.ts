@@ -15,7 +15,7 @@ const guest = (installation: string): Resource => ({
   displayName: 'same-short-name',
   platformType: 'proxmox-pve',
   platformId: installation,
-  sourceType: 'proxmox',
+  sourceType: 'api',
   status: 'online',
   lastSeen: 1_791_533_000_000,
   platformScopes: ['proxmox-pve'],
@@ -48,7 +48,7 @@ const container: Resource = {
     hostname: 'same-short-name',
     containerId: 'fixture-container',
     runtime: 'docker',
-    state: 'running',
+    containerState: 'running',
   },
 };
 
