@@ -4527,6 +4527,19 @@ func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
 	}
 }
 
+// Execute the real staging and container-bootstrap functions with confined
+// transports/host commands and real fixture signatures, never a live LXC.
+func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_temporary_inputs.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer private/authenticated temporary-input controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `

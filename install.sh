@@ -1268,6 +1268,14 @@ cleanup_stale_sensor_proxy_mounts() {
 }
 
 create_lxc_container() {
+    # Only files created by this invocation belong to its EXIT cleanup. Local
+    # --archive inputs and a caller-supplied installer must remain untouched.
+    local container_script_temp_dir=""
+    local container_archive_source=""
+    local container_archive_dest=""
+    local container_archive_temp=false
+    local archive_requested=false
+    trap 'cleanup_container_install_inputs "${container_script_temp_dir:-}" "${container_archive_source:-}" "${container_archive_temp:-false}"' EXIT
     CURRENT_INSTALL_CTID=""
     CONTAINER_CREATED_FOR_CLEANUP=false
     trap handle_install_interrupt INT TERM
@@ -2035,11 +2043,6 @@ create_lxc_container() {
         cleanup_on_error
     fi
 
-    local container_archive_source=""
-    local container_archive_dest=""
-    local container_archive_temp=false
-    local archive_requested=false
-
     if [[ -n "$ARCHIVE_OVERRIDE" ]]; then
         archive_requested=true
         container_archive_source="$ARCHIVE_OVERRIDE"
@@ -2057,57 +2060,11 @@ create_lxc_container() {
     print_info "Installing Pulse..."
     
     # When piped through curl, $0 is "bash" not the script. Download fresh copy.
-    local script_source="/tmp/pulse_install_$$.sh"
+    local script_source="$0"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
-        # We're being piped, download the script with retry logic
-        local download_url=""
-        if ! download_url=$(resolve_install_script_download_url); then
-            print_error "Failed to determine installer download URL for the selected release channel"
+        if ! download_container_installer script_source container_script_temp_dir; then
             cleanup_on_error
         fi
-        local download_success=false
-        local download_error=""
-        local max_retries=3
-        
-        for attempt in $(seq 1 $max_retries); do
-            if [[ $attempt -gt 1 ]]; then
-                print_info "Retrying download (attempt $attempt/$max_retries)..."
-                sleep 2
-            fi
-            
-            local curl_stderr="/tmp/curl_error_$$.txt"
-            if command -v timeout >/dev/null 2>&1; then
-                if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
-                    download_success=true
-                    rm -f "$curl_stderr"
-                    break
-                fi
-            else
-                if curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
-                    download_success=true
-                    rm -f "$curl_stderr"
-                    break
-                fi
-            fi
-            download_error=$(cat "$curl_stderr" 2>/dev/null || echo "unknown error")
-            rm -f "$curl_stderr"
-        done
-        
-        if [[ "$download_success" != "true" ]]; then
-            print_error "Failed to download install script after $max_retries attempts"
-            print_error "URL: $download_url"
-            if [[ -n "$download_error" ]]; then
-                print_error "Error: $download_error"
-            fi
-            print_info ""
-            print_info "Workaround: Download the script manually and run it locally:"
-            print_info "  curl -fsSL $download_url -o install.sh"
-            print_info "  bash install.sh"
-            cleanup_on_error
-        fi
-    else
-        # We have a local script file
-        script_source="$0"
     fi
     
     # Copy this script to container and run it
@@ -2116,16 +2073,15 @@ create_lxc_container() {
         cleanup_on_error
     fi
     
-    # Clean up temp file if we created one
-    if [[ "$script_source" == "/tmp/pulse_install_"* ]]; then
-        rm -f "$script_source"
-    fi
+    cleanup_container_install_inputs "$container_script_temp_dir" "" false
+    container_script_temp_dir=""
 
     if [[ -n "$container_archive_source" ]]; then
         print_info "Copying Pulse release archive to container..."
         if ! pct push $CTID "$container_archive_source" "$container_archive_dest" >/dev/null 2>&1; then
             if [[ "$container_archive_temp" == "true" ]]; then
-                rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+                cleanup_temp_archive_path "$container_archive_source"
+                container_archive_temp=false
             fi
             if [[ "$archive_requested" == "true" ]]; then
                 print_error "Failed to copy Pulse release archive to container"
@@ -2141,14 +2097,16 @@ create_lxc_container() {
             if [[ -f "${container_archive_source}.sshsig" ]]; then
                 if ! pct push $CTID "${container_archive_source}.sshsig" "${container_archive_dest}.sshsig" >/dev/null 2>&1; then
                     if [[ "$container_archive_temp" == "true" ]]; then
-                        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+                        cleanup_temp_archive_path "$container_archive_source"
+                        container_archive_temp=false
                     fi
                     print_error "Failed to copy Pulse release archive signature to container"
                     cleanup_on_error
                 fi
             else
                 if [[ "$container_archive_temp" == "true" ]]; then
-                    rm -f "$container_archive_source"
+                    cleanup_temp_archive_path "$container_archive_source"
+                    container_archive_temp=false
                 fi
                 print_error "Pulse release archive signature missing alongside ${container_archive_source}"
                 cleanup_on_error
@@ -2157,7 +2115,8 @@ create_lxc_container() {
     fi
 
     if [[ "$container_archive_temp" == "true" ]]; then
-        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+        cleanup_temp_archive_path "$container_archive_source"
+        container_archive_temp=false
     fi
     
     # Run installation with visible progress
@@ -3272,11 +3231,86 @@ validate_pulse_binary_architecture() {
 
 create_temp_archive_path() {
     local prefix="$1"
-    local temp_base=""
+    local temp_dir=""
 
-    temp_base=$(mktemp "${prefix}-XXXXXX") || return 1
-    rm -f "$temp_base"
-    printf '%s.tar.gz\n' "$temp_base"
+    # Reserving then unlinking a mktemp file does not reserve the .tar.gz or
+    # sidecar name. Keep both downloads inside one owner-only directory.
+    temp_dir=$(mktemp -d "${prefix}-XXXXXX") || return 1
+    printf '%s/%s.tar.gz\n' "$temp_dir" "${prefix##*/}"
+}
+
+cleanup_temp_archive_path() {
+    local archive_path="$1"
+    [[ -n "$archive_path" ]] || return 0
+    rm -f -- "$archive_path" "${archive_path}.sshsig"
+    # Delete only the two owned leaves and an empty parent, never a tree.
+    rmdir -- "$(dirname "$archive_path")" 2>/dev/null || true
+}
+
+cleanup_container_install_inputs() {
+    local script_dir="${1:-}" archive_path="${2:-}" archive_owned="${3:-false}"
+    if [[ -n "$script_dir" ]]; then
+        rm -f -- "$script_dir/install.sh" "$script_dir/install.sh.sshsig" "$script_dir/curl-error"
+        rmdir -- "$script_dir" 2>/dev/null || true
+    fi
+    if [[ "$archive_owned" == true ]]; then
+        cleanup_temp_archive_path "$archive_path"
+    fi
+}
+
+download_container_installer() {
+    local source_output="$1" directory_output="$2"
+    local download_url="" staging_dir="" staged_installer="" staged_signature=""
+    local download_success=false download_error="" attempt
+    local max_retries=3
+
+    if ! download_url=$(resolve_install_script_download_url); then
+        print_error "Failed to determine installer download URL for the selected release channel"
+        return 1
+    fi
+    if ! require_release_signature_verifier; then
+        print_error "Cannot verify the signed container installer"
+        return 1
+    fi
+    if ! staging_dir=$(mktemp -d /tmp/pulse-lxc-installer-XXXXXX); then
+        print_error "Could not prepare private container installer staging"
+        return 1
+    fi
+    # Return the owned directory before transport so the caller's EXIT trap
+    # can clean an interrupted download too. No path is returned for execution
+    # until both the complete transfer and the pinned signature are admitted.
+    printf -v "$directory_output" '%s' "$staging_dir"
+    staged_installer="$staging_dir/install.sh"
+    staged_signature="$staging_dir/install.sh.sshsig"
+    for attempt in $(seq 1 "$max_retries"); do
+        if [[ "$attempt" -gt 1 ]]; then
+            print_info "Retrying download (attempt $attempt/$max_retries)..."
+            sleep 2
+        fi
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+                download_success=true
+                break
+            fi
+        elif curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+            download_success=true
+            break
+        fi
+        download_error=$(cat "$staging_dir/curl-error" 2>/dev/null || true)
+    done
+    if [[ "$download_success" != true ]]; then
+        print_error "Failed to download install script after $max_retries attempts"
+        [[ -z "$download_error" ]] || print_error "Error: $download_error"
+        return 1
+    fi
+    if ! curl -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
+        print_error "Failed to download container installer signature; refusing to copy or run the installer"
+        return 1
+    fi
+    if ! verify_release_signature "$staged_installer" "$staged_signature" "downloaded container installer"; then
+        return 1
+    fi
+    printf -v "$source_output" '%s' "$staged_installer"
 }
 
 resolve_target_release() {
@@ -3609,13 +3643,16 @@ download_pulse() {
             }
             archive_from_temp=true
             if ! download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"; then
-                rm -f "$archive_path"
+                cleanup_temp_archive_path "$archive_path"
                 exit 1
             fi
             expected_release="$LATEST_RELEASE"
         fi
 
         if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"; then
+            if [[ "$archive_from_temp" == true ]]; then
+                cleanup_temp_archive_path "$archive_path"
+            fi
             exit 1
         fi
 
@@ -3623,14 +3660,14 @@ download_pulse() {
         # local signature/content/architecture/version failures leave Pulse up.
         if ! install_pulse_archive "$archive_path" "$expected_release"; then
             if [[ "$archive_from_temp" == "true" ]]; then
-                rm -f "$archive_path" "${archive_path}.sshsig"
+                cleanup_temp_archive_path "$archive_path"
             fi
             exit 1
         fi
 
         rm -f "$BUILD_FROM_SOURCE_MARKER"
         if [[ "$archive_from_temp" == "true" ]]; then
-            rm -f "$archive_path" "${archive_path}.sshsig"
+            cleanup_temp_archive_path "$archive_path"
         fi
     fi  # End of SKIP_DOWNLOAD check
 }
@@ -3657,7 +3694,7 @@ prefetch_pulse_archive_for_container() {
         return 1
     }
     if ! download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"; then
-        rm -f "$archive_path"
+        cleanup_temp_archive_path "$archive_path"
         return 1
     fi
 
