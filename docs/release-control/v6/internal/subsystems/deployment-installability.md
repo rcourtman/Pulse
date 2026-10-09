@@ -44,6 +44,13 @@ real Docker execution, hosted artifact transfer or a completed user journey.
 Containing hosted production, load/start and all journey verdicts remain the
 operational acceptance result. These images are not release artifacts.
 
+The native immutable-base check recognises both a literal full Alpine pin and
+the exact `${PULSE_E2E_SEED_IMAGE:-<full-pin>}` compose default used by that
+same-run bundle. Its pin-form controls reject arbitrary variables/operators,
+missing, mutable or malformed defaults and partial digests. This reconciles
+the native source check with the existing compose expression; it changes no
+image, Docker admission, installer behaviour, deadline or required CI gate.
+
 ### Existing auto-update timers are discovered without changing consent
 
 Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.
