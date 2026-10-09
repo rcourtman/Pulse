@@ -86,6 +86,7 @@ vi.mock('../StackedMemoryBar', () => ({
     used: number;
     total: number;
     unavailable?: boolean;
+    reading?: { state: string; message: string } | null;
     comparisonTotalLabel?: string;
     tooltipTitle?: string;
   }) => (
@@ -94,6 +95,8 @@ vi.mock('../StackedMemoryBar', () => ({
       data-used={props.used}
       data-total={props.total}
       data-unavailable={props.unavailable}
+      data-reading-state={props.reading?.state}
+      data-reading-message={props.reading?.message}
       data-comparison-total-label={props.comparisonTotalLabel}
       data-tooltip-title={props.tooltipTitle}
     />
@@ -1180,6 +1183,14 @@ describe('GuestRow', () => {
           expect(screen.queryByRole('img', { name: /current/ })).not.toBeInTheDocument();
         } else {
           expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'false');
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-message',
+            'Last known. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC. Not a current measurement.',
+          );
         }
       });
 
@@ -1199,6 +1210,11 @@ describe('GuestRow', () => {
             expect(
               screen.getByRole('img', { name: 'test-vm memory history, freshness unknown 50%' }),
             ).toBeInTheDocument();
+          } else {
+            expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+              'data-reading-state',
+              'unknown',
+            );
           }
         },
       );
@@ -1237,6 +1253,10 @@ describe('GuestRow', () => {
           expect(screen.queryByText('50%')).not.toBeInTheDocument();
         } else {
           expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'unavailable',
+          );
         }
       });
 
@@ -1264,6 +1284,9 @@ describe('GuestRow', () => {
         setGuest({ ...guest(), memory: observation('current') });
         expect(container.querySelector('tr')).toBe(row);
         expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'bars') {
+          expect(screen.getByTestId('memory-bar')).not.toHaveAttribute('data-reading-state');
+        }
         if (mode === 'sparklines') {
           expect(
             screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),

@@ -2997,6 +2997,28 @@ hot paths. The shell keeps its fitted percentage/capacity label on a
 semi-opaque surface scrim with base-content contrast so segment colors cannot
 make the small readout illegible; this remains CSS presentation only and adds
 no measurement or per-row runtime work.
+The Workloads memory bar consumes the same already-classified observation as
+the row's freshness cue (`memoryObservation.ts`), without deriving freshness
+from capacity, Last seen, another metric or a host-relative denominator.
+Only a current observation may colour memory as live pressure or show its
+anomaly badge. Last-known and unknown observations keep their percentage,
+composition, balloon and swap geometry for inspection, in a neutral tone;
+their composition tooltip carries the original source/time caveat. A current
+linked-agent memory observation remains current while QEMU disk reads defer.
+Tooltip headings, numeric values and neutral labels use theme-aware text so
+the source caveat and composition remain readable on both light and dark surfaces.
+An unavailable reading, including the shared bar's explicit unavailable input,
+emits no swap indicator, swap usage tooltip or anomaly badge even when retained
+numeric carriers are present. Known capacity may still explain that absence.
+Unannotated unrelated-platform callers keep current behaviour and measured
+zero remains zero. Alert records, thresholds, evaluation and historical series
+are unchanged: withholding a live decoration neither dismisses an alert nor
+establishes guest recovery. `stackedMemoryBarModel.test.ts`,
+`StackedMemoryBar.test.tsx` and `GuestRow.test.tsx` verify neutral retention,
+unavailable carriers, current controls, host/percentage-only paths and reactive
+same-guest replacement. Browser acceptance uses the canonical Workloads mapper
+and surface at desktop and phone widths, with source-owned memory independent
+of QEMU disk deferral; it is not native guest or installed acceptance.
 The dashboard metric bar now follows that same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in
