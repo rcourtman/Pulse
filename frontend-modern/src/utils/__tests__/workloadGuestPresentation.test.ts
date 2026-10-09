@@ -10,6 +10,25 @@ import {
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each(['permission-denied', 'prev-permission-denied'])(
+    'keeps %s separate from permission expansion and guest health',
+    (reason) => {
+      const message = getWorkloadGuestDiskStatusMessage(reason);
+      expect(message).toContain('If this VM is an intended monitoring target');
+      expect(message).toContain("configured account and token's effective read permissions");
+      expect(message).toContain('VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+)');
+      expect(message).toContain(
+        'Do not widen intentionally scoped access just to clear this error',
+      );
+      expect(message).toContain('A denied read does not establish guest or filesystem health');
+      expect(message).toContain(
+        'Defer access changes and live probes during backups or a guest incident',
+      );
+      expect(message.startsWith('Using last known disk stats.')).toBe(reason.startsWith('prev-'));
+      expect(message).not.toMatch(/Administrator|VM\.GuestAgent\.(Exec|FileWrite)|curl|qm agent/);
+    },
+  );
+
   it.each(guestDiskDeferrals)(
     'explains %s with and without retained disk evidence',
     (reason, message) => {

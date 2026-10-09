@@ -81,6 +81,21 @@ class BackupAgeEvaluationDocsTest(unittest.TestCase):
 
 
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
+    def test_guest_disk_permission_help_preserves_intended_access_and_backup_safety(self):
+        guide = (ROOT / "docs/VM_DISK_MONITORING.md").read_text()
+        section = guide.split("## ⚙️ Permissions\n", 1)[1].split("\n## ", 1)[0]
+        text = " ".join(section.split())
+        for distinction in ("VM is an intended monitoring target",
+                            "Keep intentionally restricted access unchanged",
+                            "do not widen the token's scope",
+                            "not evidence that the guest or filesystem is unhealthy",
+                            "only for intended targets", "outside backups or guest incidents",
+                            "Table filters and alert suppression do not stop API polling"):
+            self.assertIn(distinction, text)
+        self.assertNotIn("```", section, "no copied grant or live guest probe")
+        self.assertEqual((ROOT / "docs/VM_DISK_MONITORING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/VM_DISK_MONITORING.md").read_bytes())
+
     def test_intentionally_restricted_cluster_is_not_an_access_repair_recipe(self):
         trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
         section = trouble.split("### Check Permissions (Proxmox)\n", 1)[1].split("\n### ", 1)[0]

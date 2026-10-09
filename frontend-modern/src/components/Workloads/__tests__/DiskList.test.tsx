@@ -86,7 +86,7 @@ describe('DiskList', () => {
       ],
       [
         'permission-denied',
-        'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).',
+        "Permission denied. If this VM is an intended monitoring target, review the configured account and token's effective read permissions: VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+). Do not widen intentionally scoped access just to clear this error. A denied read does not establish guest or filesystem health. Defer access changes and live probes during backups or a guest incident.",
       ],
       [
         'agent-disabled',

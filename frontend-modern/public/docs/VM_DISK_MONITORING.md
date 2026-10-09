@@ -293,6 +293,13 @@ privilege separation or recreate the token to diagnose a missing reading. See
 inspection and repair boundary. A permitted read does not prove disk freshness,
 responsiveness or thaw.
 
+First check whether the VM is an intended monitoring target. Keep intentionally
+restricted access unchanged; do not widen the token's scope just to clear a
+permission error on an excluded guest. A denied filesystem read is unavailable,
+not evidence that the guest or filesystem is unhealthy. Review or change access
+only for intended targets, through normal administration outside backups or
+guest incidents. Table filters and alert suppression do not stop API polling.
+
 | Collection | Proxmox VE 9+ | Proxmox VE 8 |
 | --- | --- | --- |
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
@@ -354,7 +361,7 @@ pass; do not clear or bypass a guest-read pause to test recovery.
 | Observation | Useful next check |
 | --- | --- |
 | **Disk shows “-”** | Read its explanation and observation time. Check the owning host, current VM options, guest-local service and configured API token access. |
-| **Permission denied** | Review the token and account's effective read privileges on that VM, including privilege-separated token ACLs. A successful root command would not disprove this error. |
+| **Permission denied** | First check whether this VM is an intended monitoring target. Preserve intentionally restricted access. For intended targets only, review the token and account's effective read privileges, including privilege-separated token ACLs, outside backups or guest incidents. A successful root command would not disprove this error; a denied read does not establish guest or filesystem health. |
 | **Timeout or backup lock** | Check the existing backup/task timeline and guest workload locally. Defer active guest-agent probes; increasing a timeout is not a contention or thaw repair. |
 | **Rocky Linux / RHEL memory missing** | Review `/etc/sysconfig/qemu-ga` inside the guest. File-read restrictions can explain memory collection failure; they do not by themselves prove why filesystem usage is absent. Change the guest's allowlist or restart its agent only through your normal maintenance procedure, outside backups. |
 | **Windows service stopped** | Check the QEMU Guest Agent service inside Windows. Schedule any restart outside backups. |
