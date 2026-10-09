@@ -63,6 +63,24 @@ class GuestNetworkTroubleshootingDocsTest(unittest.TestCase):
                 self.assertIn(boundary, text)
         self.assertNotIn("```", text, "use existing observations, not a copied command")
 
+    def test_interface_preference_is_not_routing_or_blanket_virtual_exclusion(self):
+        text = self.section()
+        for distinction in (
+            "When interface associations are supplied",
+            "not a physical-NIC test",
+            "Useful secondary addresses are retained",
+            "virtual-only guest's addresses",
+            "An unknown interface association remains unknown",
+            "address order does not establish the intended route",
+        ):
+            with self.subTest(distinction=distinction):
+                self.assertIn(distinction, text)
+        self.assertNotIn("sorted independently of their interfaces", text)
+        collector = (ROOT / "internal/monitoring/guest_network_addresses.go").read_text()
+        self.assertIn("guestIPAddressesByInterface", collector)
+        self.assertIn("IsSecondaryInterfaceName", collector)
+        self.assertIn("!associated[address]", collector)
+
     def test_shipped_help_is_byte_identical(self):
         self.assertEqual(
             (ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),

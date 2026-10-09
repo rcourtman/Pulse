@@ -311,7 +311,44 @@ custom monitoring role if the required read privileges are absent.
 
 ## 🔧 Troubleshooting
 
+### Current, retained and unavailable disk readings
+
+In **Workloads**, read the disk cell's explanation or open the guest's details
+and look under **Filesystems → Status**. Compact rows use **Prior** and **N/A**;
+wider rows use **Last known** and **Unavailable**. Where an observation time is
+shown, keep it with the reading; an unavailable time leaves freshness unknown.
+
+| Reading | What it establishes |
+| --- | --- |
+| Current filesystem usage | Usage for the reported guest and filesystem, from its collection source. It does not establish that every filesystem is covered or that a backup can be restored. |
+| **Prior**, **Last known**, or **Using last known disk stats** | Retained evidence, not current free space. A visible number or History sample does not make it fresh. |
+| **N/A**, **Unavailable**, a dash, or a paused/deferred read | Usage is unknown, not zero and not proof that the disk is full. A cooldown ending does not establish a successful new read. |
+
+**A numeric disk search or disk sort is not a monitoring-coverage check.** To
+review missing readings, clear numeric disk conditions and restrictive table
+filters, then use the existing name search or unfiltered inventory. Inspect the
+same guest's explanation and filesystem rows, not just the first or last row
+in a disk sort. A guest absent from a filtered result is not evidence of low
+usage, deletion or healthy monitoring. Clearing a display filter neither changes
+access nor stops API polling; keep intentionally restricted targets restricted.
+
+An existing linked Pulse Agent can supply current filesystem readings while
+Proxmox guest reads are deferred. Conversely, a stale agent can leave retained
+values. Compare the collection source, same guest identity and filesystem; a
+working Machines view does not prove that the QEMU-only path recovered. Use
+[existing Machines readings](#use-existing-machines-readings-without-changing-the-guest)
+only with those distinctions, without installing another agent.
+
+Use normally collected observations and the guest's established filesystem
+view for capacity decisions. Do not run Diagnostics, guest-agent probes,
+a backup or a restart to turn an unknown reading into a number. Do not bypass a
+guest-read pause or widen token access. None of these display states proves
+thaw or successful workload writes; [Backup safety](#backup-safety) still applies.
+
 ### A missing reading is not an installation diagnosis
+
+[Check the reading's context](#current-retained-and-unavailable-disk-readings)
+before treating a dash or a retained number as a setup failure.
 
 Pulse's **“agent not running”** disk explanation means Proxmox could not query
 the guest agent. It can also cover a general guest-agent HTTP 500 response; it
