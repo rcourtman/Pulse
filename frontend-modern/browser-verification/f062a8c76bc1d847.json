@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "b5edec67b7b8636221684454dd29fec0f5e5747a",
+  "verified_at": "2026-10-09T09:36:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/utils/systemLogsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "b92a73f4382aaaf734044194be1e5659e85b10cc4fa8305323b80de4259001bc",
+    "frontend-modern/src/utils/systemLogsPresentation.ts": "759e3dde79d1ddf550f362c5cc13763d67fb60858fd6560bd6150dad508104eb"
+  },
+  "routes": [
+    "/settings/support \u2014 production SystemLogsPanel, hook, presentation, shared controls and CSS in a synthetic component fixture, not the authenticated Settings shell"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Info on mount with server-wide/private-data description",
+    "Streaming, display paused and cleared with monitoring/export-scope warning still visible",
+    "Synthetic archive download and mock Warn change; no Debug or live server action"
+  ],
+  "interactions": [
+    "Inspect visible 14 px descriptions and accessible control names/description associations",
+    "Keyboard pause, clear, download and resume; verify paused arrivals omitted on one open stream",
+    "Mock Info to Warn; verify only its expected level POST and one synthetic download GET",
+    "Unmount closes stream once; late synthetic arrivals cannot restore the view"
+  ],
+  "proof_scope": "Actual panel, state hook, presentation, shared controls and CSS with synthetic SSE and API/download responses. No actual bundle, Debug, monitoring, backup, guest probe, native recovery or installed acceptance.",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "playwright_version": "1.56.1",
+  "known_existing_limit": "The unchanged light-theme Support Bundle button still has the low-contrast styling addressed by held 6a66493824. This disclosure receipt is not that rendering repair or native recovery."
+}
