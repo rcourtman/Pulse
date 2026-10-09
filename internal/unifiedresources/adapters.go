@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/netutil"
 )
 
 func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resource, ResourceIdentity) {
@@ -3933,8 +3934,9 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 	var macs []string
 	// Agents report interfaces sorted by name, which places docker0/br-* bridges
 	// ahead of eth*/en*, and consumers treat the first IP as the host's primary
-	// address. Collect physical-looking interfaces first so bridge and overlay
-	// addresses never lead the list. Mirrors hostagent.isLikelyVirtualInterfaceName.
+	// address. Prefer interfaces without local-container/overlay names, keeping
+	// secondary-only hosts useful. This display hint is not a physical-NIC or
+	// default-route assertion and must not alter the agent's MAC-based identity.
 	for pass := 0; pass < 2; pass++ {
 		for _, iface := range interfaces {
 			if (pass == 0) == isLikelyVirtualInterfaceName(iface.Name) {
@@ -3956,27 +3958,7 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 }
 
 func isLikelyVirtualInterfaceName(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	switch {
-	case name == "" || name == "lo":
-		return true
-	case strings.HasPrefix(name, "docker"):
-		return true
-	case strings.HasPrefix(name, "veth"):
-		return true
-	case strings.HasPrefix(name, "br-"):
-		return true
-	case strings.HasPrefix(name, "cni"):
-		return true
-	case strings.HasPrefix(name, "flannel"):
-		return true
-	case strings.HasPrefix(name, "virbr"):
-		return true
-	case strings.HasPrefix(name, "zt"):
-		return true
-	default:
-		return false
-	}
+	return netutil.IsSecondaryInterfaceName(name)
 }
 
 func extractHostname(raw string) string {

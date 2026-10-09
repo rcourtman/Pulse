@@ -1943,6 +1943,48 @@ func TestCollectInterfaceIDsAllVirtualStillCollects(t *testing.T) {
 	}
 }
 
+func TestIssue2757AgentDisplayPrefersNonContainerInterfaces(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"eth0", "wlp2s0", "br0", "vmbr0", "bond0", "vlan100", "eth0.100", "tun0", "wg0"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			host := models.Host{ID: "agent-a", Hostname: "agent", MachineID: "machine-a", NetworkInterfaces: []models.HostNetworkInterface{
+				{Name: "podman0", MAC: "02:00:00:00:00:01", Addresses: []string{"10.88.0.1/16"}},
+				{Name: name, MAC: "02:00:00:00:00:02", Addresses: []string{"192.0.2.80/24"}},
+			}}
+			before, err := json.Marshal(host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resource, identity := resourceFromHost(host)
+			if !reflect.DeepEqual(identity.IPAddresses, []string{"192.0.2.80", "10.88.0.1"}) || identity.MachineID != "machine-a" || resource.Agent.AgentID != "agent-a" {
+				t.Fatalf("agent display IPs or supplied identity changed: %+v", identity)
+			}
+			host.ReportIP = "10.88.0.1"
+			_, override := resourceFromHost(host)
+			if !reflect.DeepEqual(override.IPAddresses, []string{"10.88.0.1", "192.0.2.80"}) {
+				t.Fatalf("explicit report IP did not lead: %v", override.IPAddresses)
+			}
+			host.ReportIP = ""
+			after, err := json.Marshal(host)
+			if err != nil || string(before) != string(after) {
+				t.Fatal("host input mutated")
+			}
+		})
+	}
+}
+
+func TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses(t *testing.T) {
+	t.Parallel()
+	_, identity := resourceFromHost(models.Host{ID: "agent-a", NetworkInterfaces: []models.HostNetworkInterface{
+		{Name: "podman0", Addresses: []string{"10.88.0.1/16"}},
+		{Name: "veth0", Addresses: []string{"10.89.0.1/16"}},
+	}})
+	if !reflect.DeepEqual(identity.IPAddresses, []string{"10.88.0.1", "10.89.0.1"}) {
+		t.Fatalf("secondary-only host lost addresses: %v", identity.IPAddresses)
+	}
+}
+
 func TestPhysicalDiskWearoutFromSMARTAttributesClampsExhaustedMedia(t *testing.T) {
 	percentageUsed := 143
 	got := physicalDiskWearoutFromSMARTAttributes(&models.SMARTAttributes{

@@ -3188,6 +3188,26 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 ## Current State
 
+### Interface-associated guest address selection
+
+LXC status, configuration and existing runtime-interface fallback collection,
+and QEMU guest-agent network metadata, select display addresses by their named
+interface rather than globally sorting flattened IP text. Name-ordered guest
+interfaces without common local-container/overlay names lead; remaining scalar
+addresses keep unknown association, and secondary interfaces remain useful as
+fallbacks. All collected addresses and interface/traffic metadata are retained.
+Within an interface valid IPs sort numerically, IPv4 before IPv6; unparsed
+metadata retains a deterministic fallback. This is a display hint, not evidence
+of physical NICs, default routes or reachability. No new guest query, permission,
+poll cadence, cache/backoff or machine-identity behaviour is introduced.
+
+`TestIssue2757ContainerAddressSelection` covers status, stopped/config-only,
+DHCP fallback, IPv6, duplicates, numeric sorting, unknown associations and
+secondary-only/management-bridge paths through canonical listing and broadcast.
+`TestIssue2757VMAddressSelectionAndCache` exercises the actual metadata fetch
+and warm cache with reversed input order, preserving interfaces and ownership.
+These source fixtures are not native #2757 recovery or released availability.
+
 ### TrueNAS physical-disk History — issue #2519
 
 The actual all-metric drawer request also reaches this reader when stored I/O

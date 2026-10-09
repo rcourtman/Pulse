@@ -341,12 +341,8 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		})
 	}
 
-	if len(addressOrder) > 1 {
-		sort.Strings(addressOrder)
-	}
-
 	if len(addressOrder) > 0 {
-		container.IPAddresses = addressOrder
+		container.IPAddresses = guestIPAddressesByInterface(addressOrder, networkIfaces)
 	}
 
 	if len(networkIfaces) > 0 {
