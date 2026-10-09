@@ -4332,7 +4332,9 @@ may coexist with AI controls, but they must keep consuming the canonical AI
 settings payload rather than reviving storage-local provider defaults, modal
 setup logic, or route-specific BYOK model guesses when shared handlers change.
 The retained-value recovery transport helper is now shared too.
-Recovery still owns when rollups, points, facets, and series refetch, but the
+Recovery still owns when recovery points and protection postures refetch
+(`useRecoveryPoints.ts` and `useProtectionPostures.ts` each set a 30-second
+poll interval; the rollup, facet, and series hooks are gone), but the
 non-suspending query primitive itself now lives under the shared frontend
 primitives contract so other governed surfaces can reuse the same app-shell
 fallback boundary without forking it.
@@ -4680,10 +4682,11 @@ recomputable guest identity keep their stored keys unchanged.
 The frontend decode boundary owns the runtime recovery display model:
 `frontend-modern/src/utils/recoveryPlatformModel.ts`, which
 `frontend-modern/src/hooks/useRecoveryPoints.ts` applies to every response,
-exposes `display.itemLabel` and `display.itemType` to recovery consumers, while
-legacy transport fields such as `subjectLabel` and `subjectType` remain
-decode-only compatibility aliases in that normalization layer instead of
-leaking into tables.
+exposes `display.itemLabel` and `display.itemType` to recovery consumers. The
+points handler's display carries the item label only as `subjectLabel`, so the
+transport's `subjectLabel`, `subjectType`, and `subjectRef` stay decode-only:
+`frontend-modern/src/types/recovery.ts` declares them on the transport types
+alone, and tables read the canonical item fields.
 That same canonical item-label boundary must prefer recognizable protected-item
 names over raw entity IDs. When unresolved Proxmox-backed recovery points only
 have a VMID/CTID in the subject ref but still carry a richer backup comment or
@@ -4921,11 +4924,13 @@ implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts` and
 survived the page: `frontend-modern/src/types/recovery.ts`,
 `frontend-modern/src/utils/recoveryDatePresentation.ts`,
 `frontend-modern/src/utils/recoveryOutcomePresentation.ts`,
-`frontend-modern/src/utils/recoveryArtifactModePresentation.ts`,
 `frontend-modern/src/utils/recoveryTimelinePresentation.ts`, and
 `frontend-modern/src/utils/recoveryTimelineChartPresentation.ts`. They must not
 inherit release-control coverage only through the platform tabs that render
-them.
+them. They hold only what those tabs read: the date and timeline helpers serve
+the Proxmox Backups tab and the outcome helper the TrueNAS Protection tab.
+Exports no tab reads, and `recoveryArtifactModePresentation.ts`, which only
+those exports read, have been removed.
 `useRecoveryPoints.ts` also owns recovery transport normalization at the
 frontend boundary: raw compatibility fields such as `provider` may still
 arrive from older `/api/recovery/points` payloads, but the points it returns

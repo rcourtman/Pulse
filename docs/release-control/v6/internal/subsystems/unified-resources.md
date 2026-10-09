@@ -50,6 +50,21 @@ also consumes that same live registry and production broadcast JSON while
 checking History withholding. Source clearance is not independent guest thaw,
 covered-filesystem writes or native monitoring recovery.
 
+### Collected alert subjects share current canonical ownership
+
+`AlertResourceReferenceResolver` exposes the current-inventory identity owner
+used by history correlation to runtime consumers. Supported producer child
+references bind through durable source identities only. Resolution reads the
+owner, canonical type and source targets under one registry read lock. It never
+uses display names or retained history aliases to resurrect a removed owner.
+An agent's disk, temperature, RAID and custom observations remain owned when an
+operator link folds the agent into a VM, container or node. The presence of the
+agent facet is required for that cross-type ownership. Patrol can therefore
+select the canonical owner without interpreting alert strings independently.
+`alert_scope_test.go` verifies the registry and both read adapters, rejected
+references and absent current owners. Scoped Patrol tests cover linked owners
+and conflicting unqualified source IDs.
+
 ### Proxmox node temperature cell follows its own open alert — issue #2068
 
 `ProxmoxNodesTable` finds the node's own temperature alert through
@@ -5774,8 +5789,14 @@ recovery timeline day, chart range, workspace `view`, inventory `state`,
 Recovery page. The Proxmox Backups tab owns its own day selection through
 `PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
 of `/api/recovery/*` payloads must still prefer canonical `platform` /
-`platforms` response fields over legacy `provider` aliases, which
-`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites at decode time.
+`platforms` response fields over legacy `provider` aliases. The frontend's
+only recovery-points reader is `useRecoveryPoints.ts`, and
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites `provider`,
+`subjectRef`, and `display.subjectLabel` onto `platform`, `itemRef`, and
+`display.itemLabel` at decode time. The TrueNAS Protection tab
+(`TrueNASProtectionTable.tsx`, `truenasPageModel.ts`) reads only those
+canonical fields; the normalized `RecoveryPoint` type does not declare the
+subject names.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

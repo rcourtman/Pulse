@@ -121,7 +121,6 @@ import environmentLockPresentationSource from '@/utils/environmentLockPresentati
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import discoveryTargetSource from '@/utils/discoveryTarget.ts?raw';
 import recoveryOutcomePresentationSource from '@/utils/recoveryOutcomePresentation.ts?raw';
-import recoveryArtifactModePresentationSource from '@/utils/recoveryArtifactModePresentation.ts?raw';
 import recoveryDatePresentationSource from '@/utils/recoveryDatePresentation.ts?raw';
 import recoveryTimelineChartPresentationSource from '@/utils/recoveryTimelineChartPresentation.ts?raw';
 import recoveryTimelinePresentationSource from '@/utils/recoveryTimelinePresentation.ts?raw';
@@ -987,9 +986,6 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoveryArtifactModePresentationSource).toContain(
-      'export function getRecoveryArtifactModePresentation',
-    );
     expect(recoveryDatePresentationSource).toContain(
       'export function recoveryDateKeyFromTimestamp',
     );
@@ -998,13 +994,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryFullDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryFilterDateLabel');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryCompactAxisLabel');
-    expect(recoveryDatePresentationSource).toContain('export function formatRecoveryTimeOnly');
     expect(recoveryDatePresentationSource).toContain('export function getRecoveryNiceAxisMax');
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineAxisLabelClass',
-    );
-    expect(recoveryTimelineChartPresentationSource).toContain(
-      'export function getRecoveryTimelineBarMinWidthClass',
     );
     expect(recoveryTimelineChartPresentationSource).toContain(
       'export function getRecoveryTimelineLabelEvery',

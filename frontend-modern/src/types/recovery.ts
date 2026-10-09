@@ -17,8 +17,6 @@ export interface RecoveryExternalRef {
 }
 
 export interface RecoveryPointDisplay {
-  subjectLabel?: string;
-  subjectType?: string;
   itemLabel?: string;
   itemType?: string;
   isWorkload?: boolean;
@@ -31,7 +29,13 @@ export interface RecoveryPointDisplay {
   detailsSummary?: string;
 }
 
-export type RecoveryPointDisplayTransport = RecoveryPointDisplay;
+// The backend display names the item label and type subjectLabel and
+// subjectType. recoveryPlatformModel folds them onto itemLabel and itemType,
+// so normalized points never carry them.
+export interface RecoveryPointDisplayTransport extends RecoveryPointDisplay {
+  subjectLabel?: string;
+  subjectType?: string;
+}
 
 export interface RecoveryPoint {
   id: string;
@@ -59,7 +63,6 @@ export interface RecoveryPoint {
   providerScope?: string;
   evidence?: EvidenceEnvelope | null;
   itemRef?: RecoveryExternalRef | null;
-  subjectRef?: RecoveryExternalRef | null;
   repositoryRef?: RecoveryExternalRef | null;
   details?: Record<string, unknown> | null;
 
@@ -70,6 +73,7 @@ export interface RecoveryPointTransport extends RecoveryPoint {
   display?: RecoveryPointDisplayTransport | null;
   provider?: RecoveryPlatform;
   subjectResourceId?: string;
+  subjectRef?: RecoveryExternalRef | null;
 }
 
 export interface RecoveryResponseMeta {
@@ -87,63 +91,6 @@ export interface RecoveryPointsResponse {
 export interface RecoveryPointsTransportResponse {
   data: RecoveryPointTransport[];
   meta: RecoveryResponseMeta;
-}
-
-export type VerifyIntent = 'verified' | 'stale' | 'unknown';
-
-export interface ProtectionRollup {
-  rollupId: string;
-  itemResourceId?: string;
-  itemRef?: RecoveryExternalRef | null;
-  subjectRef?: RecoveryExternalRef | null;
-  display?: RecoveryPointDisplay | null;
-
-  lastAttemptAt?: string | null;
-  lastSuccessAt?: string | null;
-  // Older payloads may omit this even though the canonical backend contract now supplies it.
-  lastOutcome?: RecoveryOutcome;
-
-  platforms?: RecoveryPlatform[];
-
-  // VerifyIntent tracks whether the most recent successful backup for this
-  // subject has been verified within the staleness window. Omitted by older
-  // backends; absence is equivalent to "unknown".
-  verifyIntent?: VerifyIntent;
-  lastVerifiedAt?: string | null;
-}
-
-export interface ProtectionRollupTransport extends ProtectionRollup {
-  display?: RecoveryPointDisplayTransport | null;
-  providers?: RecoveryPlatform[];
-  subjectResourceId?: string;
-}
-
-export interface RecoveryRollupsResponse {
-  data: ProtectionRollup[];
-  meta: RecoveryResponseMeta;
-}
-
-export interface RecoveryRollupsTransportResponse {
-  data: ProtectionRollupTransport[];
-  meta: RecoveryResponseMeta;
-}
-
-export interface RecoveryPointsSeriesBucket {
-  day: string; // YYYY-MM-DD (client timezone)
-  total: number;
-  snapshot: number;
-  local: number;
-  remote: number;
-}
-
-export interface RecoveryPointsFacets {
-  clusters?: string[];
-  nodesAgents?: string[];
-  namespaces?: string[];
-  itemTypes?: string[];
-  hasSize?: boolean;
-  hasVerification?: boolean;
-  hasEntityId?: boolean;
 }
 
 export type ProtectionState = 'protected' | 'attention' | 'unprotected' | 'unknown';

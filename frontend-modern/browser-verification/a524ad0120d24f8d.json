@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "8c9c628c28a40d2295cb193cfb6504991bc9b871",
+  "verified_at": "2026-10-08T10:21:05.285Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "e8fa83fb1d65ab587f6e85b5011469fe25512a8ca6d040e6f4dba9d82a5f44ab",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "5c56b2e2eb47084ad0ce62de1814268fa6b9fe129b17f646ba4584cbb7ab7834"
+  },
+  "routes": [
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Four unavailable updates; current byparr and sonarr; PBS failed check",
+    "Refusal removed on reload restores enabled Update for one host"
+  ],
+  "interactions": [
+    "Hover, keyboard focus, Escape, status click without planning or row expansion, Tab blur at all three widths",
+    "Reload with changed canonical readiness; enabled Update opens review and Escape closes without approval or execution"
+  ]
+}

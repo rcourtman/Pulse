@@ -55,6 +55,27 @@ acceptance.
 Manual-rule confirmation retains a readable scope and exact ID with a scrollable long reason and separate action footer. This is an existing-flow accessibility repair, not a change to deletion, finding history or server authority.
 
 
+### Host filesystem alerts retain exact subjects in scoped Patrol
+
+An alert-button request may name a collected child subject such as
+`agent:<source-id>/disk:docker-data`. Patrol binds that reference through the
+shared current-inventory resolver only when the exact collected alert identifier
+and subject agree. The canonical owner becomes the collection scope. The alert
+keeps its original child identity, filesystem metadata, observed value, threshold
+and message in both full and budgeted model context. Related child alert evidence
+is retained only for the selected current owner. Missing owners, caller-authored
+child paths, names and conflicting source identities cannot broaden scope.
+
+Linked VM, container and node owners retain their agent observations. Node/host
+views of the same proven canonical owner are one identity. Automatic alert type
+hints follow that owner while explicit caller type restrictions stay intact.
+Admission and execution resolve independently against current collection state.
+`patrol_alert_scope_test.go` covers linked owners, evidence, repeated resolution
+and rejected subjects. `patrol_host_disk_scope_test.go` exercises the production
+host alert evaluator and HTTP handler. The opt-in browser backend and
+`scripts/check-host-disk-patrol.mjs` verify `/alerts` admission and feedback at
+1440 and 390 pixels. Browser fixtures qualify admission, not model diagnosis.
+
 ### Fully cached Patrol usage — issues #2118 / #2350
 
 Zero ordinary input tokens do not mean a run was free or skipped. Any positive
