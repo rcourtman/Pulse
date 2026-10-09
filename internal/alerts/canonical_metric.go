@@ -282,6 +282,15 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alertMetadata[k] = v
 			}
 		}
+		// Date the evaluated breach, not a newer hold/recovery observation.
+		// A restored alert retains its breach's LastSeen; without that evidence
+		// the date stays unknown rather than becoming the restart or poll time.
+		var lastBreachAt time.Time
+		if triggered {
+			lastBreachAt = observedAt
+		} else if exists && existingAlert != nil {
+			lastBreachAt = existingAlert.LastSeen
+		}
 		metricStatus := buildMetricAlertStatus(metricStatusInput{
 			value:                value,
 			triggered:            triggered,
@@ -292,6 +301,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			window:               windowed,
 			incident:             incident,
 			observedAt:           observedAt,
+			lastBreachAt:         lastBreachAt,
 		})
 
 		if !exists {

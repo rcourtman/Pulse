@@ -127,6 +127,18 @@ while recovering, `recoveryStartedAt` and `recoveryElapsedSeconds`. Legacy
 trigger. The field is absent for non-threshold alerts and until the first
 evaluation after a restart, and clients then fall back to `message`.
 
+`metricStatus.lastBreachAt` optionally dates the alert's retained evaluated
+breach value. Holds and recovery do not advance it to `observedAt`, and an
+unknown/zero date is omitted. The websocket and `/api/state` projection still
+omit legacy `lastSeen`; `/api/alerts/active` retains it. Old clients may ignore
+the additive field; consumers without it may use a valid legacy `lastSeen`
+but must not fabricate the date from `startTime` or the current observation.
+After restart no live status exists until evaluation; resolved rows have none.
+
+`TestMetricBreachTimeStateDeltasPreserveAndWithdraw` reconstructs the client
+baseline through held, recovery, renewed-breach, unknown-date and no-status
+keyed patches, including removal rather than retention of an obsolete date.
+
 ### Organisation deletion retains data after incomplete monitoring shutdown
 
 Authenticated organisation-owner deletion waits for tenant-loop exit and sealed

@@ -550,3 +550,47 @@ func TestMetricAlertStatusCloneIsDeep(t *testing.T) {
 		t.Fatal("nil status must clone to nil")
 	}
 }
+
+// Check the encoded additive contract as an older client would see it; missing
+// dates stay missing, including Go's zero time, without changing other fields.
+func TestMetricAlertStatusBreachTimeWireAndClone(t *testing.T) {
+	for _, tc := range []struct{ name, date string }{
+		{"known", "2026-10-09T19:25:16.123456789Z"},
+		{"offset", "2026-10-09T20:25:16+01:00"},
+		{"unknown", ""},
+		{"zero", "0001-01-01T00:00:00Z"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := map[string]any{"phase": "latched", "value": 78, "trigger": 80, "recovery": 75}
+			if tc.date != "" {
+				input["lastBreachAt"] = tc.date
+			}
+			data, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var status MetricAlertStatus
+			if err := json.Unmarshal(data, &status); err != nil {
+				t.Fatal(err)
+			}
+			for _, copy := range []*MetricAlertStatus{&status, status.Clone()} {
+				data, err = json.Marshal(copy)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var wire map[string]any
+				if err := json.Unmarshal(data, &wire); err != nil {
+					t.Fatal(err)
+				}
+				got, present := wire["lastBreachAt"]
+				wantDate := tc.date != "" && tc.date != "0001-01-01T00:00:00Z"
+				if present != wantDate || wantDate && got != tc.date {
+					t.Errorf("lastBreachAt = %v, present %v; want %q present %v", got, present, tc.date, wantDate)
+				}
+				if wire["value"] != float64(78) || wire["phase"] != "latched" {
+					t.Fatalf("new date changed legacy reading: %s", data)
+				}
+			}
+		})
+	}
+}

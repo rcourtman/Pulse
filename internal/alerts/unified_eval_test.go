@@ -1751,7 +1751,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	fired := fireNodeTemperatureAlert(t, m, clock, 85)
 	status := fired.MetricStatus
 	if status == nil || status.Phase != models.MetricAlertPhaseBreaching || status.Value != 85 ||
-		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" {
+		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" ||
+		!metricBreachTime(t, status).Equal(fired.LastSeen) {
 		t.Fatalf("breaching status = %+v", status)
 	}
 	if status.RecoveryDelaySeconds <= 0 {
@@ -1772,7 +1773,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 		t.Fatalf("hold rewrote the breach snapshot: value=%v message=%q lastSeen=%v", held.Value, held.Message, held.LastSeen)
 	}
 	if got := held.MetricStatus; got == nil || got.Phase != models.MetricAlertPhaseLatched || got.Value != 78 ||
-		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil {
+		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("latched status = %+v", got)
 	}
 
@@ -1782,13 +1784,15 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	checkMetricStatusNode(m, 72)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
 		got.Phase != models.MetricAlertPhaseRecovering || got.Value != 72 ||
-		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 {
+		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("recovery start status = %+v", got)
 	}
 	clock.advance(delay / 2)
 	checkMetricStatusNode(m, 75)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
-		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) {
+		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("recovery progress status = %+v", got)
 	}
 
@@ -1796,7 +1800,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	clock.advance(30 * time.Second)
 	checkMetricStatusNode(m, 77)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
-		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 {
+		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("status after recovery reset = %+v", got)
 	}
 	if got := len(notified); got != notifications {
