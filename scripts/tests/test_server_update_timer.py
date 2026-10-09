@@ -107,6 +107,7 @@ case "$FLOW" in
         exit 0 ;;
     refresh) refresh_auto_updates; exit 0 ;;
     setup) ENABLE_AUTO_UPDATES=true; setup_auto_updates; exit 0 ;;
+    repair-entry) exec bash "$INSTALLER" --repair-auto-update-units ;;
     assets)
         result=0
         install_auto_update_assets || result=$?
@@ -346,12 +347,12 @@ class ServerUpdateTimerTest(unittest.TestCase):
 
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl filesystem inventory is unavailable")
     def test_asset_repair_and_explicit_setup_cannot_replace_effectively_masked_units(self):
-        for flow in ("assets", "setup"):
+        for flow in ("assets", "setup", "repair-entry"):
             for mask in ("timer", "service"):
                 with self.subTest(flow=flow, mask=mask):
                     e = self.exercise(flow=flow, state="disabled", mask=mask,
                                       mask_location="runtime", inventory="real", config_enabled=False)
-                    self.assert_preserved(e, status=1 if flow == "assets" else 0)
+                    self.assert_preserved(e, status=1 if flow in ("assets", "repair-entry") else 0)
                     self.assertIn("masked-runtime", e["result"].stdout)
 
     def test_failed_unknown_and_duplicate_effective_inventory_cannot_admit_writes(self):
