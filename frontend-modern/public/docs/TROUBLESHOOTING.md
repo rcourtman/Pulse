@@ -279,6 +279,31 @@ restore, not by overwriting today's history. Follow
 
 ### Monitoring Data
 
+#### Primary IP shows a Podman or Docker bridge address
+
+On a Proxmox VM or LXC, **Primary IP** is Pulse's selected address, not proof of
+the guest's default route or reachability from your browser. In an agentless
+LXC, the collected addresses can be sorted independently of their interfaces,
+so a `podman0` or Docker bridge address can appear before the intended `eth0`
+address. The Proxmox API and Pulse agent use different collection paths; an
+agent's correct address does not establish that the API-only view is correct.
+
+For access, use the intended guest address from your existing Proxmox network
+configuration rather than assuming the displayed first address is suitable.
+In **Workloads**, hover over the guest's network icon to inspect **Network
+Interfaces**: when supplied, interface names appear beside their addresses.
+The guest's details also show **Other IPs** when more than one address is
+available. An address list without interface names does not establish which
+interface it belongs to; keep that association unknown rather than guessing
+from its prefix or position. These views do not test routing or connectivity.
+
+Do not remove a working bridge, renumber the guest, reinstall or add an agent,
+recreate the monitored connection, or run a guest-agent probe just to change
+this display. For a report, retain the collection path and the interface/address
+relationship already observed. Keep actual addresses, MACs and hostnames
+private, using consistent aliases to preserve which address belongs to which
+interface; a raw network or configuration dump is not needed.
+
 #### Agent fleet update or identity issue
 
 - If readings became mixed after adding another Proxmox installation, start
