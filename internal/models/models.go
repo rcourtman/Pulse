@@ -3228,7 +3228,6 @@ func (i GuestNetworkInterface) NormalizeCollections() GuestNetworkInterface {
 	return i
 }
 
-// Disk represents disk usage
 // GuestDiskObservation keeps a QEMU filesystem reading's original source time
 // through internal snapshots. DiskStatusReason owns current/retained display
 // state; a linked Pulse agent remains a separate source. This is not wire data.
@@ -3237,6 +3236,7 @@ type GuestDiskObservation struct {
 	ObservedAt time.Time
 }
 
+// Disk represents disk usage
 type Disk struct {
 	Total      int64   `json:"total"`
 	Used       int64   `json:"used"`

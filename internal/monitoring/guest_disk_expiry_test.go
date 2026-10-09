@@ -192,7 +192,10 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 				res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "windows", VMID: 105, Status: "running", MaxMem: 8 * mib, Mem: 2 * mib, MaxDisk: 1000 * mib, CPU: .2}
 				id := makeGuestID("disk-expiry", "node", 105)
 				publish := func(vm models.VM) {
-					registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+					// An accepted poll owns publication. Read hydration may reuse a
+					// recent generation and is not an ingestion boundary.
+					m.state.UpdateVMs([]models.VM{vm})
+					m.updateResourceStore(m.currentStateWithScope())
 				}
 				build := func(ctx context.Context) models.VM {
 					t.Helper()
@@ -214,7 +217,7 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 					}
 					publish(vm)
 					m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
-					view := registry.VMs()[0]
+					view := m.currentModeReadState().VMs()[0]
 					if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation {
 						t.Fatal("source disk observation changed at canonical read boundary")
 					}
@@ -225,7 +228,7 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 					}
 					var served []struct{ Proxmox unifiedresources.ProxmoxData }
 					if err := json.Unmarshal(wire, &served); err != nil || len(served) != 1 || served[0].Proxmox.DiskStatusReason != vm.DiskStatusReason {
-						t.Fatal("served source reason differs from the observed poll")
+						t.Fatalf("served source reason differs from poll %q: %s / %v", vm.DiskStatusReason, wire, err)
 					}
 					return vm
 				}
