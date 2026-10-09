@@ -79,6 +79,12 @@ func TestGuestMetadataOSInfoStateSurvivesVersionDeferral(t *testing.T) {
 					if mode == "repeated-failure" {
 						expected.osInfoFailureCount, expected.osInfoSkip = round, round >= guestAgentOSInfoFailureThreshold
 					}
+					if mode == "supported-reset" {
+						if entry.osInfoObservedAt.Before(start) || entry.osInfoObservedAt.After(end) || entry.windowsGuest {
+							t.Error("completed non-Windows OS reply lost its independent origin")
+						}
+						expected.osInfoObservedAt = entry.osInfoObservedAt
+					}
 					if !reflect.DeepEqual(entry, expected) {
 						t.Errorf("completed OS-info state lost or partial identity published: failures=%d skip=%t, want failures=%d skip=%t", entry.osInfoFailureCount, entry.osInfoSkip, expected.osInfoFailureCount, expected.osInfoSkip)
 					}
