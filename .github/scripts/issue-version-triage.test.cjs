@@ -10,6 +10,7 @@ function createGithub({
   existingLabels = new Set(),
   existingComments = [],
   issues = [],
+  currentIssue = null,
 } = {}) {
   const calls = {
     createComment: [],
@@ -19,11 +20,17 @@ function createGithub({
     paginate: [],
     addLabels: [],
     removeLabel: [],
+    getIssue: [],
   };
 
   const github = {
+    currentIssue,
     rest: {
       issues: {
+        async get(payload) {
+          calls.getIssue.push(payload);
+          return { data: github.currentIssue };
+        },
         async getLabel({ name }) {
           calls.getLabel.push(name);
           if (existingLabels.has(name)) {
@@ -69,11 +76,20 @@ function createGithub({
   return { github, calls };
 }
 
+// Existing fixtures describe a current open report unless a test supplies a
+// different live read. The production helper still makes the actual GET.
+async function syncLabels(args) {
+  if (!args.github.currentIssue) {
+    args.github.currentIssue = { ...args.context.payload.issue, state: "open" };
+  }
+  return triage.syncLabels(args);
+}
+
 function createContext({ action = "opened", issue, previousBody }) {
   return {
     payload: {
       action,
-      issue,
+      issue: { updated_at: "2026-10-08T10:00:00Z", ...issue },
       ...(previousBody === undefined ? {} : { changes: { body: { from: previousBody } } }),
     },
     repo: {
@@ -99,7 +115,7 @@ test("syncLabels classifies older bug reports without requesting a retest", asyn
     labels: [],
   };
 
-  await triage.syncLabels({
+  await syncLabels({
     github,
     context: createContext({ issue }),
     core: createCore(),
@@ -121,7 +137,7 @@ test("syncLabels only adds documentation classification for non-bug v6 feedback"
     labels: [],
   };
 
-  await triage.syncLabels({
+  await syncLabels({
     github,
     context: createContext({ issue }),
     core: createCore(),
@@ -146,7 +162,7 @@ test("syncLabels marks declared secondary topics for decomposition", async () =>
     labels: [{ name: "enhancement" }],
   };
 
-  await triage.syncLabels({
+  await syncLabels({
     github,
     context: createContext({ issue }),
     core: createCore(),
@@ -171,7 +187,7 @@ test("syncLabels preserves community decomposition on an empty form field", asyn
       labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
     };
 
-    await triage.syncLabels({
+    await syncLabels({
       github,
       context: createContext({ action, issue }),
       core: createCore(),
@@ -193,7 +209,7 @@ test("syncLabels adds newly declared topics but respects a completed disposition
     { action: "reopened", expectedAdd: false },
   ]) {
     const { github, calls } = createGithub();
-    await triage.syncLabels({
+    await syncLabels({
       github,
       context: createContext({ action, previousBody, issue: {
         number: 1796,
@@ -408,7 +424,7 @@ test("older-version reports cannot trigger event or scheduled retest posting", a
 test("label sync preserves community-owned retest state regardless of version", async () => {
   for (const version of ["6.3.1", "6.4.1", "_No response_"]) {
     const { github, calls } = createGithub({ latestVersion: "6.4.1" });
-    await triage.syncLabels({
+    await syncLabels({
       github, core: createCore(),
       context: createContext({ issue: {
         number: 1200, title: "Bug", body: `## Pulse version\n${version}\n`,
@@ -507,7 +523,7 @@ test("ambiguous upgrade version requests information without a retest comment", 
     author_association: "NONE",
   };
   const args = { github, context: createContext({ issue }), core: createCore() };
-  await triage.syncLabels(args);
+  await syncLabels(args);
   await triage.postRetestComment(args);
   const labels = calls.addLabels.at(-1).labels;
   assert.ok(labels.includes("needs-version-info"));
@@ -528,7 +544,7 @@ test("queued label sync cannot overwrite newer Community label decisions", async
     };
     github.rest.issues.addLabels = async ({ labels }) => labels.forEach(label => live.add(label));
     github.rest.issues.removeLabel = async ({ name }) => live.delete(name);
-    await triage.syncLabels({ github, core: createCore(), context: createContext({ issue: {
+    await syncLabels({ github, core: createCore(), context: createContext({ issue: {
       number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
       labels: ["bug", "affects-6.0.0", "needs-version-info",
         ...(!communityAdded ? ["needs-retest-on-latest"] : [])].map(name => ({ name })),
@@ -545,7 +561,7 @@ test("version-label removal tolerates an absent label but propagates access fail
   for (const status of [404, 403]) {
     const { github } = createGithub();
     github.rest.issues.removeLabel = async () => { throw Object.assign(new Error("API failure"), { status }); };
-    const run = triage.syncLabels({ github, core: createCore(), context: createContext({ issue: {
+    const run = syncLabels({ github, core: createCore(), context: createContext({ issue: {
       number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
       labels: [{ name: "bug" }, { name: "affects-6.0.0" }],
     } }) });
@@ -576,8 +592,117 @@ test("stable-to-preview intake keeps baseline, agent and platform versions out o
       ].join("\n\n"),
       labels: [],
     };
-    await triage.syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
     assert.deepEqual(calls.addLabels.flatMap((call) => call.labels).sort(), [expected, "bug"].sort());
     assert.equal(calls.createComment.length, 0);
   }
+});
+
+test("delayed events classify the current report and labels, not an old version", async () => {
+  const eventIssue = {
+    number: 2800,
+    title: "Bug after upgrade from 6.4.5",
+    body: "### Pulse version\nunknown\n",
+    labels: [{ name: "bug" }],
+    updated_at: "2026-10-08T10:00:00Z",
+  };
+  const currentIssue = {
+    ...eventIssue,
+    state: "open",
+    body: "### Pulse version\n6.5.0\n",
+    labels: ["bug", "affects-6.4.5", "needs-version-info",
+      "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    updated_at: "2026-10-08T11:00:00Z",
+  };
+  const { github, calls } = createGithub({ currentIssue });
+  await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
+
+  assert.deepEqual(calls.getIssue, [{ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }]);
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.equal(calls.getLatestRelease.length, 0);
+  assert.equal(calls.createComment.length, 0);
+});
+
+test("a delayed declaration cannot restore a cleared decomposition task", async () => {
+  const eventIssue = {
+    number: 2801,
+    title: "Two report topics",
+    body: "### Additional actionable topics\nA separate workflow problem\n",
+    labels: [],
+    updated_at: "2026-10-08T10:00:00Z",
+  };
+  for (const body of [eventIssue.body, "### Additional actionable topics\nNone\n"]) {
+    const { github, calls } = createGithub({ currentIssue: {
+      ...eventIssue, state: "open", body, updated_at: "2026-10-08T11:00:00Z",
+    } });
+    await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("current feedback classification supersedes a queued bug declaration", async () => {
+  const eventIssue = {
+    number: 2802, title: "Feedback", labels: [],
+    body: "### Feedback type\nBug / regression\n### Pulse version\n6.4.5\n",
+  };
+  const { github, calls } = createGithub({ currentIssue: {
+    ...eventIssue, state: "open",
+    body: "### Feedback type\nDocumentation issue\n### Pulse version\n6.5.0\n",
+  } });
+  await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["documentation"]]);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.createComment.length, 0);
+});
+
+test("a failed current-issue read stops without stale classification or mutation", async () => {
+  for (const status of [403, 404, 500]) {
+    const { github, calls } = createGithub();
+    github.rest.issues.get = async () => {
+      throw Object.assign(new Error("Read failed"), { status });
+    };
+    await assert.rejects(syncLabels({ github, core: createCore(), context: createContext({ issue: {
+      number: 2803, title: "Old bug", body: "### Pulse version\n6.4.5\n",
+      labels: [{ name: "bug" }],
+    } }) }), { status });
+    assert.equal(calls.getLabel.length, 0);
+    assert.equal(calls.createLabel.length, 0);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("a closed report or pull request receives no issue metadata changes", async () => {
+  const eventIssue = {
+    number: 2804, title: "Bug", body: "### Pulse version\n6.5.0\n",
+    labels: [{ name: "bug" }],
+  };
+  for (const current of [{ state: "closed" }, { state: "open", pull_request: {} }]) {
+    const { github, calls } = createGithub({ currentIssue: { ...eventIssue, ...current } });
+    await syncLabels({ github, core: createCore(), context: createContext({ issue: eventIssue }) });
+    assert.equal(calls.getLabel.length, 0);
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("a mismatched current issue identity fails closed", async () => {
+  const { github, calls } = createGithub({ currentIssue: {
+    number: 9999, state: "open", title: "Another report",
+    body: "### Pulse version\n6.5.0\n", labels: [{ name: "bug" }],
+  } });
+  await assert.rejects(syncLabels({ github, core: createCore(), context: createContext({ issue: {
+    number: 2805, title: "Bug", labels: [{ name: "bug" }],
+  } }) }), /Current issue identity did not match/);
+  assert.equal(calls.getLabel.length, 0);
+  assert.equal(calls.addLabels.length, 0);
+  assert.equal(calls.removeLabel.length, 0);
+  assert.equal(calls.createComment.length, 0);
 });

@@ -169,6 +169,19 @@ topics or create issues automatically. A maintainer or triage agent reviews the
 source context, chooses the correct destination, creates links, and is
 accountable for the disposition.
 
+Before changing metadata, the synchronizer reads the current issue body and
+labels, rather than classifying a queued event's older report. A failed read
+stops the job without a stale-data fallback; closed issues and pull requests are
+not changed. It applies only individual label additions and removals, preserving
+unrelated and community-owned retest labels. Only a still-current declaration
+event can add `needs-decomposition`; a delayed event cannot restore a task that
+the maintainer has since cleared. Comments and superseded declarations still
+need whole-thread triage, not an automatic disposition.
+
+Version classification does not need the latest release and cannot establish
+relevant-fix availability. The synchronizer makes no release lookup, public
+comment, retest request or closure.
+
 This boundary is deliberate: preserving an explicit reporter declaration is
 safe to automate, while deciding whether two observations are one root cause is
 a product and technical judgment.
