@@ -5,6 +5,8 @@ import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WorkloadsSurface } from '../WorkloadsSurface';
+import { useWorkloadsState } from '../useWorkloadsState';
+import type { Node } from '@/types/api';
 import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -1009,6 +1011,90 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Workload derivation contracts', () => {
+    it.each([false, true])(
+      'retains separate supplied tuples sharing a native ID (reversed=%s)',
+      (reversed) => {
+        const makeNode = (instance: string, name: string, capacity: number) =>
+          ({
+            id: 'lab-east-pve1',
+            instance,
+            name,
+            status: 'online',
+            cpu: 0,
+            memory: { total: capacity, used: 1, free: capacity - 1, usage: 1 / capacity },
+            disk: { total: 100, used: 1, free: 99, usage: 1 },
+          }) as Node;
+        const nodes = [makeNode('lab-east', 'pve1', 8), makeNode('lab', 'east-pve1', 32)];
+        mockWorkloads = [
+          makeGuest(1, {
+            id: 'raw-a',
+            instance: 'lab-east',
+            node: 'pve1',
+            type: 'vm',
+            workloadType: 'vm',
+          }),
+          makeGuest(2, {
+            id: 'raw-b',
+            instance: 'lab',
+            node: 'east-pve1',
+            type: 'vm',
+            workloadType: 'vm',
+          }),
+        ];
+        // The canonical refresh overlays only B, not A despite the same native ID.
+        mockInfrastructureResources = [
+          {
+            id: 'lab-east-pve1',
+            type: 'agent',
+            name: 'east-pve1',
+            platformType: 'proxmox-pve',
+            status: 'offline',
+            proxmox: { instance: 'lab', node: 'east-pve1' },
+            memory: { current: 1, total: 64, used: 1 },
+          } as Resource,
+        ];
+        function SuppliedNodes() {
+          const state = useWorkloadsState({
+            vms: [],
+            containers: [],
+            nodes: reversed ? [...nodes].reverse() : nodes,
+            useWorkloads: true,
+          });
+          return (
+            <pre data-testid="supplied-node-parents">
+              {JSON.stringify({
+                count: state.infrastructureNodes().length,
+                parents: state.allGuests().map((guest) => {
+                  const parent = state.guestParentNodeMap()[getCanonicalWorkloadId(guest)];
+                  return {
+                    guest: guest.instance,
+                    instance: parent?.instance,
+                    node: parent?.name,
+                    capacity: parent?.memory.total,
+                    status: parent?.status,
+                  };
+                }),
+              })}
+            </pre>
+          );
+        }
+        render(() => <SuppliedNodes />);
+        expect(JSON.parse(screen.getByTestId('supplied-node-parents').textContent!)).toEqual({
+          count: 2,
+          parents: [
+            {
+              guest: 'lab-east',
+              instance: 'lab-east',
+              node: 'pve1',
+              capacity: 8,
+              status: 'online',
+            },
+            { guest: 'lab', instance: 'lab', node: 'east-pve1', capacity: 64, status: 'offline' },
+          ],
+        });
+      },
+    );
+
     it('normalizes workloads view mode aliases through the shared workload helper', () => {
       expect(normalizeWorkloadViewModeParam('all')).toBe('all');
       expect(normalizeWorkloadViewModeParam('container')).toBe('container');
