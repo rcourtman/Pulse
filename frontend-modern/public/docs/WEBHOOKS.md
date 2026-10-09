@@ -135,9 +135,17 @@ and HTTP status. A pending or held delivery is not a terminal failure; quiet
 hours and other delivery policies can postpone it. There is no fixed delivery
 deadline promised by the attempt count.
 
-Delivery activity masks recognised URL credentials, not arbitrary provider
-text or private infrastructure details. Keep full errors and screenshots
-private; follow the [delivery evidence precautions](TROUBLESHOOTING.md#recover-retained-delivery-failures)
+Alert-webhook response text is deliberately withheld from delivery errors,
+logs and Test summaries because receivers can echo credentials or alert content.
+Withholding is not a delivery verdict: retain the HTTP status and failure class.
+For read failures, bounded byte counts and safe use of existing receiver records,
+follow the [withheld-response guidance](TROUBLESHOOTING.md#webhook-response-body-is-withheld).
+Do not enable Debug or replay a request to obtain the hidden text.
+
+Delivery activity masks recognised URL credentials, not all private information.
+Older records and other error sources can retain provider text or private
+infrastructure details; they are not retroactively scrubbed. Keep full errors
+and screenshots private; follow the [delivery evidence precautions](TROUBLESHOOTING.md#recover-retained-delivery-failures)
 before sharing a manually redacted excerpt. A `REDACTED` marker is not proof
 that the remaining text is safe to post.
 

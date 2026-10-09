@@ -134,6 +134,15 @@ payloads private, even when an error or screenshot contains them. A missing
 notification alone does not prove that alert evaluation failed; retain both
 symptoms when the thread supplies evidence for each.
 
+Treat webhook `response body withheld` or `details withheld` messages as
+intentional privacy boundaries, not missing evidence to request from a reporter.
+Use the supplied HTTP status, failure class and time; a response-read failure
+does not prove the receiver rejected the request. A Test's bounded response byte
+count is not the sent payload size or proof of receipt. If a provider-specific
+distinction matters, use an existing, locally reviewed error code or redacted
+explanation, never a raw response, Debug capture or replay. Historical errors
+and other exports are not retroactively scrubbed; the full entry remains private.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:
