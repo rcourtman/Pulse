@@ -26,7 +26,9 @@ fields take precedence over inferred legacy guest-ID prefixes, whose positive VM
 may fill missing fields but cannot contradict them. Supplied node snapshots
 overlay only the same native ID and tuple; a shared native ID cannot erase
 another tuple. Ambiguous tuples or native-ID aliases do not provide parent
-evidence. Row status and host-relative memory use the validated row parent in grouped and flat modes;
+evidence. Legacy fallback must also resolve the candidate's own tuple back to
+that same node; a unique native ID cannot restore an ambiguous tuple, even
+when the guest's instance or node fields are absent. Row status and host-relative memory use the validated row parent in grouped and flat modes;
 a group label is not authority to supply another row's parent. Unrelated
 platforms do not inherit Proxmox parent state from matching labels.
 
@@ -41,6 +43,9 @@ host-memory denominator unavailable, never zero or another node's capacity.
 Verification: `workloadTopology.attribution.test.ts` and
 `workloadTopology.scope.test.ts` cover collided scopes, parent ambiguity,
 source-field precedence, legacy hints and unrelated platforms.
+`workloadTopology.ambiguousParent.test.ts` discriminates complete and incomplete
+guest fields, both native aliases, VM/LXC types and both inventory orders;
+unique, consistent legacy fallbacks remain valid.
 `WorkloadsSurface.performance.contract.test.tsx` checks both supplied inventory
 orders and same-node snapshot overlays; `useWorkloadTableMetricHistory.test.tsx`
 checks the native-ID transport boundary. Parent-bound browser proof checks real

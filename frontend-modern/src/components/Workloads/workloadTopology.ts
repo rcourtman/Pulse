@@ -219,6 +219,8 @@ export const buildGuestParentNodeMap = (
 
     // Legacy IDs may supply an otherwise missing parent, but must not
     // contradict source-owned instance/node fields or resolve an ID collision.
+    // A unique native ID is not evidence of a unique tuple: revalidate the
+    // candidate's tuple too, including when guest fields are incomplete.
     if (guest.id) {
       const lastDash = guest.id.lastIndexOf('-');
       if (
@@ -231,6 +233,8 @@ export const buildGuestParentNodeMap = (
         const candidate = nodeMap[nodeId];
         if (
           candidate &&
+          nodeMap[workloadNodeScopeId({ instance: candidate.instance, node: candidate.name })] ===
+            candidate &&
           (!guest.instance?.trim() || guest.instance.trim() === candidate.instance?.trim()) &&
           (!guest.node?.trim() || guest.node.trim() === candidate.name?.trim())
         ) {
