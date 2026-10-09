@@ -67,13 +67,10 @@ node browser-tests/build-publication-fixtures.mjs
 npm run test -- browser-tests/publication-fixture-server.test.mjs
 ```
 
-The server regression uses Node's built-in test runner. Vitest excludes only
-that test body from discovery and awaits its standalone run through
-`src/__tests__/publicationFixtureServer.test.ts`. A Node failure still fails
-`npm test`; the command above also runs it independently. This preserves the
-binding, listener and cleanup checks without importing a Node suite as a
-Vitest file with no Vitest tests. The server checks exercise only a locally
-owned loopback listener and synthetic temporary files.
+The server regression uses Vitest's runner and is included in `npm test`.
+The command above also runs its binding, listener and cleanup checks on their
+own. The server checks exercise only a locally owned loopback listener and
+synthetic temporary files; no standalone Node bridge is needed.
 
 The four corresponding browser runners use the resulting static bundles in
 `tmp/publication-final-static` at the repository root. They no longer compile

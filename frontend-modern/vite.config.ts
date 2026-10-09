@@ -291,10 +291,6 @@ export default defineConfig(({ mode }) => ({
       ...configDefaults.exclude,
       'tests/integration/**',
       '**/tests/integration/**',
-      // Uses node:test, with its own loopback server and cleanup assertions.
-      // The Vitest bridge awaits its node --test exit; README documents the
-      // standalone command too. Do not discover the Node test body as Vitest.
-      'browser-tests/publication-fixture-server.test.cjs',
     ],
   },
 }));
