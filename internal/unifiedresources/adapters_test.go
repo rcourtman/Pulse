@@ -1960,6 +1960,9 @@ func TestIssue2757AgentDisplayPrefersNonContainerInterfaces(t *testing.T) {
 			if !reflect.DeepEqual(identity.IPAddresses, []string{"192.0.2.80", "10.88.0.1"}) || identity.MachineID != "machine-a" || resource.Agent.AgentID != "agent-a" {
 				t.Fatalf("agent display IPs or supplied identity changed: %+v", identity)
 			}
+			if !reflect.DeepEqual(identity.MACAddresses, []string{"02:00:00:00:00:01", "02:00:00:00:00:02"}) {
+				t.Fatalf("display preference changed the legacy MAC sequence: %v", identity.MACAddresses)
+			}
 			host.ReportIP = "10.88.0.1"
 			_, override := resourceFromHost(host)
 			if !reflect.DeepEqual(override.IPAddresses, []string{"10.88.0.1", "192.0.2.80"}) {

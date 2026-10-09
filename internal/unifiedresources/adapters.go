@@ -3939,11 +3939,13 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 	// default-route assertion and must not alter the agent's MAC-based identity.
 	for pass := 0; pass < 2; pass++ {
 		for _, iface := range interfaces {
-			if (pass == 0) == isLikelyVirtualInterfaceName(iface.Name) {
-				continue
-			}
-			if iface.MAC != "" {
+			// Preserve the old MAC sequence: the new Podman preference is
+			// only for displayed IPs, not another identity metadata change.
+			if (pass == 0) != isLikelyVirtualInterfaceName(iface.Name) && iface.MAC != "" {
 				macs = append(macs, iface.MAC)
+			}
+			if (pass == 0) == netutil.IsSecondaryInterfaceName(iface.Name) {
+				continue
 			}
 			for _, addr := range iface.Addresses {
 				ip := addr
@@ -3958,7 +3960,29 @@ func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []
 }
 
 func isLikelyVirtualInterfaceName(name string) bool {
-	return netutil.IsSecondaryInterfaceName(name)
+	// Legacy MAC metadata ordering, also used by the agent's machine-ID
+	// fallback. Keep Podman out of this classifier to preserve those identities.
+	name = strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case name == "" || name == "lo":
+		return true
+	case strings.HasPrefix(name, "docker"):
+		return true
+	case strings.HasPrefix(name, "veth"):
+		return true
+	case strings.HasPrefix(name, "br-"):
+		return true
+	case strings.HasPrefix(name, "cni"):
+		return true
+	case strings.HasPrefix(name, "flannel"):
+		return true
+	case strings.HasPrefix(name, "virbr"):
+		return true
+	case strings.HasPrefix(name, "zt"):
+		return true
+	default:
+		return false
+	}
 }
 
 func extractHostname(raw string) string {

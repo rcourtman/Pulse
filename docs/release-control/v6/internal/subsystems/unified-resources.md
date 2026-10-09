@@ -3091,8 +3091,10 @@ canonical identity and broadcast. Agent-host display address selection also
 recognises Podman interface names as secondary, retaining every address and the
 explicit `--report-ip` preference. The shared `pkg/netutil` name hint does not
 drop management bridges, bonds, VLANs or tunnels, prove a default route, or
-change the agent's separate MAC-based machine-ID fallback. No identity key or
-wire shape changes. `TestIssue2757AgentDisplayPrefersNonContainerInterfaces`
+change the agent's separate MAC-based machine-ID fallback. The existing MAC
+metadata sequence keeps its legacy classifier; Podman preference affects only
+displayed IPs. No identity key or wire shape changes.
+`TestIssue2757AgentDisplayPrefersNonContainerInterfaces`
 and `TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses` bind Podman,
 management-interface, supplied identity and explicit-override controls to the
 production host adapter; monitoring's #2757 fixtures bind guest list/broadcast

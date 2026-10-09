@@ -89,8 +89,8 @@ func TestIssue2757ContainerAddressSelection(t *testing.T) {
 			config: map[string]interface{}{"net0": "name=eth0,ip=dhcp,ip6=auto"},
 			interfaces: []proxmox.ContainerInterface{
 				{Name: "podman0", Inet: "10.88.0.1/16"},
-				{Name: "veth0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.89.0.1/16"}}},
-				{Name: "eth0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.80/24"}, {Address: "2001:db8::80/64"}, {Address: "fe80::1/64"}}},
+				{Name: "veth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "10.89.0.1/16"}}},
+				{Name: "eth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "192.0.2.80/24"}, {Address: "2001:db8::80/64"}, {Address: "fe80::1/64"}}},
 				{Name: "lo", Inet: "127.0.0.1/8 ::1/128"},
 			},
 			want:           []string{"192.0.2.80", "2001:db8::80", "10.88.0.1", "10.89.0.1"},
