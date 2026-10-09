@@ -11,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/PRODUCTION_SECURITY.md"
+TRUST_DOC = ROOT / "docs/OPERATIONAL_TRUST.md"
 
 
 def section(heading):
@@ -111,6 +112,55 @@ class ProductionRolloutDocsTest(unittest.TestCase):
                          "stage the rollout", "independent security certification"):
             self.assertIn(boundary, text)
         self.assertNotRegex(text, r"(?:--insecure|curl[^\n]*\||--token\s)")
+
+    def test_operational_upgrade_checks_are_observational_not_action_probes(self):
+        text = " ".join(TRUST_DOC.read_text().split("### Read-only checks after upgrading\n", 1)[1].split())
+        for boundary in ("existing authenticated browser session", "ordinary collection",
+                         "same organisation, access scope and filters",
+                         "An empty queue does not establish complete or healthy collection",
+                         "Do not disconnect a collector or induce a fault",
+                         "Recent delivery activity", "recipient's actual message separately",
+                         "Test success does not establish ordinary, grouped or resolved delivery",
+                         "execution and verification records separately",
+                         "not by itself a monitoring failure", "Retry can send a real notification",
+                         "suppression changes active attention", "restart changes a workload",
+                         "Do not acknowledge, suppress, retry, dismiss or clear records, send a Test",
+                         "or approve or run an action merely to validate an upgrade",
+                         "unverified rather than manufacture one",
+                         "isolated non-production fixture", "synthetic destinations",
+                         "disposable workloads", "never against live resources"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+        for old_instruction in ("acknowledge and unacknowledge a test item",
+                                "verify a bounded suppression returns to active attention",
+                                "exercise notification retry/dead-letter monitoring",
+                                "complete a review/approve/run/verify journey"):
+            self.assertNotIn(old_instruction, text)
+        # The original advice crossed real mutation boundaries, not just UI
+        # demonstrations. Keep that reason grounded in the current owners.
+        queue = (ROOT / "internal/api/alerting/notification_queue.go").read_text()
+        self.assertIn("queue.ScheduleRetry(request.ID, 0)", queue)
+        actions = (ROOT / "internal/api/actions.go").read_text()
+        self.assertIn("h.ActionLifecycle().Execute(", actions)
+
+    def test_operational_upgrade_preserves_recovery_and_access_boundaries(self):
+        text = " ".join(TRUST_DOC.read_text().split("## Upgrade and compatibility\n", 1)[1].split())
+        for boundary in ("version, edition and deployment configuration", "consistent private backup",
+                         "matching encryption and audit signing keys", "external stores",
+                         "not a copy of a live database file or a configuration-only export",
+                         "Do not broaden permissions or replace keys", "independent monitoring and alert coverage",
+                         "MIGRATION.md#full-state-recovery", "VM_DISK_MONITORING.md#backup-safety",
+                         "Reverting a binary does not reverse data migrations", "AUTO_UPDATE.md#rollback",
+                         "metrics listener private", "not a reason to expose a new listener",
+                         "authentication, TLS verification and least-privilege collection unchanged",
+                         "Preserve errors and existing delivery/action records", "locally redacted explanation",
+                         "not credentials, full inventories, notification payloads or Debug exports",
+                         "A failed read or an empty queue alone is not a reason to restore data",
+                         "Do not delete lifecycle, evidence, notification, recovery or action records"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+        self.assertEqual(TRUST_DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/OPERATIONAL_TRUST.md").read_bytes())
 
 
 if __name__ == "__main__":
