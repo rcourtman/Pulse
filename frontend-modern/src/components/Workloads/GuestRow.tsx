@@ -604,6 +604,7 @@ export function GuestRow(props: GuestRowProps) {
                           used={props.guest.memory?.used || 0}
                           total={memoryDisplayTotal()}
                           unavailable={memoryDisplayUnavailable()}
+                          reading={memoryReading()}
                           percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
                           cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
                           cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
