@@ -336,7 +336,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					} else {
 						log.Debug().
 							Str("webhook", webhook.Name).
-							Str("retryAfter", retryAfter).
 							Msg("invalid Retry-After header; falling back to exponential backoff")
 					}
 				}

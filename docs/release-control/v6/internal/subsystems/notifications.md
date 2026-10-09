@@ -23,7 +23,10 @@ body bytes. Logs, delivery errors/history and the existing Test response carry
 structured status, bounded byte counts and incomplete/limit-reached facts, not
 arbitrary receiver text. Test keeps its status/string/error shape; a nonempty
 response string now explains that the body was withheld. ResponseLogging
-enables metadata only. Reaching the read cap does not claim the body exceeded it.
+enables metadata only. Invalid Retry-After hints retain the fixed fallback
+diagnostic without copying the receiver's arbitrary header value. Valid hints
+still report their parsed bounded duration. Reaching the read cap does not
+claim the body exceeded it.
 
 HTTP status still owns rejection classification and retry decisions, Retry-After
 and actual attempt/final-status accounting survive, and incomplete 2xx replies
@@ -37,7 +40,9 @@ historical diagnostics are not rewritten or claimed to be scrubbed.
 ntfy/retry senders with in-memory HTTP responses: echoed credentials/alert text,
 successful/rejected responses, error-prose disclosure, final delivery history,
 unchanged requests and response closure. `webhook_response_metadata_test.go`
-checks empty/incomplete/at-cap/over-cap bodies and the Test summary. Existing
+checks empty/incomplete/at-cap/over-cap bodies and the Test summary.
+`webhook_response_retry_hint_test.go` preserves actual retry/fallback behaviour
+without disclosing invalid hint text. Existing
 Test/Gotify and ntfy HTTP-error controls retain status and request expectations
 with the new withheld response. These are synthetic source controls, not native
 provider acceptance or a cause/fix claim for reported notification failures.
