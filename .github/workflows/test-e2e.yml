@@ -177,7 +177,12 @@ jobs:
         run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
 
       - name: Install Playwright dependencies
-        timeout-minutes: 10
+        # Chromium + WebKit requested 116 MB of authenticated OS packages in
+        # the retained setup failure. Active downloads near 90 kB/s need over
+        # 20 minutes before installation/browser downloads, not ten. Keep the
+        # 60-minute job and every test deadline unchanged; apt's transport
+        # timeouts and incomplete-index refusal still bound stalled requests.
+        timeout-minutes: 30
         working-directory: tests/integration
         run: |
           npm ci
