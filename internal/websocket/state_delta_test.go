@@ -537,7 +537,7 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 	if err := json.Unmarshal(previous.keyed[activeAlertsField].entries["alert-temperature"], &received); err != nil {
 		t.Fatal(err)
 	}
-	checkDate := func(want string) {
+	checkDate := func(t *testing.T, want string) {
 		t.Helper()
 		status, _ := received["metricStatus"].(map[string]any)
 		got, present := status["lastBreachAt"]
@@ -548,7 +548,7 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 			t.Fatal("state dated lifecycle alerts through LastSeen")
 		}
 	}
-	checkDate("2026-10-09T19:00:00Z")
+	checkDate(t, "2026-10-09T19:00:00Z")
 	for _, step := range []struct{ name, body, date string }{
 		{"hold", `{"phase":"latched","value":78,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:01:00Z","lastBreachAt":"2026-10-09T19:00:00Z"}`, "2026-10-09T19:00:00Z"},
 		{"recovery", `{"phase":"recovering","value":72,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:02:00Z","lastBreachAt":"2026-10-09T19:00:00Z","recoveryStartedAt":"2026-10-09T19:02:00Z"}`, "2026-10-09T19:00:00Z"},
@@ -577,7 +577,7 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 			if err := json.Unmarshal(payload.Upserts[0], &patch); err != nil {
 				t.Fatal(err)
 			}
-			received = applyLabelTagMergePatch(received, patch)
+			received = applyMetricBreachTimeMergePatch(received, patch)
 			var complete map[string]any
 			if err := json.Unmarshal(current.keyed[activeAlertsField].entries["alert-temperature"], &complete); err != nil {
 				t.Fatal(err)
@@ -585,8 +585,29 @@ func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
 			if !reflect.DeepEqual(received, complete) {
 				t.Fatalf("receiver differs from complete state: %+v vs %+v", received, complete)
 			}
-			checkDate(step.date)
+			checkDate(t, step.date)
 			previous = current
 		})
 	}
+}
+
+// Independent RFC 7396 receiver oracle for the alert's encoded keyed patch.
+// Keep it with this control: unrelated optional fixtures are not part of the
+// committed baseline used by an exact-source proof.
+func applyMetricBreachTimeMergePatch(previous, patch map[string]any) map[string]any {
+	out := make(map[string]any, len(previous))
+	for key, value := range previous {
+		out[key] = value
+	}
+	for key, value := range patch {
+		if value == nil {
+			delete(out, key)
+		} else if object, ok := value.(map[string]any); ok {
+			old, _ := out[key].(map[string]any)
+			out[key] = applyMetricBreachTimeMergePatch(old, object)
+		} else {
+			out[key] = value
+		}
+	}
+	return out
 }
