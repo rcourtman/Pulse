@@ -772,7 +772,15 @@ detect_service_name() {
 }
 
 update_timer_exists() {
-    command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${UPDATE_TIMER_UNIT}$"
+    command -v systemctl >/dev/null 2>&1 || return 1
+    local unit_files=""
+    # Rows also contain enablement/preset columns. Match the exact first field,
+    # not the whole row or a regex, and keep long custom unit names untruncated.
+    # A failed inventory must not admit even plausible partial stdout.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$UPDATE_TIMER_UNIT" 2>/dev/null); then
+        return 1
+    fi
+    awk -v unit="$UPDATE_TIMER_UNIT" '$1 == unit { found = 1 } END { exit !found }' <<< "$unit_files"
 }
 
 update_timer_enabled() {
@@ -4731,6 +4739,15 @@ setup_auto_updates() {
 # Refresh the installed assets unconditionally instead, without changing the
 # user's choices: system.json and the timer's enabled state stay untouched.
 refresh_auto_updates() {
+    # Discovering an existing masked unit is not consent to unmask it. The
+    # staged unit rename would otherwise replace its /dev/null symlink.
+    local asset
+    for asset in "${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-}}" "${UPDATE_SERVICE_PATH:-${PULSE_UPDATE_SERVICE_PATH:-}}"; do
+        if [[ -L "$asset" && "$asset" -ef /dev/null ]]; then
+            print_info "Auto-update unit is deliberately masked ($asset); preserving the existing helper and units."
+            return 0
+        fi
+    done
     print_info "Refreshing the installed auto-update helper..."
     if ! install_auto_update_assets; then
         print_warn "Could not refresh the auto-update helper; the previously installed one may be stale."

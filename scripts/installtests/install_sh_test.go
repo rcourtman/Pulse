@@ -4540,6 +4540,19 @@ func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
 	}
 }
 
+// Execute discovery and every installer refresh consumer together. systemd
+// manager operations are confined doubles; real inventory uses a fixture root.
+func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_timer.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer timer discovery/refresh controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
