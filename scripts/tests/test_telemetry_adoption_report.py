@@ -2219,12 +2219,21 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 latest_by_install[install_id] = row
 
         original_parse_received_at = report.parse_received_at
+        parse_calls = 0
+
+        def counting_parse_received_at(value):
+            nonlocal parse_calls
+            parse_calls += 1
+            return original_parse_received_at(value)
+
         started = time.perf_counter()
+        # Count the invariant without timing/retaining 120,000 Mock call
+        # records. Keep the real parser, dataset, aggregation and time budget.
         with mock.patch.object(
             report,
             "parse_received_at",
-            wraps=original_parse_received_at,
-        ) as parse_received_at:
+            new=counting_parse_received_at,
+        ):
             analyses = report.analyze_pulse_intelligence_rows(rows)
             report.summarize_pulse_intelligence_outcome_cohorts(
                 rows,
@@ -2241,7 +2250,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         elapsed = time.perf_counter() - started
 
         self.assertEqual(len(analyses), install_count)
-        self.assertEqual(parse_received_at.call_count, len(rows))
+        self.assertEqual(parse_calls, len(rows))
         self.assertLess(
             elapsed,
             8.0,
