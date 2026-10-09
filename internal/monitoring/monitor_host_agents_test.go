@@ -7706,6 +7706,7 @@ func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
 				VMID:             101,
 				RuntimeStatus:    "running",
 				DiskStatusReason: "agent-not-running",
+				DiskObservation:  models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-time.Minute)},
 			},
 			// The linked agent's addresses count as recent guest evidence.
 			Identity: unifiedresources.ResourceIdentity{IPAddresses: []string{"10.0.0.5"}},

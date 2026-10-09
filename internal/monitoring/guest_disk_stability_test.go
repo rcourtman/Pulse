@@ -102,6 +102,7 @@ func TestStabilizeGuestLowTrustDiskCarriesPreviouslyForwardedSnapshotWithAgentEv
 		LastSeen:         now.Add(-time.Minute),
 		AgentVersion:     "8.2.0",
 		DiskStatusReason: "prev-no-filesystems",
+		DiskObservation:  models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-time.Minute)},
 		Disk: models.Disk{
 			Total: 1000,
 			Used:  400,

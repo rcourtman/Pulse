@@ -163,6 +163,7 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
 		Disks:             guestDisksFromReadStateView(vm.Disks()),
 		DiskStatusReason:  vm.DiskStatusReason(),
+		DiskObservation:   vm.DiskObservation(),
 		LastSeen:          vm.LastSeen(),
 	}
 }

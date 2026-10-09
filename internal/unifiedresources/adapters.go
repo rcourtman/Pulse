@@ -1843,6 +1843,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		LastBackup:         vm.LastBackup,
 		BackupInProgress:   vm.BackupInProgress,
 		DiskStatusReason:   vm.DiskStatusReason,
+		DiskObservation:    vm.DiskObservation,
 		GuestAgentStatus:   vm.GuestAgentStatus,
 		GuestAgentExpected: vm.GuestAgentExpected,
 		OSName:             vm.OSName,

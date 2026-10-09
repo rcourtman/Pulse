@@ -32,6 +32,7 @@ type vmBuildState struct {
 	diskUsage               float64
 	diskFromAgent           bool
 	diskStatusReason        string
+	diskObservation         models.GuestDiskObservation
 	guestAgentStatus        string
 	guestAgentExpected      bool
 	individualDisks         []models.Disk
@@ -143,6 +144,9 @@ func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName stri
 	if len(fsDisks) > 0 {
 		state.individualDisks = fsDisks
 	}
+	if state.diskFromAgent {
+		state.diskObservation.ObservedAt = time.Now()
+	}
 	if guestAgentDiskDeferred(state.diskStatusReason) {
 		state.guestAgentStatus = "deferred"
 	}
@@ -226,6 +230,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, prePollTime)
 
 	state := vmBuildState{
+		diskObservation:         models.GuestDiskObservation{Source: "guest-agent"},
 		memTotal:                res.MaxMem,
 		memUsed:                 res.Mem,
 		memorySource:            "cluster-resources",
@@ -355,6 +360,7 @@ func (m *Monitor) buildVMFromClusterResource(
 			state.diskStatusReason,
 		)
 		if preferred {
+			state.diskObservation = models.GuestDiskObservation{Source: "agent", ObservedAt: vmIDToHostAgent[guestID].LastSeen}
 			log.Debug().
 				Str("instance", instanceName).
 				Str("vm", res.Name).
@@ -378,6 +384,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		state.diskFromAgent,
 		sampleTime,
 	)
+	if strings.HasPrefix(state.diskStatusReason, "prev-") {
+		state.diskObservation.ObservedAt = guestDiskObservationTime(prevVM)
+	}
 
 	if res.Status != "running" {
 		state.memorySource = "powered-off"
@@ -493,6 +502,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		},
 		Disks:              state.individualDisks,
 		DiskStatusReason:   state.diskStatusReason,
+		DiskObservation:    state.diskObservation,
 		GuestAgentStatus:   state.guestAgentStatus,
 		Lock:               res.Lock,
 		GuestAgentExpected: state.guestAgentExpected,

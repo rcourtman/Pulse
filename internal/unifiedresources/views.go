@@ -259,6 +259,14 @@ func (v VMView) DiskStatusReason() string {
 	return v.r.Proxmox.DiskStatusReason
 }
 
+// DiskObservation is internal source evidence, not resource freshness.
+func (v VMView) DiskObservation() models.GuestDiskObservation {
+	if v.r == nil || v.r.Proxmox == nil {
+		return models.GuestDiskObservation{}
+	}
+	return v.r.Proxmox.DiskObservation
+}
+
 func (v VMView) OSName() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""

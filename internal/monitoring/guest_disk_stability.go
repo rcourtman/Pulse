@@ -63,7 +63,7 @@ func stabilizeGuestLowTrustDisk(
 	if status != "running" || diskFromAgent || !shouldCarryForwardQEMUDisk(diskStatusReason) {
 		return diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason
 	}
-	if prev == nil || prev.Type != "qemu" || !hasRecentGuestAgentEvidence(prev, now) {
+	if prev == nil || prev.Type != "qemu" || !guestDiskSnapshotWithinAge(prev, now) {
 		return diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason
 	}
 	if prev.Disk.Total <= 0 || prev.Disk.Used < 0 || prev.Disk.Used > prev.Disk.Total || prev.Disk.Usage < 0 {
@@ -78,4 +78,30 @@ func stabilizeGuestLowTrustDisk(
 	}
 
 	return total, used, free, prev.Disk.Usage, cloneGuestDisks(prev.Disks), "prev-" + diskStatusReason
+}
+
+// Disk evidence belongs to the successful filesystem read, independently of
+// cached identity or optional OS/version support. A legacy direct observation
+// may use its receipt time once, but an already unavailable/retained value with
+// no original time cannot borrow the latest VM poll's LastSeen.
+func guestDiskObservationTime(prev *models.VM) time.Time {
+	if prev == nil {
+		return time.Time{}
+	}
+	observation := prev.DiskObservation
+	if observation.Source != "" || !observation.ObservedAt.IsZero() {
+		if observation.Source != "guest-agent" {
+			return time.Time{}
+		}
+		return observation.ObservedAt
+	}
+	if prev.DiskStatusReason != "" {
+		return time.Time{}
+	}
+	return prev.LastSeen
+}
+
+func guestDiskSnapshotWithinAge(prev *models.VM, now time.Time) bool {
+	observedAt := guestDiskObservationTime(prev)
+	return !observedAt.IsZero() && !observedAt.After(now) && now.Sub(observedAt) <= recentGuestAgentEvidenceMaxAge
 }

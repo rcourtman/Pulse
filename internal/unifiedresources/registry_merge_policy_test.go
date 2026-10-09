@@ -14,6 +14,33 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
+func TestGuestDiskObservationMergeReplacesMissingAndDifferentSource(t *testing.T) {
+	original := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
+	existing := &ProxmoxData{VMID: 105, DiskObservation: original, DiskStatusReason: "prev-agent-error"}
+	for _, tc := range []struct {
+		name     string
+		incoming ProxmoxData
+		want     models.GuestDiskObservation
+	}{
+		{"expired original clears", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent"}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"missing full guest origin clears", ProxmoxData{VMID: 105}, models.GuestDiskObservation{}},
+		{"current linked source does not inherit QGA", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "agent"}},
+		{"new successful filesystem read replaces", ProxmoxData{VMID: 105, DiskObservation: models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now()}}, models.GuestDiskObservation{Source: "guest-agent"}},
+		{"non-guest partial facet does not own origin", ProxmoxData{NodeDisplayName: "node"}, original},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := tc.want
+			if !tc.incoming.DiskObservation.ObservedAt.IsZero() {
+				want.ObservedAt = tc.incoming.DiskObservation.ObservedAt
+			}
+			merged := mergeProxmoxData(existing, &tc.incoming)
+			if merged.DiskObservation != want || existing.DiskObservation != original {
+				t.Fatal("merge renewed/resurrected old evidence or mutated its source")
+			}
+		})
+	}
+}
+
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 

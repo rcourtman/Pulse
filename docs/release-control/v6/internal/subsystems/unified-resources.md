@@ -23,6 +23,23 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Internal guest disk observation provenance
+
+A Proxmox VM facet preserves the successful filesystem read's original source
+and time through adapter, clone, typed view and previous-guest projection.
+Complete guest facets replace this evidence in both directions, including a
+missing/expired origin; partial non-guest facets cannot renew or clear it.
+Linked agent selection remains independent and cannot become QGA fallback
+proof. `DiskObservation` is internal only (`json:"-"`): no JSON, identity,
+History key, source-priority or agent report contract changes.
+
+`TestGuestDiskObservationDoesNotChangeWireOrIdentity`,
+`TestGuestDiskObservationViewUsesOnlyItsOwnSource` and
+`TestGuestDiskObservationMergeReplacesMissingAndDifferentSource` verify exact
+public facet equality, internal cloning, missing-source access and authoritative
+replacement. Monitoring's disk observation contract covers the ordinary poll
+and served-reason boundary. These checks do not establish installed recovery.
+
 ### Guest views retain exact governance identity for configuration reads
 
 VM and system-container views expose cloned canonical policy/AI-safe metadata

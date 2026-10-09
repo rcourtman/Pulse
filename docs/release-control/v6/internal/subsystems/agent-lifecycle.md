@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### QGA disk provenance stays outside the agent report contract
+
+The shared VM model carries an internal filesystem source/time observation for
+bounded QGA disk fallback. It is not agent input or a public JSON field; linked
+Pulse-agent disk evidence keeps its own source and precedence. Agent report,
+identity, enrollment and lifecycle contracts are unchanged.
+`TestGuestDiskObservationIsInternalSnapshotEvidence` verifies internal copy
+isolation and omission from both model and frontend JSON; the existing linked
+agent exclusion control now supplies an explicit original QGA observation.
+
 ### Automatic provider links retain full hostname distinctions
 
 An agent report may automatically associate a short hostname with a unique

@@ -423,7 +423,12 @@ type ProxmoxData struct {
 	// Reclaimable buff/cache split out of the memory metric's free bytes.
 	MemoryCache int64          `json:"memoryCache,omitempty"`
 	Memory      *models.Memory `json:"memory,omitempty"`
-	Lock        string         `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+
+	// Original QGA filesystem evidence survives internal clone/merge/previous
+	// state, never JSON. Source identity or UpdatedAt cannot renew it.
+	DiskObservation models.GuestDiskObservation `json:"-"`
+
+	Lock string `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// SensorSetupOutdated is derived by the registry, never ingested: the
 	// node's SSH temperature monitoring still runs the pre-rc.6 setup and a
 	// disk under it waits on a SMART temperature that setup cannot deliver
