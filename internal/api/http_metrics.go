@@ -98,29 +98,43 @@ func normalizeRoute(path string) string {
 	}
 
 	// Strip query parameters.
-	if idx := strings.Index(path, "?"); idx >= 0 {
+	if idx := strings.IndexByte(path, '?'); idx >= 0 {
 		path = path[:idx]
 	}
 
-	segments := strings.Split(path, "/")
-	normSegments := make([]string, 0, len(segments))
-	count := 0
-	for _, seg := range segments {
+	// Only five non-empty segments enter the label. Keep those on the stack
+	// instead of allocating slices for the entire (possibly much longer) path.
+	var segments [5]string
+	count, size := 0, 0
+	for len(path) > 0 && count < len(segments) {
+		seg := path
+		if idx := strings.IndexByte(path, '/'); idx >= 0 {
+			seg, path = path[:idx], path[idx+1:]
+		} else {
+			path = ""
+		}
 		if seg == "" {
 			continue
 		}
+		seg = normalizeSegment(seg)
+		segments[count] = seg
+		size += 1 + len(seg)
 		count++
-		if count > 5 {
-			break
-		}
-		normSegments = append(normSegments, normalizeSegment(seg))
 	}
 
-	if len(normSegments) == 0 {
+	if count == 0 {
 		return "/"
 	}
 
-	return "/" + strings.Join(normSegments, "/")
+	// One owned string, including the leading slash. Returning a path prefix
+	// would retain discarded query/token bytes in long-lived metric labels.
+	var route strings.Builder
+	route.Grow(size)
+	for _, seg := range segments[:count] {
+		route.WriteByte('/')
+		route.WriteString(seg)
+	}
+	return route.String()
 }
 
 func normalizeSegment(seg string) string {
