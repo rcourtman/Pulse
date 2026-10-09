@@ -371,3 +371,61 @@ func TestNotificationRedirectOriginQueue(t *testing.T) {
 		}
 	}
 }
+
+// The count limit must not hide an origin refusal: net/http attaches the final
+// Location to its error even when it never requests that receiver.
+func TestNotificationRedirectOriginAtLimit(t *testing.T) {
+	for _, status := range []int{http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		for _, path := range []string{"request", "enhanced-retry", "apprise"} {
+			t.Run(fmt.Sprintf("%d/%s", status, path), func(t *testing.T) {
+				captured := captureAppriseLogs(t)
+				initial, final := &notificationRedirectCapture{}, &notificationRedirectCapture{}
+				sink := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					final.record(t, r)
+					w.WriteHeader(http.StatusAccepted)
+				}))
+				defer sink.Close()
+				origin := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					initial.record(t, r)
+					target := sink.URL + "/" + redirectPrivateLocation
+					switch r.URL.Path {
+					case "/same-origin-1":
+						target = "/same-origin-2"
+					case "/same-origin-2":
+					default:
+						target = "/same-origin-1"
+					}
+					http.Redirect(w, r, target, status)
+				}))
+				defer origin.Close()
+				n := notificationRedirectManager(t)
+				webhook := WebhookConfig{Name: "capped redirect fixture", URL: origin.URL + "/entry",
+					Headers: map[string]string{"X-Receiver-Key": redirectPrivateHeader}}
+				var err error
+				switch path {
+				case "request":
+					_, err = n.executeWebhookRequest(webhook, []byte(redirectPrivateBody), webhookRequestOptions{validateURL: true})
+				case "enhanced-retry":
+					err = n.sendWebhookWithRetry(EnhancedWebhookConfig{WebhookConfig: webhook, RetryCount: 1}, []byte(redirectPrivateBody), "fixture:alert")
+				case "apprise":
+					cfg := AppriseConfig{Enabled: true, Mode: AppriseModeHTTP, ServerURL: origin.URL, APIKey: redirectPrivateHeader, APIKeyHeader: "X-Receiver-Key", TimeoutSeconds: 5}
+					err = n.sendGroupedApprise(cfg, []*alerts.Alert{{ID: "capped-redirect", Message: redirectPrivateBody}})
+				}
+				assertNotificationRedirectRefused(t, err)
+				if len(initial.snapshot()) != WebhookMaxRedirects || len(final.snapshot()) != 0 {
+					t.Error("capped foreign redirect was retried or contacted its receiver")
+				}
+				assertNotificationRedirectPrivate(t, captured.String())
+				if path == "enhanced-retry" {
+					history := n.GetWebhookHistory()
+					if len(history) != 1 || history[0].Success || history[0].RetryAttempts != 0 {
+						t.Error("capped foreign redirect lost its one-attempt failure state")
+					}
+					if len(history) == 1 {
+						assertNotificationRedirectPrivate(t, history[0].ErrorMessage)
+					}
+				}
+			})
+		}
+	}
+}

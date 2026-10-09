@@ -24,8 +24,10 @@ is not permission to receive private alert bodies, custom authentication headers
 or signed requests. HTTP/HTTPS changes are also refused. Same-origin paths and
 queries remain supported, including default-port and equivalent IPv6 spellings;
 the existing redirect limit, DNS pinning, URL validation and TLS checks remain.
-Foreign redirects stop before target DNS resolution, validation logging or a
-second request. A fixed configuration failure advises the operator to configure
+Foreign redirects stop before target DNS resolution, validation logging or any
+request to that receiver. Origin refusal precedes the redirect-count error, so
+an exhausted same-origin chain cannot expose its final foreign Location or
+change that refusal into an unknown/retryable error. A fixed configuration failure advises the operator to configure
 the final destination URL, without copying the receiver-controlled Location.
 
 That typed failure stops both enhanced transport retries and the queue's retry
@@ -37,7 +39,9 @@ Apprise retains the same safe guidance and existing opaque diagnostic policy.
 redirect statuses, foreign ports/hostname aliases, authenticated HTTPS downgrade
 with and without the existing TLS override, every sender path and the real
 queue's firing/recovery dead-letter, audit and receipt lifecycle. Same-origin
-controls verify unchanged methods, payloads, credentials and signatures.
+controls verify unchanged methods, payloads, credentials and signatures. Capped
+chains exercise direct, enhanced-retry and HTTP Apprise paths; the unchanged
+same-origin redirect-count controls remain.
 `notification_redirect_origin_test.go` covers origin equivalence and separation.
 Existing redirect-chain controls now exercise paths on one receiver, not three
 different receivers. This is source privacy/compatibility proof, not installed
