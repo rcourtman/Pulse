@@ -67,9 +67,10 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
             const text = await page.locator('main').innerText();
             assert.ok(!text.includes('chat-only') && !text.includes('Infrastructure changes stay with Patrol'));
             if (expected === 'controlled') { assert.ok(text.includes('Chat does not execute the plan')); assert.equal(await page.getByLabel('Protected guests').inputValue(), 'vm-101'); }
+            else assert.ok(text.includes('Assistant can query and explain only. It cannot plan infrastructure actions.'));
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
           });
-          if (level === 'autonomous') { await select.scrollIntoViewIfNeeded(); await capture('legacy-settings'); }
+          if (level === 'autonomous' || level === 'read_only') { await select.scrollIntoViewIfNeeded(); await capture(level === 'read_only' ? 'read-only-settings' : 'legacy-settings'); }
           const before = writes.length;
           await page.getByRole('button', { name: 'Save Assistant settings', exact: true }).click();
           await check(`Unrelated save preserves ${level} and scoped policy`, async () => {

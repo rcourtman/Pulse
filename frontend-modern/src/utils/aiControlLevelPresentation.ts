@@ -35,7 +35,7 @@ export function getAIControlLevelDescription(level: AIControlLevel): string {
     case 'controlled':
       return 'Assistant can plan infrastructure actions and saves each plan to Actions for you to review and run. Chat does not execute the plan.';
     default:
-      return 'Assistant can query and explain only; it cannot plan infrastructure actions.';
+      return 'Assistant can query and explain only. It cannot plan infrastructure actions.';
   }
 }
 
