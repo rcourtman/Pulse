@@ -104,7 +104,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
 
     def test_docs_explain_permission_transport_and_end_to_end_limits(self):
         ai = DOCUMENTS["AI_AUTONOMY"].read_text()
-        for text in ("settings:write", "even for GET", "changes Patrol mode", "after an uncertain write",
+        for text in ("settings:write", "even for GET", "changes Patrol mode", "After an uncertain write",
                      "HTTPS", "not use a write as an", "private header file"):
             self.assertIn(text, ai)
         proxy = DOCUMENTS["PROXY_AUTH"].read_text()
