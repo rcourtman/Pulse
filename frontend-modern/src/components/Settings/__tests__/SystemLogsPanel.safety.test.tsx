@@ -60,7 +60,8 @@ describe('SystemLogsPanel control safety', () => {
     expect(pause).toHaveAccessibleDescription(/Monitoring and server logging continue/);
     expect(pause).toHaveAttribute('aria-pressed', 'false');
     stream.receive('INFO before display pause');
-    expect(screen.getByText('INFO before display pause')).toBeVisible();
+    // The display publishes accepted messages on the next animation frame.
+    expect(await screen.findByText('INFO before display pause')).toBeVisible();
     fireEvent.click(pause);
     const resume = screen.getByRole('button', { name: 'Resume Stream' });
     expect(resume).toHaveAttribute('aria-pressed', 'true');
@@ -70,7 +71,8 @@ describe('SystemLogsPanel control safety', () => {
     expect(stream.close).not.toHaveBeenCalled();
     fireEvent.click(resume);
     stream.receive('INFO after display resume');
-    expect(screen.getByText('INFO after display resume')).toBeVisible();
+    expect(await screen.findByText('INFO after display resume')).toBeVisible();
+    expect(screen.queryByText('INFO received while paused')).toBeNull();
     expect(DisplayStream.instances).toHaveLength(1);
     expect(stream.url).toBe('/api/logs/stream');
     expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
@@ -85,7 +87,8 @@ describe('SystemLogsPanel control safety', () => {
     expect(screen.queryByText('INFO displayed before clear')).toBeNull();
     expect(screen.getByText('Waiting for log output.')).toBeVisible();
     stream.receive('INFO displayed after clear');
-    expect(screen.getByText('INFO displayed after clear')).toBeVisible();
+    expect(await screen.findByText('INFO displayed after clear')).toBeVisible();
+    expect(screen.queryByText('INFO displayed before clear')).toBeNull();
     expect(stream.close).not.toHaveBeenCalled();
     expect(screen.getByRole('combobox', { name: 'Server Log Level:' })).toHaveValue('info');
     expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
