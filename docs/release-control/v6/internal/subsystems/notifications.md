@@ -15,6 +15,38 @@
 
 ## Purpose
 
+### Notification redirects keep the configured receiver's origin
+
+Webhook and HTTP Apprise firing, recovery, Test and admitted queued delivery
+follow redirects only within the initial HTTP origin: scheme, normalised host
+and effective port. An SSRF-permitted host, subdomain, DNS alias or another port
+is not permission to receive private alert bodies, custom authentication headers
+or signed requests. HTTP/HTTPS changes are also refused. Same-origin paths and
+queries remain supported, including default-port and equivalent IPv6 spellings;
+the existing redirect limit, DNS pinning, URL validation and TLS checks remain.
+Foreign redirects stop before target DNS resolution, validation logging or any
+request to that receiver. Origin refusal precedes the redirect-count error, so
+an exhausted same-origin chain cannot expose its final foreign Location or
+change that refusal into an unknown/retryable error. A fixed configuration failure advises the operator to configure
+the final destination URL, without copying the receiver-controlled Location.
+
+That typed failure stops both enhanced transport retries and the queue's retry
+budget. It remains an undelivered dead letter and audit, never a successful
+firing/recovery receipt; admitted private configuration is not rewritten.
+Apprise retains the same safe guidance and existing opaque diagnostic policy.
+
+`notification_redirect_test.go` supplies real loopback controls for all five
+redirect statuses, foreign ports/hostname aliases, authenticated HTTPS downgrade
+with and without the existing TLS override, every sender path and the real
+queue's firing/recovery dead-letter, audit and receipt lifecycle. Same-origin
+controls verify unchanged methods, payloads, credentials and signatures. Capped
+chains exercise direct, enhanced-retry and HTTP Apprise paths; the unchanged
+same-origin redirect-count controls remain.
+`notification_redirect_origin_test.go` covers origin equivalence and separation.
+Existing redirect-chain controls now exercise paths on one receiver, not three
+different receivers. This is source privacy/compatibility proof, not installed
+destination acceptance, evidence of prior exposure or resolution of a report.
+
 ### Webhook diagnostics withhold receiver-controlled text
 
 Ordinary and enhanced firing/recovery senders, including ntfy's plain-text
@@ -419,7 +451,14 @@ firing grouping are unchanged.
 
 Verification: `resolved_grouping_contract_test.go` establishes ordinary firing
 receipts then resolves fifteen alerts in one process, after manager restart,
-and across restart with pending recoveries. It checks unseen-destination and
+and across restart with pending recoveries. Receiver timestamps must respect
+one second from the first admitted occurrence in each group. An emission burst
+completed within that window must stay one group; emission/restart work spanning
+the window is not itself evidence of early delivery. A deliberate late-arrival
+case checks that an expired first group is not extended. Across groups every
+occurrence must appear once, in order within its group, with its start time and
+resolution timestamp intact. The fixture does not change production deadlines,
+rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
 rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and

@@ -27,6 +27,8 @@ import {
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
   workloadHostScopeId,
+  workloadNodeScopeId,
+  resolveWorkloadHostScope,
 } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
@@ -174,7 +176,8 @@ export const filterWorkloads = ({
 
   const nodeScope = selectedNode;
   if (nodeScope && viewMode !== 'pod') {
-    guests = guests.filter((g) => workloadHostScopeId(g) === nodeScope);
+    const resolvedScope = resolveWorkloadHostScope(allGuests, nodeScope);
+    guests = resolvedScope ? guests.filter((g) => workloadHostScopeId(g) === resolvedScope) : [];
   }
 
   const hostHint = (selectedHostHint || '').trim().toLowerCase();
@@ -398,7 +401,11 @@ export const createWorkloadSortComparator = (
 export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type === 'vm' || type === 'system-container') {
-    return `${guest.instance}-${guest.node}`;
+    const scope = workloadNodeScopeId(guest);
+    return guest.platformScopes?.includes('vmware-vsphere') &&
+      !guest.platformScopes.includes('proxmox-pve')
+      ? `vsphere|${scope}`
+      : scope;
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
   return `${type}:${context}`;
@@ -435,6 +442,8 @@ export const getWorkloadGroupLabel = (
     const nodeName = (first.node || '').trim();
     if (nodeName && cluster) return { type: cluster, name: nodeName };
     if (nodeName) return { type: '', name: nodeName };
+    const instance = (first.instance || '').trim();
+    if (instance) return { type: '', name: instance };
   }
   return { type: '', name: context };
 };

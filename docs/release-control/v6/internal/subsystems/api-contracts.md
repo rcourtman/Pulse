@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Optional held-alert breach date consumer
+
+`MetricAlertStatus.lastBreachAt?: string` mirrors the existing backend ISO
+field dating `Alert.value`. Older servers and restart-before-evaluation may
+omit it. Consumers validate it, then a valid legacy `lastSeen`, without
+creating a date from start/poll time. Frontend type and consumer regression
+controls are in `types/api.ts`, `features/alerts/__tests__/helpers.test.ts`
+and `components/Alerts/__tests__/alertAssistantHandoffModel.test.ts`.
+No endpoint, required field or mobile capability changes.
+
 ### PMG scope readback preserves explicit all-off settings
 
 Settings node responses carry explicit false for all four PMG scope booleans,
@@ -126,6 +136,18 @@ while recovering, `recoveryStartedAt` and `recoveryElapsedSeconds`. Legacy
 `value`, `message` and `lastSeen` keep meaning the last reading that met the
 trigger. The field is absent for non-threshold alerts and until the first
 evaluation after a restart, and clients then fall back to `message`.
+
+`metricStatus.lastBreachAt` optionally dates the alert's retained evaluated
+breach value. Holds and recovery do not advance it to `observedAt`, and an
+unknown/zero date is omitted. The websocket and `/api/state` projection still
+omit legacy `lastSeen`; `/api/alerts/active` retains it. Old clients may ignore
+the additive field; consumers without it may use a valid legacy `lastSeen`
+but must not fabricate the date from `startTime` or the current observation.
+After restart no live status exists until evaluation; resolved rows have none.
+
+`TestMetricBreachTimeStateDeltasPreserveAndWithdraw` reconstructs the client
+baseline through held, recovery, renewed-breach, unknown-date and no-status
+keyed patches, including removal rather than retention of an obsolete date.
 
 ### Organisation deletion retains data after incomplete monitoring shutdown
 

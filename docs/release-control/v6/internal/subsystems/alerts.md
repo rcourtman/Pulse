@@ -102,6 +102,40 @@ day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
 
+The optional `metricStatus.lastBreachAt` dates the evaluated value retained in
+`Alert.Value`, not the newer `observedAt` of a hold or recovery. A breaching
+sample (including equality at the trigger) advances it; a held or recovering
+sample uses the existing alert's `LastSeen`. Unknown/zero dates are omitted,
+never replaced by the occurrence start, restart or poll time. It remains
+volatile with the status, so restart rebuilds it from the saved breach and a
+hold does not rewrite the recovery mirror. Resolution drops the whole status.
+
+`TestMetricBreachTimeTracksTheEvaluatedBreach` checks holds, recovery progress
+and reset, exact-trigger and renewed breaches. The existing live-status and
+checkpoint controls also assert the breach date; restart controls cover both
+durable active state and the JSON mirror, unchanged mirror bytes/mtime, and
+legacy unknown-date recovery through a new breach.
+
+### Held breach dates in attention and Assistant
+
+`getMetricAlertLastBreachAt` selects a valid timezone-qualified ISO
+`metricStatus.lastBreachAt` before a valid legacy `Alert.lastSeen`.
+Unknown, malformed, impossible-calendar and Go-zero dates stay undated; the
+occurrence start, current poll and recovery start are never substitutes.
+Attention, overview/incident hover and active History share this selection.
+Relative ages use the caller's clock. Assistant model-only context carries
+the normalised UTC ISO date as `Last Breach At` when known, separate from
+the retained breach value and live reading/clear rule. The existing compact
+Chat attachment is unchanged; no removed detail surface is restored.
+Missing live status after restart keeps the existing recorded-message path.
+The scoped target and explicit operator-approval boundary are unchanged.
+
+Verification: date-selection/attention controls in `helpers.test.ts`,
+`alertAssistantHandoffModel.test.ts` and final-byte desktop/phone production
+surface fixture `browser-tests/held-breach-time.cjs`. These are synthetic
+source/rendering controls, not native readings, inference, notification
+provider delivery or restart recovery acceptance.
+
 ### Alert card and open incident lead with the live reading — issue #2068
 
 The Alerts overview card leads an open threshold alert with the presentation's

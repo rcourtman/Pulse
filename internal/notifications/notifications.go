@@ -195,10 +195,19 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 		Timeout:   timeout,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// SSRF admission is not permission to forward private alert bodies,
+			// custom authentication headers or signatures to a different receiver.
+			if len(via) == 0 || via[0] == nil || !sameNotificationOrigin(via[0].URL, req.URL) {
+				return FailWithClass(NotificationFailureConfiguration, errNotificationRedirectOrigin)
+			}
+			// Origin refusal takes precedence even when the redirect budget is
+			// exhausted: a foreign Location must not enter diagnostics or become
+			// an unknown/retryable error instead of a local configuration failure.
 			if len(via) >= WebhookMaxRedirects {
 				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
-			// Re-validate strictly on redirect
+			// Re-validate strictly on an admitted redirect, including DNS/IP
+			// changes. Foreign origins are rejected before resolution or logging.
 			return n.validateWebhookURL(req.URL.String(), diagnosticURL)
 		},
 	}

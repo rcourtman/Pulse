@@ -134,6 +134,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     containerRuntime,
     selectedPlatform,
     selectedNode,
+    selectedHostHint,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     selectedCluster,

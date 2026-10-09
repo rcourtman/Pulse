@@ -145,7 +145,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   );
                   const metadata = () =>
                     getWorkloadGuestMetadataRecord(guest(), props.guestMetadata());
-                  const parentNode = () => node() ?? props.guestParentNodeMap()[guestId()];
+                  // A group label is not parent evidence. Every row follows
+                  // the validated source-owned parent, including flat mode.
+                  const parentNode = () => props.guestParentNodeMap()[guestId()];
                   const parentNodeOnline = () => {
                     const pn = parentNode();
                     return pn ? isNodeOnline(pn) : true;

@@ -141,6 +141,11 @@ the alerts subsystem. Agent report admission, host continuity and
 re-enrollment never read or write it, and it is not persisted with agent or
 state records.
 
+`MetricAlertStatus.lastBreachAt` is an optional server-evaluated breach date,
+not an agent report timestamp. It stays with the volatile alert status and
+neither changes agent admission nor adds persistent agent/state fields. The
+model wire/clone controls cover known, offset, unknown and Go-zero dates.
+
 ### Source-record lookup preserves report admission
 
 Host and Docker report admission still performs canonical host-view matching

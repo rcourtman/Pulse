@@ -14,6 +14,8 @@ on:
       - '.github/workflows/test-e2e.yml'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
+      - 'scripts/e2e_test_images.py'
+      - 'scripts/tests/test_e2e_test_images.py'
   push:
     branches:
       - main
@@ -28,6 +30,8 @@ on:
       - '.github/workflows/test-e2e.yml'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
+      - 'scripts/e2e_test_images.py'
+      - 'scripts/tests/test_e2e_test_images.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -54,6 +58,9 @@ jobs:
       # Fail before installs, Docker builds or the eight-shard fan-out.
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
+
+      - name: Validate shared E2E image admission
+        run: python3 scripts/tests/test_e2e_test_images.py
 
       - name: Validate browser dependency acquisition policy
         run: python3 scripts/tests/test_playwright_acquisition.py
@@ -148,15 +155,50 @@ jobs:
           path: tests/integration/playwright-report/multi-tenant-diagnostic/
           retention-days: 3
 
+  test-images:
+    name: Build source-bound E2E images once
+    needs: tier-selection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.images.outputs.artifact-id }}
+      manifest-sha256: ${{ steps.bundle.outputs.manifest-sha256 }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Same provider, pins and e2e_runtime contract as the former nine builds.
+      # A provider refusal remains terminal: no mirror, login or pull retry.
+      - name: Build and bind the test images
+        id: bundle
+        run: python3 scripts/e2e_test_images.py build "$RUNNER_TEMP/pulse-e2e-images"
+
+      - name: Upload this run's exact test images
+        id: images
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-test-images-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/pulse-e2e-images/manifest.json
+            ${{ runner.temp }}/pulse-e2e-images/images.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
-    needs: tier-selection
+    needs: [tier-selection, test-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    env:
+      PULSE_E2E_SEED_IMAGE: pulse-e2e-seed:test
 
     steps:
       - name: Checkout code
@@ -177,7 +219,12 @@ jobs:
         run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
 
       - name: Install Playwright dependencies
-        timeout-minutes: 10
+        # Chromium + WebKit requested 116 MB of authenticated OS packages in
+        # the retained setup failure. Active downloads near 90 kB/s need over
+        # 20 minutes before installation/browser downloads, not ten. Keep the
+        # 60-minute job and every test deadline unchanged; apt's transport
+        # timeouts and incomplete-index refusal still bound stalled requests.
+        timeout-minutes: 30
         working-directory: tests/integration
         run: |
           npm ci
@@ -187,12 +234,17 @@ jobs:
         working-directory: internal/cloudcp/portal/frontend
         run: npm ci
 
-      - name: Build Docker images for test environment
-        # GO_BUILD_TAGS="" drops the release build tag so the suite can enable
-        # mock fixtures; release-tag gating has its own -tags release Go tests.
-        run: |
-          docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
-          docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
+      - name: Download this run's exact test images
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
+          path: ${{ runner.temp }}/pulse-e2e-images
+          merge-multiple: true
+
+      - name: Admit the source-bound test images
+        env:
+          PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}
+        run: python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images"
 
       - name: Start test containers
         working-directory: tests/integration
@@ -318,8 +370,12 @@ jobs:
 
   agent-registration:
     name: Agent registration lifecycle
+    needs: [tier-selection, test-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      PULSE_E2E_SEED_IMAGE: pulse-e2e-seed:test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -352,10 +408,17 @@ jobs:
         working-directory: internal/cloudcp/portal/frontend
         run: npm ci
 
-      - name: Build test images
-        run: |
-          docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
-          docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
+      - name: Download this run's exact test images
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.test-images.outputs.artifact-id }}
+          path: ${{ runner.temp }}/pulse-e2e-images
+          merge-multiple: true
+
+      - name: Admit the source-bound test images
+        env:
+          PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}
+        run: python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images"
 
       - name: Start non-mock test container
         working-directory: tests/integration
@@ -406,6 +469,7 @@ jobs:
     timeout-minutes: 5
     needs:
       - tier-selection
+      - test-images
       - e2e
       - agent-registration
     if: always()
@@ -419,6 +483,10 @@ jobs:
         run: |
           if [ "${{ needs.tier-selection.result }}" != "success" ]; then
             echo "E2E tier selection is invalid (result: ${{ needs.tier-selection.result }})"
+            exit 1
+          fi
+          if [ "${{ needs.test-images.result }}" != "success" ]; then
+            echo "Source-bound E2E test images were not produced (result: ${{ needs.test-images.result }})"
             exit 1
           fi
           if [ "${{ needs.e2e.result }}" != "success" ]; then

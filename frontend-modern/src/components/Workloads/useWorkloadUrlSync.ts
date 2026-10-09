@@ -11,7 +11,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import type { ViewMode } from '@/types/workloads';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
-import type { WorkloadNodeOption } from './workloadRouteModel';
+import { resolveWorkloadNodeHint, type WorkloadNodeOption } from './workloadRouteModel';
 import {
   parseWorkloadsWorkloadUrlParams,
   resolveWorkloadsManagedWorkloadsNavigateTarget,
@@ -75,13 +75,7 @@ export function useWorkloadUrlSync(options: WorkloadsWorkloadUrlSyncOptions) {
     if (options.viewMode() === 'pod') return;
     const hostHint = options.selectedHostHint();
     if (!hostHint || options.selectedNode() !== null) return;
-    const normalizedHint = hostHint.trim().toLowerCase();
-    if (!normalizedHint) return;
-    const workloadNode = options.workloadNodeOptions().find((candidate) => {
-      const label = candidate.label.toLowerCase();
-      const value = candidate.value.toLowerCase();
-      return label === normalizedHint || value === normalizedHint || label.includes(normalizedHint);
-    });
+    const workloadNode = resolveWorkloadNodeHint(options.workloadNodeOptions(), hostHint);
     if (!workloadNode) return;
     options.setSelectedNode(workloadNode.value);
     options.setSelectedHostHint(null);

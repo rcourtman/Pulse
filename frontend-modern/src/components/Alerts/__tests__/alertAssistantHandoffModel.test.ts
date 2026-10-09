@@ -189,3 +189,84 @@ describe('alertAssistantHandoffModel', () => {
     expect(handoff.context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
   });
 });
+
+const BREACH_NOW = new Date('2026-10-06T10:52:00Z');
+const heldAlert = (overrides: Partial<Alert> = {}): Alert =>
+  makeAlert({
+    type: 'temperature',
+    value: 80,
+    threshold: 80,
+    message: 'Node temperature at 80.0°C',
+    startTime: '2026-10-06T07:57:44Z',
+    lastSeen: '2026-10-06T10:51:59Z',
+    metricStatus: {
+      phase: 'latched',
+      value: 76,
+      unit: '°C',
+      observedAt: '2026-10-06T10:51:50Z',
+      lastBreachAt: '2026-10-06T11:31:59.123456789+01:00',
+      trigger: 80,
+      recovery: 75,
+      recoveryDelaySeconds: 300,
+    },
+    ...overrides,
+  });
+
+describe('Assistant held breach date evidence', () => {
+  it.each(['latched', 'recovering'] as const)(
+    'keeps the %s breach date distinct from current, poll and start time',
+    (phase) => {
+      const alert = heldAlert();
+      alert.metricStatus = { ...alert.metricStatus!, phase };
+      const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+      expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:31:59.123Z');
+      expect(context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
+      expect(context.handoffContext).toContain('Current Value: 76.0°C');
+      expect(context.autonomousMode).toBe(false);
+      expect(context.handoffContext).toContain('Operator Boundary:');
+    },
+  );
+
+  it('uses a valid legacy breach date only when no valid status date exists', () => {
+    const alert = heldAlert({ lastSeen: '2026-10-06T10:32:00Z' });
+    alert.metricStatus!.lastBreachAt = 'not-a-date';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:32:00.000Z');
+  });
+
+  it.each([
+    undefined,
+    '',
+    'unknown',
+    'bad',
+    '0001-01-01T00:00:00Z',
+    '2026-02-30T10:00:00Z',
+    '0',
+    0,
+  ])('omits unknown date evidence without replacing it with start or poll: %s', (date) => {
+    const alert = heldAlert({ lastSeen: date as string | undefined });
+    alert.metricStatus!.lastBreachAt = date as string | undefined;
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).not.toContain('Last Breach At:');
+    expect(context.handoffContext).toContain('Current Value: 76.0°C');
+  });
+
+  it('keeps a valid future-skewed date as evidence, rather than fabricating now', () => {
+    const alert = heldAlert();
+    alert.metricStatus!.lastBreachAt = '2026-10-06T11:52:00Z';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T11:52:00.000Z');
+  });
+
+  it('does not add held-breach copy when the alert is breaching or has no live status', () => {
+    const alert = heldAlert();
+    alert.metricStatus!.phase = 'breaching';
+    const { context } = buildAlertAssistantHandoff({ alert, now: BREACH_NOW });
+    expect(context.handoffContext).toContain('Last Breach At: 2026-10-06T10:31:59.123Z');
+    expect(context.briefing?.detailLines?.join('\n')).not.toContain('Last reading at or above');
+    alert.metricStatus = undefined;
+    const legacy = buildAlertAssistantHandoff({ alert, now: BREACH_NOW }).context;
+    expect(legacy.handoffContext).not.toContain('Last Breach At:');
+    expect(legacy.briefing?.detailLines).toContain('Message: Node temperature at 80.0°C');
+  });
+});

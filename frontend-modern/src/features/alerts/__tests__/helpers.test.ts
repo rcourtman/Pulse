@@ -414,3 +414,88 @@ describe('getAlertAttentionCopy', () => {
     expect(copy.message).not.toContain('80');
   });
 });
+
+const INVALID_BREACH_DATES = [
+  undefined,
+  '',
+  'unknown',
+  'not-a-date',
+  '0001-01-01T00:00:00Z',
+  ' 0001-01-01T00:00:00.000000000+00:00 ',
+  '2026-02-30T10:00:00Z',
+  '2026-10-06T10:00:00',
+  '0',
+  0,
+] as const;
+
+describe('held breach date consumers', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  it.each(['latched', 'recovering'] as const)(
+    'prefers the status breach date in %s presentation and attention hover',
+    (phase) => {
+      const alert = minipcAlert({
+        phase,
+        lastBreachAt: '2026-10-06T11:31:59.123456789+01:00',
+      });
+      // Simulate a legacy field carrying a newer poll time; it must not win.
+      alert.lastSeen = '2026-10-06T10:51:59Z';
+      const expected = 'Last reading at or above 80°C: 80°C, 20 mins ago';
+      expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toBe(expected);
+      expect(getAlertAttentionCopy(alert, NOW).title).toContain(expected);
+    },
+  );
+
+  it.each(['latched', 'recovering'] as const)(
+    'dates a status-only %s breach without legacy lastSeen',
+    (phase) => {
+      const alert = {
+        ...minipcAlert({ phase, lastBreachAt: '2026-10-06T10:32:00Z' }),
+        lastSeen: undefined,
+      };
+      expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toBe(
+        'Last reading at or above 80°C: 80°C, 20 mins ago',
+      );
+    },
+  );
+
+  it.each(INVALID_BREACH_DATES)(
+    'uses valid legacy lastSeen when the status breach date is unusable: %s',
+    (lastBreachAt) => {
+      const alert = minipcAlert({ lastBreachAt: lastBreachAt as string | undefined });
+      alert.lastSeen = '2026-10-06T10:32:00Z';
+      expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toBe(
+        'Last reading at or above 80°C: 80°C, 20 mins ago',
+      );
+    },
+  );
+
+  it.each(INVALID_BREACH_DATES)(
+    'keeps an unknown breach date undated, never start or poll time: %s',
+    (date) => {
+      const alert = minipcAlert({ lastBreachAt: date as string | undefined });
+      alert.lastSeen = date as string | undefined;
+      const expected = 'Last reading at or above 80°C: 80°C';
+      expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toBe(expected);
+      expect(getAlertAttentionCopy(alert, NOW).title?.split('\n').at(-1)).toBe(expected);
+    },
+  );
+
+  it('uses the supplied clock for both current-evaluation age and breach age', () => {
+    // Deliberately independent of the wall clock.
+    vi.setSystemTime(NOW + 60 * 60 * 1000);
+    const alert = minipcAlert({
+      observedAt: '2026-10-06T10:40:00Z',
+      lastBreachAt: '2026-10-06T10:32:00Z',
+    });
+    expect(getMetricAlertPresentation(alert, NOW)?.summary).toBe(
+      'Last reading: Temperature 76°C, 12 mins ago',
+    );
+    expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toContain('20 mins ago');
+  });
+});

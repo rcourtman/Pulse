@@ -15,6 +15,35 @@
 
 ## Purpose
 
+### Core E2E images are built once and admitted in the same run
+
+The secret-free Core E2E workflow builds its existing `e2e_runtime` server and
+mock GitHub images once after tier validation. It also pulls the unchanged,
+committed Alpine seed pin once. The eight stable shards and non-mock agent
+registration job load the same short-retention, current-run artifact by its
+producer's immutable artifact ID; they do not select another run, image cache,
+registry, credential or rebuild fallback. Local compose keeps its pinned seed
+image default. Each job retains its own containers, data and browser sessions.
+
+Before Docker load, the helper verifies the producer job's manifest digest,
+exact checkout/run/attempt, committed seed pin, three fixed image IDs, archive
+size and archive digest. After load it verifies Linux amd64, the producer's
+image IDs and source revision labels on both built images. A missing, changed,
+foreign or failed bundle stops the job. Failed production stops fan-out and
+fails the final verdict; all eight stable shards and agent registration must
+still pass. Browser acquisition and test deadlines, probation rules, registry
+pins and production/release paths are unchanged. Provider refusals stay terminal:
+there is no login, alternate registry or pull retry.
+
+`scripts/tests/test_e2e_test_images.py` exercises real tar/gzip/hash/filesystem
+production and admission with a Docker command double, exact command arguments,
+source/run/attempt isolation, changed/truncated/oversized/symlink bytes, wrong
+platform/revision/image IDs, terminal failures without replay and fail-closed
+workflow fan-out/verdict mutants. This is source and orchestration proof, not
+real Docker execution, hosted artifact transfer or a completed user journey.
+Containing hosted production, load/start and all journey verdicts remain the
+operational acceptance result. These images are not release artifacts.
+
 ### Existing auto-update timers are discovered without changing consent
 
 Server installer timer discovery is a bounded, exact-unit `systemctl` inventory.

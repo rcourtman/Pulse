@@ -15,6 +15,43 @@
 
 ## Purpose
 
+### Workloads node attribution preserves instance/node boundaries
+
+Workloads uses an encoded instance/node tuple for UI node scopes, grouping and
+parent lookup. Concatenated legacy aliases may resolve existing bookmarks only
+when unique; neither a partial host hint nor an ambiguous alias may choose the
+first node. An unresolved bookmark remains a visible, removable text filter
+and uses filtered-empty copy, not an inventory-outage message. Supplied parent
+fields take precedence over inferred legacy guest-ID prefixes, whose positive VMID suffix must match the supplied VMID and which
+may fill missing fields but cannot contradict them. Supplied node snapshots
+overlay only the same native ID and tuple; a shared native ID cannot erase
+another tuple. Ambiguous tuples or native-ID aliases do not provide parent
+evidence. Legacy fallback must also resolve the candidate's own tuple back to
+that same node; a unique native ID cannot restore an ambiguous tuple, even
+when the guest's instance or node fields are absent. Row status and host-relative memory use the validated row parent in grouped and flat modes;
+a group label is not authority to supply another row's parent. Unrelated
+platforms do not inherit Proxmox parent state from matching labels.
+
+UI scope tokens are not collector or metric IDs. The existing charts transport
+uses a uniquely resolved native node ID, or its bounded global summary when
+that parent cannot be resolved uniquely, retaining canonical per-resource chart
+ownership and existing polling/point limits. This presentation boundary changes
+no server ingestion, guest ID, alert identity, collector, native History or
+monitoring permissions. Node removal or ambiguous supplied inventory leaves the
+host-memory denominator unavailable, never zero or another node's capacity.
+
+Verification: `workloadTopology.attribution.test.ts` and
+`workloadTopology.scope.test.ts` cover collided scopes, parent ambiguity,
+source-field precedence, legacy hints and unrelated platforms.
+`workloadTopology.ambiguousParent.test.ts` discriminates complete and incomplete
+guest fields, both native aliases, VM/LXC types and both inventory orders;
+unique, consistent legacy fallbacks remain valid.
+`WorkloadsSurface.performance.contract.test.tsx` checks both supplied inventory
+orders and same-node snapshot overlays; `useWorkloadTableMetricHistory.test.tsx`
+checks the native-ID transport boundary. Parent-bound browser proof checks real
+Workloads grouping, row status, host-memory basis and removable bookmarks on
+desktop and phone. It does not establish server ingestion or native recovery.
+
 
 ### Workloads disk decorations follow the selected filesystem source
 

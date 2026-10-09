@@ -75,7 +75,9 @@ Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile
 - Your monitoring data runs in an **isolated container** — no shared databases.
 - Data is stored encrypted at rest.
 - Backups are automated and encrypted.
-- You can **export** your configuration at any time via **Settings → System → Recovery** and migrate to self-hosted if needed.
+- **Create Backup** in **Settings → System → Recovery** downloads an encrypted
+  configuration export, not a complete copy of the hosted installation. Check
+  the [migration scope](#migrating-tofrom-cloud) before relying on it for a move.
 - See [Privacy](PRIVACY.md) for full details.
 
 ## Billing
@@ -88,21 +90,89 @@ Pulse Cloud billing is handled by Stripe. You can manage your subscription from 
 
 ## Migrating To/From Cloud
 
+**Create Backup transfers only the included configuration, not the full
+installation.** Metrics and audit history, incidents and queued notifications,
+server-side agent inventory and enrolment state, profiles and assignments are
+not included. Neither are TrueNAS, vSphere and Machine Availability connections,
+local login credentials or deployment overrides. Contents depend on the
+exporting version; see the [configuration-transfer scope](MIGRATION.md#configuration-transfer)
+for the complete account. Imported API-token records do not reveal the original
+tokens or establish that every agent is admitted.
+
+Hosted automatic backups and this downloaded export are different things. If
+you need excluded state, retain the source and establish a recoverable,
+[consistent full-state backup](MIGRATION.md#full-state-recovery) before moving.
+Do not assume access to the hosted filesystem or that a hosted backup can be
+restored into your self-hosted installation. Do not mix encrypted files and keys
+from different installations. Keep exports, passphrases and credentials private.
+
+Import can activate monitoring and notification settings. Use an isolated trial
+where available; if the hosted destination cannot be isolated, arrange a
+single-active cutover before importing and retain independent monitoring during
+the pause. Browser administrator access does not grant hosted filesystem or
+service-control access. If a necessary hosting-side operation is unavailable,
+stop before importing rather than cancel the source or run two connected copies.
+
 ### Self-Hosted → Cloud
 
-1. **Export** from your self-hosted instance: **Settings → System → Recovery → Create Backup**.
-2. **Import** into your Cloud instance: **Settings → System → Recovery → Restore Configuration**.
-3. Update agent `--url` flags to point to your cloud URL.
+1. Keep the self-hosted source intact and preserve the separate full-state
+   backup if you need its history or excluded state.
+2. Set up destination-local administrator access on Cloud. Keep the trial
+   destination isolated from monitored systems, agents and notification
+   destinations so two instances do not send duplicate alerts or remote actions.
+3. **Export** from the source through **Settings → System → Recovery → Create
+   Backup**, using a strong, unique passphrase stored separately. If Cloud
+   already has useful configuration, export it first. **Restore Configuration**
+   replaces the included settings and API-token records; it does not merge them.
+4. Re-create the excluded connections and settings you need. Retarget existing
+   agents using the [address-change procedure](UNIFIED_AGENT.md#moving-pulse-to-a-new-address),
+   not by uninstalling or re-enrolling them. It preserves the saved identity and
+   credential; use the procedure supported by that host's platform.
+5. Complete the [cutover checks](#verify-the-move-before-retiring-the-source)
+   before retiring the self-hosted source.
 
 ### Cloud → Self-Hosted
 
-1. **Export** from Cloud: **Settings → System → Recovery → Create Backup**.
-2. Install Pulse on your own server (see [Install Guide](INSTALL.md)).
-3. **Import** the backup.
-4. Re-activate your license key (if switching to Pro self-hosted).
-5. Update agent `--url` flags.
+1. Keep the Cloud instance available until validation is complete; do not
+   cancel it or discard the source merely because an export succeeded. Establish
+   recovery for any excluded state you need before proceeding.
+2. Install Pulse on your own server using the [Install Guide](INSTALL.md).
+   Set up destination-local administrator access and keep the trial isolated
+   from monitored systems, agents and notification destinations.
+3. **Export** from Cloud through **Settings → System → Recovery → Create
+   Backup**. Keep its passphrase separately and privately. Export any existing
+   destination configuration first, then use **Restore Configuration** there;
+   import replaces the included settings and API-token records, not a merge.
+4. Re-create excluded connections and settings, and verify your Pro licence
+   separately if using Pro self-hosted. Retarget existing agents with the
+   [address-change procedure](UNIFIED_AGENT.md#moving-pulse-to-a-new-address),
+   preserving their identity and private credential rather than creating a
+   replacement token just for the move.
+5. Complete the checks below before retiring the Cloud source.
 
-See [Migration Guide](MIGRATION.md) for detailed steps.
+### Verify the move before retiring the source
+
+- Verify destination-local login, imported SSO mappings and the new callback
+  address. Imported settings do not override every deployment-managed value.
+- Keep HTTPS verification enabled for both the new installer download and the
+  agent connection. An old endpoint's custom CA or certificate pin is not
+  automatically trust for the new endpoint; follow the retargeting guide.
+- Check fresh ordinary reports and agent admission at the destination, not
+  just cached rows or a successful import. Re-create profiles and assignments
+  before enabling remote actions. Missing history after configuration-only
+  transfer does not prove collection failed.
+- Check every expected platform and your existing notification delivery
+  evidence without running two instances against the same destinations. Do
+  not induce alerts, replay a queue or run a workload action merely to test the
+  move; importing settings does not transfer queued notifications.
+- If an import reports a reload/apply failure, settings may already have been
+  written. Preserve both instances and inspect the error before repeating it.
+  If validation fails, stop the trial destination before returning traffic to
+  the intact source, check agent URLs and avoid two active writers.
+
+See the [Migration Guide](MIGRATION.md#cut-over-and-verify) for the complete
+cutover and recovery procedure. A successful configuration import is not proof
+of full recovery.
 
 ## FAQ
 
@@ -120,7 +190,9 @@ Your data is retained for 30 days after cancellation. You can export your config
 
 ### Can I switch between Cloud and self-hosted?
 
-Yes. Use the export/import workflow described above. Your monitoring configuration is fully portable.
+You can transfer the included configuration using the workflow above. It is
+not a full installation copy: history, some connections and agent enrolment
+state need separate handling. Verify the destination before retiring the source.
 
 ## See Also
 

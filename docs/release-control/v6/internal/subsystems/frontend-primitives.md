@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Shared alert breach-date presentation
+
+Existing attention and alert/history hover copy uses the validated
+`metricStatus.lastBreachAt` before legacy `lastSeen`, never occurrence start
+or poll time. Unknown/Go-zero dates stay undated. Shared relative formatting
+receives the presentation caller's clock for both stale-reading and breach
+ages. The existing compact Assistant attachment and approval boundary remain
+unchanged; only its model context gains the validated UTC date. Date controls
+in alert helpers and the production held-breach browser fixture bind this
+shared presentation boundary to the alerts/API contracts.
+
+
 ### Systemd backup-pause help separates shutdown from remote completion
 
 The existing systemd precaution reads the stop result as well as the inactive
