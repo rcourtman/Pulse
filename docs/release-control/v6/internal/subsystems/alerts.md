@@ -102,6 +102,20 @@ day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
 
+The optional `metricStatus.lastBreachAt` dates the evaluated value retained in
+`Alert.Value`, not the newer `observedAt` of a hold or recovery. A breaching
+sample (including equality at the trigger) advances it; a held or recovering
+sample uses the existing alert's `LastSeen`. Unknown/zero dates are omitted,
+never replaced by the occurrence start, restart or poll time. It remains
+volatile with the status, so restart rebuilds it from the saved breach and a
+hold does not rewrite the recovery mirror. Resolution drops the whole status.
+
+`TestMetricBreachTimeTracksTheEvaluatedBreach` checks holds, recovery progress
+and reset, exact-trigger and renewed breaches. The existing live-status and
+checkpoint controls also assert the breach date; restart controls cover both
+durable active state and the JSON mirror, unchanged mirror bytes/mtime, and
+legacy unknown-date recovery through a new breach.
+
 ### Alert card and open incident lead with the live reading — issue #2068
 
 The Alerts overview card leads an open threshold alert with the presentation's

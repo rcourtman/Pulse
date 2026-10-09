@@ -165,6 +165,10 @@ type MetricAlertStatus struct {
 	// Recovery progress, present only in the recovering phase.
 	RecoveryStartedAt      *time.Time `json:"recoveryStartedAt,omitempty"`
 	RecoveryElapsedSeconds int        `json:"recoveryElapsedSeconds,omitempty"`
+	// LastBreachAt dates the alert's Value: the latest evaluated reading that
+	// met the trigger, not the newer observation of a hold or recovery run.
+	// State/websocket alerts omit LastSeen; zero means the date is unknown.
+	LastBreachAt time.Time `json:"lastBreachAt,omitzero"`
 }
 
 // Clone returns a deep copy.

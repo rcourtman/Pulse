@@ -243,6 +243,13 @@ lists carry the reading being evaluated now for a threshold alert held below
 its trigger, while `value` and `message` keep the last breach. The projection
 adds no copy of its own: `GetActiveAlerts` already returns deep clones.
 
+The optional status field `lastBreachAt` carries the held breach's original
+`LastSeen` through that same projection, without publishing the poll-varying
+`LastSeen` of other lifecycle alerts. `observedAt` still dates the current
+comparison. `TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert` checks
+the concrete frontend JSON as well as the in-memory held reading, with an
+independent breach date and omitted legacy `lastSeen`.
+
 ### Fresh broadcast projection owns one resource/target capture
 
 Canonical live, fallback and standalone-host continuity broadcast reads prefer

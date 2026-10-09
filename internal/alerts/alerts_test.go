@@ -22472,13 +22472,16 @@ func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
 
 func TestMetricStatusStaysOutOfDurableAlertSnapshots(t *testing.T) {
 	m, clock := newMetricStatusTestManager(t)
-	fireNodeTemperatureAlert(t, m, clock, 85)
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
 	clock.advance(30 * time.Second)
 	checkMetricStatusNode(m, 78)
 
 	live := m.GetActiveAlerts()
 	if len(live) != 1 || live[0].MetricStatus == nil || live[0].MetricStatus.Value != 78 {
 		t.Fatalf("live alerts do not carry the current reading: %+v", live)
+	}
+	if got := metricBreachTime(t, live[0].MetricStatus); !got.Equal(fired.LastSeen) {
+		t.Fatalf("live status lost the breach's date: %v, want %v", got, fired.LastSeen)
 	}
 	for _, alert := range m.snapshotActiveAlerts() {
 		if alert.MetricStatus != nil {

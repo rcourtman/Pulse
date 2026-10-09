@@ -511,3 +511,82 @@ func TestClientStateBaselineAdvancesOnlyAfterDeltaIsQueued(t *testing.T) {
 		t.Fatal("client baseline did not advance after the delta was queued")
 	}
 }
+
+// A receiver retains an unchanged breach date across held/recovery patches,
+// advances it only with a new breach, and drops it when the producer has none.
+func TestMetricBreachTimeStateDeltasPreserveAndWithdraw(t *testing.T) {
+	state := models.EmptyStateFrontend()
+	state.ActiveAlerts = []models.Alert{{ID: "alert-temperature", Type: "temperature", Value: 85}}
+	setStatus := func(body string) {
+		t.Helper()
+		state.ActiveAlerts[0].MetricStatus = nil
+		if body != "" {
+			var status models.MetricAlertStatus
+			if err := json.Unmarshal([]byte(body), &status); err != nil {
+				t.Fatal(err)
+			}
+			state.ActiveAlerts[0].MetricStatus = &status
+		}
+	}
+	setStatus(`{"phase":"breaching","value":85,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:00:00Z","lastBreachAt":"2026-10-09T19:00:00Z"}`)
+	previous, err := buildClientStateSnapshot(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received map[string]any
+	if err := json.Unmarshal(previous.keyed[activeAlertsField].entries["alert-temperature"], &received); err != nil {
+		t.Fatal(err)
+	}
+	checkDate := func(want string) {
+		t.Helper()
+		status, _ := received["metricStatus"].(map[string]any)
+		got, present := status["lastBreachAt"]
+		if present != (want != "") || want != "" && got != want {
+			t.Errorf("receiver date = %v present %v, want %q", got, present, want)
+		}
+		if _, present := received["lastSeen"]; present {
+			t.Fatal("state dated lifecycle alerts through LastSeen")
+		}
+	}
+	checkDate("2026-10-09T19:00:00Z")
+	for _, step := range []struct{ name, body, date string }{
+		{"hold", `{"phase":"latched","value":78,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:01:00Z","lastBreachAt":"2026-10-09T19:00:00Z"}`, "2026-10-09T19:00:00Z"},
+		{"recovery", `{"phase":"recovering","value":72,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:02:00Z","lastBreachAt":"2026-10-09T19:00:00Z","recoveryStartedAt":"2026-10-09T19:02:00Z"}`, "2026-10-09T19:00:00Z"},
+		{"new breach", `{"phase":"breaching","value":90,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:03:00Z","lastBreachAt":"2026-10-09T19:03:00Z"}`, "2026-10-09T19:03:00Z"},
+		{"unknown date", `{"phase":"latched","value":78,"trigger":80,"recovery":75,"observedAt":"2026-10-09T19:04:00Z"}`, ""},
+		{"no live status", "", ""},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			setStatus(step.body)
+			current, err := buildClientStateSnapshot(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			delta, err := buildClientStateDelta(previous, current)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, ok := delta[activeAlertsDeltaField].(resourceDeltaPayload)
+			if !ok || len(payload.Upserts) != 1 || len(payload.Removed) != 0 {
+				t.Fatalf("alert transition did not produce one keyed patch: %+v", delta)
+			}
+			if _, full := delta[activeAlertsField]; full {
+				t.Fatal("transition re-shipped all active alerts")
+			}
+			var patch map[string]any
+			if err := json.Unmarshal(payload.Upserts[0], &patch); err != nil {
+				t.Fatal(err)
+			}
+			received = applyLabelTagMergePatch(received, patch)
+			var complete map[string]any
+			if err := json.Unmarshal(current.keyed[activeAlertsField].entries["alert-temperature"], &complete); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(received, complete) {
+				t.Fatalf("receiver differs from complete state: %+v vs %+v", received, complete)
+			}
+			checkDate(step.date)
+			previous = current
+		})
+	}
+}
