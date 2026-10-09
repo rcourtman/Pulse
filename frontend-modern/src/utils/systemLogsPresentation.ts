@@ -17,6 +17,8 @@ export const SYSTEM_LOGS_PANEL_COPY = {
   clearTitle: 'Clear Log Output',
   downloadLabel: 'Support Bundle',
   emptyState: 'Waiting for log output.',
+  bufferHelp:
+    'This view keeps only the latest 1,000 received lines. Paused lines are not collected. Clearing the view does not delete server logs.',
 } as const;
 
 export const SYSTEM_LOG_LEVEL_OPTIONS: readonly SystemLogLevelOption[] = [

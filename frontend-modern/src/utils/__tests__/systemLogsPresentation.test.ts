@@ -16,6 +16,8 @@ describe('systemLogsPresentation', () => {
       clearTitle: 'Clear Log Output',
       downloadLabel: 'Support Bundle',
       emptyState: 'Waiting for log output.',
+      bufferHelp:
+        'This view keeps only the latest 1,000 received lines. Paused lines are not collected. Clearing the view does not delete server logs.',
     });
     expect(SYSTEM_LOG_LEVEL_OPTIONS).toEqual([
       { value: 'debug', label: 'Debug' },
