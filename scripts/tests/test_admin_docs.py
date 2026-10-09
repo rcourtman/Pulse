@@ -69,7 +69,7 @@ def recipes(name: str) -> list[str]:
 def executable_recipe(name: str, step: str) -> str:
     # Use the actual shared helper, not a test-only safe client. Legacy curl
     # snippets remain executable so the parent control can expose their leak.
-    if name == "AUDIT_LOGGING" and "pulse_api " in step:
+    if "pulse_api " in step:
         return request_helper() + "\n" + step
     return step
 
@@ -83,13 +83,13 @@ class AdminDocsTest(unittest.TestCase):
                 for step in steps:
                     self.assertNotRegex(step, r"(?:\b\w*TOKEN=|Authorization:|X-API-Token:|Bearer\s|--cookie\b)")
                     self.assertNotRegex(step, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-                    if name == "AUDIT_LOGGING":
-                        self.assertIn("pulse_api GET ", step)
+                    if name in ("AUDIT_LOGGING", "RBAC"):
+                        self.assertIn("pulse_api ", step)
                         self.assertNotIn("curl ", step)
                     else:
                         self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', step)
-                    if re.search(r"--request (POST|PUT)", step):
-                        self.assertIn("--data-binary @-", step)
+                    if re.search(r"(?:--request|pulse_api) (POST|PUT)", step):
+                        self.assertIn("--data-binary @-", request_helper() if "pulse_api " in step else step)
                         self.assertIn("<<'JSON'", step)
 
     def test_guides_explain_authority_and_sensitive_output(self):
@@ -154,7 +154,7 @@ class AdminDocsTest(unittest.TestCase):
                             self.assertNotIn(b"Saved private export", result.stdout)
                             # curl preserves an error body, in stdout or the requested file.
                             exports = list(Path(temporary).glob("*/audit-export.json"))
-                            if name == "AUDIT_LOGGING":
+                            if name in ("AUDIT_LOGGING", "RBAC"):
                                 responses = list((Path(temporary) / ".config/pulse").glob("api-response.*"))
                                 self.assertEqual(len(responses), 1)
                                 output = responses[0].read_bytes()
@@ -204,6 +204,56 @@ class AdminDocsTest(unittest.TestCase):
                                                executable_recipe("AUDIT_LOGGING", step), private_response=True)
                         self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
                         self.assertEqual(len(requests), before + 1, "must not follow redirects or retry partial reads")
+
+    def test_rbac_guidance_preserves_private_and_uncertain_change_boundaries(self):
+        guide = (DOCS / "RBAC.md").read_text()
+        for boundary in ("in the same Bash session", "not an installed Pulse command",
+                         "owner-only file", "redacted", "five-second", "twenty-second",
+                         "not a script to run from top to bottom", "administrator recovery path",
+                         "empty role list remove access", "does not follow redirects or retry",
+                         "after the change was applied", "inspect the current state",
+                         "HTTP success", "upstream IdP account"):
+            self.assertIn(boundary, guide)
+
+    def test_rbac_operations_keep_private_success_bodies_in_new_owner_only_files(self):
+        steps = recipes("RBAC")
+        self.assertEqual(len(steps), len(EXPECTED["RBAC"]))
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory(prefix="rbac docs ") as temporary:
+            home = Path(temporary)
+            for header in (f"X-API-Token: {TEST_TOKEN}", f"Authorization: Bearer {TEST_TOKEN}"):
+                for step, (method, path, _) in zip(steps, EXPECTED["RBAC"]):
+                    with self.subTest(method=method, path=path, header=header.split(":")[0]):
+                        before = len(requests)
+                        result = exercise_curl(self, home, header, port,
+                                               executable_recipe("RBAC", step), private_response=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+                        self.assertIn(b"HTTP 200", result.stdout)
+            self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 17)
+
+    def test_rbac_operations_keep_private_http_errors_and_fail_without_retry(self):
+        for status in (400, 401, 402, 403, 500, 503):
+            with private_recording_server(status) as (port, requests):
+                for step in recipes("RBAC"):
+                    with self.subTest(status=status, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("RBAC", step), private_response=True)
+                        self.assertEqual(result.returncode, 22, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertIn(f"HTTP {status}".encode(), result.stdout)
+
+    def test_rbac_operations_refuse_redirect_success_and_uncertain_transfer_retry(self):
+        for status, partial, expected_exit in ((302, False, 1), (200, True, 18)):
+            with private_recording_server(status, partial) as (port, requests):
+                for step in recipes("RBAC"):
+                    with self.subTest(status=status, partial=partial, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("RBAC", step), private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1, "an uncertain mutation must not be repeated or redirected")
 
 
 if __name__ == "__main__":
