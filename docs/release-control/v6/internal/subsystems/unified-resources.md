@@ -3084,6 +3084,23 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Interface-associated display addresses
+
+VM and LXC projections retain the collector's interface-associated IP order in
+canonical identity and broadcast. Agent-host display address selection also
+recognises Podman interface names as secondary, retaining every address and the
+explicit `--report-ip` preference. The shared `pkg/netutil` name hint does not
+drop management bridges, bonds, VLANs or tunnels, prove a default route, or
+change the agent's separate MAC-based machine-ID fallback. The existing MAC
+metadata sequence keeps its legacy classifier; Podman preference affects only
+displayed IPs. No identity key or wire shape changes.
+`TestIssue2757AgentDisplayPrefersNonContainerInterfaces`
+and `TestIssue2757AgentDisplayKeepsSecondaryOnlyAddresses` bind Podman,
+management-interface, supplied identity and explicit-override controls to the
+production host adapter; monitoring's #2757 fixtures bind guest list/broadcast
+order and name/address/traffic association. Native readings and publication
+remain separate evidence.
+
 Discovery-led availability proposals present their evidence and canonical
 attachment boundary as short, complete sentences in both the inline card and
 machine-wide review. The colocated component test pins that operator-facing

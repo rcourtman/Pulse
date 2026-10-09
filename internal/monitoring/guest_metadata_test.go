@@ -523,7 +523,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 					},
 				},
 			},
-			wantIPs: []string{"10.0.0.5", "192.168.1.10"},
+			wantIPs: []string{"192.168.1.10", "10.0.0.5"}, // keep interface priority, not global IP order
 			wantIfaces: []models.GuestNetworkInterface{
 				{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.10"}},
 				{Name: "eth1", MAC: "AA:BB:CC:DD:EE:FF", Addresses: []string{"10.0.0.5"}},

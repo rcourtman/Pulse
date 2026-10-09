@@ -552,7 +552,7 @@ func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, 
 		}
 
 		if len(addresses) > 1 {
-			sort.Strings(addresses)
+			sortGuestAddresses(addresses)
 		}
 
 		rxBytes := parseInterfaceStat(iface.Statistics, "rx-bytes")
@@ -582,17 +582,13 @@ func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, 
 		})
 	}
 
-	if len(ipAddresses) > 1 {
-		sort.Strings(ipAddresses)
-	}
-
 	if len(guestIfaces) > 1 {
 		sort.SliceStable(guestIfaces, func(i, j int) bool {
 			return guestIfaces[i].Name < guestIfaces[j].Name
 		})
 	}
 
-	return ipAddresses, guestIfaces
+	return guestIPAddressesByInterface(ipAddresses, guestIfaces), guestIfaces
 }
 
 func parseInterfaceStat(stats interface{}, key string) int64 {

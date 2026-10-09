@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog"
@@ -25,6 +28,288 @@ type stubPVEClientLXCStatus struct {
 
 	containerStatus *proxmox.Container
 	statusCalls     int
+}
+
+type issue2757ContainerClient struct {
+	stubPVEClient
+	status                   *proxmox.Container
+	config                   map[string]interface{}
+	interfaces               []proxmox.ContainerInterface
+	statusCalls, configCalls int
+	interfaceCalls           int
+}
+
+func (c *issue2757ContainerClient) GetContainerStatus(context.Context, string, int) (*proxmox.Container, error) {
+	c.statusCalls++
+	return c.status, nil
+}
+
+func (c *issue2757ContainerClient) GetContainerConfig(context.Context, string, int) (map[string]interface{}, error) {
+	c.configCalls++
+	return c.config, nil
+}
+
+func (c *issue2757ContainerClient) GetContainerInterfaces(context.Context, string, int) ([]proxmox.ContainerInterface, error) {
+	c.interfaceCalls++
+	return c.interfaces, nil
+}
+
+// These are source fixtures, not the reporter's inventory or native recovery.
+// All addresses are synthetic; choosing one says nothing about its default route.
+func TestIssue2757ContainerAddressSelection(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name           string
+		status         *proxmox.Container
+		config         map[string]interface{}
+		interfaces     []proxmox.ContainerInterface
+		stopped        bool
+		want           []string
+		wantIfaceCalls int
+	}{
+		{
+			name: "status interface association beats flattened text order",
+			status: &proxmox.Container{IP: "10.88.0.1 192.0.2.80", Network: map[string]proxmox.ContainerNetworkConfig{
+				"net1": {Name: "podman0", IP: "10.88.0.1/16"},
+				"net0": {Name: "eth0", IP: "192.0.2.80/24"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "stopped config-only guest needs no runtime query",
+			config: map[string]interface{}{
+				"net1": "name=podman0,ip=10.88.0.1/16",
+				"net0": "name=eth0,ip=192.0.2.80/24",
+			},
+			stopped: true,
+			want:    []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name:   "DHCP interfaces fallback keeps named addresses and filters loopback",
+			config: map[string]interface{}{"net0": "name=eth0,ip=dhcp,ip6=auto"},
+			interfaces: []proxmox.ContainerInterface{
+				{Name: "podman0", Inet: "10.88.0.1/16"},
+				{Name: "veth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "10.89.0.1/16"}}},
+				{Name: "eth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "192.0.2.80/24"}, {Address: "2001:db8::80/64"}, {Address: "fe80::1/64"}}},
+				{Name: "lo", Inet: "127.0.0.1/8 ::1/128"},
+			},
+			want:           []string{"192.0.2.80", "2001:db8::80", "10.88.0.1", "10.89.0.1"},
+			wantIfaceCalls: 1,
+		},
+		{
+			name: "IPv6 on preferred interface precedes secondary IPv4",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "eth0": {IP6: "2001:db8::80"},
+			}},
+			want: []string{"2001:db8::80", "10.88.0.1"},
+		},
+		{
+			name: "secondary-only guest keeps useful addresses",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "docker0": {IP: "192.0.2.80"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "management bridge is not discarded or treated as a container bridge",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "br0": {IP: "192.0.2.80"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "unassociated status IP stays useful without inventing its interface",
+			status: &proxmox.Container{IP: "192.0.2.80", Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name:   "empty preferred interface does not hide the only address",
+			config: map[string]interface{}{"net0": "name=eth0,ip=dhcp"},
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"},
+			}},
+			want: []string{"10.88.0.1"},
+		},
+		{
+			name: "deduplicate globally but sort numerically only within each interface",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"eth0": {IP: "192.0.2.10 192.0.2.2", IP6: "2001:db8::10 2001:db8::2"},
+				"eth1": {IP: "10.0.0.1"}, "podman0": {IP: "192.0.2.2 10.88.0.1"},
+			}},
+			want: []string{"192.0.2.2", "192.0.2.10", "2001:db8::2", "2001:db8::10", "10.0.0.1", "10.88.0.1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &issue2757ContainerClient{status: tc.status, config: tc.config, interfaces: tc.interfaces}
+			before, err := json.Marshal([]interface{}{client.status, client.config, client.interfaces})
+			if err != nil {
+				t.Fatal(err)
+			}
+			container := models.Container{ID: "site-a-node-a-2757", VMID: 2757, Name: "guest", Instance: "site-a", Node: "node-a", Status: "running", Type: "lxc", LastSeen: time.Now()}
+			if tc.stopped {
+				container.Status = "stopped"
+			}
+			monitor := &Monitor{}
+			monitor.enrichContainerMetadata(context.Background(), client, "site-a", "node-a", &container)
+			if !reflect.DeepEqual(container.IPAddresses, tc.want) {
+				t.Fatalf("guest IP selection = %v, want %v", container.IPAddresses, tc.want)
+			}
+			wantStatusCalls := 1
+			if tc.stopped {
+				wantStatusCalls = 0
+			}
+			if client.configCalls != 1 || client.statusCalls != wantStatusCalls || client.interfaceCalls != tc.wantIfaceCalls {
+				t.Fatalf("metadata query counts = status:%d config:%d interfaces:%d", client.statusCalls, client.configCalls, client.interfaceCalls)
+			}
+			after, err := json.Marshal([]interface{}{client.status, client.config, client.interfaces})
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("client changed while enriching")
+			}
+			monitor.state = models.NewState()
+			monitor.state.UpdateContainers([]models.Container{container})
+			assertIssue2757GuestWire(t, monitor, container.ID, tc.want, container.NetworkInterfaces)
+		})
+	}
+}
+
+type issue2757VMClient struct {
+	emptyGuestMetadataClient
+	interfaces []proxmox.VMNetworkInterface
+	calls      int
+}
+
+func (c *issue2757VMClient) GetVMNetworkInterfaces(context.Context, string, int) ([]proxmox.VMNetworkInterface, error) {
+	c.calls++
+	return c.interfaces, nil
+}
+
+func TestIssue2757VMAddressSelectionAndCache(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		interfaces []proxmox.VMNetworkInterface
+		want       []string
+	}{
+		{
+			name: "prefer named interface even with lower secondary addresses",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "eth1", IPAddresses: []proxmox.VMIPAddress{{Address: "10.0.0.1"}}},
+				{Name: "eth0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.10"}, {Address: "192.0.2.2"}, {Address: "2001:db8::10"}, {Address: "2001:db8::2"}, {Address: "192.0.2.2"}, {Address: "fe80::1"}}},
+			},
+			want: []string{"192.0.2.2", "192.0.2.10", "2001:db8::2", "2001:db8::10", "10.0.0.1", "10.88.0.1"},
+		},
+		{
+			name: "secondary-only VM keeps every useful address",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "docker0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.80"}}},
+			},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "management bridge remains a usable first interface",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "br0", HardwareAddr: "02:00:00:00:00:01", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.80"}}, Statistics: map[string]interface{}{"rx-bytes": float64(123), "tx-bytes": float64(456)}},
+			},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for permutation := 0; permutation < 2; permutation++ {
+				raw := append([]proxmox.VMNetworkInterface(nil), tc.interfaces...)
+				if permutation == 1 {
+					for i, j := 0, len(raw)-1; i < j; i, j = i+1, j-1 {
+						raw[i], raw[j] = raw[j], raw[i]
+					}
+				}
+				before, err := json.Marshal(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := &issue2757VMClient{interfaces: raw}
+				monitor := &Monitor{}
+				status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
+				for poll := 0; poll < 2; poll++ {
+					ips, ifaces, _, _, _, deferred := monitor.fetchGuestAgentMetadata(context.Background(), client, "site-a", "node-a", "guest", 2757, status, false)
+					if deferred || !reflect.DeepEqual(ips, tc.want) {
+						t.Fatalf("guest IP selection = %v, deferred:%v, want %v", ips, deferred, tc.want)
+					}
+					monitor.state = models.NewState()
+					monitor.state.UpdateVMs([]models.VM{{ID: "site-a-node-a-2757", VMID: 2757, Name: "guest", Instance: "site-a", Node: "node-a", Status: "running", LastSeen: time.Now(), IPAddresses: ips, NetworkInterfaces: ifaces}})
+					assertIssue2757GuestWire(t, monitor, "site-a-node-a-2757", tc.want, ifaces)
+				}
+				if client.calls != 1 {
+					t.Fatalf("fresh cache issued %d network queries, want one", client.calls)
+				}
+				after, err := json.Marshal(raw)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatal("guest-agent input was mutated")
+				}
+			}
+		})
+	}
+}
+
+func assertIssue2757GuestWire(t *testing.T, monitor *Monitor, nativeID string, want []string, interfaces []models.GuestNetworkInterface) {
+	t.Helper()
+	monitor.state.UpdateNodes([]models.Node{{ID: "site-a-node-a", Name: "node-a", Instance: "site-a", Status: "online", LastSeen: time.Now()}})
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(nil)
+	frontend := monitor.BuildBroadcastFrontendState()
+	var listed *unifiedresources.Resource
+	for _, resource := range monitor.GetUnifiedResources() {
+		if resource.Proxmox != nil && resource.Proxmox.SourceID == nativeID {
+			copy := resource
+			listed = &copy
+		}
+	}
+	if listed == nil || !reflect.DeepEqual(listed.Identity.IPAddresses, want) {
+		t.Fatalf("canonical listing lost guest addresses: %+v, want %v", listed, want)
+	}
+	var projected *models.ResourceFrontend
+	for _, resource := range frontend.Resources {
+		if resource.ID == listed.ID {
+			copy := resource
+			projected = &copy
+		}
+	}
+	if projected == nil || projected.Identity == nil || !reflect.DeepEqual(projected.Identity.IPs, want) {
+		t.Fatalf("broadcast lost guest address order: %+v, want %v", projected, want)
+	}
+	var facet unifiedresources.ProxmoxData
+	if err := json.Unmarshal(projected.Proxmox, &facet); err != nil {
+		t.Fatal(err)
+	}
+	if facet.SourceID != nativeID || facet.Instance != "site-a" || facet.NodeName != "node-a" || facet.VMID != 2757 || listed.ParentID == nil || projected.ParentID != *listed.ParentID {
+		t.Fatalf("broadcast changed guest ownership: %+v, listing parent:%v broadcast parent:%q", facet, listed.ParentID, projected.ParentID)
+	}
+	parentFound := false
+	for _, resource := range monitor.GetUnifiedResources() {
+		if resource.ID == *listed.ParentID && resource.Proxmox != nil && resource.Proxmox.SourceID == "site-a-node-a" {
+			parentFound = true
+		}
+	}
+	if !parentFound {
+		t.Fatalf("guest parent does not name the supplying node: %s", *listed.ParentID)
+	}
+	if len(facet.NetworkInterfaces) != len(interfaces) || len(listed.Proxmox.NetworkInterfaces) != len(interfaces) {
+		t.Fatalf("listing/broadcast lost named interfaces: %+v", facet.NetworkInterfaces)
+	}
+	for i, iface := range interfaces {
+		// Empty address collections are omitted on the JSON wire and may be
+		// normalised to [] in memory. Compare their values on both surfaces;
+		// keep every name/address/traffic/owner assertion, not nil-vs-empty.
+		for _, wire := range []unifiedresources.NetworkInterface{listed.Proxmox.NetworkInterfaces[i], facet.NetworkInterfaces[i]} {
+			if wire.Name != iface.Name || wire.MAC != iface.MAC || !slices.Equal(wire.Addresses, iface.Addresses) || wire.RXBytes != uint64(max(0, iface.RXBytes)) || wire.TXBytes != uint64(max(0, iface.TXBytes)) {
+				t.Fatalf("interface association or traffic changed: %+v, want %+v", wire, iface)
+			}
+		}
+	}
 }
 
 func (s *stubPVEClientLXCStatus) GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error) {
