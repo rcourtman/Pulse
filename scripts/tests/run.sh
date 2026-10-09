@@ -18,10 +18,20 @@ EOF
 
 discover_tests() {
   local -n ref=$1
-  mapfile -t ref < <(
+  local inventory
+  # Process substitution hides producer failures from mapfile. Admit the
+  # complete discovery pipeline before running any tests, never a partial list.
+  if ! inventory="$(
     find "${TEST_DIR}" -maxdepth 1 -type f \
       \( -name 'test-*.sh' -o -name 'test_*.py' \) | sort
-  )
+  )"; then
+    echo "Failed to discover the complete smoke test inventory under ${TEST_DIR}" >&2
+    return 1
+  fi
+  ref=()
+  if [[ -n "${inventory}" ]]; then
+    mapfile -t ref <<< "${inventory}"
+  fi
 }
 
 resolve_test_path() {
@@ -99,7 +109,9 @@ main() {
       tests+=("${resolved}")
     done
   else
-    discover_tests tests
+    if ! discover_tests tests; then
+      return 1
+    fi
   fi
 
   if [[ ${#tests[@]} -eq 0 ]]; then
