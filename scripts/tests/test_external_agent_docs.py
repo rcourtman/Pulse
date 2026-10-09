@@ -38,6 +38,8 @@ class ExternalAgentDocsTest(unittest.TestCase):
 
     def test_read_only_setup_does_not_grant_whole_surface_authority(self):
         text = compact(guide())
+        self.assertIn("Start read-only", text)
+        self.assertIn("## What the endpoints offer", text)
         self.assertLess(text.index("Start read-only"), text.index("## What the endpoints offer"))
         for boundary in ("not the minimum for a read-only client", "monitoring:read",
                          "client can list tools its token cannot call", "scope_only",
