@@ -2536,6 +2536,7 @@ type patrolAlertResourceState struct {
 	status       string
 	cpu          float64
 	memory       float64
+	guestMemory  *patrolGuestMemoryReading
 	disk         float64
 	found        bool
 }
@@ -2653,6 +2654,7 @@ func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 			status:       guest.status,
 			cpu:          guest.cpu,
 			memory:       guest.mem,
+			guestMemory:  &guest.memory,
 			found:        true,
 		}, true
 	}
@@ -2732,6 +2734,9 @@ func (p *PatrolService) getCurrentMetricValueState(alert AlertInfo, snap patrolR
 	case "cpu":
 		return resource.cpu
 	case "memory":
+		if resource.guestMemory != nil && !resource.guestMemory.pressureKnown {
+			return -1
+		}
 		return resource.memory
 	default:
 		if resource.resourceType == "storage" {
@@ -2813,6 +2818,19 @@ func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []Alert
 		if strings.HasPrefix(strings.ToUpper(trimmed), "RESOLVE:") {
 			verdicts[0].resolve = true
 			verdicts[0].reason = patrolAlertResolveReason(strings.TrimPrefix(trimmed[len("RESOLVE:"):], " "))
+		}
+	}
+	// This quick review has only the supplied snapshot, not an independent
+	// guest measurement. Missing/stale/cache-inclusive memory cannot prove a
+	// memory alert recovered, even if the model asks to resolve it.
+	for i, alert := range batch {
+		if alert.Type != "memory" {
+			continue
+		}
+		resource := lookupPatrolAlertResourceState(alert, snap)
+		if resource.guestMemory != nil && !resource.guestMemory.pressureKnown {
+			verdicts[i].resolve = false
+			verdicts[i].reason = ""
 		}
 	}
 
@@ -2917,11 +2935,11 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 		return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)
 	case "vm":
-		return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
+		return fmt.Sprintf("VM '%s': CPU %.1f%%, Memory %s, Status: %s",
+			resource.name, resource.cpu, resource.guestMemory.display(), resource.status)
 	case "system-container":
-		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
+		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %s, Status: %s",
+			resource.name, resource.cpu, resource.guestMemory.display(), resource.status)
 	case "app-container":
 		return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)

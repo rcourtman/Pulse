@@ -383,6 +383,20 @@ func (v VMView) MemoryPercent() float64 {
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
 }
 
+// MemoryObservation returns provenance of the selected memory metric, not a
+// possibly conflicting platform facet. The bool distinguishes absent memory
+// from a measured zero; an empty observation still has unknown provenance.
+func (v VMView) MemoryObservation() (models.MemoryObservation, bool) {
+	return selectedMemoryObservation(v.r)
+}
+
+func selectedMemoryObservation(r *Resource) (models.MemoryObservation, bool) {
+	if r == nil || r.Metrics == nil || r.Metrics.Memory == nil {
+		return models.MemoryObservation{}, false
+	}
+	return r.Metrics.Memory.Observation, true
+}
+
 func (v VMView) DiskUsed() int64 {
 	if v.r == nil {
 		return 0
@@ -707,6 +721,10 @@ func (v ContainerView) MemoryPercent() float64 {
 		return 0
 	}
 	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v ContainerView) MemoryObservation() (models.MemoryObservation, bool) {
+	return selectedMemoryObservation(v.r)
 }
 
 func (v ContainerView) DiskUsed() int64 {

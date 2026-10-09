@@ -762,7 +762,7 @@ func TestFormatTriageBriefing(t *testing.T) {
 	if !strings.Contains(out, "web-01") || !strings.Contains(out, "High Memory") {
 		t.Fatalf("expected resource row in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "## Healthy Resources") {
+	if !strings.Contains(out, "## Resources without triage flags") {
 		t.Fatalf("expected healthy summary section, got:\n%s", out)
 	}
 	if !strings.Contains(out, "Scanned 7 resources: 1 nodes, 2 guests, 1 storage resources (1 pools, 0 physical disks), 1 docker hosts, 1 TrueNAS systems, 1 PBS, 0 PMG.") {

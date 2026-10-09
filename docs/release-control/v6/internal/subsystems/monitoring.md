@@ -17,6 +17,18 @@
 
 ## Purpose
 
+### Guest memory evidence survives typed consumers
+
+The monitor's existing guest memory observation remains source-owned when
+Patrol reads it through VM/system-container views. Selected canonical memory,
+not a retained raw Proxmox facet, supplies provenance; absent memory is distinct
+from measured zero. `TestGuestViewMemoryObservationKeepsSelectedOrigin` checks
+that read boundary and `TestPatrolGuestMemoryEvidence` checks the consumer's
+qualifications through ordinary snapshot ingestion. This changes no memory
+collector/parser, guest command, TTL, shared safety pause, alert threshold or
+History writer. Synthetic named-field checks and qualified summaries are not
+native acceptance of #2762's reported input or guest recovery.
+
 ### Cluster recovery preserves established certificate pins
 
 Startup and unhealthy-endpoint recovery must not replace the configured primary

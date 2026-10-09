@@ -1153,6 +1153,7 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, seedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(seedSet))},
+		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, p.buildScopedSetForRuntime(scope, snap))},
 
 		// P2 — triage already preserves the flagged set, so these sections can
 		// summarize under tighter provider-derived retry budgets.
@@ -1210,6 +1211,7 @@ func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *P
 
 		// P1 — always include (typically compact).
 		{priority: 1, name: "previous_run", content: p.seedPreviousRun(now)},
+		{priority: 1, name: "guest_memory_evidence", content: patrolGuestMemoryEvidenceSection(snap, scopedSet)},
 
 		// P2 — summarize when needed.
 		{
@@ -1693,7 +1695,10 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 			if g.template || g.status != "running" {
 				continue
 			}
-			metrics := map[string]float64{"memory": g.memPercent, "disk": g.diskPercent}
+			metrics := map[string]float64{"disk": g.diskPercent}
+			if g.memoryKnown {
+				metrics["memory"] = g.memPercent
+			}
 			if g.cpuFraction > 0 {
 				metrics["cpu"] = g.cpuFraction
 			}
@@ -1762,8 +1767,10 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 			if g.template || g.status != "running" {
 				continue
 			}
-			if pts := mh.GetGuestMetrics(g.id, "memory", 48*time.Hour); len(pts) >= 5 {
-				addForecast(g.id, g.name, "memory", pts, g.memPercent)
+			if g.memoryKnown {
+				if pts := mh.GetGuestMetrics(g.id, "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(g.id, g.name, "memory", pts, g.memPercent)
+				}
 			}
 			if pts := mh.GetGuestMetrics(g.id, "disk", 48*time.Hour); len(pts) >= 5 {
 				addForecast(g.id, g.name, "disk", pts, g.diskPercent)
@@ -1893,6 +1900,7 @@ type patrolGuestInventoryRow struct {
 	id                        string
 	name, gType, node, status string
 	cpu, mem, disk            float64
+	memory                    patrolGuestMemoryReading
 	vmid                      int
 	ip                        string
 	lastBackup                time.Time
@@ -1955,6 +1963,7 @@ type patrolPrecomputeGuestSource struct {
 	status      string
 	cpuFraction float64
 	memPercent  float64
+	memoryKnown bool
 	diskPercent float64
 }
 
@@ -2020,14 +2029,17 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				continue
 			}
 			gi := guestIntel[vmv.ID()]
+			observation, hasMemory := vmv.MemoryObservation()
+			_, hasProxmox := vmv.SourceStatus(unifiedresources.SourceProxmox)
 			guests = append(guests, patrolGuestInventoryRow{
 				id:         vmv.ID(),
 				name:       vmv.Name(),
 				gType:      "VM",
 				node:       vmv.Node(),
-				status:     string(vmv.Status()),
+				status:     patrolGuestRuntimeStatus(vmv.RuntimeStatus(), vmv.Status()),
 				cpu:        vmv.CPUPercent(),
 				mem:        vmv.MemoryPercent(),
+				memory:     readPatrolGuestMemory(vmv.MemoryPercent(), observation, hasMemory, hasProxmox || vmv.VMID() > 0),
 				disk:       vmv.DiskPercent(),
 				vmid:       vmv.VMID(),
 				ip:         patrolFirstIP(vmv.IPAddresses()),
@@ -2041,14 +2053,17 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				continue
 			}
 			gi := guestIntel[ctv.ID()]
+			observation, hasMemory := ctv.MemoryObservation()
+			_, hasProxmox := ctv.SourceStatus(unifiedresources.SourceProxmox)
 			guests = append(guests, patrolGuestInventoryRow{
 				id:         ctv.ID(),
 				name:       ctv.Name(),
 				gType:      "Container",
 				node:       ctv.Node(),
-				status:     string(ctv.Status()),
+				status:     patrolGuestRuntimeStatus(ctv.RuntimeStatus(), ctv.Status()),
 				cpu:        ctv.CPUPercent(),
 				mem:        ctv.MemoryPercent(),
+				memory:     readPatrolGuestMemory(ctv.MemoryPercent(), observation, hasMemory, hasProxmox || ctv.VMID() > 0),
 				disk:       ctv.DiskPercent(),
 				vmid:       ctv.VMID(),
 				ip:         patrolFirstIP(ctv.IPAddresses()),
@@ -2074,6 +2089,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			status:     vm.Status,
 			cpu:        unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
 			mem:        vm.Memory.Usage,
+			memory:     readPatrolGuestMemory(vm.Memory.Usage, vm.Memory.Observation, vm.Memory.HasKnownUsage(), vm.VMID > 0 || vm.Type == "qemu"),
 			disk:       vm.Disk.Usage,
 			vmid:       vm.VMID,
 			ip:         patrolFirstIP(vm.IPAddresses),
@@ -2095,6 +2111,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			status:     ct.Status,
 			cpu:        unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
 			mem:        ct.Memory.Usage,
+			memory:     readPatrolGuestMemory(ct.Memory.Usage, ct.Memory.Observation, ct.Memory.HasKnownUsage(), ct.VMID > 0 || ct.Type == "lxc"),
 			disk:       ct.Disk.Usage,
 			vmid:       ct.VMID,
 			ip:         patrolFirstIP(ct.IPAddresses),
@@ -2626,6 +2643,7 @@ func patrolPrecomputeGuestSources(snap patrolRuntimeState, scopedSet map[string]
 			status:      guest.status,
 			cpuFraction: guest.cpu / 100,
 			memPercent:  guest.mem,
+			memoryKnown: guest.memory.pressureKnown,
 			diskPercent: guest.disk,
 		})
 	}
@@ -2767,6 +2785,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 	}
 
 	if len(guests) > 0 {
+		memoryGaps := patrolGuestMemoryGaps(guests)
 		if isQuiet && scopedSet == nil {
 			running, stopped := 0, 0
 			var unreachableNames []string
@@ -2792,10 +2811,13 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 					}
 				}
 				if hasReachabilityData {
-					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected. All reachable.\n\n", running, stopped))
+					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected in available readings. All reachable.\n\n", running, stopped))
 				} else {
-					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected.\n\n", running, stopped))
+					sb.WriteString(fmt.Sprintf("# Guests: %d running, %d stopped, no issues detected in available readings.\n\n", running, stopped))
 				}
+			}
+			if memoryGaps != "" {
+				sb.WriteString(memoryGaps + "\n\n")
 			}
 		} else {
 			sb.WriteString("# Guest Metrics\n")
@@ -2806,8 +2828,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				if !g.lastBackup.IsZero() {
 					backup = seedFormatTimeAgo(now, g.lastBackup)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s | %s |\n",
-					g.name, g.gType, g.node, g.service, g.cpu, g.mem, g.disk, g.status, g.reachable, backup))
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
+					g.name, g.gType, g.node, g.service, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
 			}
 			sb.WriteString("\n")
 
@@ -3103,11 +3125,15 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 		guestRows := patrolGuestInventoryRows(snap, scopedSet, guestIntel)
 		guests := make([]compactResource, 0, len(guestRows))
 		for _, g := range guestRows {
+			memory := g.mem
+			if !g.memory.pressureKnown {
+				memory = -1 // Unknown pressure cannot be a high-usage outlier.
+			}
 			guests = append(guests, compactResource{
 				name:   g.name,
 				status: g.status,
 				cpu:    g.cpu,
-				mem:    g.mem,
+				mem:    memory,
 				disk:   g.disk,
 			})
 		}
@@ -3141,6 +3167,9 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 			}
 
 			lines = append(lines, line)
+			if gaps := patrolGuestMemoryGaps(guestRows); gaps != "" {
+				lines = append(lines, gaps)
+			}
 		}
 	}
 
