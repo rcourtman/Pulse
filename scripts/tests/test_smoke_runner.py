@@ -163,6 +163,74 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertEqual(self.observed_calls(), ["test_first.py", "test-second.sh"])
         self.assertIn("Summary: 1/2 passed", result.stdout)
 
+    def test_docs_shards_cover_current_and_future_suites_once_without_unrelated_tests(self):
+        names = ["test_admin_docs.py", "test_api_auth_docs.py", "test_docs_reader.py",
+                 "test_future_docs.py", "test_recovery_docs.py", "test_security_docs.py",
+                 "test_troubleshooting_logs.py", "test_vm_disk_diagnostics.py"]
+        for name in names:
+            self.python_fixture(name)
+        names.append("test-retired-trial-acquisition-docs.sh")
+        self.shell_fixture(names[-1])
+        self.python_fixture("test_backend.py", 7)
+        self.shell_fixture("test-agent-runtime.sh", 7)
+        nested = self.tests / "nested"
+        nested.mkdir()
+        (nested / "test_nested_docs.py").write_text("raise SystemExit(7)\n")
+        seen = []
+        for shard in range(4):
+            before = len(self.observed_calls())
+            result = self.run_runner("--docs-shard", shard)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = self.observed_calls()[before:]
+            self.assertEqual(calls, sorted(names)[shard::4])
+            seen.extend(calls)
+            self.assertIn(f"Documentation shard {shard}/4:", result.stdout)
+        self.assertEqual(sorted(seen), sorted(names))
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_every_doc_failure_remains_gating_and_collects_the_remaining_shard(self):
+        names = [f"test_{index}_docs.py" for index in range(8)]
+        for index, name in enumerate(names):
+            self.python_fixture(name, 7 if index < 4 else 0)
+        for shard in range(4):
+            before = len(self.observed_calls())
+            result = self.run_runner("--docs-shard", shard)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(self.observed_calls()[before:], names[shard::4])
+            self.assertIn("Summary: 1/2 passed", result.stdout)
+            self.assertIn("Failures: 1", result.stdout)
+
+    def test_docs_discovery_rejects_failed_find_and_sort_before_execution(self):
+        passing = self.python_fixture("test_first_docs.py")
+        self.python_fixture("test_second_docs.py", 7)
+        for name in ("find", "sort"):
+            with self.subTest(producer=name):
+                self.producer(name, 23, [passing])
+                self.assert_discovery_rejected(self.run_runner("--docs-shard", 0))
+                (self.bin / name).unlink()
+
+    def test_invalid_doc_shard_arguments_stop_before_discovery_or_execution(self):
+        self.python_fixture("test_first_docs.py")
+        self.producer("find", 23)
+        for args in ((), ("-1",), ("4",), ("00",), ("one",), ("0", "test_first_docs.py")):
+            with self.subTest(args=args):
+                result = self.run_runner("--docs-shard", *args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Usage:", result.stderr)
+                self.assertNotIn("Failed to discover", result.stderr)
+                self.assertEqual(self.observed_calls(), [])
+
+    def test_empty_doc_inventory_or_shard_is_not_a_pass(self):
+        self.python_fixture("test_unrelated.py")
+        empty = self.run_runner("--docs-shard", 0)
+        self.assertNotEqual(empty.returncode, 0)
+        self.assertIn("No tests found", empty.stderr)
+        self.python_fixture("test_first_docs.py")
+        empty = self.run_runner("--docs-shard", 3)
+        self.assertNotEqual(empty.returncode, 0)
+        self.assertIn("No tests found", empty.stderr)
+        self.assertEqual(self.observed_calls(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

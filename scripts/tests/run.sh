@@ -10,20 +10,30 @@ TEST_DIR="${ROOT_DIR}/scripts/tests"
 usage() {
   cat <<'EOF'
 Usage: scripts/tests/run.sh [test-script ...]
+       scripts/tests/run.sh --docs-shard <0|1|2|3>
 
 Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
-when specified.
+when specified. Documentation CI discovers every documentation suite and runs
+one of four disjoint, sorted shards; it does not maintain a second suite list.
 EOF
 }
 
 discover_tests() {
   local -n ref=$1
+  local mode="${2:-all}"
   local inventory
+  local -a patterns=(-name 'test-*.sh' -o -name 'test_*.py')
+  if [[ "${mode}" == docs ]]; then
+    # Keep the established safety helpers whose names predate the docs suffix.
+    patterns=(-name 'test_*docs*.py' -o -name 'test_vm_disk_diagnostics.py'
+      -o -name 'test_troubleshooting_logs.py'
+      -o -name 'test-retired-trial-acquisition-docs.sh')
+  fi
   # Process substitution hides producer failures from mapfile. Admit the
   # complete discovery pipeline before running any tests, never a partial list.
   if ! inventory="$(
     find "${TEST_DIR}" -maxdepth 1 -type f \
-      \( -name 'test-*.sh' -o -name 'test_*.py' \) | sort
+      \( "${patterns[@]}" \) | LC_ALL=C sort
   )"; then
     echo "Failed to discover the complete smoke test inventory under ${TEST_DIR}" >&2
     return 1
@@ -99,7 +109,21 @@ main() {
   fi
 
   local -a tests=()
-  if [[ $# -gt 0 ]]; then
+  if [[ "${1:-}" == --docs-shard ]]; then
+    if [[ $# -ne 2 || ! "${2:-}" =~ ^[0-3]$ ]]; then
+      echo "Usage: scripts/tests/run.sh --docs-shard <0|1|2|3>" >&2
+      return 1
+    fi
+    local -a doc_tests=()
+    if ! discover_tests doc_tests docs; then
+      return 1
+    fi
+    local index
+    for ((index = $2; index < ${#doc_tests[@]}; index += 4)); do
+      tests+=("${doc_tests[index]}")
+    done
+    printf 'Documentation shard %s/4: %s of %s suites\n' "$2" "${#tests[@]}" "${#doc_tests[@]}"
+  elif [[ $# -gt 0 ]]; then
     local arg resolved
     for arg in "$@"; do
       if ! resolved="$(resolve_test_path "${arg}")"; then
