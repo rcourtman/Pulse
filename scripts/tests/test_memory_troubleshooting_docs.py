@@ -308,8 +308,14 @@ class GuestMemoryInterpretationDocsTest(unittest.TestCase):
         ):
             self.assertIn(distinction, guide)
         patrol = (ROOT / "internal/ai/patrol_guest_memory.go").read_text()
-        self.assertIn('"guest pressure unknown"', patrol)
-        self.assertIn('"N/A (guest memory unavailable; not evidence of recovery)"', patrol)
+        # Patrol delegates the selected reading to the shared query/observer
+        # qualifier. Follow that production path instead of requiring duplicate
+        # wording in a caller that no longer owns the formatter.
+        self.assertIn("unifiedresources.QualifyGuestMemory(", patrol)
+        self.assertIn("}).Format(r.percent)", patrol)
+        evidence = (ROOT / "internal/unifiedresources/guest_memory.go").read_text()
+        self.assertIn('"guest pressure unknown"', evidence)
+        self.assertIn('"N/A (guest memory unavailable; not evidence of recovery)"', evidence)
 
     def test_guidance_uses_existing_evidence_without_new_guest_reads(self):
         guide = self.guidance()
