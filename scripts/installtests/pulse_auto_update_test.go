@@ -29,6 +29,28 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 	}
 }
 
+// Service-state admission is independent of the signed/metadata transaction
+// matrix below; no native service or published input is used by this fixture.
+func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
+	}
+}
+
+func extractAutoUpdateServiceFunctions(t *testing.T) string {
+	t.Helper()
+	var functions []string
+	for _, name := range []string{"read_update_service_state", "start_update_service_if_stopped", "stop_update_service_for_rollback", "wait_for_service_active", "ensure_service_restarted"} {
+		functions = append(functions, extractAutoUpdateFunction(t, name))
+	}
+	return strings.Join(functions, "\n")
+}
+
 // TestIsPrereleaseTagRecognizesPrereleases asserts that any semver tag with
 // a hyphen after the patch component is flagged as a prerelease. This is the
 // pattern used for Pulse RCs (`-rc.N`), betas (`-beta.N`), alphas, nightlies,
@@ -142,6 +164,9 @@ INSTALL_DIR="/tmp/pulse-nonexistent-test-install"
 log() { echo "[$1] $2"; }
 detect_service_name() { echo pulse; }
 get_current_version() { echo v5.1.27; }
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() { return 0; }
 # If any of these get called, the guard has failed.
 curl() { echo "FAIL: curl invoked during refused update"; exit 99; }
@@ -449,7 +474,7 @@ curl() {
   if [[ -n "$out" ]]; then
     case "$out" in
       *.sig.*) printf 'dummy-signature\n' > "$out" ;;
-      *) printf '#!/usr/bin/env bash\nexit 1\n' > "$out" ;;
+      *) printf '#!/usr/bin/env bash\necho inactive > "${PULSE_INSTALL_DIR}/service-state"\nexit 1\n' > "$out" ;;
     esac
   fi
   return 0
@@ -458,10 +483,15 @@ curl() {
 # Service is running at the was-active capture, then down (the installer
 # stopped it before failing) until an explicit start/restart.
 IS_ACTIVE_CALLS=0
+printf 'active\n' > "$INSTALL_DIR/service-state"
 SERVICE_UP="no"
 STARTS=0
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
   case "$1" in
+    show) printf 'LoadState=loaded\nActiveState=%s\n' "$(cat "$INSTALL_DIR/service-state")"; return 0 ;;
     is-active)
       ((IS_ACTIVE_CALLS += 1))
       if (( IS_ACTIVE_CALLS == 1 )); then return 0; fi
@@ -470,16 +500,16 @@ systemctl() {
     start|restart)
       ((STARTS += 1))
       SERVICE_UP="yes"
+      printf 'active\n' > "$INSTALL_DIR/service-state"
       return 0
       ;;
-    stop) SERVICE_UP="no"; return 0 ;;
+    stop) SERVICE_UP="no"; printf 'inactive\n' > "$INSTALL_DIR/service-state"; return 0 ;;
   esac
   return 1
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then
   echo "RESULT:succeeded"
@@ -514,8 +544,12 @@ func TestEnsureServiceRestartedHonorsPriorServiceState(t *testing.T) {
 set -uo pipefail
 SERVICE_UP="no"
 STARTS=0
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
   case "$1" in
+    show) printf 'LoadState=loaded\n'; if [[ "$SERVICE_UP" == yes ]]; then echo ActiveState=active; else echo ActiveState=inactive; fi; return 0 ;;
     is-active) [[ "$SERVICE_UP" == "yes" ]] && return 0 || return 1 ;;
     start|restart) ((STARTS += 1)); SERVICE_UP="yes"; return 0 ;;
   esac
@@ -523,8 +557,7 @@ systemctl() {
 }
 sleep() { :; }
 log() { echo "[$1] ${*:2}"; }
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ensure_service_restarted pulse false || echo "INACTIVE_PATH_FAILED"
 echo "STARTS_AFTER_INACTIVE:$STARTS"
 ensure_service_restarted pulse true || echo "ACTIVE_PATH_FAILED"
@@ -601,14 +634,16 @@ INSTALLER
 }
 
 # Pulse was running and stays running, so perform_update succeeds.
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
-  if [[ "$1" == "is-active" ]]; then return 0; fi
+  if [[ "$1" == show ]]; then printf 'LoadState=loaded\nActiveState=active\n'; fi
   return 0
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateServiceFunctions(t) + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 if perform_update v5.1.25; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
 echo "LEAKED:$(trap -p RETURN)"
@@ -768,6 +803,7 @@ cat > "$FIXTURE_DIR/installer" <<'INSTALLER'
 set -euo pipefail
 printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
 printf 'false\n' > "$FIXTURE_DIR/active"
+[[ "$FAULT" != stop ]] || printf 'true\n' > "$FIXTURE_DIR/active"
 mkdir -p "$PULSE_INSTALL_DIR/bin"
 new_version=v6.5.0
 [[ "$OUTCOME" != mismatch ]] || new_version=v6.4.6
@@ -873,8 +909,12 @@ curl() {
   command cp "$FIXTURE_DIR/installer" "$out"
  fi
 }
+# Pure-function manager doubles stay in this shell; the Python fixture uses
+# real timeout with an external confined manager to test actual deadlines.
+timeout() { case "$1" in -k) shift 2 ;; --kill-after=*) shift ;; esac; shift; "$@"; }
 systemctl() {
  case "$1" in
+  show) printf 'LoadState=loaded\n'; if [[ "$(cat "$FIXTURE_DIR/active")" == true ]]; then echo ActiveState=active; else echo ActiveState=inactive; fi ;;
   is-active) [[ "$(cat "$FIXTURE_DIR/active")" == true ]] ;;
   stop)
    printf 'stop\n' >> "$FIXTURE_DIR/service-operations"
