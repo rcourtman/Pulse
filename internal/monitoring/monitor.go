@@ -5445,10 +5445,15 @@ func (m *Monitor) resourceStoreManualLinks() []unifiedresources.ResourceLink {
 }
 
 // sameManualLinks reports whether two link lists fold the same resources in
-// the same order. Link metadata (reason, author, time) does not change a fold.
+// the same order. The reason and author do not change a fold, but the creation
+// time can: among otherwise equal candidates a chain of links folds into the
+// primary of its earliest-created link (unifiedresources linkChainRootLocked),
+// so lists that differ only in a creation time can leave a different row
+// standing.
 func sameManualLinks(a, b []unifiedresources.ResourceLink) bool {
 	return slices.EqualFunc(a, b, func(x, y unifiedresources.ResourceLink) bool {
-		return x.ResourceA == y.ResourceA && x.ResourceB == y.ResourceB && x.PrimaryID == y.PrimaryID
+		return x.ResourceA == y.ResourceA && x.ResourceB == y.ResourceB && x.PrimaryID == y.PrimaryID &&
+			x.CreatedAt.Equal(y.CreatedAt)
 	})
 }
 

@@ -3596,8 +3596,16 @@ current generation (`resourceStoreManualLinks`,
 broadcast when the resource store's next rebuild loads it, as in live mode; in
 mock mode that is normally the broadcast's own read-path refresh once the
 generation is older than `readPathRegistryFreshness`. The cached view is keyed
-on the fixture data version and the link list, so a link change rebuilds it
-without a fixture tick; an unchanged list keeps the shared build. Freshness,
+on the fixture data version and the link list, each link by its resource pair,
+its primary and its creation time (`sameManualLinks`, which the structure view
+reuses), so a link change rebuilds it without a fixture tick; an unchanged
+list keeps the shared build. The creation time is in the key because, among
+otherwise equal candidates, a chain of links folds into the primary of its
+earliest-created link (unified-resources contract, "Operator links reach
+record-ingested resources", "Links apply as chains"): lists that differ only
+in a time can leave a different row standing, and a key that ignored it kept
+serving the row the old times chose while the live rebuild, which reloads the
+links from the store, served the new one. Freshness,
 which the resources API keys its registry cache on, is assigned in
 publication order under `mockUnifiedViewMu`: a view built from the same
 fixture freshness and links as the one it replaces keeps its freshness, and
@@ -3610,7 +3618,13 @@ the mock-mode fence above): it stays a plain projection of current state for
 the window before a rebuild in the new epoch, after which the registry applies
 the links again. `TestMockUnifiedViewAppliesOperatorManualLinks` in
 `internal/monitoring/monitor_host_agents_test.go` pins the broadcast, the
-freshness advance and the cache, `TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary`
+freshness advance and the cache,
+`TestMockUnifiedViewFollowsALinkCreationTimeChange` in the same file pins the
+creation time in that key (a Proxmox storage, a TrueNAS VM and a vSphere VM
+linked in a cycle swap the surviving VM when only one link's time moves, with
+the fixture data version held, through the structure view and the
+data-version view alike, and match what a linked mock build keeps),
+`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary`
 and `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
 `internal/mock/platform_fixtures_test.go` pin the linked fixture build, and
 `TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph` in
