@@ -462,10 +462,6 @@ interface VmwareOverviewProps {
 
 function VmwareOverview(props: VmwareOverviewProps) {
   const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
-    useWorkloads: true,
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotRefetch: props.resourceSnapshotRefetch,
     forcedPlatform: VMWARE_PLATFORM_FILTER,

@@ -23,9 +23,10 @@ when unique; neither a partial host hint nor an ambiguous alias may choose the
 first node. An unresolved bookmark remains a visible, removable text filter
 and uses filtered-empty copy, not an inventory-outage message. Supplied parent
 fields take precedence over inferred legacy guest-ID prefixes, whose positive VMID suffix must match the supplied VMID and which
-may fill missing fields but cannot contradict them. Supplied node snapshots
-overlay only the same native ID and tuple; a shared native ID cannot erase
-another tuple. Ambiguous tuples or native-ID aliases do not provide parent
+may fill missing fields but cannot contradict them. The state builds one node
+per canonical Proxmox agent resource and keeps that resource's own tuple, so a
+shared native ID cannot erase another tuple; it accepts no caller-supplied node
+snapshots. Ambiguous tuples or native-ID aliases do not provide parent
 evidence. Legacy fallback must also resolve the candidate's own tuple back to
 that same node; a unique native ID cannot restore an ambiguous tuple, even
 when the guest's instance or node fields are absent. Row status and host-relative memory use the validated row parent in grouped and flat modes;
@@ -37,7 +38,7 @@ uses a uniquely resolved native node ID, or its bounded global summary when
 that parent cannot be resolved uniquely, retaining canonical per-resource chart
 ownership and existing polling/point limits. This presentation boundary changes
 no server ingestion, guest ID, alert identity, collector, native History or
-monitoring permissions. Node removal or ambiguous supplied inventory leaves the
+monitoring permissions. Node removal or ambiguous node inventory leaves the
 host-memory denominator unavailable, never zero or another node's capacity.
 
 Verification: `workloadTopology.attribution.test.ts` and
@@ -46,9 +47,9 @@ source-field precedence, legacy hints and unrelated platforms.
 `workloadTopology.ambiguousParent.test.ts` discriminates complete and incomplete
 guest fields, both native aliases, VM/LXC types and both inventory orders;
 unique, consistent legacy fallbacks remain valid.
-`WorkloadsSurface.performance.contract.test.tsx` checks both supplied inventory
-orders and same-node snapshot overlays; `useWorkloadTableMetricHistory.test.tsx`
-checks the native-ID transport boundary. Parent-bound browser proof checks real
+`WorkloadsSurface.performance.contract.test.tsx` checks both snapshot orders of
+two canonical nodes whose instance and node names join to one string;
+`useWorkloadTableMetricHistory.test.tsx` checks the native-ID transport boundary. Parent-bound browser proof checks real
 Workloads grouping, row status, host-memory basis and removable bookmarks on
 desktop and phone. It does not establish server ingestion or native recovery.
 
@@ -1851,7 +1852,16 @@ shell clickable behind another overlay.
     `forcedViewMode`, the empty-state title and description, and
     `tableTitle`). Every `useWorkloadsState` option
     (`WorkloadsStateOptions` in `useWorkloadsState.ts`) belongs on the
-    page's own state call. The surface repeats only `forcedPlatform` and
+    page's own state call. The state always runs its workloads query and
+    takes no enable flag and no `vms`, `containers` or `nodes` arrays: guests
+    and Proxmox nodes come from the canonical resource snapshot the page
+    passes (or, with none, from the state's own resource queries), so no
+    caller can supply a second inventory that diverges from it.
+    The options type rejects them on either page, and
+    `WorkloadsSurface.performance.contract.test.tsx` and
+    `ProxmoxPageSurface.contract.test.tsx` pin their absence from the hook
+    and the Proxmox call.
+    The surface repeats only `forcedPlatform` and
     `forcedViewMode` and declares none of the hook-only options, so a mount
     that names one as an attribute fails type-checking. It imports only the
     state's type, so it can never become a second state owner on the page.
