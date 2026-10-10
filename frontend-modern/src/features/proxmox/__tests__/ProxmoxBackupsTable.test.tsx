@@ -158,7 +158,6 @@ function mockBackupAPIs(
       verificationWindowSeconds: 604800,
       requireVerification: true,
     },
-    meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
   });
 }
 
@@ -346,7 +345,6 @@ describe('ProxmoxBackupsTable', () => {
         verificationWindowSeconds: 604800,
         requireVerification: true,
       },
-      meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
     });
 
     await waitFor(() =>
@@ -790,7 +788,7 @@ const sourceCalls = (source: 'pve' | 'pbs') =>
 describe('independent Proxmox backup inventory reads', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
   });
 
   it.each(['pve', 'pbs'] as const)(
@@ -1167,7 +1165,7 @@ describe('backup-identity: connected Coverage and By date', () => {
         }),
       ),
     );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
     vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
   };
   afterEach(() => vi.restoreAllMocks());

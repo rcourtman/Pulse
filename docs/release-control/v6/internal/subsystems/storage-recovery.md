@@ -5003,6 +5003,16 @@ with its reader.
 keys, the result members and the response keys at the type level, and at
 runtime the three parameters that reach the wire and that a backend response's
 meta does not survive the decode.
+`useProtectionPostures.ts` holds the same line for `GET /api/recovery/postures`:
+`ProtectionPosturesResponse` carries the posture rows and the policy that the
+Proxmox Backups tab reads, and nothing else. That endpoint also returns its
+pagination meta and the backend contract is unchanged, but the hook joins its
+200-ID batches into one response, so a `limit` or page count would only be
+invented client-side and no surface reads one. A surface that pages postures
+adds the meta back together with its reader. `RecoveryResponseMeta` went with
+the last response type that carried it.
+`frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts` pins the
+response keys at the type level.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and
