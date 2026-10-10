@@ -1068,19 +1068,30 @@ agent host, or inspect an already retained excerpt privately. Distinguish:
 - **Pulse rejected this agent's API token** from host reporting: keep its HTTP
   status and redacted error, separately from the lookup failure.
 
+If both lookup and host reporting return 401, this is not a lookup-only failure.
+The host log's restore/upgrade explanation is generic, not an established cause
+for that installation. If you already tried reinstalling, do not repeat it to
+collect evidence; check the intended token record below first.
+
 A running local service or successful-looking installer output does not prove
 that Pulse accepted a fresh report. No host-report error in the selected log
 window is inconclusive, not proof of successful reporting. Do not restart,
 re-enrol, delete identity or enable debug logging to manufacture that evidence.
 
 In your signed-in administrator session on the **same Pulse instance** the
-agent targets, check the intended record under **Settings → Security → API
-Tokens** without revealing or copying its secret. Its presence, expiry and
-reporting scope help distinguish server-side rejection, but do not prove that
-the running service is using that record. Keep service environments, token
-files and connection files private; do not paste a credential into a command,
-URL or issue. Do not grant administrator scope, change Proxmox permissions or
-disable authentication/TLS to test a guess.
+agent targets, open **Settings → API Access** in the Security group. Check
+whether the intended token is listed, its **Created** time, **Last used** value
+and **Scopes**, without revealing or copying its secret. A missing record and a
+listed record with `Never` are different observations; neither proves that the
+service is presenting the same token. Last-used metadata is not a token-use
+audit and does not identify which consumer authenticated. These observations
+do not prove that the running service is using that record.
+
+If asked about the inventory, report only whether the record exists and the
+relevant metadata; do not share the token or its hint. Keep service environments,
+token files and connection files private; do not paste a credential into a
+command, URL or issue. Do not grant administrator scope, change Proxmox
+permissions or disable authentication/TLS to test a guess.
 
 If reporting this problem, say whether the existing error is lookup-only or
 also affects host reporting, and share only the failure stage, HTTP status and

@@ -82,6 +82,30 @@ class AgentAuthDocsTest(unittest.TestCase):
         self.assertEqual(DOC.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/UNIFIED_AGENT.md").read_bytes())
 
+    def test_inventory_guidance_matches_available_navigation_and_metadata(self):
+        text = " ".join(section().split())
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text()
+        api_entry = re.search(r"id: 'api',\s+label: '([^']+)'", catalog)
+        self.assertIsNotNone(api_entry)
+        self.assertIn(f"Settings → {api_entry.group(1)}", text)
+        inventory = (ROOT / "frontend-modern/src/components/Settings/APITokenManager.tsx").read_text()
+        for field in ("Created", "Last used", "Scopes"):
+            self.assertIn(field, inventory)
+            self.assertIn(f"**{field}**", text)
+        self.assertIn("Security group", text)
+        self.assertNotIn("Security → API Tokens", text)
+        self.assertNotIn("presence, expiry", text)
+        self.assertIn("not a token-use audit", text)
+        self.assertIn("do not share the token or its hint", text)
+
+    def test_dual_rejection_does_not_recommend_another_install_or_assume_a_restore(self):
+        text = " ".join(section().split())
+        for fact in ("both lookup and host reporting return 401", "not a lookup-only failure",
+                     "restore/upgrade explanation is generic", "not an established cause",
+                     "already tried reinstalling", "do not repeat it",
+                     "missing record", "service is presenting the same token"):
+            self.assertIn(fact, text)
+
 
 if __name__ == "__main__":
     unittest.main()
