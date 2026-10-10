@@ -31,6 +31,16 @@ legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegac
 uses actual encrypted GET/PUT persistence with and without the entitlement,
 then checks explicit read-only opt-out and later opt-in remain possible.
 
+### Legacy protection copy is not a canonical-plan guarantee
+
+The retained Protected guests list is older configuration, not a filter of
+canonical saved resource plans. Settings and both existing help pages must
+state that limitation and direct the operator to Actions target/approval review.
+The value is preserved on unrelated saves. Mounted component, accessible
+description and mirrored-help checks prevent a false exclusion promise.
+`TestService_isAutonomousModeEnabled` also covers every current saved level,
+explicit core-owned investigation enable/disable and unchanged stored values.
+
 ### Interactive Assistant modes reflect action planning
 
 Interactive Assistant offers Read-only and Ask first (`controlled`).
@@ -39,7 +49,7 @@ for interactive responses/tool availability. Saved bytes, shared capability
 vocabulary, entitlement checks and legacy `IsAutonomous` approval-admission
 remain intact; removing that legacy check would relax command approval.
 Chat's control tool saves typed plans to Actions without execution. Scoped
-handoff flags, execute authority, policy, protected guests and action lifecycle
+handoff flags, execute authority, policy and action lifecycle
 review/run/verification remain necessary; Patrol mode/Autopilot is separate.
 Unrelated Settings saves compare normalised values and preserve saved legacy
 preferences. Runtime, real encrypted-settings roundtrip/API, mounted component

@@ -941,6 +941,24 @@ describe('Assistant saved-control compatibility', () => {
     },
   );
 
+  it('explains the legacy protected list does not exclude canonical action plans', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      control_level: 'autonomous',
+      protected_guests: ['101', 'prod-db'],
+    });
+    renderComponent('assistant');
+    const legacy = await screen.findByLabelText('Protected guests (legacy)');
+    await waitFor(() => expect(legacy).toHaveValue('101, prod-db'));
+    expect(legacy).toHaveAccessibleDescription(
+      'Retained legacy VMIDs or names. This list does not exclude saved action plans. Review each plan’s target and approval policy in Actions.',
+    );
+    expect(screen.queryByText(/excluded from Assistant action planning/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+  });
+
   it('explicitly opts out of legacy action planning without changing Patrol', async () => {
     const saved = { ...baseSettings(), control_level: 'autonomous', protected_guests: ['vm-101'] };
     getSettingsMock.mockResolvedValue(saved);

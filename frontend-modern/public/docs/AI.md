@@ -487,6 +487,10 @@ Older saved `autonomous` preferences display as **Ask first**, not as permission
 to execute without approval. The stored preference and its existing entitlement
 checks are preserved for older clients.
 
+**Protected guests (legacy)** retains older VMIDs or names. This list does not
+exclude saved action plans. Review each plan’s target and approval policy in
+**Actions** instead of treating this list as an execution safeguard.
+
 ### Reviewing an Assistant action plan
 
 1. Assistant submits a typed action for a resource advertising that capability.

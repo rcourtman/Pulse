@@ -3582,6 +3582,24 @@ describe('AIChat', () => {
       });
     });
 
+    it('clamps the mode menu inside the composer and closes it on viewport resize', () => {
+      renderChat();
+      const trigger = screen.getByRole('button', { name: 'Assistant chat action mode: Read-only' });
+      const composer = trigger.closest('[data-assistant-composer]') as HTMLElement;
+      vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ left: 185 } as DOMRect);
+      vi.spyOn(composer, 'getBoundingClientRect').mockReturnValue({
+        left: 16,
+        right: 374,
+      } as DOMRect);
+      fireEvent.click(trigger);
+      const menu = screen.getByRole('menu', { name: 'Assistant chat action options' });
+      expect(menu.style.width).toBe('240px');
+      expect(menu.style.left).toBe('-51px');
+      fireEvent(window, new Event('resize'));
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    });
+
     it('opens the control menu from the keyboard', async () => {
       renderChat();
       const controlButton = screen.getByRole('button', {

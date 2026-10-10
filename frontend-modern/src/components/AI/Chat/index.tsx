@@ -739,6 +739,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
+  const [controlMenuPlacement, setControlMenuPlacement] = createSignal({ left: 0, width: 240 });
   const [controlSaving, setControlSaving] = createSignal(false);
   const [transcriptCopyFallback, setTranscriptCopyFallback] =
     createSignal<TranscriptCopyFallback | null>(null);
@@ -1495,6 +1496,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const openControlMenuAndFocusSelection = () => {
     if (controlSaving()) return;
+    // A wrapped toolbar can put the trigger at either edge. Keep the whole
+    // review-only menu inside the composer, not clipped by the chat panel.
+    const trigger = controlModeButtonRef?.getBoundingClientRect();
+    const composer = controlModeButtonRef
+      ?.closest('[data-assistant-composer]')
+      ?.getBoundingClientRect();
+    const leftEdge = Math.max(16, composer?.left ?? 16);
+    const rightEdge = Math.min(window.innerWidth - 16, composer?.right || window.innerWidth - 16);
+    const width = Math.min(240, Math.max(0, rightEdge - leftEdge));
+    const left = Math.max(leftEdge, Math.min(trigger?.left ?? leftEdge, rightEdge - width));
+    setControlMenuPlacement({ left: left - (trigger?.left ?? leftEdge), width });
     setShowControlMenu(true);
     focusCurrentControlModeOption();
   };
@@ -2934,10 +2946,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
         closeSlashCommandAutocomplete({ clearTransientDraft: true });
       }
     };
+    const closeControlMenuOnResize = () => setShowControlMenu(false);
+    window.addEventListener('resize', closeControlMenuOnResize);
     document.addEventListener('click', handleClickOutside);
     onCleanup(() => {
       stashComposerDraftForRemount();
       document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('resize', closeControlMenuOnResize);
       aiChatStore.registerInput?.(null);
       clearInterruptArm();
       if (queuedFollowUpCommandTargetTimeout) {
@@ -5491,7 +5506,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <Show when={showControlMenu()}>
                     <div
-                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      class="absolute bottom-full z-50 mb-2 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      style={{
+                        left: `${controlMenuPlacement().left}px`,
+                        width: `${controlMenuPlacement().width}px`,
+                      }}
                       role="menu"
                       aria-label={AI_CHAT_CONTROL_MODE_MENU_LABEL}
                     >

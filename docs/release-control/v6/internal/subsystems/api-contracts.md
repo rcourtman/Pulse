@@ -20,6 +20,11 @@
 
 ## Purpose
 
+The retained `protected_guests` settings field is legacy compatibility data,
+not an exclusion filter for canonical saved action plans. Existing Assistant
+help now states that limitation and requires target/approval review in Actions.
+No field value, GET/PUT shape, scope or approval authority changes.
+
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
 legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`

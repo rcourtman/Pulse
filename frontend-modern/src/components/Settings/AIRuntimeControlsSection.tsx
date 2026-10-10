@@ -324,11 +324,12 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
               for="ai-protected-guests"
               class="text-xs font-medium text-muted w-28 shrink-0 pt-1"
             >
-              Protected guests
+              Protected guests (legacy)
             </label>
             <div class="flex-1">
               <input
                 id="ai-protected-guests"
+                aria-describedby="ai-protected-guests-help"
                 type="text"
                 value={state.form.protectedGuests}
                 onInput={(e) => state.setForm('protectedGuests', e.currentTarget.value)}
@@ -336,8 +337,9 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
                 class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded-sm"
                 disabled={state.saving()}
               />
-              <p class="text-[10px] text-muted mt-1">
-                Comma-separated VMIDs or names excluded from Assistant action planning.
+              <p id="ai-protected-guests-help" class="text-[10px] text-muted mt-1">
+                Retained legacy VMIDs or names. This list does not exclude saved action plans.
+                Review each plan’s target and approval policy in Actions.
               </p>
             </div>
           </div>

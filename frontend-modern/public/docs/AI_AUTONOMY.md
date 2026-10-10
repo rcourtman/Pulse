@@ -109,6 +109,10 @@ entitlement checks for older clients. It does not bypass approval. An unrelated
 settings save does not rewrite that preference. Unknown values fail closed to
 read-only. Patrol mode and Autopilot acknowledgements remain separate.
 
+**Protected guests (legacy)** retains older VMIDs or names. This list does not
+exclude saved action plans. Review each plan’s target and approval policy in
+**Actions** instead of treating this list as an execution safeguard.
+
 ### Configuration
 
 **UI:** Settings → Pulse Intelligence → Assistant → Chat action mode

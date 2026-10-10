@@ -16,14 +16,15 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({ root, configFile: path.join(root, 'vite.config.ts'), cacheDir: path.join(output, 'vite-cache'), server: { host: '127.0.0.1', port: 5308, strictPort: true, watch: null } });
   const origin = 'http://127.0.0.1:5308';
-  const results = [], screenshots = [];
+  const results = [], screenshots = [], browserVersions = [];
   let browser, phase = 'server', browserClosed = false, serverClosed = false;
-  const result = () => ({ result: 'passed', base_sha: binding.base_sha, content_sha256: binding.content_sha256, playwrightVersion: version, results, screenshots, browserClosed, serverClosed, scope: 'Actual Settings state/save, Chat menus/scoped context and Docs with synthetic local API transport. No model/action/native persistence or deployed/released acceptance.' });
+  const result = () => ({ result: 'passed', base_sha: binding.base_sha, content_sha256: binding.content_sha256, playwrightVersion: version, browserVersions, results, screenshots, browserClosed, serverClosed, scope: 'Actual Settings state/save, Chat menus/scoped context and Docs with synthetic local API transport. No model/action/native persistence or deployed/released acceptance.' });
   try {
     await server.listen();
     for (const [name, engine, width, height, dark] of [ ['desktop-light', chromium, 1365, 900, false], ['phone-dark', webkit, 390, 844, true], ['narrow-light', webkit, 320, 740, false] ]) {
       browserClosed = false;
       browser = await engine.launch(engine === chromium ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] } : { headless: true });
+      browserVersions.push({ name, engine: engine === chromium ? 'chromium' : 'webkit', version: browser.version() });
       const page = await browser.newPage({ viewport: { width, height }, isMobile: width < 500, hasTouch: width < 500, locale: 'en-GB' });
       page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(60000);
       const errors = [], offOrigin = [], writes = [], checks = [], reads = [];
@@ -66,7 +67,7 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
             assert.equal(await select.locator('option').count(), 2);
             const text = await page.locator('main').innerText();
             assert.ok(!text.includes('chat-only') && !text.includes('Infrastructure changes stay with Patrol'));
-            if (expected === 'controlled') { assert.ok(text.includes('Chat does not execute the plan')); assert.equal(await page.getByLabel('Protected guests').inputValue(), 'vm-101'); }
+            if (expected === 'controlled') { assert.ok(text.includes('Chat does not execute the plan')); const legacy = page.getByLabel('Protected guests (legacy)', { exact: true }); assert.equal(await legacy.inputValue(), 'vm-101'); assert.equal(await legacy.getAttribute('aria-describedby'), 'ai-protected-guests-help'); assert.ok(text.includes('This list does not exclude saved action plans.')); assert.ok(text.includes('Review each plan’s target and approval policy in Actions.')); }
             else assert.ok(text.includes('Assistant can query and explain only. It cannot plan infrastructure actions.'));
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
           });
@@ -91,9 +92,22 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
           assert.equal(await ask.getAttribute('aria-checked'), 'true');
           await page.keyboard.press('Home'); assert.ok(await modes.first().evaluate((el) => el === document.activeElement));
           await page.keyboard.press('ArrowUp'); assert.ok(await ask.evaluate((el) => el === document.activeElement));
+          const bounds = await page.getByRole('menu').boundingBox();
+          const composer = await page.locator('[data-assistant-composer]').boundingBox();
+          assert.ok(bounds.x >= composer.x - 1 && bounds.x + bounds.width <= composer.x + composer.width + 1);
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
           await capture('chat-menu');
           await page.keyboard.press('Escape'); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Assistant chat action mode: Ask first');
           assert.equal(await page.getByRole('menu').count(), 0);
+        });
+        await check('Viewport resize closes the menu and reopened bounds fit', async () => {
+          await trigger.click();
+          await page.setViewportSize({ width: width + 1, height });
+          await page.getByRole('menu').waitFor({ state: 'hidden' });
+          await page.setViewportSize({ width, height }); await trigger.click();
+          const bounds = await page.getByRole('menu').boundingBox();
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+          await page.keyboard.press('Escape');
         });
         await check('Scoped alert attachment keeps identity and approval boundary', async () => {
           await page.evaluate(() => window.__assistantProof.scoped());
@@ -122,7 +136,7 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
             await page.getByRole('link', { name: link, exact: true }).click();
             const h = page.getByRole('heading', { name: heading, exact: true }); await h.waitFor(); await h.scrollIntoViewIfNeeded();
             const text = await page.locator('article').innerText(); assert.ok(text.includes('Assistant chat does not execute'));
-            assert.ok(text.includes('stored') && text.includes('entitlement') && text.includes('independent verification'));
+            assert.ok(text.includes('stored') && text.includes('entitlement') && text.includes('independent verification') && text.includes('Protected guests (legacy)') && text.includes('does not exclude saved action plans'));
             assert.ok(!text.includes('executes actions without prompting') && !text.includes('executes commands without prompting'));
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
             await capture(state);

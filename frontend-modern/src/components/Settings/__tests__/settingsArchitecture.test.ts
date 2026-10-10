@@ -117,6 +117,16 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('pairs the legacy protected field with its accessible canonical-plan limitation', () => {
+    expect(aiRuntimeControlsSectionSource).toContain('Protected guests (legacy)');
+    expect(aiRuntimeControlsSectionSource).toContain('aria-describedby="ai-protected-guests-help"');
+    expect(aiRuntimeControlsSectionSource).toContain('id="ai-protected-guests-help"');
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'This list does not exclude saved action plans.',
+    );
+    expect(aiRuntimeControlsSectionSource).not.toContain('excluded from Assistant action planning');
+  });
+
   it('keeps the Patrol cost preview on the canonical cost-preview API and presentation helper', () => {
     // The price table and the install's run history live on the server; the
     // settings surface must not re-derive dollars from model names.
