@@ -4579,3 +4579,167 @@ func linkedDiskRowsOn(t *testing.T, resources []Resource) linkedDiskRows {
 	}
 	return rows
 }
+
+// TestRegistryHoldsManualLinksBackUntilTheDeferredPass pins the exported
+// boundary a builder outside the monitor draws (the mock fixture build): once
+// DeferManualLinks is called the snapshot and record ingests leave every
+// member standing, ApplyDeferredManualLinks folds them in one pass, and a
+// second call changes nothing. A registry with no links has no pass to hold
+// back, so the call leaves it ingesting as before.
+func TestRegistryHoldsManualLinksBackUntilTheDeferredPass(t *testing.T) {
+	now := time.Now().UTC()
+	nas := IngestRecord{
+		SourceID: "system:tn-1:vm:nas-vm",
+		Resource: Resource{Type: ResourceTypeVM, Name: "nas-vm", Status: StatusOnline, LastSeen: now},
+	}
+	guest := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline, LastSeen: now,
+			VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		VMs: []models.VM{
+			{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+		},
+		Hosts: []models.Host{
+			{ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now},
+		},
+	}
+	// The snapshot brings a Proxmox VM and an agent, the records bring a
+	// TrueNAS VM and a vSphere VM; one link joins each pair.
+	ingest := func(rr *ResourceRegistry, afterSnapshot func()) {
+		rr.IngestSnapshot(snapshot)
+		if afterSnapshot != nil {
+			afterSnapshot()
+		}
+		rr.IngestRecords(SourceTrueNAS, []IngestRecord{nas})
+		rr.IngestRecords(SourceVMware, []IngestRecord{guest})
+	}
+
+	unlinked := NewRegistry(nil)
+	ingest(unlinked, nil)
+	ids := map[string]string{}
+	for _, resource := range unlinked.List() {
+		ids[resource.Name] = resource.ID
+	}
+	if len(ids) != 4 || ids["web"] == "" || ids["app-agent"] == "" || ids["nas-vm"] == "" || ids["app-guest"] == "" {
+		t.Fatalf("unlinked estate = %v, want the VM, the agent, the TrueNAS VM and the vSphere VM", ids)
+	}
+	links := []ResourceLink{
+		{ResourceA: ids["app-agent"], ResourceB: ids["web"], PrimaryID: ids["web"]},
+		{ResourceA: ids["nas-vm"], ResourceB: ids["app-guest"], PrimaryID: ids["app-guest"]},
+	}
+	wantAfter := []string{ids["app-guest"], ids["web"]}
+	slices.Sort(wantAfter)
+	listed := func(rr *ResourceRegistry) []string {
+		got := resourceIDs(rr.List())
+		slices.Sort(got)
+		return got
+	}
+
+	eager := NewRegistryWithManualLinks(links)
+	ingest(eager, nil)
+	if got := listed(eager); !slices.Equal(got, wantAfter) {
+		t.Fatalf("a registry that was not deferred listed %v, want %v", got, wantAfter)
+	}
+
+	deferred := NewRegistryWithManualLinks(links)
+	deferred.DeferManualLinks()
+	ingest(deferred, func() {
+		// The link between the snapshot's own members waits too.
+		if got := listed(deferred); len(got) != 2 {
+			t.Fatalf("a deferred registry listed %v after the snapshot, want both snapshot members standing", got)
+		}
+	})
+	if got := listed(deferred); len(got) != 4 {
+		t.Fatalf("a deferred registry listed %v before the pass, want every member standing", got)
+	}
+	deferred.ApplyDeferredManualLinks(nil)
+	if got := listed(deferred); !slices.Equal(got, wantAfter) {
+		t.Fatalf("a deferred registry listed %v after the pass, want %v", got, wantAfter)
+	}
+	folded, _ := deferred.Get(ids["app-guest"])
+	for _, source := range []DataSource{SourceTrueNAS, SourceVMware} {
+		if !slices.Contains(folded.Sources, source) {
+			t.Fatalf("folded row sources = %v, want %s among them", folded.Sources, source)
+		}
+	}
+	deferred.ApplyDeferredManualLinks(nil)
+	if got := listed(deferred); !slices.Equal(got, wantAfter) {
+		t.Fatalf("a second deferred pass listed %v, want the same rows %v", got, wantAfter)
+	}
+
+	plain := NewRegistry(nil)
+	plain.DeferManualLinks()
+	if plain.deferManualLinks {
+		t.Fatal("a registry with no links holds a pass back that has nothing to fold")
+	}
+	plain.ApplyDeferredManualLinks(nil)
+}
+
+// TestRegistryDeferredLinkPassJudgesFreshnessByTheCallersThresholds pins the
+// thresholds ApplyDeferredManualLinks takes: a vSphere disk reading three
+// minutes old is current under the five minutes the ingests were given, so the
+// guest keeps it over the agent's, and stale under the two-minute default,
+// where the fresh agent's reading replaces it.
+func TestRegistryDeferredLinkPassJudgesFreshnessByTheCallersThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	total, used := int64(8<<30), int64(3<<30)
+	guest := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline,
+			LastSeen: now.Add(-3 * time.Minute),
+			VMware:   &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+			Metrics: &ResourceMetrics{
+				Disk: &MetricValue{Value: 20, Percent: 20, Used: &used, Total: &total, Source: SourceVMware},
+			},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		Hosts: []models.Host{{
+			ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now,
+			Disks: []models.Disk{{Total: 100 << 30, Used: 80 << 30, Free: 20 << 30, Usage: 80, Mountpoint: "/"}},
+		}},
+	}
+	thresholds := map[DataSource]time.Duration{SourceVMware: 5 * time.Minute, SourceAgent: 5 * time.Minute}
+	ingest := func(rr *ResourceRegistry) {
+		rr.IngestSnapshotWithStaleThresholds(snapshot, thresholds)
+		rr.IngestRecordsWithStaleThresholds(SourceVMware, []IngestRecord{guest}, thresholds)
+	}
+
+	unlinked := NewRegistry(nil)
+	ingest(unlinked)
+	ids := map[string]string{}
+	for _, resource := range unlinked.List() {
+		ids[resource.Name] = resource.ID
+	}
+	if len(ids) != 2 || ids["app-agent"] == "" || ids["app-guest"] == "" {
+		t.Fatalf("unlinked estate = %v, want the agent and the vSphere VM", ids)
+	}
+	links := []ResourceLink{{ResourceA: ids["app-agent"], ResourceB: ids["app-guest"], PrimaryID: ids["app-guest"]}}
+
+	diskSource := func(applyWith map[DataSource]time.Duration) DataSource {
+		rr := NewRegistryWithManualLinks(links)
+		rr.DeferManualLinks()
+		ingest(rr)
+		rr.ApplyDeferredManualLinks(applyWith)
+		row, ok := rr.Get(ids["app-guest"])
+		if !ok || row.Metrics == nil || row.Metrics.Disk == nil {
+			t.Fatalf("merged guest = %+v, want it listed with a disk reading", row)
+		}
+		return row.Metrics.Disk.Source
+	}
+	if got := diskSource(thresholds); got != SourceVMware {
+		t.Fatalf("deferred pass with the ingests' thresholds took the disk reading from %q, want the current vSphere one", got)
+	}
+	if got := diskSource(nil); got != SourceAgent {
+		t.Fatalf("deferred pass with default thresholds took the disk reading from %q, want the fresh agent's (this scenario no longer separates the thresholds)", got)
+	}
+}
