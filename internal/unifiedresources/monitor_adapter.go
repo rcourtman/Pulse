@@ -154,7 +154,7 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 		}
 	}
 
-	cloned := NewRegistry(registry.store)
+	cloned := newRegistryFrom(registry)
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
 	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
@@ -487,7 +487,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return
 	}
 
-	rebuilt := NewRegistry(registry.store)
+	rebuilt := newRegistryFrom(registry)
 	staleThresholds := a.currentStaleThresholds()
 	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
 	sources := make([]DataSource, 0, len(recordsBySource))

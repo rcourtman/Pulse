@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -4088,6 +4089,269 @@ func TestMonitorStateKeepsASplitWhenTheAgentStopsReportingItsMachineID(t *testin
 		nodeLink, agentLink := f.links()
 		require.Empty(t, nodeLink+agentLink, "cycle %d: state relinked the split pair", cycle)
 	}
+}
+
+// unreadableDecisionStore fails reads of the operator's manual decisions
+// while its flags are set, as a store that cannot be read for a moment does.
+// Writes pass through, so a test can record a decision during the outage.
+type unreadableDecisionStore struct {
+	ResourceStore
+	failLinks      atomic.Bool
+	failExclusions atomic.Bool
+}
+
+func (s *unreadableDecisionStore) failAll(fail bool) {
+	s.failLinks.Store(fail)
+	s.failExclusions.Store(fail)
+}
+
+func (s *unreadableDecisionStore) GetLinks() ([]ResourceLink, error) {
+	if s.failLinks.Load() {
+		return nil, errors.New("links unreadable")
+	}
+	return s.ResourceStore.GetLinks()
+}
+
+func (s *unreadableDecisionStore) GetExclusions() ([]ResourceExclusion, error) {
+	if s.failExclusions.Load() {
+		return nil, errors.New("exclusions unreadable")
+	}
+	return s.ResourceStore.GetExclusions()
+}
+
+// splitMonitorFixture returns a node and agent the operator split with a
+// report-merge style exclusion, the decision stored and applied by a
+// generation that read it, and the store that can then stop answering.
+func splitMonitorFixture(t *testing.T) (*monitorSplitFixture, *unreadableDecisionStore, nodeAgentRows, string) {
+	t.Helper()
+	var flaky *unreadableDecisionStore
+	f := newMonitorSplitFixtureWithStore(t, "lab", "pve1", "0123456789abcdef", func(store ResourceStore) ResourceStore {
+		flaky = &unreadableDecisionStore{ResourceStore: store}
+		return flaky
+	})
+	f.cycle()
+	f.cycle()
+	merged := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, merged, "fixture did not join the node and its agent")
+	nodeCandidate := SourceSpecificID(ResourceTypeAgent, SourceProxmox, f.node.ID)
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: nodeCandidate, CreatedAt: time.Now().UTC()}))
+	for i := 0; i < 3; i++ {
+		f.cycle()
+	}
+	apart := hostRowsByFacet(t, f.adapter.GetAll())
+	require.Empty(t, apart.joined, "the split did not reach the registry")
+	require.NotEmpty(t, apart.node)
+	require.NotEmpty(t, apart.agent)
+	nodeLink, agentLink := f.links()
+	require.Empty(t, nodeLink+agentLink, "the split did not reach the state")
+	return f, flaky, apart, nodeCandidate
+}
+
+func (f *monitorSplitFixture) splitReadByDecider() bool {
+	f.t.Helper()
+	snapshot := f.state.GetSnapshot()
+	require.Len(f.t, snapshot.Nodes, 1)
+	for _, host := range snapshot.Hosts {
+		if host.ID == f.host.ID {
+			return f.adapter.ProxmoxNodeAgentSplit(snapshot.Nodes[0], host)
+		}
+	}
+	f.t.Fatalf("the state lost the fixture's agent %s", f.host.ID)
+	return false
+}
+
+// A rebuild whose store reads fail loads no decisions, and without the carry
+// it would publish a registry that lists a split node and agent as one
+// machine and answers the monitor's split decider "undecided", so the
+// monitor relinks the pair until the next readable rebuild.
+func TestRebuildThatCannotReadDecisionsKeepsANodeAgentSplit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(*unreadableDecisionStore)
+		// during changes what the store can still read while the other half
+		// cannot: the carry is the previous generation's decisions whole.
+		during func(t *testing.T, f *monitorSplitFixture, flaky *unreadableDecisionStore)
+	}{
+		{name: "both reads", fail: func(s *unreadableDecisionStore) { s.failAll(true) }},
+		{name: "exclusions only", fail: func(s *unreadableDecisionStore) { s.failExclusions.Store(true) }},
+		{
+			name: "links only, the exclusion lifted meanwhile",
+			fail: func(s *unreadableDecisionStore) { s.failLinks.Store(true) },
+			during: func(t *testing.T, f *monitorSplitFixture, flaky *unreadableDecisionStore) {
+				exclusions, err := flaky.ResourceStore.GetExclusions()
+				require.NoError(t, err)
+				require.NotEmpty(t, exclusions)
+				for _, exclusion := range exclusions {
+					_, found, err := f.store.TakeExclusion(exclusion.ResourceA, exclusion.ResourceB)
+					require.NoError(t, err)
+					require.True(t, found)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, flaky, apart, _ := splitMonitorFixture(t)
+			require.True(t, f.splitReadByDecider(), "a readable generation did not report the split")
+
+			if tc.during != nil {
+				tc.during(t, f, flaky)
+			}
+			tc.fail(flaky)
+			for cycle := 1; cycle <= 3; cycle++ {
+				f.cycle()
+				require.True(t, f.adapter.currentRegistry().overridesUnreadable, "cycle %d: the rebuild read the store", cycle)
+				rows := hostRowsByFacet(t, f.adapter.GetAll())
+				require.Equal(t, apart, rows, "cycle %d: the rebuild that could not read the decisions rejoined the pair", cycle)
+				require.True(t, f.splitReadByDecider(), "cycle %d: the decider lost the split", cycle)
+				nodeLink, agentLink := f.links()
+				require.Empty(t, nodeLink+agentLink, "cycle %d: the state relinked the split pair", cycle)
+			}
+		})
+	}
+}
+
+// The negative control: a generation published with no decisions, which is
+// what a rebuild without the carry published for an unreadable store, loses
+// the split in both places. The decider answers "undecided", so the state
+// relinks the pair on the next report, and the rebuild joins the rows.
+func TestGenerationWithoutDecisionsRejoinsASplitNodeAgent(t *testing.T) {
+	f, flaky, _, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	bare := NewRegistry(flaky)
+	require.True(t, bare.overridesUnreadable)
+	require.Empty(t, bare.exclusions, "an unreadable store loaded decisions")
+	f.adapter.mu.Lock()
+	f.adapter.registry = bare
+	f.adapter.mu.Unlock()
+	require.False(t, f.splitReadByDecider(), "a generation holding no decisions still reported the split")
+
+	f.cycle()
+	rows := hostRowsByFacet(t, f.adapter.GetAll())
+	require.NotEmpty(t, rows.joined, "without decisions the rebuild kept the pair apart: %+v", rows)
+	nodeLink, agentLink := f.links()
+	require.NotEmpty(t, nodeLink+agentLink, "without decisions the state kept the pair unlinked")
+}
+
+// Carried decisions are good only until the store answers again: the next
+// readable rebuild loads its current decisions, one the operator recorded or
+// lifted during the outage included.
+func TestCarriedDecisionsYieldToTheNextReadableRebuild(t *testing.T) {
+	f, flaky, apart, nodeCandidate := splitMonitorFixture(t)
+	merged := hostRowsByFacet(t, f.adapter.GetAll())
+	_ = merged
+
+	flaky.failAll(true)
+	exclusions, err := f.store.(*unreadableDecisionStore).ResourceStore.GetExclusions()
+	require.NoError(t, err)
+	require.NotEmpty(t, exclusions)
+	for _, exclusion := range exclusions {
+		_, found, err := flaky.ResourceStore.TakeExclusion(exclusion.ResourceA, exclusion.ResourceB)
+		require.NoError(t, err)
+		require.True(t, found)
+	}
+	f.cycle()
+	require.Equal(t, apart, hostRowsByFacet(t, f.adapter.GetAll()), "the outage generation dropped the carried split")
+	require.True(t, f.splitReadByDecider(), "the outage generation's decider dropped the carried split")
+
+	flaky.failAll(false)
+	var rows nodeAgentRows
+	for cycle := 1; cycle <= 4; cycle++ {
+		f.cycle()
+		rows = hostRowsByFacet(t, f.adapter.GetAll())
+		require.False(t, f.adapter.currentRegistry().overridesUnreadable, "cycle %d: the store answers again", cycle)
+	}
+	require.NotEmpty(t, rows.joined, "a readable rebuild kept the carried split after the operator lifted it (node candidate %s): %+v", nodeCandidate, rows)
+	require.False(t, f.splitReadByDecider(), "the decider kept a split the store no longer holds")
+}
+
+// A manual link is carried the same way, so an outage does not unfold the
+// pair it joins, whichever read failed.
+func TestRebuildThatCannotReadDecisionsKeepsAManualLink(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(*unreadableDecisionStore)
+		// unlink changes what the store can still read while the other half
+		// cannot: the carry is the previous generation's decisions whole.
+		unlink bool
+	}{
+		{name: "both reads", fail: func(s *unreadableDecisionStore) { s.failAll(true) }},
+		{name: "links only", fail: func(s *unreadableDecisionStore) { s.failLinks.Store(true) }},
+		{name: "exclusions only, the pair unlinked meanwhile", fail: func(s *unreadableDecisionStore) { s.failExclusions.Store(true) }, unlink: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			snapshot := models.StateSnapshot{
+				Hosts: []models.Host{
+					{ID: "host-app", Hostname: "app-guest", MachineID: "machine-app", Status: "online", LastSeen: now},
+					{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas", Status: "online", LastSeen: now},
+				},
+				LastUpdate: now,
+			}
+			flaky := &unreadableDecisionStore{ResourceStore: NewMemoryStore()}
+			adapter := NewMonitorAdapter(NewRegistry(flaky))
+			adapter.PopulateFromSnapshot(snapshot)
+			listed := adapter.GetAll()
+			require.Len(t, listed, 2, "fixture hosts did not stay separate: %v", resourceIDs(listed))
+
+			require.NoError(t, flaky.AddLink(ResourceLink{ResourceA: listed[0].ID, ResourceB: listed[1].ID, PrimaryID: listed[0].ID}))
+			adapter.PopulateFromSnapshot(snapshot)
+			require.Len(t, adapter.GetAll(), 1, "a readable rebuild did not fold the linked pair")
+			require.Len(t, adapter.ManualLinks(), 1)
+
+			if tc.unlink {
+				require.NoError(t, flaky.AddExclusion(ResourceExclusion{ResourceA: listed[0].ID, ResourceB: listed[1].ID, CreatedAt: time.Now().UTC()}))
+			}
+			tc.fail(flaky)
+			adapter.PopulateFromSnapshot(snapshot)
+			require.True(t, adapter.currentRegistry().overridesUnreadable)
+			require.Len(t, adapter.GetAll(), 1, "the rebuild that could not read the decisions unfolded the pair")
+			require.Len(t, adapter.ManualLinks(), 1, "the rebuild that could not read the decisions dropped the link")
+
+			// The generation published with nothing to carry folds nothing.
+			flaky.failAll(true)
+			bare := NewRegistry(flaky)
+			bare.IngestSnapshot(snapshot)
+			require.Len(t, bare.List(), 2, "negative control: a generation holding no link still folded the pair")
+		})
+	}
+}
+
+// A carry owns its copy: the registry that took the decisions neither shares
+// a map or slice it could be written through with the generation it replaced.
+func TestCarriedDecisionsAreCopiedNotAliased(t *testing.T) {
+	store := NewMemoryStore()
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	require.NoError(t, store.AddExclusion(ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-b", CreatedAt: at}))
+	require.NoError(t, store.AddLink(ResourceLink{ResourceA: "agent-c", ResourceB: "agent-d", PrimaryID: "agent-c", CreatedAt: at}))
+	previous := NewRegistry(store)
+	require.False(t, previous.overridesUnreadable)
+	require.Len(t, previous.exclusions, 1)
+	require.Len(t, previous.links, 1)
+
+	flaky := &unreadableDecisionStore{ResourceStore: store}
+	flaky.failAll(true)
+	next := NewRegistry(flaky)
+	require.Empty(t, next.links)
+	next.carryOverridesFrom(previous)
+	require.Equal(t, previous.exclusions, next.exclusions)
+	require.Equal(t, previous.links, next.links)
+	require.Equal(t, previous.linksByID, next.linksByID)
+
+	next.exclusions["extra"] = at
+	next.links[0].PrimaryID = "agent-d"
+	require.Len(t, previous.exclusions, 1, "the carry shared the exclusions map")
+	require.Equal(t, "agent-c", previous.links[0].PrimaryID, "the carry shared the links slice")
+
+	// A registry that read the store keeps what it read, and one with no
+	// previous generation stays empty.
+	readable := NewRegistry(store)
+	readable.carryOverridesFrom(NewRegistry(nil))
+	require.Len(t, readable.exclusions, 1)
+	first := NewRegistry(flaky)
+	first.carryOverridesFrom(nil)
+	require.Empty(t, first.exclusions)
+	require.NotNil(t, first.exclusions)
 }
 
 // An operator split of a node and its agent reaches monitoring's own link:
