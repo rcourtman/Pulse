@@ -1571,6 +1571,7 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 			PBS: &PBSData{
 				InstanceID:     "pbs-instance-1",
 				Hostname:       "pbs.example",
+				NodeName:       "pbs01",
 				HostURL:        "https://pbs.example:8007",
 				GuestURL:       "https://pbs-guest.example:8007",
 				Version:        "3.2",
@@ -1624,6 +1625,9 @@ func TestView_PBSAndPMGInstanceViewAccessors(t *testing.T) {
 		}
 		if v.Hostname() != "pbs.example" || v.Version() != "3.2" || v.UptimeSeconds() != 100 {
 			t.Fatalf("expected hostname/version/uptime to match, got %q/%q/%d", v.Hostname(), v.Version(), v.UptimeSeconds())
+		}
+		if v.NodeName() != "pbs01" {
+			t.Fatalf("expected the node name the PBS server reports, distinct from the configured hostname, got %q", v.NodeName())
 		}
 		if v.InstanceID() != "pbs-instance-1" || v.HostURL() != "https://pbs.example:8007" || v.GuestURL() != "https://pbs-guest.example:8007" {
 			t.Fatalf("expected canonical instance/host/guest URLs, got id=%q host=%q guest=%q", v.InstanceID(), v.HostURL(), v.GuestURL())
