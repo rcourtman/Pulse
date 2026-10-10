@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -7967,5 +7968,286 @@ func TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs(t *testing.T) {
 			setNames("docker")
 			check("docker.home.example", "home") // Legacy short provider name remains usable.
 		})
+	}
+}
+
+func storeWiringProvider(sourceID string) *testMonitorSupplementalProvider {
+	return &testMonitorSupplementalProvider{
+		recordsByOrg: map[string][]unifiedresources.IngestRecord{
+			"default": {{
+				SourceID: sourceID,
+				Resource: unifiedresources.Resource{
+					Type:     unifiedresources.ResourceTypeAgent,
+					Name:     sourceID,
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: time.Now().UTC(),
+				},
+				Identity: unifiedresources.ResourceIdentity{Hostnames: []string{sourceID}},
+			}},
+		},
+	}
+}
+
+// Every wiring call that publishes populates the whole registry and runs the
+// alert pass over every resource, so startup, which wires a store and one
+// provider per supplemental source, must publish once, not once per source.
+func TestSetResourceStoreAndProvidersPublishesOnce(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState()}
+
+	monitor.SetResourceStoreAndProviders(store, map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: storeWiringProvider("tn-host-1"),
+		unifiedresources.SourceVMware:  storeWiringProvider("esxi-host-1"),
+	})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("wiring a store and two providers populated the registry %d times, want 1", store.snapshotCalls)
+	}
+	for source, sourceID := range map[unifiedresources.DataSource]string{
+		unifiedresources.SourceTrueNAS: "tn-host-1",
+		unifiedresources.SourceVMware:  "esxi-host-1",
+	} {
+		records := store.recordsBySource[source]
+		if len(records) != 1 || records[0].SourceID != sourceID {
+			t.Fatalf("the one pass ingested %v for %s, want the %s record", records, source, sourceID)
+		}
+	}
+}
+
+// A router re-applies its wiring to a monitor it already wired (a provider
+// change re-runs the tenant initializer on every existing monitor, and so do
+// SetMonitor and SetMultiTenantMonitor). The same store and providers must not
+// repopulate the registry again; a different provider or store must.
+func TestSetResourceStoreAndProvidersPublishesOnlyWhenWiringChanged(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState()}
+	trueNAS := storeWiringProvider("tn-host-1")
+	vmware := storeWiringProvider("esxi-host-1")
+	providers := map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: trueNAS,
+		unifiedresources.SourceVMware:  vmware,
+	}
+
+	monitor.SetResourceStoreAndProviders(store, providers)
+	monitor.SetResourceStoreAndProviders(store, providers)
+	monitor.SetResourceStoreAndProviders(store, map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceVMware: vmware})
+	if store.snapshotCalls != 1 {
+		t.Fatalf("re-wiring the same store and providers populated the registry %d times in all, want 1", store.snapshotCalls)
+	}
+
+	monitor.SetResourceStoreAndProviders(store, map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceVMware: storeWiringProvider("esxi-host-2"),
+	})
+	if store.snapshotCalls != 2 {
+		t.Fatalf("wiring a different provider populated the registry %d times in all, want 2", store.snapshotCalls)
+	}
+
+	monitor.SetResourceStoreAndProviders(&testSupplementalResourceStore{}, nil)
+	if store.snapshotCalls != 2 {
+		t.Fatalf("the replaced store was populated again: %d calls", store.snapshotCalls)
+	}
+	replacement, ok := monitor.resourceStore.(*testSupplementalResourceStore)
+	if !ok || replacement == store {
+		t.Fatalf("the monitor kept the store it was wired with: %#v", monitor.resourceStore)
+	}
+	if replacement.snapshotCalls != 1 {
+		t.Fatalf("wiring a different store populated it %d times, want 1", replacement.snapshotCalls)
+	}
+}
+
+// A provider type that cannot be compared must read as a change, not panic.
+type uncomparableWiringProvider struct {
+	records []unifiedresources.IngestRecord
+}
+
+func (uncomparableWiringProvider) SupplementalRecords(*Monitor, string) []unifiedresources.IngestRecord {
+	return nil
+}
+
+func TestSetResourceStoreAndProvidersTreatsUncomparableProvidersAsChanged(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState()}
+	providers := map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: uncomparableWiringProvider{},
+	}
+
+	monitor.SetResourceStoreAndProviders(store, providers)
+	monitor.SetResourceStoreAndProviders(store, providers)
+
+	if store.snapshotCalls != 2 {
+		t.Fatalf("an uncomparable provider populated the registry %d times for two wirings, want 2", store.snapshotCalls)
+	}
+}
+
+func TestSetSupplementalRecordsProvidersPublishesOnce(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState(), resourceStore: store}
+
+	monitor.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: storeWiringProvider("tn-host-1"),
+		unifiedresources.SourceVMware:  storeWiringProvider("esxi-host-1"),
+	})
+
+	if store.snapshotCalls != 1 {
+		t.Fatalf("registering two providers populated the registry %d times, want 1", store.snapshotCalls)
+	}
+	if len(store.recordsBySource[unifiedresources.SourceTrueNAS]) != 1 || len(store.recordsBySource[unifiedresources.SourceVMware]) != 1 {
+		t.Fatalf("the pass did not ingest both providers: %v", store.recordsBySource)
+	}
+}
+
+func TestSetSupplementalRecordsProvidersNormalizesRemovesAndSkipsEmpty(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState(), resourceStore: store}
+
+	monitor.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		" TrueNAS ": storeWiringProvider("tn-host-1"),
+		"   ":       storeWiringProvider("nameless"),
+	})
+	if store.snapshotCalls != 1 {
+		t.Fatalf("a usable source populated the registry %d times, want 1", store.snapshotCalls)
+	}
+	if len(store.recordsBySource[unifiedresources.SourceTrueNAS]) != 1 {
+		t.Fatalf("a provider registered as %q was not found under %q: %v", " TrueNAS ", unifiedresources.SourceTrueNAS, store.recordsBySource)
+	}
+	if len(store.recordsBySource) != 1 {
+		t.Fatalf("a blank source was registered: %v", store.recordsBySource)
+	}
+
+	store.snapshotCalls = 0
+	monitor.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{"  ": storeWiringProvider("nameless")})
+	monitor.SetSupplementalRecordsProviders(nil)
+	if store.snapshotCalls != 0 {
+		t.Fatalf("a change naming no usable source populated the registry %d times, want 0", store.snapshotCalls)
+	}
+
+	store.recordsBySource = nil
+	monitor.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: nil})
+	if store.snapshotCalls != 1 {
+		t.Fatalf("removing a provider populated the registry %d times, want 1", store.snapshotCalls)
+	}
+	if len(store.recordsBySource) != 0 {
+		t.Fatalf("a removed provider still supplied records: %v", store.recordsBySource)
+	}
+}
+
+// The single-source setters keep publishing, so a caller that wires one piece
+// at a time still ends with a populated registry.
+func TestSingleWiringSettersStillPublish(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	monitor := &Monitor{state: models.NewState()}
+
+	monitor.SetResourceStore(store)
+	if store.snapshotCalls != 1 {
+		t.Fatalf("SetResourceStore populated the registry %d times, want 1", store.snapshotCalls)
+	}
+
+	provider := storeWiringProvider("tn-host-1")
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	if store.snapshotCalls != 2 {
+		t.Fatalf("SetSupplementalRecordsProvider populated the registry %d times in all, want 2", store.snapshotCalls)
+	}
+	if len(store.recordsBySource[unifiedresources.SourceTrueNAS]) != 1 {
+		t.Fatalf("the provider's records were not ingested: %v", store.recordsBySource)
+	}
+
+	// Unlike the batched wiring step, the single setters are a refresh the
+	// caller asked for: the same arguments publish again.
+	monitor.SetResourceStore(store)
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	if store.snapshotCalls != 4 {
+		t.Fatalf("repeating the single setters populated the registry %d times in all, want 4", store.snapshotCalls)
+	}
+}
+
+// blockingWiringProvider supplies one record named sourceID, and holds its
+// caller inside the registry pass that collects it until release closes.
+type blockingWiringProvider struct {
+	sourceID string
+	entered  chan struct{}
+	release  chan struct{}
+	once     sync.Once
+}
+
+func (p *blockingWiringProvider) SupplementalRecords(*Monitor, string) []unifiedresources.IngestRecord {
+	p.once.Do(func() { close(p.entered) })
+	if p.release != nil {
+		<-p.release
+	}
+	return []unifiedresources.IngestRecord{{
+		SourceID: p.sourceID,
+		Resource: unifiedresources.Resource{
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     p.sourceID,
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: time.Now().UTC(),
+		},
+		Identity: unifiedresources.ResourceIdentity{Hostnames: []string{p.sourceID}},
+	}}
+}
+
+// A pass collects the registered providers' records before it populates the
+// registry, so one that collected a provider just before it was replaced can
+// populate after the pass that collected its replacement. Such a pass notices
+// that a registration changed while it ran and repeats, so the registry ends
+// built from the last registration (which is also what lets a repeat of an
+// unchanged wiring skip its publication).
+func TestStorePassRepeatsWhenAProviderRegistrationChangesDuringIt(t *testing.T) {
+	store := &testAtomicResourceStore{}
+	monitor := &Monitor{state: models.NewState()}
+	monitor.SetResourceStore(store)
+
+	old := &blockingWiringProvider{sourceID: "old-host", entered: make(chan struct{}), release: make(chan struct{})}
+	replacement := &blockingWiringProvider{sourceID: "new-host", entered: make(chan struct{})}
+	monitor.registerSupplementalProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: old})
+
+	// An ingest-driven pass that collects the old provider and waits inside it.
+	passDone := make(chan struct{})
+	go func() {
+		monitor.updateResourceStore(monitor.currentStateWithScope())
+		close(passDone)
+	}()
+	<-old.entered
+
+	// The replacement is wired and published while that pass still holds the
+	// old provider's records.
+	monitor.SetResourceStoreAndProviders(store, map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: replacement})
+	close(old.release)
+	<-passDone
+
+	records := store.lastRecordsBySrc[unifiedresources.SourceTrueNAS]
+	if len(records) != 1 || records[0].SourceID != "new-host" {
+		t.Fatalf("the registry holds %v after the pass that collected the old provider finished last, want the replacement's record", records)
+	}
+}
+
+// The comparison that decides whether a wiring changed anything runs in the
+// same critical section as the change, so two overlapping wirings cannot both
+// read "unchanged" against the other's registration.
+func TestRegisterSupplementalProvidersReportsWhatChanged(t *testing.T) {
+	monitor := &Monitor{}
+	first := storeWiringProvider("tn-host-1")
+	second := storeWiringProvider("tn-host-2")
+	register := func(provider MonitorSupplementalRecordsProvider) (bool, bool) {
+		return monitor.registerSupplementalProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: provider})
+	}
+
+	if usable, changed := register(first); !usable || !changed {
+		t.Fatalf("registering a new provider reported usable=%v changed=%v, want both", usable, changed)
+	}
+	if usable, changed := register(first); !usable || changed {
+		t.Fatalf("registering the same provider reported usable=%v changed=%v, want usable and unchanged", usable, changed)
+	}
+	if _, changed := register(second); !changed {
+		t.Fatal("replacing a provider reported no change")
+	}
+	if _, changed := register(nil); !changed {
+		t.Fatal("removing a provider reported no change")
+	}
+	if usable, changed := register(nil); !usable || changed {
+		t.Fatalf("removing an absent provider reported usable=%v changed=%v, want usable and unchanged", usable, changed)
+	}
+	if usable, changed := monitor.registerSupplementalProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{"  ": first}); usable || changed {
+		t.Fatalf("a blank source reported usable=%v changed=%v, want neither", usable, changed)
 	}
 }

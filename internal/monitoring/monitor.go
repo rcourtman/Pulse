@@ -1299,6 +1299,7 @@ type Monitor struct {
 	state                      *models.State
 	orgID                      string // Organization ID for tenant isolation (empty = default/legacy)
 	mockUnifiedViewMu          sync.Mutex
+	providersGeneration        atomic.Uint64 // advances when a provider registration changes; a store pass that sees it move repeats (updateResourceStore)
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
 	mockUnifiedViewStructure   uint64 // fixture structure revision the published view was built at
@@ -5011,11 +5012,68 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 // When set, the monitor will check if it should reduce polling frequency
 // for nodes that have host agents providing data.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
+	m.attachResourceStore(store)
+	m.backfillResourceStore(store)
+}
+
+// SetResourceStoreAndProviders makes store and providers the monitor's
+// resource store and supplemental providers, and publishes the estate once if
+// that changed either. It is the wiring step a router repeats for a monitor it
+// has already wired (every provider change re-applies the tenant initializer
+// to the existing monitors, and SetMonitor and SetMultiTenantMonitor apply it
+// again), where the store and providers are the same and a full refresh
+// (populate, metric syncs and the alert pass over every resource) would only
+// repeat the last one. Wiring a store and then each provider through its own
+// setter also published after every call: startup made 19 passes before the
+// listener answered, where one is needed.
+//
+// A store pass collects the registered providers' records before it populates
+// the registry, so one that collected the old registration can populate after
+// the pass that collected the new. updateResourceStore repeats a pass during
+// which a registration changed, so the registry ends built from the last
+// registration however the passes overlap, and a repeat of an unchanged wiring
+// has nothing to repair.
+func (m *Monitor) SetResourceStoreAndProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
+	_, providersChanged := m.registerSupplementalProviders(providers)
+	storeChanged := m.attachResourceStore(store)
+	if providersChanged || storeChanged {
+		m.backfillResourceStore(store)
+	}
+}
+
+// sameWiredValue reports whether two wired dependencies are the same value. A
+// value of an uncomparable type is never taken for the one it replaces.
+func sameWiredValue(a, b any) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+	return a == b
+}
+
+func normalizeSupplementalSource(source unifiedresources.DataSource) unifiedresources.DataSource {
+	return unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+}
+
+// backfillResourceStore populates a freshly wired store from current state so
+// ReadState consumers have data as soon as it is wired. Minimally initialized
+// monitors (e.g., test fixtures with bare &Monitor{}) have no state to read.
+func (m *Monitor) backfillResourceStore(store ResourceStoreInterface) {
+	if store != nil && m.state != nil {
+		m.updateResourceStore(m.currentStateWithScope())
+	}
+}
+
+// attachResourceStore wires store in and reports whether it is not the store
+// the monitor already had.
+func (m *Monitor) attachResourceStore(store ResourceStoreInterface) (changed bool) {
 	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
 		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
 
 	m.mu.Lock()
+	changed = !sameWiredValue(m.resourceStore, store)
 	m.resourceStore = store
 	incidentStore := m.incidentStore
 	m.installNodeAgentSplitDeciderLocked()
@@ -5040,40 +5098,63 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 		// behind an un-projected backlog.
 		m.scheduleAlertProjectionCatchUp()
 	}
-
-	// Immediately backfill the store from current state so ReadState
-	// consumers have data as soon as the store is wired.
-	// Guard against minimally initialized monitors (e.g., test fixtures
-	// with bare &Monitor{}) where m.state may be nil.
-	if store != nil && m.state != nil {
-		m.updateResourceStore(m.currentStateWithScope())
-	}
+	return changed
 }
 
 // SetSupplementalRecordsProvider configures source-native resource providers
 // that ingest alongside the legacy state snapshot path.
 func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSource, provider MonitorSupplementalRecordsProvider) {
+	m.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{source: provider})
+}
+
+// SetSupplementalRecordsProviders registers (or, for a nil provider, removes)
+// several providers and publishes the estate once, however many changed.
+func (m *Monitor) SetSupplementalRecordsProviders(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
 	if m == nil {
 		return
 	}
-
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
+	if usable, _ := m.registerSupplementalProviders(providers); !usable {
 		return
 	}
 
-	m.mu.Lock()
-	if m.supplementalProviders == nil {
-		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+	m.updateResourceStore(m.currentStateWithScope())
+}
+
+// registerSupplementalProviders applies a provider change without publishing
+// it. It reports whether the map named any usable source, and whether applying
+// it changed what the monitor has registered.
+func (m *Monitor) registerSupplementalProviders(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) (usable, changed bool) {
+	if len(providers) == 0 {
+		return false, false
 	}
-	if provider == nil {
-		delete(m.supplementalProviders, normalized)
-	} else {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for source, provider := range providers {
+		normalized := normalizeSupplementalSource(source)
+		if normalized == "" {
+			continue
+		}
+		usable = true
+		if m.supplementalProviders == nil {
+			m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+		}
+		previous, registered := m.supplementalProviders[normalized]
+		if provider == nil {
+			if registered {
+				delete(m.supplementalProviders, normalized)
+				changed = true
+			}
+			continue
+		}
+		if !registered || !sameWiredValue(previous, provider) {
+			changed = true
+		}
 		m.supplementalProviders[normalized] = provider
 	}
-	m.mu.Unlock()
-
-	m.updateResourceStore(m.currentStateWithScope())
+	if changed {
+		m.providersGeneration.Add(1)
+	}
+	return usable, changed
 }
 
 // SetLicenseChecker wires the commercial feature gate used by monitoring-owned
@@ -5670,20 +5751,22 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[Resources] Populating resource store from state snapshot")
 
-	snapshotForStore := state
-	ownedSources := m.providerOwnedSnapshotSources()
-	if len(ownedSources) > 0 {
-		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
-		sourceNames := make([]string, 0, len(ownedSources))
-		for _, source := range ownedSources {
-			sourceNames = append(sourceNames, string(source))
+	publish := func() bool {
+		// Which snapshot slices a provider owns follows the registration, so
+		// it is read again when the pass repeats.
+		snapshotForStore := state
+		ownedSources := m.providerOwnedSnapshotSources()
+		if len(ownedSources) > 0 {
+			snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
+			sourceNames := make([]string, 0, len(ownedSources))
+			for _, source := range ownedSources {
+				sourceNames = append(sourceNames, string(source))
+			}
+			log.Debug().
+				Strs("sources", sourceNames).
+				Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
 		}
-		log.Debug().
-			Strs("sources", sourceNames).
-			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
-	}
 
-	mark, published := scope.publish(func() bool {
 		recordsBySource := m.collectSupplementalRecordsBySource()
 		supplementalChanges := m.collectSupplementalChanges()
 		if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
@@ -5719,13 +5802,35 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 
 		recordSupplementalResourceChanges(store, supplementalChanges)
 		return true
-	})
-	if !published {
-		// The snapshot belongs to the mode the monitor just left.
-		return
+	}
+
+	// A pass collects the registered providers' records before it populates
+	// the registry. A registration that changes in between is missed by this
+	// pass, and the pass that made the change may publish before this one
+	// does, leaving the older providers' records in the registry. A pass during
+	// which a registration changed therefore runs again, up to a bound; a
+	// change that keeps coming is followed by the pass of whoever makes it.
+	var mark uint64
+	settled := false
+	for attempt := 0; attempt <= providerChangeRepeatLimit && !settled; attempt++ {
+		generation := m.providersGeneration.Load()
+		var published bool
+		mark, published = scope.publish(publish)
+		if !published {
+			// The snapshot belongs to the mode the monitor just left.
+			return
+		}
+		settled = m.providersGeneration.Load() == generation
+	}
+	if !settled {
+		log.Warn().Msg("[Resources] A provider registration kept changing while the resource store was populated; the next refresh settles it")
 	}
 	m.syncPublishedResourceStore(store, scope, mark)
 }
+
+// providerChangeRepeatLimit bounds how many times one store pass repeats
+// because a provider registration changed during it.
+const providerChangeRepeatLimit = 2
 
 // resourceSnapshotStore serves one GetAll clone to every consumer of a single
 // store-refresh pass. The metric syncs and the alert sync each cloned the

@@ -6778,3 +6778,13 @@ excludes the links that join a member carrying the named source to the rest
 of the merged resource. That changes which pairs the report excludes, through
 the same exclusion write as before; no schema, backup, retention, migration or recovery path is added or
 moved.
+
+### Resource-store wiring opens no storage or recovery path
+
+`internal/api/router.go` now registers a monitor's resource store and
+supplemental providers with one call that publishes the estate once and skips a
+repeat wiring that changes nothing (see "Store and provider wiring publishes
+the estate once, and only when it changed" in the monitoring contract). The
+store, the providers and what they ingest are the same; fewer redundant
+repopulations run. No backup, retention, migration, snapshot or recovery path is
+added or moved.
