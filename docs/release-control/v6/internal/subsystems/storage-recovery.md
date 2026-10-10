@@ -1035,7 +1035,11 @@ The workload filter belongs immediately before the workload table it controls,
 after the node preview, and its committed search term must also flow into the
 node table. `ProxmoxPageSurface` renders that one `WorkloadsFilter` itself and
 passes the embedded `WorkloadsSurface` the same workload state; the surface
-renders no filter row of its own. The node table must use the shared Proxmox search model so a
+renders no filter row of its own. That state is the surface's only data input:
+the app-container exclusion and its nested-context cue
+(`excludedWorkloadTypes`, `showNestedExcludedWorkloads`) live on the page's
+`useWorkloadsState` call, and the surface mount carries only the state, the
+locked platform, the empty-state copy and the `Guests` title. The node table must use the shared Proxmox search model so a
 matching guest retains its owning node while unrelated nodes disappear; a
 node search must likewise retain the directly matching node. The table still
 receives the real already-loaded PVE node collection as its source, so the

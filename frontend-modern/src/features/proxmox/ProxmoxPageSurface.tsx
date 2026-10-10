@@ -623,13 +623,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         </Show>
         <WorkloadsSurface
           state={workloadsState}
-          vms={[]}
-          containers={[]}
-          nodes={[]}
-          useWorkloads
           forcedPlatform={PROXMOX_PLATFORM_FILTER}
-          excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}
-          showNestedExcludedWorkloads
           emptyStateTitle="No Proxmox workloads"
           emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
           tableTitle={

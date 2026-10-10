@@ -65,7 +65,7 @@ const isProxmoxNodeResource = (resource: Resource): boolean =>
     Boolean(resource.proxmox) ||
     Boolean(resource.platformData?.proxmox));
 
-export interface WorkloadsSurfaceProps {
+export interface WorkloadsStateOptions {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
@@ -133,7 +133,7 @@ export interface WorkloadGroupLabelBadge {
   title?: string;
 }
 
-export function useWorkloadsState(props: WorkloadsSurfaceProps) {
+export function useWorkloadsState(props: WorkloadsStateOptions) {
   const navigate = useNavigate();
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
