@@ -3386,7 +3386,19 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
     `internal/unifiedresources/monitor_adapter_read_state_test.go` and
     `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
-    `internal/monitoring/issue1913_host_continuity_test.go`.
+    `internal/monitoring/issue1913_host_continuity_test.go`. The rebuild
+    holds the operator-link pass back until the snapshot and every record
+    source except availability are ingested, then folds each chain of links
+    once over the assembled estate and ingests availability after
+    (`deferManualLinks`, `applyDeferredManualLinks`; unified-resources
+    contract, "Links apply as chains"): a pass after each source folded
+    members as their sources arrived, and a later source's member could not
+    outrank one already folded, so the surviving identity depended on which
+    source reported it. The live supplemental refresh and the read-state
+    overlay still run a pass per call over the rows they find. Regression
+    coverage:
+    `TestMonitorRebuildJudgesLinkChainsOverTheAssembledEstate` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The

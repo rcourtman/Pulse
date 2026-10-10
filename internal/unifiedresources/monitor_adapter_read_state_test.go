@@ -1291,3 +1291,40 @@ func TestMonitorAdapterProjectionSnapshotKeepsReplacedGeneration(t *testing.T) {
 		t.Fatal("separate adapters shared a tenant projection")
 	}
 }
+
+// The monitor's rebuild folds a chain of operator links once, over the
+// snapshot and every record source, instead of after each source. A Proxmox
+// storage, a TrueNAS VM and a vSphere VM linked in a cycle keep the TrueNAS
+// VM, whose link is the oldest; folding as the sources arrived (TrueNAS
+// before vSphere) had already put the TrueNAS VM inside the storage when the
+// vSphere VM's link closed the cycle, and kept the storage or the vSphere VM.
+func TestMonitorRebuildJudgesLinkChainsOverTheAssembledEstate(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	nasVM, storage, guest := estate.ids["nas-vm"], estate.ids["pve-storage"], estate.ids["vsphere-vm"]
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: nasVM, ResourceB: storage, PrimaryID: storage, CreatedAt: created.Add(time.Minute)},
+		{ResourceA: storage, ResourceB: guest, PrimaryID: guest, CreatedAt: created.Add(2 * time.Minute)},
+		{ResourceA: guest, ResourceB: nasVM, PrimaryID: nasVM, CreatedAt: created},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	assertChainRoot(t, "rebuild", adapter.currentRegistry(), nasVM, ResourceTypeVM, storage, guest)
+
+	// A registry that ingests the same sources one call at a time, as a live
+	// refresh does, judges the chain at each call and can settle elsewhere:
+	// the rebuild's whole-estate pass is what the monitor publishes.
+	staged := NewRegistry(store)
+	staged.IngestSnapshot(estate.snapshot)
+	staged.IngestRecords(SourceTrueNAS, estate.records[SourceTrueNAS])
+	staged.IngestRecords(SourceVMware, estate.records[SourceVMware])
+	if _, listed := staged.Get(nasVM); listed {
+		t.Fatalf("staged ingest kept the TrueNAS VM, so this fixture no longer separates the rebuild from per-call passes")
+	}
+}

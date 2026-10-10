@@ -807,11 +807,12 @@ grouping metadata, not same-machine evidence; cross-instance equality requires
 the same node identity, the exact configured endpoint, or independently
 corroborated host evidence.
 Frontend REST and realtime resource mirrors must retain the canonical
-`hostnames`, `machineId`, and `dmiUuid` evidence used for that decision. When
-independent Proxmox connections expose the same native node hostname, browser
-compatibility coalescing must preserve the server-authored provider split; in
-an ambiguous hostname bucket, a separate agent row may join a provider node
-only through its explicit linked-agent identity rather than hostname alone.
+`hostnames`, `machineId`, and `dmiUuid` evidence. The browser never re-joins
+host rows, so when independent Proxmox connections expose the same native node
+hostname the server-authored provider split reaches the UI as delivered; in an
+ambiguous hostname bucket the server joins a separate agent row to a provider
+node only through its explicit linked-agent identity rather than hostname
+alone.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and
@@ -1917,7 +1918,7 @@ container inventory table.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 19. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
@@ -2283,13 +2284,11 @@ canonical unified-resource lists must preserve one deterministic
 websocket-backed refreshes so equal-name resources do not silently reshuffle
 between cold hydrate and later runtime updates
 Realtime delta reconciliation must preserve exact display-object identity
-for untouched non-host resources, canonicalize changed and newly added rows,
-and re-evaluate exactly the host-merge groups the delta could have altered:
-a group refreshes when a flagged id names one of its current members, and a
-flagged id absent from the incoming snapshot (a removal, or a partner id an
-earlier coalesce folded away) conservatively refreshes every group. A tick
-that flags no member of a group must preserve that group's cached merged
-host row by object identity. Incremental and
+for untouched resources and canonicalize changed and newly added rows. Each
+server row is one display row: the server coalesced host views for
+presentation, and the browser runs no host-merge pass of its own, so a pair
+the server keeps apart (an operator split, a provider-scoped Proxmox site)
+renders as two rows. Incremental and
 full-snapshot paths must therefore produce the same canonical host identity,
 labels, and compatibility fields without cloning the entire estate per tick.
 The connection store publishes each reconciliation's changed IDs and resource
@@ -2298,9 +2297,9 @@ all-resources cache once and derives type-filtered route projections from the
 canonical result. An instance observing a revision the shared cache already
 holds must not re-read or deep-unwrap the realtime store, and the merging
 instance dereferences raw store subtrees only for rows the delta merge will
-clone (flagged ids, host-merge members, and ids absent from the shared
-cache). A sequential revision with unchanged route membership
-patches only the changed row indices plus the bounded agent coalescing set.
+clone (flagged ids and ids absent from the shared cache). A sequential
+revision with unchanged route membership patches only the changed row
+indices.
 The connection store retains a bounded per-revision changed-id history; an
 instance that resumes several revisions behind the shared cache must catch
 up through the unioned changed-id set as an incremental delta merge whenever
@@ -2320,8 +2319,9 @@ connection store and instance projections as per-key subtree writes rather
 than whole-row keyed reconciles. The fast output must stay
 content-equivalent to the full path (facet keeps, deletion semantics, and
 default-policy synthesis included), must never adopt raw-baseline subtrees
-by reference, and any row outside the allow-list — including agent rows,
-whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
+by reference, and any row outside the allow-list must take the full path.
+Agent rows still take it: the fast path has not been shown equivalent for
+their facet keeps since the browser stopped coalescing host rows. Route-prefetch and route-realtime
 activation are separate:
 a prefetched hidden surface may retain REST data without subscribing its full
 projection to every realtime tick, and activation catches up from the shared
@@ -6921,19 +6921,142 @@ links" below).
   answer for themselves until the agent reports and the link folds them, so
   intent set on the pair under the agent's ID does not reach the live
   member's references in that window. Holds are recomputed on every link
-  pass; a hold whose primary a later link folds follows the fold, a saved
-  row held under a saved primary follows that primary's hold, and a cycle of
-  saved rows resolves each to itself. Exact reads are untouched: `Get` still
+  pass. A saved row answers to the row its link partner folds into, found
+  through the fold record when an earlier pass of the rebuild, or the
+  monitor a registry was seeded from, already folded the partner away; a
+  saved row held under a saved primary follows that primary's hold, and a
+  cycle of saved rows resolves each to itself. A saved row that several
+  links would fold answers to the best of the rows their partners fold into,
+  found after the folds (a partner a seeded listing carries inside a row the
+  links now fold away is ranked by the row it survives in), by the chain
+  precedence below with each row judged by its own identity and an observed
+  row ranked before a saved one; the first link the store lists no longer
+  decides. Exact reads are untouched: `Get` still
   returns the saved row, so the saved agent's own drawer reads its own facet
   bundle and history, while its operator-state section reads and writes the
   guest's state.
-- Holds cover a link whose two members are both listed. A saved member
-  whose partner an earlier link already folded into a third resource, such
-  as an agent linked into a VM that is itself linked into another resource,
-  is not held: the monitor's published registry folds the VM before
-  continuity adds the agent, so the agent answers for itself until it
-  reports. Live chains already depend on the order their links are stored
-  in, which this does not change.
+- Links apply as chains (`manual_link_chains.go`). Links that share a
+  member name one identity, so a link pass folds every connected set of
+  observed members into one row, whatever order the store lists the links
+  in. Applied one at a time, a link naming a member an earlier link had
+  folded away found nothing: an agent linked into a VM that a second link
+  folds into storage joined the chain in one order and stayed its own row in
+  the other, and a saved agent whose partner the published registry had
+  already folded answered for itself. Standing the row that holds a folded
+  member in for it fixed neither, because that row then outranked the
+  link's own primary (a VM folded into a pool that had taken the agent
+  first) and hid the agent-into-guest direction once the guest was folded.
+  A link member is the resource the link names, judged by its own shape
+  (agent, hypervisor-managed guest) after a link folds it too: the holding
+  row takes a guest's Proxmox payload and would read as a guest itself.
+  Fold records keep both sides' shapes, so later passes and a registry
+  seeded from a listing judge a member alike. Each link keeps its pair rule:
+  the stated primary, except that an agent named primary over a guest folds
+  into the guest. A chain's root is picked from the members no link folds,
+  or from every member when the directions form a cycle. Rows compete, each
+  by its own identity: a member an earlier pass folded stands as the row
+  holding it, since a fold is not undone. When every candidate row is an
+  agent and the chain holds a guest, the rows holding guests compete
+  instead, including a row an earlier fold put a guest into, so an agent
+  never ends up holding a guest. Among candidates a hypervisor-managed guest
+  wins, then any non-agent resource over an agent, then the primary of the
+  earliest-created link, then the lowest canonical ID. A single link keeps
+  its effective primary, and so does a chain whose directions agree, unless
+  that primary is an agent and the chain holds a guest. The node and agent
+  rules judge each link before it joins a chain: a link between a Proxmox
+  node and an agent a newer split separates is dropped, and a link whose one
+  side a joined node-and-agent row already holds records that side's fold on
+  the row before any link resolves its members, so a second link naming the
+  folded side joins the chain whichever link the store lists first; the
+  fold record keeps both sides' agent shape, so a guest linked to the
+  folded node still outranks storage.
+- The monitor's rebuild holds the link pass back until the snapshot and
+  every record source except availability are in
+  (`deferManualLinks`, `applyDeferredManualLinks`), so its chains are judged
+  over the assembled estate; the availability batch that follows runs its
+  own pass, which finds the chains already folded. A link pass after each source folded members as
+  their sources arrived, and a later source's member could then outrank a
+  member already folded: a cycle through a Proxmox storage, a TrueNAS VM
+  and a vSphere VM kept the storage or the vSphere VM, where judging the
+  whole cycle keeps the TrueNAS VM. Availability checks still follow the
+  links, so a check linked to a folded resource projects onto its primary.
+  Record ingest into an existing registry still runs a link pass per call:
+  a live supplemental refresh that brings a member the last rebuild had not
+  seen judges it against the rows the rebuild left, until the next rebuild
+  judges the whole chain. A refresh can also recreate a folded member whose
+  source maps to a holder of another type; the recreated row competes as
+  itself, as it did in the rebuild, and folds back along the fold records
+  its chain carries, so identical records leave the pair set and every
+  folded ID as they were. The resources API's snapshot-seeded fallback,
+  used only while the monitor has published no unified listing, still
+  ingests the snapshot and each supplemental source with a pass per call,
+  and so does the mock-mode fixture build (`internal/mock`): a chain whose
+  answer depends on the order its members' sources arrive in can settle
+  differently there than in the monitor's rebuild.
+- Rows fold along the chain's links, deepest first, so each fold record
+  names a stored link's pair. The links form a spanning tree from the root
+  that follows the fold records the rows already carry before any other
+  link: a row a record pass recreated folds back through a link a record
+  names in the direction it folded, and a chain with several recreated
+  members folds back along its recorded ancestry, instead of reaching one
+  through a member another row holds, which would turn that member's record
+  round and leave its ID resolving nowhere. A cycle's closing link is
+  recorded in its own direction, so it counts as a recorded link only where
+  that direction matches, and a recreated row may fold back through it; the
+  pair set and every folded ID stay as they were. Links no record names
+  join once those are exhausted, breadth first from the root. The pass then records every other link of the
+  chain on the root (the link closing a cycle, or one whose sides an earlier
+  pass already joined, recorded with the link's effective direction though
+  it folded nothing in), so a report-merge that excludes every recorded pair
+  undoes every link of the chain. The pass records each fold before it
+  merges the folded row into the holder, as the own-sources record needs. A
+  pair is recorded once and keeps the
+  direction it was first recorded in, since a seeded listing can carry
+  records from an older generation of the links, and turning one would leave
+  the ID it folded in without a row. When a row must fold into another
+  and its own records name members it took in, its records are oriented
+  away from an anchor: the surviving row's own ID when they name it (a
+  recreated row that now roots the chain, or a link changed after the
+  listing was published), else the member the link names. Each record points
+  from the side nearer the anchor to the side farther (records between two
+  members equally far keep their direction), so the folded row's own ID
+  becomes a folded ID and keeps resolving, and the anchor is never recorded
+  as folded: a record naming the surviving row as folded, such as a cycle's
+  closing link, would leave report-merge no holder that no link folded to
+  infer the root from once that row is re-keyed. Hanging the records from
+  the member when the surviving row lies between that member and the folded
+  row would leave a member with no incoming fold. Each turned record lists
+  all of the row's sources, since the row no longer knows which member
+  brought which. A row whose records reach neither, such as a physical disk re-keyed
+  after it took the member in, stays standing rather than leave its own ID
+  resolving nowhere. A turned record keeps each side's own sources with the
+  side, and a record the pass adds for a link closing a cycle carries them
+  too, so report-merge (above), which picks links by member from these
+  records, can cut a reported member from every path of the chain.
+  Availability-owned members stay
+  unmerged, and saved members never join a chain: two live rows that only a
+  saved row links stay apart until it reports.
+  `TestManualLinkChainsFoldTheSameWayInAnyLinkOrder` (`registry_test.go`)
+  rebuilds twelve chains in every link order and checks both rebuilds, a live
+  refresh of each record source, the read-state overlay and a registry
+  seeded from it: one row of the expected type, every member resolving to
+  it, every link pair recorded and the same fold records in every order. On
+  main ten of the twelve leave a member standing, pick another root or miss
+  a link pair in some order; the other two (a record-sourced storage chain
+  and one recreated member) guard what already worked.
+  `TestManualLinkChainRefreshNeverLeavesAnAgentHoldingAGuest` refreshes in
+  a vSphere host the rebuild had not seen and checks the storage holding the
+  guest keeps the chain until the next rebuild keeps the guest.
+  `TestManualLinkToAJoinedNodeFoldsTheSameWayInAnyLinkOrder` links a
+  Proxmox node's own ID, which the inferred join with its agent consumed,
+  and a pool, in both orders: the joined row's fold of the node is recorded
+  before any link resolves its members, so the pool link joins the chain
+  whichever link the store lists first.
+  `TestSavedLinkMemberHoldsFollowTheChainInAnyLinkOrder` (`resolve_test.go`)
+  holds a saved agent under the pool its VM partner folds into, and under
+  its guest over a competing pool, in both orders, in the overlay and the
+  resources API's seeded registry; on main each case answers to the wrong
+  row in one order.
 - A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
   an agent chosen as primary over a TrueNAS system still carries the
   system's facet, and the system's pools re-parent to the merged row.
@@ -7736,15 +7859,9 @@ reports no machine key and declares it refuses any joined-era pin while its
 own linked agent is missing, keeping its own ID until that agent reports. An exclusion keyed by the
 agent's machine-derived ID stops naming the agent if the agent's effective
 canonical key changes (it stops reporting a machine ID and no pin restores
-it), as every exclusion keyed by a canonical ID does. The browser's realtime
-coalesce (`mergeCanonicalResourceSnapshot` in `resourceStateAdapters.ts`,
-used by the websocket store and `useUnifiedResources`) receives no
-exclusions and joins a Proxmox-only row and an agent-only row that share a
-hostname unless their machine IDs or DMI UUIDs disagree, their Proxmox
-facets name different clusters or provider scopes, or several Proxmox nodes
-share the hostname and the node does not name the agent, so the UI still
-renders such a split pair, from this change or from an identity-match split,
-as one row.
+it), as every exclusion keyed by a canonical ID does. The browser renders
+the split as the server presents it; see "The browser renders those rows as
+delivered" below.
 
 The resources API seeds its registry from the monitor's listing, which
 already has the link applied, so it cannot split the pair itself: an unlink
@@ -7775,6 +7892,89 @@ rows and coalescing them is judged by the newer generation's exclusions for
 that one broadcast. Both surfaces share one known limit: the filter compares
 the IDs of the rows being merged, so a third same-host fragment that merges
 first can carry an excluded pair into one row.
+
+The browser renders those rows as delivered. Its realtime merge
+(`mergeCanonicalResourceSnapshot` and `mergeCanonicalResourceDeltaSnapshot`
+in `resourceStateAdapters.ts`, used by the websocket store and
+`useUnifiedResources`) used to join an agent-only row and a platform row
+(Proxmox, Docker, Kubernetes, vSphere or TrueNAS) that shared a hostname
+unless their machine IDs, DMI UUIDs or Proxmox provider scopes disagreed. It
+read no exclusions, so a host pair the operator split reached the browser as
+two rows and rendered as one. Every realtime payload (the websocket
+snapshot, its deltas and `/api/state`) already carries the server's
+presentation coalesce, so the browser now merges each row only with the
+previous row of its ID and never joins host rows. A split usually leaves one
+side on the joined row's ID, and that per-ID merge keeps what the incoming
+row omits, so the agent kept the node's Proxmox facts: the flattened
+`platformData` the Proxmox facet is rebuilt from, its platform scopes,
+`clusterId`, identity fields and canonical aliases. When the incoming row's
+own `sources` list lacks a source the previous row of its ID listed,
+`mergeCanonicalResource` rebuilds the row from the incoming one instead of
+merging. A list inferred from the facets a thin row carries is no such
+evidence. The rebuilt row keeps the REST-only enrichments the realtime
+payload never carries where the departed sources did not own them: platform
+scopes minus the departed sources' own that no surviving source, Docker LXC
+host or non-host facet supports (a Docker container in a Proxmox LXC stays on
+the Proxmox page when its availability check is removed, because its host ID
+still places it there, and an agent-reported disk keeps the Proxmox scope its
+ownership facet gives it; a host row's facets are no evidence, since
+canonicalizing flattened platform data synthesizes them), the source status
+of the sources that remain (status the pruning empties is deleted), discovery
+readiness unless a coordinate it names (`targetId` the reporter, `resourceId`
+the resource) differs from the same coordinate of the row's discovery target
+(realtime carries a target only for agent and Docker host rows, so a row
+without one keeps it unless the agent left), and action readiness unless the
+agent left. Everything else REST adds returns with the next REST refresh. The fast merge path never rebuilds
+a row: `sources` is outside its allow-list, so it patches the previous display
+row and a rebuild waits for the row's next full merge (see the limits below).
+
+Three rules keep REST enrichment from outliving a source. Source status is
+REST enrichment, since the realtime payload carries none, and the platform data
+merge and the top-level merge prune its entries to the sources the merged row
+lists (only a list the row carries itself counts; canonicalizing a thin row
+that carries none synthesizes one from its facets, which the merge cannot tell
+apart, so a thin row can prune the status of a source its facets omit); a
+joined host's `proxmox` entry otherwise kept the Machines page from
+listing the agent that was split off it, because that page reads source status
+as provider ownership. A previous row claims every source either of its own
+lists names, its top-level `sources` and its `platformData.sources`, so a row
+whose two lists disagree, because an enrichment of another generation landed on
+it or a shared array changed under it, is rebuilt as soon as the realtime row
+drops the extra source instead of carrying that source's metadata on. And the
+resources hook's full merge no longer hands the websocket store's rows to the
+merge: the store reconciles server changes into its own rows in place, and cache
+rows that shared a nested array with them, such as `sources`, flipped to the
+split value while keeping the REST enrichment of the joined era. It clones the
+store's rows once on that path, as the delta path clones each changed row.
+Known limits: a hook's own store is still created from its cache's rows, so a
+store commit can edit rows another cache entry shares (the claimed-sources rule
+rebuilds such a row on its next merge), and the fast merge path is
+content-equivalent to the full path only for a display row whose own lists
+agree, so enrichment of another generation can leave a departed source's status
+on a non-agent row until its next full merge. After a rebuild the browser
+judges whether REST-only scopes and readiness still belong to the row from
+names and target coordinates alone, because the realtime payload carries no
+provenance for them: a facet canonicalization synthesized from flattened
+platform data on a row that is not a host (a guest's `disks`, a storage
+row's `instance`, a Kubernetes node's kernel version) can keep the scope it
+names, a Docker host row (`docker-host`) can keep the agent scope through its
+synthesized agent facet, and a guest without a discovery target keeps the
+previous reporter's readiness when its reporter changes in the same interval
+without an `agent` source leaving (and loses it when an in-guest agent is
+unlinked while the node's reporter still serves discovery). The next REST
+refresh restores every one of these. `keeps an
+operator-split node and agent as two rows through snapshots and deltas`
+(`resourceStateAdapters.test.ts`), `keeps an operator-split host pair as two
+rows through a snapshot and deltas` (`websocket-unified.test.ts`), `keeps an
+operator-split host pair as two rows and an unchanged agent peer by identity`
+and `drops REST enrichment of a departed source when the store reconciles a
+split in place` (`useUnifiedResources.test.ts`) pin a split pair in the
+broadcast's shape through full snapshots, the delta that splits a joined row,
+later deltas and the resources hook (the last also that hook rows share no
+array with the store's), `rebuilds a row whose own source lists disagree once
+the realtime row drops the extra source` pins the claimed-sources rule, and
+`prunes source status entries of sources the merged row no longer lists` pins
+the status rule.
 
 A write leaves one row for its pair: `AddLink` and `AddExclusion` also delete
 a row of their own kind that succession stored in the other order, and the
