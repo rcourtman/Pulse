@@ -1,4 +1,4 @@
-import { renderHook } from '@solidjs/testing-library';
+import { renderHook, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -214,5 +214,108 @@ describe('useAlertDestinationsState', () => {
 
     expect(RelayAPI.getConfig).not.toHaveBeenCalled();
     expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('captures downstream writes before awaiting email and retains a newer Apprise draft', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    let acknowledgeEmail!: (value: { success: boolean }) => void;
+    vi.mocked(NotificationsAPI.updateEmailConfig).mockReturnValue(
+      new Promise((resolve) => {
+        acknowledgeEmail = resolve;
+      }),
+    );
+    vi.mocked(NotificationsAPI.updateAppriseConfig).mockImplementation(async (config) => ({
+      ...config,
+      apiKey: '',
+      hasApiKey: true,
+    }));
+    vi.mocked(AlertsAPI.updateDeadManConfig).mockResolvedValue({ success: true, configured: true });
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    result.setAppriseConfig({
+      ...result.appriseConfig(),
+      serverUrl: 'https://first.example.test',
+      apiKey: 'synthetic-first',
+    });
+    result.setDeadManPingUrl('https://watchdog.example.test/first');
+    const save = result.saveDestinations();
+    result.setAppriseConfig({
+      ...result.appriseConfig(),
+      serverUrl: 'https://newer.example.test',
+      apiKey: 'synthetic-newer',
+    });
+    result.setDeadManPingUrl('https://watchdog.example.test/newer');
+    acknowledgeEmail({ success: true });
+    await save;
+
+    expect(NotificationsAPI.updateAppriseConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverUrl: 'https://first.example.test',
+        apiKey: 'synthetic-first',
+      }),
+    );
+    expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
+      'https://watchdog.example.test/first',
+    );
+    expect(result.appriseConfig().serverUrl).toBe('https://newer.example.test');
+    expect(result.appriseConfig().apiKey).toBe('synthetic-newer');
+    expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('withdraws a superseded reload indicator and ignores its late response', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    let acknowledgeOldRead!: (
+      config: Awaited<ReturnType<typeof NotificationsAPI.getEmailConfig>>,
+    ) => void;
+    vi.mocked(NotificationsAPI.getEmailConfig)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          acknowledgeOldRead = resolve;
+        }),
+      )
+      .mockResolvedValue({ enabled: true, server: 'smtp.current.example.test' } as never);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    const oldRead = result.loadDestinations({ indicateLoading: true });
+    expect(result.isLoadingDestinations()).toBe(true);
+    result.resetDestinations();
+    expect(result.isLoadingDestinations()).toBe(false);
+    await result.loadDestinations();
+    acknowledgeOldRead({ enabled: true, server: 'smtp.old.example.test' } as never);
+    await oldRead;
+
+    expect(result.isLoadingDestinations()).toBe(false);
+    expect(result.emailConfig().server).toBe('smtp.current.example.test');
+  });
+
+  it('does not refresh destinations before the policy owner admits a loaded context', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({
+      enabled: true,
+      server: 'smtp.loaded.example.test',
+    } as never);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+    const [activeTab, setActiveTab] = createSignal<'overview' | 'destinations'>('overview');
+    const [canReload, setCanReload] = createSignal(false);
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab, canReload }));
+
+    setActiveTab('destinations');
+    await Promise.resolve();
+    expect(NotificationsAPI.getEmailConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.getAppriseConfig).not.toHaveBeenCalled();
+    expect(AlertsAPI.getDeadManConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.getWebhooks).not.toHaveBeenCalled();
+    setCanReload(true);
+    await Promise.resolve();
+    expect(NotificationsAPI.getEmailConfig).not.toHaveBeenCalled();
+
+    setActiveTab('overview');
+    setActiveTab('destinations');
+    await waitFor(() => expect(result.emailConfig().server).toBe('smtp.loaded.example.test'));
+    expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(1);
+    expect(RelayAPI.getConfig).not.toHaveBeenCalled();
   });
 });

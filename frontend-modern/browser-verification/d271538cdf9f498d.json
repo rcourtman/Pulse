@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "base_sha": "cceaea20c0c726c95e12e126d3e364b83f0ffe38",
+  "verified_at": "2026-10-10T10:21:28.981Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/utils/alertConfigPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "f62c9497f190811e63ce750246d6e44e05f145697e5de36bf7914a7759748021",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "319a42fed4bee01960a9db7b41717be8681bffa4ea5e3db9d3dceae0e5255f3a",
+    "frontend-modern/src/utils/alertConfigPresentation.ts": "e3d43f9051121201a07a4ec61dda6271566bf1c875898cd05c06a235e649aa6f"
+  },
+  "routes": [
+    "/qualification/save (local fixture for existing alert scheduling and notification settings, not a new product route)"
+  ],
+  "viewports": [
+    {
+      "name": "desktop-light",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "desktop-dark",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "phone-light",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "narrow-dark",
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production configuration surface, real policy/destination state, payload builders, API adapters and CSS against synthetic local endpoints. Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0, light/dark desktop and 390px/320px.",
+    "A rejected saved-policy read renders an announced load error and Reload settings instead of editable defaults. No policy or destination PUT occurs. Keyboard reload announces pending saved settings without editable fields.",
+    "A successful reload restores the saved cooldown, overrides and SMTP destination before admitting an edited save. A failed replacement context withdraws editing again.",
+    "All twenty final captures inspected: unavailable, loading, recovered, replacement-unavailable and pending-save states across four variants. New load/error/reload content fits narrow widths; inherited panel description truncation remains.",
+    "This local browser proof does not establish type-check, unit/full-suite, lint, production-build, native notification, real tenant, physical-phone, installed or release acceptance."
+  ],
+  "interactions": [
+    "48 assertion groups across four variants: failed/pending policy reads, keyboard reload, correct saved-state write after recovery, replacement failure, normal Save/Discard, pending policy/Apprise replies, retained newer inputs, duplicate-save prevention, dirty tab re-entry, rejection and deliberate retry.",
+    "The changed-source control retains click-time wire fields and newer dirty inputs through older acknowledgements. Superseded destination reads cannot replace fresh context or leave the obsolete loading indicator.",
+    "No page errors, unexpected API requests or Test/retained-queue Retry/Dismiss/Relay/provider calls. Browsers and preview server closed. Earlier issued/acknowledged writes are not cancelled or rolled back."
+  ],
+  "evidence_sha256": {
+    "script": "04b766adfb2b390022f6a82c09540c5f24ff2e04bf0775af512a20a3c1d023ba",
+    "results": "c3b29002f25efc4c628f87e064c33a0774b6fffdc1f4ffd55c4b9c59d5f1ed83",
+    "captures": {
+      "desktop-light-unavailable.png": "faf720c0451699567301916b989b3a7be35a6bcdd3b9dc45902535593b4f81c4",
+      "desktop-light-loading.png": "87510ec2b7ff196bde3a274645b78c31b7ff620d7d3e626fdace968939d9ffac",
+      "desktop-light-recovered.png": "f890eb2d16e45890f3127bcf4e0ed0b7593258f8ec6df3df58e73b65ad91c49b",
+      "desktop-light-context-unavailable.png": "75882738355300af20b8db9b1b2f32032df7a54a80952797a9689052bebca958",
+      "desktop-light-pending.png": "32b9df8ffe90c51ddc0a57dd99ca4471dedfb733785a6666df97f33838878504",
+      "desktop-dark-unavailable.png": "c7e3517326f3ffef36cdc516e37ef74a474c5035f133d052f4de612b72836d4c",
+      "desktop-dark-loading.png": "bf140f89692ea445c48758016b3d7bb56e577eaf34ba7aabefc33afda165e3c2",
+      "desktop-dark-recovered.png": "ffb40524ed08d317c57ca5a4d5dc356cccd0bbc556d3e5ff560a6fe1be1ad8ee",
+      "desktop-dark-context-unavailable.png": "fdd6b32d0c2fe4117f94623137f67318f458826d1f1cbc5acdc38b1d0016f784",
+      "desktop-dark-pending.png": "0138e7d6dc493179a78464b1ecf6437bcbea68b8a6bb53e1d5cf08a0c7404781",
+      "phone-light-unavailable.png": "8742163f36a3bfc4557868360525fc0ed19da83c5875e0a6e3af22b126a7ac36",
+      "phone-light-loading.png": "8b0fb37fd3d8428f9653cbd210e797dea1397fd1223868d7ac63f138cf64798c",
+      "phone-light-recovered.png": "c4d2faec29bfafc2de96d62dba04593ce052e2181858a53869d14a712d322aa1",
+      "phone-light-context-unavailable.png": "8742163f36a3bfc4557868360525fc0ed19da83c5875e0a6e3af22b126a7ac36",
+      "phone-light-pending.png": "6b0f83a2a856bb6be392824f5faff73d912057fbefa457530a4c1057a33f1a86",
+      "narrow-dark-unavailable.png": "b74233e2de8156763d42e5afff788028a05c5fd78872a55eac3e49cf2c904647",
+      "narrow-dark-loading.png": "ddd0098846fb2782f5a9f181cfc597a5c01e6b244e3f30a460f6007e388856d5",
+      "narrow-dark-recovered.png": "1f479c9ea47d3c32c33996c7691c35a702e84ae7b392d08aa17228ed546d6b34",
+      "narrow-dark-context-unavailable.png": "d02c8c495f27dd00986c3ae08ceb518b09b7545b3ec5805728b4fc8acde66c89",
+      "narrow-dark-pending.png": "533e2f94b7e3c30253b5bacd49e98c664e2539d4315f58196c8576e799b6fd1f"
+    }
+  }
+}

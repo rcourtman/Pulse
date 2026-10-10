@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
@@ -20,6 +20,7 @@ import type { AlertTab, UIAppriseConfig, UIEmailConfig } from './types';
 
 interface AlertDestinationsStateOptions {
   activeTab: Accessor<AlertTab>;
+  canReload?: Accessor<boolean>;
 }
 
 export function useAlertDestinationsState(options: AlertDestinationsStateOptions) {
@@ -36,7 +37,13 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
 
+  onCleanup(() => {
+    ++reloadVersion;
+  });
+
   const resetDestinations = () => {
+    ++reloadVersion;
+    setIsLoadingDestinations(false);
     setDestConfigLoadError(null);
     setEmailConfig(createDefaultEmailConfig());
     setAppriseConfig(createDefaultAppriseConfig());
@@ -112,20 +119,42 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     }
   };
 
-  const saveDestinations = async () => {
-    await NotificationsAPI.updateEmailConfig(buildEmailConfigPayload(emailConfig()));
+  // Capture every endpoint's payload before any write yields. The alert-policy
+  // owner uses the same snapshot even while its preceding PUT is pending.
+  const captureDestinations = () => ({
+    email: structuredClone(buildEmailConfigPayload(emailConfig())),
+    apprise: structuredClone(buildAppriseConfigPayload(appriseConfig())),
+    appriseDraft: appriseConfig(),
+    pingUrl: deadManPingUrl(),
+    pushMinimumSeverity: pushMinimumSeverity(),
+    relayEnabled: hasFeature('relay'),
+    reloadVersion,
+  });
 
-    const updatedApprise = await NotificationsAPI.updateAppriseConfig(
-      buildAppriseConfigPayload(appriseConfig()),
-    );
+  const saveDestinations = async (snapshot = captureDestinations(), ownsSave = () => true) => {
+    if (!ownsSave()) return;
+    await NotificationsAPI.updateEmailConfig(snapshot.email);
+    if (!ownsSave()) return;
 
-    await AlertsAPI.updateDeadManConfig(deadManPingUrl());
+    const updatedApprise = await NotificationsAPI.updateAppriseConfig(snapshot.apprise);
+    if (!ownsSave()) return;
 
-    if (hasFeature('relay')) {
-      await RelayAPI.updateConfig({ alert_minimum_severity: pushMinimumSeverity() });
+    await AlertsAPI.updateDeadManConfig(snapshot.pingUrl);
+    if (!ownsSave()) return;
+
+    if (snapshot.relayEnabled && hasFeature('relay')) {
+      await RelayAPI.updateConfig({ alert_minimum_severity: snapshot.pushMinimumSeverity });
     }
 
-    setAppriseConfig(normalizeAppriseConfig(updatedApprise));
+    // An acknowledgement is not a reload: it may replace the submitted draft
+    // with masked fields, but must not overwrite edits or another context.
+    if (
+      ownsSave() &&
+      reloadVersion === snapshot.reloadVersion &&
+      appriseConfig() === snapshot.appriseDraft
+    ) {
+      setAppriseConfig(normalizeAppriseConfig(updatedApprise));
+    }
   };
 
   createEffect(() => {
@@ -133,10 +162,13 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     const previous = lastActiveTab;
     lastActiveTab = current;
 
-    if (current !== 'destinations' || previous === null) {
+    if (current !== 'destinations' || previous === null || previous === current) {
       return;
     }
 
+    // Entering a tab must not replace drafts or race a pending save. Only tab
+    // changes trigger this refresh, not later changes to the admission flags.
+    if (!untrack(options.canReload ?? (() => true))) return;
     void loadDestinations({ indicateLoading: true });
   });
 
@@ -155,6 +187,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setWebhooks,
     resetDestinations,
     loadDestinations,
+    captureDestinations,
     saveDestinations,
   };
 }

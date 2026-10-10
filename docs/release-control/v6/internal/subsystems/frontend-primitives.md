@@ -20,6 +20,28 @@
 
 ## Purpose
 
+### Existing alerts Save controls expose acknowledgement state
+
+The settings Save button renders Saving… with aria-busy while its logical
+save is pending, and both Save and Discard are disabled until completion or
+failure. Newer edits remain possible and visibly unsaved; acknowledgement is
+not a claim that those edits were saved. Shared alert-configuration copy keeps
+the existing normal-save vocabulary and supplies a separate newer-unsaved
+message. Keyboard activation, tab re-entry and 320px/390px layouts are covered
+by the parent-bound browser fixture. `alertConfigPresentation.test.ts` and
+`alertSettingsSave.acknowledgement.test.tsx` exercise the copy and state owner.
+No new primitive, route or permission is introduced.
+
+Threshold, schedule and destination editors appear only after saved policy
+and destination loading have completed for the current context. Pending reads
+render an announced loading message, not editable defaults. Failed policy reads
+render an alert and keyboard-operable Reload settings control; neither Save
+nor editable default fields is exposed. The copy and acknowledgement controls
+cover failed reads and successful reloads; the connected browser fixture also
+requires preserved pending-save drafts and narrow-layout fit. Overview and
+History navigation are not gated by this editor load state.
+
+
 ### Existing Assistant control selectors describe planning
 
 Settings and Chat have only Read-only and Ask first options. Legacy
