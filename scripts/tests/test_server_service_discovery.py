@@ -20,6 +20,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh"))
+UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/pulse-auto-update.sh"))
 REAL_SYSTEMCTL = shutil.which("systemctl")
 QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
          "pulse-backend.service", "pulse.service"]
@@ -68,11 +69,13 @@ sys.exit(97)
 
 HARNESS = r'''
 source "$INSTALLER"
+if [[ "$PRODUCER" == updater ]]; then source "$UPDATER"; fi
 print_header() { :; }
 print_info() { echo "$*" >&2; }
 print_warn() { echo "$*" >&2; }
 print_error() { echo "$*" >&2; }
 print_success() { echo "$*" >&2; }
+log() { echo "$*" >&2; }
 check_root() { :; }
 check_proxmox_host() { return 1; }
 detect_os() { :; }
@@ -108,13 +111,24 @@ case "$FLOW" in
             check_existing_installation() { CURRENT_VERSION=v6.5.0; return 0; }
         fi
         ;;
-    archive|build)
+    archive|build|automatic)
         verify_release_signature() { :; }
         validate_pulse_binary_architecture() { :; }
         detect_pulse_architecture() { echo amd64; }
         chown() { :; }
         install_additional_agent_binaries() { :; }
         deploy_agent_scripts() { :; }
+        if [[ "$FLOW" == automatic ]]; then
+            curl() {
+                # Fixed fixture response, never a provider request.
+                local target="${@: -1}"
+                if [[ "$*" == *.sshsig* ]]; then
+                    printf 'fixture signature\n' > "$target"
+                else
+                    cp "$FIXTURE/served-installer.sh" "$target"
+                fi
+            }
+        fi
         if [[ "$FLOW" == build ]]; then
             apt-get() { :; }
             go() { echo 'go version go1.26.9 linux/amd64'; }
@@ -152,6 +166,7 @@ case "$FLOW" in
     main|late-main) main || status=$? ;;
     archive) install_pulse_archive "$FIXTURE/pulse-v6.6.0-linux-amd64.tar.gz" v6.6.0 || status=$? ;;
     build) build_from_source main || status=$? ;;
+    automatic) perform_update v6.6.0 || status=$? ;;
     uninstall) uninstall_pulse || status=$? ;;
     reset) reset_pulse || status=$? ;;
     unit) install_systemd_service || status=$? ;;
@@ -163,19 +178,24 @@ exit "$status"
 
 
 class ServiceDiscovery(unittest.TestCase):
-    def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None):
+    def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
+                    producer="installer"):
         with tempfile.TemporaryDirectory(prefix="pulse-service-discovery-") as directory:
             f = Path(directory)
             for name in ["bin", "install/bin", "config", "units", "root/etc/systemd/system"]:
                 (f / name).mkdir(parents=True)
             (f / "bin/systemctl").write_text(SYSTEMCTL)
             (f / "bin/systemctl").chmod(0o755)
-            old = b"#!/bin/sh\necho 'Pulse version v6.5.0'\n"
-            new = b"#!/bin/sh\necho 'Pulse version v6.6.0'\n"
+            old = b"#!/bin/sh\necho 'Pulse v6.5.0'\n"
+            new = b"#!/bin/sh\necho 'Pulse v6.6.0'\n"
             (f / "install/bin/pulse").write_bytes(old)
             (f / "install/bin/pulse").chmod(0o755)
             (f / "new-pulse").write_bytes(new)
             (f / "new-pulse").chmod(0o755)
+            (f / "served-installer.sh").write_text(
+                '#!/bin/bash\nset -eu\n'
+                'printf "%s\\n" "$PULSE_SERVICE_NAME" > "$FIXTURE/installer-service"\n'
+                'cp "$FIXTURE/new-pulse" "$PULSE_INSTALL_DIR/bin/pulse"\n')
             archive = f / "pulse-v6.6.0-linux-amd64.tar.gz"
             with tarfile.open(archive, "w:gz") as stream:
                 entry = tarfile.TarInfo("pulse")
@@ -191,7 +211,8 @@ class ServiceDiscovery(unittest.TestCase):
             (f / "root/etc/systemd/system/pulse-backend.service").write_text(unit)
             (f / "root/etc/systemd/system/pulse.service").write_text(unit)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
-            env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), FLOW=flow, MODE=mode,
+            env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), UPDATER=str(UPDATER),
+                       PRODUCER=producer, FLOW=flow, MODE=mode,
                        ROWS=rows, QUERY_EXIT=str(query_exit), REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
                        PATH=str(f / "bin") + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
@@ -207,6 +228,8 @@ class ServiceDiscovery(unittest.TestCase):
                         mutations=(f / "mutations").read_text() if (f / "mutations").exists() else "",
                         binary=(f / "install/bin/pulse").read_bytes(), old=old, new=new,
                         units=[p.name for p in (f / "units").iterdir()],
+                        installer_service=(f / "installer-service").read_text()
+                        if (f / "installer-service").exists() else None,
                         broken_pipe=(f / "broken-pipe").exists())
 
     def assert_refused(self, e):
@@ -302,6 +325,42 @@ class ServiceDiscovery(unittest.TestCase):
         self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
         self.assertEqual(e["result"].stdout, "SERVICE=pulse-backend\n")
         self.assertEqual(e["calls"], [QUERY])
+
+    def test_automatic_helper_preserves_exact_names_and_explicit_instances(self):
+        for rows, explicit, expected in [("", None, "pulse"),
+                                         ("pulse.service disabled enabled\n", None, "pulse"),
+                                         ("pulse-backend.service masked-runtime enabled\n", None, "pulse-backend"),
+                                         ("", "pulse.department" + "x" * 140, "pulse.department" + "x" * 140)]:
+            with self.subTest(rows=rows, explicit=explicit):
+                e = self.run_fixture(producer="updater", rows=rows, explicit=explicit)
+                self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
+                self.assertEqual(e["result"].stdout, "SERVICE=" + expected + "\n")
+                self.assertEqual(e["calls"], [] if explicit else [QUERY])
+
+    def test_automatic_helper_cannot_short_read_the_installer_handoff(self):
+        e = self.run_fixture(producer="updater", mode="large", flow="automatic")
+        self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
+        self.assertEqual(e["installer_service"], "pulse-backend\n")
+        self.assertEqual(e["binary"], e["new"])
+        self.assertEqual(e["calls"][0], QUERY)
+        self.assertFalse(e["broken_pipe"])
+
+    def test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list(self):
+        for rows, status in [("", 1), ("pulse-backend.service enabled enabled\n", 1),
+                             ("pulse-backend.service future-state\n", 0),
+                             ("pulse-backend.service enabled\npulse-backend.service enabled\n", 0),
+                             ("pulse-backendXservice enabled\n", 0),
+                             ("pulse.service enabled enabled extra\n", 0)]:
+            with self.subTest(rows=rows, status=status):
+                e = self.run_fixture(producer="updater", rows=rows, query_exit=status, flow="automatic")
+                self.assert_refused(e)
+                self.assertIsNone(e["installer_service"])
+
+    def test_automatic_helper_timeout_stops_before_service_observation(self):
+        e = self.run_fixture(producer="updater", mode="hang", flow="automatic")
+        self.assert_refused(e)
+        self.assertLess(e["seconds"], 7)
+        self.assertIsNone(e["installer_service"])
 
 
 if __name__ == "__main__":

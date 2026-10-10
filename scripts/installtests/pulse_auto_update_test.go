@@ -1,12 +1,33 @@
 package installtests
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+// The standalone helper passes an explicit name to the installer. Exercise
+// that producer and its real entry/handoff, not just installer discovery.
+func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v",
+		"ServiceDiscovery.test_automatic_helper_preserves_exact_names_and_explicit_instances",
+		"ServiceDiscovery.test_automatic_helper_cannot_short_read_the_installer_handoff",
+		"ServiceDiscovery.test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list",
+		"ServiceDiscovery.test_automatic_helper_timeout_stops_before_service_observation")
+	cmd.Env = append(os.Environ(),
+		"PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended service discovery/installer handoff controls: %v\n%s", err, out)
+	}
+}
 
 // TestIsPrereleaseTagRecognizesPrereleases asserts that any semver tag with
 // a hyphen after the patch component is flagged as a prerelease. This is the

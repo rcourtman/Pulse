@@ -26,6 +26,13 @@ partial, malformed, duplicate, impostor or unknown-state inventory does not.
 This avoids an early pipe close hiding an installed legacy service under
 `pipefail`. Discovery itself never stops, enables or unmasks a unit.
 
+The standalone unattended updater uses the same bounded name/state admission
+before passing its explicit service identity to the installer. It checks the
+command-substitution result separately from local variable declaration, and
+refuses unknown inventory before observing prior-active state, creating backup
+files, downloading/invoking the installer or installing a restart trap. An
+installer-only repair cannot cover this earlier explicit-name handoff.
+
 Existing-install detection distinguishes an unavailable inventory from no
 installation. Main, archive/source replacement, unit creation, removal and
 reset propagate the refusal even when a caller disables Bash errexit: no
@@ -40,6 +47,10 @@ optional real `systemctl --root` inventory. Only the unit-writer test relocates
 its fixed output path. It proves selection and refusal propagation, not release
 signature trust, real compilation, native systemd restart, an LXC stop cause or
 installed update/recovery. Those remain separate operational evidence.
+`TestAutoUpdateServiceDiscoveryAndInstallerHandoff` uses the same fixture to
+execute the actual unattended helper's selection and
+`perform_update` entry/handoff with a fake installer, including timeout and
+failed/partial inventory before any service observation or installer call.
 
 ### Core E2E images are built once and admitted in the same run
 
