@@ -10,7 +10,7 @@ import {
  * Branch-coverage companion to recoveryPlatformModel.test.ts.
  *
  * The non-exported helpers (toTrimmedString, normalizeRecoveryDisplay,
- * getRecoveryItemResourceId, getRecoveryItemRef, normalizeRecoveryMeta) are
+ * getRecoveryItemResourceId, getRecoveryItemRef) are
  * exercised indirectly through the exported normalizers, since they are
  * module-private. Each test below targets specific arms of the conditionals
  * documented in recoveryPlatformModel.ts.
@@ -197,42 +197,14 @@ describe('recoveryPlatformModel.branchcov2', () => {
     });
   });
 
-  describe('normalizeRecoveryMeta (via response normalizers)', () => {
-    it('passes valid finite numeric meta through unchanged', () => {
-      const meta = { page: 2, limit: 50, total: 7, totalPages: 1 };
-      expect(normalizeRecoveryPointsResponse({ data: [], meta })).toStrictEqual({
-        data: [],
-        meta,
-      });
-    });
-
-    it('applies defaults when meta is null or undefined', () => {
-      const defaults = { page: 1, limit: 0, total: 0, totalPages: 1 };
-      expect(
-        normalizeRecoveryPointsResponse({
-          data: [],
-        } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
-      ).toStrictEqual({ data: [], meta: defaults });
-      expect(
-        normalizeRecoveryPointsResponse({
-          data: [],
-          meta: null,
-        } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
-      ).toStrictEqual({ data: [], meta: defaults });
-    });
-  });
-
   describe('normalizeRecoveryPointsResponse', () => {
-    it('coerces non-finite and non-number meta fields to defaults and non-array data to []', () => {
+    it('coerces non-array data to [] and carries no response-level meta', () => {
       expect(
         normalizeRecoveryPointsResponse({
           data: 'not-an-array',
           meta: { page: NaN, limit: Infinity, total: 'twenty', totalPages: undefined },
         } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
-      ).toStrictEqual({
-        data: [],
-        meta: { page: 1, limit: 0, total: 0, totalPages: 1 },
-      });
+      ).toStrictEqual({ data: [] });
     });
   });
 });
