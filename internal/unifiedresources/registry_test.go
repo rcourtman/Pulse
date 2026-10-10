@@ -8821,6 +8821,309 @@ func TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains(t *testing.T) {
 	}
 }
 
+// successionForwardingStore gives a store wrapper that embeds the ResourceStore
+// interface the optional succession capability of the store beneath it, which
+// the interface does not carry: without it the registry's assertion to
+// canonicalIDSuccessor fails and no succession ever reaches the store.
+type successionForwardingStore struct{ *unreadableDecisionStore }
+
+func (s successionForwardingStore) ApplyCanonicalIDSuccessions(successions []CanonicalIDSuccession) error {
+	return s.ResourceStore.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions(successions)
+}
+
+// An operator split of one reporter from another that reports the same machine
+// survives the other reporter's absence whichever pin holds the shared machine
+// key. The store lets one pin hold a strong key, so while both reporters are
+// present the split source's pin (on its source-specific ID) or its sibling's
+// ends up holding it. Pin succession reads the holder as the same host's
+// earlier era, and in a generation where the sibling is absent the split source
+// lands on the sibling's ID: declaring the one superseded by the other would
+// rewrite the exclusion of the pair into one of the resource from itself, and
+// the sibling's return would merge the two. An operator decision that the old
+// and the new ID are different resources outranks the key that suggests they
+// are one, and so does a batch that would retire both sides of a split onto one
+// successor. A split of an ID that is not paired with the succession's
+// successor still follows the succession.
+func TestPinSuccessionKeepsASplitSourceApart(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	recorded := func(t *testing.T, store ResourceStore) map[string]string {
+		t.Helper()
+		switch s := store.(type) {
+		case *SQLiteResourceStore:
+			return s.successionMap()
+		case *MemoryStore:
+			return s.canonicalSuccessions
+		}
+		t.Fatalf("%T records no successions", store)
+		return nil
+	}
+	now := time.Now().UTC()
+	machineID := "machine-shared-07"
+	agentHost := models.Host{ID: "agent-shared-07", Hostname: "shared-07", MachineID: machineID, Status: "online", LastSeen: now}
+	dockerHost := models.DockerHost{ID: "docker-shared-07", Hostname: "shared-07", MachineID: machineID, Status: "online", LastSeen: now}
+	merged := MachineIdentityCanonicalID(ResourceTypeAgent, machineID)
+	candidate := SourceSpecificID(ResourceTypeAgent, SourceDocker, dockerHost.ID)
+	both := models.StateSnapshot{Hosts: []models.Host{agentHost}, DockerHosts: []models.DockerHost{dockerHost}}
+	dockerOnly := models.StateSnapshot{DockerHosts: []models.DockerHost{dockerHost}}
+
+	for storeName, newStore := range stores {
+		for holderName, holder := range map[string]string{
+			"the split source's pin holds the machine key": candidate,
+			"the sibling's pin holds the machine key":      merged,
+		} {
+			t.Run(storeName+"/"+holderName, func(t *testing.T) {
+				store := newStore(t)
+				if err := store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: candidate}); err != nil {
+					t.Fatalf("split the Docker source from %s: %v", merged, err)
+				}
+				agents := func(snapshot models.StateSnapshot) int {
+					t.Helper()
+					rr := NewRegistry(store)
+					rr.IngestSnapshot(snapshot)
+					rr.PersistIdentityPins()
+					return len(rr.ListByType(ResourceTypeAgent))
+				}
+				if got := agents(both); got != 2 {
+					t.Fatalf("with both reporters present the split left %d agents, want the two kept apart", got)
+				}
+				// The store keeps one pin per strong key and hands it to the last
+				// writer, so which pin holds it is the write order's outcome; the
+				// fixture decides it.
+				if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+					CanonicalID: holder, ResourceType: ResourceTypeAgent, MachineID: machineID, Hostname: "shared-07",
+				}}); err != nil {
+					t.Fatalf("hold the machine key on %s: %v", holder, err)
+				}
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("ListResourceIdentityPins: %v", err)
+				}
+				if i := slices.IndexFunc(pins, func(pin ResourceIdentityPin) bool { return pin.MachineID == machineID }); i < 0 || pins[i].CanonicalID != holder {
+					t.Fatalf("pins = %+v, want the machine key held by %s", pins, holder)
+				}
+
+				if got := agents(dockerOnly); got != 1 {
+					t.Fatalf("with the sibling absent %d agents were listed, want the Docker host alone", got)
+				}
+				if got := recorded(t, store); got[candidate] != "" || got[merged] != "" {
+					t.Fatalf("a split pair was declared a succession: %v", got)
+				}
+				exclusions, err := store.GetExclusions()
+				if err != nil {
+					t.Fatalf("GetExclusions: %v", err)
+				}
+				if len(exclusions) != 1 || exclusionKey(exclusions[0].ResourceA, exclusions[0].ResourceB) != exclusionKey(merged, candidate) {
+					t.Fatalf("exclusions = %+v, want the one split of %s from %s", exclusions, candidate, merged)
+				}
+				if got := agents(both); got != 2 {
+					t.Fatalf("the split did not survive its sibling's absence: %d agents, want the two kept apart", got)
+				}
+			})
+		}
+
+		// A rebuild that cannot read its decisions carries the previous
+		// generation's exclusions (carryOverridesFrom), and the check reads those.
+		// The control is the same outage with no split, which declares the
+		// succession through the same store, so the refusal is the check's.
+		t.Run(storeName+"/a rebuild that cannot read its decisions still refuses the pair", func(t *testing.T) {
+			outage := func(t *testing.T, split bool) *unreadableDecisionStore {
+				t.Helper()
+				flaky := &unreadableDecisionStore{ResourceStore: newStore(t)}
+				store := successionForwardingStore{flaky}
+				// Both runs carry a split, so only the pair check can tell them apart.
+				if err := store.AddExclusion(ResourceExclusion{ResourceA: "agent-unrelated-a", ResourceB: "agent-unrelated-b"}); err != nil {
+					t.Fatalf("split two unrelated resources: %v", err)
+				}
+				if split {
+					if err := store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: candidate}); err != nil {
+						t.Fatalf("split the Docker source from %s: %v", merged, err)
+					}
+				}
+				// The previous generation ingests nothing: a both-present ingest
+				// declares the candidate's reporter era itself, which would record
+				// the succession before the outage and hide whether the outage's
+				// pin succession does.
+				previous := NewRegistry(store)
+				if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+					CanonicalID: candidate, ResourceType: ResourceTypeAgent, MachineID: machineID, Hostname: "shared-07",
+				}}); err != nil {
+					t.Fatalf("hold the machine key on %s: %v", candidate, err)
+				}
+				if got := recorded(t, flaky.ResourceStore); got[candidate] != "" {
+					t.Fatalf("%s was declared superseded before the outage: %v", candidate, got)
+				}
+
+				flaky.failAll(true)
+				rebuilt := newRegistryFrom(previous)
+				if wantCarried := map[bool]int{true: 2, false: 1}[split]; !rebuilt.overridesUnreadable || len(rebuilt.exclusions) != wantCarried {
+					t.Fatalf("the rebuild carried %d exclusions (unreadable=%v), want %d", len(rebuilt.exclusions), rebuilt.overridesUnreadable, wantCarried)
+				}
+				rebuilt.IngestSnapshot(dockerOnly)
+				rebuilt.PersistIdentityPins()
+				flaky.failAll(false)
+				return flaky
+			}
+
+			if got := recorded(t, outage(t, false).ResourceStore); got[candidate] != merged {
+				t.Fatalf("control: with no split the rebuild declared %v, want %s superseded by %s", got, candidate, merged)
+			}
+			flaky := outage(t, true)
+			if got := recorded(t, flaky.ResourceStore); got[candidate] != "" {
+				t.Fatalf("a rebuild holding the carried split declared %s superseded by %s", candidate, got[candidate])
+			}
+			exclusions, err := flaky.GetExclusions()
+			if err != nil {
+				t.Fatalf("GetExclusions: %v", err)
+			}
+			if !slices.ContainsFunc(exclusions, func(e ResourceExclusion) bool {
+				return exclusionKey(e.ResourceA, e.ResourceB) == exclusionKey(merged, candidate)
+			}) {
+				t.Fatalf("exclusions = %+v, want the split of %s from %s kept", exclusions, candidate, merged)
+			}
+		})
+
+		// One pin can succeed two predecessors, a machine-keyed pin through its
+		// key and a machine-keyless cluster-slot pin through its slot. Each
+		// passes the pair check against the successor, but the operator split
+		// the two from each other, and the successor cannot be both. The control
+		// is the same pins with no split, which retires both.
+		t.Run(storeName+"/two split IDs are not retired onto one successor", func(t *testing.T) {
+			keyedID, slotID := "agent-fanin-keyed", "agent-fanin-slot"
+			run := func(t *testing.T, exclusions ...ResourceExclusion) (ResourceStore, string) {
+				t.Helper()
+				store := newStore(t)
+				if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{
+					{CanonicalID: keyedID, ResourceType: ResourceTypeAgent, MachineID: "machine-fanin", Hostname: "fanin-keyed"},
+					{CanonicalID: slotID, ResourceType: ResourceTypeAgent, ClusterName: "fanin-swarm", Hostname: "fanin-host"},
+				}); err != nil {
+					t.Fatalf("seed identity pins: %v", err)
+				}
+				for _, exclusion := range exclusions {
+					if err := store.AddExclusion(exclusion); err != nil {
+						t.Fatalf("exclude %s from %s: %v", exclusion.ResourceA, exclusion.ResourceB, err)
+					}
+				}
+				rr := NewRegistry(store)
+				successorID := rr.ingest(SourceDocker, "docker:fanin-host", Resource{
+					Type: ResourceTypeAgent, Name: "fanin-host", Status: StatusOnline,
+					Docker: &DockerData{HostSourceID: "docker:fanin-host", Hostname: "fanin-host"},
+				}, ResourceIdentity{MachineID: "machine-fanin", ClusterName: "fanin-swarm", Hostnames: []string{"fanin-host", "fanin-swarm:fanin-host"}})
+				if successorID == "" || successorID == keyedID || successorID == slotID {
+					t.Fatalf("the host was listed as %q, want a successor distinct from %s and %s", successorID, keyedID, slotID)
+				}
+				rr.PersistIdentityPins()
+				return store, successorID
+			}
+
+			store, successorID := run(t)
+			if got := recorded(t, store); got[keyedID] != successorID || got[slotID] != successorID {
+				t.Fatalf("control: with no split the pins declared %v, want %s and %s retired onto %s", got, keyedID, slotID, successorID)
+			}
+			// An exclusion of an ID from itself is what the defect left behind in
+			// a store it already reached, and it separates nothing from the other
+			// predecessor.
+			store, successorID = run(t, ResourceExclusion{ResourceA: keyedID, ResourceB: keyedID})
+			if got := recorded(t, store); got[keyedID] != successorID || got[slotID] != successorID {
+				t.Fatalf("a self-pair exclusion of %s stopped the pins declaring %v, want %s and %s retired onto %s", keyedID, got, keyedID, slotID, successorID)
+			}
+			store, successorID = run(t, ResourceExclusion{ResourceA: keyedID, ResourceB: slotID})
+			if got := recorded(t, store); got[keyedID] != "" || got[slotID] != "" {
+				t.Fatalf("two split IDs were retired onto %s: %v", successorID, got)
+			}
+			exclusions, err := store.GetExclusions()
+			if err != nil {
+				t.Fatalf("GetExclusions: %v", err)
+			}
+			if len(exclusions) != 1 || exclusionKey(exclusions[0].ResourceA, exclusions[0].ResourceB) != exclusionKey(keyedID, slotID) {
+				t.Fatalf("exclusions = %+v, want the one split of %s from %s", exclusions, keyedID, slotID)
+			}
+		})
+
+		// The control for the rule's reach: an operator split names an ID whose
+		// host later gains a stronger key, and the succession carries the split
+		// with the host, since the ID it supersedes is not paired with its
+		// successor.
+		t.Run(storeName+"/a split of a superseded ID that is not paired with its successor follows it", func(t *testing.T) {
+			store := newStore(t)
+			shortEraID := buildHashID(ResourceTypeAgent, "cluster:prod-swarm:cloud")
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+				CanonicalID: shortEraID, ResourceType: ResourceTypeAgent, ClusterName: "prod-swarm", Hostname: "cloud",
+			}}); err != nil {
+				t.Fatalf("seed identity pin: %v", err)
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: shortEraID, ResourceB: "other-resource"}); err != nil {
+				t.Fatalf("split %s from another resource: %v", shortEraID, err)
+			}
+			rr := NewRegistry(store)
+			newID := rr.ingest(SourceDocker, "docker:cloud.a", Resource{
+				Type: ResourceTypeAgent, Name: "cloud.a", Status: StatusOnline,
+				Docker: &DockerData{HostSourceID: "docker:cloud.a", Hostname: "cloud.a"},
+			}, ResourceIdentity{ClusterName: "prod-swarm", Hostnames: []string{"cloud.a", "prod-swarm:cloud.a"}})
+			if newID == "" || newID == shortEraID {
+				t.Fatalf("expected a full-hostname canonical ID, got %q (short era %q)", newID, shortEraID)
+			}
+			rr.PersistIdentityPins()
+			if got := recorded(t, store); got[shortEraID] != newID {
+				t.Fatalf("the short era was not succeeded by %s: %v", newID, got)
+			}
+			exclusions, err := store.GetExclusions()
+			if err != nil {
+				t.Fatalf("GetExclusions: %v", err)
+			}
+			if len(exclusions) != 1 || exclusionKey(exclusions[0].ResourceA, exclusions[0].ResourceB) != exclusionKey(newID, "other-resource") {
+				t.Fatalf("exclusions = %+v, want the split re-keyed onto %s", exclusions, newID)
+			}
+		})
+	}
+
+	// The fan-in filter weighs each predecessor's first declaration (the stores
+	// re-key a predecessor once), and only the successions that retire two split
+	// IDs onto one successor are dropped.
+	t.Run("the fan-in filter drops only successions that retire two split IDs onto one", func(t *testing.T) {
+		succession := func(oldID, newID string) CanonicalIDSuccession {
+			return CanonicalIDSuccession{OldCanonicalID: oldID, NewCanonicalID: newID}
+		}
+		rr := NewRegistry(nil)
+		rr.exclusions[exclusionKey("fan-a", "fan-b")] = now
+		rr.exclusions[exclusionKey("fan-p", "fan-q")] = now
+		for name, tc := range map[string]struct{ batch, want []CanonicalIDSuccession }{
+			"two split IDs onto one successor": {
+				[]CanonicalIDSuccession{succession("fan-a", "fan-w"), succession("fan-b", "fan-w")}, nil,
+			},
+			"an unrelated third predecessor still moves": {
+				[]CanonicalIDSuccession{succession("fan-a", "fan-w"), succession("fan-b", "fan-w"), succession("fan-c", "fan-w")},
+				[]CanonicalIDSuccession{succession("fan-c", "fan-w")},
+			},
+			"a split predecessor with an ID outside its successor's group": {
+				[]CanonicalIDSuccession{succession("fan-a", "fan-w"), succession("fan-c", "fan-w"), succession("fan-b", "fan-x")},
+				[]CanonicalIDSuccession{succession("fan-a", "fan-w"), succession("fan-c", "fan-w"), succession("fan-b", "fan-x")},
+			},
+			"an unrelated split does not stop a star": {
+				[]CanonicalIDSuccession{succession("fan-c", "fan-w"), succession("fan-d", "fan-w")},
+				[]CanonicalIDSuccession{succession("fan-c", "fan-w"), succession("fan-d", "fan-w")},
+			},
+			"a later declaration for a predecessor retires nothing": {
+				[]CanonicalIDSuccession{succession("fan-a", "fan-x"), succession("fan-b", "fan-y"), succession("fan-a", "fan-y")},
+				[]CanonicalIDSuccession{succession("fan-a", "fan-x"), succession("fan-b", "fan-y")},
+			},
+		} {
+			if got := rr.withoutSplitFanInLocked(tc.batch); !slices.Equal(got, tc.want) {
+				t.Errorf("%s: kept %v, want %v", name, got, tc.want)
+			}
+		}
+	})
+}
+
 // A physical disk keyed by a serial that two machines report is re-keyed in
 // place to a machine-scoped ID (rekeyPhysicalDiskLocked), and that moves no
 // operator-state row: the registry keeps no durable record of a disk's IDs, so

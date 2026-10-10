@@ -339,6 +339,41 @@ func (index *identityPinIndex) successionsFor(pin ResourceIdentityPin) []Canonic
 	return successions
 }
 
+// withoutSplitFanInLocked drops the successions of a batch that retire two IDs
+// the operator split onto one successor. Each passes the pair check against the
+// successor, but applying both puts the split's two sides on one ID and
+// rewrites their exclusion into one of the ID from itself. That batch comes
+// from one pin sharing a machine key with one predecessor and a cluster slot
+// with the other, and the successor cannot be both hosts, so neither moves. The
+// stores re-key a predecessor once, to the first successor declared for it, so
+// only that declaration is weighed; a later one retires nothing and is
+// dropped. The caller holds rr.mu.
+func (rr *ResourceRegistry) withoutSplitFanInLocked(batch []CanonicalIDSuccession) []CanonicalIDSuccession {
+	if len(rr.exclusions) == 0 || len(batch) < 2 {
+		return batch
+	}
+	effective := make([]CanonicalIDSuccession, 0, len(batch))
+	retiredOnto := make(map[string][]string, len(batch))
+	declared := make(map[string]struct{}, len(batch))
+	for _, succession := range batch {
+		if _, dup := declared[succession.OldCanonicalID]; dup {
+			continue
+		}
+		declared[succession.OldCanonicalID] = struct{}{}
+		effective = append(effective, succession)
+		retiredOnto[succession.NewCanonicalID] = append(retiredOnto[succession.NewCanonicalID], succession.OldCanonicalID)
+	}
+	kept := effective[:0:0]
+	for _, succession := range effective {
+		if !slices.ContainsFunc(retiredOnto[succession.NewCanonicalID], func(other string) bool {
+			return other != succession.OldCanonicalID && rr.isExcluded(succession.OldCanonicalID, other)
+		}) {
+			kept = append(kept, succession)
+		}
+	}
+	return kept
+}
+
 // upsertedOnto returns the row UpsertResourceIdentityPins stores when pin is
 // written over existing: an empty field keeps the stored value.
 func (pin ResourceIdentityPin) upsertedOnto(existing ResourceIdentityPin) ResourceIdentityPin {
@@ -446,7 +481,10 @@ func clusterPinKey(clusterName, hostname string) string {
 // survive the era change. Successions are skipped while the old canonical ID
 // still belongs to a live resource, or to one a manual link folded into
 // another: a genuinely short-named host must not have its rows stolen by an
-// FQDN sibling. Change-journal rows are never
+// FQDN sibling. They are skipped too when the operator split the old ID from
+// its successor, or two IDs the batch retires onto one successor from each
+// other (withoutSplitFanInLocked): the pins' shared keys do not outrank that
+// decision, and the re-key would erase it. Change-journal rows are never
 // rewritten; EraIDs merges those at read time.
 func (rr *ResourceRegistry) PersistIdentityPins() {
 	if rr.store == nil {
@@ -527,8 +565,12 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 			for _, succession := range rr.identityPins.successionsFor(pin) {
 				// A resource a manual link folded into its primary is still
 				// observed. Succeeding it would re-key the link onto the
-				// primary itself, splitting the pair on the next rebuild.
-				if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
+				// primary itself, splitting the pair on the next rebuild. A
+				// split the operator recorded between the two IDs outranks
+				// the key their pins share: applying it would rewrite the
+				// exclusion into one of the ID from itself.
+				if rr.canonicalIDObservedLocked(succession.OldCanonicalID) ||
+					rr.isExcluded(succession.OldCanonicalID, succession.NewCanonicalID) {
 					continue
 				}
 				successions = append(successions, succession)
@@ -538,6 +580,7 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 	}
 	pins = changed(pins)
 	linkPins = changed(linkPins)
+	successions = rr.withoutSplitFanInLocked(successions)
 	rr.mu.RUnlock()
 
 	if len(pins) == 0 && len(linkPins) == 0 {

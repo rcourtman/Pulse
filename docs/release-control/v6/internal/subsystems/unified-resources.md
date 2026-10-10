@@ -3656,9 +3656,8 @@ it, which it does not for a later machine key. One an operator split names is
 the candidate of a source kept apart from another resource, and a succession
 would rewrite that pair into an exclusion of the resource from itself in a
 generation where the other side is absent, erasing the split, so the
-declaration leaves that reporter's rows alone (a pin-driven succession can
-still re-key such an ID when the split source holds the shared machine key,
-which this does not change). Reporters that gain a key declare
+declaration leaves that reporter's rows alone (pin succession refuses the same
+pair, see the split paragraph below). Reporters that gain a key declare
 their era on every rebuild and the stores re-key a predecessor once, to the
 successor it first had (the record is keyed by the predecessor), so a lock the
 operator set on the keyless ID is carried onto the keyed one (the whole row
@@ -3671,6 +3670,43 @@ generation is still being served, so when the keyed ID had no row an action
 planned against the old ID in that window finds no row there, and a link the
 succession rewrites takes effect in the next generation, because a registry
 loads its links when it is built (the lock is shared across the pair at once).
+
+Pin succession does not join two IDs the operator split. It reads two pins that
+share a strong key as one host's eras, and a source split from a sibling that
+reports the same machine key pins that key on its own source-specific ID
+while the sibling is present (the store keeps one pin per key and deletes the
+other's row, so which of the two holds it follows the write order). In a
+generation where the sibling is absent and the split source's pin holds the key,
+the source mints the sibling's ID and its pin names its candidate as that ID's
+earlier era; applying the pair would rewrite the exclusion into one of the ID
+from itself, and the sibling's return would merge the two. `PersistIdentityPins`
+therefore declares a succession only when its retired ID is no longer observed
+and the operator has not excluded that ID from its successor, and
+`withoutSplitFanInLocked` drops a batch's successions that retire two IDs the
+operator split from each other onto one successor (a pin matching one
+predecessor by machine key and the other by cluster slot). The registry owns
+both checks, beside the observed-ID check, so a rebuild that could not read its
+decisions guards the split from the exclusions it carried
+(`carryOverridesFrom`). A split that pairs the retired ID with a third resource
+is re-keyed onto the successor with the other rows, as before. The refused
+pair leaves its operator rows where they are, and the pin write of the same
+rebuild still hands the shared key to the sibling's ID: while the sibling is
+absent the split source is listed under the sibling's ID, and an operator lock
+set on the candidate ID does not apply to it until the sibling returns (the
+same boundary as the reporter-era rule above, and the boundary that already
+held when the sibling's pin held the key; before this check a split source
+holding the key had the lock carried onto the sibling's ID, with the split
+erased). Limits: record-declared eras (`applyRecordSuccessions`) are not
+checked, as reporter eras already skip every ID a split names and the
+predecessor IDs that Proxmox guest and TrueNAS records declare are older IDs
+of the record's own resource; only the successions of one batch are composed,
+so a chain through stale carried decisions can still reach a self pair, and a
+predecessor the stores already recorded still counts toward a fan-in, which
+holds a safe migration back rather than letting a split go; and a split
+recorded after the registry read its decisions is seen by the next rebuild
+whose decision reads succeed. Proof:
+`TestPinSuccessionKeepsASplitSourceApart` in
+`internal/unifiedresources/registry_test.go`.
 
 Canonical ID changes that reach neither a link nor `ApplyCanonicalIDSuccessions`
 carry nothing: a physical disk re-keyed in place to a machine-scoped ID
