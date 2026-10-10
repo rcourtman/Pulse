@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { NotificationsAPI, type Webhook, type WebhookTemplate } from '@/api/notifications';
@@ -74,6 +74,7 @@ export interface WebhookConfigState {
   adding: Accessor<boolean>;
   saving: Accessor<boolean>;
   saveError: Accessor<string | null>;
+  mutationError: Accessor<string | null>;
   editingId: Accessor<string | null>;
   formData: Accessor<WebhookConfigFormData>;
   templates: Accessor<WebhookTemplate[]>;
@@ -91,7 +92,9 @@ export interface WebhookConfigState {
   selectService: (service: string) => void;
   saveWebhook: () => Promise<void>;
   testWebhookForm: () => void;
-  toggleAllWebhooks: (enabled: boolean) => void;
+  toggleAllWebhooks: (enabled: boolean) => Promise<void>;
+  toggleWebhook: (webhook: Webhook) => Promise<void>;
+  deleteWebhook: (webhook: Webhook) => Promise<void>;
   updateHeaderInput: (index: number, patch: Partial<HeaderInput>) => void;
   removeHeaderInput: (index: number) => void;
   addHeaderInput: () => void;
@@ -104,12 +107,17 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   const [adding, setAdding] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [saveError, setSaveError] = createSignal<string | null>(null);
+  const [mutationError, setMutationError] = createSignal<string | null>(null);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [formData, setFormData] = createSignal<WebhookConfigFormData>(createDefaultFormData());
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
   const [showServiceDropdown, setShowServiceDropdown] = createSignal(false);
   const [headerInputs, setHeaderInputs] = createSignal<HeaderInput[]>([]);
   const [customFieldInputs, _setCustomFieldInputs] = createSignal<CustomFieldInput[]>([]);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
 
   const setCustomFieldInputs = (inputs: CustomFieldInput[]) => {
     _setCustomFieldInputs(inputs);
@@ -152,17 +160,51 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   const currentTemplate = () =>
     templates().find((template) => template.service === formData().service);
 
-  const toggleAllWebhooks = (enabled: boolean) => {
-    props.webhooks.forEach((webhook) => {
-      props.onUpdate({ ...webhook, enabled });
+  // The form and list share one writer. Do not let a late toggle acknowledgement
+  // replace a later operator choice, or let list changes invalidate an open draft.
+  const mutateList = async (mutate: () => boolean | Promise<boolean>) => {
+    if (disposed || saving() || adding()) return;
+    setSaving(true);
+    setMutationError(null);
+    const failureMessage =
+      'Could not confirm all webhook changes. Some destinations may already have changed. Check the configured destinations before trying again.';
+    try {
+      if ((await mutate()) !== true && !disposed) setMutationError(failureMessage);
+    } catch {
+      // Callback/provider text may contain private destination details.
+      if (!disposed) setMutationError(failureMessage);
+    } finally {
+      if (!disposed) setSaving(false);
+    }
+  };
+
+  const toggleAllWebhooks = (enabled: boolean) =>
+    mutateList(async () => {
+      // Capture only changed rows before yielding. Each acknowledgement updates
+      // inventory; a failure leaves earlier accepted changes intact, not rolled back.
+      const submitted = props.webhooks
+        .filter((webhook) => webhook.enabled !== enabled)
+        .map((webhook) => structuredClone({ ...webhook, enabled }));
+      for (const webhook of submitted) {
+        if (disposed) return false;
+        if ((await props.onUpdate(webhook)) !== true) return false;
+      }
+      return true;
     });
+
+  const toggleWebhook = (webhook: Webhook) =>
+    mutateList(() => props.onUpdate(structuredClone({ ...webhook, enabled: !webhook.enabled })));
+
+  const deleteWebhook = async (webhook: Webhook) => {
+    if (!webhook.id) return;
+    await mutateList(() => props.onDelete(webhook.id));
   };
 
   const allEnabled = () => props.webhooks.every((webhook) => webhook.enabled);
   const someEnabled = () => props.webhooks.some((webhook) => webhook.enabled);
 
   const openAddForm = () => {
-    if (saving()) return;
+    if (disposed || saving()) return;
     setSaveError(null);
     setAdding(true);
     setEditingId(null);
@@ -175,12 +217,12 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   };
 
   const cancelForm = () => {
-    if (saving()) return;
+    if (disposed || saving()) return;
     resetForm();
   };
 
   const editWebhook = (webhook: Webhook) => {
-    if (saving()) return;
+    if (disposed || saving()) return;
     setSaveError(null);
     if (webhook.id) {
       setEditingId(webhook.id);
@@ -253,7 +295,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   };
 
   const saveWebhook = async () => {
-    if (saving()) return;
+    if (disposed || saving()) return;
     const data = formData();
     if (!data.name || !data.url) return;
 
@@ -296,13 +338,15 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
                 ? data.minimumSeverity
                 : 'all',
           });
-      if (accepted === true) resetForm();
-      else setSaveError(failureMessage);
+      if (!disposed) {
+        if (accepted === true) resetForm();
+        else setSaveError(failureMessage);
+      }
     } catch {
       // Callback/provider text can contain submitted destination details.
-      setSaveError(failureMessage);
+      if (!disposed) setSaveError(failureMessage);
     } finally {
-      setSaving(false);
+      if (!disposed) setSaving(false);
     }
   };
 
@@ -360,6 +404,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     adding,
     saving,
     saveError,
+    mutationError,
     editingId,
     formData,
     templates,
@@ -378,6 +423,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     saveWebhook,
     testWebhookForm,
     toggleAllWebhooks,
+    toggleWebhook,
+    deleteWebhook,
     updateHeaderInput,
     removeHeaderInput,
     addHeaderInput,

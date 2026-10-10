@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "912f37ac6284f13a5be8a09375bd56ab6f8df3c4",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfig.tsx",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts",
+    "frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "c08c16075b39d6bf4ce66c802fe59cb92540954b9ad97aaa125c71a14484aa51",
+    "frontend-modern/src/components/Alerts/WebhookConfig.tsx": "d1b7dccfc0db12863b215d041abd01dc7d449b7fa06d798025ac863290cf8d17",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "50cdcec4d337c9959724777b0b066db83e80af6e027f6a00a69361a3de128677",
+    "frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx": "edc82aa1379a942dde66bc7cb38920b4d70e5f12dbaa271e277d0deed1ccbc46"
+  },
+  "routes": [
+    "/settings/alerts"
+  ],
+  "states": [
+    "Existing webhook section in a source-isolated offline fixture, using the real component, state owners and API adapters",
+    "Deferred bulk and individual writes, unchanged rows, 503 partial failure with earlier acknowledged changes retained",
+    "Unaccepted deletion, deliberate retry, open masked draft and retired editor"
+  ],
+  "interactions": [
+    "Bulk Disable with blocked competing Enable, row deletion and new editor entry; one acknowledged write at a time",
+    "Explicit retry changes only remaining changed rows; no editor retry or rollback on failure",
+    "Single toggle and deletion share pending admission; success:false preserves the row, success:true removes it",
+    "Edit/Cancel retain the existing mask and draft fields, while list controls remain disabled",
+    "Leave the editor while a batch is pending: no remaining unsent write is issued"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-10T12:16:16.965Z",
+  "browser": {
+    "client": "1.56.1",
+    "engine": "Chromium",
+    "version": "141.0.7390.37"
+  },
+  "scope": "Targeted existing section fixture and synthetic local API endpoints, not full authenticated application, provider delivery or installed recovery."
+}

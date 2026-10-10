@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Existing webhook list controls expose pending acknowledgement
+
+The webhook section shares pending admission across form saves, list toggles,
+bulk changes and deletion. Pending list writes announce a `role="status"`
+message and disable competing list controls and Add. An open draft also locks
+the saved-row controls; its own fields, Test and Save remain available until
+that draft is submitted. A fixed `role="alert"` message explains that earlier
+batch changes may already be saved when a later change is unconfirmed, rather
+than presenting an atomic rollback or automatically retrying it.
+
+The existing section, state owners and API adapters are exercised in desktop
+and 390px browser fixtures with deferred/rejected synthetic replies, masked
+drafts, deliberate retry and unmount. List controls retain their narrow 44px
+touch targets and the section does not overflow horizontally. These checks
+establish source interaction and layout, not ordinary notification delivery.
+No new primitive, route, permission, destination or transport policy is added.
+
 ### Existing alerts Save controls expose acknowledgement state
 
 The settings Save button renders Saving… with aria-busy while its logical
