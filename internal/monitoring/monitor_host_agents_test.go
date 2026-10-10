@@ -5992,6 +5992,171 @@ func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
 	}
 }
 
+// TestMockUnifiedViewFollowsALinkCreationTimeChange pins the creation time as
+// part of the mock view's cache key. Among otherwise equal candidates a chain
+// of links folds into the primary of its earliest-created link, so a link list
+// that differs from the cached one only in a creation time can leave a
+// different row standing: in a cycle of a Proxmox storage, a TrueNAS VM and a
+// vSphere VM the storage never competes, and the TrueNAS VM keeps its row
+// while its link is older than the vSphere VM's and gives it to the vSphere VM
+// once it is newer. The cache compared resource pairs and primaries only, so
+// with the fixture data version held it kept serving the row the old times
+// chose while the live rebuild, which reloads the links from the store, served
+// the new one. Both readers of the key are held to it: the structure view
+// (cachedMockStructureView) and the data-version view
+// (currentUnifiedStateView).
+func TestMockUnifiedViewFollowsALinkCreationTimeChange(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	soleSource := func(resource unifiedresources.Resource, source unifiedresources.DataSource) bool {
+		return len(resource.Sources) == 1 && resource.Sources[0] == source
+	}
+	var storageID, nasVMID, guestID string
+	for _, resource := range m.currentUnifiedStateView().resources {
+		switch {
+		case storageID == "" && resource.Type == unifiedresources.ResourceTypeStorage &&
+			soleSource(resource, unifiedresources.SourceProxmox):
+			storageID = resource.ID
+		case nasVMID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+			soleSource(resource, unifiedresources.SourceTrueNAS):
+			nasVMID = resource.ID
+		case guestID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+			soleSource(resource, unifiedresources.SourceVMware):
+			guestID = resource.ID
+		}
+	}
+	if storageID == "" || nasVMID == "" || guestID == "" {
+		t.Fatalf("fixture graph needs a Proxmox storage, a TrueNAS VM and a vSphere VM, got storage=%q nas=%q guest=%q",
+			storageID, nasVMID, guestID)
+	}
+
+	created := time.Date(2026, time.October, 1, 9, 0, 0, 0, time.UTC)
+	// The link whose primary is the TrueNAS VM is the last of the three, so
+	// replacing it keeps the list's order and changes only its creation time.
+	cycle := func(nasLinkCreated time.Time) []unifiedresources.ResourceLink {
+		return []unifiedresources.ResourceLink{
+			{ResourceA: nasVMID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created.Add(time.Minute)},
+			{ResourceA: storageID, ResourceB: guestID, PrimaryID: guestID, CreatedAt: created.Add(2 * time.Minute)},
+			{ResourceA: guestID, ResourceB: nasVMID, PrimaryID: nasVMID, CreatedAt: nasLinkCreated},
+		}
+	}
+	oldest, newest := created, created.Add(3*time.Minute)
+	setNasLinkCreated := func(at time.Time) {
+		t.Helper()
+		for _, link := range cycle(at) {
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("AddLink: %v", err)
+			}
+		}
+		// Reads deliberately reuse a generation younger than two seconds, so
+		// apply the rebuild boundary that loads the links instead of waiting.
+		m.updateResourceStore(m.currentStateWithScope())
+	}
+
+	// cycleRows is what is left of the three members: ID and sources.
+	cycleRows := func(resources []unifiedresources.Resource) []string {
+		var rows []string
+		for _, resource := range resources {
+			if resource.ID != storageID && resource.ID != nasVMID && resource.ID != guestID {
+				continue
+			}
+			sources := make([]string, 0, len(resource.Sources))
+			for _, source := range resource.Sources {
+				sources = append(sources, string(source))
+			}
+			slices.Sort(sources)
+			rows = append(rows, fmt.Sprintf("%s %v", resource.ID, sources))
+		}
+		return rows
+	}
+	// mockRows is the reference: the linked build the view is made of.
+	mockRows := func(links []unifiedresources.ResourceLink) []string {
+		resources, _ := mock.UnifiedResourceSnapshotWithLinks(links)
+		return cycleRows(resources)
+	}
+	wantNas, wantGuest := mockRows(cycle(oldest)), mockRows(cycle(newest))
+	if slices.Equal(wantNas, wantGuest) || len(wantNas) != 1 || len(wantGuest) != 1 ||
+		!strings.HasPrefix(wantNas[0], nasVMID+" ") || !strings.HasPrefix(wantGuest[0], guestID+" ") {
+		t.Fatalf("a creation time alone must move the cycle between the TrueNAS VM %s and the vSphere VM %s; got %v then %v",
+			nasVMID, guestID, wantNas, wantGuest)
+	}
+	version := mock.FixtureDataVersion()
+	assertLinksDifferOnlyInTime := func(before, after []unifiedresources.ResourceLink) {
+		t.Helper()
+		if len(before) != len(after) || len(before) != 3 {
+			t.Fatalf("link lists %+v and %+v need three links each", before, after)
+		}
+		differing := 0
+		for i := range before {
+			if before[i].ResourceA != after[i].ResourceA || before[i].ResourceB != after[i].ResourceB ||
+				before[i].PrimaryID != after[i].PrimaryID {
+				t.Fatalf("link %d changed its pair or primary: %+v -> %+v", i, before[i], after[i])
+			}
+			if !before[i].CreatedAt.Equal(after[i].CreatedAt) {
+				differing++
+			}
+		}
+		if differing != 1 {
+			t.Fatalf("%d links changed their creation time, want exactly one: %+v -> %+v", differing, before, after)
+		}
+	}
+	assertRows := func(label string, view monitorUnifiedStateView, want []string) {
+		t.Helper()
+		if got := cycleRows(view.resources); !slices.Equal(got, want) {
+			t.Fatalf("%s kept %v, want the row a linked mock build keeps: %v", label, got, want)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture data version moved from %d to %d; a creation time alone must refresh the view", version, got)
+		}
+	}
+
+	setNasLinkCreated(oldest)
+	first := m.currentUnifiedStateView()
+	assertRows("view with the TrueNAS VM's link oldest", first, wantNas)
+	firstLinks := m.resourceStoreManualLinks()
+
+	// The link list changes in its creation time alone. The structure reader
+	// answers from the cached view while the list is unchanged, so it must
+	// notice before anything else rebuilds the view.
+	setNasLinkCreated(newest)
+	assertLinksDifferOnlyInTime(firstLinks, m.resourceStoreManualLinks())
+	structure := m.currentStructureUnifiedStateView()
+	if structure.readState == first.readState {
+		t.Fatal("structure view served the view built before the creation time changed")
+	}
+	assertRows("structure view after the creation time changed", structure, wantGuest)
+	second := m.currentUnifiedStateView()
+	assertRows("view after the creation time changed", second, wantGuest)
+	if !second.freshness.After(first.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on a creation time change", second.freshness, first.freshness)
+	}
+
+	// And back: the data-version reader is held to the key on its own, with
+	// the structure reader no longer the one that rebuilt the view.
+	setNasLinkCreated(oldest)
+	assertLinksDifferOnlyInTime(m.resourceStoreManualLinks(), cycle(newest))
+	third := m.currentUnifiedStateView()
+	if third.readState == second.readState {
+		t.Fatal("view served the build made before the creation time changed back")
+	}
+	assertRows("view after the creation time changed back", third, wantNas)
+	if !third.freshness.After(second.freshness) {
+		t.Fatalf("view freshness %v did not advance past %v on a creation time change", third.freshness, second.freshness)
+	}
+	if again := m.currentUnifiedStateView(); again.readState != third.readState {
+		t.Fatal("expected the view to stay cached while neither the fixtures nor the links change")
+	}
+}
+
 // Alert evaluation resolves a target per resource and windowed metric on every
 // pass. A metric tick moves the fixture's data version, not what resources
 // exist, so a lookup after a tick must be served from the cached view instead

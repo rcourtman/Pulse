@@ -9480,3 +9480,14 @@ report, enrollment, lease or command path is touched
 (`TestSharedSystemAlertCorrelationForHostLazyListsNodesOnDemand` and
 `TestMockStructureConsumersDoNotRebuildTheViewAfterFixtureTicks` in
 `internal/monitoring/monitor_host_agents_test.go`).
+
+### Mock-mode unified view cache follows a link's creation time
+
+`internal/monitoring/monitor.go` changed only so `sameManualLinks`, the
+comparison behind the mock-mode unified view's cache, also compares each
+link's creation time (monitoring contract, "Mock-mode unified view applies
+operator links"): among otherwise equal candidates a chain of links folds into
+the primary of its earliest-created link, so lists that differ only in a time
+can leave a different row standing. Agent registration, enrolment, install, update,
+removal, report identity and continuity are unchanged, and real-mode
+resolution still goes through the live registry.
