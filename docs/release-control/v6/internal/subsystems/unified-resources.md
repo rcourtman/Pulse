@@ -6535,6 +6535,14 @@ merge the PBS service and host, change either metrics target, or turn PBS API
 polls into a host-agent time series. A missing or ambiguous host leaves the
 link absent.
 
+`PBSInstanceView.NodeName()` hands read-state consumers the hostname the PBS
+server reports about itself (`PBSData.NodeName`), which is not `Hostname()`, the
+host of the endpoint Pulse was configured with. Consumers that rebuild a
+`models.PBSInstance` from the view, such as `Monitor.PBSInstancesSnapshot()`
+feeding the connections ledger, must carry it: it is empty only when the
+connection cannot read the node-name endpoint (API tokens).
+`TestView_PBSAndPMGInstanceViewAccessors` pins the accessor.
+
 PBS does not supply the SMART inventory. Disk identity, health, temperature,
 and other typed physical-disk facts therefore remain agent-owned, while the
 PBS source mapping and PBS-parent relationship make the existing disk

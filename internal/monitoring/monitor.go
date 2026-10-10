@@ -3981,6 +3981,7 @@ func pbsInstanceFromReadStateView(view *unifiedresources.PBSInstanceView) models
 		ID:               firstNonEmptyString(view.InstanceID(), view.ID()),
 		Name:             view.Name(),
 		Host:             view.HostURL(),
+		NodeName:         view.NodeName(),
 		GuestURL:         view.GuestURL(),
 		Status:           string(view.Status()),
 		Version:          view.Version(),

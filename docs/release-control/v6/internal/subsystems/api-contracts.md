@@ -3962,7 +3962,9 @@ a new API state machine, queue contract, or verification-accounting field.
     closed when more than one enabled platform source matches; VMware remains
     excluded because a vCenter connection is not the ESXi host on which an
     agent would run. PBS source aliases include the hostname the PBS node
-    reports about itself (state-side `PBSInstance.NodeName`), because reported
+    reports about itself (`PBSInstance.NodeName` as returned by
+    `Monitor.PBSInstancesSnapshot()`, which converts it back out of the unified
+    PBS view), because reported
     machine identity, not configured addressing, is what reconciles an
     IP-or-alias-configured PBS connection with the host agent running on that
     machine. Composition adds agent telemetry to the source row without

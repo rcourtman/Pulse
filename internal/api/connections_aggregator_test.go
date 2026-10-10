@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func ptrTime(t time.Time) *time.Time { return &t }
@@ -390,6 +392,79 @@ func TestPBSReportedNodeNamesByInstanceSkipsBlankIdentity(t *testing.T) {
 	want := map[string]string{"backup": "pbs01"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("pbsReportedNodeNamesByInstance() = %+v, want %+v", got, want)
+	}
+}
+
+// The reported node name has to survive the whole route into the ledger:
+// unified PBS resource, Monitor.PBSInstancesSnapshot, aggregator inputs,
+// connection HostAliases, system grouping. A PBS connection configured by IP
+// depends on it, because nothing the host agent running on that machine
+// reports matches the configured address. The unit tests above feed their
+// inputs by hand and cannot see the snapshot dropping the name.
+func TestConnectionsLedger_GroupsHostAgentWithPBSByReportedNodeName(t *testing.T) {
+	setMockModeForTest(t, false)
+
+	monitor, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	now := time.Now()
+	adapter := unified.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-backup",
+			Name:     "backup",
+			Host:     "https://192.0.2.40:8007",
+			NodeName: "pbs01",
+			Status:   "online",
+			LastSeen: now,
+		}},
+		Hosts: []models.Host{{
+			ID:       "host-pbs01",
+			Hostname: "pbs01",
+			Status:   "online",
+			LastSeen: now,
+		}},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	cfg := &config.Config{
+		PBSInstances: []config.PBSInstance{{Name: "backup", Host: "https://192.0.2.40:8007"}},
+	}
+	inputs := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{})
+	connections := buildConnections(inputs)
+
+	var pbsConnection, agentConnection *Connection
+	for i := range connections {
+		switch connections[i].Type {
+		case ConnectionTypePBS:
+			pbsConnection = &connections[i]
+		case ConnectionTypeAgent:
+			agentConnection = &connections[i]
+		}
+	}
+	if pbsConnection == nil || agentConnection == nil {
+		t.Fatalf("expected a PBS and an agent connection, got %+v", connections)
+	}
+	if !reflect.DeepEqual(pbsConnection.HostAliases, []string{"backup", "192.0.2.40", "pbs01"}) {
+		t.Fatalf("pbs host aliases = %+v, want the reported node name %q included", pbsConnection.HostAliases, "pbs01")
+	}
+
+	systems := buildConnectionSystems(connections, monitor)
+	if len(systems) != 1 || systems[0].ID != pbsConnection.ID {
+		t.Fatalf("expected one system led by %q, got %+v", pbsConnection.ID, systems)
+	}
+	roles := make(map[string]ConnectionSystemComponentRole, len(systems[0].Components))
+	for _, component := range systems[0].Components {
+		roles[component.ConnectionID] = component.Role
+	}
+	if roles[pbsConnection.ID] != ConnectionSystemComponentRolePrimary {
+		t.Fatalf("%s role = %q, want %q", pbsConnection.ID, roles[pbsConnection.ID], ConnectionSystemComponentRolePrimary)
+	}
+	if roles[agentConnection.ID] != ConnectionSystemComponentRoleAttachment {
+		t.Fatalf("%s role = %q, want %q", agentConnection.ID, roles[agentConnection.ID], ConnectionSystemComponentRoleAttachment)
 	}
 }
 

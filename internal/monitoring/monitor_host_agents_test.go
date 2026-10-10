@@ -7969,3 +7969,43 @@ func TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs(t *testing.T) {
 		})
 	}
 }
+
+// The poller records the hostname a PBS node reports about itself so the
+// connections ledger can group the host agent running on that machine under
+// the PBS connection, even when the connection was configured by IP or DNS
+// alias. The ledger reads the name back through PBSInstancesSnapshot, which
+// rebuilds each instance from the unified read state; a conversion that
+// drops the name leaves the agent as a separate row with no error anywhere.
+func TestMonitorPBSInstancesSnapshotCarriesReportedNodeName(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-1",
+			Name:     "backup",
+			Host:     "https://192.0.2.40:8007",
+			NodeName: "pbs01",
+			Status:   "online",
+			LastSeen: time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC),
+		}},
+	})
+
+	// The unified resource holds the name, so a missing value below is lost
+	// in the conversion, not at ingest.
+	resources := registry.ListByType(unifiedresources.ResourceTypePBS)
+	if len(resources) != 1 || resources[0].PBS == nil || resources[0].PBS.NodeName != "pbs01" {
+		t.Fatalf("expected the PBS resource to keep the reported node name, got %+v", resources)
+	}
+
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	instances := m.PBSInstancesSnapshot()
+	if len(instances) != 1 {
+		t.Fatalf("expected one PBS instance, got %d", len(instances))
+	}
+	if instances[0].NodeName != "pbs01" {
+		t.Fatalf("PBSInstancesSnapshot()[0].NodeName = %q, want the reported node name %q", instances[0].NodeName, "pbs01")
+	}
+}
