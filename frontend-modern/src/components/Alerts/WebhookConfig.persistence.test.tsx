@@ -185,7 +185,9 @@ describe('webhook persistence acknowledgement', () => {
     render(() => (
       <WebhookConfig
         webhooks={[]}
-        onAdd={async () => { throw new Error(privateDetail); }}
+        onAdd={async () => {
+          throw new Error(privateDetail);
+        }}
         onUpdate={async () => false}
         onDelete={() => {}}
         onTest={() => {}}
@@ -193,19 +195,26 @@ describe('webhook persistence acknowledgement', () => {
     ));
     openNewDraft();
     fireEvent.click(screen.getByRole('button', { name: 'Add Webhook', exact: true }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Check the configured destinations'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Check the configured destinations'),
+    );
     expect(screen.getByRole('alert')).not.toHaveTextContent(privateDetail);
     expect(screen.getByLabelText('Name')).toHaveValue('New destination');
   });
 
   it('returns true only after an accepted create or update and false on failure', async () => {
-    const { result: owner } = renderHook(() => useAlertWebhookDestinationsState({ autoLoad: false }));
+    const { result: owner } = renderHook(() =>
+      useAlertWebhookDestinationsState({ autoLoad: false }),
+    );
     vi.mocked(NotificationsAPI.createWebhook).mockResolvedValue(savedWebhook);
     expect(await owner.addWebhook(savedWebhook)).toBe(true);
     vi.mocked(NotificationsAPI.updateWebhook).mockRejectedValue(new Error('Save unavailable'));
     expect(await owner.updateWebhook(savedWebhook)).toBe(false);
     expect(owner.webhooks()).toEqual([savedWebhook]);
-    vi.mocked(NotificationsAPI.updateWebhook).mockResolvedValue({ ...savedWebhook, enabled: false });
+    vi.mocked(NotificationsAPI.updateWebhook).mockResolvedValue({
+      ...savedWebhook,
+      enabled: false,
+    });
     expect(await owner.updateWebhook(savedWebhook)).toBe(true);
   });
 });

@@ -72,6 +72,8 @@ const createCustomFieldInput = (
 
 export interface WebhookConfigState {
   adding: Accessor<boolean>;
+  saving: Accessor<boolean>;
+  saveError: Accessor<string | null>;
   editingId: Accessor<string | null>;
   formData: Accessor<WebhookConfigFormData>;
   templates: Accessor<WebhookTemplate[]>;
@@ -87,7 +89,7 @@ export interface WebhookConfigState {
   cancelForm: () => void;
   editWebhook: (webhook: Webhook) => void;
   selectService: (service: string) => void;
-  saveWebhook: () => void;
+  saveWebhook: () => Promise<void>;
   testWebhookForm: () => void;
   toggleAllWebhooks: (enabled: boolean) => void;
   updateHeaderInput: (index: number, patch: Partial<HeaderInput>) => void;
@@ -100,6 +102,8 @@ export interface WebhookConfigState {
 
 export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigState {
   const [adding, setAdding] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
+  const [saveError, setSaveError] = createSignal<string | null>(null);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [formData, setFormData] = createSignal<WebhookConfigFormData>(createDefaultFormData());
   const [templates, setTemplates] = createSignal<WebhookTemplate[]>([]);
@@ -127,6 +131,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   };
 
   const resetForm = () => {
+    setSaveError(null);
     setAdding(false);
     setEditingId(null);
     setFormData(createDefaultFormData());
@@ -157,6 +162,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   const someEnabled = () => props.webhooks.some((webhook) => webhook.enabled);
 
   const openAddForm = () => {
+    if (saving()) return;
+    setSaveError(null);
     setAdding(true);
     setEditingId(null);
     setFormData(createDefaultFormData());
@@ -168,10 +175,13 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   };
 
   const cancelForm = () => {
+    if (saving()) return;
     resetForm();
   };
 
   const editWebhook = (webhook: Webhook) => {
+    if (saving()) return;
+    setSaveError(null);
     if (webhook.id) {
       setEditingId(webhook.id);
     }
@@ -242,7 +252,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     setShowServiceDropdown(false);
   };
 
-  const saveWebhook = () => {
+  const saveWebhook = async () => {
+    if (saving()) return;
     const data = formData();
     if (!data.name || !data.url) return;
 
@@ -250,38 +261,49 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     const customFields = buildMapFromInputs(customFieldInputs());
     const normalizedCustomFields = normalizeAlertWebhookCustomFields(data.service, customFields);
 
-    if (editingId()) {
-      props.onUpdate({
-        ...data,
-        id: editingId()!,
-        headers,
-        service: data.service,
-        template: data.payloadTemplate,
-        customFields: normalizedCustomFields,
-        mention: data.mention,
-      });
-      resetForm();
-      return;
+    setSaving(true);
+    setSaveError(null);
+    // The owner updates inventory only after an acknowledged API write. Do
+    // not discard this draft (including masked saved fields) on an unconfirmed
+    // result, and never retry a potentially accepted create automatically.
+    const failureMessage =
+      'Could not confirm the save. Your changes are still here. Check the configured destinations in another tab before trying again.';
+    try {
+      const accepted = editingId()
+        ? await props.onUpdate({
+            ...data,
+            id: editingId()!,
+            headers,
+            service: data.service,
+            template: data.payloadTemplate,
+            customFields: normalizedCustomFields,
+            mention: data.mention,
+          })
+        : await props.onAdd({
+            name: data.name,
+            url: data.url,
+            method: data.method,
+            headers,
+            enabled: data.enabled,
+            service: data.service,
+            template: data.payloadTemplate,
+            customFields: normalizedCustomFields,
+            mention: data.mention,
+            tagFilter: data.tagFilter ?? [],
+            tagFilterMode: data.tagFilterMode === 'any' ? 'any' : 'all',
+            minimumSeverity:
+              data.minimumSeverity === 'critical' || data.minimumSeverity === 'warning'
+                ? data.minimumSeverity
+                : 'all',
+          });
+      if (accepted === true) resetForm();
+      else setSaveError(failureMessage);
+    } catch {
+      // Callback/provider text can contain submitted destination details.
+      setSaveError(failureMessage);
+    } finally {
+      setSaving(false);
     }
-
-    props.onAdd({
-      name: data.name,
-      url: data.url,
-      method: data.method,
-      headers,
-      enabled: data.enabled,
-      service: data.service,
-      template: data.payloadTemplate,
-      customFields: normalizedCustomFields,
-      mention: data.mention,
-      tagFilter: data.tagFilter ?? [],
-      tagFilterMode: data.tagFilterMode === 'any' ? 'any' : 'all',
-      minimumSeverity:
-        data.minimumSeverity === 'critical' || data.minimumSeverity === 'warning'
-          ? data.minimumSeverity
-          : 'all',
-    });
-    resetForm();
   };
 
   const testWebhookForm = () => {
@@ -336,6 +358,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
 
   return {
     adding,
+    saving,
+    saveError,
     editingId,
     formData,
     templates,
