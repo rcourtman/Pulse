@@ -1500,6 +1500,254 @@ func TestExecuteRefusesRetiredResourceWithoutDispatch(t *testing.T) {
 	}
 }
 
+// admissionOrderStore stamps the moment the audit store commits an execution
+// admission, so a test can order it against a concurrent policy save.
+type admissionOrderStore struct {
+	unified.ResourceStore
+	seq       *atomic.Int64
+	admission atomic.Int64
+}
+
+func (s *admissionOrderStore) RecordActionExecutionAdmission(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent, attempt unified.ActionDispatchAttempt) error {
+	err := s.ResourceStore.RecordActionExecutionAdmission(record, event, attempt)
+	if err == nil {
+		s.admission.Store(s.seq.Add(1))
+	}
+	return err
+}
+
+// windowExecutor runs one hook inside the readiness phase: after the operator
+// lock was read, before admission is committed.
+type windowExecutor struct {
+	*stubExecutor
+	window func()
+}
+
+func (e *windowExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+	if window := e.window; window != nil {
+		e.window = nil
+		window()
+	}
+	return e.stubExecutor.CheckActionAvailable(ctx, req, resource)
+}
+
+// dispatchHookExecutor runs one hook once the dispatch is durably admitted,
+// immediately before the executor would act.
+type dispatchHookExecutor struct {
+	*stubExecutor
+	onDispatch func()
+}
+
+func (e *dispatchHookExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	if hook := e.onDispatch; hook != nil {
+		e.onDispatch = nil
+		hook()
+	}
+	return e.stubExecutor.ExecuteAction(ctx, record)
+}
+
+func approveForExecution(t *testing.T, service *Service, actionID string) {
+	t.Helper()
+	if _, err := service.Decide(context.Background(), "default", actionID, testActionDecision(t, service, "default", actionID, unified.ActionApprovalRecord{
+		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
+	})); err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+}
+
+func saveRemediationLock(store unified.ResourceStore) error {
+	return store.SetResourceOperatorState(unified.ResourceOperatorState{CanonicalID: "vm:42", NeverAutoRemediate: true})
+}
+
+// A lock saved while a human-approved action is between its readiness check and
+// its admission commit must not be missed: the save either lands before the
+// readiness check (the dispatch is refused) or queues behind the admission (the
+// dispatch is already committed). What it may never do is acknowledge to the
+// operator before the admission commits and still let the dispatch through.
+func runExecuteAdmissionLinearizesWithOperatorLockSave(t *testing.T, newStore func(t *testing.T) unified.ResourceStore) {
+	now := time.Now().UTC()
+	var seq atomic.Int64
+	store := &admissionOrderStore{ResourceStore: newStore(t), seq: &seq}
+	executor := &windowExecutor{stubExecutor: &stubExecutor{result: &unified.ExecutionResult{Success: true, Output: "restarted"}}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+
+	// Both actions are approved up front: once the lock is saved, Decide itself
+	// refuses to record an approval for the locked resource.
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	approveForExecution(t, service, plan.ActionID)
+	second, err := service.Plan(context.Background(), "default", unified.ActionRequest{
+		RequestID: "req-2", ResourceID: "vm:42", CapabilityName: "restart",
+		Params: map[string]any{"mode": "graceful"}, Reason: "Second restart", RequestedBy: "agent:test",
+	}, testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("second Plan: %v", err)
+	}
+	approveForExecution(t, service, second.ActionID)
+
+	var ackSeq atomic.Int64
+	acked := make(chan struct{})
+	entered := make(chan struct{})
+	saveErr := make(chan error, 1)
+	executor.window = func() {
+		// Deterministic half: a policy writer must be excluded while Execute sits
+		// between the lock read and the admission commit.
+		coordinator := service.admissionCoordinator()
+		if coordinator.mu.TryLock() {
+			coordinator.mu.Unlock()
+			t.Error("a policy writer could enter between the readiness check and the admission commit: Execute is not holding the admission coordinator")
+		}
+		// Concurrent half: a real writer gets its chance to finish inside the
+		// window. A lifecycle holding the coordinator keeps it queued, so the
+		// bounded wait only elapses on the correct path.
+		go func() {
+			err := service.WithPolicyMutation(func() error {
+				close(entered)
+				return saveRemediationLock(store)
+			})
+			ackSeq.Store(seq.Add(1))
+			saveErr <- err
+			close(acked)
+		}()
+		select {
+		case <-acked:
+		case <-entered:
+			waitFor(t, acked, "lock save to acknowledge")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	completed, execErr := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator@example.com", "default"), "approved restart")
+	waitFor(t, acked, "lock save to acknowledge after Execute")
+	if err := <-saveErr; err != nil {
+		t.Fatalf("lock save: %v", err)
+	}
+
+	if executor.calls > 0 && ackSeq.Load() < store.admission.Load() {
+		t.Fatalf("operator lock save was acknowledged (seq %d) before the dispatch was admitted (seq %d), yet the action still reached the executor (calls=%d, state=%q, err=%v)",
+			ackSeq.Load(), store.admission.Load(), executor.calls, completed.State, execErr)
+	}
+	if execErr != nil || completed.State != unified.ActionStateCompleted || executor.calls != 1 {
+		t.Fatalf("admitted dispatch must complete once the save queues behind it: state=%q calls=%d err=%v", completed.State, executor.calls, execErr)
+	}
+
+	// The queued save is durable and refuses every later dispatch, including an
+	// action that was approved before the lock existed.
+	refused, err := service.Execute(context.Background(), "default", second.ActionID, testActionActor("operator@example.com", "default"), "")
+	if !errors.Is(err, unified.ErrResourceRemediationLocked) || refused.State != unified.ActionStateFailed || executor.calls != 1 {
+		t.Fatalf("later dispatch after the lock save: state=%q calls=%d err=%v, want refused with ErrResourceRemediationLocked", refused.State, executor.calls, err)
+	}
+}
+
+func waitFor(t *testing.T, done <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+	}
+}
+
+func TestExecuteAdmissionLinearizesWithOperatorLockSaveMemoryStore(t *testing.T) {
+	runExecuteAdmissionLinearizesWithOperatorLockSave(t, func(*testing.T) unified.ResourceStore { return unified.NewMemoryStore() })
+}
+
+func TestExecuteAdmissionLinearizesWithOperatorLockSaveSQLite(t *testing.T) {
+	runExecuteAdmissionLinearizesWithOperatorLockSave(t, func(t *testing.T) unified.ResourceStore {
+		store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = store.Close() })
+		return store
+	})
+}
+
+// Admission is the linearization point: a lock saved after the dispatch is
+// durably admitted never recalls it, and the save must not wait for the
+// dispatch, so Execute may not hold the admission coordinator across the
+// executor call.
+func TestExecuteAdmittedDispatchIsNotRecalledByLaterOperatorLock(t *testing.T) {
+	now := time.Now().UTC()
+	store := unified.NewMemoryStore()
+	executor := &dispatchHookExecutor{stubExecutor: &stubExecutor{result: &unified.ExecutionResult{Success: true, Output: "restarted"}}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	approveForExecution(t, service, plan.ActionID)
+
+	saved := make(chan error, 1)
+	executor.onDispatch = func() {
+		go func() {
+			saved <- service.WithPolicyMutation(func() error { return saveRemediationLock(store) })
+		}()
+		select {
+		case err := <-saved:
+			if err != nil {
+				t.Errorf("lock save during dispatch: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("lock save blocked behind an admitted dispatch: Execute must release the admission coordinator before calling the executor")
+		}
+	}
+
+	completed, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator@example.com", "default"), "approved restart")
+	if err != nil || completed.State != unified.ActionStateCompleted || executor.calls != 1 {
+		t.Fatalf("admitted dispatch: state=%q calls=%d err=%v, want completed exactly once", completed.State, executor.calls, err)
+	}
+	if state, found, getErr := store.GetResourceOperatorState("vm:42"); getErr != nil || !found || !state.BlocksRemediation() {
+		t.Fatalf("lock save during dispatch must persist: found=%v state=%#v err=%v", found, state, getErr)
+	}
+}
+
+// The no-recall boundary also covers an attempt that was admitted but never
+// sent (a crash between admission and send): restart recovery drives the
+// committed authority and does not re-read the operator lock. Recalling known
+// unsent work would need an atomic pre-send terminalization the stores do not
+// have, so this pins the contract instead of leaving it implicit.
+func TestRecoverExecutingActionsDoesNotRecallQueuedAttemptAfterOperatorLock(t *testing.T) {
+	now := time.Now().UTC()
+	store := unified.NewMemoryStore()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true, Output: "restarted"}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalNone), executor)
+
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	record, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
+	}
+	started, event, err := unified.BeginActionExecution(record, "operator", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := unified.NewActionDispatchAttempt(started.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordActionExecutionAdmission(started, event, attempt); err != nil {
+		t.Fatal(err)
+	}
+	if queued, ok, getErr := store.GetActionDispatchAttempt(started.ID); getErr != nil || !ok || queued.State != unified.ActionDispatchQueued {
+		t.Fatalf("setup attempt = %#v found=%v err=%v, want queued", queued, ok, getErr)
+	}
+
+	if err := service.WithPolicyMutation(func() error { return saveRemediationLock(store) }); err != nil {
+		t.Fatalf("lock save: %v", err)
+	}
+	recovered, err := service.RecoverExecutingActions(context.Background(), "default", "system:recovery", 10)
+	if err != nil || len(recovered) != 1 || recovered[0].State != unified.ActionStateCompleted || executor.calls != 1 {
+		t.Fatalf("recovered=%#v calls=%d err=%v, want the admitted attempt dispatched once", recovered, executor.calls, err)
+	}
+}
+
 func TestExecuteRefusesDriftedPlan(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
