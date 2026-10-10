@@ -579,10 +579,25 @@ perform_update() {
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
            "PULSE_CONFIG_DIR=$CONFIG_DIR" \
-           bash "$installer_tmp" "${installer_args[@]}" 2>&1 | \
-       while IFS= read -r line; do
-           log info "installer: $line"
-       done; then
+           bash "$installer_tmp" "${installer_args[@]}" 2>&1 | (
+           collector_status=0
+           line=""
+           # Drain even after a failed log write: closing this pipe early can
+           # interrupt an installer that is still replacing files. Retain the
+           # first failure, not just the last successful write, and include a
+           # final line without a newline in the completion evidence.
+           while IFS= read -r line || [[ -n "$line" ]]; do
+               if log info "installer: $line"; then
+                   :
+               else
+                   log_status=$?
+                   if [[ "$collector_status" == 0 ]]; then
+                       collector_status=$log_status
+                   fi
+               fi
+           done
+           exit "$collector_status"
+       ); then
         # Capture both observed exits before any command overwrites PIPESTATUS.
         # Completion of this pipeline still requires binary/service verification.
         installer_pipeline_status=("${PIPESTATUS[@]}")

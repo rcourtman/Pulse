@@ -400,6 +400,7 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, http.StatusNotFound, "not_found", "Organization not found", nil)
 			return
 		}
+		log.Error().Err(err).Str("org_id", orgID).Msg("Failed to delete organization persistence")
 		writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", "Failed to delete organization", nil)
 		return
 	}

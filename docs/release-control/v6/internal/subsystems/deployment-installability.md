@@ -85,11 +85,17 @@ published installer trust, #2785's stop cause or installed acceptance.
 
 The helper records the installer and log collector's separate observed exit
 statuses immediately after their pipeline, before logging or recovery can
-overwrite them. A failed collector does not establish installer failure;
-zero exits establish pipeline completion only, not version, service or update
-acceptance. The existing signed transaction and confined service-state tests
-cover installer-only, collector-only, simultaneous and successful exits with
-unchanged prior-activity, mask, backup and restoration safeguards. These facts
+overwrite them. The collector drains installer output even after a log-write
+failure, retains the first failure across later successful writes, and includes
+a final line without a newline. It must not close the installer pipe early or
+admit an update because a later write hid missing diagnostic evidence.
+A failed collector does not establish installer failure; zero exits establish
+pipeline completion only, not version, service or update acceptance.
+The existing signed transaction and confined service-state tests
+cover installer-only, collector-only, simultaneous and successful exits,
+early-write failures followed by success, complete pipe draining and
+unterminated final evidence with unchanged prior-activity, mask, backup and
+restoration safeguards. These facts
 cannot reconstruct exits or signals from an earlier interrupted attempt, or
 identify who stopped a host.
 

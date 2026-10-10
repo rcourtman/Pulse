@@ -2265,6 +2265,23 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	})
 	defer leaveMockModeSwitches()
 
+	// Tenant deletion waits for Start to return before closing stores and
+	// removing the data directory. Alert passes must belong to that same
+	// lifetime: detached mock checks can otherwise keep writing alert files
+	// after the monitoring loop has reported completion.
+	var alertChecks sync.WaitGroup
+	defer alertChecks.Wait()
+	startAlertCheck := func(check func()) {
+		if ctx.Err() != nil {
+			return
+		}
+		alertChecks.Go(func() {
+			if ctx.Err() == nil {
+				check()
+			}
+		})
+	}
+
 	// Set up alert callbacks. Projection replay is deliberately absent here:
 	// the canonical resource store is not attached yet, so a replay now could
 	// not advance the durable watermark and would walk the same events again
@@ -2320,11 +2337,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	if mock.IsMockEnabled() {
 		if keepRealPolling {
 			log.Info().Msg("mock mode enabled - running mock alerts and real metric polling")
-			go m.checkMockAlerts()
+			startAlertCheck(m.checkMockAlerts)
 			go m.poll(ctx, wsHub)
 		} else {
 			log.Info().Msg("mock mode enabled - skipping real node polling")
-			go m.checkMockAlerts()
+			startAlertCheck(m.checkMockAlerts)
 		}
 	} else {
 		go m.poll(ctx, wsHub)
@@ -2354,7 +2371,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.evaluateNotificationDelivery(now)
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
-				go m.checkMockAlerts()
+				startAlertCheck(m.checkMockAlerts)
 				if keepRealPolling {
 					// Keep real metrics flowing while mock UI mode is active.
 					go m.poll(ctx, wsHub)
@@ -2367,7 +2384,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			// ledger, which lives behind the api layer. We invoke the
 			// registered lister here so a wedged PVE/PBS/PMG/VMware/TrueNAS
 			// connection escalates into the top-nav alert stream.
-			go m.checkConnectionAlerts()
+			startAlertCheck(m.checkConnectionAlerts)
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
