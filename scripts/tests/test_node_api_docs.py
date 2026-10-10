@@ -20,7 +20,9 @@ import test_api_auth_docs as auth
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/API.md"
-PLATFORM_SECRET = "synthetic-platform-token-secret"
+# A fixed, non-credential marker proves body transport and output redaction.
+# Never substitute an account token, environment value or generated credential.
+PLATFORM_FIXTURE_MARKER = "node-api-doc-fixture-7cd40730"
 
 
 def section() -> str:
@@ -130,7 +132,7 @@ class NodeAPIDocsTest(unittest.TestCase):
 
     def test_copied_file_dispatch_is_private_bounded_and_never_retried(self):
         payload = sample()
-        payload["tokenValue"] = PLATFORM_SECRET
+        payload["tokenValue"] = PLATFORM_FIXTURE_MARKER
         # Independent operation expectation: the fixture must not accept a
         # different route, method, credential or body just because it was copied.
         self.assertEqual(request().strip(), 'pulse_api POST /api/config/nodes < "$node_request_file"')
@@ -138,9 +140,14 @@ class NodeAPIDocsTest(unittest.TestCase):
                                 (302, False), (500, False), (200, True)):
             with self.subTest(status=status, partial=partial), tempfile.TemporaryDirectory() as tmp:
                 home = Path(tmp)
-                body = home / "node.json"
-                body.write_text(json.dumps(payload))
-                body.chmod(0o600)
+                # mkstemp creates a unique mode-0600 file before any body is
+                # written, independent of the process umask. Do not repair
+                # initially public permissions after writing the fixture.
+                fd, name = tempfile.mkstemp(prefix="node-", suffix=".json", dir=home)
+                body = Path(name)
+                with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                    self.assertEqual(stat.S_IMODE(os.fstat(stream.fileno()).st_mode), 0o600)
+                    stream.write(json.dumps(payload))
                 script = f'node_request_file={json.dumps(str(body))}\n' + auth.request_helper() + "\n" + request()
                 with auth.private_recording_server(status, partial) as (port, calls):
                     result = auth.exercise_curl(self, home, "X-API-Token: " + auth.TEST_TOKEN,
@@ -153,8 +160,8 @@ class NodeAPIDocsTest(unittest.TestCase):
                 self.assertEqual(json.loads(data), payload)
                 self.assertEqual(body.read_text(), json.dumps(payload))
                 argv = (home / "argv.json").read_text()
-                self.assertNotIn(PLATFORM_SECRET, argv)
-                self.assertNotIn(PLATFORM_SECRET.encode(), result.stdout + result.stderr)
+                self.assertNotIn(PLATFORM_FIXTURE_MARKER, argv)
+                self.assertNotIn(PLATFORM_FIXTURE_MARKER.encode(), result.stdout + result.stderr)
                 self.assertEqual(result.returncode == 0, status == 201 and not partial)
 
     def test_missing_request_file_sends_nothing(self):
