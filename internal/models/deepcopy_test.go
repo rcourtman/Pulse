@@ -515,21 +515,24 @@ func TestCloneHostXCPNGInventoryIsolation(t *testing.T) {
 	}
 }
 
-// AgentSMARTReported is internal poll evidence: a state snapshot copy keeps it
-// for the alert check, and it never reaches an API or websocket payload.
+// AgentSMARTReported and AgentSMARTSplit are internal poll evidence: a state
+// snapshot copy keeps them for the alert check and the poll's evidence
+// retention, and neither reaches an API or websocket payload.
 func TestPhysicalDiskAgentSMARTReportedStaysInternal(t *testing.T) {
-	disk := PhysicalDisk{ID: "lab-pve1-sda", DevPath: "/dev/sda", AgentSMARTReported: true}
-	if clone := clonePhysicalDisk(disk); !clone.AgentSMARTReported {
-		t.Fatalf("clone dropped AgentSMARTReported")
+	disk := PhysicalDisk{ID: "lab-pve1-sda", DevPath: "/dev/sda", AgentSMARTReported: true, AgentSMARTSplit: true}
+	if clone := clonePhysicalDisk(disk); !clone.AgentSMARTReported || !clone.AgentSMARTSplit {
+		t.Fatalf("clone dropped AgentSMARTReported/AgentSMARTSplit: %+v", clone)
 	}
-	if clones := clonePhysicalDisks([]PhysicalDisk{disk}); !clones[0].AgentSMARTReported {
-		t.Fatalf("slice clone dropped AgentSMARTReported")
+	if clones := clonePhysicalDisks([]PhysicalDisk{disk}); !clones[0].AgentSMARTReported || !clones[0].AgentSMARTSplit {
+		t.Fatalf("slice clone dropped AgentSMARTReported/AgentSMARTSplit: %+v", clones[0])
 	}
 	payload, err := json.Marshal(disk)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.ToLower(string(payload)), "agentsmartreported") {
-		t.Fatalf("AgentSMARTReported leaked into JSON: %s", payload)
+	for _, field := range []string{"agentsmartreported", "agentsmartsplit"} {
+		if strings.Contains(strings.ToLower(string(payload)), field) {
+			t.Fatalf("%s leaked into JSON: %s", field, payload)
+		}
 	}
 }

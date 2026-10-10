@@ -911,7 +911,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			nodes := nodesForInstanceFromReadState(readState, instanceName)
 			hosts := hostsFromReadState(readState)
 			updated := mergeNVMeTempsIntoDisks(existing, nodes)
-			updated = mergeHostAgentSMARTIntoDisks(updated, nodes, hosts)
+			updated = mergeHostAgentSMARTIntoDisks(updated, nodes, hosts, m.proxmoxDiskAgentSplits())
 			m.state.UpdatePhysicalDisks(instanceName, updated)
 		}
 		return
@@ -950,6 +950,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		nodesFromState := nodesForInstanceFromReadState(readState, inst)
 		hosts := hostsFromReadState(readState)
 		existingDisks := physicalDisksForInstanceFromReadState(readState, inst)
+		splits := m.proxmoxDiskAgentSplits()
 		existingDisksMap := make(map[string]models.PhysicalDisk, len(existingDisks))
 		for _, disk := range existingDisks {
 			if disk.Instance == inst {
@@ -976,12 +977,14 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		// Proxmox disk query fails can still populate its physical disks from
 		// the agent's smartctl view (#1516).
 		smartByNode := make(map[string][]models.HostDiskSMART)
+		linkedHostByNode := make(map[string]models.Host)
 		for _, n := range nodesFromState {
 			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
 			linkedNodes[n.Name] = true
 			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok {
+				linkedHostByNode[n.Name] = linkedHost
 				if len(linkedHost.DiskExclude) > 0 {
 					diskExcludeByNode[n.Name] = linkedHost.DiskExclude
 				}
@@ -1044,7 +1047,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				// exceed the API window PVE itself allows for disks/list, so
 				// without this fallback their Physical Disks view empties
 				// permanently (#1516).
-				if fallback := physicalDisksFromHostAgentSMART(inst, node.Node, smartByNode[node.Node]); len(fallback) > 0 {
+				if fallback := unsplitPhysicalDisksFromHostAgentSMART(inst, node.Node, linkedHostByNode[node.Node], smartByNode[node.Node], splits); len(fallback) > 0 {
 					polledNodes[node.Node] = true
 					allDisks = append(allDisks, fallback...)
 					log.Info().
@@ -1145,8 +1148,14 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		}
 
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
-		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
+		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts, splits)
 		for index := range allDisks {
+			// A split disk's earlier record held the agent's readings and
+			// identity until the split; retained, they would never leave it,
+			// and nothing records which retained value Proxmox collected.
+			if allDisks[index].AgentSMARTSplit {
+				continue
+			}
 			if previous, ok := previousPhysicalDiskEvidence(allDisks[index], existingDisks); ok {
 				allDisks[index] = preserveUnavailablePhysicalDiskEvidence(allDisks[index], previous)
 			}
@@ -1285,6 +1294,28 @@ func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []model
 			SmartAttributes: smartAttributesCopy(smart.Attributes),
 			LastChecked:     now,
 		})
+	}
+	return disks
+}
+
+// unsplitPhysicalDisksFromHostAgentSMART is physicalDisksFromHostAgentSMART
+// without the rows the operator split from the Proxmox disk in their slot.
+// Such a row describes the agent's disk, not the slot's, and standing in for
+// it would copy the agent's disk, readings and temperature alert included,
+// into a second row that the PVE disk check alerts on as well. The stand-in
+// is judged under its own ID, the key the registry holds it by once it is
+// recorded.
+func unsplitPhysicalDisksFromHostAgentSMART(inst, nodeName string, host models.Host, smartEntries []models.HostDiskSMART, splits diskAgentSplitStore) []models.PhysicalDisk {
+	if splits == nil {
+		return physicalDisksFromHostAgentSMART(inst, nodeName, smartEntries)
+	}
+	var disks []models.PhysicalDisk
+	for _, smart := range smartEntries {
+		for _, disk := range physicalDisksFromHostAgentSMART(inst, nodeName, []models.HostDiskSMART{smart}) {
+			if !splits.ProxmoxDiskAgentSMARTSplit(disk, host, smart) {
+				disks = append(disks, disk)
+			}
+		}
 	}
 	return disks
 }
