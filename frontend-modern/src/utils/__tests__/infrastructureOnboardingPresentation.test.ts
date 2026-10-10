@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   getInfrastructureAgentHostProfileSupportText,
-  getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureApiProductsByGovernanceState,
   getInfrastructureAutoDetectLabels,
   getInfrastructureEmptyStateDetail,
@@ -238,13 +237,6 @@ describe('infrastructureOnboardingPresentation', () => {
       routeStep: 'kubernetes',
       connectionType: 'agent',
       label: 'Kubernetes',
-    });
-  });
-
-  it('owns the source-manager coverage-complete copy outside the component', () => {
-    expect(getInfrastructureCoverageCompleteActionPresentation()).toEqual({
-      label: 'Coverage coherent',
-      detail: 'Coverage looks coherent for the connected systems.',
     });
   });
 });
