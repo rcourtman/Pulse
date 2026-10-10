@@ -27073,3 +27073,32 @@ func TestContract_PMGFalseScopeIsExplicitOnWire(t *testing.T) {
 		}
 	}
 }
+
+func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
+	for _, entitled := range []bool{false, true} {
+		tmp := t.TempDir()
+		persistence := config.NewConfigPersistence(tmp)
+		cfg := config.NewDefaultAIConfig()
+		cfg.ControlLevel = config.ControlLevelAutonomous
+		if err := persistence.SaveAIConfig(*cfg); err != nil {
+			t.Fatal(err)
+		}
+		handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+		handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: entitled})
+		rec := httptest.NewRecorder()
+		handler.HandleGetAISettings(rec, newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if string(payload["control_level"]) != `"controlled"` {
+			t.Fatalf("interactive control_level %s", payload["control_level"])
+		}
+		if string(payload["protected_guests"]) != "[]" {
+			t.Fatalf("protected_guests must remain an explicit array: %s", payload["protected_guests"])
+		}
+	}
+}

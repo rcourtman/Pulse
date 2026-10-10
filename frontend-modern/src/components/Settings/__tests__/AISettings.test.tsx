@@ -244,14 +244,14 @@ describe('AISettings model loading error states', () => {
 
     expect(await screen.findByText('Assistant chat actions')).toBeInTheDocument();
     expect(
-      screen.getByText('This controls actions started from Assistant chat only', { exact: false }),
+      screen.getByText('This sets what Assistant chat may plan', { exact: false }),
     ).toBeInTheDocument();
     const chatActionMode = screen.getByLabelText('Chat action mode');
     expect(chatActionMode).toBeInTheDocument();
     expect(chatActionMode).toHaveClass('w-full', 'min-w-0', 'sm:flex-1');
     expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
     expect(
-      screen.getByText('Assistant asks before chat-only actions.', { exact: false }),
+      screen.getByText('Assistant can plan infrastructure actions', { exact: false }),
     ).toHaveClass('sm:ml-30');
     expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
@@ -883,7 +883,7 @@ describe('AISettings model loading error states', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
+  it('presents an existing autonomous preference as Ask first even without upgrade prompts', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     getSettingsMock.mockResolvedValue({
@@ -897,8 +897,84 @@ describe('AISettings model loading error states', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole('option', { name: /Allow chat-only actions/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Chat action mode')).toHaveValue('controlled');
     expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
+  });
+});
+
+describe('Assistant saved-control compatibility', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each(['autonomous', 'suggest', 'controlled', 'read_only', 'unknown'])(
+    'does not rewrite the saved %s preference on an unrelated save',
+    async (level) => {
+      const saved = {
+        ...baseSettings(),
+        control_level: level,
+        protected_guests: ['vm-101'],
+        patrol_autonomy_level: 'full',
+      };
+      getSettingsMock.mockResolvedValue(saved);
+      updateSettingsMock.mockResolvedValue(saved);
+      renderComponent('assistant');
+      const mode = await screen.findByLabelText('Chat action mode');
+      await waitFor(() =>
+        expect(mode).toHaveValue(
+          ['autonomous', 'suggest', 'controlled'].includes(level) ? 'controlled' : 'read_only',
+        ),
+      );
+      expect(within(mode).getAllByRole('option')).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+      await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('control_level');
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
+    },
+  );
+
+  it('explains the legacy protected list does not exclude canonical action plans', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      control_level: 'autonomous',
+      protected_guests: ['101', 'prod-db'],
+    });
+    renderComponent('assistant');
+    const legacy = await screen.findByLabelText('Protected guests (legacy)');
+    await waitFor(() => expect(legacy).toHaveValue('101, prod-db'));
+    expect(legacy).toHaveAccessibleDescription(
+      'Retained legacy VMIDs or names. This list does not exclude saved action plans. Review each plan’s target and approval policy in Actions.',
+    );
+    expect(screen.queryByText(/excluded from Assistant action planning/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+  });
+
+  it('explicitly opts out of legacy action planning without changing Patrol', async () => {
+    const saved = { ...baseSettings(), control_level: 'autonomous', protected_guests: ['vm-101'] };
+    getSettingsMock.mockResolvedValue(saved);
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...saved,
+      ...payload,
+    }));
+    renderComponent('assistant');
+    const mode = await screen.findByLabelText('Chat action mode');
+    await waitFor(() => expect(mode).toHaveValue('controlled'));
+    fireEvent.change(mode, { target: { value: 'read_only' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+    expect(updateSettingsMock.mock.calls[0][0]).toHaveProperty('control_level', 'read_only');
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
   });
 });
 

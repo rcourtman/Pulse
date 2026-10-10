@@ -1409,3 +1409,42 @@ func TestInvestigationRunRequiresIdentityBeforeStarting(t *testing.T) {
 		t.Fatalf("expected identity precondition error, got %v", err)
 	}
 }
+
+func TestAssistantRuntimeProjectsLegacyLevelAfterResolver(t *testing.T) {
+	for _, saved := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous, "unknown"} {
+		for _, resolved := range []string{"", config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous} {
+			t.Run(saved+"/resolver-"+resolved, func(t *testing.T) {
+				cfg := &config.AIConfig{ControlLevel: saved, ProtectedGuests: []string{"vm-101"}}
+				var resolver func(*config.AIConfig) string
+				if resolved != "" {
+					resolver = func(*config.AIConfig) string { return resolved }
+				}
+				service := NewService(Config{AIConfig: cfg, ControlLevelResolver: resolver})
+				selected := saved
+				if resolved != "" {
+					selected = resolved
+				}
+				want := tools.ControlLevelReadOnly
+				if selected == config.ControlLevelControlled || selected == config.ControlLevelAutonomous {
+					want = tools.ControlLevelControlled
+				}
+				if got := service.effectiveControlLevelLocked(); got != want {
+					t.Fatalf("interactive resolved level %s; want %s", got, want)
+				}
+				if cfg.ControlLevel != saved {
+					t.Fatal("runtime projection rewrote saved config")
+				}
+				if service.isAutonomousModeEnabled() {
+					t.Fatal("saved Assistant preference removed interactive question tools")
+				}
+				// A request flag may tighten but never widen the projected level.
+				for _, flag := range []*bool{nil, boolPtrProjection(false), boolPtrProjection(true)} {
+					if got := controlLevelForRequestAutonomousMode(service.effectiveControlLevelLocked(), flag); got != want {
+						t.Fatalf("request flag widened level: %s", got)
+					}
+				}
+			})
+		}
+	}
+}
+func boolPtrProjection(v bool) *bool { return &v }

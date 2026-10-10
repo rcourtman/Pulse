@@ -95,31 +95,37 @@ Without the `ai_autofix` capability, the effective Patrol mode is clamped to `mo
 
 ## Assistant Control Levels
 
-Control levels govern what the interactive Pulse Assistant can do during chat sessions.
+Control levels govern interactive Assistant queries and action planning, not
+Patrol's autonomy or permission to execute infrastructure work.
 
-| Level | Key | Query | Execute Commands | Plan |
-|-------|-----|:-----:|:----------------:|------|
+| Mode | Key | Query | Plan infrastructure actions | Availability |
+|------|-----|:-----:|:---------------------------:|--------------|
 | **Read-only** | `read_only` | Yes | No | Community |
-| **Controlled** | `controlled` | Yes | With approval | Community |
-| **Autonomous** | `autonomous` | Yes | Yes | Pro / legacy Pro+ / Cloud |
+| **Ask first** | `controlled` | Yes | For operator review in **Actions** | Community |
 
-- **Read-only** (default): The assistant can query metrics, storage, and resource status but cannot execute any control actions.
-- **Controlled**: The assistant can propose commands but pauses for your explicit approval before execution. Each command shows a detailed approval card in the chat UI.
-- **Autonomous**: The assistant executes commands without prompting. Requires a Pro, legacy Pro+, or Cloud license.
+Assistant chat does not execute the plans it saves. A legacy saved `autonomous`
+preference displays as **Ask first** and keeps its stored value and existing
+entitlement checks for older clients. It does not bypass approval. An unrelated
+settings save does not rewrite that preference. Unknown values fail closed to
+read-only. Patrol mode and Autopilot acknowledgements remain separate.
+
+**Protected guests (legacy)** retains older VMIDs or names. This list does not
+exclude saved action plans. Review each plan’s target and approval policy in
+**Actions** instead of treating this list as an execution safeguard.
 
 ### Configuration
 
-**UI:** Settings → Pulse Intelligence → Assistant → Chat command mode
+**UI:** Settings → Pulse Intelligence → Assistant → Chat action mode
 
-**API:** This intentionally changes chat command access. Use the same private
+**API:** This intentionally changes Assistant action planning access. Use the same private
 administrator header file with `settings:write`; the token must also have
 permission to change settings. Prefer the UI for one-off changes, and verify
-the saved **Chat command mode** there afterwards. Do not use a write as an
+the saved **Chat action mode** there afterwards. Do not use a write as an
 authentication test.
 
 Use the same `pulse_api` helper defined above, with its private response file
 and request limits. Supporting PUT in the helper grants no additional access.
-If the response is lost, check the saved **Chat command mode** in the UI before
+If the response is lost, check the saved **Chat action mode** in the UI before
 deciding whether another change is needed; do not repeat the write blindly.
 
 ```bash
@@ -128,17 +134,16 @@ pulse_api PUT /api/settings/ai/update <<'JSON'
 JSON
 ```
 
-### Approval Flow (Controlled Mode)
+### Reviewing plans (Ask first)
 
-When control level is `controlled`, write operations follow this flow:
-
-1. The assistant proposes a command (e.g., `qm start 100`).
-2. An `APPROVAL_REQUIRED` response is emitted with an `approval_id`.
-3. The UI displays an approval card showing the exact command.
-4. You click **Approve** or **Deny**.
-5. On approval, the command executes and the assistant verifies the result.
-
-Approvals expire after 5 minutes if not acted upon.
+1. Assistant requests a typed action for an explicitly identified resource with
+   the advertised capability.
+2. Pulse saves the canonical plan in **Actions** without requesting execution.
+3. Review the target, operation, approval policy and expiry in **Actions**.
+4. Use the existing authorised approval and run controls; Chat action mode grants
+   no additional access or automatic approval.
+5. Read the recorded execution and independent verification outcome before
+   concluding that the operation worked. Do not repeat an uncertain operation.
 
 ---
 

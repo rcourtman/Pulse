@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_CHAT_ASSISTANT_MESSAGE_LABEL,
-  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_CONTEXT_USED_LABEL,
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
@@ -49,7 +48,6 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
-  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   AI_CHAT_UNDO_LAST_TURN_EMPTY_MESSAGE,
   AI_CHAT_UNDO_LAST_TURN_ERROR_MESSAGE,
   AI_CHAT_UNDO_LAST_TURN_LABEL,
@@ -94,11 +92,9 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Ask Pulse Assistant about this view');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
-    expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss chat actions warning');
     expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
     expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant chat action mode');
     expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant chat action options');
-    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant chat actions to Ask first');
     expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_BUTTON_LABEL).toBe('Open Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_CLOSE_LABEL).toBe('Close Assistant commands');
