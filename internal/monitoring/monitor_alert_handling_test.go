@@ -1071,6 +1071,7 @@ func TestMonitor_HandleAlertResolved_SuppressesRecoveryWhenFiringNeverDelivered(
 	notifMgr.SetGroupingWindow(120)
 
 	alertMgr := alerts.NewManager()
+	t.Cleanup(alertMgr.Stop)
 	cfg := alertMgr.GetConfig()
 	cfg.Enabled = true
 	cfg.ActivationState = alerts.ActivationActive
