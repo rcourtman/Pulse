@@ -3096,6 +3096,10 @@ anomaly badge. Last-known and unknown observations keep their percentage,
 composition, balloon and swap geometry for inspection, in a neutral tone;
 their composition tooltip carries the original source/time caveat. A current
 linked-agent memory observation remains current while QEMU disk reads defer.
+A current cache-inclusive Proxmox reading still reaches the row presentation,
+so the VM row can say `May include cache`; rows whose reading is current and
+cache-aware keep returning no presentation without formatting a date or source
+label (`memoryObservation.test.ts` pins both paths).
 Tooltip headings, numeric values and neutral labels use theme-aware text so
 the source caveat and composition remain readable on both light and dark surfaces.
 An unavailable reading, including the shared bar's explicit unavailable input,

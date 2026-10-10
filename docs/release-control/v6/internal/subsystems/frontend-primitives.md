@@ -188,10 +188,21 @@ Unavailable numeric carriers remain N/A while recorded History stays intact.
 An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
+A current reading from a cache-inclusive Proxmox source (`status-mem`,
+`status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same set
+the backend marks `MayIncludeCache`) keeps its numbers, colour and thresholds;
+the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
+percentage alone does not show memory pressure and which fix can supply the
+guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
+layouts); a container, whose Proxmox reading is always the cgroup value, keeps
+the caveat in the bar tooltip and drawer instead of a label on every row. A
+retained or freshness-unknown reading keeps its own freshness label with the
+caveat in its explanation, an unavailable reading is never qualified, and the
+drawer states the note as visible text in `About this reading`.
 
-`GuestRow.test.tsx`, `MetricMiniSparkline.test.tsx` and
-`memoryObservation.test.ts` pin these boundaries, with existing drawer, adapter
-and History suites. `browser-tests/guest-row-memory-provenance.cjs` checks real
+`GuestRow.test.tsx`, `GuestDrawerOverview.memory-cache.test.tsx`,
+`MetricMiniSparkline.test.tsx` and `memoryObservation.test.ts` pin these
+boundaries, with existing drawer, adapter and History suites. `browser-tests/guest-row-memory-provenance.cjs` checks real
 production rows and drawers, visible/accessible labels, pointer/touch/keyboard,
 light/dark and narrow/desktop layouts using synthetic observations only.
 Presentation acceptance does not establish native thaw, covered-filesystem

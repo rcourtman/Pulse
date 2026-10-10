@@ -416,6 +416,18 @@ resumption through unified and served conversions; wire and source-selection
 controls cover omission, cloning and independent live agent data. These are
 synthetic source proofs, not native QGA/HAOS acceptance or delivered relief.
 
+Mock-mode guests carry the same provenance so the UI qualifies mock readings
+as it qualifies live ones: running VMs read `guest-agent-meminfo` (Linux only),
+`agent` or the cache-inclusive `status-mem` with no cache split, running
+containers read `cluster-resources` or `agent`, and stopped or scenario-stopped
+guests are `unavailable` from `powered-off`. A current mock observation's
+`observedAt` moves with each refresh, static-metrics mode included, and a
+retained one keeps its own state, source and time
+(`TestGeneratedGuestMemoryProvenanceMatchesPowerStateAndOS`,
+`TestMockGuestMemoryObservationFollowsScenarioPowerState`,
+`TestFixtureRefreshMovesCurrentGuestMemoryObservationTime`). This is fixture
+realism, not a change to live source selection.
+
 Low-trust memory stabilisation uses the original memory observation time for
 its existing two-minute reconnect and ten-minute healthy-guest windows, not
 the diagnostic poll's `RetrievedAt`. Repeated carried-forward polls cannot
