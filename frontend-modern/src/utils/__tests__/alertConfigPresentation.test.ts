@@ -83,6 +83,15 @@ import {
 } from '@/utils/alertConfigPresentation';
 
 describe('alertConfigPresentation', () => {
+  it('distinguishes a pending save from accepted settings with newer unsaved edits', () => {
+    expect(getAlertConfigSaveChangesLabel(true)).toBe('Saving…');
+    expect(getAlertConfigSaveChangesLabel(false)).toBe('Save Changes');
+    expect(getAlertConfigSaveSuccess(true)).toBe(
+      'Settings from this save were accepted. Your newer changes are still unsaved.',
+    );
+    expect(getAlertConfigSaveSuccess(false)).toBe(ALERT_CONFIG_SAVE_SUCCESS);
+  });
+
   it('returns canonical alert config shell vocabulary', () => {
     expect(ALERT_CONFIG_UNSAVED_CHANGES).toBe('You have unsaved changes');
     expect(ALERT_CONFIG_SAVE_CHANGES).toBe('Save Changes');

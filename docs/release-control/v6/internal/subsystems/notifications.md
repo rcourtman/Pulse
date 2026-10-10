@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Destination saves use one submitted snapshot without replacing newer input
+
+The existing email, Apprise, watchdog and entitled push writes preserve their
+payload fields, endpoint order and server-side policy. The editor captures
+them before the preceding alert-policy request yields, rather than reading
+later edits between writes. Apprise response normalisation and masking apply
+only to its untouched submitted draft in the same loaded context. Newer input
+and unsaved status survive old acknowledgements; context invalidation stops
+remaining unsent calls, without cancelling or undoing an issued request.
+Failed multi-endpoint saves can have earlier persisted writes and are not
+represented as atomic rollback or provider delivery.
+
+`useAlertDestinationsState.test.tsx` and
+`alertSettingsSave.acknowledgement.test.tsx` use deferred and rejected replies
+to prove the snapshot, draft, retry and context boundaries. The genuine browser
+fixture runs the existing surface, state owners and API adapters against local
+synthetic endpoints, not SMTP/Apprise providers. Credentials, TLS verification,
+entitlement, activation, ordinary delivery, queue and retry policy are unchanged.
+
+
 ### Notification redirects keep the configured receiver's origin
 
 Webhook and HTTP Apprise firing, recovery, Test and admitted queued delivery

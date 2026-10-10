@@ -215,4 +215,49 @@ describe('useAlertDestinationsState', () => {
     expect(RelayAPI.getConfig).not.toHaveBeenCalled();
     expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
   });
+
+  it('captures downstream writes before awaiting email and retains a newer Apprise draft', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    let acknowledgeEmail!: (value: { success: boolean }) => void;
+    vi.mocked(NotificationsAPI.updateEmailConfig).mockReturnValue(
+      new Promise((resolve) => {
+        acknowledgeEmail = resolve;
+      }),
+    );
+    vi.mocked(NotificationsAPI.updateAppriseConfig).mockImplementation(async (config) => ({
+      ...config,
+      apiKey: '',
+      hasApiKey: true,
+    }));
+    vi.mocked(AlertsAPI.updateDeadManConfig).mockResolvedValue({ success: true, configured: true });
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    result.setAppriseConfig({
+      ...result.appriseConfig(),
+      serverUrl: 'https://first.example.test',
+      apiKey: 'synthetic-first',
+    });
+    result.setDeadManPingUrl('https://watchdog.example.test/first');
+    const save = result.saveDestinations();
+    result.setAppriseConfig({
+      ...result.appriseConfig(),
+      serverUrl: 'https://newer.example.test',
+      apiKey: 'synthetic-newer',
+    });
+    result.setDeadManPingUrl('https://watchdog.example.test/newer');
+    acknowledgeEmail({ success: true });
+    await save;
+
+    expect(NotificationsAPI.updateAppriseConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverUrl: 'https://first.example.test',
+        apiKey: 'synthetic-first',
+      }),
+    );
+    expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
+      'https://watchdog.example.test/first',
+    );
+    expect(result.appriseConfig().serverUrl).toBe('https://newer.example.test');
+    expect(result.appriseConfig().apiKey).toBe('synthetic-newer');
+    expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
+  });
 });
