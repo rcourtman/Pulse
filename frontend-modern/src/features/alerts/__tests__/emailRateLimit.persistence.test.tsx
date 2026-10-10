@@ -53,7 +53,7 @@ describe('email rate-limit persistence', () => {
           : { ...savedConfig, rateLimit: loadedRateLimit };
       }
       if (path === '/api/notifications/apprise') return { enabled: false, targets: [] };
-      if (path === '/api/notifications/webhooks' || path === '/api/notifications/email/providers')
+      if (path === '/api/notifications/webhooks' || path === '/api/notifications/email-providers')
         return [];
       throw new Error('Unexpected synthetic API call');
     });
@@ -127,7 +127,7 @@ describe('email rate-limit persistence', () => {
       );
     }
     render(() => <Fixture />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Advanced settings' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show advanced options' }));
     const input = screen.getByRole('spinbutton', { name: 'Rate limit' });
     expect(input).toHaveValue(17);
     fireEvent.input(input, { target: { value: '12' } });
