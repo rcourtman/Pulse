@@ -2859,8 +2859,13 @@ type PhysicalDisk struct {
 	// AgentSMARTReported marks a disk a linked host agent lists in its SMART
 	// report, so the agent's CheckHost owns its temperature alert. Internal
 	// poll evidence, set by the PVE disk poller's agent SMART merge.
-	AgentSMARTReported bool      `json:"-"`
-	LastChecked        time.Time `json:"lastChecked"`
+	AgentSMARTReported bool `json:"-"`
+	// AgentSMARTSplit marks a disk the operator split from the disk a linked
+	// host agent's SMART row describes, so the PVE disk poller pairs neither
+	// that row nor an earlier poll's record, which held its readings, with
+	// it. Internal poll evidence, set by the same merge.
+	AgentSMARTSplit bool      `json:"-"`
+	LastChecked     time.Time `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance

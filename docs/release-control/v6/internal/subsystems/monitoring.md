@@ -2438,6 +2438,48 @@ merge, so on a mock estate every hot disk on an online node alerts.
 `internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
 the collected reading, agent ownership and exclusion.
 
+A disk the operator split from the agent's disk (report-merge on the merged
+disk) is not paired with the agent's row. `mergeHostAgentSMARTIntoDisks` asks
+the resource store, through `diskAgentSplitStore`
+(`unifiedresources.MonitorAdapter.ProxmoxDiskAgentSMARTSplit`), once per disk
+it matches a row to, on the full poll and on the skipped polls between, and a
+split disk takes nothing from the row: no attributes, I/O, health, identity,
+type or temperature, and no `AgentSMARTReported`. It takes no agent-supplied
+node-sensor temperature either: the node poll takes the node's SMART list from
+the linked agent when the agent's report carries a usable temperature
+(`mergeTemperatureData`; `hostSuppliesNodeSMARTTemperatures` mirrors that
+rule), and its legacy NVMe list is matched by order, so
+`dropNodeSensorTemperature` removes a reading `mergeNVMeTempsIntoDisks` took
+from either, leaving the PVE disk check no such reading to judge beside the
+agent's own alert, while a reading from the SSH collector's list stays (the
+rule needs the agent still reporting). The
+split disk is still evaluated by `checkPhysicalDiskAlerts` whenever its node
+is polled. It is marked
+`AgentSMARTSplit` (internal poll evidence, never serialized), so the poll's
+retention of unavailable evidence restores nothing into it. The decider is
+asked about the observation under its own ID, as the registry holds it. The
+Proxmox-query-failure fallback omits the rows the operator split from the disk
+in their slot, so while the query fails that disk's Proxmox record is not
+listed (a node every row of which is split keeps its last records, and is not
+evaluated by `checkPhysicalDiskAlerts`, as any unqueried node). A store that holds no
+decisions, or none for the pair, leaves the merge as it was. The decision
+comes from the registry generation the monitor last built, so a split applies
+from the first full disk poll that collects the node from Proxmox and matches
+the agent's row after the rebuild that loaded it; the skipped polls before then
+mark the record and drop its node-sensor temperature but leave what an earlier
+poll merged into it.
+`TestMergeHostAgentSMARTIntoDisksLeavesDisksTheOperatorSplitAlone`,
+`TestHostAgentSMARTFallbackSkipsRowsTheOperatorSplit`,
+`TestFailedDiskQueryListsOnlyTheRowsTheOperatorDidNotSplit`,
+`TestMergeHostAgentSMARTIntoDisksKeepsSSHNodeSensorReadingOfSplitDisk`,
+`TestDropNodeSensorTemperatureRemovesOnlyAgentSuppliedReadings`,
+`TestMergeNVMeTempsLabelsReadingsWithTheNodeSensorSources`,
+`TestHostSuppliesNodeSMARTTemperaturesFollowsUsableReadings` and
+`TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the merge, the
+fallback and the poller end to end, and `TestProxmoxDiskAlertsRunOnMergedDiskState`
+in `canonical_guardrails_test.go` pins the signature and call.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection

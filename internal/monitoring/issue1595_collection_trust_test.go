@@ -148,7 +148,7 @@ func TestIssue1595SASTopologySurvivesMergeRegistryAndReadState(t *testing.T) {
 		}
 	}
 
-	merged := mergeHostAgentSMARTIntoDisks(providerDisks, []models.Node{node}, []models.Host{host})
+	merged := mergeHostAgentSMARTIntoDisks(providerDisks, []models.Node{node}, []models.Host{host}, nil)
 	if len(merged) != 24 {
 		t.Fatalf("merged disk count = %d, want 24", len(merged))
 	}
@@ -286,6 +286,7 @@ func TestTrustedSMARTSerialPromotionDoesNotRewriteSATAOrNVMeIdentity(t *testing.
 				disks,
 				[]models.Node{{Name: "node", LinkedAgentID: "agent"}},
 				hosts,
+				nil,
 			)[0]
 			if got.Serial != "PROVIDER-SERIAL" || got.Type != diskType {
 				t.Fatalf("%s identity changed during SAS remediation: %+v", diskType, got)
@@ -948,6 +949,7 @@ func TestHostAgentSMARTMergeRefusesPathMatchAcrossContradictingIdentity(t *testi
 				[]models.Host{{ID: "agent-1", Sensors: models.HostSensorSummary{
 					SMART: append([]models.HostDiskSMART{tc.smart}, tc.others...),
 				}}},
+				nil,
 			)[0]
 			if !tc.merged {
 				if got.Serial != tc.disk.Serial || got.WWN != tc.disk.WWN || got.Type != tc.disk.Type ||

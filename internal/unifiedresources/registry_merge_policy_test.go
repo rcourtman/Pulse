@@ -4243,7 +4243,9 @@ func TestPhysicalDiskExclusionFallbackStaysPerMachine(t *testing.T) {
 // on every rebuild. The registry ingests agent disks first, so the agent's
 // row holds the merged ID and keeps it; the Proxmox row takes the ID it holds
 // alone, or its source-specific ID where both share a hardware identity (the
-// agent holds that ID), as findMatch's excluded branch does.
+// agent holds that ID), as findMatch's excluded branch does. The PVE disk
+// poller asks ProxmoxDiskAgentSMARTSplit before it pairs the agent's SMART
+// row with the Proxmox disk, and it answers as the exclusions split the rows.
 func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	for _, shape := range []struct {
@@ -4331,6 +4333,15 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 					t.Fatalf("fixture did not join the disks under the agent's ID: merged %q, alone: agent %q, proxmox %q", merged, agentAlone, pveAlone)
 				}
 				ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+				// The PVE disk poller asks the adapter before it pairs the
+				// agent's SMART row with the Proxmox disk on the agent's node.
+				pollerSplit := func(step string, host models.Host, smart models.HostDiskSMART, want bool) {
+					t.Helper()
+					if got := adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, smart); got != want {
+						t.Fatalf("%s: poller split = %v, want %v", step, got, want)
+					}
+				}
+				pollerSplit("before the request", host, shape.agent, false)
 				addExclusions(t, store, request.exclusions(ids))
 
 				want := linkedDiskRows{joined: merged}
@@ -4371,6 +4382,13 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 
 				check, describe := exactly(want)
 				assertViews("after the request", snapshot, check, describe)
+				pollerSplit("after the request", host, shape.agent, request.split)
+				// A generation that has not ingested the agent's disk yet judges
+				// its row by the ID and identity the row would be keyed under.
+				unseen := NewMonitorAdapter(NewRegistry(store))
+				if got := unseen.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent); got != request.split {
+					t.Fatalf("a generation without the agent's disk judged the split = %v, want %v", got, request.split)
+				}
 				if !request.split {
 					return
 				}
@@ -4383,6 +4401,11 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				}
 				check, describe = exactly(linkedDiskRows{joined: merged})
 				assertViews("after relink", snapshot, check, describe)
+				// The link is the operator's later decision, whether it
+				// replaced an exclusion (the Proxmox row held its candidate
+				// ID) or left it standing: the generation holds the
+				// observations as one disk, so the poller pairs them again.
+				pollerSplit("after relink", host, shape.agent, false)
 				relinked := adapter.currentRegistry()
 				var again [][2]string
 				for _, fold := range relinked.ManualLinkFolds(merged) {
@@ -4393,6 +4416,22 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				addExclusions(t, store, again)
 				check, describe = exactly(want)
 				assertViews("after splitting again", snapshot, check, describe)
+				pollerSplit("after splitting again", host, shape.agent, true)
+
+				// The split names the IDs of the disks it separated, not the
+				// Proxmox slot, so a replacement in the slot (different
+				// hardware on both sides) is a different disk the poller pairs.
+				replacedPVE, replacedAgent := shape.pve, shape.agent
+				replacedPVE.Serial = "REPLACEMENT-0009"
+				replacedAgent.Serial = "Z9Z9REPLACED"
+				if shape.pve.Serial == shape.agent.Serial {
+					replacedAgent.Serial = replacedPVE.Serial
+				}
+				replacedHost := host
+				replacedHost.Sensors.SMART = []models.HostDiskSMART{replacedAgent}
+				if adapter.ProxmoxDiskAgentSMARTSplit(replacedPVE, replacedHost, replacedAgent) {
+					t.Fatalf("a replacement in the slot inherited the split recorded against the disk it replaced")
+				}
 
 				// smartctl reads no serial from a disk in standby, so the
 				// agent's row takes its device-keyed ID. A Proxmox
@@ -4405,8 +4444,10 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 					assertViews("while the agent's disk is in standby", asleep, func(got linkedDiskRows) bool {
 						return apart(got) && got.proxmox == merged
 					}, "the disks apart, the Proxmox row on "+merged)
+					pollerSplit("while the agent's disk is in standby", asleep.Hosts[0], asleep.Hosts[0].Sensors.SMART[0], true)
 					check, describe = exactly(want)
 					assertViews("once the agent's disk wakes", snapshot, check, describe)
+					pollerSplit("once the agent's disk wakes", host, shape.agent, true)
 				}
 
 				// A same-serial disk on another machine re-keys the agent's
@@ -4414,6 +4455,7 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				// the unscoped ID, still holds.
 				if shape.agent.Serial != "" {
 					assertViews("after a same-serial disk appears elsewhere", withClone, apart, "the disks apart")
+					pollerSplit("after a same-serial disk appears elsewhere", host, shape.agent, true)
 				}
 			})
 		}
@@ -4450,6 +4492,9 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 						if got := linkedDiskRowsOn(t, resources); got.joined != "" || got.agent == "" || got.proxmox == "" {
 							t.Fatalf("%s rebuild %d %s: got %+v, want the disks apart", step.name, rebuild, view, got)
 						}
+					}
+					if !adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent) {
+						t.Fatalf("%s rebuild %d: the poller would pair the disks the rows split", step.name, rebuild)
 					}
 				}
 			}
