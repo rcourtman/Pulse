@@ -2433,6 +2433,23 @@ artifact-selection behaviour.
    the deterministic dev user/hash. `tests/integration/scripts/run-playwright.mjs`
    owns the run-scoped `HOT_DEV_VERIFY_LOCK_FILE` handoff so overlapping browser
    proof cannot reuse stale first-run credentials.
+   Its npm entrypoint must attempt the existing posttest teardown once whenever
+   pretest was launched, including a nonzero setup exit or a failed test launch.
+   Failed setup skips Playwright and retains its original exit; teardown failure
+   may fail success but cannot turn an earlier failure into success. The handoff
+   stays held through teardown and is removed only if this invocation wrote it
+   and its complete contents still match. A failed lock preparation starts
+   neither setup nor teardown, and a non-hot-dev invocation never removes a
+   pre-existing verification lock. This is an ownership observation, not a new
+   exclusive lock or protection against an independent writer racing unlink.
+   `tests/integration/scripts/run-playwright.test.mjs` executes the actual
+   entrypoint with controlled pretest, Playwright and posttest child processes,
+   retaining exit precedence, identical run/state handoffs, partial-runtime
+   cleanup and foreign/replaced-lock preservation. Script smoke discovers it
+   through `scripts/tests/test-e2e-runner-cleanup.sh`. These command-level
+   controls do not establish real managed-runtime teardown, descendant reaping,
+   catchable-signal recovery, Windows execution or browser acceptance; the
+   existing owned shell supervisor and native/browser proofs remain separate.
    The managed and foreground hot-dev entrypoints must share one network-default
    contract: local dev binds frontend and backend traffic to loopback by default
    so installed LAN agents cannot accidentally treat a developer laptop as the
@@ -5712,6 +5729,23 @@ helper must also prove that storage-pool and physical-disk history cover the
 suite's deepest seven-day chart window. The compose harness must seed that
 same seven-day window by default instead of forcing every parallel shard to
 build unrelated 90-day preview history.
+Core E2E must admit that same authenticated default fixture once, through
+`tests/integration/fixture-readiness.config.ts` and its dedicated spec, after
+container startup and before either test tier. An absent opt-in, incomplete
+inventory or insufficient pool/disk history fails the shard before suite work;
+it must not become repeated per-test setup failures. The policy lives in
+`tests/integration/scripts/default-mock-readiness.mjs`, consumed by the existing
+authenticated helper, with unchanged 120/180-second phase waits and history
+depth. Admission has no retry or ignored failure and a separate bounded report;
+it does not replace later fixture checks or any product/browser assertion.
+Completed stable-tier failure reports and JUnit must be uploaded before the
+observational probation pass, so a later probation cancellation cannot suppress
+those completed receipts. The job deadline, stable/probation selection and verdict
+gate stay unchanged. `scripts/tests/test-e2e-fixture-admission.sh` covers every
+required platform identity, both history scopes and depth, actual admission-spec
+error/cleanup behavior, the workflow's fail-fast command and receipt ordering.
+These controls prove fixture/gate orchestration, not the cause of a hosted
+runtime fault, provider transience or native monitoring recovery.
 Managed runtime recovery and browser bootstrap proofs therefore need to keep
 helper coverage that demonstrates browser-shell request tracking remains
 trustworthy when the same test also performs direct health or security-status

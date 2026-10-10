@@ -1466,11 +1466,10 @@ func (cc *ClusterClient) GetVMFSInfo(ctx context.Context, node string, vmid int)
 	var result []VMFileSystem
 	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		info, err := client.GetVMFSInfo(ctx, node, vmid)
-		if err != nil {
-			return err
-		}
+		// Preserve valid peers and the incomplete-inventory error together.
+		// Neither a partial response nor its error grants another endpoint read.
 		result = info
-		return nil
+		return err
 	})
 	return result, err
 }

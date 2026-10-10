@@ -6844,3 +6844,28 @@ generation younger than two seconds. The decision takes effect in the next
 loaded generation, not retroactively in the listing already served. The
 fixture seed keeps default thresholds while the configured live adapter
 retains its four-minute Proxmox threshold.
+
+### Incomplete guest filesystem responses do not establish recovery
+
+`GetVMFSInfo` preserves valid peer rows from a malformed array but returns an
+error with them, through both single and cluster clients. The surviving rows
+cannot establish total guest capacity, usage, or removal of a rejected volume.
+A completed response with invalid counters is not a command-completion failure:
+serial admission, same-target lock checks and single-attempt guest requests
+remain unchanged, and there is no failover/replay or new cooldown. Alternate
+clients' contradictory or out-of-range counters enforce the same completeness
+boundary before publishing a current aggregate.
+
+Monitoring retains only the prior complete disk tuple, mount inventory and
+original observation time within the existing age bound; otherwise disk usage
+is unavailable. Partial responses do not create disk History, resolve genuine
+filesystem alerts, or remove unknown volumes. Independent current CPU/memory
+continues. A later complete ordinary inventory can still remove a volume and
+publish an explicitly measured zero, append History and recover alerts.
+
+`pkg/proxmox/guest_filesystem_completeness_test.go` and
+`internal/monitoring/guest_filesystem_completeness_test.go` cover valid peers plus
+malformed records, both client/collector paths, canonical and served state,
+original age/expiry, History, breach continuity and complete removal/recovery.
+These are synthetic source controls, not native thaw, the cause of #2619/#2439,
+or installed/released acceptance.

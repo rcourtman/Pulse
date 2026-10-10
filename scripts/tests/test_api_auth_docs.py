@@ -203,14 +203,17 @@ class APIAuthDocsTest(unittest.TestCase):
         self.assertNotRegex(bash, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
         blocks = re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL)
         requests = [block for block in blocks if block.startswith("pulse_api ")]
-        self.assertEqual(len(requests), 8)
+        self.assertEqual(len(requests), 9)
         self.assertEqual([block for block in blocks if "curl " in block], [request_helper()],
                          "an example must not bypass the private-response helper")
         self.assertIn("curl --disable --fail-with-body ", request_helper())
         for request in requests:
             if request.startswith("pulse_api POST "):
                 self.assertIn("--data-binary @-", request_helper())
-                self.assertIn("<<'JSON'", request)
+                if request.startswith("pulse_api POST /api/config/nodes "):
+                    self.assertEqual(request.strip(), 'pulse_api POST /api/config/nodes < "$node_request_file"')
+                else:
+                    self.assertIn("<<'JSON'", request)
 
     def test_every_documented_shell_recipe_parses(self):
         for block in re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL):

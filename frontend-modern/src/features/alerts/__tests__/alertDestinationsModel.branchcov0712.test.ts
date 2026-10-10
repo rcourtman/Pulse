@@ -83,7 +83,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
 
   // -----------------------------------------------------------------------
   // Exact payload shape — toStrictEqual verifies that UI-only fields
-  // (replyTo, maxRetries, retryDelay, rateLimit) are absent from the
+  // (replyTo, maxRetries, retryDelay) are absent from the
   // output and that falsy scalar values pass through unchanged.
   // -----------------------------------------------------------------------
   describe('payload shape', () => {
@@ -117,16 +117,14 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
         to: ['ops@example.com'],
         tls: false,
         startTLS: false,
+        rateLimit: 100,
         minimumSeverity: 'all',
       });
     });
 
-    it('does not include rateLimit in the payload even when set in the UI config', () => {
-      // SUSPECTED SOURCE BUG: UIEmailConfig.rateLimit is required but
-      // buildEmailConfigPayload never forwards it to the backend payload.
-      // See GLM_REPORT.md.
+    it('includes the rate limit already supported by the email API', () => {
       const result = buildEmailConfigPayload(makeUIEmailConfig({ rateLimit: 100 }));
-      expect(result).not.toHaveProperty('rateLimit');
+      expect(result).toHaveProperty('rateLimit', 100);
     });
 
     it('does not include replyTo, maxRetries, or retryDelay in the payload', () => {
