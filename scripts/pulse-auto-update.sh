@@ -574,6 +574,7 @@ perform_update() {
     log info "Installer signature verified"
 
     local update_accepted="false"
+    local -a installer_pipeline_status=()
     if env \
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
@@ -582,8 +583,10 @@ perform_update() {
        while IFS= read -r line; do
            log info "installer: $line"
        done; then
-        
-        log info "Installer completed; verifying update"
+        # Capture both observed exits before any command overwrites PIPESTATUS.
+        # Completion of this pipeline still requires binary/service verification.
+        installer_pipeline_status=("${PIPESTATUS[@]}")
+        log info "Installer completed; verifying update (installer exit: ${installer_pipeline_status[0]}; log collector exit: ${installer_pipeline_status[1]})"
         
         # Verify new version
         local installed_version
@@ -632,7 +635,10 @@ perform_update() {
             log error "Version mismatch after update. Expected: $new_version, Got: $installed_version"
         fi
     else
-        log error "Update installation failed"
+        installer_pipeline_status=("${PIPESTATUS[@]}")
+        # A collector failure is not evidence that the installer itself failed.
+        # These are exit observations, not a diagnosis of a host interruption.
+        log error "Installer pipeline failed (installer exit: ${installer_pipeline_status[0]}; log collector exit: ${installer_pipeline_status[1]})"
     fi
 
     if [[ "$update_accepted" == "true" ]]; then

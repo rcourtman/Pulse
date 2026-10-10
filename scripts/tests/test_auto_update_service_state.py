@@ -66,7 +66,10 @@ sys.exit(97)
 
 HARNESS = r'''
 source "$UPDATER"
-log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+log() {
+    printf '[%s] %s\n' "$1" "${*:2}"
+    if [[ "${2:-}" == 'installer: '* ]]; then return "$COLLECTOR_EXIT"; fi
+}
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
 sleep() { :; } # Only the liveness wait; timeout/manager deadlines are real.
 verify_release_signature() { :; }
@@ -105,7 +108,8 @@ exit "$status"
 
 
 class UpdateServiceState(unittest.TestCase):
-    def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update"):
+    def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
+                    installer_exit=None, collector_exit=0):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
@@ -127,13 +131,15 @@ class UpdateServiceState(unittest.TestCase):
                 'cp "$FIXTURE/new-pulse" "$PULSE_INSTALL_DIR/bin/pulse"\n'
                 'echo v6.6.0 > "$PULSE_INSTALL_DIR/VERSION"\n'
                 'echo "$INSTALLER_STATE" > "$FIXTURE/state"\n'
+                'printf "fixture installation output\\n"\n'
                 'exit "$INSTALLER_EXIT"\n')
             env = dict(os.environ)
             env.update(FIXTURE=str(f), UPDATER=str(UPDATER), MODE=mode, FLOW=flow,
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
                        PULSE_SERVICE_NAME="pulse-custom@department", LOAD_STATE=load,
                        INSTALLER_STATE="active" if mode in ("stop-noop", "stop-error", "stop-hang", "after-error", "readback-error", "readback-empty") else "inactive",
-                       INSTALLER_EXIT="0" if success else "23",
+                       INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
+                       COLLECTOR_EXIT=str(collector_exit),
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
             start = time.monotonic()
             result = subprocess.run(["bash", "-c", HARNESS], env=env, capture_output=True, timeout=15)
@@ -195,6 +201,40 @@ class UpdateServiceState(unittest.TestCase):
                 self.assertIn(b"v6.6.0", r["binary"])
                 self.assertEqual(r["started"], state == "active", r)
                 self.assertFalse(r["stopped"], r)
+                self.assertEqual(r["backups"], [], r)
+
+    def test_pipeline_failure_records_both_exits_before_unchanged_recovery(self):
+        # Distinct simultaneous failures detect swapped or overwritten statuses;
+        # collector-only failure must not be misreported as installer failure.
+        for installer, collector in ((23, 0), (0, 73), (42, 73)):
+            for state, load in (("active", "loaded"), ("inactive", "loaded"),
+                                ("failed", "loaded"), ("inactive", "masked")):
+                with self.subTest(installer=installer, collector=collector, state=state, load=load):
+                    r = self.run_fixture(state=state, load=load, installer_exit=installer,
+                                         collector_exit=collector)
+                    observed = f"Installer pipeline failed (installer exit: {installer}; log collector exit: {collector})"
+                    self.assertIn(observed, r["output"], r)
+                    self.assertLess(r["output"].index(observed), r["output"].index("Restoring from backup"), r)
+                    self.assertNotIn("Installer completed", r["output"], r)
+                    self.assertNotIn("Update successfully installed and verified", r["output"], r)
+                    self.assertEqual(r["exit"], 1, r)
+                    self.assertTrue(r["installed"], r)
+                    self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n", r)
+                    self.assertEqual(r["version"], "v6.5.0\n", r)
+                    self.assertEqual(r["started"], state == "active", r)
+                    self.assertEqual(r["backups"], [], r)
+
+    def test_completed_pipeline_records_exits_without_claiming_verification(self):
+        for state in ("active", "inactive"):
+            with self.subTest(state=state):
+                r = self.run_fixture(state=state, success=True)
+                observed = "Installer completed; verifying update (installer exit: 0; log collector exit: 0)"
+                self.assertIn(observed, r["output"], r)
+                self.assertLess(r["output"].index(observed), r["output"].index("Version verified:"), r)
+                self.assertNotIn("Installer pipeline failed", r["output"], r)
+                self.assertEqual(r["exit"], 0, r)
+                self.assertIn(b"v6.6.0", r["binary"], r)
+                self.assertEqual(r["started"], state == "active", r)
                 self.assertEqual(r["backups"], [], r)
 
     def test_uncertain_rollback_stop_retains_backup_without_replacement_or_start(self):

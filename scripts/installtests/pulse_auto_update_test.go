@@ -1020,6 +1020,17 @@ printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 	if !strings.Contains(string(out), "TRANSACTION_ASSERTIONS_PASSED") {
 		t.Fatalf("transaction assertions did not finish:\n%s", out)
 	}
+	if !preflight {
+		installerExit := "0"
+		switch outcome {
+		case "failure", "symlink", "directory", "fifo":
+			installerExit = "23"
+		}
+		observed := "(installer exit: " + installerExit + "; log collector exit: 0)"
+		if !strings.Contains(string(out), observed) {
+			t.Fatalf("missing observed pipeline exits %q after signed installer execution:\n%s", observed, out)
+		}
+	}
 }
 
 // Stable admission is object-bound, not a line-oriented tag/flag accumulator.

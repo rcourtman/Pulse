@@ -83,6 +83,16 @@ matrix and smoke controls retain their cryptographic, metadata and return-trap
 coverage. These are source/fixture controls, not native systemd/LXC recovery,
 published installer trust, #2785's stop cause or installed acceptance.
 
+The helper records the installer and log collector's separate observed exit
+statuses immediately after their pipeline, before logging or recovery can
+overwrite them. A failed collector does not establish installer failure;
+zero exits establish pipeline completion only, not version, service or update
+acceptance. The existing signed transaction and confined service-state tests
+cover installer-only, collector-only, simultaneous and successful exits with
+unchanged prior-activity, mask, backup and restoration safeguards. These facts
+cannot reconstruct exits or signals from an earlier interrupted attempt, or
+identify who stopped a host.
+
 ### Core E2E images are built once and admitted in the same run
 
 The secret-free Core E2E workflow builds its existing `e2e_runtime` server and
