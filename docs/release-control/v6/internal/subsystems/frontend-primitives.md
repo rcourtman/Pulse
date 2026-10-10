@@ -3279,7 +3279,10 @@ Agent`), with the plain-language source phrase available through accessible
     single finding-level Pulse Pro capability line in the expanded finding
     primary-action area for plan-locked installs on active critical or warning
     findings, with its upgrade action gated by the upgrade-prompt policy. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
-    such as `patrol_control` and `patrolControl*`. The always-visible Patrol mode selector must stay on
+    such as `patrol_control` and `patrolControl*`. The Patrol header keeps the
+    Patrol mode selector inside its collapsed `Mode and automation` disclosure
+    and, for plan-locked installs, shows one inline `Patrol mode` line with the
+    watch-only summary instead of a selector. The selector must stay on
     the selected mode and one plain summary, without a separate `Limits`
     disclosure or hard-limit matrix beside the picker. Shared feature shells must not invent their own Patrol safety
     thresholds, policy labels, or disabled-control explanations. The Patrol page
