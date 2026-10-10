@@ -500,6 +500,32 @@ test("bug and pre-release forms accept truthful evidence for installs that never
   }
 });
 
+test("both bug forms keep an optional failed-upgrade timeline without unsafe collection", () => {
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const timeline = form.split("    id: upgrade_context\n")[1]?.split("  - type: ")[0];
+    assert.ok(timeline, name);
+    assert.match(timeline, /label: Upgrade attempt and recovery/);
+    assert.match(timeline, /required: false/);
+    for (const distinction of [
+      "starting version, intended version or asset", "original time and timezone",
+      "last recorded updater/installer result or exit code",
+      "whole LXC, VM or host stopping", "recovery you already performed",
+      "A verified download signature is not a completed upgrade",
+      "a later boot does not explain the stop",
+      "Today's running version does not establish the version at failure",
+      'blank or "unknown" is valid', "not full journals",
+      "Do not rerun the update, reboot, restore, run Diagnostics or delete rollback backups",
+      "Keep backups private and preserve the original evidence",
+    ]) {
+      assert.ok(timeline.includes(distinction), `${name}: ${distinction}`);
+    }
+    const version = form.split("    id: pulse_version\n")[1].split("  - type: ")[0];
+    assert.match(version, /Version running when the problem occurred, or "unknown"/);
+    assert.match(version, /target and later recovered version separate/);
+  }
+});
+
 test("bug and pre-release forms accept unsafe one-off failures without a second run", () => {
   const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
   for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
@@ -938,6 +964,42 @@ test("stable-to-preview intake keeps baseline, agent and platform versions out o
     await syncLabels({ github, context: createContext({ issue }), core: createCore() });
     assert.deepEqual(calls.addLabels.flatMap((call) => call.labels).sort(), [expected, "bug"].sort());
     assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("interrupted-upgrade targets and recovered versions cannot supply the failing version", async () => {
+  for (const [failing, expected] of [
+    ["6.4.5", "affects-6.4.5"],
+    ["unknown", "needs-version-info"],
+  ]) {
+    for (const formTitle of ["[Bug]:", "[v6 pre-release]:"]) {
+      const { github, calls } = createGithub({ latestVersion: "6.5.0" });
+      const bugForm = formTitle === "[Bug]:";
+      const issue = {
+        number: 2785,
+        title: `${formTitle} interrupted upgrade to 6.5.0`,
+        body: [
+          ...(!bugForm ? ["### Feedback type", "Bug / regression"] : []),
+          "### Pulse version", failing,
+          "### Last known working Pulse version", "6.4.1",
+          "### Agent version", "6.5.0",
+          "### Upgrade attempt and recovery",
+          "Attempt: 6.4.5 → 6.5.0; automatic timer; 6 October 04:20 UTC",
+          "Last recorded result: signature verified, then Broken pipe; exit unknown",
+          "Observed stop: whole LXC; stop time/cause unknown",
+          "Recovery already performed: booted 7 October; current version 6.5.0",
+          "### Additional actionable topics", "None",
+        ].join("\n\n"),
+        // GitHub applies the bug form's label; the preview form declares its
+        // classification in Feedback type instead. Reproduce both inputs.
+        labels: bugForm ? [{ name: "bug" }] : [],
+      };
+      await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+      assert.deepEqual(calls.addLabels.flatMap((call) => call.labels).sort(),
+        (bugForm ? [expected] : [expected, "bug"]).sort());
+      assert.equal(calls.createComment.length, 0);
+      assert.equal(calls.getLatestRelease.length, 0);
+    }
   }
 });
 
