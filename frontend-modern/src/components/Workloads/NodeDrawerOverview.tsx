@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
@@ -181,6 +182,7 @@ const toDetailRows = (rows: NodeOverviewRow[]): DetailRow[] =>
   );
 
 export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
   const versionLabel = () => getNodeVersionLabel(props.node);
   const linkedAgentId = () => cleanText(props.node.linkedAgentId);
   const clusterLabel = () =>
@@ -371,7 +373,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getAlertAttentionCopy(alert),
+          ...getAlertAttentionCopy(alert, now),
           subject:
             cleanText(alert.resourceName) ||
             cleanText(alert.nodeDisplayName) ||

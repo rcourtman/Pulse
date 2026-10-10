@@ -768,6 +768,8 @@ describe('platform overview layout guardrails', () => {
     for (const [name, source] of surfacesWithSharedToolbar) {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
+      expect(source, `${name} names its workloads table even in kiosk`).toContain('tableTitle={');
+      expect(source, `${name} uses an accessible table heading`).toContain('<h2');
       expect(
         source.indexOf('<WorkloadsFilter'),
         `${name} filter precedes the surface`,

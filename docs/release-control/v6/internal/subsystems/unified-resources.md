@@ -8319,3 +8319,20 @@ Verification: `truenasPageModel.test.ts`,
 `browser-tests/truenas-disk-thresholds.cjs` cover disk overrides, TrueNAS-wide
 limits, Off and last-known readings. Synthetic browser observations do not
 establish sustained native metrics, History, revocation or release availability.
+
+### Availability recovery replaces complete check records (10 October 2026)
+
+A present availability summary, its platformData mirror and plural check set
+replace the previous complete record. Optional failure/application/certificate/
+location fields omitted after recovery or summary-target change are withdrawn;
+an absent record retains enrichment only while its explicit source remains.
+The plural mirror must leave with that source and cannot reappear on hydration.
+Other provider facets keep their own partial/native-withdrawal rules, including
+linked-agent and guest filesystems. Snapshot, rebuilt websocket merge-patch and
+source-removal controls cover both canonical and mirrored records.
+
+The availability table, fleet, open probe card and loaded Settings resource
+classification use the existing shared clock for freshness and ages. No clock
+tick initiates a probe, grants health, changes thresholds or widens token scope.
+The vSphere VM table has one h2 title, including kiosk and filtered-empty state;
+its count follows filtered rows only when the page-owned toolbar state is ready.

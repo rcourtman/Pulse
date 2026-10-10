@@ -4753,3 +4753,13 @@ Notifications owner, proving a late result cannot notify or start readbacks
 in its replacement while the replacement's own action still works. Browser
 controls use the actual Overview/Notifications components, API adapters,
 toast and CSS with synthetic local endpoints at desktop/phone widths.
+
+### Mounted held readings follow the shared clock (10 October 2026)
+
+Node, guest and Mail Gateway drawer attention, and the Proxmox node temperature
+hover, age an unchanged metric evaluation on the existing shared clock. The
+metric presentation requires an explicit clock; drawer copy reads an accessor
+only for usable live status, leaving non-metric rows unchanged. The ten-minute
+stale boundary, evaluated breach date, legacy fallback, clear rule and operator
+memory basis remain independent. This does not infer collection or recovery.
+Mounted drawer controls and lazy-copy tests cover this boundary.
