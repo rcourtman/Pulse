@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "7b53ea4875876c34073f11e9b8981a777a07415f",
+  "verified_at": "2026-10-10T15:16:17.187928Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "24a988a118bf3040647ea82b53d3ee1b35fb332d1c6349919d0173c3b986a75e"
+  },
+  "routes": [
+    "/tmp/notification-lifetime/index.html?surface=overview",
+    "/tmp/notification-lifetime/index.html?surface=destinations"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "20 final synthetic-response controls use the real existing Overview/Notifications components, hooks, API adapters, toast and CSS. Desktop Chromium 141.0.7390.37/light and phone WebKit 26.0/dark; Playwright 1.56.1 matches the integration lock.",
+    "Both Retry and Dismiss, accepted and rejected while pending, then view replacement: no late toast/feedback or new health/activity GET; the replacement remains independently healthy. Pending controls are disabled and one confirmation leads to one synthetic POST.",
+    "Active-view accepted Retry retains its acknowledgement/readback; rejected Dismiss retains fixed recovery feedback and no provider text. Existing notices and destinations are not removed.",
+    "Four immutable-parent browser controls reproduce late success/error toasts over the replacement view and extra health readbacks after accepted mutations. Final twelve captures were opened and inspected; no page error, unexpected endpoint, off-origin request or horizontal overflow was observed.",
+    "This is mounted-view lifetime acceptance, not full-shell/in-place organisation replacement, real queue/provider delivery, native use, publication or release acceptance. An already-issued action is neither cancelled nor undone on unmount."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone touch start the actual queue controls. Existing confirmations are accepted; both Retry/Dismiss controls remain disabled while a synthetic response is held.",
+    "A keyed fixture replacement unmounts the actual old component and mounts the same existing surface with independent health evidence, without page reload. Held responses then complete through the production API client.",
+    "Read and POST budgets, global toast calls, fixed local feedback, replacement heading/state and viewport width are asserted. No notification is sent; all HTTP is synthetic local evidence. Screenshots fast-forward CSS animation only to inspect settled rendering."
+  ]
+}
