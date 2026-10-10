@@ -81,6 +81,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       ageClass: props.backupPresentation?.ageClass,
     });
   const guestReadPresentation = () => getGuestDrawerGuestReadPresentation(props.guest);
+  const memoryReading = () => getGuestDrawerMemoryReading(props.guest);
   // A linked Pulse agent past its reporting lease leaves its last report on
   // the guest, so its RAID, network and filesystem rows read as last known.
   const agentLastKnownReason = () =>
@@ -110,7 +111,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             tone: guestReadPresentation()?.tone,
             wrap: true,
           }),
-          makeDetailRow('Memory reading', getGuestDrawerMemoryReading(props.guest)?.summary, {
+          makeDetailRow('Memory reading', memoryReading()?.summary, {
+            wrap: true,
+          }),
+          // Visible text, not a tooltip: the caveat and what to do about it
+          // must reach touch and keyboard users too.
+          makeDetailRow('About this reading', memoryReading()?.cacheNote, {
+            layout: 'stacked',
             wrap: true,
           }),
           makeDetailRow('Primary IP', props.ipAddresses[0]),

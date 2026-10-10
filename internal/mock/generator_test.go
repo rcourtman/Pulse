@@ -1460,3 +1460,163 @@ func TestBuildFixtureStateMergesSharedPBSStorageLikeThePoller(t *testing.T) {
 		t.Fatal("expected shared PBS storage in the fixture")
 	}
 }
+
+// Mock guests report where their memory reading came from, the way a live
+// estate does, so the UI qualifies mock readings instead of treating every
+// guest as unannotated ("Freshness unknown").
+func TestGeneratedGuestMemoryProvenanceMatchesPowerStateAndOS(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.StoppedPercent = 0.3
+	now := time.Now()
+
+	sources := map[string]int{}
+	for i := 0; i < 300; i++ {
+		vm := generateVM("node-01", "mock-cluster", 1000+i, cfg)
+		obs := vm.Memory.Observation
+		if vm.Status != "running" {
+			if obs.State != "unavailable" || obs.Source != "powered-off" {
+				t.Fatalf("stopped VM observation = %+v, want unavailable powered-off", obs)
+			}
+			continue
+		}
+		sources[obs.Source]++
+		if obs.State != "current" || obs.ObservedAt.IsZero() || obs.ObservedAt.After(now.Add(time.Minute)) {
+			t.Fatalf("running VM observation = %+v, want a current reading observed now", obs)
+		}
+		switch obs.Source {
+		case "status-mem":
+			// Proxmox's value carries no used | cache | free split.
+			if vm.Memory.Cache != 0 {
+				t.Fatalf("cache-inclusive VM reported a measured cache split: %+v", vm.Memory)
+			}
+		case "guest-agent-meminfo":
+			// The QEMU guest agent reads Linux /proc/meminfo only.
+			if strings.Contains(strings.ToLower(vm.OSName), "windows") {
+				t.Fatalf("Windows VM %q claims Linux meminfo provenance", vm.OSName)
+			}
+		case "agent":
+		default:
+			t.Fatalf("running VM has unexpected memory source %q", obs.Source)
+		}
+	}
+	if sources["status-mem"] == 0 || sources["guest-agent-meminfo"] == 0 || sources["agent"] == 0 {
+		t.Fatalf("expected cache-inclusive, guest-agent and Pulse-agent VMs in the estate, got %v", sources)
+	}
+
+	sources = map[string]int{}
+	for i := 0; i < 300; i++ {
+		ct := generateContainer("node-01", "mock-cluster", 2000+i, cfg)
+		obs := ct.Memory.Observation
+		if ct.Status != "running" {
+			if obs.State != "unavailable" || obs.Source != "powered-off" {
+				t.Fatalf("stopped container observation = %+v, want unavailable powered-off", obs)
+			}
+			continue
+		}
+		sources[obs.Source]++
+		if obs.State != "current" || obs.ObservedAt.IsZero() {
+			t.Fatalf("running container observation = %+v, want a current reading", obs)
+		}
+		if obs.Source != "cluster-resources" && obs.Source != "agent" {
+			t.Fatalf("running container has unexpected memory source %q", obs.Source)
+		}
+	}
+	if sources["cluster-resources"] == 0 || sources["agent"] == 0 {
+		t.Fatalf("expected cgroup and Pulse-agent containers in the estate, got %v", sources)
+	}
+}
+
+func TestMockGuestMemoryObservationFollowsScenarioPowerState(t *testing.T) {
+	cases := []struct {
+		name    string
+		before  models.MemoryObservation
+		running bool
+		want    models.MemoryObservation
+	}{
+		{
+			name:    "forced stopped loses its reading",
+			before:  models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: time.Now()},
+			running: false,
+			want:    models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+		},
+		{
+			name:    "forced running after generation gets a current source",
+			before:  models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+			running: true,
+			want:    models.MemoryObservation{State: "current", Source: "agent"},
+		},
+		{
+			name:    "a running guest keeps its own source",
+			before:  models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: time.Now()},
+			running: true,
+			want:    models.MemoryObservation{State: "current", Source: "status-mem"},
+		},
+		{
+			name:    "a retained reading on a running guest is kept",
+			before:  models.MemoryObservation{State: "last-known", Source: "status-mem", ObservedAt: time.Now().Add(-time.Hour)},
+			running: true,
+			want:    models.MemoryObservation{State: "last-known", Source: "status-mem"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mem := models.Memory{Observation: tc.before}
+			mockSettleGuestMemoryObservation(&mem, tc.running, "agent")
+			got := mem.Observation
+			if got.State != tc.want.State || got.Source != tc.want.Source {
+				t.Fatalf("observation = %+v, want state %q source %q", got, tc.want.State, tc.want.Source)
+			}
+			if tc.want.State == "current" && got.ObservedAt.IsZero() {
+				t.Fatalf("a current observation needs its observation time: %+v", got)
+			}
+		})
+	}
+}
+
+func TestFixtureRefreshMovesCurrentGuestMemoryObservationTime(t *testing.T) {
+	for _, randomMetrics := range []bool{true, false} {
+		name := "random metrics"
+		if !randomMetrics {
+			name = "static metrics"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.RandomMetrics = randomMetrics
+			stale := time.Now().Add(-time.Hour)
+			refreshAt := time.Now().Truncate(time.Second)
+
+			data := &models.StateSnapshot{
+				VMs: []models.VM{
+					{ID: "vm-current", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "current", Source: "status-mem", ObservedAt: stale},
+					}},
+					{ID: "vm-retained", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "last-known", Source: "status-mem", ObservedAt: stale},
+					}},
+					{ID: "vm-stopped", Node: "node-01", Status: "stopped", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "unavailable", Source: "powered-off"},
+					}},
+				},
+				Containers: []models.Container{
+					{ID: "ct-current", Node: "node-01", Status: "running", Memory: models.Memory{
+						Total: 100, Observation: models.MemoryObservation{State: "current", Source: "cluster-resources", ObservedAt: stale},
+					}},
+				},
+			}
+			updateFixtureStateMetricsAt(data, cfg, refreshAt)
+
+			if got := data.VMs[0].Memory.Observation; !got.ObservedAt.Equal(refreshAt) || got.Source != "status-mem" {
+				t.Fatalf("current VM observation = %+v, want source kept and time %v", got, refreshAt)
+			}
+			if got := data.VMs[1].Memory.Observation; !got.ObservedAt.Equal(stale) || got.State != "last-known" {
+				t.Fatalf("a retained observation keeps its own state and time, got %+v", got)
+			}
+			if got := data.VMs[2].Memory.Observation; !got.ObservedAt.IsZero() || got.Source != "powered-off" {
+				t.Fatalf("a stopped guest has no observation time to move, got %+v", got)
+			}
+			if got := data.Containers[0].Memory.Observation; !got.ObservedAt.Equal(refreshAt) || got.Source != "cluster-resources" {
+				t.Fatalf("current container observation = %+v, want source kept and time %v", got, refreshAt)
+			}
+		})
+	}
+}

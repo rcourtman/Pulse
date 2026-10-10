@@ -1298,6 +1298,64 @@ describe('GuestRow', () => {
         }
       });
 
+      it(`says a current VM reading from a cache-inclusive source may include cache in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation('current', observedAt, 'status-mem'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('May include cache');
+        const message = notice?.querySelector('.sr-only');
+        expect(message).toHaveTextContent('Current. Source: Proxmox. Observed: 2026-09-30');
+        expect(message).toHaveTextContent(
+          'a high percentage alone does not mean it is short of memory',
+        );
+        expect(message).toHaveTextContent('Pulse agent in the VM');
+        if (mode === 'sparklines') {
+          // The value itself is a current reading; only its source is qualified.
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-reading-state', 'current');
+        }
+      });
+
+      it(`keeps a container's cache caveat out of the ${mode} row label`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'lxc',
+            memory: observation('current', observedAt, 'cluster-resources'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        // Nothing for the user to set up on a container, so no label per row.
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'bars') {
+          const message = screen.getByTestId('memory-bar').getAttribute('data-reading-message');
+          expect(message).toContain('cached memory the container can reuse');
+          expect(message).toContain('Pulse agent in the container');
+          expect(message).not.toContain('QEMU');
+        }
+      });
+
+      it(`adds no cache cue to a cache-aware ${mode} reading`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation('current', observedAt, 'guest-agent-meminfo'),
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+      });
+
       it(`withdraws the ${mode} cue only for a qualified same-guest reading`, () => {
         const [guest, setGuest] = createSignal(makeGuest({ memory: observation('last-known') }));
         const { container } = render(() => (
@@ -1405,6 +1463,42 @@ describe('GuestRow', () => {
       expect(notice?.querySelector('.sr-only')).toHaveTextContent('2026-09-30 11:00:00 UTC');
       expect(notice).not.toHaveTextContent('future-state');
     });
+
+    it('fits the compact cache cue without losing the accessible caveat', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({
+          type: 'qemu',
+          memory: observation('current', observedAt, 'cluster-resources'),
+        }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(/^Cache\?$/);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');
+    });
+
+    it.each([
+      ['last-known', 'observed', 'Last known'],
+      ['current', 'not-a-date', 'Freshness unknown'],
+      ['future-state', 'observed', 'Freshness unknown'],
+    ])(
+      'keeps a %s cache-inclusive reading under its freshness label, not the current cue',
+      (state, time, label) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            type: 'qemu',
+            memory: observation(state, time === 'observed' ? observedAt : time, 'status-mem'),
+          }),
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+        expect(notice).not.toHaveTextContent('May include cache');
+        // The caveat still reaches the user, beside the freshness warning.
+        expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');
+      },
+    );
 
     it('does not expose unknown provider labels or borrow disk provenance', () => {
       const { container } = renderGuestRow({
