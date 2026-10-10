@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "410d84c69444ce4b59d00432b0b5510ce3016d0e",
+  "verified_at": "2026-10-08T07:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/Storage.tsx",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx",
+    "frontend-modern/src/components/Storage/StorageGroupRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/storageSummaryGroups.ts",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts",
+    "frontend-modern/src/index.css",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/Storage.tsx": "da1ef534e98e348283e79269c800bd3cfcbacdac3f28bc7865e8d559526a8663",
+    "frontend-modern/src/components/Storage/StorageContentCard.tsx": "65d6d7248ecf77a3aeee0ea9994749971e49d0f412ee8f86499ef52fa395dc4a",
+    "frontend-modern/src/components/Storage/StorageGroupRow.tsx": "b54cdecfbf8f0ccb6ed70e054cedc92f33bf11845370af083dab93f114c2a9a4",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "118627e025ab76e544b85ff064442fcdd53720c249b0952a6df450c49c3ee181",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "6954ea9c2eaa74e3dd6dcb1e7e51e1589994247b0c3056b9753389800c0294e2",
+    "frontend-modern/src/components/Storage/storageSummaryGroups.ts": "e3e27f9ceea6bdad727d61e23738b11da3c2542a47dfe14d87e6ec91a4a31c89",
+    "frontend-modern/src/components/Storage/useStoragePageModel.ts": "2cb615953e5833766111b77933458ddc9b3ea7a6503b3f07c868b5961d3ea62e",
+    "frontend-modern/src/components/shared/summaryCardInteraction.ts": "054c9c7d90fdc594b70225d6fc2c9c591344adcd0c7e62b07c4c477610610766",
+    "frontend-modern/src/components/shared/summaryTableFocus.ts": "4028c380e21b6515ec5b28ba495b6721534257c69bf9fa5560ef72fa07f8d378",
+    "frontend-modern/src/index.css": "66a8493ec824aeb75a5a77314373276d7c87a3e21d276fcdec779b99a983b64b",
+    "frontend-modern/src/routing/resourceLinks.ts": "6dfba4f6f5e13be54983f348c76215b04d726a19976b337c262cb960c970a178"
+  },
+  "routes": [
+    "/proxmox/storage?group=node",
+    "/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Acluster",
+    "/proxmox/storage?group=node&resource=ceph-rbd"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private stack: backend built from origin/main d2ac0c5112 in mock mode (6 nodes; 10 storage groups when grouped by node) on :7801, Vite dev server on :5321 serving this change's tree from the landing clone; the served StorageGroupRow.tsx was fetched and confirmed to be the changed source. Prettier later reflowed two lines in StorageContentCard.tsx and useStoragePageModel.ts with no code change",
+    "Baseline on the same stack before the edit (origin/main): clicking the cluster header collapsed it (20 to 18 pool rows), added summaryGroup=storage:node:cluster to the URL, showed Clear selection and kept the header highlighted, with 0 pinned member rows visible; a second click expanded and unpinned; hovering the header tinted its 2 member rows (preview); with offsite-vault open in backup-vault, clicking the cluster header closed that pool",
+    "After, grouped by node: hovering a group header adds no member-row emphasis and no data-summary-row-active on the header; the header carries data-summary-group-id only (no data-summary-group-series-count)",
+    "After: clicking the cluster header collapses it (20 to 18 rows) and a second click expands it; the URL stays ?group=node, no Clear selection appears, and the collapsed header has no pinned accent",
+    "After: with offsite-vault open in backup-vault, clicking the cluster header collapses cluster and the offsite-vault detail stays open; Clear selection is shown for the open pool and Escape clears it",
+    "After: a hand-typed ?summaryGroup=storage:node:cluster URL renders every group expanded with no pinned rows, no highlighted header and no Clear selection (the leftover param is ignored)",
+    "After: an in-app navigation to ?group=node&resource=ceph-rbd with the shared group collapsed reopens shared and opens the ceph-rbd detail",
+    "After: pool row hover still sets data-summary-row-active on the hovered pool",
+    "390x844: tapping the cluster header collapses and expands the group; the URL and Clear selection are unchanged",
+    "Committed onto origin/main 410d84c694, 885 commits past the verified base d2ac0c5112: none of them touches Storage, summaryTableFocus.ts, summaryCardInteraction.ts, resourceLinks.ts or index.css (git log over those paths is empty), so the verified frontend bytes are unchanged; the only same-file overlaps are three contract docs and SharedPrimitives.guardrails.test.ts, which merged cleanly"
+  ],
+  "interactions": [
+    "Mouse hover over the cluster group header row",
+    "Click on the cluster group header row body (not the chevron), twice",
+    "Click on the offsite-vault pool row to open its detail, then click the cluster group header",
+    "Escape keypress with a pool detail open",
+    "Full navigation to a URL carrying summaryGroup",
+    "In-app navigation (history pushState plus popstate) to a ?resource=ceph-rbd link after collapsing the shared group",
+    "Pointer enter on a pool row",
+    "Tap on the cluster group header at 390x844, twice"
+  ]
+}

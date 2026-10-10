@@ -51,11 +51,7 @@ const Storage: Component<StorageProps> = (props) => {
     sourceFilterOptions,
     nodeFilterOptions,
     clearPinnedSummaryScope,
-    activeSummaryStorageGroupScope,
     activeSummaryStorageResourceId,
-    focusedSummaryStorageGroupScope,
-    focusedSummaryStorageGroupId,
-    hoveredSummaryStorageGroupScope,
     physicalDisks,
     getDiskAlertResourceIds,
     nodes,
@@ -73,8 +69,6 @@ const Storage: Component<StorageProps> = (props) => {
     isLoadingPools,
     selectedDiskId,
     setClearSurfaceRootRef,
-    setFocusedStorageGroupScope,
-    setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
@@ -160,13 +154,7 @@ const Storage: Component<StorageProps> = (props) => {
           highlightedRecordId={highlightedRecordId}
           getRecordAlertState={getRecordAlertState}
           isLoadingPools={isLoadingPools}
-          activeSummaryGroupScope={activeSummaryStorageGroupScope}
           clearPinnedSummaryScope={clearPinnedSummaryScope}
-          hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
-          focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
-          focusedSummaryGroupId={focusedSummaryStorageGroupId}
-          onGroupFocusChange={setFocusedStorageGroupScope}
-          onGroupHoverChange={setHoveredStorageGroupScope}
           highlightedSummaryResourceId={activeSummaryStorageResourceId}
           hoveredStorageResourceId={hoveredStorageResourceId}
           setTableRootRef={setSummaryTableRootRef}

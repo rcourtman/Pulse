@@ -354,6 +354,13 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('-webkit-text-fill-color: var(--color-text-base);');
   });
 
+  it('keeps summary row emphasis to the shared active-row rules', () => {
+    expect(appStylesSource).toContain("tr[data-summary-row-active='true'] > td");
+    // Group-member emphasis went with the Storage group pin; no table sets it.
+    expect(appStylesSource).not.toContain('data-summary-group-member-active');
+    expect(appStylesSource).not.toContain('--color-summary-group-member-');
+  });
+
   it('keeps infrastructure platforms marked as dense data surfaces', () => {
     platformSurfaceSources.forEach((source) => {
       expect(source).toMatch(/data-testid="[^"]+-page" class="pulse-wide-data-surface /);

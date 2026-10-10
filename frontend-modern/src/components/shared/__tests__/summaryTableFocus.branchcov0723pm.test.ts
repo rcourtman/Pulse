@@ -1,16 +1,11 @@
 import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  useSummaryPageInteractionState,
-  useSummaryTableFocusBridge,
-} from '@/components/shared/summaryTableFocus';
+import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 
 // Branch-coverage tests for the UNCOVERED guard arms of summaryTableFocus.ts.
 // The existing spec (summaryTableFocus.test.tsx) exercises the happy paths;
 // this file targets the null/empty/early-return arms that never fire there:
-//   - focusedGroupRow guards: missing container ref, empty id, querySelector
-//     miss, attribute-selector escaping.
 //   - page-default and hover-only active series resolution.
 //   - Escape handler: defaultPrevented, every modifier arm, dialog target.
 // Every asserted value below is hand-computed against the source in
@@ -47,97 +42,10 @@ describe('summaryTableFocus.branchcov0723pm', () => {
   });
 
   // -------------------------------------------------------------------------
-  // focusedGroupRow guard arms: missing container ref, empty id, querySelector
-  // miss, attribute-selector escaping.
-  // -------------------------------------------------------------------------
-  describe('focusedGroupRow guard arms', () => {
-    it('does not attempt a reveal when setTableRootRef receives undefined (setter `element ?? null` right arm)', () => {
-      const rafSpy = vi.fn((cb: FrameRequestCallback) => {
-        cb(0);
-        return 1;
-      });
-      vi.stubGlobal('requestAnimationFrame', rafSpy);
-
-      const [focusedGroupId] = createSignal<string | null>('group-a');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(undefined);
-
-      // tableRoot stays null -> the reveal effect returns before scheduling.
-      expect(rafSpy).not.toHaveBeenCalled();
-    });
-
-    it('does not attempt a reveal for a whitespace-only focused group id (normalizeSeriesId guard)', () => {
-      const rafSpy = vi.fn((cb: FrameRequestCallback) => {
-        cb(0);
-        return 1;
-      });
-      vi.stubGlobal('requestAnimationFrame', rafSpy);
-
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('   ');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      expect(rafSpy).not.toHaveBeenCalled();
-    });
-
-    it('does not scroll a decoy row when no group row carries the matching id (querySelector miss)', () => {
-      const scrollIntoView = vi.fn();
-      const root = document.createElement('div');
-      const decoy = document.createElement('div');
-      decoy.setAttribute('data-summary-group-id', 'other');
-      Object.defineProperty(decoy, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => buildRect(1200, 40),
-      });
-      Object.defineProperty(decoy, 'scrollIntoView', {
-        configurable: true,
-        value: scrollIntoView,
-      });
-      root.appendChild(decoy);
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('group-a');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('escapes backslashes and double quotes in the group id before injecting it into the attribute selector', () => {
-      const scrollIntoView = vi.fn();
-      const root = document.createElement('div');
-      const row = document.createElement('div');
-      // Literal id containing both a double-quote and a backslash — the exact
-      // characters escapeAttributeSelectorValue rewrites.
-      row.setAttribute('data-summary-group-id', 'id"with\\special');
-      Object.defineProperty(row, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => buildRect(1200, 40),
-      });
-      Object.defineProperty(row, 'scrollIntoView', {
-        configurable: true,
-        value: scrollIntoView,
-      });
-      root.appendChild(row);
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('id"with\\special');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      // If escaping were broken the selector would not match the literal id.
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // Active series resolution — page default and transient hover
   // -------------------------------------------------------------------------
   describe('active series resolution arms', () => {
-    it('resolves no active series or group when no hover/focus/group signal is set (page-default state)', () => {
+    it('resolves no active series when no hover or focus signal is set (page-default state)', () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
 
@@ -145,7 +53,6 @@ describe('summaryTableFocus.branchcov0723pm', () => {
       result.setTableRootRef(root);
 
       expect(result.activeSeriesId()).toBeNull();
-      expect(result.activeGroupScope()).toBeNull();
     });
 
     it('highlights a hovered off-screen row without moving the page (hover is not a reveal)', () => {
@@ -181,81 +88,6 @@ describe('summaryTableFocus.branchcov0723pm', () => {
       expect(revealActiveSeries).not.toHaveBeenCalled();
       expect(scrollIntoView).not.toHaveBeenCalled();
       expect(scrollTo).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Focused-group reveal effect (summaryTableFocus.ts:350) — the
-  // already-visible arm skips scrollIntoView; the out-of-viewport arm scrolls.
-  // -------------------------------------------------------------------------
-  describe('focused-group reveal arms', () => {
-    it('does not call scrollIntoView when the focused group row is already visible (already-focused arm)', () => {
-      const scrollIntoView = vi.fn();
-      const root = document.createElement('div');
-      const row = document.createElement('div');
-      row.setAttribute('data-summary-group-id', 'group-a');
-      Object.defineProperty(row, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => buildRect(120, 40), // inside viewport
-      });
-      Object.defineProperty(row, 'scrollIntoView', {
-        configurable: true,
-        value: scrollIntoView,
-      });
-      root.appendChild(row);
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('group-a');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      // `!isElementVisibleWithinViewport(row) && ...` short-circuits on the
-      // left operand when the row is already on-screen.
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('calls scrollIntoView with nearest-block when the focused group row sits below the viewport', () => {
-      const scrollIntoView = vi.fn();
-      const root = document.createElement('div');
-      const row = document.createElement('div');
-      row.setAttribute('data-summary-group-id', 'group-a');
-      Object.defineProperty(row, 'getBoundingClientRect', {
-        configurable: true,
-        value: () => buildRect(1200, 40), // below innerHeight(800)
-      });
-      Object.defineProperty(row, 'scrollIntoView', {
-        configurable: true,
-        value: scrollIntoView,
-      });
-      root.appendChild(row);
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('group-a');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      expect(scrollIntoView).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
-    });
-
-    it('retries via rAF then stops when the focused group row never mounts (no matching group row -> remainingFrames exhausted)', () => {
-      const rafSpy = vi.fn((cb: FrameRequestCallback) => {
-        cb(0);
-        return 1;
-      });
-      vi.stubGlobal('requestAnimationFrame', rafSpy);
-
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-
-      const [focusedGroupId] = createSignal<string | null>('group-a');
-      const { result } = renderHook(() => useSummaryTableFocusBridge({ focusedGroupId }));
-      result.setTableRootRef(root);
-
-      // Initial rAF + one per decrement: remainingFrames 12->0 = 13 calls.
-      expect(rafSpy).toHaveBeenCalledTimes(13);
     });
   });
 

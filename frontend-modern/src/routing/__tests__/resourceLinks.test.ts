@@ -320,7 +320,6 @@ describe('resource link routing contract', () => {
       resource: 'storage-1',
       sort: 'usage',
       order: 'desc',
-      summaryGroup: '',
     });
 
     expect(STORAGE_QUERY_PARAMS.tab).toBe('tab');
@@ -331,7 +330,7 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
-    expect(STORAGE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
+    expect(STORAGE_QUERY_PARAMS).not.toHaveProperty('summaryGroup');
   });
 
   it('canonicalizes legacy storage source aliases when parsing links', () => {
