@@ -28,6 +28,17 @@ const helpers = stripTypeScriptTypes([
   '({ ensureAuthenticated, ensureSessionAuthenticated, apiRequest });',
 ].join('\n'));
 
+// Use the shipped pre-auth entrypoint policy, rather than assuming that every
+// cookie-admitted navigation triggers the app's protected bootstrap.
+const appRuntimeSource = fs.readFileSync(
+  path.resolve(root, '../../frontend-modern/src/useAppRuntimeState.ts'), 'utf8',
+);
+const preAuthPolicy = appRuntimeSource.match(/const isPreAuthLoginBootstrapPath =[\s\S]*?;\n/);
+assert.ok(preAuthPolicy, 'missing app pre-auth entrypoint policy');
+const isPreAuthLoginBootstrapPath = runInNewContext(stripTypeScriptTypes(
+  `${preAuthPolicy[0]}\nisPreAuthLoginBootstrapPath;`,
+));
+
 const cookie = (name, value) => ({
   name, value, domain: '127.0.0.1', path: '/', expires: -1,
   httpOnly: name === 'pulse_session', secure: false, sameSite: 'Lax',
@@ -68,6 +79,8 @@ function fixture(t, options = {}) {
   const createPage = () => {
     let cookies = [];
     let url = 'about:blank';
+    let hasLoginHint = false;
+    const navigations = [];
     const context = {
       cookies: async () => cookies,
       addCookies: async values => { cookies = [...cookies, ...values]; },
@@ -75,8 +88,19 @@ function fixture(t, options = {}) {
     return {
       context: () => context,
       request: { fetch: async (target, args) => fetch(cookies, target, args) },
-      goto: async () => { url = validSession(cookies) ? 'http://127.0.0.1:7655/proxmox' : 'http://127.0.0.1:7655/'; },
+      goto: async target => {
+        navigations.push(target);
+        // The real app does not probe protected bootstrap on / or /login
+        // without a per-tab login hint. A cookie-only new context has none,
+        // even if its separate saved-cookie API probe succeeded.
+        const preAuthEntry = isPreAuthLoginBootstrapPath(target);
+        const admitted = validSession(cookies) && !options.browserRejectSession &&
+          (!preAuthEntry || hasLoginHint);
+        url = admitted ? 'http://127.0.0.1:7655/proxmox' : 'http://127.0.0.1:7655/';
+      },
       url: () => url,
+      navigations,
+      rememberLoginHint: () => { hasLoginHint = true; },
     };
   };
   const api = runInNewContext(helpers, {
@@ -98,6 +122,7 @@ function fixture(t, options = {}) {
       const value = `login-${loginCalls}`;
       sessions.add(value);
       await page.context().addCookies([cookie('pulse_session', value), cookie('pulse_csrf', 'csrf')]);
+      page.rememberLoginHint();
       await page.goto('/');
     },
     expect: page => ({ toHaveURL: async pattern => assert.match(page.url(), pattern) }),
@@ -144,6 +169,29 @@ test('the existing admitted cookie session avoids another login and does not imp
   assert.equal(f.counts().loginCalls, 0);
   assert.deepEqual((await page.context().cookies()).map(item => item.name), ['pulse_session', 'pulse_csrf']);
   assert.equal(f.counts().disposed, 1);
+});
+
+test('cookie-only reuse enters the existing workspace bootstrap, not the hint-dependent login entry', async t => {
+  const f = fixture(t);
+  f.save([cookie('pulse_session', 'saved-live'), cookie('pulse_csrf', 'csrf')]);
+  const page = f.createPage();
+  await f.ensureAuthenticated(page);
+  assert.deepEqual(page.navigations, ['/infrastructure']);
+  assert.equal(f.counts().loginCalls, 0);
+  assert.equal(f.counts().probeCalls, 1);
+  assert.equal(f.counts().disposed, 1);
+});
+
+test('an API-admitted cookie does not hide rejection by the actual browser bootstrap', async t => {
+  const f = fixture(t, { browserRejectSession: true });
+  f.save([cookie('pulse_session', 'saved-live'), cookie('pulse_csrf', 'csrf')]);
+  const page = f.createPage();
+  await assert.rejects(() => f.ensureAuthenticated(page), { code: 'ERR_ASSERTION' });
+  assert.deepEqual(page.navigations, ['/infrastructure']);
+  assert.equal(f.counts().loginCalls, 0);
+  assert.equal(f.counts().probeCalls, 1);
+  assert.equal(f.counts().disposed, 1);
+  assert.equal(page.url(), 'http://127.0.0.1:7655/');
 });
 
 for (const scenario of ['revoked', 'expired', 'other-backend', 'missing-session', 'malformed-json']) {
