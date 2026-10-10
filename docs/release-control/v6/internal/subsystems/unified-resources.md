@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Selected guest memory observation in typed read state
+
+VM and system-container views expose a value-copy of the selected memory
+metric's observation and an explicit presence bit. A selected measured zero
+has presence; a missing selected metric does not. Empty metadata remains
+unknown and cannot be supplied by a conflicting raw platform memory facet or
+resource LastSeen. No wire, metric-priority, identity, history or correlation
+contract changes. `TestGuestViewMemoryObservationKeepsSelectedOrigin` in
+`views_test.go` covers selected-agent versus raw-Proxmox disagreement, absent
+metrics, legacy zero and value-copy isolation. Patrol owns interpretation of
+this evidence; the accessor does not establish pressure, recovery or permission
+to run a guest command.
+
 ### Internal QGA query-eligibility evidence
 
 The native Proxmox guest facet carries `GuestAgentEvidence` internally. A full

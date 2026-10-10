@@ -2551,3 +2551,39 @@ func TestGuestViewGovernanceIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestViewMemoryObservationKeepsSelectedOrigin(t *testing.T) {
+	at := time.Now().UTC().Add(-time.Minute)
+	selected := models.MemoryObservation{State: "current", Source: "agent", ObservedAt: at}
+	r := &Resource{
+		Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 0, Observation: selected}},
+		Proxmox: &ProxmoxData{Memory: &models.Memory{Usage: 99, Observation: models.MemoryObservation{State: "last-known", Source: "status-mem", ObservedAt: at.Add(-time.Hour)}}},
+	}
+	for _, kind := range []string{"vm", "system-container"} {
+		t.Run(kind, func(t *testing.T) {
+			read := func(r *Resource) (models.MemoryObservation, bool) {
+				if kind == "vm" {
+					return NewVMView(r).MemoryObservation()
+				}
+				return NewContainerView(r).MemoryObservation()
+			}
+			got, ok := read(r)
+			if !ok || got != selected {
+				t.Fatalf("selected zero or its source was replaced by the raw facet: %+v present=%t", got, ok)
+			}
+			got.Source = "changed"
+			if r.Metrics.Memory.Observation != selected {
+				t.Fatal("view returned mutable source evidence")
+			}
+			for _, absent := range []*Resource{nil, {}, {Metrics: &ResourceMetrics{}}, {Proxmox: r.Proxmox}} {
+				if got, ok := read(absent); ok || got != (models.MemoryObservation{}) {
+					t.Fatalf("absent selected memory borrowed platform provenance: %+v present=%t", got, ok)
+				}
+			}
+			legacy := &Resource{Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 0}}}
+			if got, ok := read(legacy); !ok || got != (models.MemoryObservation{}) {
+				t.Fatalf("unannotated zero was mistaken for missing memory: %+v present=%t", got, ok)
+			}
+		})
+	}
+}

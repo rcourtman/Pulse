@@ -796,7 +796,7 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		},
 		Metrics: &unifiedresources.ResourceMetrics{
 			CPU:    &unifiedresources.MetricValue{Percent: 10},
-			Memory: &unifiedresources.MetricValue{Percent: 30},
+			Memory: &unifiedresources.MetricValue{Percent: 30, Observation: models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: now}},
 			Disk:   &unifiedresources.MetricValue{Percent: 20},
 		},
 	})
@@ -867,7 +867,7 @@ func TestSeedResourceInventoryState_UsesRuntimeReadStateForNodesAndGuests(t *tes
 		"# Node Metrics",
 		"| node-1 | online | 55% | 65% | 40%",
 		"# Guest Metrics",
-		"| vm-1 | VM | node-1 | - | 10% | 30% | 20% | running | - | 2h ago |",
+		fmt.Sprintf("| vm-1 | VM | node-1 | - | 10%% | 30%% (current; source available-field; observed %s; cache-aware guest usage) | 20%% | running | - | 2h ago |", now.UTC().Format(time.RFC3339)),
 		"# Docker",
 		"| docker-1 | 2 | 1 | 1 |",
 		"docker-1/web: health=unhealthy",

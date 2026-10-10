@@ -25,6 +25,36 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Patrol guest memory is qualified evidence, not an unlabelled percentage
+
+Patrol consumes the selected guest memory metric's original observation,
+including absence, last-known state, source and time. It does not borrow a
+different raw Proxmox facet, a refreshed resource timestamp or disk readiness.
+Current, dated cache-aware Proxmox/QGA/Pulse-agent readings can support guest
+pressure flags, anomalies, forecasts, actionability and recovery verification.
+Cache-inclusive status/cluster/total-minus-used estimates, unknown sources,
+undated/future origins and retained readings remain visible but cannot establish
+current pressure or recovery. Missing memory is N/A, not measured zero; real
+current zero and real high pressure both retain their meaning. Other platforms
+without Proxmox observations keep their existing selected readings.
+
+Full, quiet and condensed inventory and actual triage seeds preserve these
+qualifications, including unflagged running guests within the existing analysis scope. Guest
+analysis opt-outs do not acquire the new evidence section. The no-flag rollup is
+not a health verdict. Native guest runtime status, rather than canonical collection
+status, owns running/paused/stopped eligibility. A snapshot-only alert review
+cannot auto-resolve a memory alert from unknown guest pressure; independently
+verified current recovery and removed-resource handling remain separate.
+
+`TestPatrolGuestMemoryEvidence`, `TestPatrolGuestMemoryForecastsAndAnomalies`,
+`TestPatrolGuestMemoryAlertRecovery` and
+`TestPatrolGuestMemorySelectedMetricAndOtherPlatforms` exercise these connected
+paths. `TestIssue2762NamedMemoryFields` checks the existing named MemAvailable
+parser against synthetic cache-heavy/reordered evidence, not a new free-table
+parser. These controls do not establish issue #2762's installed input or cause,
+a cleared finding, or a containing release. Monitoring collection, guest-agent
+admission, configured alert thresholds, history storage and access are unchanged.
+
 ### Assistant action plans do not guess an installation from session placement
 
 An explicit current canonical resource ID takes precedence over stale session

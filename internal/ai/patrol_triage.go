@@ -207,7 +207,7 @@ func triageThresholdChecksState(snap patrolRuntimeState, scopedSet map[string]bo
 		if guest.gType == "VM" {
 			resourceType = "vm"
 		}
-		if sev, threshold := triageWarnWatchSeverity(guest.mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); sev != "" {
+		if sev, threshold := triageWarnWatchSeverity(guest.mem, thresholds.GuestMemWarning, thresholds.GuestMemWatch); guest.memory.pressureKnown && sev != "" {
 			flags = append(flags, TriageFlag{
 				ResourceID:   guest.id,
 				ResourceName: guest.name,
@@ -653,8 +653,9 @@ func formatTriageHealthySummarySection(triage *TriageResult) string {
 	totalHealthy := healthyNodes + healthyGuests + healthyStorage + healthyDocker + healthyTrueNAS + healthyPBS + healthyPMG
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
-	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
+	sb.WriteString(fmt.Sprintf("## Resources without triage flags (%d)\n", totalHealthy))
+	sb.WriteString("No flag is not proof of health; missing or uncertain readings remain unknown.\n")
+	sb.WriteString(fmt.Sprintf("Nodes: %d unflagged\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
 	sb.WriteString(fmt.Sprintf("Storage: %d resources monitored (%d pools, %d physical disks)\n",
 		healthyStorage,
