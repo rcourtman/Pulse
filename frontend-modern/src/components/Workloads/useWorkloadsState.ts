@@ -5,7 +5,7 @@ import {
   type RuntimeInventorySourcesResponse,
 } from '@/api/runtimeInventorySources';
 import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
-import type { VM, Container, Node } from '@/types/api';
+import type { Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -50,7 +50,7 @@ import {
   buildNestedWorkloadContextByGuestId,
   type NestedWorkloadContextByGuestId,
 } from './nestedWorkloadContext';
-import { buildGuestParentNodeMapFromNodes, workloadNodeScopeId } from './workloadTopology';
+import { buildGuestParentNodeMapFromNodes } from './workloadTopology';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
@@ -66,11 +66,7 @@ const isProxmoxNodeResource = (resource: Resource): boolean =>
     Boolean(resource.platformData?.proxmox));
 
 export interface WorkloadsStateOptions {
-  vms: VM[];
-  containers: Container[];
-  nodes: Node[];
   layoutWidth?: Accessor<number | null | undefined>;
-  useWorkloads?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   excludedWorkloadTypes?: readonly WorkloadType[];
@@ -142,8 +138,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
 
   const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState();
 
-  const workloadsEnabled = createMemo(() => props.useWorkloads === true);
-  const workloads = useWorkloads(workloadsEnabled, {
+  const workloads = useWorkloads(undefined, {
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotChange: props.resourceSnapshotChange,
     refetchSnapshot: props.resourceSnapshotRefetch,
@@ -151,7 +146,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
   const infrastructureSources = useUnifiedResources({
     query: WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY,
     cacheKey: 'workloads-infrastructure-sources',
-    enabled: () => workloadsEnabled() && !props.resourceSnapshot,
+    enabled: () => !props.resourceSnapshot,
   });
   const infrastructureResources = createMemo(() =>
     props.resourceSnapshot ? (props.resourceSnapshot() ?? []) : infrastructureSources.resources(),
@@ -162,7 +157,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
       : infrastructureSources.loading(),
   );
   const inventorySourcesResourceKey = createMemo(() =>
-    workloadsEnabled() && !props.inventorySourcesQuery ? 'enabled' : null,
+    props.inventorySourcesQuery ? null : 'enabled',
   );
   const ownedInventorySourcesSnapshot = createNonSuspendingQuery<
     RuntimeInventorySourcesResponse,
@@ -188,19 +183,15 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
   };
 
   const excludedWorkloadTypeSet = createMemo(() => new Set(props.excludedWorkloadTypes ?? []));
-  const rawGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsEnabled() ? workloads.workloads() : [],
-  );
+  const rawGuests = createMemo<WorkloadGuest[]>(() => workloads.workloads());
   const allGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsEnabled()
-      ? dedupeGuests(
-          selectVisibleWorkloadInventory({
-            guests: rawGuests(),
-            excludedTypes: excludedWorkloadTypeSet(),
-            platformScope: props.forcedPlatform,
-          }),
-        )
-      : [],
+    dedupeGuests(
+      selectVisibleWorkloadInventory({
+        guests: rawGuests(),
+        excludedTypes: excludedWorkloadTypeSet(),
+        platformScope: props.forcedPlatform,
+      }),
+    ),
   );
   const nestedWorkloadContextByGuestId = createMemo<NestedWorkloadContextByGuestId>(() =>
     props.showNestedExcludedWorkloads
@@ -232,30 +223,16 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
     ),
   );
 
-  const infrastructureNodes = createMemo<Node[]>(() => {
-    const merged = new Map<string, Node>();
-    const mergeNode = (node: Node) => {
-      // Two supplied nodes can share a lossy native ID. Keep their source
-      // tuples separate; only overlay snapshots for the same actual node.
-      const key = JSON.stringify([
-        node.id,
-        workloadNodeScopeId({ instance: node.instance, node: node.name }),
-      ]);
-      const existing = merged.get(key);
-      merged.set(key, existing ? { ...existing, ...node } : node);
-    };
-    props.nodes.forEach(mergeNode);
-
-    if (workloadsEnabled()) {
-      infrastructureResources()
-        .filter(isProxmoxNodeResource)
-        .map(nodeFromResource)
-        .filter((node): node is Node => Boolean(node))
-        .forEach(mergeNode);
-    }
-
-    return Array.from(merged.values());
-  });
+  // One node per canonical Proxmox agent resource. Snapshot producers keep
+  // resource IDs unique (the registry lists each ID once and the REST fetch
+  // dedupes by ID), and each node keeps its resource's instance/node tuple, so
+  // two installs whose names join to the same alias stay separate nodes.
+  const infrastructureNodes = createMemo<Node[]>(() =>
+    infrastructureResources()
+      .filter(isProxmoxNodeResource)
+      .map(nodeFromResource)
+      .filter((node): node is Node => Boolean(node)),
+  );
 
   const {
     clusterFilterConfig,
@@ -383,36 +360,29 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
     buildWorkloadInventorySourceIssues(inventorySourcesSnapshot.value().sources ?? []),
   );
   const hasWorkloadsData = createMemo(() => allGuests().length > 0);
-  const hasInfrastructureSources = createMemo(() =>
-    workloadsEnabled()
-      ? infrastructureNodes().length > 0 || infrastructureResources().length > 0
-      : infrastructureNodes().length > 0,
+  const hasInfrastructureSources = createMemo(
+    () => infrastructureNodes().length > 0 || infrastructureResources().length > 0,
   );
-  const infrastructureSourceStateReady = createMemo(() =>
-    workloadsEnabled() ? hasInfrastructureSources() || !infrastructureLoading() : true,
+  const infrastructureSourceStateReady = createMemo(
+    () => hasInfrastructureSources() || !infrastructureLoading(),
   );
-  const surfaceConnected = createMemo(() =>
-    workloadsEnabled()
-      ? workloads.loading() || hasWorkloadsData() || !workloads.error()
-      : connected(),
+  const surfaceConnected = createMemo(
+    () => workloads.loading() || hasWorkloadsData() || !workloads.error(),
   );
-  const surfaceInitialDataReceived = createMemo(() =>
-    workloadsEnabled()
-      ? hasWorkloadsData() ||
-        ((!workloads.loading() || Boolean(workloads.error())) && infrastructureSourceStateReady())
-      : initialDataReceived(),
+  const surfaceInitialDataReceived = createMemo(
+    () =>
+      hasWorkloadsData() ||
+      ((!workloads.loading() || Boolean(workloads.error())) && infrastructureSourceStateReady()),
   );
 
   const reconnectSurface = () => {
-    if (workloadsEnabled()) {
-      void workloads.refetch();
-      void inventorySourcesSnapshot.refetch({ background: true });
-    }
+    void workloads.refetch();
+    void inventorySourcesSnapshot.refetch({ background: true });
     reconnect();
   };
 
   createEffect(() => {
-    if (!workloadsEnabled() || props.inventorySourcesQuery) return;
+    if (props.inventorySourcesQuery) return;
     const handle = window.setInterval(() => {
       void inventorySourcesSnapshot.refetch({ background: true });
     }, WORKLOADS_INVENTORY_SOURCES_POLL_INTERVAL_MS);
@@ -424,7 +394,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
   createEffect(() => {
     const isConnected = connected();
     if (isConnected) {
-      if (workloadsEnabled() && !lastConnected && hasSeenConnectedState) {
+      if (!lastConnected && hasSeenConnectedState) {
         void workloads.refetch();
       }
       hasSeenConnectedState = true;

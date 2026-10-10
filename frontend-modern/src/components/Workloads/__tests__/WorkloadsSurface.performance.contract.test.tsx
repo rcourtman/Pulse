@@ -6,7 +6,6 @@ import type { Resource } from '@/types/resource';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
 import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
-import type { Node } from '@/types/api';
 import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -539,7 +538,7 @@ describe('Workloads performance contract', () => {
       wsReconnecting = true;
       mockWorkloads = [makeGuest(1, { name: 'route-owned-workload' })];
 
-      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(
@@ -558,7 +557,7 @@ describe('Workloads performance contract', () => {
         () => new Promise(() => undefined),
       );
 
-      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(
@@ -583,7 +582,7 @@ describe('Workloads performance contract', () => {
         ],
       });
 
-      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1));
       expect(connectionsApiMocks.list).not.toHaveBeenCalled();
@@ -753,9 +752,7 @@ describe('Workloads performance contract', () => {
         }),
       ];
 
-      const { getByTestId } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { getByTestId } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(getByTestId('guest-row-drawer-regression')).toBeInTheDocument();
@@ -814,7 +811,7 @@ describe('Workloads performance contract', () => {
         }),
       ];
 
-      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(screen.getByText('vm-missing-agent')).toBeInTheDocument();
@@ -842,9 +839,7 @@ describe('Workloads performance contract', () => {
       wsConnected = false;
       mockWorkloads = [makeGuest(1, { name: 'first-connect-workload' })];
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -861,9 +856,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [makeGuest(1, { name: 'reconnect-workload' })];
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -910,9 +903,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.M);
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -928,9 +919,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.L);
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -949,9 +938,7 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.S);
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         const rowCount = getGuestRowCount(container);
@@ -965,9 +952,7 @@ describe('Workloads performance contract', () => {
       const guests = makeGuests(40);
       mockWorkloads = guests;
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(40);
@@ -1004,9 +989,7 @@ describe('Workloads performance contract', () => {
         mockLocationSearch = `?type=${mode}`;
         mockWorkloads = profileGuests;
 
-        const { container, unmount } = render(() => (
-          <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-        ));
+        const { container, unmount } = render(() => <PageOwnedWorkloadsSurface />);
 
         await waitFor(() => {
           expect(getGuestRowCount(container)).toBe(
@@ -1021,19 +1004,32 @@ describe('Workloads performance contract', () => {
 
   describe('Workload derivation contracts', () => {
     it.each([false, true])(
-      'retains separate supplied tuples sharing a native ID (reversed=%s)',
+      'keeps Proxmox nodes whose instance and node names join to one string apart (reversed=%s)',
       (reversed) => {
-        const makeNode = (instance: string, name: string, capacity: number) =>
+        // Two installs: instance "lab-east" + node "pve1" and instance "lab" + node
+        // "east-pve1" both join to "lab-east-pve1". Each guest must resolve to the
+        // node of its own install, whichever order the snapshot lists them in.
+        const makeNode = (
+          id: string,
+          instance: string,
+          node: string,
+          capacity: number,
+          status: string,
+        ) =>
           ({
-            id: 'lab-east-pve1',
-            instance,
-            name,
-            status: 'online',
-            cpu: 0,
-            memory: { total: capacity, used: 1, free: capacity - 1, usage: 1 / capacity },
-            disk: { total: 100, used: 1, free: 99, usage: 1 },
-          }) as Node;
-        const nodes = [makeNode('lab-east', 'pve1', 8), makeNode('lab', 'east-pve1', 32)];
+            id,
+            type: 'agent',
+            name: node,
+            platformType: 'proxmox-pve',
+            status,
+            proxmox: { instance, node },
+            memory: { current: 1, total: capacity, used: 1 },
+          }) as Resource;
+        const nodeResources = [
+          makeNode('agent-east-1', 'lab-east', 'pve1', 8, 'online'),
+          makeNode('agent-east-2', 'lab', 'east-pve1', 64, 'offline'),
+        ];
+        mockInfrastructureResources = reversed ? [...nodeResources].reverse() : nodeResources;
         mockWorkloads = [
           makeGuest(1, {
             id: 'raw-a',
@@ -1050,27 +1046,10 @@ describe('Workloads performance contract', () => {
             workloadType: 'vm',
           }),
         ];
-        // The canonical refresh overlays only B, not A despite the same native ID.
-        mockInfrastructureResources = [
-          {
-            id: 'lab-east-pve1',
-            type: 'agent',
-            name: 'east-pve1',
-            platformType: 'proxmox-pve',
-            status: 'offline',
-            proxmox: { instance: 'lab', node: 'east-pve1' },
-            memory: { current: 1, total: 64, used: 1 },
-          } as Resource,
-        ];
-        function SuppliedNodes() {
-          const state = useWorkloadsState({
-            vms: [],
-            containers: [],
-            nodes: reversed ? [...nodes].reverse() : nodes,
-            useWorkloads: true,
-          });
+        function SnapshotNodes() {
+          const state = useWorkloadsState({});
           return (
-            <pre data-testid="supplied-node-parents">
+            <pre data-testid="snapshot-node-parents">
               {JSON.stringify({
                 count: state.infrastructureNodes().length,
                 parents: state.allGuests().map((guest) => {
@@ -1087,8 +1066,8 @@ describe('Workloads performance contract', () => {
             </pre>
           );
         }
-        render(() => <SuppliedNodes />);
-        expect(JSON.parse(screen.getByTestId('supplied-node-parents').textContent!)).toEqual({
+        render(() => <SnapshotNodes />);
+        expect(JSON.parse(screen.getByTestId('snapshot-node-parents').textContent!)).toEqual({
           count: 2,
           parents: [
             {
@@ -1122,9 +1101,7 @@ describe('Workloads performance contract', () => {
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }) as any,
       );
 
-      const { container } = render(() => (
-        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-      ));
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
 
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
@@ -1158,10 +1135,6 @@ describe('Workloads performance contract', () => {
 
       const { container } = render(() => (
         <PageOwnedWorkloadsSurface
-          vms={[]}
-          containers={[]}
-          nodes={[]}
-          useWorkloads
           forcedPlatform="proxmox-pve"
           forcedViewMode="container"
           excludedWorkloadTypes={['app-container']}
@@ -1197,6 +1170,14 @@ describe('Workloads performance contract', () => {
       expect(workloadsGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
       expect(workloadsStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
       expect(workloadsStateSource).not.toContain('const normalizeOrgScope =');
+    });
+
+    it('reads guests and Proxmox nodes only from the workloads query or page snapshot', () => {
+      // The state always runs its workloads query, so its options carry no
+      // enable flag and no caller-supplied guest or node arrays.
+      expect(workloadsStateSource).not.toMatch(/^ {2}(?:vms|containers|nodes|useWorkloads)\??:/m);
+      expect(workloadsStateSource).not.toContain('props.useWorkloads');
+      expect(workloadsStateSource).not.toContain('props.nodes');
     });
 
     it('keeps hot-path workloads state in the shared workloads state owner', () => {

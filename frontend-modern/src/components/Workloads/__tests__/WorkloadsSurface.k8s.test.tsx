@@ -226,9 +226,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
     mockLocationSearch = '?type=pod';
-    const { getByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('api-6c4d8')).toBeInTheDocument();
@@ -269,10 +267,6 @@ describe('Workloads pod workloads integration', () => {
 
     render(() => (
       <PageOwnedWorkloadsSurface
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
         forcedPlatform="proxmox-pve"
         forcedViewMode="all"
         excludedWorkloadTypes={['app-container']}
@@ -398,9 +392,7 @@ describe('Workloads pod workloads integration', () => {
     ];
     mockLocationSearch = '?type=pod&resource=legacy:pve1:101';
 
-    const { getByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('api-6c4d8')).toBeInTheDocument();
@@ -438,9 +430,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { getByText, queryByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText, queryByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('api-native')).toBeInTheDocument();
@@ -507,9 +497,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { getByText, queryByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText, queryByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('api-a')).toBeInTheDocument();
@@ -587,9 +575,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { getByText, queryByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText, queryByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('api-b')).toBeInTheDocument();
@@ -651,9 +637,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { getByText, queryByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText, queryByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('vm-a')).toBeInTheDocument();
@@ -743,9 +727,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { queryByText, getByTestId } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { queryByText, getByTestId } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByTestId('guest-row-api-a')).toBeInTheDocument();
@@ -815,9 +797,7 @@ describe('Workloads pod workloads integration', () => {
       },
     ];
 
-    const { getByText, getAllByText } = render(() => (
-      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
-    ));
+    const { getByText, getAllByText } = render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(getByText('cluster-a')).toBeInTheDocument();
@@ -833,7 +813,7 @@ describe('Workloads pod workloads integration', () => {
     mockLocationSearch = '?type=all';
     mockWorkloads = [];
 
-    render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+    render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -849,7 +829,7 @@ describe('Workloads pod workloads integration', () => {
     mockLocationSearch = '?type=all&context=cluster-a';
     mockWorkloads = [];
 
-    render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+    render(() => <PageOwnedWorkloadsSurface />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
