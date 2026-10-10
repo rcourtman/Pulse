@@ -4308,6 +4308,20 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 	}
 }
 
+// Execute the existing CI phase with confined compiler/Git doubles, including
+// every-byte embed admission and terminal build/vet failures. This proves the
+// recipe and workflow wiring, not a real frontend/backend build.
+func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("same-checkout real-embed CI admission controls: %v\n%s", err, out)
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,

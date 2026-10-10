@@ -93,6 +93,24 @@ unchanged prior-activity, mask, backup and restoration safeguards. These facts
 cannot reconstruct exits or signals from an earlier interrupted attempt, or
 identify who stopped a host.
 
+### Ordinary CI compiles the backend with the same checkout's real frontend
+
+The existing Frontend job retains its production bundle, size, whole-tree tests,
+audit and 30-minute ceiling. After those tests it selects Go from `go.mod`,
+requires a nonempty built index/assets tree and compares the complete generated
+frontend and embed copy before backend compilation and server/API vet. Missing,
+extra or changed embedded files stop the phase; it never creates a placeholder
+or imports assets from another job/source. Build and vet use the read-only Go
+graph and two workers; the binary stays in the runner's temporary directory.
+The log records the checkout and binary digest without publishing an artifact.
+
+`TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
+with private assets and Git/compiler doubles, covering mismatch refusal,
+declared command/ordering checks and terminal compiler/vet failures. These
+controls are not real compilation. Actual containing CI checkout/phase logs
+remain necessary before using the result as real-embed source proof; unrelated
+stub builds, workflow success, releases and installed recovery remain distinct.
+
 ### Core E2E images are built once and admitted in the same run
 
 The secret-free Core E2E workflow builds its existing `e2e_runtime` server and

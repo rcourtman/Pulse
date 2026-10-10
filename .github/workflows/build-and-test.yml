@@ -269,6 +269,26 @@ jobs:
         working-directory: frontend-modern
         run: npm run test
 
+      # Use this checkout's production assets, not another job's embed stub.
+      # Keep the existing job deadline, audit and full frontend tests gating.
+      - name: Set up Go for real-embed verification
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify backend with real frontend embed
+        run: |
+          set -euo pipefail
+          printf 'REAL_EMBED_CHECKOUT=%s\n' "$(git rev-parse HEAD)"
+          test -s frontend-modern/dist/index.html
+          test -d frontend-modern/dist/assets
+          diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist
+          go version
+          go build -mod=readonly -p=2 -o "$RUNNER_TEMP/pulse-real-embed" ./cmd/pulse
+          go vet -mod=readonly -p=2 ./cmd/pulse ./internal/api
+          sha256sum "$RUNNER_TEMP/pulse-real-embed"
+
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
       - name: Require frontend dependency audit
