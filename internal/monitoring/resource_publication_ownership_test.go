@@ -39,7 +39,7 @@ func (p *consumeOnceWiringProvider) SupplementalChanges(m *Monitor, org string) 
 	}
 	p.pending = false
 	p.drains++
-	return []unifiedresources.ResourceChange{{ResourceID: p.name, ResourceName: p.name, OrgID: org}}
+	return []unifiedresources.ResourceChange{{ResourceID: p.name, Metadata: map[string]any{"org": org}}}
 }
 
 func (p *consumeOnceWiringProvider) drainCount() int {
@@ -56,6 +56,14 @@ type wiringChangeStore struct {
 
 func newWiringChangeStore() *wiringChangeStore {
 	return &wiringChangeStore{wiringPublicationStore: newWiringPublicationStore()}
+}
+
+func (s *wiringChangeStore) TryReplaceRegistryForRead(snapshot models.StateSnapshot, maxAge time.Duration, supply func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	rebuilt := s.MonitorAdapter.TryReplaceRegistryForRead(snapshot, maxAge, supply)
+	if rebuilt && s.before != nil {
+		s.before()
+	}
+	return rebuilt
 }
 
 func (s *wiringChangeStore) RecordChange(change unifiedresources.ResourceChange) error {
@@ -88,12 +96,13 @@ type changeSelectionBarrier struct {
 	published *atomic.Bool
 	entered   chan struct{}
 	release   chan struct{}
-	once      sync.Once
+	held      atomic.Bool
 }
 
 func (p *changeSelectionBarrier) hold() {
-	if p.published.Load() {
-		p.once.Do(func() { close(p.entered); <-p.release })
+	if p.published.Load() && p.held.CompareAndSwap(false, true) {
+		close(p.entered)
+		<-p.release
 	}
 }
 
@@ -123,13 +132,7 @@ func TestResourcePublicationChangesStayWithTheirCapturedStoreAndProvider(t *test
 			newProvider := &consumeOnceWiringProvider{name: "new-host", pending: true}
 			var published atomic.Bool
 			barrier := &changeSelectionBarrier{published: &published, entered: make(chan struct{}), release: make(chan struct{})}
-			// Read refresh uses the native MonitorAdapter; for it the first
-			// post-publication callback itself is the unambiguous boundary.
-			if read {
-				oldProvider.beforeChanges = func(*Monitor) { published.Store(true); barrier.hold() }
-			} else {
-				oldStore.before = func() { published.Store(true) }
-			}
+			oldStore.before = func() { published.Store(true) }
 			m := &Monitor{state: models.NewState(), resourceStore: oldStore,
 				pollProviders:         map[InstanceType]PollProvider{"barrier": barrier},
 				supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: oldProvider}}

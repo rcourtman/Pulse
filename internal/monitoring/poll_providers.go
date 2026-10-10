@@ -858,12 +858,21 @@ func (m *Monitor) captureResourceStoreBinding() resourceStoreBinding {
 	}
 	binding.providers.manual = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider, len(m.supplementalProviders))
 	for source, provider := range m.supplementalProviders {
-		if provider != nil {
-			binding.providers.manual[source] = provider
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if provider != nil && normalized != "" {
+			binding.providers.manual[normalized] = provider
 		}
 	}
 	m.mu.RUnlock()
 
+	// Registration validates types, but keep bare-monitor fixture behavior
+	// without invoking a provider method while holding m.mu.
+	if provider := byType[""]; provider != nil {
+		delete(byType, "")
+		if typ := provider.Type(); typ != "" {
+			byType[typ] = provider
+		}
+	}
 	for _, provider := range []PollProvider{newPVEPollProvider(), newPBSPollProvider(), newPMGPollProvider(), newAvailabilityPollProvider()} {
 		typ := provider.Type()
 		if _, exists := byType[typ]; !exists {
