@@ -1708,13 +1708,14 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 	}
 	recognized := false
 	for name := range fields {
-		switch name {
-		case "name", "type", "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk":
-			recognized = true
-		}
-		for _, canonical := range []string{"total-bytes", "total-bytes-privileged", "used-bytes"} {
-			if name != canonical && strings.EqualFold(name, canonical) {
-				return fmt.Errorf("guest filesystem byte count has a noncanonical field name")
+		// encoding/json also matches case-insensitive struct fields. Identity
+		// and filter metadata must not overwrite an earlier canonical field or
+		// turn a rejected volume into a special mount that silently disappears.
+		for _, canonical := range []string{"name", "type", "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk"} {
+			if name == canonical {
+				recognized = true
+			} else if strings.EqualFold(name, canonical) {
+				return fmt.Errorf("guest filesystem record has a noncanonical field name")
 			}
 		}
 	}

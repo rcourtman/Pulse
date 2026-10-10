@@ -25,6 +25,10 @@ func TestVMFilesystemIncompleteInventoryKeepsPeersAndSingleAttempt(t *testing.T)
 			"scalar-record":  `42`,
 			"empty-record":   `{}`,
 			"unknown-record": `{"unknown":"value"}`,
+			"case-name":      `{"name":"/dev/vdb1","NAME":"C:\\","mountpoint":"/data","type":"ext4","total-bytes":9000,"used-bytes":8820}`,
+			"case-type":      `{"mountpoint":"/data","type":"ext4","TYPE":"tmpfs","total-bytes":9000,"used-bytes":8820}`,
+			"case-mount":     `{"mountpoint":"/data","MOUNTPOINT":"/proc","type":"ext4","total-bytes":9000,"used-bytes":8820}`,
+			"case-disk":      `{"mountpoint":"/data","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"DISK":[{"dev":"/dev/vda1"}],"total-bytes":9000,"used-bytes":8820}`,
 		} {
 			t.Run(path+"/"+name, func(t *testing.T) {
 				var commands, configs atomic.Int32
