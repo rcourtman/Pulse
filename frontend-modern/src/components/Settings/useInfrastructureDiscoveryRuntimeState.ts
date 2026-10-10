@@ -164,11 +164,6 @@ export const useInfrastructureDiscoveryRuntimeState = ({
     } else {
       setDiscoveredNodes(filtered);
     }
-
-    setDiscoveryScanStatus((previous) => ({
-      ...previous,
-      lastResultAt: Date.now(),
-    }));
   };
 
   const loadDiscoveredNodes = async () => {
@@ -192,10 +187,12 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       const responseTimestamp = normalizeDiscoveryTimestamp(data?.timestamp ?? data?.updated);
       if (Array.isArray(data.servers)) {
         updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
+        // Loading the stored result is not a scan. A fresh install answers
+        // `updated: 0`, and dating that "now" reads as "Last scanned 0s ago".
         setDiscoveryScanStatus((previous) => ({
           ...previous,
           scanning: false,
-          lastResultAt: responseTimestamp ?? Date.now(),
+          lastResultAt: responseTimestamp ?? previous.lastResultAt,
           errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
         }));
         return;

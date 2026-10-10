@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "f89136e3838d03f457a2cd82ceeaf732c452fd24",
+  "verified_at": "2026-10-10T19:41:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
+    "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "77d7305a3768d8377de8d0ba6f4f7236dd52fa546921323053fa115a6a91109e",
+    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts": "adec08da6b2b9259d0161ee55c84083cd9c0d94e56e09199342caa025ccb3372",
+    "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts": "2f7821fa6e0c0aad53fd5937865496cc014cc562e71d43cfeddcd6ab0d9054ca"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "fresh install, nothing connected, discovery off (1440 and 375): supported-sources paragraph wraps in full, one Add infrastructure button, no Last scanned or Not configured text beside the Off badge",
+    "fresh install with discovery turned on and a scan in progress: Scanning and Started 0s ago",
+    "discovery on, scan finished and page not yet told the result: Ready with No scan result yet and a Run discovery button",
+    "page reloaded after the scan: Last scanned 15s ago matching the server updated timestamp, four discovered candidates listed (1440 and 375)",
+    "mock estate with 15 connected systems: connection posture band shows the systems count, active count, agent update count and Open Agent Doctor; no stray add or scan button. The Install agent summary button needs a Proxmox host without an agent, which this estate does not contain, so that button is covered by the component test only and was not seen in the browser"
+  ],
+  "interactions": [
+    "opened Configure discovery and switched on automatic scanning, which started a real scan",
+    "reloaded Settings Infrastructure to read the stored discovery result",
+    "resized between 1440x900 and 375x812 and re-read the empty and candidate states",
+    "read computed white-space on the empty-state paragraph chain to confirm the nowrap source and that the wrapper now wraps"
+  ]
+}
