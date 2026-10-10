@@ -30,9 +30,9 @@ The two-option Chat menu keeps radio semantics, keyboard cycling/Escape/focus
 and saved-error recovery. Copy explains infrastructure plans in Actions and
 separate Patrol authority; it does not grant approval or execution. Existing
 scoped resource/alert/Patrol briefings and compact layouts remain intact.
-The retained Protected guests (legacy) field has an accessible description
-explicitly stating that it does not exclude saved action plans. Its saved list
-is not erased or presented as an execution safeguard. The Chat control menu
+The panel has no Protected guests field: it never excluded a saved action plan,
+so it was removed, and a muted line points operators at the resource's Never
+auto-remediate lock instead (`ai-never-auto-remediate-hint`). The Chat control menu
 clamps to the composer and viewport on open and closes on viewport resize,
 so a wrapped toolbar does not clip either option. Mounted geometry checks
 and real 390px/320px browser bounds cover this observed gap.
@@ -3849,7 +3849,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     Patrol autonomy distinct from Assistant chat actions: Patrol's
     hands-on control level belongs on the Patrol page, while the shared settings
     shell may only describe whether Assistant chat can run eligible chat
-    actions.
+    actions. The panel carries no per-guest allowlist or denylist: guests the
+    Assistant must not touch are locked with Never auto-remediate in the
+    resource's Operator overrides, and `AIRuntimeControlsSection.tsx` points
+    there instead of storing a separate Protected guests list.
 11. Keep first-session dashboard empty-state copy on
     `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
     infrastructure setup guidance name the canonical destination explicitly
@@ -6206,6 +6209,25 @@ resource-list filter shape. If a future surface needs a new filtering
 affordance, it should extend the FilterBar catalog model or add a new
 registry-backed shared primitive rather than reintroducing a per-page select
 row.
+
+Kiosk mode (`?kiosk=1`, the session flag read through
+`frontend-modern/src/hooks/useKioskMode.ts`) is the read-only wall display,
+and `FilterBar` owns hiding filter chrome there. While kiosk is on the shared
+bar stays unmounted, so search, inline and menu filters, View options, leading
+and trailing controls, and the search field's type-to-search listener are all
+absent on every consumer, including the Proxmox and vSphere workload
+overviews, platform tables through `PlatformTableToolbar`, Storage, Proxmox
+Backups, and Alert History. Filter state that is already applied keeps
+narrowing the rendered rows; kiosk changes what is shown, not what the URL or
+stored preferences select. Consumers must not re-implement the gate page by
+page: the Proxmox and vSphere overview toolbars lost it when they were hoisted
+out of `WorkloadsSurface`, and kept rendering on kiosk displays until the rule
+moved into the shared bar. A consumer whose surrounding chrome exists only for
+the bar, such as the Storage view subtabs, may still hide that chrome itself.
+The rule covers the shared bar only: a scope heading and its reset (the
+Proxmox `Guests on <node>` heading with Show all nodes), chart-driven
+selections on Proxmox Backups and Alert History, and search fields inside
+opened drawers are outside it.
 
 FilterBar does not carry a saved-views affordance. The former
 `savedViewsKey` / `useSavedViews` / `SavedViewsMenu` trio persisted named

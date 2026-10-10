@@ -176,7 +176,6 @@ func NewService(cfg Config) *Service {
 
 	if cfg.AIConfig != nil {
 		execCfg.ControlLevel = resolveEffectiveControlLevel(cfg.ControlLevelResolver, cfg.AIConfig)
-		execCfg.ProtectedGuests = cfg.AIConfig.GetProtectedGuests()
 	}
 
 	executor := tools.NewPulseToolExecutor(execCfg)
@@ -562,7 +561,6 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	// Update executor settings
 	if s.executor != nil && s.cfg != nil {
 		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
-		s.executor.SetProtectedGuests(s.cfg.GetProtectedGuests())
 	}
 
 	// Recreate provider with new settings
@@ -3687,7 +3685,6 @@ func (s *Service) UpdateControlSettings(cfg *config.AIConfig) {
 	s.cfg = cfg
 	if s.executor != nil {
 		s.executor.SetControlLevel(s.effectiveControlLevelLocked())
-		s.executor.SetProtectedGuests(cfg.GetProtectedGuests())
 	}
 }
 

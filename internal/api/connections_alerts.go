@@ -66,6 +66,19 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
 		inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
+		// A non-default org's cfg is its monitor's detached config copy
+		// (#1619), which a settings save does not update: saved PBS and PMG
+		// intervals reach the monitor only as runtime overrides. Scale the
+		// stale cutoff by the cadence the monitor actually polls at.
+		if interval := monitor.BasePollInterval(monitoring.InstanceTypePVE); interval > 0 {
+			inputs.pvePollingInterval = interval
+		}
+		if interval := monitor.BasePollInterval(monitoring.InstanceTypePBS); interval > 0 {
+			inputs.pbsPollingInterval = interval
+		}
+		if interval := monitor.BasePollInterval(monitoring.InstanceTypePMG); interval > 0 {
+			inputs.pmgPollingInterval = interval
+		}
 		inputs.plannedPollIntervals = plannedPollIntervalsForConfig(monitor, cfg)
 	} else {
 		inputs.hosts = []models.Host{}

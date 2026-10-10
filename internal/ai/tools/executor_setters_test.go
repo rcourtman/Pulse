@@ -49,9 +49,6 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec.SetControlLevel(ControlLevelControlled)
 	assert.Equal(t, ControlLevelControlled, exec.controlLevel)
 
-	exec.SetProtectedGuests([]string{"100", "101"})
-	assert.Equal(t, []string{"100", "101"}, exec.protectedGuests)
-
 	metadataUpdater := &stubMetadataUpdater{}
 	exec.SetMetadataUpdater(metadataUpdater)
 	assert.Equal(t, metadataUpdater, exec.metadataUpdater)

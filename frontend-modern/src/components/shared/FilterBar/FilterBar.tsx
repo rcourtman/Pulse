@@ -4,6 +4,7 @@ import { Card } from '@/components/shared/Card';
 import { FilterButtonGroup } from '@/components/shared/FilterButtonGroup';
 import { FilterActionButton, FilterMobileToggleButton } from '@/components/shared/FilterToolbar';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
 import {
@@ -80,7 +81,7 @@ const FilterSearchTermChip: Component<{
   </div>
 );
 
-export const FilterBar: Component<FilterBarProps> = (props) => {
+const FilterBarToolbar: Component<FilterBarProps> = (props) => {
   const [mobileExpanded, setMobileExpanded] = createSignal(false);
   const [searchDraft, setSearchDraft] = createSignal('');
   const [searchTerms, setSearchTerms] = createSignal<FilterSearchTerm[]>([]);
@@ -365,5 +366,17 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
         </Show>
       </div>
     </Card>
+  );
+};
+
+// Kiosk mode is the read-only wall display, so every filter toolbar stays
+// unmounted there, type-to-search listener included. The shared bar owns the
+// rule so a page that moves or adds a toolbar cannot drop it.
+export const FilterBar: Component<FilterBarProps> = (props) => {
+  const kioskMode = useKioskMode();
+  return (
+    <Show when={!kioskMode()}>
+      <FilterBarToolbar {...props} />
+    </Show>
   );
 };

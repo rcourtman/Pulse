@@ -3610,6 +3610,30 @@ tighten it only when a freshly shortened interval justifies an earlier run.
 Without this, a sixty-second availability target polls at the ten-second
 tick cadence whenever adaptive polling is off, which is the default.
 
+### Base poll cadence is read through the monitor, not its config copy
+
+`Monitor.BasePollInterval` (`internal/monitoring/monitor_runtime_settings.go`)
+is the exported reader for the clamped base cadence the monitor polls PVE,
+PBS and PMG at. For the built-in poll providers it returns the same values as
+the scheduler's `baseIntervalForInstanceType`, including PBS and PMG runtime
+polling overrides, but skips the poll-provider lookup, so it never takes
+`m.mu`. A replacement provider's own `BaseInterval`, a provider's fixed
+instance interval, and a task already queued at its previous interval can
+differ from it until the next planning pass. A monitor without config reports
+zero where the scheduler falls back to ten seconds.
+Non-default tenant monitors poll against a detached config copy (#1619), so a
+saved PBS or PMG interval reaches them only as one of those overrides, and
+`GetConfig` keeps the old value until that monitor is rebuilt (a restart, or a
+full reload such as a PVE interval save). Code outside the monitor that
+judges poll freshness, starting with the connections list, must read the cadence
+through `BasePollInterval`, not from the config. It reports the same base under
+adaptive scheduling, where it is only a floor: the adaptive scheduler plans
+each instance's interval independently of the per-platform intervals, and
+`PlannedPollInterval` reports that plan. The fixed-cadence branch of
+`Monitor.resourcePollIntervals` reads the same accessor. Regression coverage:
+`TestMonitorBasePollIntervalReportsSchedulerBaseCadence` in
+`internal/monitoring/canonical_guardrails_test.go`.
+
 ### Host report admission does not wedge on stale removal blocks
 
 Host-agent report admission consults removal blocks across the durable

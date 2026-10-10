@@ -59,7 +59,7 @@ type AISettingsHandler struct {
 	aiServicesMu            sync.RWMutex
 	agentServer             *agentexec.Server
 	onModelChange           func() // Called when model or other AI chat-affecting settings change
-	onControlSettingsChange func() // Called when control level or protected guests change
+	onControlSettingsChange func() // Called when the control level changes
 
 	// Providers to be applied to new services
 	stateProvider           ai.StateProvider
@@ -2341,8 +2341,7 @@ type AISettingsResponse struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    string   `json:"control_level"`    // "read_only" or "controlled" (interactive projection)
-	ProtectedGuests []string `json:"protected_guests"` // VMIDs/names that AI cannot control
+	ControlLevel string `json:"control_level"` // "read_only" or "controlled" (interactive projection)
 	// Discovery settings
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
@@ -2424,9 +2423,6 @@ func (r AISettingsResponse) NormalizeCollections() AISettingsResponse {
 	}
 	if r.Providers == nil {
 		r.Providers = []AIProviderDefinitionResponse{}
-	}
-	if r.ProtectedGuests == nil {
-		r.ProtectedGuests = []string{}
 	}
 	if r.PatrolAlertTriggerTypes == nil {
 		r.PatrolAlertTriggerTypes = []string{}
@@ -2537,8 +2533,7 @@ type AISettingsUpdateRequest struct {
 	// Request timeout (seconds) - for slow hardware running local models
 	RequestTimeoutSeconds *int `json:"request_timeout_seconds,omitempty"`
 	// Infrastructure control settings
-	ControlLevel    *string  `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs/names that AI cannot control (nil = don't update, empty = clear)
+	ControlLevel *string `json:"control_level,omitempty"` // "read_only", "controlled", "autonomous"
 	// Discovery settings
 	DiscoveryEnabled       *bool `json:"discovery_enabled,omitempty"`        // Enable discovery
 	DiscoveryIntervalHours *int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
@@ -2678,7 +2673,6 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		CostBudgetUSD30d:          settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
 		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
-		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
 		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
@@ -3077,11 +3071,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		}
 	}
 
-	// Handle protected guests (nil = don't update)
-	if req.ProtectedGuests != nil {
-		settings.ProtectedGuests = req.ProtectedGuests
-	}
-
 	// Handle discovery settings
 	if req.DiscoveryEnabled != nil {
 		settings.DiscoveryEnabled = *req.DiscoveryEnabled
@@ -3158,9 +3147,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		h.onModelChange()
 	}
 
-	// Update Assistant control settings if control level or protected guests changed.
+	// Update Assistant control settings if the control level changed.
 	// This updates tool visibility without restarting AI chat.
-	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
+	if h.onControlSettingsChange != nil && req.ControlLevel != nil {
 		h.onControlSettingsChange()
 	}
 
@@ -3237,7 +3226,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		Providers:                 aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
 		ControlLevel:              settings.GetAssistantControlLevel(hasAutoFixFeature),
-		ProtectedGuests:           settings.GetProtectedGuests(),
 		DiscoveryEnabled:          settings.DiscoveryEnabled,
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
 		PatrolReadiness:           ptrToPatrolReadiness(patrolReadiness),

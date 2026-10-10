@@ -109,9 +109,12 @@ entitlement checks for older clients. It does not bypass approval. An unrelated
 settings save does not rewrite that preference. Unknown values fail closed to
 read-only. Patrol mode and Autopilot acknowledgements remain separate.
 
-**Protected guests (legacy)** retains older VMIDs or names. This list does not
-exclude saved action plans. Review each plan’s target and approval policy in
-**Actions** instead of treating this list as an execution safeguard.
+To keep Assistant away from a specific guest, lock it: open the guest, choose
+**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
+Pulse then refuses typed actions that target that resource, including
+approved ones (see [Keep a Resource Off-Limits](#keep-a-resource-off-limits)).
+Older versions also showed a **Protected guests** list here. It never excluded a
+guest from action plans, so it has been removed.
 
 ### Configuration
 
@@ -188,6 +191,10 @@ The assistant cannot operate on resources it hasn't first discovered. This preve
 ### Verification-After-Write
 
 After executing any control action, the assistant must verify the result with a read operation before reporting success. This is enforced by the FSM — the assistant cannot return to idle state without verification.
+
+### Keep a Resource Off-Limits
+
+To stop Pulse acting on a specific guest, host or container, open its drawer, choose **Manage**, turn on **Never auto-remediate** under Operator overrides, confirm the prompt, and click **Save overrides**. Pulse then refuses typed actions that target that exact resource: the Assistant declines to plan one when it can read the lock, Patrol will not run one, and the action lifecycle checks the lock again before it runs an action that was already planned, even when approved. The lock covers that resource only, not its host or other resources, and it does not stop read-only investigation. Turn it off and save again when you want Pulse to act on the resource again. A resource whose lifecycle is Retired is blocked the same way until the lifecycle is set back to Active.
 
 ---
 

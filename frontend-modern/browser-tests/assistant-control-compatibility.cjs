@@ -67,7 +67,7 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
             assert.equal(await select.locator('option').count(), 2);
             const text = await page.locator('main').innerText();
             assert.ok(!text.includes('chat-only') && !text.includes('Infrastructure changes stay with Patrol'));
-            if (expected === 'controlled') { assert.ok(text.includes('Chat does not execute the plan')); const legacy = page.getByLabel('Protected guests (legacy)', { exact: true }); assert.equal(await legacy.inputValue(), 'vm-101'); assert.equal(await legacy.getAttribute('aria-describedby'), 'ai-protected-guests-help'); assert.ok(text.includes('This list does not exclude saved action plans.')); assert.ok(text.includes('Review each plan’s target and approval policy in Actions.')); }
+            if (expected === 'controlled') { assert.ok(text.includes('Chat does not execute the plan')); assert.equal(await page.getByLabel(/Protected guests/i).count(), 0); assert.ok(!text.includes('Protected guests')); const hint = page.getByTestId('ai-never-auto-remediate-hint'); assert.ok((await hint.innerText()).includes('Never auto-remediate')); assert.ok(!(await page.locator('input').evaluateAll((els) => els.some((el) => el.value === 'vm-101')))); }
             else assert.ok(text.includes('Assistant can query and explain only. It cannot plan infrastructure actions.'));
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
           });
@@ -136,7 +136,7 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
             await page.getByRole('link', { name: link, exact: true }).click();
             const h = page.getByRole('heading', { name: heading, exact: true }); await h.waitFor(); await h.scrollIntoViewIfNeeded();
             const text = await page.locator('article').innerText(); assert.ok(text.includes('Assistant chat does not execute'));
-            assert.ok(text.includes('stored') && text.includes('entitlement') && text.includes('independent verification') && text.includes('Protected guests (legacy)') && text.includes('does not exclude saved action plans'));
+            assert.ok(text.includes('stored') && text.includes('entitlement') && text.includes('independent verification') && text.includes('Never auto-remediate') && text.includes('has been removed'));
             assert.ok(!text.includes('executes actions without prompting') && !text.includes('executes commands without prompting'));
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
             await capture(state);

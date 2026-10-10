@@ -319,30 +319,13 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
           {getAIControlLevelDescription(state.form.controlLevel)}
         </p>
         <Show when={state.form.controlLevel !== 'read_only'}>
-          <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">
-            <label
-              for="ai-protected-guests"
-              class="text-xs font-medium text-muted w-28 shrink-0 pt-1"
-            >
-              Protected guests (legacy)
-            </label>
-            <div class="flex-1">
-              <input
-                id="ai-protected-guests"
-                aria-describedby="ai-protected-guests-help"
-                type="text"
-                value={state.form.protectedGuests}
-                onInput={(e) => state.setForm('protectedGuests', e.currentTarget.value)}
-                placeholder="e.g., 100, 101, prod-db"
-                class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded-sm"
-                disabled={state.saving()}
-              />
-              <p id="ai-protected-guests-help" class="text-[10px] text-muted mt-1">
-                Retained legacy VMIDs or names. This list does not exclude saved action plans.
-                Review each plan’s target and approval policy in Actions.
-              </p>
-            </div>
-          </div>
+          <p
+            class="pt-2 border-t border-blue-200 dark:border-blue-700 text-[10px] text-muted"
+            data-testid="ai-never-auto-remediate-hint"
+          >
+            To keep Assistant away from a guest, open it, choose Manage, turn on Never
+            auto-remediate, and save. Pulse then refuses typed actions on that guest.
+          </p>
         </Show>
       </div>
     </>
