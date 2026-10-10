@@ -388,7 +388,7 @@ PY
     def test_retarget_uninstall_and_cleanup_use_saved_script_without_new_token(self):
         expected = (["--retarget", "--url", "https://pulse.example.com"], ["--uninstall"],
                     ["--uninstall", "--local-only"])
-        commands = [recipe(NAMES[0], "--retarget --url"), recipe(NAMES[0], 'agent-install.sh" --uninstall'),
+        commands = [recipe(NAMES[0], "--retarget --url"), recipe(NAMES[0], 'agent-install.sh" --uninstall\n'),
                     recipe(NAMES[1], "--uninstall --local-only")]
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
@@ -398,6 +398,12 @@ PY
             for name in ("agent-install.sh", "sensor-proxy-uninstall.sh"):
                 (private / name).write_text(fixture)
             env = fixture_environment(home)
+            tools = home / "tools"
+            tools.mkdir()
+            sudo = tools / "sudo"
+            sudo.write_text('#!/bin/sh\nexec "$@"\n')
+            sudo.chmod(0o700)
+            env["PATH"] = f"{tools}:{env['PATH']}"
             env["INSTALL_RECEIPT"] = str(home / "argv.json")
             for command, args in zip(commands, expected):
                 result, recorded_args = run_recorded_recipe(command, env)
