@@ -77,7 +77,7 @@ func (m *Monitor) cachedGuestMemoryObservation(instance, node string, vmid int, 
 	m.rrdCacheMu.RLock()
 	entry, ok := m.vmAgentMemCache[guestMemoryCacheKey(instance, node, vmid)]
 	m.rrdCacheMu.RUnlock()
-	if !ok || entry.negative || entry.fetchedAt.IsZero() || entry.fetchedAt.After(now) || now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge || memory.Total <= 0 || entry.info.EffectiveAvailable > uint64(memory.Total) || memory.Used != memory.Total-int64(entry.info.EffectiveAvailable) {
+	if !ok || entry.negative || entry.fetchedAt.IsZero() || entry.fetchedAt.After(now) || now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge || memory.Total <= 0 || (entry.info.Total > 0 && entry.info.Total != uint64(memory.Total)) || entry.info.EffectiveAvailable > uint64(memory.Total) || memory.Used != memory.Total-int64(entry.info.EffectiveAvailable) {
 		return models.MemoryObservation{}, false
 	}
 	expected := models.Memory{Free: int64(entry.info.EffectiveAvailable)}

@@ -43,7 +43,12 @@ func guestMemoryCacheKey(instanceName, node string, vmid int) string {
 // refresh; the cleanup age bounds last-known evidence during coordination.
 // Neither a poll timestamp nor a previous-snapshot trust label renews that age.
 func (m *Monitor) deferredVMGuestMemory(instanceName, node string, vmid int, total uint64, previous *GuestMemorySnapshot, now time.Time) (models.Memory, bool) {
-	if previous == nil || previous.GuestType != "qemu" || previous.Status != "running" || previous.Instance != instanceName || previous.Node != node || previous.VMID != vmid || !previous.Memory.HasKnownUsage() || uint64(previous.Memory.Total) != total {
+	if previous == nil || previous.GuestType != "qemu" || previous.Status != "running" || previous.Instance != instanceName || previous.Node != node || previous.VMID != vmid || !previous.Memory.HasKnownUsage() || previous.Memory.Total <= 0 {
+		return models.Memory{}, false
+	}
+	// The last guest sample can be smaller than its configured maximum. Keep
+	// the tuple intact, but still reject retention across a capacity change.
+	if guestMemoryConfiguredCapacity(previous) != total {
 		return models.Memory{}, false
 	}
 	switch CanonicalMemorySource(previous.MemorySource) {
@@ -60,7 +65,8 @@ func (m *Monitor) deferredVMGuestMemory(instanceName, node string, vmid int, tot
 	if entry.info.Source != "meminfo-available" && entry.info.Source != "meminfo-derived" {
 		return models.Memory{}, false
 	}
-	if entry.info.EffectiveAvailable > total || previous.Memory.Used != int64(total-entry.info.EffectiveAvailable) {
+	sampleTotal := uint64(previous.Memory.Total)
+	if (entry.info.Total > 0 && entry.info.Total != sampleTotal) || entry.info.EffectiveAvailable > sampleTotal || previous.Memory.Used != int64(sampleTotal-entry.info.EffectiveAvailable) {
 		return models.Memory{}, false
 	}
 	expected := models.Memory{Free: int64(entry.info.EffectiveAvailable)}

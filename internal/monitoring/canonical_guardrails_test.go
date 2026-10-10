@@ -3297,3 +3297,7 @@ func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestMemorySampleCapacityCanonicalProjection(t *testing.T) {
+	testGuestMemorySampleCapacityPolling(t)
+}

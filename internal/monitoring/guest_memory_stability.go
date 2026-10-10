@@ -31,6 +31,28 @@ func guestMemorySourceReliability(source string) int {
 	}
 }
 
+// Configured capacity fences a VM resize; it is not the denominator of an
+// in-guest reading. Older snapshots and containers keep their existing total.
+func guestMemoryConfiguredCapacity(previous *GuestMemorySnapshot) uint64 {
+	if previous == nil || previous.Memory.Total <= 0 {
+		return 0
+	}
+	if previous.GuestType == "qemu" {
+		if previous.Raw.StatusMaxMem > 0 {
+			return previous.Raw.StatusMaxMem
+		}
+		if previous.Raw.ListingMaxMem > 0 {
+			return previous.Raw.ListingMaxMem
+		}
+	}
+	return uint64(previous.Memory.Total)
+}
+
+func guestMemoryCapacityMatches(previous *GuestMemorySnapshot, currentTotal uint64) bool {
+	return previous != nil && previous.Memory.Total > 0 &&
+		(uint64(previous.Memory.Total) == currentTotal || guestMemoryConfiguredCapacity(previous) == currentTotal)
+}
+
 func (m *Monitor) previousGuestSnapshot(instance, guestType, node string, vmid int) *GuestMemorySnapshot {
 	if m == nil {
 		return nil
@@ -104,7 +126,7 @@ func shouldCarryForwardPreviousGuestMemory(prev *GuestMemorySnapshot, currentSta
 	if prevReliability <= currentReliability {
 		return false
 	}
-	if currentTotal > 0 && prev.Memory.Total > 0 && prev.Memory.Total != int64(currentTotal) {
+	if currentTotal > 0 && !guestMemoryCapacityMatches(prev, currentTotal) {
 		return false
 	}
 
@@ -126,7 +148,7 @@ func shouldCarryForwardHealthyGuestLowTrustMemory(prev *GuestMemorySnapshot, cur
 	if !guestMemorySnapshotWithinAge(prev, now, guestMemoryHealthyGuestMaxAge) {
 		return false
 	}
-	if currentTotal == 0 || prev.Memory.Total != int64(currentTotal) {
+	if currentTotal == 0 || !guestMemoryCapacityMatches(prev, currentTotal) {
 		return false
 	}
 	if guestMemorySourceReliability(currentSource) != guestMemoryReliabilityLow {

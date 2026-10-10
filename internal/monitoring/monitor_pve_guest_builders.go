@@ -411,6 +411,15 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	var snapshotNotes []string
+	if prevSnapshot != nil && (prevSnapshot.Raw.StatusMaxMem > 0 || prevSnapshot.Raw.ListingMaxMem > 0) {
+		currentCapacity := state.guestRaw.StatusMaxMem
+		if currentCapacity == 0 {
+			currentCapacity = state.guestRaw.ListingMaxMem
+		}
+		if guestMemoryConfiguredCapacity(prevSnapshot) != currentCapacity {
+			prevSnapshot = nil // A resize cannot retain the earlier guest tuple.
+		}
+	}
 	state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(
 		prevSnapshot,
 		res.Status,
@@ -428,6 +437,11 @@ func (m *Monitor) buildVMFromClusterResource(
 			state.agentVersion,
 		),
 	)
+	if state.memorySource == "previous-snapshot" && prevSnapshot != nil {
+		// Retention keeps the original guest denominator as well as its usage.
+		// The selector has already checked capacity continuity and source age.
+		state.memTotal = uint64(prevSnapshot.Memory.Total)
+	}
 	memFree := uint64(0)
 	if state.memTotal >= state.memUsed {
 		memFree = state.memTotal - state.memUsed
@@ -478,6 +492,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		trulyFree = state.guestRaw.GuestAgentMemFree
 	}
 	splitReclaimableMemory(&memory, trulyFree)
+	if state.memorySource == "previous-snapshot" && prevSnapshot != nil && prevSnapshot.Memory.Observation.State != "" {
+		memory = prevSnapshot.Memory
+	}
 	if state.detailedStatus != nil && state.detailedStatus.Balloon > 0 {
 		memory.Balloon = int64(state.detailedStatus.Balloon)
 	}
