@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "9f3726a05da68dc511007db46f7bf7543bc5f36c",
+  "verified_at": "2026-10-08T10:47:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useRecoveryPoints.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useRecoveryPoints.ts": "b7468328eb31dabd1b2a397f0ae2100f140e3acb8f8967906ede84f7e2fd7bb7"
+  },
+  "routes": [
+    "/truenas/overview",
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Before/after pair on pulse-dev: production vite builds of the parent tree (main at 9f3726a05d, which is byte-identical to the PR 2750 head f0561c274b the pair was built from) and of this tree, each served with vite preview proxied to the 50-node mock rig on :7699 (which includes the TrueNAS recovery fixtures), driven by the same headless Chromium script at 1440x900 and 390x844.",
+    "Off the Protection tab: /truenas/overview makes no /api/recovery/points request in either build, so the hook still sees a null query there. Opening Protection through the section tab requests /api/recovery/points?page=1&limit=200&platform=truenas (two identical requests on open in both builds); the 33 s window on the tab adds one more, the 30 s poll; leaving to Overview and waiting 33 s adds none; returning requests it once. The request URLs and counts are identical in both builds at both widths.",
+    "TrueNAS Protection: 10 rows in both builds, named by dataset (archive/backups, tank/apps, vault/compliance, tank/photos, tank/media, fast/vm-images), status filter All 10, Attention 1, Healthy 8, Warning 0, Failed 1, Running 1, Unknown 0; searching \"backups\" narrows to the same three rows; the first row opens the identical Protection detail panel (Kind Replication, Outcome Failed, Dataset archive/backups, Host truenas-main, Replication and Target sections) apart from the mock clock minute. Screenshots of both builds at both widths show the table and the phone layout rendered.",
+    "Results JSON: 26 measurements, 24 identical; the two that differ are the detail panel text, which is identical once the mock clock time (03:27/03:28 vs 03:30/03:31) is masked. No failing responses and no console errors in either build.",
+    "Dist proof: 189 files each side; 94 byte-identical (the CSS included), 94 differ only in chunk-hash names and SRI strings, and 1 differs in code. After normalising hashes and short identifiers, TrueNAS-*.js (69306 to 68264 bytes) loses only the removed hook statements: the unused option normalisation, the unused URL parameters, the \"__all__\" branch, the meta memo and the meta and resolvedOnce return members. The literal rollupId is in the before chunk and not in the after chunk.",
+    "check-bundle-size.mjs passes on both builds with no chunk renamed and .bundlesize.json unchanged: TrueNAS 16.86 to 16.57 kB gzip, total JS 1366.45 to 1366.15 kB, total CSS 32.13 kB in both."
+  ],
+  "interactions": [
+    "Sign in with the rig login, load /truenas/overview and wait, click the Protection section tab, read the row labels, status filter options and row count, type \"backups\" into \"Search snapshots or replication\", read the narrowed rows, clear it, expand the first row and read the Protection detail panel; repeat at 390x844.",
+    "Stay on Protection for 33 s and count /api/recovery/points requests, click the Overview section tab and wait 33 s, click Protection again and count requests and rows; repeat at 390x844.",
+    "Run the same script against the before and after builds and diff the JSON; screenshots of both viewports inspected."
+  ]
+}
