@@ -304,7 +304,10 @@ else: sys.exit(97)
                 if path.name == "installer-definitions":
                     before = "cat > /etc/systemd/system/$SERVICE_NAME.service << EOF"
                     self.assertEqual(data.count(before), 1)
+                    append = "cat >> /etc/systemd/system/$SERVICE_NAME.service << EOF"
+                    self.assertEqual(data.count(append), 2)
                     data = data.replace(before, 'cat > "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
+                    data = data.replace(append, 'cat >> "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
