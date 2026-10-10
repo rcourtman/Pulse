@@ -1177,6 +1177,9 @@ that ordinary notifications arrive.
 `WebhookConfig.persistence.test.tsx` exercises the actual editor and mutation
 owner through deferred create/update responses, failure, explicit retry,
 canonical accepted response, cancellation and fixed callback-error guidance.
+The deliberate-retry control defers its response separately: clearing the old
+warning at retry start is not acknowledgement, and the draft stays locked until
+the accepted response incorporates the destination and closes the editor.
 `WebhookConfig.test.tsx` now acknowledges successful saves before expecting
 editor dismissal. The local `webhook-save-acknowledgement` browser fixture
 checks the same components with synthetic API transport, including desktop and

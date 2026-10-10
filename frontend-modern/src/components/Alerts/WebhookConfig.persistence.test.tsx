@@ -119,15 +119,22 @@ describe('webhook persistence acknowledgement', () => {
     expect(NotificationsAPI.createWebhook).toHaveBeenCalledTimes(1);
     expect(notificationStore.success).not.toHaveBeenCalled();
 
-    vi.mocked(NotificationsAPI.createWebhook).mockResolvedValueOnce({
-      ...savedWebhook,
-      id: 'new-hook',
-      name: 'Accepted destination',
-    });
+    const retry = deferred<Webhook>();
+    vi.mocked(NotificationsAPI.createWebhook).mockReturnValueOnce(retry.promise);
     fireEvent.click(screen.getByRole('button', { name: 'Add Webhook' }));
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    // Starting a deliberate retry clears the old warning, not the draft.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('New destination');
+    expect(screen.getByLabelText('Name')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    expect(owner.webhooks()).toEqual([]);
+    expect(notificationStore.success).not.toHaveBeenCalled();
     expect(NotificationsAPI.createWebhook).toHaveBeenCalledTimes(2);
+
+    retry.resolve({ ...savedWebhook, id: 'new-hook', name: 'Accepted destination' });
+    await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(notificationStore.success).toHaveBeenCalledTimes(1);
     expect(vi.mocked(NotificationsAPI.createWebhook).mock.calls[1][0]).toEqual(
       vi.mocked(NotificationsAPI.createWebhook).mock.calls[0][0],
     );
