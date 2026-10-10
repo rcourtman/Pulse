@@ -39,7 +39,11 @@ func TestGuestMemoryQueryEvidence(t *testing.T) {
 		} {
 			for _, path := range []string{"canonical", "typed-view"} {
 				t.Run(kind+"/"+tc.name+"/"+path, func(t *testing.T) {
-					total, used := int64(20<<30), int64(5<<30)
+					total := int64(20 << 30)
+					used := int64(0)
+					if !math.IsNaN(tc.percent) {
+						used = int64(float64(total) * tc.percent / 100)
+					}
 					r := unifiedresources.Resource{ID: "selected-guest", Name: "selected-guest", Type: unifiedresources.ResourceType(kind), Status: unifiedresources.StatusOnline, LastSeen: time.Now(),
 						Proxmox: &unifiedresources.ProxmoxData{VMID: 100, NodeName: "node", Instance: "fixture", SourceID: "source-guest", RuntimeStatus: "running",
 							Memory: &models.Memory{Usage: 99, Observation: models.MemoryObservation{State: "current", Source: "available-field", ObservedAt: time.Now()}}},
@@ -100,6 +104,12 @@ func TestGuestMemoryQueryEvidence(t *testing.T) {
 						}
 						if available && percent != tc.percent || !available && percent != nil {
 							t.Errorf("%s percent=%v want available=%t percent=%g", action, percent, available, tc.percent)
+						}
+						if action == "get" && available {
+							memory := decoded["memory"].(map[string]interface{})
+							if memory["used_gb"] != float64(used)/(1024*1024*1024) || memory["total_gb"] != float64(20) {
+								t.Errorf("selected percentage/bytes came from different samples: %+v", memory)
+							}
 						}
 						if !tc.at.IsZero() && !tc.at.After(time.Now()) && available && e["observed_at"] != tc.at.Format(time.RFC3339) {
 							t.Errorf("%s renewed/lost original time: %+v", action, e)
