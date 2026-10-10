@@ -9,7 +9,6 @@ export const QUARANTINED_SPECS = [
   // the default org. CI runs a multi-tenant environment, so delisting this
   // spec turns that open bug into a permanent red.
   '**/03-multi-tenant.spec.ts',
-  '**/47-inline-selection-scroll-stability.spec.ts',
 ];
 
 /**
@@ -50,6 +49,7 @@ export const PROBATION_SPECS = [
   '**/44-workloads-chart-spacing.spec.ts',
   '**/45-workloads-memory-tail.spec.ts',
   '**/46-storage-summary-continuity.spec.ts',
+  '**/47-inline-selection-scroll-stability.spec.ts',
   '**/49-demo-scenario-curation.spec.ts',
   '**/50-storage-physical-disk-io-history.spec.ts',
   '**/52-ai-settings-provider-setup.spec.ts',

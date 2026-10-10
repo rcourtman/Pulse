@@ -1341,6 +1341,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     (`diskPresentation.ts`) loads with an open agent guest's drawer instead
     of joining the WorkloadsSurface chunk.
     `WorkloadsSurface.performance.contract.test.tsx` pins the dynamic import.
+    Prose and tests call the table chunk the Proxmox and vSphere pages share
+    the WorkloadsSurface chunk, but the build names it after its last module
+    in execution order, and `WorkloadsSurface.tsx` imports only the state's
+    type, so `frontend-modern/.bundlesize.json` tracks it as
+    `useWorkloadsState` with the same limit. A `MISSING` report only says the
+    name is absent, which a split or a removal also causes: when inspection
+    confirms the same shared chunk merely changed its name, rename the key
+    and leave its baseline alone.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
@@ -1837,7 +1845,16 @@ shell clickable behind another overlay.
     display, and columns on the shared `FilterBar`) from that state, directly
     above the surface, and hands the same state to `WorkloadsSurface` through
     its `state` prop. The surface renders no filter row of its own, so the
-    page never stacks two toolbars wired to one state.
+    page never stacks two toolbars wired to one state. That `state` prop is
+    required and the surface never builds a workloads state itself: it
+    accepts only `state` plus presentation props (`forcedPlatform`,
+    `forcedViewMode`, the empty-state title and description, and
+    `tableTitle`). Every `useWorkloadsState` option
+    (`WorkloadsStateOptions` in `useWorkloadsState.ts`) belongs on the
+    page's own state call. The surface repeats only `forcedPlatform` and
+    `forcedViewMode` and declares none of the hook-only options, so a mount
+    that names one as an attribute fails type-checking. It imports only the
+    state's type, so it can never become a second state owner on the page.
     Proxmox also passes that state's search, plus its page-owned metric mode
     and history range, to the nodes table above the guests, so one toolbar
     drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
@@ -2118,9 +2135,9 @@ changes without deduplicating requests. A
 reader therefore must not poll a summary its rows do not render. In Trends
 the vSphere overview polls only the workloads history, and the Proxmox
 overview polls the workloads history and the infrastructure summary once
-each. Standalone
-WorkloadsSurface callers (no override props) keep the original
-persistent-signal-backed behavior.
+each. A `useWorkloadsState` owner that omits these overrides keeps the
+original persistent-signal-backed behavior; `WorkloadsSurface` builds no
+state of its own, so it always renders the owner its page passes.
 Every toolbar that controls a `WorkloadsSurface` consumes
 `getWorkloadsMetricFilterProps` as one atomic binding. Those toolbars are the
 page-owned `WorkloadsFilter` instances on the Proxmox and vSphere overviews,
@@ -3722,6 +3739,22 @@ resource policy attached to them. `internal/mock/generator_test.go` verifies
 nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
+
+### Mock linked fixture builds use the rebuild's link boundary
+
+The mock fixture build holds the operator-link pass back until the snapshot and
+every supplemental source but availability are ingested, then runs one deferred
+pass before availability (`DeferManualLinks`, `ApplyDeferredManualLinks`), as
+the monitor's rebuild does; the availability ingest runs its own pass after it,
+as in the rebuild. The shared memoized snapshot has no links, so it defers
+nothing and builds as before (about 52 ms and 65 MB on the default fixture
+estate, with or without the change). A linked build, which runs only when the
+fixture data version or the link list changes, pays one extra refresh round
+after the deferred pass: about 3 ms and 5 MB more on that estate, the same
+round the rebuild runs.
+`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` in
+`internal/mock/platform_fixtures_test.go` pins the result a pass per source
+does not reach.
 
 ### Alert passes resolve metrics targets without materializing the estate
 

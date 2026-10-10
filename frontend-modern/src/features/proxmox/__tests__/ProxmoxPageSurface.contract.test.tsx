@@ -21,6 +21,8 @@ const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
+const mockWorkloadsSurfaceProps = vi.hoisted(() => vi.fn());
+const mockWorkloadsStateRef = vi.hoisted(() => ({ current: undefined as unknown }));
 const mockWorkloadsReady = vi.hoisted(() => vi.fn(() => false));
 const mockFetchReplicationJobs = vi.hoisted(() =>
   vi.fn((_signal?: AbortSignal) => Promise.resolve([] as unknown[])),
@@ -91,13 +93,16 @@ vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: () => <div data-testid="workloads-surface" />,
+  WorkloadsSurface: (props: Record<string, unknown>) => {
+    mockWorkloadsSurfaceProps(props);
+    return <div data-testid="workloads-surface" />;
+  },
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
   useWorkloadsState: (options: unknown) => {
     mockWorkloadsOptions(options);
-    return {
+    const state = {
       surfaceConnected: mockWorkloadsReady,
       surfaceInitialDataReceived: mockWorkloadsReady,
       allGuests: () => (mockWorkloadsReady() ? [{ id: 'vm-1' }] : []),
@@ -108,6 +113,8 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
       search: mockWorkloadSearch,
       setSearch: vi.fn(),
     };
+    mockWorkloadsStateRef.current = state;
+    return state;
   },
 }));
 
@@ -611,6 +618,29 @@ describe('ProxmoxPageSurface contract', () => {
         .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('hands the guests table only its page-owned state and presentation props', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+    renderSurface();
+
+    const props = mockWorkloadsSurfaceProps.mock.lastCall?.[0] as Record<string, unknown>;
+    expect(Object.keys(props).sort()).toEqual([
+      'emptyStateDescription',
+      'emptyStateTitle',
+      'forcedPlatform',
+      'state',
+      'tableTitle',
+    ]);
+    expect(props.state).toBe(mockWorkloadsStateRef.current);
+    const options = mockWorkloadsOptions.mock.lastCall?.[0] as { forcedPlatform?: string };
+    expect(props.forcedPlatform).toBe(options.forcedPlatform);
+    expect(options).toEqual(
+      expect.objectContaining({
+        excludedWorkloadTypes: ['app-container'],
+        showNestedExcludedWorkloads: true,
+      }),
+    );
   });
 
   it('keeps the bounded node preview before guests at every viewport', () => {

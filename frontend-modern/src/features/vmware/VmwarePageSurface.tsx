@@ -533,10 +533,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
       </Show>
       <WorkloadsSurface
         state={workloadsState}
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
