@@ -24,6 +24,8 @@ vi.mock('@/hooks/useBreakpoint', () => ({
 vi.mock('../useAlertHistoryState', () => ({
   useAlertHistoryState: () => ({
     alertData: () => [],
+    loading: () => false,
+    historyLoadError: () => false,
   }),
 }));
 

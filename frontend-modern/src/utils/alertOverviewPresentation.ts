@@ -420,6 +420,16 @@ export function getAlertHistoryLoadingState() {
   } as const;
 }
 
+export function getAlertHistoryLoadFailure() {
+  return {
+    title: 'Could not load alert history',
+    description:
+      'Any entries shown may be incomplete or out of date. Retry to refresh saved history.',
+    retryLabel: 'Retry history',
+    retryingLabel: 'Retrying…',
+  } as const;
+}
+
 export function getAlertBucketCountLabel(count: number) {
   return count === 0 ? ALERT_BUCKET_EMPTY_LABEL : `${count} alert${count === 1 ? '' : 's'}`;
 }
