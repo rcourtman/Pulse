@@ -170,26 +170,30 @@ jobs:
         run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
 
       # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
-      # Keep their supported Bash/GNU metadata semantics local to that step;
+      # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
       # native macOS agent/runtime tests still use the runner's own utilities.
       - name: Supply Linux server installer fixture tools on macOS
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          brew install bash
+          brew install bash gnu-tar
           linux_bash="$(brew --prefix bash)/bin/bash"
           test -x "$linux_bash"
           "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
           coreutils_bin="$(brew --prefix coreutils)/bin"
           fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
           ln -s "$linux_bash" "$fixture_bin/bash"
-          for tool in stat chmod chown; do
+          for tool in stat chmod chown mv; do
             executable="$coreutils_bin/g$tool"
             test -x "$executable"
             "$executable" --version | grep -q 'GNU coreutils'
             ln -s "$executable" "$fixture_bin/$tool"
           done
+          gnu_tar="$(brew --prefix gnu-tar)/bin/gtar"
+          test -x "$gnu_tar"
+          "$gnu_tar" --version | grep -q 'GNU tar'
+          ln -s "$gnu_tar" "$fixture_bin/tar"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
       - name: Test native Unix installer contracts

@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Legacy alert-history compaction releases removed-row storage
+
+Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
+for the surviving history rows, not the original loaded row count. Unchanged
+expiry and removal passes keep the current array. This reduces avoidable runtime
+retention after loading a mostly-expired or noisy history without changing the
+30-day cutoff, five-minute duplicate chain, earliest occurrence/latest observation,
+identity, ordering, evidence or empty-array shape.
+
+`history_retention_storage_test.go` verifies exact survivor capacity, recurrence
+and neighbour separation, detached migration snapshots, subsequent appends and
+concurrent reads/writes. Connected primary, backup and retired-JSON loads compact
+without rewriting the recovery files or changing their retirement state. JSON
+recovery and event-log authority remain unchanged. Array-capacity evidence is not
+whole-process RSS or attribution of a reported installation's memory growth.
+
+
 ### Webhook list changes share the editor's acknowledged writer
 
 Enable/Disable, deletion, bulk changes and form saves cannot overlap in one
@@ -4712,3 +4729,27 @@ provider, mask, routing and off-state behaviour;
 `src/utils/__tests__/alertEmailPresentation.test.ts` covers the retry explanation.
 Browser proof uses the production email panel, destination state, API and CSS
 with synthetic local endpoints. It is not native SMTP delivery or a release.
+
+### Notification recovery belongs to its mounted view
+
+Overview and Notifications retire their delivery-health/recovery owner on
+unmount. Late health success, failure and loading completion cannot update
+that owner. Late Retry/Dismiss completion cannot publish a global toast,
+change its feedback or start health/activity readbacks after the view retires.
+A callback scheduled before retirement is checked again before invocation;
+already-started activity failures cannot restore retired feedback. Calls to
+retired health/action/clear handlers do nothing, including no confirmation.
+
+An already-dispatched mutation or read is not cancelled, undone or declared
+failed by navigation. Active views retain the existing confirmation,
+acknowledgement, read ordering and persistent failure feedback. A replacement
+view owns its independent read and any deliberately confirmed action; source
+checks do not establish notification delivery or installed queue recovery.
+
+`useNotificationDeliveryHealth.lifecycle.test.tsx` covers pending reads and
+both actions, callback scheduling/completion and retired entry points.
+`useAlertDestinationsTabState.test.tsx` connects both actions to the real
+Notifications owner, proving a late result cannot notify or start readbacks
+in its replacement while the replacement's own action still works. Browser
+controls use the actual Overview/Notifications components, API adapters,
+toast and CSS with synthetic local endpoints at desktop/phone widths.

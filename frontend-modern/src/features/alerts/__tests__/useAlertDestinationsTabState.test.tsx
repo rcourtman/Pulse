@@ -78,6 +78,95 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
 });
 
 describe('useAlertDestinationsTabState', () => {
+  describe.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)(
+    '%s view replacement',
+    (action) => {
+      it.each(['accepted', 'rejected'] as const)(
+        'does not attribute the retired %s result or refresh to the new Notifications tab',
+        async (outcome) => {
+          const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+          vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+          vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [] } as never);
+          vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+            queue: { status: 'degraded', attentionRequired: 2 },
+          } as never);
+          const mountTab = () => {
+            const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+            return renderHook(() =>
+              useAlertDestinationsTabState({
+                appriseConfig,
+                setAppriseConfig,
+                configLoadError: () => null,
+                emailConfig: () => buildEmailConfig(),
+                isLoadingDestinations: () => false,
+                isRetrying: () => false,
+                onRetryLoad: vi.fn(),
+              }),
+            );
+          };
+          const retired = mountTab();
+          let current: ReturnType<typeof mountTab> | undefined;
+          try {
+            await waitFor(() => expect(retired.result.deliveryNeedsAttention()).toBe(true));
+            let accept!: (
+              value: Awaited<ReturnType<(typeof NotificationsAPI)[typeof action]>>,
+            ) => void;
+            let reject!: (error: Error) => void;
+            vi.mocked(NotificationsAPI[action]).mockReturnValueOnce(
+              new Promise((yes, no) => {
+                accept = yes;
+                reject = no;
+              }),
+            );
+            const pending = retired.result[action]();
+            retired.cleanup();
+            current = mountTab();
+            await waitFor(() => expect(current!.result.deliveryNeedsAttention()).toBe(true));
+            if (outcome === 'accepted') accept({ success: true, affected: 2 });
+            else reject(new Error('retired action failed'));
+            await pending;
+            expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
+            expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2);
+            expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(2);
+            expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(2);
+            expect(notificationStore.success).not.toHaveBeenCalled();
+            expect(notificationStore.error).not.toHaveBeenCalled();
+            expect(current.result.queueActionFeedback()).toBeNull();
+            expect(current.result.deliveryNeedsAttention()).toBe(true);
+            expect(current.result.retryingTerminalFailures()).toBe(false);
+            expect(current.result.dismissingTerminalFailures()).toBe(false);
+            await retired.result[action]();
+            await retired.result.loadDeliveryHealth();
+            expect(confirm).toHaveBeenCalledOnce();
+            expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
+            expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2);
+
+            // The replacement owns its own deliberate action and readback.
+            vi.mocked(NotificationsAPI[action]).mockResolvedValueOnce({
+              success: true,
+              affected: 2,
+            });
+            vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce({
+              queue: { status: 'healthy', attentionRequired: 0 },
+            } as never);
+            await current.result[action]();
+            expect(notificationStore.success).toHaveBeenCalledOnce();
+            expect(notificationStore.error).not.toHaveBeenCalled();
+            expect(NotificationsAPI[action]).toHaveBeenCalledTimes(2);
+            expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(3);
+            expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(3);
+            expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(3);
+            expect(current.result.deliveryNeedsAttention()).toBe(false);
+          } finally {
+            retired.cleanup();
+            current?.cleanup();
+            confirm.mockRestore();
+          }
+        },
+      );
+    },
+  );
+
   it('preserves degraded configuration Retry health when the older mount request finishes', async () => {
     let finishMount!: (health: Awaited<ReturnType<typeof NotificationsAPI.getHealth>>) => void;
     const healthy = { queue: { status: 'healthy', attentionRequired: 0 } } as Awaited<

@@ -795,24 +795,31 @@ func (hm *HistoryManager) cleanOldEntries() {
 	defer hm.mu.Unlock()
 
 	cutoff := time.Now().AddDate(0, 0, -MaxHistoryDays)
-	newHistory := make([]HistoryEntry, 0, len(hm.history))
-
 	removed := 0
 	for _, entry := range hm.history {
-		if entry.Timestamp.After(cutoff) {
-			newHistory = append(newHistory, entry)
-		} else {
+		if !entry.Timestamp.After(cutoff) {
 			removed++
 		}
 	}
-
-	if removed > 0 {
-		hm.history = newHistory
-		log.Info().
-			Int("removed", removed).
-			Int("remaining", len(newHistory)).
-			Msg("cleaned old alert history entries")
+	if removed == 0 {
+		return
 	}
+
+	// Allocate for survivors, not the loaded file's original row count. A
+	// mostly-expired history otherwise keeps its old-sized Alert array after
+	// startup cleanup, even though no expired rows remain visible.
+	newHistory := make([]HistoryEntry, 0, len(hm.history)-removed)
+	for _, entry := range hm.history {
+		if entry.Timestamp.After(cutoff) {
+			newHistory = append(newHistory, entry)
+		}
+	}
+
+	hm.history = newHistory
+	log.Info().
+		Int("removed", removed).
+		Int("remaining", len(newHistory)).
+		Msg("cleaned old alert history entries")
 }
 
 // historyDedupWindow is the maximum gap between consecutive same-alert entries
@@ -832,10 +839,25 @@ func (hm *HistoryManager) deduplicateHistory() {
 		return
 	}
 
-	deduped := make([]HistoryEntry, 0, len(hm.history))
-	lastIdxByKey := make(map[string]int)
 	lastTimeByKey := make(map[string]time.Time)
 	removed := 0
+	for _, entry := range hm.history {
+		key := historyIdentityKey(&entry.Alert)
+		if lastTime, ok := lastTimeByKey[key]; ok && entry.Timestamp.Sub(lastTime) <= historyDedupWindow {
+			removed++
+		}
+		lastTimeByKey[key] = entry.Timestamp
+	}
+	if removed == 0 {
+		return
+	}
+
+	// Count first so the new backing array holds only surviving occurrences.
+	// Clipping a preallocated slice's capacity would keep its original array;
+	// copying twice would instead add another full array on sparse reductions.
+	deduped := make([]HistoryEntry, 0, len(hm.history)-removed)
+	lastIdxByKey := make(map[string]int)
+	clear(lastTimeByKey)
 
 	for _, entry := range hm.history {
 		key := historyIdentityKey(&entry.Alert)
@@ -845,7 +867,6 @@ func (hm *HistoryManager) deduplicateHistory() {
 				idx := lastIdxByKey[key]
 				deduped[idx].Alert = mergeHistoryAlertSnapshots(deduped[idx].Alert, entry.Alert)
 				lastTimeByKey[key] = entry.Timestamp
-				removed++
 				continue
 			}
 		}
@@ -855,13 +876,11 @@ func (hm *HistoryManager) deduplicateHistory() {
 		lastTimeByKey[key] = entry.Timestamp
 	}
 
-	if removed > 0 {
-		hm.history = deduped
-		log.Info().
-			Int("removed", removed).
-			Int("remaining", len(deduped)).
-			Msg("deduplicated alert history entries")
-	}
+	hm.history = deduped
+	log.Info().
+		Int("removed", removed).
+		Int("remaining", len(deduped)).
+		Msg("deduplicated alert history entries")
 }
 
 // RemoveAlert removes a specific alert from history by ID
@@ -869,21 +888,25 @@ func (hm *HistoryManager) RemoveAlert(alertID string) {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
 
-	newHistory := make([]HistoryEntry, 0, len(hm.history))
-	removed := false
+	removed := 0
+	for _, entry := range hm.history {
+		if entry.Alert.ID == alertID {
+			removed++
+		}
+	}
+	if removed == 0 {
+		return
+	}
 
+	newHistory := make([]HistoryEntry, 0, len(hm.history)-removed)
 	for _, entry := range hm.history {
 		if entry.Alert.ID != alertID {
 			newHistory = append(newHistory, entry)
-		} else {
-			removed = true
 		}
 	}
 
-	if removed {
-		hm.history = newHistory
-		log.Debug().Str("alertID", alertID).Msg("removed alert from history")
-	}
+	hm.history = newHistory
+	log.Debug().Str("alertID", alertID).Msg("removed alert from history")
 }
 
 // ClearAllHistory clears all alert history

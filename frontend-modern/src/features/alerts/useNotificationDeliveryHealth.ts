@@ -1,4 +1,4 @@
-import { batch, createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
 
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
@@ -21,16 +21,24 @@ export function useNotificationDeliveryHealth(options?: {
   const [deliveryHealthUnavailable, setDeliveryHealthUnavailable] = createSignal(false);
   const [refreshingDeliveryHealth, setRefreshingDeliveryHealth] = createSignal(false);
   const [loadedOnce, setLoadedOnce] = createSignal(false);
+  // A request already sent is not cancelled on navigation. Its retired view
+  // must not publish a toast or start follow-up reads in the replacement view.
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
 
   // Mount, configuration retry and queue actions can overlap. Only the latest
   // requested snapshot owns health and loading state, regardless of completion order.
   let latestHealthRequest = 0;
+  const ownsHealthRequest = (request: number) => !disposed && request === latestHealthRequest;
   const loadDeliveryHealth = async () => {
+    if (disposed) return;
     const request = ++latestHealthRequest;
     setRefreshingDeliveryHealth(true);
     try {
       const health = await NotificationsAPI.getHealth();
-      if (request !== latestHealthRequest) return;
+      if (!ownsHealthRequest(request)) return;
       // Snapshot and availability change together. Set one at a time and
       // deliveryNeedsAttention reads a half-updated pair (no health, not yet
       // unavailable), briefly unmounting the warning and everything it holds.
@@ -39,14 +47,14 @@ export function useNotificationDeliveryHealth(options?: {
         setDeliveryHealthUnavailable(health.queue.status === 'unavailable');
       });
     } catch (error) {
-      if (request !== latestHealthRequest) return;
+      if (!ownsHealthRequest(request)) return;
       logger.error('Failed to load notification delivery health', error);
       batch(() => {
         setDeliveryHealth(null);
         setDeliveryHealthUnavailable(true);
       });
     } finally {
-      if (request === latestHealthRequest) {
+      if (ownsHealthRequest(request)) {
         setLoadedOnce(true);
         setRefreshingDeliveryHealth(false);
       }
@@ -67,15 +75,18 @@ export function useNotificationDeliveryHealth(options?: {
   const [queueActionFeedback, setQueueActionFeedback] = createSignal<string | null>(null);
   let latestAction = 0;
   const clearQueueActionFeedback = () => {
+    if (disposed) return;
     ++latestAction;
     setQueueActionFeedback(null);
   };
   const refreshAfterAction = async (action: number) => {
+    if (disposed) return;
     await Promise.all([
       loadDeliveryHealth(),
       Promise.resolve()
-        .then(() => options?.onAfterQueueAction?.())
+        .then(() => (disposed ? undefined : options?.onAfterQueueAction?.()))
         .catch((error) => {
+          if (disposed) return;
           logger.error(
             'Failed to refresh notification activity after accepted queue action',
             error,
@@ -93,6 +104,7 @@ export function useNotificationDeliveryHealth(options?: {
   const [dismissingTerminalFailures, setDismissingTerminalFailures] = createSignal(false);
 
   const retryTerminalFailures = async () => {
+    if (disposed) return;
     const count = deliveryHealth()?.queue.attentionRequired ?? 0;
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryRetryConfirmation(count))) {
       return;
@@ -102,21 +114,24 @@ export function useNotificationDeliveryHealth(options?: {
     setRetryingTerminalFailures(true);
     try {
       const result = await NotificationsAPI.retryTerminalFailures();
+      if (disposed) return;
       notificationStore.success(
         `${result.affected} retained ${result.affected === 1 ? 'delivery' : 'deliveries'} queued for retry.`,
       );
       await refreshAfterAction(action);
     } catch (error) {
+      if (disposed) return;
       logger.error('Failed to retry retained notification deliveries', error);
       if (action === latestAction)
         setQueueActionFeedback('Unable to retry retained notification deliveries.');
       notificationStore.error('Unable to retry retained notification deliveries.');
     } finally {
-      setRetryingTerminalFailures(false);
+      if (!disposed) setRetryingTerminalFailures(false);
     }
   };
 
   const dismissTerminalFailures = async () => {
+    if (disposed) return;
     const count = deliveryHealth()?.queue.attentionRequired ?? 0;
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryDismissConfirmation(count))) {
       return;
@@ -126,17 +141,19 @@ export function useNotificationDeliveryHealth(options?: {
     setDismissingTerminalFailures(true);
     try {
       const result = await NotificationsAPI.dismissTerminalFailures();
+      if (disposed) return;
       notificationStore.success(
         `${result.affected} retained ${result.affected === 1 ? 'failure' : 'failures'} dismissed.`,
       );
       await refreshAfterAction(action);
     } catch (error) {
+      if (disposed) return;
       logger.error('Failed to dismiss retained notification failures', error);
       if (action === latestAction)
         setQueueActionFeedback('Unable to dismiss retained notification failures.');
       notificationStore.error('Unable to dismiss retained notification failures.');
     } finally {
-      setDismissingTerminalFailures(false);
+      if (!disposed) setDismissingTerminalFailures(false);
     }
   };
 
