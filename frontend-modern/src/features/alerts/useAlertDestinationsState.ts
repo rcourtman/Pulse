@@ -43,6 +43,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
 
   const resetDestinations = () => {
     ++reloadVersion;
+    setIsLoadingDestinations(false);
     setDestConfigLoadError(null);
     setEmailConfig(createDefaultEmailConfig());
     setAppriseConfig(createDefaultAppriseConfig());

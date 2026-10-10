@@ -260,4 +260,32 @@ describe('useAlertDestinationsState', () => {
     expect(result.appriseConfig().apiKey).toBe('synthetic-newer');
     expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
   });
+
+  it('withdraws a superseded reload indicator and ignores its late response', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    let acknowledgeOldRead!: (
+      config: Awaited<ReturnType<typeof NotificationsAPI.getEmailConfig>>,
+    ) => void;
+    vi.mocked(NotificationsAPI.getEmailConfig)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          acknowledgeOldRead = resolve;
+        }),
+      )
+      .mockResolvedValue({ enabled: true, server: 'smtp.current.example.test' } as never);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    const oldRead = result.loadDestinations({ indicateLoading: true });
+    expect(result.isLoadingDestinations()).toBe(true);
+    result.resetDestinations();
+    expect(result.isLoadingDestinations()).toBe(false);
+    await result.loadDestinations();
+    acknowledgeOldRead({ enabled: true, server: 'smtp.old.example.test' } as never);
+    await oldRead;
+
+    expect(result.isLoadingDestinations()).toBe(false);
+    expect(result.emailConfig().server).toBe('smtp.current.example.test');
+  });
 });
