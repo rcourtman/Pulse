@@ -1157,11 +1157,7 @@ async function authenticateWithSharedCookieSession(page: Page): Promise<boolean>
       throw new Error(`Shared cookie session probe failed: ${status}`);
     }
     await page.context().addCookies(cookies);
-    // Root/login deliberately skip protected bootstrap without a local login
-    // hint. Cookie-only reuse has no per-tab hint, so enter the existing
-    // workspace route and let its normal protected bootstrap validate it.
-    // Do not restore token, tenant or other origin storage to manufacture one.
-    await page.goto("/infrastructure");
+    await page.goto("/");
     await waitForAppShell(page);
     await expect(page).toHaveURL(AUTHENTICATED_URL);
     return true;
