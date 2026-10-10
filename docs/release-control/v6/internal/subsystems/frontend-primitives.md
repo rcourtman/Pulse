@@ -5246,10 +5246,13 @@ the realtime store has already reported. Authenticated cold starts must render
 from retained realtime or unified-resource state without falling back to
 first-run/welcome posture or replaying stale setup success notifications, and
 background revalidation may update rows in place but may not blank the page.
-Realtime resource adapters must defensively coalesce split host identities by
-the same source-bridge rule as the API boundary so a transient backend rebuild
-cannot surface duplicate infrastructure rows while the next canonical REST
-snapshot is settling.
+Realtime resource adapters render each server row as one display row and never
+re-join host rows: the websocket payload, its deltas and `/api/state` already
+carry the server's presentation coalesce, which applies the operator's merge
+exclusions and provider scope the browser cannot see, so a browser-side join
+could only undo a split the server made. A row whose own server `sources`
+list shrank is rebuilt from the incoming row instead of inheriting the
+previous display row's provider metadata.
 Shared identity helpers in `frontend-modern/src/utils/resourceIdentity.ts`
 and `frontend-modern/src/utils/agentResources.ts` use the trimmed-string helper
 from `frontend-modern/src/utils/stringUtils.ts` so shared components do not keep

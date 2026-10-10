@@ -325,34 +325,13 @@ describe('mergeCanonicalIdentity + merge fallbacks (via mergeCanonicalResource)'
 });
 
 // ===========================================================================
-// mergeCanonicalResourceSnapshot — empty-incoming early return, and the
-// getHostResourceMergeKey `undefined` arm (reached only when every identity
-// candidate — including the resource id — is blank).
+// mergeCanonicalResourceSnapshot — empty-incoming early return.
 // ===========================================================================
 
 describe('mergeCanonicalResourceSnapshot edge arms', () => {
   it('returns an empty array when the incoming snapshot is empty', () => {
     const existing: Resource = agent({ platformData: { sources: ['agent'] } });
     expect(mergeCanonicalResourceSnapshot([], [existing])).toEqual([]);
-  });
-
-  it('does not coalesce two agents whose every identity candidate is blank', () => {
-    const blank = (): Resource =>
-      ({
-        id: '',
-        type: 'agent',
-        name: '',
-        displayName: '',
-        platformId: '',
-        platformType: 'agent',
-        sourceType: 'agent',
-        status: 'online',
-        lastSeen: 100,
-      }) as unknown as Resource;
-    const out = mergeCanonicalResourceSnapshot([blank(), blank()], []);
-    // No host key derivable (getHostResourceMergeKey returns undefined) → both
-    // stay as separate entries instead of being coalesced.
-    expect(out).toHaveLength(2);
   });
 });
 
@@ -479,69 +458,6 @@ describe('pmgInstanceFromResource fallback arms', () => {
     );
     expect(instance?.status).toBe('unknown');
     expect(instance?.connectionHealth).toBe('unknown');
-  });
-});
-
-// ===========================================================================
-// normalizeResourceIdentityToken — the `normalized.length > 0 ? normalized :
-// undefined` false arm.  Only reachable via getHostResourceMergeKey, which runs
-// every identity candidate through the normaliser.  A whitespace-only candidate
-// is truthy (so it skips the `!value` guard) but trims to ''.
-// ===========================================================================
-
-describe('normalizeResourceIdentityToken whitespace candidate (via mergeCanonicalResourceSnapshot)', () => {
-  it('drops a whitespace-only platformId candidate while still coalescing on a valid hostname', () => {
-    const mkAgent = (id: string, lastSeen: number): Resource =>
-      ({
-        id,
-        type: 'agent',
-        name: 'merge-host',
-        displayName: 'merge-host',
-        platformId: 'merge-host',
-        platformType: 'proxmox-pve',
-        sourceType: 'hybrid',
-        status: 'online',
-        lastSeen,
-        canonicalIdentity: { platformId: '   ', hostname: 'merge-host' },
-      }) as unknown as Resource;
-
-    const out = mergeCanonicalResourceSnapshot([mkAgent('a', 100), mkAgent('b', 200)], []);
-    // The whitespace platformId candidate exercises the length===0 false arm
-    // (→ undefined) but 'merge-host' still forms hostKey 'agent:merge-host',
-    // so the two hybrid agents coalesce into one.
-    expect(out).toHaveLength(1);
-  });
-});
-
-// ===========================================================================
-// sourceListHas — the `!sources || sources.length === 0` early-return arm.
-// sourceListHas is only ever called with an empty/undefined list through
-// sourceListContainsRuntimePlatform when unionSources is undefined, which
-// happens when two coalescing agents each derive no canonical sources.
-// ===========================================================================
-
-describe('sourceListHas empty-sources arm (via mergeCanonicalResourceSnapshot)', () => {
-  it('does not merge two agents that share a host key but derive no canonical sources', () => {
-    const mkAgent = (id: string, lastSeen: number): Resource =>
-      ({
-        id,
-        type: 'agent',
-        name: 'gen-host',
-        displayName: 'gen-host',
-        platformId: 'gen-host',
-        platformType: 'generic',
-        sourceType: 'api',
-        status: 'online',
-        lastSeen,
-        canonicalIdentity: { hostname: 'gen-host' },
-      }) as unknown as Resource;
-
-    const out = mergeCanonicalResourceSnapshot([mkAgent('a', 100), mkAgent('b', 200)], []);
-    // Both derive hostKey 'agent:gen-host', but getCanonicalSourceList returns
-    // undefined for each (generic + api, no facets) → unionSources undefined →
-    // sourceListHas(undefined, 'agent') takes its empty-sources arm → false.
-    expect(out).toHaveLength(2);
-    expect(out.map((r) => r.id).sort()).toEqual(['a', 'b']);
   });
 });
 

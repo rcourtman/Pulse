@@ -1310,17 +1310,13 @@ const buildUnifiedResourceFacets = (resources: readonly Resource[]): UnifiedReso
  * Resolve the small set of store rows that need reconciliation for one
  * canonical realtime revision. A structural mismatch returns `null` so the
  * caller can fall back to a full keyed reconcile for additions, removals, type
- * membership changes, or order changes.
- *
- * Agent rows are a bounded exception: when an agent changed, canonical host
- * coalescing can update another agent row as well, so refresh the complete
- * agent subset while leaving every non-host row outside the delta untouched.
+ * membership changes, or order changes. Each server row is one display row,
+ * so only the changed rows need reconciling.
  */
 export const resolveIncrementalResourcePatchIndices = (
   current: readonly Resource[],
   next: readonly Resource[],
   changedIds: ReadonlySet<string>,
-  refreshAgentRows: boolean,
 ): number[] | null => {
   if (current.length !== next.length) return null;
 
@@ -1331,7 +1327,7 @@ export const resolveIncrementalResourcePatchIndices = (
     if (!currentResource || !nextResource || currentResource.id !== nextResource.id) {
       return null;
     }
-    if (changedIds.has(nextResource.id) || (refreshAgentRows && nextResource.type === 'agent')) {
+    if (changedIds.has(nextResource.id)) {
       patchIndices.push(index);
     }
   }
@@ -1865,21 +1861,25 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     // Deep-unwrapping the whole resource store on every websocket tick was the
     // single largest idle main-thread cost in the 2026-08-25 audit profile.
     // The delta merge only dereferences raw subtrees for entries it will clone
-    // (changed ids, agents whose host-merge groups it re-evaluates, and ids it
-    // has no cached merge output for), so unwrap exactly those and skip the
-    // store read entirely when this realtime version is already applied.
+    // (changed ids and ids it has no cached merge output for), so unwrap
+    // exactly those and skip the store read entirely when this realtime
+    // version is already applied.
     // untrack keeps the per-item id/type reads from registering thousands of
     // fine-grained dependencies; the effect is driven by resourceChange().
     const readWsResources = (catchUp: CatchUpMeta | null): Resource[] =>
       untrack(() => {
         const stored = wsStore.state.resources;
         if (!Array.isArray(stored)) return [];
-        if (catchUp === null) return unwrap(stored) as Resource[];
+        // The cache rows built from this read must not share nested arrays or
+        // objects with the store's rows: the store reconciles server changes
+        // into its own rows in place, and a shared `sources` array would flip
+        // on a cached row while that row keeps its REST-only enrichment.
+        if (catchUp === null) return structuredClone(unwrap(stored)) as Resource[];
         const cachedById = new Map(
           allResourcesEntry.resources.map((resource) => [resource.id, resource] as const),
         );
         return stored.map((resource) => {
-          if (resource.type === 'agent' || !cachedById.has(resource.id)) {
+          if (!cachedById.has(resource.id)) {
             return unwrap(resource) as Resource;
           }
           if (!catchUp.changedIds.has(resource.id)) {
@@ -1974,17 +1974,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         ? resolveCatchUpMeta(previousCacheRealtimeVersion)
         : null;
     const canPatchProjectionIncrementally = cacheEntryCatchUp !== null;
-    const changedResourceTouchesAgent =
-      canPatchProjectionIncrementally &&
-      mergedWsResources.some(
-        (resource) => resource.type === 'agent' && cacheEntryCatchUp!.changedIds.has(resource.id),
-      );
     const incrementalPatchIndices = canPatchProjectionIncrementally
       ? resolveIncrementalResourcePatchIndices(
           resources as unknown as Resource[],
           resolvedProjectedResources,
           cacheEntryCatchUp!.changedIds,
-          changedResourceTouchesAgent,
         )
       : null;
 

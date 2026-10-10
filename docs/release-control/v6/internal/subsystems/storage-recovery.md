@@ -1834,6 +1834,12 @@ recovery scope, or a storage/recovery-owned secret source.
    reorder the REST-first hydration guarantee above, and a skipped store read
    must never leave a storage/recovery projection behind the shared cache's
    applied revision.
+   The shared hook's full merge also clones the connection store's rows before
+   merging them, so a cached storage/recovery row never shares a nested array
+   with a row the store reconciles in place, and the browser no longer re-joins
+   same-hostname host rows itself (each server row is one display row, as the
+   server's presentation coalesce delivers it). Neither may change which
+   canonical storage, disk, or recovery fields a merged row carries.
    The same invisibility bound covers the per-key fast merge: a changed row
    whose recorded patch keys stay within the metric fast-path allow-list may
    be merged as the previous display row with only the patched subtrees

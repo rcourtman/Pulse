@@ -702,7 +702,7 @@ or a measured fleet performance improvement.
     WebSocket startup, so a delayed or blocked first stream snapshot cannot
     hide server-owned platform scopes; auth-mode branches must not fork
     additional state probes or perform the same hydration twice.
-20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 17. `frontend-modern/src/utils/workloads.ts` shared with `unified-resources`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
 18. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
@@ -741,16 +741,15 @@ cluster's pods in each usage update, keyed by node name, with no per-pod scan
 of other pods or nodes.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
-canonicalizes and reconciles only changed resources plus the host-merge groups
-the delta could have altered: a group refreshes when a flagged id names one of
-its members (a flagged id absent from the incoming snapshot conservatively
-refreshes every group), and a tick that flags no member preserves the cached
-merged host row by object identity. Unchanged non-host display resources retain
-object identity.
-Same-hostname provider disambiguation must retain that locality: candidate
-rows are indexed by normalized host key, and machine, DMI, cluster, endpoint,
-and linked-agent comparisons may inspect only the matching key's bucket rather
-than rescan unrelated estate rows.
+canonicalizes and reconciles only changed and newly added resources. Each
+server row is one display row, because the server already coalesced host
+views for presentation, so unchanged display resources, host rows included,
+retain object identity and the browser runs no host-merge pass of its own.
+The hook's full merge (initial hydration and uncovered revision gaps) clones
+the connection store's rows once, because cache rows must not share nested
+arrays with rows the store reconciles in place; delta merges already clone each
+changed row that takes the full merge path, and fast-path rows clone only the
+patched subtrees.
 `frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
 monotonic resource revision with each reconciliation. The shared
 `useUnifiedResources` owner applies that revision to the process-wide canonical

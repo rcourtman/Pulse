@@ -485,7 +485,7 @@
     },
     {
       "path": "frontend-modern/src/utils/resourceStateAdapters.ts",
-      "rationale": "canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path",
+      "rationale": "canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"

@@ -207,74 +207,161 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('coalesces split host identities from realtime resource snapshots', async () => {
+  it('keeps an operator-split host pair as two rows through a snapshot and deltas', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
 
+      const agentFacet = { agentId: 'agent-pve1', hostname: 'pve1', machineId: 'machine-pve1' };
+      // The monitor's node record keeps its link to the agent after a split.
+      const proxmoxFacet = {
+        nodeName: 'pve1',
+        instance: 'pve1',
+        clusterName: 'homelab',
+        linkedAgentId: 'agent-pve1',
+      };
+      // Broadcast platformData for a Proxmox host: flattened facts, no sources.
+      const proxmoxPlatformData = {
+        instance: 'pve1',
+        pveVersion: '9.1.9',
+        isClusterMember: true,
+        clusterName: 'homelab',
+        connectionHealth: 'online',
+      };
+      const agentPlatformData = { platform: 'linux', osName: 'Debian GNU/Linux' };
+      const splitAgent = {
+        id: 'agent-machine-pve1',
+        type: 'agent',
+        name: 'pve1',
+        displayName: 'pve1',
+        platformId: 'pve1',
+        platformType: 'agent',
+        sourceType: 'agent',
+        sources: ['agent'],
+        status: 'online',
+        lastSeen: 100,
+        identity: { hostnames: ['pve1'], machineId: 'machine-pve1' },
+        canonicalIdentity: { primaryId: 'agent:machine-pve1', aliases: ['agent:machine-pve1'] },
+        agent: agentFacet,
+        platformData: agentPlatformData,
+      };
+      const splitNode = {
+        id: 'agent-node-pve1',
+        type: 'agent',
+        name: 'pve1',
+        displayName: 'pve1',
+        platformId: 'pve1',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        sources: ['proxmox'],
+        status: 'online',
+        lastSeen: 100,
+        clusterId: 'cluster:homelab',
+        identity: { hostnames: ['pve1'], clusterName: 'homelab' },
+        canonicalIdentity: { primaryId: 'node:pve1:pve1', aliases: ['node:pve1:pve1'] },
+        proxmox: proxmoxFacet,
+        platformData: proxmoxPlatformData,
+      };
+      const expectSplitRows = () => {
+        expect(store.state.resources.map((resource) => resource.id)).toEqual([
+          'agent-machine-pve1',
+          'agent-node-pve1',
+        ]);
+        const [agent, node] = store.state.resources;
+        expect(agent?.sources).toEqual(['agent']);
+        expect(agent?.platformType).toBe('agent');
+        expect(agent?.proxmox).toBeUndefined();
+        expect((agent?.platformData as Record<string, unknown>).clusterName).toBeUndefined();
+        expect(agent?.platformScopes ?? []).not.toContain('proxmox-pve');
+        expect(agent?.clusterId).toBeUndefined();
+        expect(agent?.canonicalIdentity?.aliases).toEqual(['agent:machine-pve1']);
+        expect(node?.sources).toEqual(['proxmox']);
+        expect(node?.agent).toBeUndefined();
+      };
+
+      // Joined: the server presents one hybrid row.
       emitMessage({
         type: 'initialState',
         data: {
           connectedInfrastructure: [],
           resources: [
             {
-              id: 'agent-proxmox-delly',
-              type: 'agent',
-              name: 'delly',
-              displayName: 'delly',
-              platformId: 'delly',
+              ...splitAgent,
               platformType: 'proxmox-pve',
-              sourceType: 'api',
-              sources: ['proxmox'],
-              status: 'online',
-              lastSeen: Date.now() - 1000,
-              proxmox: {
-                nodeName: 'delly',
-                clusterName: 'homelab',
+              sourceType: 'hybrid',
+              sources: ['agent', 'proxmox'],
+              clusterId: 'cluster:homelab',
+              identity: { hostnames: ['pve1'], machineId: 'machine-pve1', clusterName: 'homelab' },
+              canonicalIdentity: {
+                primaryId: 'agent:machine-pve1',
+                aliases: ['agent:machine-pve1', 'node:pve1:pve1'],
               },
-              platformData: {
-                sources: ['proxmox'],
-                proxmox: {
-                  nodeName: 'delly',
-                  clusterName: 'homelab',
-                },
-              },
-            },
-            {
-              id: 'agent-runtime-delly',
-              type: 'agent',
-              name: 'delly',
-              displayName: 'delly',
-              platformId: 'delly',
-              platformType: 'agent',
-              sourceType: 'agent',
-              sources: ['agent'],
-              status: 'online',
-              lastSeen: Date.now(),
-              agent: {
-                hostname: 'delly',
-                osName: 'Debian GNU/Linux',
-              },
-              platformData: {
-                sources: ['agent'],
-                agent: {
-                  hostname: 'delly',
-                  osName: 'Debian GNU/Linux',
-                },
-              },
+              proxmox: proxmoxFacet,
+              platformData: proxmoxPlatformData,
             },
           ],
-          lastUpdate: 1739059200000,
+          lastUpdate: 100,
           activeAlerts: [],
           recentlyResolved: [],
         },
       });
-
       expect(store.state.resources).toHaveLength(1);
-      expect(store.state.resources[0]?.id).toBe('agent-runtime-delly');
       expect(store.state.resources[0]?.sourceType).toBe('hybrid');
-      expect(store.state.resources[0]?.proxmox).toMatchObject({ clusterName: 'homelab' });
-      expect(store.state.resources[0]?.agent).toMatchObject({ osName: 'Debian GNU/Linux' });
+
+      // The operator splits the pair: the server's delta strips the node's
+      // facet from the agent row and adds the node row.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [
+              {
+                id: 'agent-machine-pve1',
+                platformType: 'agent',
+                sourceType: 'agent',
+                sources: ['agent'],
+                clusterId: null,
+                identity: { clusterName: null },
+                canonicalIdentity: { aliases: ['agent:machine-pve1'] },
+                proxmox: null,
+                platformData: {
+                  instance: null,
+                  pveVersion: null,
+                  isClusterMember: null,
+                  clusterName: null,
+                  connectionHealth: null,
+                  ...agentPlatformData,
+                },
+              },
+              splitNode,
+            ],
+            order: ['agent-machine-pve1', 'agent-node-pve1'],
+          },
+        },
+      });
+      expectSplitRows();
+
+      // A later metrics tick on one side leaves the pair apart.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: { upserts: [{ id: 'agent-machine-pve1', lastSeen: 300 }] },
+        },
+      });
+      expectSplitRows();
+      expect(store.state.resources[0]?.lastSeen).toBe(300);
+
+      // So does the next full snapshot.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          resources: [splitAgent, splitNode],
+          lastUpdate: 400,
+        },
+      });
+      expectSplitRows();
     } finally {
       dispose();
     }
@@ -655,15 +742,14 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('keeps canonically merged hosts consistent with full snapshots across deltas (#1601)', async () => {
+  it('applies deltas for same-host rows to the raw server baseline (#1601)', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
       await waitForOpenTick();
 
-      // Two server resources that the client coalesces into ONE host: an
-      // agent host and a docker host sharing a hostname. The server's
-      // per-client delta baseline keeps both IDs, so deltas reference IDs
-      // the merged client view no longer holds.
+      // Two server rows sharing a hostname: an agent host and a docker host.
+      // Each server row is one display row, so a delta for either ID patches
+      // that row and never surfaces a typeless stub.
       emitMessage({
         type: 'initialState',
         data: {
@@ -692,12 +778,11 @@ describe('websocket store unified resource contract', () => {
         },
       });
 
-      expect(store.state.resources).toHaveLength(1);
-      expect(store.state.resources[0]?.id).toBe('agent-host-1');
+      expect(store.state.resources.map((resource) => resource.id)).toEqual([
+        'agent-host-1',
+        'docker-host-1',
+      ]);
 
-      // A merge patch for the coalesced-away docker ID must not surface a
-      // typeless stub resource: the delta applies to the raw server baseline
-      // and the canonical merge runs again on the result.
       emitMessage({
         type: 'rawData',
         data: {
@@ -708,13 +793,13 @@ describe('websocket store unified resource contract', () => {
         },
       });
 
-      expect(store.state.resources).toHaveLength(1);
-      expect(store.state.resources[0]?.id).toBe('agent-host-1');
+      expect(store.state.resources).toHaveLength(2);
+      expect(store.state.resources[1]?.id).toBe('docker-host-1');
+      expect(store.state.resources[1]?.lastSeen).toBe(200);
       expect(store.state.resources.every((resource) => Boolean(resource.type))).toBe(true);
 
       // Removing the agent side server-side must leave the surviving docker
-      // host visible. Before the raw-baseline fix this removed the single
-      // merged client resource outright and the docker host never came back.
+      // host visible.
       emitMessage({
         type: 'rawData',
         data: {

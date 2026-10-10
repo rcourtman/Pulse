@@ -807,11 +807,12 @@ grouping metadata, not same-machine evidence; cross-instance equality requires
 the same node identity, the exact configured endpoint, or independently
 corroborated host evidence.
 Frontend REST and realtime resource mirrors must retain the canonical
-`hostnames`, `machineId`, and `dmiUuid` evidence used for that decision. When
-independent Proxmox connections expose the same native node hostname, browser
-compatibility coalescing must preserve the server-authored provider split; in
-an ambiguous hostname bucket, a separate agent row may join a provider node
-only through its explicit linked-agent identity rather than hostname alone.
+`hostnames`, `machineId`, and `dmiUuid` evidence. The browser never re-joins
+host rows, so when independent Proxmox connections expose the same native node
+hostname the server-authored provider split reaches the UI as delivered; in an
+ambiguous hostname bucket the server joins a separate agent row to a provider
+node only through its explicit linked-agent identity rather than hostname
+alone.
 The same boundary carries cluster-node presentation without weakening
 canonical identity. `ProxmoxData` preserves the immutable connection-scoped
 node identity, current native node name, prior native-name aliases, and
@@ -1917,7 +1918,7 @@ container inventory table.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+18. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `performance-and-scalability`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 19. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
@@ -2283,13 +2284,11 @@ canonical unified-resource lists must preserve one deterministic
 websocket-backed refreshes so equal-name resources do not silently reshuffle
 between cold hydrate and later runtime updates
 Realtime delta reconciliation must preserve exact display-object identity
-for untouched non-host resources, canonicalize changed and newly added rows,
-and re-evaluate exactly the host-merge groups the delta could have altered:
-a group refreshes when a flagged id names one of its current members, and a
-flagged id absent from the incoming snapshot (a removal, or a partner id an
-earlier coalesce folded away) conservatively refreshes every group. A tick
-that flags no member of a group must preserve that group's cached merged
-host row by object identity. Incremental and
+for untouched resources and canonicalize changed and newly added rows. Each
+server row is one display row: the server coalesced host views for
+presentation, and the browser runs no host-merge pass of its own, so a pair
+the server keeps apart (an operator split, a provider-scoped Proxmox site)
+renders as two rows. Incremental and
 full-snapshot paths must therefore produce the same canonical host identity,
 labels, and compatibility fields without cloning the entire estate per tick.
 The connection store publishes each reconciliation's changed IDs and resource
@@ -2298,9 +2297,9 @@ all-resources cache once and derives type-filtered route projections from the
 canonical result. An instance observing a revision the shared cache already
 holds must not re-read or deep-unwrap the realtime store, and the merging
 instance dereferences raw store subtrees only for rows the delta merge will
-clone (flagged ids, host-merge members, and ids absent from the shared
-cache). A sequential revision with unchanged route membership
-patches only the changed row indices plus the bounded agent coalescing set.
+clone (flagged ids and ids absent from the shared cache). A sequential
+revision with unchanged route membership patches only the changed row
+indices.
 The connection store retains a bounded per-revision changed-id history; an
 instance that resumes several revisions behind the shared cache must catch
 up through the unioned changed-id set as an incremental delta merge whenever
@@ -2320,8 +2319,9 @@ connection store and instance projections as per-key subtree writes rather
 than whole-row keyed reconciles. The fast output must stay
 content-equivalent to the full path (facet keeps, deletion semantics, and
 default-policy synthesis included), must never adopt raw-baseline subtrees
-by reference, and any row outside the allow-list — including agent rows,
-whose output can depend on host coalescing — must take the full path. Route-prefetch and route-realtime
+by reference, and any row outside the allow-list must take the full path.
+Agent rows still take it: the fast path has not been shown equivalent for
+their facet keeps since the browser stopped coalescing host rows. Route-prefetch and route-realtime
 activation are separate:
 a prefetched hidden surface may retain REST data without subscribing its full
 projection to every realtime tick, and activation catches up from the shared
@@ -7736,15 +7736,9 @@ reports no machine key and declares it refuses any joined-era pin while its
 own linked agent is missing, keeping its own ID until that agent reports. An exclusion keyed by the
 agent's machine-derived ID stops naming the agent if the agent's effective
 canonical key changes (it stops reporting a machine ID and no pin restores
-it), as every exclusion keyed by a canonical ID does. The browser's realtime
-coalesce (`mergeCanonicalResourceSnapshot` in `resourceStateAdapters.ts`,
-used by the websocket store and `useUnifiedResources`) receives no
-exclusions and joins a Proxmox-only row and an agent-only row that share a
-hostname unless their machine IDs or DMI UUIDs disagree, their Proxmox
-facets name different clusters or provider scopes, or several Proxmox nodes
-share the hostname and the node does not name the agent, so the UI still
-renders such a split pair, from this change or from an identity-match split,
-as one row.
+it), as every exclusion keyed by a canonical ID does. The browser renders
+the split as the server presents it; see "The browser renders those rows as
+delivered" below.
 
 The resources API seeds its registry from the monitor's listing, which
 already has the link applied, so it cannot split the pair itself: an unlink
@@ -7775,6 +7769,89 @@ rows and coalescing them is judged by the newer generation's exclusions for
 that one broadcast. Both surfaces share one known limit: the filter compares
 the IDs of the rows being merged, so a third same-host fragment that merges
 first can carry an excluded pair into one row.
+
+The browser renders those rows as delivered. Its realtime merge
+(`mergeCanonicalResourceSnapshot` and `mergeCanonicalResourceDeltaSnapshot`
+in `resourceStateAdapters.ts`, used by the websocket store and
+`useUnifiedResources`) used to join an agent-only row and a platform row
+(Proxmox, Docker, Kubernetes, vSphere or TrueNAS) that shared a hostname
+unless their machine IDs, DMI UUIDs or Proxmox provider scopes disagreed. It
+read no exclusions, so a host pair the operator split reached the browser as
+two rows and rendered as one. Every realtime payload (the websocket
+snapshot, its deltas and `/api/state`) already carries the server's
+presentation coalesce, so the browser now merges each row only with the
+previous row of its ID and never joins host rows. A split usually leaves one
+side on the joined row's ID, and that per-ID merge keeps what the incoming
+row omits, so the agent kept the node's Proxmox facts: the flattened
+`platformData` the Proxmox facet is rebuilt from, its platform scopes,
+`clusterId`, identity fields and canonical aliases. When the incoming row's
+own `sources` list lacks a source the previous row of its ID listed,
+`mergeCanonicalResource` rebuilds the row from the incoming one instead of
+merging. A list inferred from the facets a thin row carries is no such
+evidence. The rebuilt row keeps the REST-only enrichments the realtime
+payload never carries where the departed sources did not own them: platform
+scopes minus the departed sources' own that no surviving source, Docker LXC
+host or non-host facet supports (a Docker container in a Proxmox LXC stays on
+the Proxmox page when its availability check is removed, because its host ID
+still places it there, and an agent-reported disk keeps the Proxmox scope its
+ownership facet gives it; a host row's facets are no evidence, since
+canonicalizing flattened platform data synthesizes them), the source status
+of the sources that remain (status the pruning empties is deleted), discovery
+readiness unless a coordinate it names (`targetId` the reporter, `resourceId`
+the resource) differs from the same coordinate of the row's discovery target
+(realtime carries a target only for agent and Docker host rows, so a row
+without one keeps it unless the agent left), and action readiness unless the
+agent left. Everything else REST adds returns with the next REST refresh. The fast merge path never rebuilds
+a row: `sources` is outside its allow-list, so it patches the previous display
+row and a rebuild waits for the row's next full merge (see the limits below).
+
+Three rules keep REST enrichment from outliving a source. Source status is
+REST enrichment, since the realtime payload carries none, and the platform data
+merge and the top-level merge prune its entries to the sources the merged row
+lists (only a list the row carries itself counts; canonicalizing a thin row
+that carries none synthesizes one from its facets, which the merge cannot tell
+apart, so a thin row can prune the status of a source its facets omit); a
+joined host's `proxmox` entry otherwise kept the Machines page from
+listing the agent that was split off it, because that page reads source status
+as provider ownership. A previous row claims every source either of its own
+lists names, its top-level `sources` and its `platformData.sources`, so a row
+whose two lists disagree, because an enrichment of another generation landed on
+it or a shared array changed under it, is rebuilt as soon as the realtime row
+drops the extra source instead of carrying that source's metadata on. And the
+resources hook's full merge no longer hands the websocket store's rows to the
+merge: the store reconciles server changes into its own rows in place, and cache
+rows that shared a nested array with them, such as `sources`, flipped to the
+split value while keeping the REST enrichment of the joined era. It clones the
+store's rows once on that path, as the delta path clones each changed row.
+Known limits: a hook's own store is still created from its cache's rows, so a
+store commit can edit rows another cache entry shares (the claimed-sources rule
+rebuilds such a row on its next merge), and the fast merge path is
+content-equivalent to the full path only for a display row whose own lists
+agree, so enrichment of another generation can leave a departed source's status
+on a non-agent row until its next full merge. After a rebuild the browser
+judges whether REST-only scopes and readiness still belong to the row from
+names and target coordinates alone, because the realtime payload carries no
+provenance for them: a facet canonicalization synthesized from flattened
+platform data on a row that is not a host (a guest's `disks`, a storage
+row's `instance`, a Kubernetes node's kernel version) can keep the scope it
+names, a Docker host row (`docker-host`) can keep the agent scope through its
+synthesized agent facet, and a guest without a discovery target keeps the
+previous reporter's readiness when its reporter changes in the same interval
+without an `agent` source leaving (and loses it when an in-guest agent is
+unlinked while the node's reporter still serves discovery). The next REST
+refresh restores every one of these. `keeps an
+operator-split node and agent as two rows through snapshots and deltas`
+(`resourceStateAdapters.test.ts`), `keeps an operator-split host pair as two
+rows through a snapshot and deltas` (`websocket-unified.test.ts`), `keeps an
+operator-split host pair as two rows and an unchanged agent peer by identity`
+and `drops REST enrichment of a departed source when the store reconciles a
+split in place` (`useUnifiedResources.test.ts`) pin a split pair in the
+broadcast's shape through full snapshots, the delta that splits a joined row,
+later deltas and the resources hook (the last also that hook rows share no
+array with the store's), `rebuilds a row whose own source lists disagree once
+the realtime row drops the extra source` pins the claimed-sources rule, and
+`prunes source status entries of sources the merged row no longer lists` pins
+the status rule.
 
 A write leaves one row for its pair: `AddLink` and `AddExclusion` also delete
 a row of their own kind that succession stored in the other order, and the
