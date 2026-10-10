@@ -630,10 +630,6 @@ describe('platform overview layout guardrails', () => {
       'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
     );
     expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
     expect(dockerPageSurfaceSource).toContain('<DockerContainersTable');
     expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
@@ -835,6 +831,22 @@ describe('platform overview layout guardrails', () => {
       );
     }
 
+    // WorkloadsSurface renders the state its page passes. It imports only that
+    // state's type, so it has no hook to call and cannot build a second state.
+    const workloadsSurfaceFile = parseTsx(workloadsSurfaceSource);
+    const stateModuleImports = findNodes(workloadsSurfaceFile, ts.isImportDeclaration).filter(
+      (node) =>
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === './useWorkloadsState',
+    );
+    expect(stateModuleImports.length).toBeGreaterThan(0);
+    for (const node of stateModuleImports) {
+      expect(node.importClause?.isTypeOnly, node.getText()).toBe(true);
+    }
+    expect(
+      findNodes(workloadsSurfaceFile, ts.isCallExpression).map((call) => call.expression.getText()),
+    ).not.toContain('useWorkloadsState');
+
     // Each Workloads embed sits on its page's Overview tab, owns the state and
     // the one toolbar, and locks the platform: the state is scoped to it and
     // the Platform chip never shows as a removable filter.
@@ -858,6 +870,13 @@ describe('platform overview layout guardrails', () => {
       expect(jsxAttr(toolbar, 'forcedPlatform'), name).toBe(platform);
       const surface = onlyJsxTag(overviewFn, 'WorkloadsSurface');
       expect(jsxAttr(surface, 'state'), name).toBe('workloadsState');
+      // The surface renders only that state; the scope it repeats for its
+      // empty-state copy must be the scope the state was built with.
+      const unquote = (text?: string) => text?.replace(/^(['"])(.*)\1$/, '$2');
+      expect(jsxAttr(surface, 'forcedPlatform'), name).toBe(platform);
+      expect(unquote(jsxAttr(surface, 'forcedViewMode')), name).toBe(
+        unquote(state.get('forcedViewMode')),
+      );
     }
 
     // StorageSurface sits on the Proxmox Storage tab with the source locked and

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import { createEffect } from 'solid-js';
-import { WorkloadsSurface } from '../WorkloadsSurface';
-import { useWorkloadsState, type WorkloadsSurfaceProps } from '../useWorkloadsState';
+import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
+import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
 import type { WorkloadsToolbarFilterConfig } from '../workloadsFilterModel';
 import type { State } from '@/types/api';
 
@@ -170,12 +170,23 @@ vi.mock('../GuestRow', () => {
 // Platform pages own the workload toolbar: they build the state, pass it to
 // the surface, and hand state.hostFilterConfig() to their WorkloadsFilter.
 // This harness reads that same config.
-function PageOwnedWorkloadsSurface(props: WorkloadsSurfaceProps) {
+function PageOwnedWorkloadsSurface(
+  props: WorkloadsStateOptions & Omit<WorkloadsSurfaceProps, 'state'>,
+) {
   const state = useWorkloadsState(props);
   createEffect(() => {
     lastHostFilter = state.hostFilterConfig();
   });
-  return <WorkloadsSurface {...props} state={state} />;
+  return (
+    <WorkloadsSurface
+      state={state}
+      forcedPlatform={props.forcedPlatform}
+      forcedViewMode={props.forcedViewMode}
+      emptyStateTitle={props.emptyStateTitle}
+      emptyStateDescription={props.emptyStateDescription}
+      tableTitle={props.tableTitle}
+    />
+  );
 }
 
 describe('Workloads pod workloads integration', () => {
@@ -257,7 +268,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     render(() => (
-      <WorkloadsSurface
+      <PageOwnedWorkloadsSurface
         vms={[]}
         containers={[]}
         nodes={[]}
@@ -278,10 +289,6 @@ describe('Workloads pod workloads integration', () => {
   it('uses filtered-empty copy for table-only surfaces when filters remove every workload', () => {
     render(() => (
       <WorkloadsSurface
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
@@ -327,10 +334,6 @@ describe('Workloads pod workloads integration', () => {
   it('keeps page-owned table-only empty copy when no operator filters are active', () => {
     render(() => (
       <WorkloadsSurface
-        vms={[]}
-        containers={[]}
-        nodes={[]}
-        useWorkloads
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
@@ -396,7 +399,7 @@ describe('Workloads pod workloads integration', () => {
     mockLocationSearch = '?type=pod&resource=legacy:pve1:101';
 
     const { getByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -436,7 +439,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -585,7 +588,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -649,7 +652,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { getByText, queryByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -741,7 +744,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { queryByText, getByTestId } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -813,7 +816,7 @@ describe('Workloads pod workloads integration', () => {
     ];
 
     const { getByText, getAllByText } = render(() => (
-      <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+      <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
     ));
 
     await waitFor(() => {
@@ -830,7 +833,7 @@ describe('Workloads pod workloads integration', () => {
     mockLocationSearch = '?type=all';
     mockWorkloads = [];
 
-    render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+    render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
@@ -846,7 +849,7 @@ describe('Workloads pod workloads integration', () => {
     mockLocationSearch = '?type=all&context=cluster-a';
     mockWorkloads = [];
 
-    render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+    render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();

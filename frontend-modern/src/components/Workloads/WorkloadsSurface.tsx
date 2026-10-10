@@ -8,22 +8,23 @@ import { ActionIconButton, ButtonLink } from '@/components/shared/Button';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
+import type { ViewMode } from '@/types/workloads';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
 import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
 import { WorkloadWebLinksAction } from './WorkloadWebLinksAction';
 import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
-import {
-  useWorkloadsState,
-  type WorkloadsState,
-  type WorkloadsSurfaceProps,
-} from './useWorkloadsState';
-export type { WorkloadsSurfaceProps } from './useWorkloadsState';
+import type { WorkloadsState } from './useWorkloadsState';
 
-interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
+// The owning platform page builds the one workload state (it also feeds the
+// page's WorkloadsFilter) and passes it here; the surface only renders it.
+// forcedPlatform and forcedViewMode repeat the scope the page gave that state.
+export interface WorkloadsSurfaceProps {
+  state: WorkloadsState;
+  forcedPlatform?: string;
+  forcedViewMode?: ViewMode;
   emptyStateDescription?: string;
   emptyStateTitle?: string;
-  state?: WorkloadsState;
   tableTitle?: JSX.Element;
 }
 
@@ -69,8 +70,8 @@ function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventoryS
   );
 }
 
-export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
-  const state = props.state ?? useWorkloadsState(props);
+export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
+  const state = props.state;
   const visibleInventoryIssues = createMemo(() => {
     // A filtered-empty table is not an inventory outage. Once inventory is
     // present, unrelated source failures cannot explain an empty selection.

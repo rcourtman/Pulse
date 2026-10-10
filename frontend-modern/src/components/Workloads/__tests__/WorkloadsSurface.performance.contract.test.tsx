@@ -4,8 +4,8 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
-import { WorkloadsSurface } from '../WorkloadsSurface';
-import { useWorkloadsState } from '../useWorkloadsState';
+import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
+import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
 import type { Node } from '@/types/api';
 import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
@@ -391,6 +391,23 @@ const flushEffects = async () => {
   await Promise.resolve();
 };
 
+// Platform pages build the one workload state and pass it to the surface.
+function PageOwnedWorkloadsSurface(
+  props: WorkloadsStateOptions & Omit<WorkloadsSurfaceProps, 'state'>,
+) {
+  const state = useWorkloadsState(props);
+  return (
+    <WorkloadsSurface
+      state={state}
+      forcedPlatform={props.forcedPlatform}
+      forcedViewMode={props.forcedViewMode}
+      emptyStateTitle={props.emptyStateTitle}
+      emptyStateDescription={props.emptyStateDescription}
+      tableTitle={props.tableTitle}
+    />
+  );
+}
+
 describe('Workloads platform-page embed contract', () => {
   it('exposes metric-display-mode + history-range override hooks so platform pages can share the toggle across multiple tables', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
@@ -522,7 +539,7 @@ describe('Workloads performance contract', () => {
       wsReconnecting = true;
       mockWorkloads = [makeGuest(1, { name: 'route-owned-workload' })];
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
       await waitFor(() => {
         expect(
@@ -541,7 +558,7 @@ describe('Workloads performance contract', () => {
         () => new Promise(() => undefined),
       );
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
       await waitFor(() => {
         expect(
@@ -566,7 +583,7 @@ describe('Workloads performance contract', () => {
         ],
       });
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
       await waitFor(() => expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1));
       expect(connectionsApiMocks.list).not.toHaveBeenCalled();
@@ -581,10 +598,6 @@ describe('Workloads performance contract', () => {
             path="/"
             component={() => (
               <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
                 forcedPlatform="proxmox-pve"
                 emptyStateTitle="No Proxmox workloads"
                 emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
@@ -673,10 +686,6 @@ describe('Workloads performance contract', () => {
             path="/"
             component={() => (
               <WorkloadsSurface
-                vms={[]}
-                containers={[]}
-                nodes={[]}
-                useWorkloads
                 state={
                   {
                     setClearSurfaceRootRef: vi.fn(),
@@ -745,7 +754,7 @@ describe('Workloads performance contract', () => {
       ];
 
       const { getByTestId } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -805,7 +814,7 @@ describe('Workloads performance contract', () => {
         }),
       ];
 
-      render(() => <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
+      render(() => <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />);
 
       await waitFor(() => {
         expect(screen.getByText('vm-missing-agent')).toBeInTheDocument();
@@ -834,7 +843,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = [makeGuest(1, { name: 'first-connect-workload' })];
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -853,7 +862,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = [makeGuest(1, { name: 'reconnect-workload' })];
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -902,7 +911,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = makeGuests(PROFILES.M);
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -920,7 +929,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = makeGuests(PROFILES.L);
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -941,7 +950,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = makeGuests(PROFILES.S);
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -957,7 +966,7 @@ describe('Workloads performance contract', () => {
       mockWorkloads = guests;
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -996,7 +1005,7 @@ describe('Workloads performance contract', () => {
         mockWorkloads = profileGuests;
 
         const { container, unmount } = render(() => (
-          <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+          <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
         ));
 
         await waitFor(() => {
@@ -1114,7 +1123,7 @@ describe('Workloads performance contract', () => {
       );
 
       const { container } = render(() => (
-        <WorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
+        <PageOwnedWorkloadsSurface vms={[]} containers={[]} nodes={[]} useWorkloads />
       ));
 
       await waitFor(() => {
@@ -1148,7 +1157,7 @@ describe('Workloads performance contract', () => {
       ];
 
       const { container } = render(() => (
-        <WorkloadsSurface
+        <PageOwnedWorkloadsSurface
           vms={[]}
           containers={[]}
           nodes={[]}
@@ -1192,6 +1201,9 @@ describe('Workloads performance contract', () => {
 
     it('keeps hot-path workloads state in the shared workloads state owner', () => {
       expect(workloadsSource).toContain('useWorkloadsState');
+      // The owning page builds the state and the surface requires it; the
+      // overview layout guardrails check the surface imports only its type.
+      expect(workloadsSource).toContain('  state: WorkloadsState;');
       expect(workloadsSource).toContain('WorkloadsTable');
       expect(workloadsSource).not.toContain('const [search, setSearch] = createSignal(');
       expect(workloadsStateSource).toContain('useWorkloadsControlsState');

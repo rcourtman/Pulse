@@ -712,10 +712,6 @@ describe('ProxmoxBackupsTable', () => {
       'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
     );
     expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
     expect(proxmoxPageSurfaceSource).toContain('workloads={model().guests}');
     expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });

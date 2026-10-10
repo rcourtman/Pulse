@@ -28,7 +28,7 @@
     "AIIntelligence": {
       "baselineGzip": 63097
     },
-    "WorkloadsSurface": {
+    "useWorkloadsState": {
       "baselineGzip": 62538
     },
     "Docker": {
