@@ -3,6 +3,8 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -293,7 +295,7 @@ func TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife(t *testi
 		},
 	}}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Wearout != 0 {
 		t.Fatalf("agent endurance reading raised the remaining life of a worn disk: wearout=%d", result[0].Wearout)
 	}
@@ -327,7 +329,7 @@ func TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife(t *test
 		},
 	}}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if result[0].Wearout != 60 {
 		t.Fatalf("agent endurance did not fill unreported PVE life: wearout=%d", result[0].Wearout)
 	}
@@ -535,7 +537,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		Device: "/dev/sdb", Serial: "LEGACY1", Temperature: 38,
 	}}}})
 
-	reporting := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{proxmoxDisk}, nodes, state.GetHosts())[0]
+	reporting := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{proxmoxDisk}, nodes, state.GetHosts(), nil)[0]
 	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(diskinventory.LegacyHostAgentSource) {
 		t.Fatalf("legacy agent temperature not recorded as collected: temp=%d collection=%+v", reporting.Temperature, reporting.Collection)
 	}
@@ -548,7 +550,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		"full poll":    proxmoxDisk,
 		"skipped poll": reporting,
 	} {
-		got := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, state.GetHosts())[0]
+		got := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, state.GetHosts(), nil)[0]
 		if got.Temperature != 38 || got.Collection.Temperature.State != diskinventory.FieldUnavailable {
 			t.Fatalf("%s: silent legacy agent temperature presented as collected: temp=%d collection=%+v", name, got.Temperature, got.Collection)
 		}
@@ -591,7 +593,7 @@ func TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal(t *testing.T) {
 	// The disk poll while the agent reported is the copy the Proxmox row
 	// keeps once its host stops being polled.
 	state.UpdatePhysicalDisks("pve1", mergeHostAgentSMARTIntoDisks(
-		[]models.PhysicalDisk{inventory}, state.GetSnapshot().Nodes, state.GetHosts()))
+		[]models.PhysicalDisk{inventory}, state.GetSnapshot().Nodes, state.GetHosts(), nil))
 	canonical := func() (int, *diskinventory.CollectionStatus) {
 		t.Helper()
 		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
@@ -791,6 +793,7 @@ type slotDiskPVEClient struct {
 	fakeStorageClient
 	mu   sync.Mutex
 	disk proxmox.Disk
+	err  error
 }
 
 func (client *slotDiskPVEClient) setDisk(disk proxmox.Disk) {
@@ -799,9 +802,20 @@ func (client *slotDiskPVEClient) setDisk(disk proxmox.Disk) {
 	client.disk = disk
 }
 
+// setError makes the disk query fail, as it does on a wide node that exceeds
+// the API window (#1516), until it is cleared with nil.
+func (client *slotDiskPVEClient) setError(err error) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.err = err
+}
+
 func (client *slotDiskPVEClient) GetDisks(context.Context, string) ([]proxmox.Disk, error) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
+	if client.err != nil {
+		return nil, client.err
+	}
 	return []proxmox.Disk{client.disk}, nil
 }
 
@@ -1146,7 +1160,7 @@ func TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports(t *testing.T) {
 		{ID: "host-node3", Status: "offline", Sensors: models.HostSensorSummary{SMART: smart}},
 	}
 
-	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	for i, want := range []bool{true, false, false, false} {
 		if merged[i].AgentSMARTReported != want {
 			t.Fatalf("%s/%s AgentSMARTReported = %v, want %v", merged[i].Node, merged[i].DevPath, merged[i].AgentSMARTReported, want)
@@ -1159,7 +1173,7 @@ func TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports(t *testing.T) {
 		t.Fatalf("a silent agent's retained row no longer enriches the disk: %+v", merged[3])
 	}
 
-	fallback := mergeHostAgentSMARTIntoDisks(physicalDisksFromHostAgentSMART("pve1", "node1", smart), nodes, hosts)
+	fallback := mergeHostAgentSMARTIntoDisks(physicalDisksFromHostAgentSMART("pve1", "node1", smart), nodes, hosts, nil)
 	if len(fallback) != 1 || !fallback[0].AgentSMARTReported {
 		t.Fatalf("a disk built from a reporting agent's SMART report is not the agent's: %+v", fallback)
 	}
@@ -1213,5 +1227,742 @@ func TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts(t *testing.T)
 	m.checkPhysicalDiskAlerts(instance, sata("/dev/sdd"), []string{"sdd"})
 	if active("/dev/sdd") {
 		t.Fatalf("an excluded device raised a temperature alert")
+	}
+}
+
+// An operator split of a Proxmox disk from the disk its linked agent reports
+// (report-merge on the merged disk, the drawer's Split merged resource) holds
+// for the PVE disk poller too. The poller paired the agent's SMART row with the
+// Proxmox disk by WWN, serial or path before the registry saw either, and read
+// no exclusions, so the registry kept two rows while the Proxmox record still
+// carried the agent's attributes, I/O, health, serial, type and temperature,
+// and the agent kept the disk's temperature alert (AgentSMARTReported). A split
+// row carries what Proxmox reported, whatever an earlier poll merged into it,
+// on a full poll and on the skipped polls between. That includes the
+// temperature: a node with a linked agent takes its sensor lists from the
+// agent, so the reading the node poll matches to the disk is the agent's row
+// of the disk it was split from, and the disk neither shows it nor alerts on it
+// a second time beside the agent's own alert.
+func TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk(t *testing.T) {
+	percentUsed, hours := 40, int64(1200)
+	agentSMART := func(device, model, serial, diskType string, temperature int) models.HostDiskSMART {
+		return models.HostDiskSMART{
+			Device: device, Model: model, Serial: serial, Type: diskType, Health: "FAILED", Temperature: temperature,
+			IO:         &models.DiskIO{Device: device, ReadBytes: 4096, WriteBytes: 8192},
+			Attributes: &models.SMARTAttributes{PowerOnHours: &hours, PercentageUsed: &percentUsed},
+			Collection: &diskinventory.CollectionStatus{
+				Serial:      diskinventory.Available("smartctl"),
+				Temperature: diskinventory.Available("smartctl"),
+				IO:          diskinventory.Available("kernel_diskstats"),
+			},
+		}
+	}
+	for _, shape := range []struct {
+		name  string
+		agent models.HostDiskSMART
+		pve   proxmox.Disk
+		// nodeTemp is the node sensor list's row for the disk. The node poll
+		// takes that list from the linked agent, so it is the agent's reading.
+		nodeTemp *models.DiskTemp
+		// What a paired record carries: the agent's serial and type, and the
+		// temperature it reports unless the node's sensors read the disk.
+		pairedSerial, pairedType string
+		pairedTemperature        int
+		// The temperature a skipped poll reads back from the joined canonical
+		// disk, and what the split disk shows once the agent's reading is gone.
+		skippedTemperature, splitTemperature int
+		// Whether the PVE disk check alerts on the split disk's reading.
+		splitAlert bool
+	}{
+		// Proxmox reports the SAS transport address as the serial (#1595), so
+		// only the device path pairs the rows, and the pairing promotes the
+		// agent's serial and transport over Proxmox's.
+		{
+			name:  "sas-path",
+			agent: agentSMART("/dev/sda", "ST4000NM0023", "Z1Z0ABCD", "sas", 70),
+			pve: proxmox.Disk{DevPath: "/dev/sda", Model: "ST4000NM0023", Serial: "5000c500a1b2c3d4", Type: "hdd",
+				Health: "PASSED", Wearout: 100, Size: 4000787030016},
+			pairedSerial: "Z1Z0ABCD", pairedType: "sas", pairedTemperature: 70, skippedTemperature: 70,
+		},
+		// One serial on both sides, and the node's sensor list reads the disk,
+		// so it carries a reading and can raise a temperature alert.
+		{
+			name:  "matching-serial",
+			agent: agentSMART("/dev/nvme0n1", "WD Black SN850X", "S6B0NL0W123456", "nvme", 40),
+			pve: proxmox.Disk{DevPath: "/dev/nvme0n1", Model: "WD Black SN850X", Serial: "S6B0NL0W123456", Type: "nvme",
+				Health: "PASSED", Wearout: 100, Size: 1000204886016},
+			nodeTemp:     &models.DiskTemp{Device: "/dev/nvme0n1", Serial: "S6B0NL0W123456", Type: "nvme", Temperature: 85},
+			pairedSerial: "S6B0NL0W123456", pairedType: "nvme", pairedTemperature: 85, skippedTemperature: 40,
+		},
+		// The agent's report carries no usable temperature, so the node's SMART
+		// list is the SSH collector's: the reading is the node's own, survives the
+		// split, and the PVE disk check, no longer deferring to the agent, alerts.
+		{
+			name:  "ssh-sensors",
+			agent: agentSMART("/dev/nvme1n1", "WD Black SN770", "S7SSH0000001", "nvme", 0),
+			pve: proxmox.Disk{DevPath: "/dev/nvme1n1", Model: "WD Black SN770", Serial: "S7SSH0000001", Type: "nvme",
+				Health: "PASSED", Wearout: 100, Size: 1000204886016},
+			nodeTemp:     &models.DiskTemp{Device: "/dev/nvme1n1", Serial: "S7SSH0000001", Type: "nvme", Temperature: 85},
+			pairedSerial: "S7SSH0000001", pairedType: "nvme", pairedTemperature: 85, skippedTemperature: 85,
+			splitTemperature: 85, splitAlert: true,
+		},
+	} {
+		for _, request := range []struct {
+			name string
+			// exclusions are the pairs report-merge records for the merged disk.
+			exclusions func(merged, agentCandidate, proxmoxCandidate string) [][2]string
+			split      bool
+		}{
+			{"report-merge", func(merged, agent, proxmox string) [][2]string {
+				return [][2]string{{merged, agent}, {merged, proxmox}}
+			}, true},
+			{"proxmox-candidate-only", func(merged, _, proxmox string) [][2]string {
+				return [][2]string{{merged, proxmox}}
+			}, true},
+			// The agent's row holds the merged ID, so a pair naming only its
+			// candidate separates nothing, here as in the registry.
+			{"agent-candidate-only", func(merged, agent, _ string) [][2]string {
+				return [][2]string{{merged, agent}}
+			}, false},
+			{"unrelated-exclusion", func(merged, _, _ string) [][2]string {
+				return [][2]string{{merged, "physical_disk-00000000deadbeef"}}
+			}, false},
+		} {
+			t.Run(shape.name+"/"+request.name, func(t *testing.T) {
+				t.Setenv("PULSE_DATA_DIR", t.TempDir())
+				now := time.Now()
+				const instance, nodeName = "pve1", "node1"
+				node := models.Node{
+					ID: "pve1-node1", Name: nodeName, Instance: instance, Host: "https://10.0.0.5:8006",
+					Status: "online", LastSeen: now, LinkedAgentID: "agent-1",
+				}
+				if shape.nodeTemp != nil {
+					reading := *shape.nodeTemp
+					reading.LastUpdated = now
+					node.Temperature = &models.Temperature{Available: true, HasSMART: true, SMART: []models.DiskTemp{reading}, LastUpdate: now}
+				}
+				state := models.NewState()
+				state.UpdateNodesForInstance(instance, []models.Node{node})
+				state.UpsertHost(models.Host{
+					ID: "agent-1", Hostname: nodeName, MachineID: "0123456789abcdef", LinkedNodeID: node.ID,
+					Status: "online", IntervalSeconds: 30, LastSeen: now,
+					Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{shape.agent}},
+				})
+				store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+				alertManager := alerts.NewManager()
+				t.Cleanup(alertManager.Stop)
+				adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+				m := &Monitor{
+					state: state, resourceStore: adapter, alertManager: alertManager,
+					metricsHistory: NewMetricsHistory(100, time.Hour),
+					startTime:      now.Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+				}
+				client := &slotDiskPVEClient{}
+				client.setDisk(shape.pve)
+
+				disk := func() models.PhysicalDisk {
+					t.Helper()
+					disks := state.GetSnapshot().PhysicalDisks
+					if len(disks) != 1 {
+						t.Fatalf("physical disks = %+v, want one", disks)
+					}
+					return disks[0]
+				}
+				fullPoll := func() models.PhysicalDisk {
+					t.Helper()
+					adapter.PopulateFromSnapshot(state.GetSnapshot())
+					started := time.Now()
+					delete(m.lastPhysicalDiskPoll, instance)
+					m.maybePollPhysicalDisksAsync(context.Background(), instance, &config.PVEInstance{}, client,
+						[]proxmox.Node{{Node: nodeName, Status: "online"}}, map[string]string{nodeName: "online"}, nil)
+					deadline := time.Now().Add(3 * time.Second)
+					for {
+						if disks := state.GetSnapshot().PhysicalDisks; len(disks) == 1 && !disks[0].LastChecked.Before(started) {
+							return disks[0]
+						}
+						if time.Now().After(deadline) {
+							t.Fatal("full physical disk poll did not land in state")
+						}
+						time.Sleep(10 * time.Millisecond)
+					}
+				}
+				skippedPoll := func() models.PhysicalDisk {
+					t.Helper()
+					adapter.PopulateFromSnapshot(state.GetSnapshot())
+					m.lastPhysicalDiskPoll[instance] = time.Now()
+					m.maybePollPhysicalDisksAsync(context.Background(), instance, &config.PVEInstance{}, nil, nil, nil, nil)
+					return disk()
+				}
+				temperatureAlert := func() bool {
+					id := unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, nodeName, shape.pve.DevPath) + "::metric-threshold:diskTemperature"
+					for _, alert := range alertManager.GetActiveAlerts() {
+						if alert.ID == id {
+							return true
+						}
+					}
+					return false
+				}
+				healthAlert := func() bool {
+					for _, alert := range alertManager.GetActiveAlerts() {
+						if alert.Type == "disk-health" {
+							return true
+						}
+					}
+					return false
+				}
+				// A poll whose Proxmox disk query fails carries the stored record
+				// (or the agent's rows) instead of a fresh one, so it is done when
+				// the state is written rather than when a disk is newly checked.
+				failedQueryPoll := func() models.PhysicalDisk {
+					t.Helper()
+					adapter.PopulateFromSnapshot(state.GetSnapshot())
+					client.setError(errors.New("disks/list timed out"))
+					defer client.setError(nil)
+					started := time.Now()
+					delete(m.lastPhysicalDiskPoll, instance)
+					m.maybePollPhysicalDisksAsync(context.Background(), instance, &config.PVEInstance{}, client,
+						[]proxmox.Node{{Node: nodeName, Status: "online"}}, map[string]string{nodeName: "online"}, nil)
+					deadline := time.Now().Add(3 * time.Second)
+					for {
+						if snapshot := state.GetSnapshot(); snapshot.LastUpdate.After(started) && len(snapshot.PhysicalDisks) == 1 {
+							return snapshot.PhysicalDisks[0]
+						}
+						if time.Now().After(deadline) {
+							t.Fatal("physical disk poll with a failing disk query did not land in state")
+						}
+						time.Sleep(10 * time.Millisecond)
+					}
+				}
+				// Whether the canonical disks are one joined row or two.
+				canonicalRows := func() (joined, agentOnly, proxmoxOnly []*unifiedresources.PhysicalDiskView) {
+					t.Helper()
+					adapter.PopulateFromSnapshot(state.GetSnapshot())
+					for _, view := range adapter.PhysicalDisks() {
+						_, fromAgent := view.SourceStatus(unifiedresources.SourceAgent)
+						_, fromProxmox := view.SourceStatus(unifiedresources.SourceProxmox)
+						switch {
+						case fromAgent && fromProxmox:
+							joined = append(joined, view)
+						case fromAgent:
+							agentOnly = append(agentOnly, view)
+						case fromProxmox:
+							proxmoxOnly = append(proxmoxOnly, view)
+						}
+					}
+					return joined, agentOnly, proxmoxOnly
+				}
+
+				assertPaired := func(step string, got models.PhysicalDisk, wantTemperature int) {
+					t.Helper()
+					if got.Serial != shape.pairedSerial || got.Type != shape.pairedType || got.Health != "FAILED" ||
+						got.Temperature != wantTemperature || got.Wearout != 60 ||
+						got.SmartAttributes == nil || got.IO == nil || !got.AgentSMARTReported || got.AgentSMARTSplit {
+						t.Fatalf("%s: the agent's row was not paired with the Proxmox disk: %+v", step, got)
+					}
+				}
+				assertProxmoxOnly := func(step string, got models.PhysicalDisk) {
+					t.Helper()
+					if got.Serial != shape.pve.Serial || got.Type != shape.pve.Type || got.Health != "PASSED" ||
+						got.Temperature != shape.splitTemperature || got.Wearout != shape.pve.Wearout ||
+						got.SmartAttributes != nil || got.IO != nil || got.AgentSMARTReported || !got.AgentSMARTSplit {
+						t.Fatalf("%s: the split disk carries the agent's data: %+v", step, got)
+					}
+				}
+
+				// The disk's temperature alert is open before the agent's row
+				// is paired with it, as when the node's sensors read it alone.
+				// A shape whose alert should open after the split starts without
+				// one: the alert manager suppresses an alert it just resolved.
+				if shape.nodeTemp != nil && !shape.splitAlert {
+					m.checkPhysicalDiskAlerts(instance, models.PhysicalDisk{
+						Instance: instance, Node: nodeName, DevPath: shape.pve.DevPath, Model: shape.pve.Model,
+						Type: shape.pve.Type, Health: "PASSED", Wearout: -1, Temperature: shape.nodeTemp.Temperature,
+					}, nil)
+					if !temperatureAlert() {
+						t.Fatal("fixture did not open the Proxmox disk's temperature alert")
+					}
+				}
+				assertPaired("before the request", fullPoll(), shape.pairedTemperature)
+				if !healthAlert() {
+					t.Fatal("the agent's failed health did not raise the disk health alert")
+				}
+				if joined, agentOnly, proxmoxOnly := canonicalRows(); len(joined) != 1 || len(agentOnly) != 0 || len(proxmoxOnly) != 0 {
+					t.Fatalf("fixture did not join the disks: joined %d, agent only %d, proxmox only %d", len(joined), len(agentOnly), len(proxmoxOnly))
+				}
+				if temperatureAlert() {
+					t.Fatal("the PVE disk's temperature alert stayed open for a disk the agent reports")
+				}
+
+				// Report-merge names the merged disk and each source's candidate.
+				ids := unifiedresources.NewRegistry(nil)
+				ids.IngestSnapshot(state.GetSnapshot())
+				var merged, agentCandidate, proxmoxCandidate string
+				for _, resource := range ids.List() {
+					if resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+						merged = resource.ID
+					}
+				}
+				for _, target := range ids.SourceTargets(merged) {
+					switch target.Source {
+					case unifiedresources.SourceAgent:
+						agentCandidate = target.CandidateID
+					case unifiedresources.SourceProxmox:
+						proxmoxCandidate = target.CandidateID
+					}
+				}
+				if merged == "" || agentCandidate == "" || proxmoxCandidate == "" || proxmoxCandidate == merged {
+					t.Fatalf("merged disk %q lists candidates agent=%q proxmox=%q", merged, agentCandidate, proxmoxCandidate)
+				}
+				for _, pair := range request.exclusions(merged, agentCandidate, proxmoxCandidate) {
+					if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				if !request.split {
+					assertPaired("after the request", fullPoll(), shape.pairedTemperature)
+					// A skipped poll merges the stored record, which the joined
+					// canonical disk reports at the agent's reading.
+					assertPaired("on a skipped poll", skippedPoll(), shape.skippedTemperature)
+					return
+				}
+				// A full poll builds the record from what Proxmox reported,
+				// and the poll after it must not retain what the one before
+				// held from the agent. The skipped polls between, which merge
+				// the stored record again, keep the agent's data off too.
+				assertProxmoxOnly("after the request", fullPoll())
+				// The split disk is still evaluated, and Proxmox's own verdict
+				// of it closes the health alert the agent's failure raised.
+				if healthAlert() {
+					t.Fatal("the disk health alert raised by the agent's row stayed open on the split disk")
+				}
+				assertProxmoxOnly("on a skipped poll", skippedPoll())
+				assertProxmoxOnly("on the next full poll", fullPoll())
+				assertProxmoxOnly("on the next skipped poll", skippedPoll())
+				// When Proxmox cannot list the node's disks, the agent's rows
+				// stand in for them (#1516), except the row split from the
+				// disk in its slot.
+				assertProxmoxOnly("when the disk query fails", failedQueryPoll())
+
+				joined, agentOnly, proxmoxOnly := canonicalRows()
+				if len(joined) != 0 || len(agentOnly) != 1 || len(proxmoxOnly) != 1 {
+					t.Fatalf("canonical disks: joined %d, agent only %d, proxmox only %d, want the two apart", len(joined), len(agentOnly), len(proxmoxOnly))
+				}
+				if proxmoxOnly[0].Health() != "PASSED" || proxmoxOnly[0].Serial() != shape.pve.Serial {
+					t.Fatalf("canonical Proxmox disk took the agent's data: health %q, serial %q", proxmoxOnly[0].Health(), proxmoxOnly[0].Serial())
+				}
+				if agentOnly[0].Health() != "FAILED" || agentOnly[0].Serial() != shape.agent.Serial {
+					t.Fatalf("canonical agent disk lost its own data: health %q, serial %q", agentOnly[0].Health(), agentOnly[0].Serial())
+				}
+				// A reading the agent supplied is gone, so the PVE disk check has
+				// none to judge and the alert the agent took over does not come
+				// back; one the SSH collector supplied is judged by the PVE check.
+				if temperatureAlert() != shape.splitAlert {
+					t.Fatalf("PVE temperature alert active = %v, want %v once the disks were split", temperatureAlert(), shape.splitAlert)
+				}
+			})
+		}
+	}
+}
+
+// fakeDiskAgentSplits answers the PVE disk poller's split question from a
+// set of Proxmox device paths and records what it was asked.
+type fakeDiskAgentSplits struct {
+	splitDevPaths map[string]bool
+	splitIDs      map[string]bool
+	asked         []string
+	askedIDs      []string
+}
+
+func (f *fakeDiskAgentSplits) ProxmoxDiskAgentSMARTSplit(disk models.PhysicalDisk, host models.Host, smart models.HostDiskSMART) bool {
+	f.asked = append(f.asked, host.ID+":"+disk.DevPath+":"+smart.Serial)
+	f.askedIDs = append(f.askedIDs, disk.ID)
+	return f.splitDevPaths[disk.DevPath] || f.splitIDs[disk.ID]
+}
+
+// The agent's SMART merge asks the split decider once per disk it matches a
+// row to. A split disk takes nothing from the row, not even the alert
+// ownership, and is marked so the poll does not retain the agent's data for it
+// either; a disk no row matches is not asked about; the rows of the disks that
+// are not split still merge, as they do without a decider.
+func TestMergeHostAgentSMARTIntoDisksLeavesDisksTheOperatorSplitAlone(t *testing.T) {
+	percentUsed := 40
+	smart := func(device, serial string) models.HostDiskSMART {
+		return models.HostDiskSMART{
+			Device: device, Serial: serial, Type: "sata", Health: "FAILED", Temperature: 61,
+			WWN: "5-c50-" + serial, Controller: "ctrl", Target: "0:1", Pool: "tank", Model: "AgentModel", SizeBytes: 1000,
+			IO:         &models.DiskIO{Device: device, ReadBytes: 1},
+			Attributes: &models.SMARTAttributes{PercentageUsed: &percentUsed},
+		}
+	}
+	disk := func(devPath, serial string) models.PhysicalDisk {
+		return models.PhysicalDisk{ID: unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", devPath, "", ""), Node: "node1", Instance: "pve1", DevPath: devPath, Serial: serial, Type: "sata", Health: "PASSED", Wearout: 100}
+	}
+	nodes := []models.Node{{Name: "node1", LinkedAgentID: "agent-1"}}
+	hosts := []models.Host{{ID: "agent-1", Status: "online", Sensors: models.HostSensorSummary{
+		SMART: []models.HostDiskSMART{smart("sda", "SERIAL-A"), smart("sdb", "SERIAL-B")},
+	}}}
+	disks := []models.PhysicalDisk{disk("/dev/sda", "SERIAL-A"), disk("/dev/sdb", "SERIAL-B"), disk("/dev/sdc", "SERIAL-C")}
+	// The node's sensor list, which a linked agent supplies, was matched to the
+	// split disk before the agent merge ran.
+	disks[0].Temperature = 58
+	disks[0].Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Available(proxmoxNodeSMARTTemperatureSource)}
+	// Proxmox's own verdict of the split disk, which the agent's PASSED/FAILED
+	// would otherwise replace or correct.
+	disks[0].Health, disks[0].Wearout = "FAILED", 30
+
+	splits := &fakeDiskAgentSplits{splitDevPaths: map[string]bool{"/dev/sda": true, "/dev/sdc": true}}
+	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, splits)
+
+	wantSplit := disk("/dev/sda", "SERIAL-A")
+	wantSplit.AgentSMARTSplit = true
+	if got := merged[0]; got.Temperature != 0 || got.Health != "FAILED" || got.Wearout != 30 || got.SmartAttributes != nil || got.IO != nil ||
+		got.AgentSMARTReported || !got.AgentSMARTSplit || got.ID != wantSplit.ID || got.Serial != wantSplit.Serial ||
+		got.WWN != "" || got.Controller != "" || got.Target != "" || got.StorageGroup != "" || got.Model != "" || got.Size != 0 {
+		t.Fatalf("a split disk took the agent's row: %+v", got)
+	}
+	if got := merged[1]; got.Temperature != 61 || got.Health != "FAILED" || got.Wearout != 60 || got.SmartAttributes == nil || got.IO == nil ||
+		!got.AgentSMARTReported || got.AgentSMARTSplit {
+		t.Fatalf("a disk that is not split lost the agent's row: %+v", got)
+	}
+	if got := merged[2]; got.AgentSMARTSplit || got.AgentSMARTReported {
+		t.Fatalf("a disk no row matches was marked: %+v", got)
+	}
+	if want := []string{"agent-1:/dev/sda:SERIAL-A", "agent-1:/dev/sdb:SERIAL-B"}; !slices.Equal(splits.asked, want) {
+		t.Fatalf("decider asked %v, want one question per matched disk %v", splits.asked, want)
+	}
+	if disks[0].AgentSMARTSplit || disks[0].Temperature != 58 || disks[0].Collection.Temperature.State != diskinventory.FieldAvailable {
+		t.Fatalf("the merge modified the caller's slice: %+v / %+v", disks[0], disks[0].Collection)
+	}
+	if merged[0].Collection == nil || merged[0].Collection.Temperature.State == diskinventory.FieldAvailable {
+		t.Fatalf("the split disk still counts the node sensors' reading as collected: %+v", merged[0].Collection)
+	}
+
+	// The decision is made under the observation's own ID, the key the registry
+	// holds it by: a controller member recorded by device alone is a different
+	// observation from the stand-in keyed by its target, so a split recorded
+	// under the other key is ignored, as it is for the registry.
+	memberRow := smart("sdd", "SERIAL-D")
+	memberRow.Controller, memberRow.Target = "megaraid", "megaraid,7"
+	memberHosts := []models.Host{{ID: "agent-1", Status: "online", Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{memberRow}}}}
+	slotID := unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdd", "", "")
+	memberID := unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdd", "megaraid", "megaraid,7")
+	if slotID == memberID {
+		t.Fatal("fixture: a controller member's key should differ from the slot's")
+	}
+	bySlot := disk("/dev/sdd", "SERIAL-D")
+	byMember := bySlot
+	byMember.ID = memberID
+	for name, tc := range map[string]struct {
+		disk      models.PhysicalDisk
+		splitID   string
+		wantSplit bool
+		wantAsked string
+	}{
+		"slot-keyed record, split under its key":    {bySlot, slotID, true, slotID},
+		"slot-keyed record, split under member key": {bySlot, memberID, false, slotID},
+		"member-keyed record, split under its key":  {byMember, memberID, true, memberID},
+		"member-keyed record, split under slot key": {byMember, slotID, false, memberID},
+	} {
+		decider := &fakeDiskAgentSplits{splitIDs: map[string]bool{tc.splitID: true}}
+		got := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{tc.disk}, nodes, memberHosts, decider)[0]
+		if got.AgentSMARTSplit != tc.wantSplit || got.AgentSMARTReported == tc.wantSplit {
+			t.Fatalf("%s: split = %v, reported = %v, want split %v", name, got.AgentSMARTSplit, got.AgentSMARTReported, tc.wantSplit)
+		}
+		if !slices.Equal(decider.askedIDs, []string{tc.wantAsked}) {
+			t.Fatalf("%s: decider asked about %v, want exactly the record's own ID %q", name, decider.askedIDs, tc.wantAsked)
+		}
+	}
+
+	// The node-sensor reading already on the disk stays; the agent's fills only an empty one.
+	if unchanged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, &fakeDiskAgentSplits{}); !unchanged[0].AgentSMARTReported || unchanged[0].Temperature != 58 || unchanged[0].Health != "FAILED" {
+		t.Fatalf("a decider that splits nothing changed the merge: %+v", unchanged[0])
+	}
+}
+
+// When the Proxmox disk query fails, the linked agent's SMART rows stand in
+// for the node's disks (#1516). A row the operator split from the Proxmox disk
+// in its slot is not that disk's stand-in: it would put the agent's disk, with
+// its readings and temperature alert, in a second row beside the agent's own.
+// The stand-in is judged under its own ID, the key the registry holds it by
+// once recorded: a controller member's is qualified by its target.
+func TestHostAgentSMARTFallbackSkipsRowsTheOperatorSplit(t *testing.T) {
+	rows := []models.HostDiskSMART{
+		{Device: "sda", Serial: "SERIAL-A", Type: "sata", Temperature: 61},
+		{Device: "sdb", Serial: "SERIAL-B", Type: "sata", Temperature: 62},
+	}
+	host := models.Host{ID: "agent-1"}
+
+	if got := unsplitPhysicalDisksFromHostAgentSMART("pve1", "node1", host, rows, nil); len(got) != 2 {
+		t.Fatalf("without split decisions the fallback listed %d disks, want 2", len(got))
+	}
+	if got := unsplitPhysicalDisksFromHostAgentSMART("pve1", "node1", host, rows, &fakeDiskAgentSplits{}); len(got) != 2 {
+		t.Fatalf("a decider that splits nothing left %d stand-ins, want 2", len(got))
+	}
+	splits := &fakeDiskAgentSplits{splitDevPaths: map[string]bool{"/dev/sda": true}}
+	got := unsplitPhysicalDisksFromHostAgentSMART("pve1", "node1", host, rows, splits)
+	if len(got) != 1 || got[0].DevPath != "/dev/sdb" || got[0].Temperature != 62 {
+		t.Fatalf("fallback disks = %+v, want only /dev/sdb", got)
+	}
+	if want := []string{"agent-1:/dev/sda:SERIAL-A", "agent-1:/dev/sdb:SERIAL-B"}; !slices.Equal(splits.asked, want) {
+		t.Fatalf("decider asked %v, want one question per row, with the row %v", splits.asked, want)
+	}
+
+	member := []models.HostDiskSMART{{Device: "sdc", Serial: "SERIAL-C", Type: "sat", Controller: "megaraid", Target: "megaraid,7"}}
+	stand := physicalDisksFromHostAgentSMART("pve1", "node1", member)
+	slot := unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdc", "", "")
+	if len(stand) != 1 || stand[0].ID == slot {
+		t.Fatalf("a controller member's stand-in should be keyed by its target: %+v", stand)
+	}
+	byOwnID := &fakeDiskAgentSplits{splitIDs: map[string]bool{stand[0].ID: true}}
+	if got := unsplitPhysicalDisksFromHostAgentSMART("pve1", "node1", host, member, byOwnID); len(got) != 0 {
+		t.Fatalf("a split recorded under the stand-in's key did not hold: %+v", got)
+	}
+	if want := []string{stand[0].ID}; !slices.Equal(byOwnID.askedIDs, want) {
+		t.Fatalf("decider asked about %v, want the stand-in's own ID %v", byOwnID.askedIDs, want)
+	}
+	// A split recorded under the slot's device-only key names a different
+	// observation, as for the registry: the stand-in is not that disk.
+	bySlot := &fakeDiskAgentSplits{splitIDs: map[string]bool{slot: true}}
+	if got := unsplitPhysicalDisksFromHostAgentSMART("pve1", "node1", host, member, bySlot); len(got) != 1 {
+		t.Fatalf("a split recorded under the slot's key applied to the member's stand-in: %+v", got)
+	}
+	if want := []string{stand[0].ID}; !slices.Equal(bySlot.askedIDs, want) {
+		t.Fatalf("decider asked about %v, want only the stand-in's own ID %v", bySlot.askedIDs, want)
+	}
+}
+
+// When the Proxmox disk query fails and the operator split one of the node's
+// disks from its agent row, only the rows that were not split stand in for the
+// node's disks, as before; the split disk gets no stand-in, which would be the
+// agent's disk again, so its Proxmox record is not listed while the query fails.
+func TestFailedDiskQueryListsOnlyTheRowsTheOperatorDidNotSplit(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	now := time.Now()
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: now, LinkedAgentID: "agent-1",
+	}})
+	state.UpsertHost(models.Host{
+		ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online", IntervalSeconds: 30, LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "/dev/sda", Serial: "AGENT-A", Type: "sata", Health: "FAILED", Temperature: 61},
+			{Device: "/dev/sdb", Serial: "SERIAL-B", Type: "sata", Health: "PASSED", Temperature: 62},
+		}},
+	})
+	record := func(device, serial string) models.PhysicalDisk {
+		return models.PhysicalDisk{
+			ID: unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", device, "", ""), Node: "node1", Instance: "pve1",
+			DevPath: device, Serial: serial, Type: "sata", Health: "PASSED", Wearout: 100, LastChecked: now,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "no temperature")},
+		}
+	}
+	state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{record("/dev/sda", "PVE-A"), record("/dev/sdb", "SERIAL-B")})
+
+	alertManager := alerts.NewManager()
+	t.Cleanup(alertManager.Stop)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{
+		state:         state,
+		resourceStore: splitDecidingStore{adapter, &fakeDiskAgentSplits{splitDevPaths: map[string]bool{"/dev/sda": true}}},
+		alertManager:  alertManager, metricsHistory: NewMetricsHistory(100, time.Hour),
+		startTime: now.Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+	}
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+	client := &slotDiskPVEClient{}
+	client.setError(errors.New("disks/list timed out"))
+	started := time.Now()
+	m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+	var disks []models.PhysicalDisk
+	for deadline := time.Now().Add(3 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if snapshot := state.GetSnapshot(); snapshot.LastUpdate.After(started) {
+			disks = snapshot.PhysicalDisks
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("physical disk poll with a failing disk query did not land in state")
+		}
+	}
+	byDevice := map[string]models.PhysicalDisk{}
+	for _, disk := range disks {
+		byDevice[disk.DevPath] = disk
+	}
+	if len(disks) != 1 {
+		t.Fatalf("disks = %+v, want only the row that was not split", disks)
+	}
+	if split, listed := byDevice["/dev/sda"]; listed {
+		t.Fatalf("the agent's row stood in for the disk the operator split from it: %+v", split)
+	}
+	if other := byDevice["/dev/sdb"]; other.Serial != "SERIAL-B" || other.Temperature != 62 || !other.AgentSMARTReported ||
+		other.ID != unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdb", "", "") {
+		t.Fatalf("the other row did not stand in for its disk: %+v", other)
+	}
+}
+
+// splitDecidingStore is the resource store a monitor test hands out when it
+// wants to decide the operator's splits itself.
+type splitDecidingStore struct {
+	*unifiedresources.MonitorAdapter
+	splits *fakeDiskAgentSplits
+}
+
+func (s splitDecidingStore) ProxmoxDiskAgentSMARTSplit(disk models.PhysicalDisk, host models.Host, smart models.HostDiskSMART) bool {
+	return s.splits.ProxmoxDiskAgentSMARTSplit(disk, host, smart)
+}
+
+// The node poll takes the node's SMART sensor list from a linked agent when
+// the agent's report carries a usable temperature, and from the SSH collector
+// otherwise, so only the first kind of reading is the agent's row of the disk
+// a split Proxmox disk was split from. The legacy NVMe list names no disk, so
+// a split disk drops its guess either way. A disk whose temperature has
+// another source keeps it, and the caller's collection is never modified.
+func TestDropNodeSensorTemperatureRemovesOnlyAgentSuppliedReadings(t *testing.T) {
+	for _, tc := range []struct {
+		source         string
+		smartFromAgent bool
+		dropped        bool
+	}{
+		{proxmoxNodeSMARTTemperatureSource, true, true},
+		{proxmoxNodeSMARTTemperatureSource, false, false},
+		{proxmoxNodeNVMeTemperatureSource, true, true},
+		{proxmoxNodeNVMeTemperatureSource, false, true},
+	} {
+		shared := &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Available(tc.source), Serial: diskinventory.Available("proxmox_disks"),
+			IO: diskinventory.Unsupported("proxmox_disks", "no counters"), Controller: diskinventory.Missing("proxmox_disks", "none"),
+			Pool: diskinventory.Available("proxmox_zfs"),
+		}
+		disk := models.PhysicalDisk{Temperature: 60, Collection: shared}
+		dropNodeSensorTemperature(&disk, tc.smartFromAgent)
+		if tc.dropped {
+			other := *disk.Collection
+			other.Temperature = shared.Temperature
+			if disk.Temperature != 0 || disk.Collection.Temperature.State != diskinventory.FieldUnsupported ||
+				disk.Collection.Temperature.Source != "proxmox_disks" || other != *shared {
+				t.Fatalf("%+v: reading not dropped cleanly: %+v / %+v", tc, disk, disk.Collection)
+			}
+		} else if disk.Temperature != 60 || disk.Collection != shared {
+			t.Fatalf("%+v: an SSH-supplied reading was dropped: %+v", tc, disk)
+		}
+		if shared.Temperature.State != diskinventory.FieldAvailable || shared.Temperature.Source != tc.source {
+			t.Fatalf("%+v: the caller's collection was modified: %+v", tc, shared)
+		}
+	}
+	for _, collection := range []*diskinventory.CollectionStatus{
+		nil,
+		{Temperature: diskinventory.Available("smartctl")},
+		{Temperature: diskinventory.Unsupported("proxmox_disks", "no temperature")},
+	} {
+		disk := models.PhysicalDisk{Temperature: 60, Collection: collection}
+		dropNodeSensorTemperature(&disk, true)
+		if disk.Temperature != 60 || disk.Collection != collection {
+			t.Fatalf("a reading from another source was dropped: %+v", disk)
+		}
+	}
+}
+
+// mergeNVMeTempsIntoDisks labels what it takes from the node's sensor lists
+// with the sources dropNodeSensorTemperature recognises: the SMART list
+// matched by identity or path, and the legacy NVMe list matched by order.
+func TestMergeNVMeTempsLabelsReadingsWithTheNodeSensorSources(t *testing.T) {
+	node := func(temperature *models.Temperature) []models.Node {
+		return []models.Node{{Name: "node1", Temperature: temperature}}
+	}
+	disk := models.PhysicalDisk{Node: "node1", DevPath: "/dev/nvme0n1", Serial: "S6B0NL0W123456", Type: "nvme"}
+
+	bySMART := mergeNVMeTempsIntoDisks([]models.PhysicalDisk{disk}, node(&models.Temperature{
+		Available: true, HasSMART: true,
+		SMART: []models.DiskTemp{{Device: "/dev/nvme0n1", Serial: "S6B0NL0W123456", Temperature: 55}},
+	}))[0]
+	if bySMART.Temperature != 55 || bySMART.Collection == nil || bySMART.Collection.Temperature.Source != proxmoxNodeSMARTTemperatureSource {
+		t.Fatalf("SMART list reading not labelled %q: %+v / %+v", proxmoxNodeSMARTTemperatureSource, bySMART, bySMART.Collection)
+	}
+
+	for name, row := range map[string]models.DiskTemp{
+		"WWN":         {Device: "/dev/other", WWN: "0x5000c500a1b2c3d4", Temperature: 52},
+		"device path": {Device: "/dev/nvme0n1", Temperature: 53},
+	} {
+		wwnDisk := models.PhysicalDisk{Node: "node1", DevPath: "/dev/nvme0n1", WWN: "0x5000c500a1b2c3d4", Type: "nvme"}
+		if name == "device path" {
+			wwnDisk = models.PhysicalDisk{Node: "node1", DevPath: "/dev/nvme0n1", Type: "nvme"}
+		}
+		got := mergeNVMeTempsIntoDisks([]models.PhysicalDisk{wwnDisk}, node(&models.Temperature{
+			Available: true, HasSMART: true, SMART: []models.DiskTemp{row},
+		}))[0]
+		if got.Temperature != row.Temperature || got.Collection == nil || got.Collection.Temperature.Source != proxmoxNodeSMARTTemperatureSource {
+			t.Fatalf("%s match not labelled %q: %+v / %+v", name, proxmoxNodeSMARTTemperatureSource, got, got.Collection)
+		}
+	}
+
+	byOrder := mergeNVMeTempsIntoDisks([]models.PhysicalDisk{disk}, node(&models.Temperature{
+		Available: true, HasNVMe: true, NVMe: []models.NVMeTemp{{Device: "nvme0", Temp: 47}},
+	}))[0]
+	if byOrder.Temperature != 47 || byOrder.Collection == nil || byOrder.Collection.Temperature.Source != proxmoxNodeNVMeTemperatureSource {
+		t.Fatalf("legacy NVMe reading not labelled %q: %+v / %+v", proxmoxNodeNVMeTemperatureSource, byOrder, byOrder.Collection)
+	}
+}
+
+// Only a SMART report that carries a usable temperature makes the node's SMART
+// list the agent's (mergeTemperatureData).
+func TestHostSuppliesNodeSMARTTemperaturesFollowsUsableReadings(t *testing.T) {
+	host := func(rows ...models.HostDiskSMART) models.Host {
+		return models.Host{Sensors: models.HostSensorSummary{SMART: rows}}
+	}
+	for name, tc := range map[string]struct {
+		host models.Host
+		want bool
+	}{
+		"a reading":              {host(models.HostDiskSMART{Device: "sda", Temperature: 40}), true},
+		"one reading of several": {host(models.HostDiskSMART{Device: "sda"}, models.HostDiskSMART{Device: "sdb", Temperature: 40}), true},
+		"no temperature":         {host(models.HostDiskSMART{Device: "sda"}), false},
+		"standby row":            {host(models.HostDiskSMART{Device: "sda", Temperature: 40, Standby: true}), false},
+		"negative reading":       {host(models.HostDiskSMART{Device: "sda", Temperature: -1}), false},
+		"no rows":                {host(), false},
+	} {
+		if got := hostSuppliesNodeSMARTTemperatures(tc.host); got != tc.want {
+			t.Errorf("%s: got %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+// When the linked agent's SMART report carries no usable temperature, the
+// node's SMART sensor list comes from the SSH collector, so a reading of a
+// split Proxmox disk taken from it is the node's own and stays, while the
+// agent's row still takes nothing else from the disk.
+func TestMergeHostAgentSMARTIntoDisksKeepsSSHNodeSensorReadingOfSplitDisk(t *testing.T) {
+	nodes := []models.Node{{Name: "node1", LinkedAgentID: "agent-1"}}
+	hosts := []models.Host{{ID: "agent-1", Status: "online", Sensors: models.HostSensorSummary{
+		SMART: []models.HostDiskSMART{{Device: "sda", Serial: "SERIAL-A", Type: "sata", Health: "FAILED"}},
+	}}}
+	disk := models.PhysicalDisk{
+		ID: "pve1-node1-/dev/sda", Node: "node1", Instance: "pve1", DevPath: "/dev/sda", Serial: "SERIAL-A", Type: "sata",
+		Health: "PASSED", Wearout: 100, Temperature: 52,
+		Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available(proxmoxNodeSMARTTemperatureSource)},
+	}
+	splits := &fakeDiskAgentSplits{splitDevPaths: map[string]bool{"/dev/sda": true}}
+	got := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, hosts, splits)[0]
+	if got.Temperature != 52 || got.Collection.Temperature.Source != proxmoxNodeSMARTTemperatureSource ||
+		got.Health != "PASSED" || got.AgentSMARTReported || !got.AgentSMARTSplit {
+		t.Fatalf("split disk with an SSH-supplied reading: %+v / %+v", got, got.Collection)
+	}
+
+	// An agent that stopped reporting keeps its rows, temperatures included,
+	// but the node poll ignores them once its lease lapsed, so the reading is
+	// the SSH collector's again.
+	hosts[0].Status = "offline"
+	hosts[0].Sensors.SMART[0].Temperature = 61
+	lapsed := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, hosts, splits)[0]
+	if lapsed.Temperature != 52 || lapsed.Collection.Temperature.Source != proxmoxNodeSMARTTemperatureSource || !lapsed.AgentSMARTSplit {
+		t.Fatalf("split disk with a lapsed agent dropped the node's own reading: %+v / %+v", lapsed, lapsed.Collection)
+	}
+	hosts[0].Status = "online"
+	live := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, hosts, splits)[0]
+	if live.Temperature != 0 || live.Collection.Temperature.State != diskinventory.FieldUnsupported {
+		t.Fatalf("split disk with a reporting agent kept the agent-supplied reading: %+v / %+v", live, live.Collection)
 	}
 }

@@ -2268,7 +2268,7 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor.go",
 			snippets: []string{
-				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {",
+				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host, splits diskAgentSplitStore) []models.PhysicalDisk {",
 				"deriveWearoutFromSMARTAttributes(matched.Attributes)",
 				"storagehealth.RemainingLifeFromPercentageUsed(*attrs.PercentageUsed)",
 				"shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health)",
@@ -2278,7 +2278,7 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor_pve.go",
 			snippets: []string{
-				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)",
+				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts, splits)",
 				"m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])",
 				"m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
 				"func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {",

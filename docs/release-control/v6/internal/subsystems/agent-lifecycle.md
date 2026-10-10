@@ -401,6 +401,20 @@ wire contract and Agent authority are unchanged;
 `internal/monitoring/physical_disk_roundtrip_test.go` and
 `TestPhysicalDiskAgentSMARTReportedStaysInternal` in
 `internal/models/deepcopy_test.go` pin the marker.
+A PVE disk the operator split from the Agent's disk (report-merge on the merged
+disk) is paired with no SMART row of the linked Agent and, from the first full
+disk poll that matches the Agent's row, shows none of the Agent's temperature,
+including the node sensor reading the node poll took from that Agent's report
+while it is reporting, so the Agent's `CheckHost` owns the temperature alert of
+the Agent's own disk only and the PVE disk check has no Agent-supplied reading
+of the Proxmox disk to alert on beside it: the split disk is marked `AgentSMARTSplit` (internal poll
+evidence on `models.PhysicalDisk`, never serialized) instead of
+`AgentSMARTReported`. Report admission, the SMART wire contract and Agent
+authority are unchanged: the Agent still reports the row, and the split only
+decides whose disk it is on the server;
+`TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` and
+`TestPhysicalDiskAgentSMARTReportedStaysInternal` pin it.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
