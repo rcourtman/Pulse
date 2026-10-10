@@ -80,6 +80,14 @@ const richRow = (
   options: Pick<DetailRow, 'title' | 'tone' | 'wrap' | 'valueClass'> = {},
 ): DetailRow => ({ label, value, valueContent, ...options });
 
+// The drawer is where a truncated table cell sends the operator for the full
+// value, so identifying values (IDs, names, image references, addresses) wrap
+// here instead of ending in an ellipsis. Their distinguishing part is often at
+// the end (a pod suffix, a hash, an image tag), and a phone cannot hover the
+// title to read it.
+const identityRow = (label: string, value?: string | null) =>
+  makeDetailRow(label, value, { wrap: true });
+
 // A Docker container's runtime rows match its table row: Docker's own state,
 // the health check on a row of its own while it runs, and uptime only for the
 // current run (Docker keeps the last value on a stopped container).
@@ -126,7 +134,7 @@ const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): De
     : null;
 
   const rows = compactDetailRows([
-    makeDetailRow('Image', image, { title: image }),
+    identityRow('Image', image),
     makeDetailRow('Image update', updateState, {
       title: update?.error,
       tone: update?.updateAvailable ? 'accent' : update?.error ? 'danger' : 'default',
@@ -173,13 +181,13 @@ const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): De
           title: new Date(finishedAt).toLocaleString(),
         })
       : null,
-    makeDetailRow('Podman pod', podmanPodName),
-    makeDetailRow('Podman pod ID', podmanPodId),
+    identityRow('Podman pod', podmanPodName),
+    identityRow('Podman pod ID', podmanPodId),
     typeof docker.podman?.infra === 'boolean'
       ? makeDetailRow('Podman infra', docker.podman.infra ? 'Yes' : 'No')
       : null,
-    makeDetailRow('Compose project', composeProject),
-    makeDetailRow('Compose service', composeService),
+    identityRow('Compose project', composeProject),
+    identityRow('Compose service', composeService),
     makeDetailRow('Auto-update', autoUpdatePolicy),
     makeDetailRow('User namespace', userNamespace),
     blockReadBytes !== null ? makeDetailRow('Block I/O read', formatBytes(blockReadBytes)) : null,
@@ -193,13 +201,15 @@ const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): De
           <div class="flex flex-wrap gap-1">
             <For each={labelEntries}>
               {([key, value]) => (
-                <span
-                  class="inline-flex max-w-full items-center truncate rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                <MetadataBadge
+                  size="xs"
+                  shape="rounded"
+                  wrap
                   title={value ? `${key}: ${value}` : key}
                 >
                   {key}
                   <Show when={value}>: {value}</Show>
-                </span>
+                </MetadataBadge>
               )}
             </For>
           </div>,
@@ -226,8 +236,8 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
         ? undefined
         : props.resource.uptime;
     const identityRows = compactDetailRows([
-      ...props.drawer.primaryIdentityRows().map((row) => makeDetailRow(row.label, row.value)),
-      props.showPlatformId ? makeDetailRow('Platform ID', props.resource.platformId) : null,
+      ...props.drawer.primaryIdentityRows().map((row) => identityRow(row.label, row.value)),
+      props.showPlatformId ? identityRow('Platform ID', props.resource.platformId) : null,
       props.drawer.identityIpValues().length > 0
         ? richRow(
             'IP Addresses',
@@ -289,7 +299,7 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
                     valueClass: props.drawer.sourceSummary()?.className,
                   })
                 : null,
-              makeDetailRow('Primary IP', props.drawer.identityIpValues()[0]),
+              identityRow('Primary IP', props.drawer.identityIpValues()[0]),
             ]),
           }
         : null,
