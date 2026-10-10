@@ -32,6 +32,7 @@ def recipe(source):
     shell = re.search(r"(?ms)^        run: \|\n((?:          [^\n]*\n)+)", step)[1]
     shell = "\n".join(line[10:] for line in shell.splitlines()) + "\n"
     for command in ('test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"',
+                    "git diff --quiet HEAD",
                     "diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist",
                     "-ldflags='-X main.Version=v0.0.1'", "-ldflags='-X main.Version=v0.0.2'",
                     "go build -mod=readonly -p=2", "sudo env -i",
@@ -197,7 +198,11 @@ class NativeContracts(unittest.TestCase):
 import json, os, pathlib, sys
 args = sys.argv[1:]; name = pathlib.Path(sys.argv[0]).name
 with pathlib.Path(os.environ["TRACE"]).open("a") as out: out.write(json.dumps([name, *args])+"\\n")
-if name == "git": print("b"*40 if os.environ["MISMATCH"] == "true" else "a"*40)
+if name == "git":
+ if args == ["rev-parse", "HEAD"]: print("b"*40 if os.environ["MISMATCH"] == "true" else "a"*40)
+ elif args == ["diff", "--quiet", "HEAD"]:
+  if os.environ["FAIL_BUILD"] == "source-modified": sys.exit(49)
+ else: sys.exit(97)
 if name == "go":
  if args[args.index("-o")+1].endswith(os.environ["FAIL_BUILD"]) and os.environ["FAIL_BUILD"]: sys.exit(43)
  pathlib.Path(args[args.index("-o")+1]).write_text("compiler double, not a product build\\n")
@@ -216,10 +221,10 @@ if name == "sudo":
     def test_exact_workflow_recipe_is_scrubbed_and_propagates_all_failures(self):
         result, calls, receipt = self.run_recipe()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual([call[0] for call in calls], ["git", "go", "go", "sudo"])
+        self.assertEqual([call[0] for call in calls], ["git", "git", "go", "go", "sudo"])
         self.assertTrue(receipt)
         self.assertEqual(calls[-1][1:3], ["env", "-i"])
-        for failure, code, count in (("before", 43, 2), ("after", 43, 3), ("native", 45, 4)):
+        for failure, code, count in (("source-modified", 49, 2), ("before", 43, 3), ("after", 43, 4), ("native", 45, 5)):
             result, calls, receipt = self.run_recipe(failure)
             self.assertEqual(result.returncode, code)
             self.assertEqual(len(calls), count)

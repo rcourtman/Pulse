@@ -124,6 +124,8 @@ contains source/binary/output hashes, all phases and cleanup, never signer keys,
 persistent contents or raw application/installer logs.
 The private fixture disables telemetry and binds the existing service to loopback;
 it exposes no test server on the hosted VM's external interface.
+Before compiling the native pair, CI requires the exact checkout head and no
+tracked-source delta, not merely a plausible commit label after frontend preparation.
 
 `TestAutoUpdateNativeSystemdHarnessContracts` checks the exact recipe, admission,
 closed transport, real local signatures and phase refusals, and runs the connected

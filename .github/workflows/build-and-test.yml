@@ -299,6 +299,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --quiet HEAD
           diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist
           go build -mod=readonly -p=2 -ldflags='-X main.Version=v0.0.1' -o "$RUNNER_TEMP/pulse-native-before" ./cmd/pulse
           go build -mod=readonly -p=2 -ldflags='-X main.Version=v0.0.2' -o "$RUNNER_TEMP/pulse-native-after" ./cmd/pulse
