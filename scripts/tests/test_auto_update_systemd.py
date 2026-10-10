@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Discriminating controls for the native CI recipe; no host manager/root use."""
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -142,6 +143,40 @@ class NativeContracts(unittest.TestCase):
                 else:
                     lab.phase("forward", "v0.0.2", active="inactive")
                     self.assertTrue(lab.receipt["phases"][0]["passed"])
+
+    def test_managed_process_identity_follows_served_readiness_and_rejects_residuals(self):
+        for mutation in ("", "process-bytes", "stopped-after-readiness", "inactive-pid"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                lab = self.make_phase(directory)
+                state = dict(LoadState="loaded", ActiveState="active", UnitFileState="disabled", MainPID="1")
+                observed = {**state, "MainPID": "2"}
+                if mutation == "stopped-after-readiness":
+                    observed.update(ActiveState="inactive", MainPID="0")
+                if mutation == "inactive-pid":
+                    lab.state = unittest.mock.Mock(return_value={**state, "ActiveState": "inactive"})
+                    with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "inactive")
+                    continue
+                lab.state = unittest.mock.Mock(side_effect=[state, observed])
+                order = []
+                def response(url, **kwargs):
+                    endpoint = url.rsplit("/", 1)[-1]
+                    order.append(endpoint)
+                    return io.BytesIO(json.dumps({"status": "healthy"} if endpoint == "health"
+                                                 else {"version": "v0.0.2"}).encode())
+                actual_digest = native.digest
+                def process_digest(path):
+                    if str(path).startswith("/proc/"):
+                        order.append("process")
+                        self.assertEqual(str(path), "/proc/2/exe")
+                        return "wrong" if mutation == "process-bytes" else lab.receipt["binaries"]["v0.0.2"]
+                    return actual_digest(path)
+                with patch.object(native.urllib.request, "urlopen", side_effect=response), patch.object(native, "digest", side_effect=process_digest):
+                    if mutation:
+                        with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "active")
+                    else:
+                        self.assertEqual(lab.assert_runtime("v0.0.2", "active"), observed)
+                self.assertEqual(order[:2], ["health", "version"])
+                self.assertEqual(order[2:], [] if mutation == "stopped-after-readiness" else ["process"])
 
     def test_cleanup_never_deletes_preexisting_unowned_scratch(self):
         with tempfile.TemporaryDirectory() as directory:
