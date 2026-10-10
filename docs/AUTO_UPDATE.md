@@ -69,6 +69,10 @@ Saving the UI preference does not provision or start a missing timer. Check the
 existing deployment rather than editing `system.json` or creating another
 update service to make the preference take effect.
 
+For a failed or uncertain unattended update, use
+[timer-only containment](#pause-further-unattended-attempts-without-stopping-pulse)
+to pause further scheduled attempts without stopping Pulse.
+
 ### Stored Settings (system.json)
 
 Auto-update preferences are stored in `system.json` and edited via the UI.
@@ -343,6 +347,71 @@ installation to the public Community runtime as a workaround.
 Share only the relevant times, versions, failed step and redacted error. Keep
 full logs, service environments, configuration, credentials and private backup
 paths out of public reports.
+
+### Pause further unattended attempts without stopping Pulse
+
+If an automatic server update failed or its result is uncertain, you can pause
+the existing update timer while keeping Pulse's monitoring service running.
+This is containment, not rollback or a fix. It does not cancel an updater
+already running, prevent a manual or in-app update, or recover a stopped LXC.
+Do not stop the updater midway through replacement merely to collect evidence.
+
+Work on the **Pulse server**, inside its LXC when applicable, not on the Proxmox
+host or a monitored guest. First identify the timer from the existing
+deployment. The default signed installation uses `pulse-update.timer`;
+legacy installations may use `pulse-backend-update.timer`, and custom names
+can differ. A name alone does not establish ownership. If the timer's identity
+is unknown, stop here; do not try every matching unit or run the installer to
+create one.
+
+For the confirmed default timer, privately record its state before changing it:
+
+```bash
+timeout --signal=TERM --kill-after=1s 5s systemctl show pulse-update.timer \
+  --property=LoadState --property=ActiveState --property=UnitFileState \
+  --property=Triggers
+```
+
+Use the actual known timer name in both commands on a legacy or custom install.
+This read prints only unit state and trigger names, not service environments.
+`LoadState=not-found`, a failed read or a timeout is not an inactive timer:
+stop rather than guessing. If `timeout` is unavailable, do not substitute an
+unbounded reader. Keep a masked timer masked; an inactive or disabled timer
+must not be enabled just to follow these instructions. Enabled state and
+current active state are separate; preserve both for later recovery. If the
+timer is runtime-enabled or managed by another scheduler, use that deployment's
+pause procedure instead of assuming the default command applies.
+
+To pause that confirmed timer, use your authorised administrative account:
+
+```bash
+sudo systemctl disable --now pulse-update.timer
+```
+
+This stops and disables **only the timer**, not `pulse.service`,
+`pulse-backend.service` or `pulse-update.service`. Re-read its bounded state
+above: it should be inactive and disabled, or remain masked. If the command
+fails or its result is uncertain, retain the error and current state; do not
+assume the schedule was paused or issue broader stop/reset commands. Keep
+independent monitoring and notifications available if Pulse itself is down.
+
+Retain the original update's starting and intended versions, last recorded
+result, time and timezone, and any recovery already performed. Today's running
+version is not proof of the version at failure. A verified signature is not a
+completed install or rollback; `Broken pipe` does not explain a host stop, and
+a later boot does not supply its time or cause. If the whole LXC or host stopped,
+use only an already available, relevant Proxmox task or host event to distinguish
+that from a Pulse-service failure; keep unknowns unknown. Do not repeat the
+update, reboot, run Diagnostics or delete rollback backups to fill these gaps.
+
+After the incident is understood and recovery is verified, restore the
+separately recorded enabled and active states through the existing deployment:
+enable only if previously enabled, and start only if previously active. Do not
+unmask a unit, enable a previously disabled timer or create a second schedule.
+A paused timer does not undo the saved
+**Automatic Stable Updates** preference; restoring the schedule may allow the
+next stable update. Keep configuration, keys, history and backups private and
+preserved until recovery is verified.
 
 ### Service won't restart after update
 
