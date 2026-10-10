@@ -65,7 +65,7 @@ function mount(initial: Webhook[] = []) {
 function openNewDraft() {
   fireEvent.click(screen.getByRole('button', { name: '+ Add Webhook' }));
   fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'New destination' } });
-  fireEvent.input(screen.getByLabelText('URL'), {
+  fireEvent.input(screen.getByLabelText('Webhook URL'), {
     target: { value: 'https://example.test/new' },
   });
 }
@@ -112,7 +112,7 @@ describe('webhook persistence acknowledgement', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Could not confirm'));
     expect(screen.getByLabelText('Name')).toHaveValue('New destination');
-    expect(screen.getByLabelText('URL')).toHaveValue('https://example.test/new');
+    expect(screen.getByLabelText('Webhook URL')).toHaveValue('https://example.test/new');
     expect(screen.getByLabelText('Custom header 1 value')).toHaveValue('application/custom+json');
     expect(screen.getByLabelText('Name')).toBeEnabled();
     expect(owner.webhooks()).toEqual([]);
