@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "e885b8acede825e5845a6ee509e97224892cf783",
+  "verified_at": "2026-10-10T08:24:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "ac12471d0bf34cf3b17ef68ba006c418ee06cfc4f805f31a3c65b5d31d8cd818"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol#patrol-control",
+    "/patrol#operations-loop",
+    "/patrol?patrolControlStarter=patrol_control#patrol-control",
+    "/settings/pulse-intelligence/assistant (External agents: header and Step 1 'Choose Patrol mode' links)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Two Vite dev servers on private ports, each proxying the managed hot-dev backend on :7655 for reads only: 'before' served frontend-modern from origin/main f4e4f52480 and 'after' served the same tree plus this change, whose header sha256 matches content_sha256. The ten PRs that landed between f4e4f52480 and this commit's parent touch none of the Patrol feature, routing, the Settings panel, licence presentation or the button group. Patrol was switched off on that backend, so GET /api/settings/ai was rewritten client-side to patrol_enabled true; nothing was written to the backend.",
+    "Patrol mode available (runtime-capabilities rewritten to grant ai_autofix), after build at both widths: plain /patrol keeps 'Mode and automation' collapsed with the selector hidden; #patrol-control, #operations-loop and the starter URL open it with the four choices (Watch only, Ask first, Safe auto-fix, Autopilot) enabled, visible and inside the viewport, above the phone bottom nav (app shell scrollTop 0).",
+    "Runtime-locked (ai_autofix blocked as paid_runtime_required), after build at 1440: #patrol-control, #operations-loop and the Settings Step 1 link open the disclosure with Watch only enabled and Ask first, Safe auto-fix and Autopilot disabled; a plain visit stays collapsed.",
+    "Plan-locked (ai_autofix neither granted nor blocked), after build at both widths: no disclosure renders on any route; the anchor lands on the header section with the inline 'Patrol mode' watch-only line. At 390 px arriving from Settings leaves the app shell scrolled to where Settings was (about 413 px), as it did before this change; plan-locked behaviour is unchanged by this commit.",
+    "Before build at both widths, Patrol mode available: every anchor route and both Settings links land with the disclosure collapsed and the selector not visible, reproducing the reported defect.",
+    "No page errors on either build; the only console errors are websocket upgrade 403s from the non-default dev origin, identical on both builds; REST reads succeed."
+  ],
+  "interactions": [
+    "Sign in with the stack's dev-default login, then load each route directly and wait for the Patrol header to settle.",
+    "From /settings/pulse-intelligence/assistant scrolled down (about 519 px at 1440, 413 px at 390), click the External agents header 'Choose Patrol mode' link; again after 'Show connector setup', click the Step 1 'Choose Patrol mode' link; both reach /patrol#patrol-control with the selector visible and in view on the after build and hidden on the before build.",
+    "After arriving on #patrol-control, click the 'Mode and automation' summary to collapse it and wait 3 s: it stays collapsed.",
+    "Same script in 1440x900 and 390x844 contexts for available and plan-locked states, 1440x900 for runtime-locked, and both widths against the before build; screenshots of the Settings Step 1 arrival at 1440 (before and after) and 390 (after) inspected."
+  ]
+}

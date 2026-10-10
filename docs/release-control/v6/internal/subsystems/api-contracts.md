@@ -3458,7 +3458,12 @@ a new API state machine, queue contract, or verification-accounting field.
    while `/patrol#operations-loop` remains inbound compatibility only, rather
    than becoming an API payload field, Assistant prompt body, or backend
    completion state machine. The canonical anchor must resolve to the visible
-   Patrol mode selector, not to the assessment workspace; that anchor may
+   Patrol mode selector, not to the assessment workspace: arriving on
+   `#patrol-control`, with or without the starter query, or on the
+   `#operations-loop` compatibility anchor opens the Patrol header's collapsed
+   `Mode and automation` disclosure and scrolls it into view, a plain `/patrol`
+   visit leaves it collapsed, and plan-locked installs, which have no selector,
+   land on the header's inline `Patrol mode` line; that anchor may
    route a new Pro user to Patrol mode from a generic Patrol run state, but issue-backed
    progress through Assistant, governed decision, verification, and MCP parity
    must still derive from real Patrol finding, investigation, approval, action,
