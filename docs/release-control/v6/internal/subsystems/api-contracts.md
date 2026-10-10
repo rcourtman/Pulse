@@ -34,10 +34,11 @@ through Assistant condensation. Performance responses add a guest-history source
 limitation without relabelling past samples or changing their numbers; their
 actual tool controls are in `TestGuestMemoryHistoryDoesNotBorrowLiveOrigin`.
 
-The retained `protected_guests` settings field is legacy compatibility data,
-not an exclusion filter for canonical saved action plans. Existing Assistant
-help now states that limitation and requires target/approval review in Actions.
-No field value, GET/PUT shape, scope or approval authority changes.
+The `protected_guests` settings field is retired: it was never an exclusion
+filter for canonical saved action plans. `GET /api/settings/ai` no longer
+returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
+stored value is dropped the next time the settings are written. Scope and
+approval authority do not change.
 
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
@@ -52,8 +53,7 @@ legacy `autonomous` preference presents planning for operator review, never
 unprompted execution. Existing legacy PUT validation and `ai_autofix` checks
 remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
-vocabulary, Patrol settings, protected-guest arrays and authenticated authority
-remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
+vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
 
 ### Optional held-alert breach date consumer
@@ -1761,7 +1761,11 @@ payload shape change when the portal presents compact client rows.
    contract tests rather than adding an untyped browser-only provider list.
    API responses must never echo provider secret values; settings updates may
    accept credential and clear-key fields, persist trimmed values, and return
-   only configured state.
+   only configured state. The settings projection and update request carry no
+   `protected_guests` field: the Assistant has no guest list of its own, and a
+   `protected_guests` key from an older client is ignored. Guests Pulse must
+   not act on are locked through the resource operator state
+   (`neverAutoRemediate`), which the Assistant honours at planning.
 6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
@@ -9997,6 +10001,25 @@ metadata, but API freshness and `lastSeenAt` projections use the server-authored
 receipt time supplied by monitoring. API consumers must not substitute the
 agent clock for disconnect detection or apply a second, shorter generic
 Connections staleness window.
+PVE, PBS and PMG connection rows scale their active-to-stale cutoff by the
+cadence the org's monitor polls at.
+`buildAggregatorInputsWithRuntimeSources` reads `Monitor.BasePollInterval`
+(clamped like the scheduler, so an out-of-range configured interval is judged
+by the cadence actually polled) whenever a monitor is present, and falls back
+to the request config only when there is no monitor. A non-default org's request config is its monitor's
+detached copy (#1619), which a system-settings save does not update; saved PBS
+and PMG intervals reach that monitor only as runtime overrides. Reading the
+copy left Settings > Infrastructure rows stale for part of every cycle after
+an interval was raised, and slow to go stale after one was lowered.
+Adaptive polling still scales by the larger of that base and
+`PlannedPollInterval`, a conservative floor that can exceed the adaptive
+cadence. The connections list, runtime inventory sources and
+diagnostics all share this input builder. The system settings GET is not
+affected: the router serves `/api/config/system` from `SystemSettingsHandler`,
+which reads the base config and saved settings, not a tenant copy.
+`TestContract_ConnectionFreshnessFollowsSavedPollingIntervalsInTenantMonitors`
+in `internal/api/contract_test.go` drives a real settings save into a tenant
+monitor built from a detached copy and checks both directions.
 Availability target writes now use `observationLocationIds` as the canonical
 bounded set. Values are source-owned IDs (`pulse:local` or
 `agent:<agent-id>`), are normalized and deduplicated by the server, and every

@@ -1414,7 +1414,7 @@ func TestAssistantRuntimeProjectsLegacyLevelAfterResolver(t *testing.T) {
 	for _, saved := range []string{config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous, "unknown"} {
 		for _, resolved := range []string{"", config.ControlLevelReadOnly, config.ControlLevelControlled, config.ControlLevelAutonomous} {
 			t.Run(saved+"/resolver-"+resolved, func(t *testing.T) {
-				cfg := &config.AIConfig{ControlLevel: saved, ProtectedGuests: []string{"vm-101"}}
+				cfg := &config.AIConfig{ControlLevel: saved}
 				var resolver func(*config.AIConfig) string
 				if resolved != "" {
 					resolver = func(*config.AIConfig) string { return resolved }

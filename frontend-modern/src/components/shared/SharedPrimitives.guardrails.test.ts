@@ -8533,6 +8533,9 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).not.toContain('LabeledFilterSelect');
     expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');
     expect(filterBarSource).not.toContain('filterControlsVariant');
+    // Kiosk hiding lives in the shared bar, not in each page that mounts one.
+    expect(filterBarSource).toContain("import { useKioskMode } from '@/hooks/useKioskMode';");
+    expect(filterBarSource).toContain('<Show when={!kioskMode()}>');
 
     expect(filterChipSource).toContain('clearFilter,');
     expect(filterChipSource).toContain('formatFilterChipValue,');

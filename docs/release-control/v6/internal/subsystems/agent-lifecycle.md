@@ -25,9 +25,10 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 
 AI settings responses project legacy Assistant levels to planning for review;
 this grants no agent command, enrolment, identity or transport authority.
-The retained legacy Protected guests list does not exclude canonical saved
-plans. Authenticated execute authority and the action approval policy remain
-separate from that configuration list.
+There is no Protected guests list: the retired setting never excluded canonical
+saved plans. A resource's Never auto-remediate lock, authenticated execute
+authority and the action approval policy are separate authorities, and none of
+them is configured from the AI settings projection.
 Existing agent report/command and shared capability vocabularies remain
 unchanged, including their separate approval and entitlement enforcement.
 
@@ -9236,6 +9237,15 @@ no update status, instead of reporting "no update available" (#2353). Agent
 registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
+
+### Connection freshness cadence only
+
+`internal/api/connections_alerts.go` changed only so PVE, PBS and PMG
+connection rows scale their stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`, which honours runtime polling overrides) rather
+than by a non-default org's detached config copy. Agent connection rows keep
+their own heartbeat cutoff. Agent registration, enrolment, install, update,
+removal and report identity are unchanged.
 
 ### Host snapshots report a linked agent's own heartbeat
 

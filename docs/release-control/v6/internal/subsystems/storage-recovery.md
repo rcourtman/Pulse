@@ -32,9 +32,9 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 The AI settings control projection describes read/query or plans for review in
 Actions. It does not authorise a backup, restore, replay or data change; action
 approval/run and independent verification remain separate. Stored legacy
-preferences, recovery-point access, the legacy protected-guests value and
-Patrol policy are preserved. The latter guest list is not a canonical saved-
-plan exclusion or a recovery execution safeguard. The handler change adds no recovery endpoint or execution route.
+preferences, recovery-point access and Patrol policy are preserved. The retired
+Protected guests list was never a canonical saved-plan exclusion or a recovery
+execution safeguard. The handler change adds no recovery endpoint or execution route.
 
 ### Retained guest identity cannot renew QGA eligibility
 
@@ -6644,6 +6644,16 @@ with the stale thresholds its seed was judged by, and
 to it.
 Both are read-path changes to source freshness and presentation; no storage,
 retention, backup or recovery path is added or moved.
+
+### Connection freshness cadence opens no storage or recovery path
+
+`internal/api/connections_alerts.go` now scales the connections list's
+active-to-stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`), which honours saved PBS and PMG intervals that
+reach a non-default org's monitor only as runtime overrides. This is a
+read-path change to connection freshness. Backup polling, PBS backup and
+datastore collection, retention and recovery are unchanged, and nothing new
+is persisted.
 
 ### Webhook configuration never persists the API mask
 

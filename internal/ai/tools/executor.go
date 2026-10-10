@@ -577,9 +577,8 @@ type ExecutorConfig struct {
 	ReadState unifiedresources.ReadState
 
 	// Control settings
-	ControlLevel    ControlLevel
-	ProtectedGuests []string // VMIDs that AI cannot control
-	OrgID           string   // Tenant/org scope for approval records
+	ControlLevel ControlLevel
+	OrgID        string // Tenant/org scope for approval records
 
 	// Optional report-narration providers, used by the pulse_summarize
 	// tool to produce AI-narrated synthesis in chat. When the per-tenant
@@ -652,8 +651,7 @@ type PulseToolExecutor struct {
 	readState unifiedresources.ReadState
 
 	// Control settings
-	controlLevel    ControlLevel
-	protectedGuests []string
+	controlLevel ControlLevel
 
 	// Current execution context
 	targetType   string
@@ -757,7 +755,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		typedActionPlanner:         cfg.TypedActionPlanner,
 		readState:                  cfg.ReadState,
 		controlLevel:               cfg.ControlLevel,
-		protectedGuests:            cfg.ProtectedGuests,
 		orgID:                      normalizeExecutorOrgID(cfg.OrgID),
 		reportNarrator:             cfg.ReportNarrator,
 		reportFleetNarrator:        cfg.ReportFleetNarrator,
@@ -834,7 +831,6 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		typedActionPlanner:          e.typedActionPlanner,
 		readState:                   e.readState,
 		controlLevel:                e.controlLevel,
-		protectedGuests:             append([]string(nil), e.protectedGuests...),
 		targetType:                  e.targetType,
 		targetID:                    e.targetID,
 		isAutonomous:                e.isAutonomous,
@@ -930,11 +926,6 @@ func (e *PulseToolExecutor) SetControlLevel(level ControlLevel) {
 func (e *PulseToolExecutor) SetExecuteAuthority(allowed bool) {
 	e.hasExecuteAuthority = allowed
 	e.executeAuthorityBound = true
-}
-
-// SetProtectedGuests updates the protected guests list
-func (e *PulseToolExecutor) SetProtectedGuests(vmids []string) {
-	e.protectedGuests = vmids
 }
 
 // RegisterTool allows tests or extensions to add tools at runtime.

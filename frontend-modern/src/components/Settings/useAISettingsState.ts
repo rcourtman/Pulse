@@ -416,7 +416,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
     controlLevel: 'read_only' as AIControlLevel,
-    protectedGuests: '' as string,
     discoveryEnabled: false,
     discoveryIntervalHours: 0,
   });
@@ -519,7 +518,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
         controlLevel: 'read_only',
-        protectedGuests: '',
         discoveryEnabled: false,
         discoveryIntervalHours: 0,
       });
@@ -573,7 +571,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
       controlLevel: normalizeAIControlLevel(data.control_level),
-      protectedGuests: Array.isArray(data.protected_guests) ? data.protected_guests.join(', ') : '',
       discoveryEnabled: data.discovery_enabled ?? false,
       discoveryIntervalHours: data.discovery_interval_hours ?? 0,
     });
@@ -1206,18 +1203,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.controlLevel !== normalizeAIControlLevel(settings()?.control_level)) {
         payload.control_level = form.controlLevel;
-      }
-
-      const currentProtected = settings()?.protected_guests || [];
-      const newProtected = form.protectedGuests
-        .split(',')
-        .map((value: string) => value.trim())
-        .filter((value: string) => value.length > 0);
-      const protectedChanged =
-        newProtected.length !== currentProtected.length ||
-        newProtected.some((guest: string, index: number) => guest !== currentProtected[index]);
-      if (protectedChanged) {
-        payload.protected_guests = newProtected;
       }
 
       payload.discovery_enabled = form.discoveryEnabled;
