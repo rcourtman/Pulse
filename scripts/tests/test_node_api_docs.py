@@ -33,7 +33,8 @@ def preparation() -> str:
 
 
 def sample() -> dict:
-    blocks = re.findall(r"```json\n(.*?)```", section(), re.DOTALL)
+    add_node = section().split("### Add Node\n", 1)[1].split("\n### ", 1)[0]
+    blocks = re.findall(r"```json\n(.*?)```", add_node, re.DOTALL)
     if len(blocks) != 1:
         raise AssertionError("expected one node configuration specimen")
     return json.loads(blocks[0])
