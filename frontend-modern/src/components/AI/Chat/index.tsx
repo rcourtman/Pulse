@@ -1500,7 +1500,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // review-only menu inside the composer, not clipped by the chat panel.
     const trigger = controlModeButtonRef?.getBoundingClientRect();
     const composer = controlModeButtonRef
-      ?.closest('[data-assistant-composer]')
+      ?.closest('[data-assistant-control-toolbar]')
       ?.getBoundingClientRect();
     const leftEdge = Math.max(16, composer?.left ?? 16);
     const rightEdge = Math.min(window.innerWidth - 16, composer?.right || window.innerWidth - 16);
@@ -5391,6 +5391,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <div
                 class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1"
                 data-testid="assistant-composer-route-controls"
+                data-assistant-control-toolbar
               >
                 <ModelSelector
                   models={aiRuntimeModels()}

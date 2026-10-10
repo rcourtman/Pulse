@@ -93,7 +93,7 @@ const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).diges
           await page.keyboard.press('Home'); assert.ok(await modes.first().evaluate((el) => el === document.activeElement));
           await page.keyboard.press('ArrowUp'); assert.ok(await ask.evaluate((el) => el === document.activeElement));
           const bounds = await page.getByRole('menu').boundingBox();
-          const composer = await page.locator('[data-assistant-composer]').boundingBox();
+          const composer = await page.locator('[data-assistant-control-toolbar]').boundingBox();
           assert.ok(bounds.x >= composer.x - 1 && bounds.x + bounds.width <= composer.x + composer.width + 1);
           assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
           await capture('chat-menu');

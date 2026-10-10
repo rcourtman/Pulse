@@ -3585,7 +3585,8 @@ describe('AIChat', () => {
     it('clamps the mode menu inside the composer and closes it on viewport resize', () => {
       renderChat();
       const trigger = screen.getByRole('button', { name: 'Assistant chat action mode: Read-only' });
-      const composer = trigger.closest('[data-assistant-composer]') as HTMLElement;
+      const composer = trigger.closest('[data-assistant-control-toolbar]') as HTMLElement;
+      expect(composer).not.toBeNull();
       vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ left: 185 } as DOMRect);
       vi.spyOn(composer, 'getBoundingClientRect').mockReturnValue({
         left: 16,
