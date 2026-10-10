@@ -10,11 +10,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const metricWindowPersistentCacheTTL = 30 * time.Second
+const (
+	metricWindowPersistentCacheTTL = 30 * time.Second
+	metricWindowCacheMaxEntries    = 1024
+	metricWindowCacheMaxBytes      = 16 << 20
+	// Charge conservatively for the key, map/entry bookkeeping and each
+	// copied timestamp/value. This is a cache working-set budget, not RSS.
+	metricWindowCacheEntryBytes = 256
+	metricWindowCachePointBytes = 64
+)
 
 type metricWindowCacheEntry struct {
 	points    []alerts.MetricWindowPoint
 	expiresAt time.Time
+	bytes     int
 }
 
 func metricHistoryName(metric string) string {
@@ -96,16 +105,9 @@ func (m *Monitor) persistentMetricWindow(history *MetricsHistory, resourceType, 
 	cacheKey := strings.Join([]string{resourceType, resourceID, metric, fmt.Sprint(end.Sub(start).Seconds())}, "\x00")
 	now := time.Now()
 	if history != nil {
-		history.metricWindowMu.Lock()
-		if cached, ok := history.metricWindowCache[cacheKey]; ok && now.Before(cached.expiresAt) {
-			points := make([]MetricPoint, len(cached.points))
-			for i, point := range cached.points {
-				points[i] = MetricPoint{Timestamp: point.Timestamp, Value: point.Value}
-			}
-			history.metricWindowMu.Unlock()
+		if points, ok := history.cachedMetricWindow(cacheKey, now); ok {
 			return points
 		}
-		history.metricWindowMu.Unlock()
 	}
 
 	var best []MetricPoint
@@ -124,25 +126,83 @@ func (m *Monitor) persistentMetricWindow(history *MetricsHistory, resourceType, 
 		}
 	}
 	if history != nil {
-		cached := make([]alerts.MetricWindowPoint, len(best))
-		for i, point := range best {
-			cached[i] = alerts.MetricWindowPoint{Timestamp: point.Timestamp, Value: point.Value}
-		}
-		history.metricWindowMu.Lock()
-		if history.metricWindowCache == nil {
-			history.metricWindowCache = make(map[string]metricWindowCacheEntry)
-		}
-		if len(history.metricWindowCache) >= 1024 {
-			for key, entry := range history.metricWindowCache {
-				if !now.Before(entry.expiresAt) {
-					delete(history.metricWindowCache, key)
-				}
-			}
-		}
-		history.metricWindowCache[cacheKey] = metricWindowCacheEntry{points: cached, expiresAt: now.Add(metricWindowPersistentCacheTTL)}
-		history.metricWindowMu.Unlock()
+		history.cacheMetricWindow(cacheKey, best, now)
 	}
 	return best
+}
+
+func (mh *MetricsHistory) cachedMetricWindow(key string, now time.Time) ([]MetricPoint, bool) {
+	mh.metricWindowMu.Lock()
+	defer mh.metricWindowMu.Unlock()
+	if cached, ok := mh.metricWindowCache[key]; ok {
+		if !now.Before(cached.expiresAt) {
+			mh.dropMetricWindowLocked(key)
+			return nil, false
+		}
+		points := make([]MetricPoint, len(cached.points))
+		for i, point := range cached.points {
+			points[i] = MetricPoint{Timestamp: point.Timestamp, Value: point.Value}
+		}
+		return points, true
+	}
+	return nil, false
+}
+
+// Overflow windows still return the complete query result through the caller;
+// only the optional private copy is refused. Neither persistent history nor
+// alert coverage is truncated. Admit before copying a potentially large window.
+func (mh *MetricsHistory) cacheMetricWindow(key string, points []MetricPoint, now time.Time) {
+	mh.metricWindowMu.Lock()
+	defer mh.metricWindowMu.Unlock()
+	mh.dropMetricWindowLocked(key)
+	// Sweep when the earliest retained entry can have expired, not on every
+	// miss at capacity. A wide live fleet otherwise scans 1024 keys per miss.
+	if !mh.metricWindowSweepAt.IsZero() && !now.Before(mh.metricWindowSweepAt) {
+		var next time.Time
+		for cachedKey, entry := range mh.metricWindowCache {
+			if !now.Before(entry.expiresAt) {
+				mh.dropMetricWindowLocked(cachedKey)
+			} else if next.IsZero() || entry.expiresAt.Before(next) {
+				next = entry.expiresAt
+			}
+		}
+		mh.metricWindowSweepAt = next
+	}
+	// Check division before multiplication so an oversized key/window cannot
+	// overflow the charge or allocate an uncapped second copy.
+	if len(key) > metricWindowCacheMaxBytes-metricWindowCacheEntryBytes ||
+		len(points) > (metricWindowCacheMaxBytes-metricWindowCacheEntryBytes-len(key))/metricWindowCachePointBytes {
+		return
+	}
+	charge := metricWindowCacheEntryBytes + len(key) + len(points)*metricWindowCachePointBytes
+	if len(mh.metricWindowCache) >= metricWindowCacheMaxEntries || charge > metricWindowCacheMaxBytes-mh.metricWindowBytes {
+		return
+	}
+	cached := make([]alerts.MetricWindowPoint, len(points))
+	for i, point := range points {
+		cached[i] = alerts.MetricWindowPoint{Timestamp: point.Timestamp, Value: point.Value}
+	}
+	if mh.metricWindowCache == nil {
+		mh.metricWindowCache = make(map[string]metricWindowCacheEntry)
+	}
+	expiresAt := now.Add(metricWindowPersistentCacheTTL)
+	mh.metricWindowCache[key] = metricWindowCacheEntry{points: cached, expiresAt: expiresAt, bytes: charge}
+	mh.metricWindowBytes += charge
+	if mh.metricWindowSweepAt.IsZero() || expiresAt.Before(mh.metricWindowSweepAt) {
+		mh.metricWindowSweepAt = expiresAt
+	}
+}
+
+func (mh *MetricsHistory) dropMetricWindowLocked(key string) {
+	if entry, ok := mh.metricWindowCache[key]; ok {
+		delete(mh.metricWindowCache, key)
+		mh.metricWindowBytes -= entry.bytes
+		if len(mh.metricWindowCache) == 0 {
+			mh.metricWindowCache = nil
+			mh.metricWindowBytes = 0
+			mh.metricWindowSweepAt = time.Time{}
+		}
+	}
 }
 
 func metricWindowCoverage(points []MetricPoint) time.Duration {

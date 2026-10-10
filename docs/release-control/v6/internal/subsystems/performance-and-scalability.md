@@ -4054,3 +4054,29 @@ projection are unchanged. `GuestRow.test.tsx` covers both nested row paths and
 `BackupStatusAccess.test.tsx` covers semantics, focus and observation changes.
 Browser proof exercises production rows with synthetic data, not native backup
 or guest-recovery acceptance.
+
+### Bounded rolling-alert window copies
+
+The existing persistent-window cache is one optional working set per metrics
+history. It admits at most 1,024 entries and 16 MiB of charged storage, including
+keys, conservative entry bookkeeping and copied timestamp/value points. Admission
+precedes the copy. Expired entries release their charge; expiry sweeps follow
+the earliest retained expiry rather than scanning the cache on every live miss.
+Replacement and Reset release old storage and accounting. Readers receive
+independently owned points, and the existing 30-second hit expiry is unchanged.
+
+At either ceiling an uncached request still returns its complete source window;
+the query, live-tail authority, interval merge, alert calculation and persistent
+history are unchanged. This bounds optional retention, not query allocations or
+whole-process RSS. Overflow can increase query work: no installed CPU or memory
+relief, or attribution of a reporter's memory sample, follows from the bound.
+
+`metric_window_cache_bounds_test.go` checks live-entry and dense/key byte bounds,
+oversized admission, replacement, zero/empty points, independent ownership,
+staggered expiry, re-admission and concurrent readers/writers/Reset without a
+database or collector. `metric_window_provider_test.go` retains cache Reset,
+request-scoped history ownership and fresh in-memory duplicate authority.
+Its connected monitor control fills each ceiling independently and checks
+complete stored/live windows, measured zero, unchanged original times, reader
+ownership and renewed admission after Reset. It uses an ordinary temporary
+history store, not an installed workload or process-memory measurement.
