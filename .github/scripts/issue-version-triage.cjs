@@ -67,9 +67,18 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function normalizeLegacyVersionValue(value) {
+  const visible = String(value).trim().replace(/^[`*_]+/, "");
+  // Keep an explicitly shared server/agent version (as in #1788), without
+  // mining a sentence such as "unknown; agent version 6.5.0" for a number.
+  return /^(?:v?\d+\.\d+\.\d+\b|server(?:[ \t]*\+[ \t]*pulse-agent)?[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+    ? normalizeVersion(visible) : null;
+}
+
 function extractPulseVersion(title, body) {
   if (body) {
-    const lines = body.split(/\r?\n/);
+    // Hidden template examples and headings are not reporter evidence.
+    const lines = stripHTMLComments(body).split(/\r?\n/);
     const versionHeading = lines.findIndex((line) =>
       /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line)
     );
@@ -82,32 +91,30 @@ function extractPulseVersion(title, body) {
         if (/^#{1,6}[ \t]+/.test(lines[i])) break;
         value.push(lines[i]);
       }
-      return normalizeVersion(stripHTMLComments(value.join("\n")));
+      return normalizeVersion(value.join("\n"));
     }
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i] || "";
-      if (/pulse\s*(\||-)?\s*version/i.test(line)) {
-        const inlineVersion = normalizeVersion(line);
-        if (inlineVersion) return inlineVersion;
+      const line = lines[i].replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*][ \t]+)/, "").trim();
+      const field = line.match(
+        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+      );
+      if (!field) continue;
 
-        for (let j = i + 1; j < Math.min(i + 6, lines.length); j += 1) {
-          const nearby = (lines[j] || "").trim();
-          if (!nearby) continue;
-          const nearbyVersion = normalizeVersion(nearby);
-          if (nearbyVersion) return nearbyVersion;
-        }
+      // Legacy inline/standalone fields have the same authority as the form.
+      // Unknown or incomplete must not borrow an agent/platform version or
+      // an upgrade's starting version from the title.
+      const inlineValue = field[1].trim();
+      if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const value = lines[j].trim();
+        if (!value || /^(?:```|~~~)[\w-]*$/.test(value)) continue;
+        // Accept a version or image reference as the first visible value,
+        // not a neighbouring heading, named field, log or prose paragraph.
+        return normalizeLegacyVersionValue(value);
       }
+      return null;
     }
-
-    const headingMatch = body.match(
-      /#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i
-    );
-    if (headingMatch) return normalizeVersion(headingMatch[1]);
-
-    const legacyMatch = body.match(
-      /pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i
-    );
-    if (legacyMatch) return normalizeVersion(legacyMatch[1]);
   }
 
   return normalizeVersion(title);
