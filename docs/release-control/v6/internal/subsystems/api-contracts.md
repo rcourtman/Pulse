@@ -5334,6 +5334,36 @@ transport fails closed when the connected agent cannot answer it. Registry or
 readiness-check infrastructure failures remain
 nonterminal internal errors rather than false permanent refusals.
 
+Human `Execute` admits through the same policy admission coordinator as
+`ExecuteUnderPolicy`. It holds the admission read lock from the live-readiness
+gates, including the operator remediation lock (`NeverAutoRemediate`) and the
+Retired lifecycle state, through the committed `executing` transition, and
+releases it before the executor's `ExecuteAction` is called, so a slow
+dispatch never blocks a policy save. Executor readiness and binding calls and
+the admission hooks still run under the lock, so they can delay a save and must
+never request a policy write or re-enter `Execute`/`ExecuteUnderPolicy`. An
+operator lock saved through `WithPolicyMutation` therefore either lands before
+the readiness check and refuses the approved action with a persisted
+refused-before-dispatch failure, or queues behind the committed admission. A
+save that has been acknowledged to the operator is never followed by a new
+lifecycle admission (`Execute` or `ExecuteUnderPolicy`) for that resource.
+The committed `executing` transition is the policy linearization point for both
+paths: a lock refuses new admissions and does not recall an admitted
+dispatch. That includes an attempt that was admitted but never sent (a crash
+between admission and send), which `RecoverExecutingActions` resumes without
+re-reading the lock. Recalling known-unsent work would need an atomic,
+conditional pre-send terminalization that neither store has
+(`RecordActionExecutionRefusal` accepts only planned, pending, and approved
+rows, and `ForceFail` records inconclusive truth), so operator-facing copy must
+say that an action already admitted can still run. Proof:
+`TestExecuteAdmissionLinearizesWithOperatorLockSave*` asserts the coordinator
+excludes a policy writer between the readiness check and the admission commit
+and orders a real concurrent lock save against the admission,
+`TestExecuteAdmittedDispatchIsNotRecalledByLaterOperatorLock` pins release
+before dispatch and no recall, and
+`TestRecoverExecutingActionsDoesNotRecallQueuedAttemptAfterOperatorLock` pins
+the unsent-attempt boundary.
+
 The public Patrol investigation boundary now carries independent
 `max_turns` and `max_evidence_calls` request limits and returns `model_turns`,
 `evidence_calls`, and total `tool_calls`. Persisted investigation sessions keep
