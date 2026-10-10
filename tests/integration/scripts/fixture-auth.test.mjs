@@ -23,10 +23,20 @@ const fragment = (start, end) => {
 // stub only the browser/backend boundaries. No listener or credentials needed.
 const helpers = stripTypeScriptTypes([
   source.match(/const AUTHENTICATED_URL =[\s\S]*?;\n/)[0],
+  fragment('async function waitForAuthenticatedAppShell(', 'export async function waitForPulseReady('),
   fragment('export async function ensureAuthenticated(', 'async function storageStateHasLiveSession('),
   fragment('export async function apiRequest(', 'export async function isMultiTenantEnabled('),
   '({ ensureAuthenticated, ensureSessionAuthenticated, apiRequest });',
 ].join('\n'));
+
+const appRuntimeSource = fs.readFileSync(
+  path.resolve(root, '../../frontend-modern/src/useAppRuntimeState.ts'), 'utf8',
+);
+const preAuthPolicy = appRuntimeSource.match(/const isPreAuthLoginBootstrapPath =[\s\S]*?;\n/);
+assert.ok(preAuthPolicy, 'missing app pre-auth entrypoint policy');
+const isPreAuthLoginBootstrapPath = runInNewContext(stripTypeScriptTypes(
+  `${preAuthPolicy[0]}\nisPreAuthLoginBootstrapPath;`,
+));
 
 const cookie = (name, value) => ({
   name, value, domain: '127.0.0.1', path: '/', expires: -1,
@@ -44,6 +54,7 @@ function fixture(t, options = {}) {
   let disposed = 0;
   let primaryRevoked = false;
   let registeredWithToken = false;
+  const bootstrapChecks = [];
   const requests = [];
   const primary = options.primary || '';
   const validSession = cookies => cookies.some(
@@ -68,6 +79,12 @@ function fixture(t, options = {}) {
   const createPage = () => {
     let cookies = [];
     let url = 'about:blank';
+    let hasLoginHint = false;
+    let bootstrapState = 'empty';
+    let pendingBootstrap;
+    let resolveWaitStarted;
+    const waitStarted = new Promise(resolve => { resolveWaitStarted = resolve; });
+    const navigations = [];
     const context = {
       cookies: async () => cookies,
       addCookies: async values => { cookies = [...cookies, ...values]; },
@@ -75,8 +92,41 @@ function fixture(t, options = {}) {
     return {
       context: () => context,
       request: { fetch: async (target, args) => fetch(cookies, target, args) },
-      goto: async () => { url = validSession(cookies) ? 'http://127.0.0.1:7655/proxmox' : 'http://127.0.0.1:7655/'; },
+      goto: async target => {
+        navigations.push(target);
+        url = new URL(target, 'http://127.0.0.1:7655').href;
+        bootstrapState = options.delayedBootstrap ? 'loading' : 'ready';
+      },
       url: () => url,
+      navigations,
+      waitStarted,
+      rememberLoginHint: () => { hasLoginHint = true; },
+      completeBootstrap: () => {
+        bootstrapState = 'ready';
+        pendingBootstrap?.();
+      },
+      waitForFunction: async (predicate, arg, settings) => {
+        assert.equal(arg, undefined);
+        assert.equal(settings.timeout, 20_000);
+        const admitted = () => validSession(cookies) && !options.browserRejectSession &&
+          (!isPreAuthLoginBootstrapPath(new URL(url).pathname) || hasLoginHint);
+        // Run the shipped predicate against a DOM-shaped boundary. Rejection
+        // leaves the requested URL unchanged, just as the real app does.
+        const evaluate = () => runInNewContext(`(${predicate.toString()})()`, {
+          document: { querySelector: selector => {
+            if (bootstrapState !== 'ready' || options.bootstrapFailure) return null;
+            const present = selector === '.app-scroll-shell' ? admitted() : !admitted();
+            return present ? { getClientRects: () => [1] } : null;
+          } },
+          getComputedStyle: () => ({ visibility: 'visible' }),
+        });
+        bootstrapChecks.push(evaluate());
+        resolveWaitStarted();
+        if (bootstrapState === 'loading') await new Promise(resolve => { pendingBootstrap = resolve; });
+        const value = evaluate();
+        if (!value) throw new Error('browser bootstrap timed out');
+        return { jsonValue: async () => value, dispose: async () => {} };
+      },
     };
   };
   const api = runInNewContext(helpers, {
@@ -98,7 +148,8 @@ function fixture(t, options = {}) {
       const value = `login-${loginCalls}`;
       sessions.add(value);
       await page.context().addCookies([cookie('pulse_session', value), cookie('pulse_csrf', 'csrf')]);
-      await page.goto('/');
+      page.rememberLoginHint();
+      await page.goto('/proxmox');
     },
     expect: page => ({ toHaveURL: async pattern => assert.match(page.url(), pattern) }),
     playwrightRequest: { newContext: async ({ storageState, baseURL }) => {
@@ -117,7 +168,7 @@ function fixture(t, options = {}) {
     getTokenAuthRequestContext: async () => ({ fetch: async (url, args) => fetch([], url, args) }),
   });
   return {
-    ...api, createPage, statePath, sessions, requests,
+    ...api, createPage, statePath, sessions, requests, bootstrapChecks,
     counts: () => ({ loginCalls, probeCalls, disposed, primaryRevoked }),
     save: (cookies, origins = []) => fs.writeFileSync(statePath, JSON.stringify({ cookies, origins })),
   };
@@ -144,6 +195,58 @@ test('the existing admitted cookie session avoids another login and does not imp
   assert.equal(f.counts().loginCalls, 0);
   assert.deepEqual((await page.context().cookies()).map(item => item.name), ['pulse_session', 'pulse_csrf']);
   assert.equal(f.counts().disposed, 1);
+});
+
+test('cookie-only reuse enters the protected workspace without manufacturing a local login hint', async t => {
+  const f = fixture(t);
+  f.save([cookie('pulse_session', 'saved-live'), cookie('pulse_csrf', 'csrf')]);
+  const page = f.createPage();
+  await f.ensureAuthenticated(page);
+  assert.deepEqual(page.navigations, ['/infrastructure']);
+  assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
+  assert.deepEqual(f.bootstrapChecks, ['authenticated']);
+  assert.deepEqual(f.counts(), { loginCalls: 0, probeCalls: 1, disposed: 1, primaryRevoked: false });
+});
+
+test('a protected URL and mounted loading root cannot complete delayed cookie bootstrap', async t => {
+  const f = fixture(t, { delayedBootstrap: true });
+  f.save([cookie('pulse_session', 'saved-live')]);
+  const page = f.createPage();
+  let completed = false;
+  const authentication = f.ensureAuthenticated(page).then(() => { completed = true; });
+  await page.waitStarted;
+  assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
+  assert.deepEqual(f.bootstrapChecks, [false]);
+  assert.equal(completed, false);
+  assert.equal(f.counts().disposed, 0);
+  page.completeBootstrap();
+  await authentication;
+  assert.equal(completed, true);
+  assert.equal(f.counts().disposed, 1);
+  assert.equal(f.counts().loginCalls, 0);
+});
+
+test('API admission cannot hide browser rejection at the unchanged protected URL', async t => {
+  const f = fixture(t, { browserRejectSession: true });
+  f.save([cookie('pulse_session', 'saved-live')]);
+  const page = f.createPage();
+  await assert.rejects(() => f.ensureAuthenticated(page), /Shared cookie session was rejected by browser bootstrap/);
+  assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
+  assert.deepEqual(page.navigations, ['/infrastructure']);
+  assert.deepEqual(f.bootstrapChecks, ['login']);
+  assert.equal(f.counts().loginCalls, 0);
+  assert.equal(f.counts().disposed, 1);
+  assert.equal(JSON.parse(fs.readFileSync(f.statePath)).cookies[0].value, 'saved-live');
+});
+
+test('an incomplete browser bootstrap propagates failure without another login or state replacement', async t => {
+  const f = fixture(t, { bootstrapFailure: true });
+  f.save([cookie('pulse_session', 'saved-live')]);
+  const page = f.createPage();
+  await assert.rejects(() => f.ensureAuthenticated(page), /browser bootstrap timed out/);
+  assert.equal(f.counts().loginCalls, 0);
+  assert.equal(f.counts().disposed, 1);
+  assert.equal(JSON.parse(fs.readFileSync(f.statePath)).cookies[0].value, 'saved-live');
 });
 
 for (const scenario of ['revoked', 'expired', 'other-backend', 'missing-session', 'malformed-json']) {
