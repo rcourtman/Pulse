@@ -34,7 +34,7 @@ body:
     id: pulse_version
     attributes:
       label: Pulse version
-      description: Running version for an existing install; for a failed install, the exact version or release asset attempted, or "unknown" if it was not shown.
+      description: Version running when the problem occurred, or "unknown" if unavailable. For a failed install, give the exact version or release asset attempted. Keep an interrupted upgrade's target and later recovered version separate in Upgrade attempt and recovery below.
       placeholder: v6.x.y-rc.N, release asset name, or unknown
     validations:
       required: true
@@ -97,8 +97,24 @@ body:
     id: installer_source
     attributes:
       label: Installer or helper source
-      description: For a failed install, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
+      description: For a failed install or upgrade, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
       placeholder: Official Pulse installer, helper URL, or command name
+    validations:
+      required: false
+
+  - type: textarea
+    id: upgrade_context
+    attributes:
+      label: Upgrade attempt and recovery
+      description: |
+        For an interrupted or failed upgrade only: give the starting version, intended version or asset, route (in-app, automatic timer, manual installer or helper), original time and timezone, and last recorded updater/installer result or exit code. Distinguish Pulse stopping from the whole LXC, VM or host stopping. Say what recovery you already performed and which version and state you observed afterwards.
+        A verified download signature is not a completed upgrade; a later boot does not explain the stop. Today's running version does not establish the version at failure. Use existing observations; blank or "unknown" is valid. If already available, include only relevant, locally reviewed and redacted updater and host stop records in the evidence field, not full journals.
+        Do not rerun the update, reboot, restore, run Diagnostics or delete rollback backups just to complete this report. Keep backups private and preserve the original evidence.
+      placeholder: |
+        Attempt: starting version → intended version; route; time and timezone
+        Last recorded result: error or exit code, or unknown
+        Observed stop: Pulse service / whole LXC, VM or host / unknown
+        Recovery already performed: none or original steps; version/state afterwards or unknown
     validations:
       required: false
 
@@ -194,7 +210,7 @@ body:
     attributes:
       label: Confirmations
       options:
-        - label: I gave the running Pulse version, or for an install that never started, the attempted version or "unknown"; for a running container I also gave its Pulse image tag or digest.
+        - label: I gave the Pulse version at the failure or "unknown" if unavailable; for an install that never started, the attempted version or "unknown"; for a running container I also gave its Pulse image tag or digest.
           required: true
         - label: I searched existing issues and the pinned v6 pre-release feedback hub first.
           required: true

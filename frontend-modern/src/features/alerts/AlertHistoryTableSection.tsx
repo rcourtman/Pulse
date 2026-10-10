@@ -44,10 +44,12 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
         <Show
           when={props.state.alertData().length > 0}
           fallback={
-            <div class="py-12 text-center text-muted">
-              <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
-              <p class="mt-1 text-xs">{getAlertHistoryEmptyState().description}</p>
-            </div>
+            <Show when={!props.state.historyLoadError()}>
+              <div class="py-12 text-center text-muted">
+                <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
+                <p class="mt-1 text-xs">{getAlertHistoryEmptyState().description}</p>
+              </div>
+            </Show>
           }
         >
           <>
@@ -132,7 +134,7 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
         </Show>
       }
     >
-      <div class="py-12 text-center text-muted">
+      <div class="py-12 text-center text-muted" role="status">
         <p class="text-sm">{getAlertHistoryLoadingState().text}</p>
       </div>
     </Show>

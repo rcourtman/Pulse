@@ -65,6 +65,7 @@ import {
   getAlertOverviewTimelineActionLabel,
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
+  getAlertHistoryLoadFailure,
   getAlertHistorySearchPlaceholder,
   getAlertBucketCountLabel,
   getAlertFilteredEmptyState,
@@ -402,6 +403,17 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewActiveSectionTitle()).toBe('Aktive Warnmeldungen');
     expect(getAlertTimelineHeading()).toBe('Vorfall');
     expect(getAlertTimelineEventTypeLabel('alert_resolved')).toBe('Behoben');
+  });
+
+  it('describes a failed History read as incomplete evidence with a read-only retry', () => {
+    expect(getAlertHistoryLoadFailure()).toEqual({
+      title: 'Could not load alert history',
+      description:
+        'Any entries shown may be incomplete or out of date. Retry to refresh saved history.',
+      retryLabel: 'Retry history',
+      retryingLabel: 'Retrying…',
+    });
+    expect(getAlertHistoryLoadFailure().title).not.toBe(getAlertHistoryEmptyState().title);
   });
 
   it('says how long ago an alert started in the active locale and moves with the clock', () => {

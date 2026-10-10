@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "base_sha": "f7a33482bb1b6694b4e0a8c6d563543da7fae345",
+  "verified_at": "2026-10-10T08:38:47.061Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/utils/alertConfigPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "e787b907b88ccee5dd2b04711601776649be4b8f16a81a61aa92cb16376c764a",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "bd1fdc838f6fbbb3e8258fdd2c8e89c616658a3f50914dff5e01de0649b31fe6",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "969c1b1adb24e5a9761b0ad7f017e8fe0eb28ff492856d9e661053bb9e9f33a1",
+    "frontend-modern/src/utils/alertConfigPresentation.ts": "c2483fbed1d26a0abfc4f0b0661efbc6fa5af1f236dfa9f64ea34980f3514e32"
+  },
+  "routes": [
+    "/qualification/save (local fixture for the existing /alerts/notifications and /alerts/schedule settings; not a product route)"
+  ],
+  "viewports": [
+    {
+      "name": "desktop-light",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "desktop-dark",
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "name": "phone-light",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "narrow-dark",
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production AlertsConfigurationSurface, real state owners, payload builders, API adapters and CSS against synthetic local endpoints; Playwright 1.56.1 matches the integration lock. Chromium 141.0.7390.37 and WebKit 26.0, light/dark desktop and narrow viewports.",
+    "One click-time policy/destination snapshot while the policy PUT and Apprise reply are deferred. Saving\u2026 and aria-busy remain visible; Save and Discard are disabled. Fields remain editable.",
+    "Newer SMTP/Apprise drafts and dirty status survive older acknowledgements and settings-tab navigation without a replacement GET. Failure retains the draft and restores Save for a deliberate retry.",
+    "Twelve pending/newer-draft/rejected captures inspected across all four variants. Save controls and unsaved notice fit at 320px/390px with no horizontal overflow; inherited panel descriptions still truncate at narrow widths.",
+    "The fixture does not mount the global toast layer or prove native SMTP/Apprise delivery, tenant operations, physical-phone, release or installed acceptance. The state tests cover newer-unsaved acknowledgement copy and context invalidation."
+  ],
+  "interactions": [
+    "32 assertion groups: keyboard Save; prevent duplicate click and Discard; edit during both pending requests; switch settings tabs; verify exact click-time wire fields; preserve newer inputs and dirty status.",
+    "Reject Apprise after email acknowledgement: no later watchdog write, draft retained, Save restored. Deliberate retry clears dirty status only after all writes; explicit idle Discard reloads accepted settings. Earlier accepted writes are not atomic rollback.",
+    "No Test, retained-queue Retry/Dismiss, Relay/provider/native call, unexpected API request or page error. Browser and preview server closed. Parent observations and first fixture failure remain separate."
+  ],
+  "evidence_sha256": {
+    "script": "c49265b3fb37284370876111342b902648ed326c9492bf37d50420a157b3213f",
+    "results": "ea67d8fd4a2b8d49f98987a1f54aaa1fb8a1558d71dfd27e84e746a6e985d2cb",
+    "captures": {
+      "desktop-light-pending.png": "8e60e665251b0f82963d58ce45803af5100caf8b8ccf859529835c5c9e42079c",
+      "desktop-light-newer-draft.png": "8df40368acc5ac00a944504d8606ac13f0a144ee96f2764d9e72cc64cc56873e",
+      "desktop-light-rejected.png": "75efcf88bc5d6278d28bdd13c081b3d30596216c5eb123ad8bbde880b20f08b9",
+      "desktop-dark-pending.png": "fa15f9f887268912db4f3d05576d3c31b18e4890bc412ebe64aff6a3b840e858",
+      "desktop-dark-newer-draft.png": "4878665803f9c42caafe860a76e043519a9cbaa9844205f3b47bf0bd20800cf5",
+      "desktop-dark-rejected.png": "b69f423848a6389a04ae08964409c94e08fbc7bde988b4b414424fea05956275",
+      "phone-light-pending.png": "d4a54a9151e6072f4334ecc85314cbca4d2c6e3b9c4595323f1f5fae5a872b7a",
+      "phone-light-newer-draft.png": "1f58966f3a8710c963a0abbca177f36974f0f4c4bb8d3f586cd04df128ee5adc",
+      "phone-light-rejected.png": "8f2caa325c91ed71f3cba5564700825e61aa1d10a3eba60f84ce824315cca4bc",
+      "narrow-dark-pending.png": "9b13d2baba6d5a27ee850aca20f83b0890db4b78b0e9cab123e28ce4f052f06b",
+      "narrow-dark-newer-draft.png": "c6124ae4b6249f69a08c6ebef44ff3f51a9946f7619e3495a788ad8f44fac430",
+      "narrow-dark-rejected.png": "6437e9352a8dee0bdb205108e94b5ff94402a4e29c941575aa2e82f6dbc5fac7"
+    }
+  }
+}

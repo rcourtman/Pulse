@@ -20,6 +20,62 @@
 
 ## Purpose
 
+### Existing alert History distinguishes failed reads from empty results
+
+The History tab renders fixed non-provider error copy in a `role="alert"`
+region and keeps its native Retry history button busy/disabled during the
+logical read. Loading is announced with `role="status"`. Frequency and severity
+totals are hidden until a read is accepted; failed reads do not render the
+ordinary empty-history claim. Same-range saved rows and live alerts can remain
+under the warning, without presenting a different range's saved rows.
+
+The connected History tab/state tests and parent-bound browser receipt cover
+deferred/synthetic failed reads, keyboard retry, accepted recovery and empty
+results, retained entries, range/context replacement and disposal. Desktop
+1280px and phone 390px layouts fit without page-level horizontal overflow;
+the phone retry control preserves the shared 44px target and the desktop
+control keeps shared compact density. No new primitive, route, feature,
+permission, notification replay or backend recovery claim is introduced.
+
+### Existing webhook list controls expose pending acknowledgement
+
+The webhook section shares pending admission across form saves, list toggles,
+bulk changes and deletion. Pending list writes announce a `role="status"`
+message and disable competing list controls and Add. An open draft also locks
+the saved-row controls; its own fields, Test and Save remain available until
+that draft is submitted. A fixed `role="alert"` message explains that earlier
+batch changes may already be saved when a later change is unconfirmed, rather
+than presenting an atomic rollback or automatically retrying it.
+
+The existing section, state owners and API adapters are exercised in desktop
+and 390px browser fixtures with deferred/rejected synthetic replies, masked
+drafts, deliberate retry and unmount. List controls retain their narrow 44px
+touch targets and the section does not overflow horizontally. These checks
+establish source interaction and layout, not ordinary notification delivery.
+No new primitive, route, permission, destination or transport policy is added.
+
+### Existing alerts Save controls expose acknowledgement state
+
+The settings Save button renders Saving… with aria-busy while its logical
+save is pending, and both Save and Discard are disabled until completion or
+failure. Newer edits remain possible and visibly unsaved; acknowledgement is
+not a claim that those edits were saved. Shared alert-configuration copy keeps
+the existing normal-save vocabulary and supplies a separate newer-unsaved
+message. Keyboard activation, tab re-entry and 320px/390px layouts are covered
+by the parent-bound browser fixture. `alertConfigPresentation.test.ts` and
+`alertSettingsSave.acknowledgement.test.tsx` exercise the copy and state owner.
+No new primitive, route or permission is introduced.
+
+Threshold, schedule and destination editors appear only after saved policy
+and destination loading have completed for the current context. Pending reads
+render an announced loading message, not editable defaults. Failed policy reads
+render an alert and keyboard-operable Reload settings control; neither Save
+nor editable default fields is exposed. The copy and acknowledgement controls
+cover failed reads and successful reloads; the connected browser fixture also
+requires preserved pending-save drafts and narrow-layout fit. Overview and
+History navigation are not gated by this editor load state.
+
+
 ### Existing Assistant control selectors describe planning
 
 Settings and Chat have only Read-only and Ask first options. Legacy

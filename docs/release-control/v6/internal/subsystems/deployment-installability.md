@@ -15,6 +15,102 @@
 
 ## Purpose
 
+### Server service discovery cannot short-read or default after an unknown inventory
+
+The server installer consumes one bounded, complete `systemctl list-unit-files`
+read for the exact historical `pulse-backend.service` and `pulse.service` names,
+with paging and truncation disabled. It preserves legacy-backend precedence,
+including masked units, and explicit custom-instance selection. Successful
+absence (or a non-systemd installation) permits the default; failed, timed-out,
+partial, malformed, duplicate, impostor or unknown-state inventory does not.
+This avoids an early pipe close hiding an installed legacy service under
+`pipefail`. Discovery itself never stops, enables or unmasks a unit.
+
+The standalone unattended updater uses the same bounded name/state admission
+before passing its explicit service identity to the installer. It checks the
+command-substitution result separately from local variable declaration, and
+refuses unknown inventory before observing prior-active state, creating backup
+files, downloading/invoking the installer or installing a restart trap. An
+installer-only repair cannot cover this earlier explicit-name handoff.
+
+Existing-install detection distinguishes an unavailable inventory from no
+installation. Main, archive/source replacement, unit creation, removal and
+reset propagate the refusal even when a caller disables Bash errexit: no
+default-based service operation, fresh-install fallback, live executable
+replacement or destructive removal follows that refusal. Admitted executable
+staging and existing stop/readback/recovery safeguards remain unchanged.
+
+`TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads` executes the
+actual shell functions and callers with confined command doubles, a
+deterministic pipe-buffer control, fake versioned archive/build inputs and an
+optional real `systemctl --root` inventory. Only the unit-writer test relocates
+its fixed output path. It proves selection and refusal propagation, not release
+signature trust, real compilation, native systemd restart, an LXC stop cause or
+installed update/recovery. Those remain separate operational evidence.
+`TestAutoUpdateServiceDiscoveryAndInstallerHandoff` uses the same fixture to
+execute the actual unattended helper's selection and
+`perform_update` entry/handoff with a fake installer, including timeout and
+failed/partial inventory before any service observation or installer call.
+
+### Unattended restoration requires observed service state
+
+Before backup, download, installer invocation or restart-trap setup, the
+standalone helper requires one complete successful observation of the exact
+selected unit's LoadState and ActiveState. Loaded and masked units are admitted
+only in settled active, inactive or failed states; missing, partial, duplicate,
+failed, timed-out, unavailable or transitional observations refuse the update.
+A failed is-active call is no longer treated as evidence of prior inactivity.
+Discovery, explicit identities, masks, consent and stable/signature admission
+retain their existing contracts.
+
+After an attempted installation, rollback replacement requires an observed
+inactive unit, or a bounded successful stop followed by a fresh inactive
+readback. Successful stop submission alone does not permit file replacement.
+Unknown/unsettled state retains the verified private backup, preserves the
+current destination bytes, suppresses restart and reports manual reconciliation.
+A post-install observation failure is not permission to start or roll back.
+The prior-active backstop starts only a freshly observed stopped/failed unit;
+it never starts a unit on a failed read. Restoration still stages and compares
+all saved files, uses atomic destination replacement and restarts only when
+prior activity was established. Incomplete restoration/start leaves the backup
+and fails; no new automatic retry, unmasking or config/data rollback is added.
+
+`TestAutoUpdateServiceStateFailsClosed` executes the production helper with
+private versioned file fixtures and an external confined manager, including
+real query/stop deadlines, successful/no-op/refused stops, failed readback,
+prior-state restoration and late unknown state. The existing signed transaction
+matrix and smoke controls retain their cryptographic, metadata and return-trap
+coverage. These are source/fixture controls, not native systemd/LXC recovery,
+published installer trust, #2785's stop cause or installed acceptance.
+
+The helper records the installer and log collector's separate observed exit
+statuses immediately after their pipeline, before logging or recovery can
+overwrite them. A failed collector does not establish installer failure;
+zero exits establish pipeline completion only, not version, service or update
+acceptance. The existing signed transaction and confined service-state tests
+cover installer-only, collector-only, simultaneous and successful exits with
+unchanged prior-activity, mask, backup and restoration safeguards. These facts
+cannot reconstruct exits or signals from an earlier interrupted attempt, or
+identify who stopped a host.
+
+### Ordinary CI compiles the backend with the same checkout's real frontend
+
+The existing Frontend job retains its production bundle, size, whole-tree tests,
+audit and 30-minute ceiling. After those tests it selects Go from `go.mod`,
+requires a nonempty built index/assets tree and compares the complete generated
+frontend and embed copy before backend compilation and server/API vet. Missing,
+extra or changed embedded files stop the phase; it never creates a placeholder
+or imports assets from another job/source. Build and vet use the read-only Go
+graph and two workers; the binary stays in the runner's temporary directory.
+The log records the checkout and binary digest without publishing an artifact.
+
+`TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
+with private assets and Git/compiler doubles, covering mismatch refusal,
+declared command/ordering checks and terminal compiler/vet failures. These
+controls are not real compilation. Actual containing CI checkout/phase logs
+remain necessary before using the result as real-embed source proof; unrelated
+stub builds, workflow success, releases and installed recovery remain distinct.
+
 ### Core E2E images are built once and admitted in the same run
 
 The secret-free Core E2E workflow builds its existing `e2e_runtime` server and

@@ -112,7 +112,7 @@ describe('WebhookConfig', () => {
   beforeEach(() => {
     onAddMock = vi.fn().mockResolvedValue(true);
     onUpdateMock = vi.fn().mockResolvedValue(true);
-    onDeleteMock = vi.fn();
+    onDeleteMock = vi.fn().mockResolvedValue(true);
     onTestMock = vi.fn();
     getWebhookTemplatesMock.mockReset();
     getWebhookTemplatesMock.mockResolvedValue(mockTemplates);
@@ -345,7 +345,7 @@ describe('WebhookConfig', () => {
     );
   });
 
-  it('"Enable All" calls onUpdate for each webhook with enabled=true', () => {
+  it('"Enable All" awaits onUpdate for each webhook with enabled=true', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', enabled: false }),
       makeWebhook({ id: 'wh-2', enabled: false }),
@@ -363,7 +363,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Enable All'));
 
-    expect(onUpdateMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onUpdateMock).toHaveBeenCalledTimes(2));
     expect(onUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wh-1', enabled: true }),
     );
@@ -372,7 +372,7 @@ describe('WebhookConfig', () => {
     );
   });
 
-  it('"Disable All" calls onUpdate for each webhook with enabled=false', () => {
+  it('"Disable All" awaits onUpdate for each webhook with enabled=false', async () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', enabled: true }),
       makeWebhook({ id: 'wh-2', enabled: true }),
@@ -390,7 +390,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Disable All'));
 
-    expect(onUpdateMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onUpdateMock).toHaveBeenCalledTimes(2));
     expect(onUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wh-1', enabled: false }),
     );
@@ -1324,7 +1324,7 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Delete'));
 
-    // The handler checks `webhook.id && props.onDelete(webhook.id)` — empty string is falsy
+    // Empty identities cannot dispatch a delete.
     expect(onDeleteMock).not.toHaveBeenCalled();
   });
 

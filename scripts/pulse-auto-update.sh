@@ -316,12 +316,47 @@ version_greater_than() {
 detect_service_name() {
     if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then
         echo "$SERVICE_NAME"
-    elif systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
-        echo "pulse-backend"
-    elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
+        return
+    fi
+    if ! command -v systemctl >/dev/null 2>&1; then
         echo "pulse"
+        return
+    fi
+
+    local unit_files="" unit="" state="" preset="" extra=""
+    local seen_backend=false seen_pulse=false
+    # Keep the standalone helper aligned with the server installer's bounded
+    # discovery. Its explicit installer handoff must not carry a short-read
+    # default past the installer's own discovery gate.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- pulse-backend.service pulse.service 2>/dev/null); then
+        log error "Cannot identify the Pulse systemd service: unit inventory failed. Reconcile service state before retrying." >&2
+        return 1
+    fi
+    while read -r unit state preset extra; do
+        [[ -n "$unit" ]] || continue
+        if [[ "$unit" == pulse-backend.service && "$seen_backend" == false ]]; then
+            seen_backend=true
+        elif [[ "$unit" == pulse.service && "$seen_pulse" == false ]]; then
+            seen_pulse=true
+        else
+            log error "Cannot identify the Pulse systemd service: unexpected unit inventory. No default service was selected." >&2
+            return 1
+        fi
+        case "$state" in
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient|masked|masked-runtime) ;;
+            *)
+                log error "Cannot identify the Pulse systemd service: unknown unit state. No default service was selected." >&2
+                return 1 ;;
+        esac
+        if [[ -n "$extra" ]]; then
+            log error "Cannot identify the Pulse systemd service: malformed unit inventory. No default service was selected." >&2
+            return 1
+        fi
+    done <<< "$unit_files"
+    if [[ "$seen_backend" == true ]]; then
+        echo "pulse-backend"
     else
-        echo "pulse"  # Default
+        echo "pulse"  # Only a successful absent inventory permits the default.
     fi
 }
 
@@ -330,14 +365,74 @@ resolve_install_script_url() {
     printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$target_version"
 }
 
-# Perform the update
+# Read a complete, bounded manager observation. An is-active failure conflates
+# an inactive unit with an unavailable manager; neither missing text nor a
+# plausible partial result grants an update, restart or rollback.
+read_update_service_state() {
+    local service_name=$1 observation="" line="" load="" state=""
+    local seen_load=false seen_state=false
+    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>/dev/null); then
+        log error "Cannot read Pulse service state ($service_name); reconcile service state before retrying" >&2
+        return 1
+    fi
+    while IFS= read -r line; do
+        case "$line" in
+            LoadState=*)
+                [[ "$seen_load" == false ]] || { log error "Duplicate Pulse service load state ($service_name)" >&2; return 1; }
+                seen_load=true; load=${line#LoadState=} ;;
+            ActiveState=*)
+                [[ "$seen_state" == false ]] || { log error "Duplicate Pulse service active state ($service_name)" >&2; return 1; }
+                seen_state=true; state=${line#ActiveState=} ;;
+            *)
+                log error "Incomplete Pulse service observation ($service_name); no service action is safe" >&2
+                return 1 ;;
+        esac
+    done <<< "$observation"
+    if [[ "$seen_load" != true || "$seen_state" != true || ( "$load" != loaded && "$load" != masked ) ]]; then
+        log error "Pulse service is unavailable ($service_name); no service action is safe" >&2
+        return 1
+    fi
+    case "$state" in
+        active|inactive|failed|activating|deactivating|reloading|refreshing|maintenance) printf '%s\n' "$state" ;;
+        *) log error "Unknown Pulse service state ($service_name); no service action is safe" >&2; return 1 ;;
+    esac
+}
+
+# Only a fresh, settled observation permits an explicit start. Return 2 for
+# uncertainty so callers do not turn an unavailable read into rollback consent.
+start_update_service_if_stopped() {
+    local service_name=$1 state=""
+    state=$(read_update_service_state "$service_name") || return 2
+    case "$state" in
+        active) return 0 ;;
+        inactive|failed) timeout -k 1 5 systemctl start "$service_name" 2>/dev/null ;;
+        *) log error "Pulse service state is not settled ($service_name); refusing start"; return 2 ;;
+    esac
+}
+
+stop_update_service_for_rollback() {
+    local service_name=$1 state=""
+    state=$(read_update_service_state "$service_name") || return 1
+    case "$state" in
+        inactive) return 0 ;;
+        active|failed) ;;
+        *) log error "Pulse service state is not settled ($service_name); refusing rollback"; return 1 ;;
+    esac
+    if ! timeout -k 1 5 systemctl stop "$service_name" 2>/dev/null; then
+        return 1
+    fi
+    state=$(read_update_service_state "$service_name") || return 1
+    [[ "$state" == inactive ]]
+}
+
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    local elapsed=0
+    local elapsed=0 state=""
 
     while (( elapsed < timeout_seconds )); do
-        if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        state=$(read_update_service_state "$service_name") || return 2
+        if [[ "$state" == active ]]; then
             return 0
         fi
         sleep 1
@@ -363,23 +458,25 @@ ensure_service_restarted() {
     if [[ "$service_was_active" != "true" ]]; then
         return 0
     fi
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        return 0
-    fi
-
-    log warn "Pulse service is not active after update attempt; starting it"
-    systemctl start "$service_name" 2>/dev/null || true
-    if wait_for_service_active "$service_name" 20; then
+    if start_update_service_if_stopped "$service_name" && wait_for_service_active "$service_name" 20; then
         log info "Pulse service is running again"
     else
-        log error "Pulse service could not be started after update attempt; manual intervention required (systemctl start $service_name)"
+        log error "Pulse service restart not confirmed ($service_name); reconcile service state before manual recovery"
     fi
     return 0
 }
 
 perform_update() {
     local new_version=$1
-    local service_name=$(detect_service_name)
+    local service_name=""
+    # A local declaration hides command-substitution failure. Refuse before
+    # prior-active observation, backup, installer download or restart traps.
+    service_name=$(detect_service_name) || return 1
+    # Never cross the stable channel even if the caller selected a preview.
+    if is_prerelease_tag "$new_version"; then
+        log error "Refusing to install prerelease version $new_version via unattended updater"
+        return 1
+    fi
     local installer_tmp=""
     local signature_tmp=""
     local backup_dir=""
@@ -394,10 +491,13 @@ perform_update() {
     # Capture whether Pulse was running before the update so we can guarantee it
     # comes back up afterwards (#1323: auto-update could leave it stopped on
     # unprivileged LXC where the installer's restart silently fails).
-    local service_was_active="false"
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        service_was_active="true"
-    fi
+    local service_was_active="false" service_state="" service_result=0
+    service_state=$(read_update_service_state "$service_name") || return 1
+    case "$service_state" in
+        active) service_was_active="true" ;;
+        inactive|failed) ;;
+        *) log error "Pulse service state is not settled ($service_name); refusing update"; return 1 ;;
+    esac
 
     # Keep the prior-active restart backstop (#1630), except when incomplete
     # recovery requires manual intervention. The trap disarms itself on the
@@ -406,14 +506,6 @@ perform_update() {
     # makes it re-run when any later function returns — with these locals gone
     # that aborted the updater under set -u after a successful update (#2128).
     trap 'trap - RETURN; rm -f -- "${installer_tmp:-}" "${signature_tmp:-}" "${restore_files[@]}"; if [[ -n "$backup_dir" && "$retain_backup" == "false" ]]; then rm -rf -- "$backup_dir"; fi; if [[ "$restart_allowed" == "true" ]]; then ensure_service_restarted "$service_name" "$service_was_active"; fi' RETURN
-
-    # Refuse to install a prerelease via the unattended updater. The stable
-    # channel must never cross onto a tag like v6.0.0-rc.2, even if every
-    # caller above this point thought it was safe.
-    if is_prerelease_tag "$new_version"; then
-        log error "Refusing to install prerelease version $new_version via unattended updater"
-        return 1
-    fi
 
     log info "Starting update to $new_version"
     
@@ -482,6 +574,7 @@ perform_update() {
     log info "Installer signature verified"
 
     local update_accepted="false"
+    local -a installer_pipeline_status=()
     if env \
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
@@ -490,8 +583,10 @@ perform_update() {
        while IFS= read -r line; do
            log info "installer: $line"
        done; then
-        
-        log info "Installer completed; verifying update"
+        # Capture both observed exits before any command overwrites PIPESTATUS.
+        # Completion of this pipeline still requires binary/service verification.
+        installer_pipeline_status=("${PIPESTATUS[@]}")
+        log info "Installer completed; verifying update (installer exit: ${installer_pipeline_status[0]}; log collector exit: ${installer_pipeline_status[1]})"
         
         # Verify new version
         local installed_version
@@ -503,24 +598,47 @@ perform_update() {
             # again. On unprivileged LXC the installer's restart can silently
             # fail, leaving Pulse stopped (#1323).
             if [[ "$service_was_active" == "true" ]]; then
-                if ! wait_for_service_active "$service_name" 20; then
+                service_result=0
+                wait_for_service_active "$service_name" 20 || service_result=$?
+                if [[ "$service_result" == 1 ]]; then
                     log warn "Pulse service is not active after update, attempting one explicit start"
-                    systemctl start "$service_name" || true
+                    start_update_service_if_stopped "$service_name" || service_result=$?
                 fi
-
-                if ! wait_for_service_active "$service_name" 20; then
+                if [[ "$service_result" != 2 ]]; then
+                    service_result=0
+                    wait_for_service_active "$service_name" 20 || service_result=$?
+                fi
+                if [[ "$service_result" == 2 ]]; then
+                    retain_backup="true"
+                    restart_allowed="false"
+                    log error "Update service state is uncertain; backup retained at $backup_dir; reconcile service state before recovery"
+                    return 1
+                elif [[ "$service_result" != 0 ]]; then
                     log error "Pulse service did not come back up after update"
                 else
                     update_accepted="true"
                 fi
             else
-                update_accepted="true"
+                # Inactive/failed prior state removes the restart obligation,
+                # not the obligation to observe the installed unit safely.
+                service_state=$(read_update_service_state "$service_name") || service_state="unknown"
+                case "$service_state" in
+                    active|inactive|failed) update_accepted="true" ;;
+                    *)
+                        retain_backup="true"
+                        restart_allowed="false"
+                        log error "Update service state is uncertain; backup retained at $backup_dir; reconcile service state before recovery"
+                        return 1 ;;
+                esac
             fi
         else
             log error "Version mismatch after update. Expected: $new_version, Got: $installed_version"
         fi
     else
-        log error "Update installation failed"
+        installer_pipeline_status=("${PIPESTATUS[@]}")
+        # A collector failure is not evidence that the installer itself failed.
+        # These are exit observations, not a diagnosis of a host interruption.
+        log error "Installer pipeline failed (installer exit: ${installer_pipeline_status[0]}; log collector exit: ${installer_pipeline_status[1]})"
     fi
 
     if [[ "$update_accepted" == "true" ]]; then
@@ -534,8 +652,8 @@ perform_update() {
     retain_backup="true"
     restart_allowed="false"
     log info "Restoring from backup"
-    if ! systemctl stop "$service_name"; then
-        log error "Could not stop Pulse for rollback; backup retained at $backup_dir; manual recovery required"
+    if ! stop_update_service_for_rollback "$service_name"; then
+        log error "Could not confirm Pulse stopped for rollback; backup retained at $backup_dir; manual recovery required"
         return 1
     fi
 
@@ -568,7 +686,7 @@ perform_update() {
     done
 
     if [[ "$service_was_active" == "true" ]]; then
-        if ! systemctl start "$service_name" || ! wait_for_service_active "$service_name" 20; then
+        if ! start_update_service_if_stopped "$service_name" || ! wait_for_service_active "$service_name" 20; then
             log error "Restored Pulse could not be started; backup retained at $backup_dir; manual recovery required"
             return 1
         fi

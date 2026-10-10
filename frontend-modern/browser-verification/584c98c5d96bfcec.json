@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c37248a9f5adec25f8e717fbf9c9e4d1e4c967a5",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx",
+    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx": "6c741b568a576640a1d589c2b39a630dcb59c69433664edb500d92eed5378a80",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx": "1255494d0e46111f0818dab6759a5c687b95f8ac01d9e86c7200476e02e0d120",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "6fdfd7d71214558875b193d5c21d699317f74e2a3d7e4ec04f8a40e7b9def15e",
+    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx": "e46d6f64a62f1decdc3c26ab3696d5891e8bdfa12b7bc6b9d4522b585319edea",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "281a9bdbfbd1f3f0a53cf2bfdc1130f6ba19ae64c8293a496b08181c552200f6"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "states": [
+    "Real existing History tab, hook, API adapter and stylesheet inside an offline context fixture; synthetic local HTTP503 and deferred reads",
+    "Initial pending/failure, read-only retry, accepted result, same-range retained entries, larger-range failure alongside live alert",
+    "Obsolete reply, organisation replacement, pending unmount"
+  ],
+  "interactions": [
+    "Keyboard Retry history admits one logical pending read; duplicate activation while busy sends no second application read",
+    "Range change does not relabel another range snapshot; same-range retained entries carry visible incomplete/out-of-date guidance",
+    "Failed reads suppress frequency chart, severity totals and ordinary empty claim; accepted reads restore them, including genuine empty result",
+    "Range URL remains unchanged by retry; organisation replacement discards old entries/errors; disposed hook cannot apply late failure"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-10T12:59:50.957461Z",
+  "browser": {
+    "client": "1.56.1",
+    "engine": "Chromium",
+    "version": "141.0.7390.37"
+  },
+  "scope": "Source-isolated existing page fixture and synthetic endpoints, not full authenticated app, ordinary backend/notification delivery or installed recovery."
+}

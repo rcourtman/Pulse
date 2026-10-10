@@ -41,6 +41,24 @@ An API-only connection can have no agent. Accept "unknown" or an omitted optiona
 field, and use existing evidence; do not ask for a downgrade, restart, reinstall
 or re-enrolment to obtain version context. Existing reports need no refile.
 
+An interrupted upgrade needs a timeline, not one inferred version. The optional
+**Upgrade attempt and recovery** field separates the starting version, intended
+version or asset, route, original time and timezone, last recorded updater or
+installer result, what stopped, and recovery already performed. Keep the version
+running at failure separate from the version observed after recovery; accept
+unknowns and use evidence already supplied anywhere in the thread.
+
+A verified download signature establishes artifact authenticity, not completed
+installation, successful rollback or a healthy running service. `Broken pipe`
+alone does not establish why a service or its host stopped. A later boot marks
+a new run, not the stop's time or cause. Distinguish Pulse stopping from its
+whole LXC, VM or host stopping, using an existing host stop record only when
+available and consequential. Ask for only the missing distinction, not full
+journals or another version already supplied. Do not rerun the update, reboot,
+restore, run Diagnostics or delete rollback backups just to complete a report;
+keep backups private and preserve the original evidence. Version labels are
+intake metadata, not proof of the failing executable or installed recovery.
+
 The optional **OS / environment** field in both bug forms also distinguishes
 where readings come from: the platform API, a Pulse agent, or both. Retain the
 affected platform release, including TrueNAS SCALE versus CORE, separately from

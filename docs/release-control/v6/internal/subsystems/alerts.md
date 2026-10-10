@@ -15,6 +15,73 @@
 
 ## Purpose
 
+### Webhook list changes share the editor's acknowledged writer
+
+Enable/Disable, deletion, bulk changes and form saves cannot overlap in one
+webhook editor. An open add/edit draft also locks list actions so a saved
+row change cannot invalidate that draft's enabled state or identity. Pending
+list actions expose a live status and keep the saved inventory until the
+server acknowledges each change. Deletion requires `success: true` before
+removing a row; a resolved but unaccepted response retains it.
+
+Bulk Enable/Disable captures only rows whose state needs changing and sends
+them sequentially. A rejected or unconfirmed write stops the remaining batch,
+retains earlier acknowledged changes and gives fixed partial-change guidance.
+No automatic retry or rollback occurs. Unmount withdraws remaining unsent
+calls, without cancelling or undoing a request already issued. Existing masks,
+routing, payloads, endpoint policy and notification delivery remain unchanged.
+The retired destination-tab mutation owner cannot dispatch another call, publish
+a late toast or replace shared inventory belonging to a newly loaded context.
+
+`WebhookConfig.mutations.test.tsx` connects the real editor and destination
+owner to deferred/rejected synthetic API replies for serial batches, shared
+pending admission, no-op rows, partial failure, open drafts, deletion acceptance,
+explicit retry and unmount. `WebhookConfig.test.tsx` retains service, payload,
+form and list coverage with acknowledged bulk sequencing.
+`useAlertWebhookDestinationsState.test.tsx` checks late create/update/delete
+replies against replacement inventory and refuses calls from the retired owner.
+Browser proof uses
+the real existing section, hooks and API adapters at desktop/narrow widths,
+with synthetic local endpoints; it does not establish provider delivery.
+
+### Existing settings saves retain the pending and newer drafts
+
+One save per loaded editor owns a click-time snapshot of the alert policy and
+all separately persisted destinations. Save and Discard are unavailable while
+it is pending; fields stay editable. Completion clears the dirty flag only
+when no newer edits occurred. If newer edits exist, the acknowledgement says
+that the submitted settings were accepted and the newer changes remain
+unsaved. Failed writes stop later calls, retain drafts and restore Save for a
+deliberate retry. The existing multi-endpoint save is not atomic: earlier
+acknowledged writes are not rolled back or described as undone.
+
+Entering the notifications tab does not reload an unsaved draft or an active
+save. Explicit Discard still reloads saved settings when no save is pending.
+Reload, organisation switch and unmount invalidate stale completions and stop
+unsent writes; they cannot cancel or undo an already-issued request. The newer
+context alone owns load results and pending flags. Apprise response masking
+replaces only the untouched submitted draft, not newer input.
+
+Save admission additionally requires a successful saved-policy read in the
+current editor context. Initial load and every replacement withdraw that
+admission before resetting draft defaults. A failed read leaves editing and
+saving unavailable; an explicit reload must obtain the saved policy and finish
+destination loading before admitting writes. An older failed read cannot
+withdraw a newer successful context. Destination partial-load failures retain
+their existing separate save block. Defaults are not a recovered saved policy.
+
+`alertSettingsSave.acknowledgement.test.tsx` exercises the real policy and
+destination owners with deferred/rejected API replies, coherent snapshots,
+newer edits, duplicate admission, tab navigation, retry, normal masking and
+organisation invalidation. `useAlertDestinationsState.test.tsx` bounds the
+same downstream snapshot; `alertConfigPresentation.test.ts` distinguishes
+pending, accepted and newer-unsaved messages. Browser proof mounts the real
+configuration surface at desktop and narrow widths with synthetic local
+endpoints. These are source controls, not ordinary notification delivery.
+The acknowledgement controls also require failed-initial/replacement-read
+write refusal, deliberate reload recovery and superseded-error ownership.
+
+
 ### PMG collection opt-outs are not recovery evidence
 
 Missing node queues (including an entirely disabled collector) cannot resolve
@@ -4245,6 +4312,30 @@ include that evaluator rather than remove the topology alerts in isolation.
 and unified alert synchronisation, including absence of duplicate parent alerts.
 
 ### Alert history clear/read ordering
+
+History read failure is not an empty result. The existing History tab announces
+an error and offers an explicit read-only retry. Pending or failed reads expose
+neither the frequency chart nor severity totals, and failure suppresses the
+ordinary empty-result claim. Same-range saved entries remain available with an
+incomplete/out-of-date warning, alongside live alerts. A snapshot loaded for
+another range is retained internally but excluded from that range's rows;
+switching range is not deletion. Search, severity and range remain URL-owned.
+
+Only the latest request may settle rows, failure or loading. An explicit retry
+admits one pending logical read; existing API transport policy is unchanged.
+Organisation replacement clears the saved snapshot and read error; retired
+reads and clears cannot change the replacement view. Disposal prevents another
+retry or a late completion from modifying view state. An already-dispatched
+clear is not cancelled, and deletion/retention, active alerts, acknowledgement
+and notification delivery are unchanged.
+
+`useAlertHistoryState.test.tsx` and `HistoryTab.loadFailure.test.tsx` exercise
+initial failure, retry, pending/accepted empty results, same-range retention,
+range isolation with live alerts, obsolete replies, context replacement and
+disposal. The parent-bound browser receipt exercises the real existing tab,
+hook, API adapter and stylesheet at desktop and phone widths with synthetic
+HTTP failures and deferred replies. These are source presentation/ownership
+controls, not installed backend recovery or destination delivery.
 
 A successful history clear invalidates reads started before its completion and
 settles their loading state, so delayed responses cannot repopulate deleted

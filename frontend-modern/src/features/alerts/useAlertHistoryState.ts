@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
@@ -103,7 +103,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   };
 
   const [alertHistory, setAlertHistory] = createSignal<Alert[]>([]);
+  const [loadedHistoryRange, setLoadedHistoryRange] = createSignal<AlertHistoryRange | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [historyLoadError, setHistoryLoadError] = createSignal(false);
   const [selectedBarIndex, setSelectedBarIndex] = createSignal<number | null>(null);
   const resourceIncidentsState = useAlertResourceIncidentsState();
 
@@ -161,17 +163,28 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
 
   let fetchRequestId = 0;
+  let historyContextVersion = 0;
+  let disposed = false;
+  let requestedRange: AlertHistoryRange | null = null;
   const fetchHistory = async (range: AlertHistoryRange) => {
+    if (disposed) return;
     const requestId = ++fetchRequestId;
+    if (requestedRange !== range) setHistoryLoadError(false);
+    requestedRange = range;
     setLoading(true);
 
     try {
       const alertHistoryData = await AlertsAPI.getHistory(buildAlertHistoryParams(range));
       if (requestId === fetchRequestId) {
-        setAlertHistory(alertHistoryData);
+        batch(() => {
+          setAlertHistory(alertHistoryData);
+          setLoadedHistoryRange(range);
+          setHistoryLoadError(false);
+        });
       }
     } catch (error) {
       if (requestId === fetchRequestId) {
+        setHistoryLoadError(true);
         logger.error('Failed to load history:', error);
       }
     } finally {
@@ -179,6 +192,12 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
         setLoading(false);
       }
     }
+  };
+
+  // An explicit retry is a read, not history deletion or notification replay.
+  const retryHistory = () => {
+    if (loading() || disposed) return;
+    return fetchHistory(timeFilter());
   };
 
   let lastTimeFilterValue: string | null = null;
@@ -233,7 +252,11 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     void fetchHistory(timeFilter());
 
     const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      historyContextVersion++;
       setAlertHistory([]);
+      setLoadedHistoryRange(null);
+      setHistoryLoadError(false);
+      requestedRange = null;
       setSelectedBarIndex(null);
       resourceIncidentsState.resetResourceIncidentsState();
       resetState();
@@ -241,6 +264,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     });
 
     onCleanup(() => {
+      disposed = true;
       unsubscribeOrgSwitched();
       fetchRequestId++;
     });
@@ -259,7 +283,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const allHistoryData = createMemo<HistoryItem[]>(() => {
     return buildAlertHistoryItems({
       activeAlerts: props.activeAlerts() || {},
-      alertHistory: alertHistory(),
+      // A failed larger-range read must not label a smaller snapshot as complete.
+      // Keep the last snapshot for same-range retry, but never reuse it in another range.
+      alertHistory: loadedHistoryRange() === timeFilter() ? alertHistory() : [],
       getResource: props.getResource,
       allResources: props.allResources(),
     });
@@ -307,17 +333,23 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   );
 
   const clearAlertHistory = async () => {
+    if (disposed) return;
     if (!confirm(getAlertAdministrationClearHistoryConfirmation())) {
       return;
     }
 
+    const contextVersion = historyContextVersion;
     try {
       await AlertsAPI.clearHistory();
+      if (disposed || contextVersion !== historyContextVersion) return;
       // Reads started before the clear completed may still contain deleted rows.
       fetchRequestId++;
       setLoading(false);
       setAlertHistory([]);
+      setLoadedHistoryRange(timeFilter());
+      setHistoryLoadError(false);
     } catch (error) {
+      if (disposed || contextVersion !== historyContextVersion) return;
       logger.error(getAlertAdministrationClearHistoryError(), error);
       notificationStore.error(getAlertAdministrationClearHistoryError());
     }
@@ -333,6 +365,8 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     setSearchTerm,
     alertHistory,
     loading,
+    historyLoadError,
+    retryHistory,
     selectedBarIndex,
     setSelectedBarIndex,
     resourceIncidentPanel: resourceIncidentsState.resourceIncidentPanel,

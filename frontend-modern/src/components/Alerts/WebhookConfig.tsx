@@ -11,7 +11,7 @@ export interface WebhookConfigProps {
   webhooks: Webhook[];
   onAdd: (webhook: Omit<Webhook, 'id'>) => boolean | Promise<boolean>;
   onUpdate: (webhook: Webhook) => boolean | Promise<boolean>;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => boolean | Promise<boolean>;
   onTest: (id: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testing?: string | null;
 }
@@ -26,15 +26,26 @@ export function WebhookConfig(props: WebhookConfigProps) {
           webhooks={props.webhooks}
           templates={state.templates}
           testing={props.testing}
-          saving={state.saving()}
+          saving={state.saving() || state.adding()}
           allEnabled={state.allEnabled}
           someEnabled={state.someEnabled}
           toggleAllWebhooks={state.toggleAllWebhooks}
-          onToggleWebhook={(webhook) => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
+          onToggleWebhook={state.toggleWebhook}
           onTestWebhook={(webhook) => webhook.id && props.onTest(webhook.id)}
           onEditWebhook={state.editWebhook}
-          onDeleteWebhook={(webhook) => webhook.id && props.onDelete(webhook.id)}
+          onDeleteWebhook={state.deleteWebhook}
         />
+      </Show>
+
+      <Show when={state.saving() && !state.adding()}>
+        <p role="status" class="text-xs text-muted">
+          Saving webhook changes…
+        </p>
+      </Show>
+      <Show when={state.mutationError()}>
+        <p role="alert" class="text-xs text-red-600 dark:text-red-400">
+          {state.mutationError()}
+        </p>
       </Show>
 
       <Show when={state.adding()}>
