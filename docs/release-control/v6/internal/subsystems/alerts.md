@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Legacy alert-history compaction releases removed-row storage
+
+Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
+for the surviving history rows, not the original loaded row count. Unchanged
+expiry and removal passes keep the current array. This reduces avoidable runtime
+retention after loading a mostly-expired or noisy history without changing the
+30-day cutoff, five-minute duplicate chain, earliest occurrence/latest observation,
+identity, ordering, evidence or empty-array shape.
+
+`history_retention_storage_test.go` verifies exact survivor capacity, recurrence
+and neighbour separation, detached migration snapshots, subsequent appends and
+concurrent reads/writes. Connected primary, backup and retired-JSON loads compact
+without rewriting the recovery files or changing their retirement state. JSON
+recovery and event-log authority remain unchanged. Array-capacity evidence is not
+whole-process RSS or attribution of a reported installation's memory growth.
+
+
 ### Webhook list changes share the editor's acknowledged writer
 
 Enable/Disable, deletion, bulk changes and form saves cannot overlap in one
