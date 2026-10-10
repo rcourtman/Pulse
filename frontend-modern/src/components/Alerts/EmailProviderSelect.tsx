@@ -4,7 +4,6 @@ import {
   ALERT_EMAIL_FROM_ADDRESS_LABEL,
   ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER,
   ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL,
-  ALERT_EMAIL_MAX_RETRIES_LABEL,
   ALERT_EMAIL_PASSWORD_LABEL,
   ALERT_EMAIL_PASSWORD_PLACEHOLDER,
   ALERT_EMAIL_PROVIDER_LABEL,
@@ -12,9 +11,7 @@ import {
   ALERT_EMAIL_RATE_LIMIT_SUFFIX,
   ALERT_EMAIL_REAPPLY_DEFAULTS_LABEL,
   ALERT_EMAIL_RECIPIENTS_LABEL,
-  ALERT_EMAIL_REPLY_TO_LABEL,
-  ALERT_EMAIL_REPLY_TO_PLACEHOLDER,
-  ALERT_EMAIL_RETRY_DELAY_LABEL,
+  ALERT_EMAIL_RETRY_POLICY_HELP,
   ALERT_EMAIL_SECURITY_LABEL,
   ALERT_EMAIL_SECURITY_NONE_LABEL,
   ALERT_EMAIL_SECURITY_STARTTLS_LABEL,
@@ -54,13 +51,10 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
     smtpServer: `${fieldIdPrefix}-smtp-server`,
     smtpPort: `${fieldIdPrefix}-smtp-port`,
     fromAddress: `${fieldIdPrefix}-from-address`,
-    replyTo: `${fieldIdPrefix}-reply-to`,
     username: `${fieldIdPrefix}-username`,
     password: `${fieldIdPrefix}-password`,
     recipients: `${fieldIdPrefix}-recipients`,
     rateLimit: `${fieldIdPrefix}-rate-limit`,
-    maxRetries: `${fieldIdPrefix}-max-retries`,
-    retryDelay: `${fieldIdPrefix}-retry-delay`,
     tagMode: `${fieldIdPrefix}-tag-mode`,
     minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
@@ -162,7 +156,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           />
         </div>
 
-        <div class={formField}>
+        <div class={`${formField} sm:col-span-2`}>
           <label for={fieldIds.fromAddress} class={labelClass()}>
             {ALERT_EMAIL_FROM_ADDRESS_LABEL}
           </label>
@@ -172,20 +166,6 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             value={props.config.from}
             onInput={(e) => props.onChange({ ...props.config, from: e.currentTarget.value })}
             placeholder={ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER}
-            class={controlClass('px-2 py-1.5')}
-          />
-        </div>
-
-        <div class={formField}>
-          <label for={fieldIds.replyTo} class={labelClass()}>
-            {ALERT_EMAIL_REPLY_TO_LABEL}
-          </label>
-          <input
-            id={fieldIds.replyTo}
-            type="email"
-            value={props.config.replyTo || ''}
-            onInput={(e) => props.onChange({ ...props.config, replyTo: e.currentTarget.value })}
-            placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
           />
         </div>
@@ -293,7 +273,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
 
         <Show when={state.showAdvanced()}>
           <div class="mt-3 space-y-3 text-xs text-base-content">
-            <div class="grid gap-3 sm:grid-cols-3">
+            <div class="grid gap-3 sm:grid-cols-2">
               <FormSelect
                 id="alert-email-security-select"
                 label={ALERT_EMAIL_SECURITY_LABEL}
@@ -337,46 +317,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
               </div>
             </div>
 
-            <div class="grid w-full gap-3 sm:grid-cols-2">
-              <div class={formField}>
-                <label
-                  for={fieldIds.maxRetries}
-                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
-                >
-                  {ALERT_EMAIL_MAX_RETRIES_LABEL}
-                </label>
-                <input
-                  id={fieldIds.maxRetries}
-                  type="number"
-                  value={props.config.maxRetries || 3}
-                  min={0}
-                  max={5}
-                  onInput={(e) =>
-                    props.onChange({ ...props.config, maxRetries: parseInt(e.currentTarget.value) })
-                  }
-                  class={controlClass('px-2 py-1 text-sm')}
-                />
-              </div>
-              <div class={formField}>
-                <label
-                  for={fieldIds.retryDelay}
-                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
-                >
-                  {ALERT_EMAIL_RETRY_DELAY_LABEL}
-                </label>
-                <input
-                  id={fieldIds.retryDelay}
-                  type="number"
-                  value={props.config.retryDelay || 5}
-                  min={1}
-                  max={60}
-                  onInput={(e) =>
-                    props.onChange({ ...props.config, retryDelay: parseInt(e.currentTarget.value) })
-                  }
-                  class={controlClass('px-2 py-1 text-sm')}
-                />
-              </div>
-            </div>
+            <p class={formHelpText}>{ALERT_EMAIL_RETRY_POLICY_HELP}</p>
           </div>
         </Show>
       </div>

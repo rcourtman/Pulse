@@ -44,13 +44,10 @@ vi.mock('../AlertPushDestinationsSection', () => ({ AlertPushDestinationsSection
 const buildEmailConfig = (): UIEmailConfig => ({
   enabled: true,
   from: 'pulse@example.com',
-  maxRetries: 3,
   password: '',
   port: 587,
   provider: 'smtp',
   rateLimit: 60,
-  replyTo: '',
-  retryDelay: 5,
   server: 'smtp.example.com',
   startTLS: true,
   tls: true,
