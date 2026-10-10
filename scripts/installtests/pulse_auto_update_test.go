@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+// The native CI runner is checked without host-manager access. These controls
+// exercise its exact recipe, admission, signature/archive and recovery wiring;
+// the hosted runner still supplies the actual systemd/real-Pulse verdict.
+func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_systemd.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("native updater harness controls: %v\n%s", err, out)
+	}
+}
+
 // The standalone helper passes an explicit name to the installer. Exercise
 // that producer and its real entry/handoff, not just installer discovery.
 func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {

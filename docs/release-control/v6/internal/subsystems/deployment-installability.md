@@ -99,6 +99,49 @@ restoration safeguards. These facts
 cannot reconstruct exits or signals from an earlier interrupted attempt, or
 identify who stopped a host.
 
+### Current-source unattended transactions have a native CI check
+
+After the same checkout's production frontend, backend build and vet, ordinary
+Frontend CI links two real server executables with **synthetic** v0.0.1/v0.0.2
+version ldflags. On that fresh GitHub-hosted VM, `auto_update_systemd.py` uses
+real installer archive staging, unit/helper writers, the unattended transaction
+and generated manual recovery helper. It observes actual systemd load/activity,
+mask/enablement, installed and running executable hashes, healthy served version,
+persistent-file hashes, restoration mode, backup disposition and owned cleanup.
+Seven phases cover forward/manual reverse, failed active/inactive/masked installs,
+invalid signatures and an incomplete restore that retains its backup without start.
+
+The test uses signed local archives/installers and an ephemeral test signer;
+production source pins are unchanged. Only fixed fixture download transport and
+private temporary-file placement are adapted. No network fallback, manager/sleep
+double, production credential, release publication or container-detection bypass
+is admitted by the native runner. The real unit keeps ProtectHome, PrivateTmp and
+ProtectSystem; its fixed owned `/opt/pulse-source-native` lab avoids hidden home
+and private temporary paths. Existing units/scratch refuse before mutation, and
+cleanup removes only objects created by this attempt. Compiler and root-command
+failures stay gating under the existing job's deadline; a seven-day closed receipt
+contains source/binary/output hashes, all phases and cleanup, never signer keys,
+persistent contents or raw application/installer logs.
+The private fixture disables telemetry and binds the existing service to loopback;
+it exposes no test server on the hosted VM's external interface.
+Before compiling the native pair, CI requires the exact checkout head and no
+tracked-source delta, not merely a plausible commit label after frontend preparation.
+
+`TestAutoUpdateNativeSystemdHarnessContracts` checks the exact recipe, admission,
+closed transport, real local signatures and phase refusals, and runs the connected
+source/archive/recovery orchestration with an explicitly confined manager/account/
+unit-path double and tiny ELF fixtures. Those controls are not native acceptance.
+The first actually containing CI receipt/logs must establish the native result.
+Even a complete native synthetic transaction does **not** establish a published
+signed historical release pair, full installer main, timer-service sandbox,
+authenticated browser journey, Proxmox LXC stop cause or reporter recovery.
+The existing published-release routes and field owners retain those outcomes.
+
+The native harness is owned canonical L1 runtime, even though it lives beside
+installer tests. Its explicit registry route requires either the dedicated
+Python harness regression file or its Go install-test bridge in the same
+candidate commit; an unowned or unreachable route is not proof coverage.
+
 ### Ordinary CI compiles the backend with the same checkout's real frontend
 
 The existing Frontend job retains its production bundle, size, whole-tree tests,
@@ -1467,6 +1510,7 @@ release-latency optimization.
 52. `scripts/install-mcp.sh`
 53. `scripts/install-mcp.ps1`
 55. `scripts/pulse-auto-update.sh`
+55a. `scripts/installtests/auto_update_systemd.py`
 56. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
 57. `scripts/release_control/record_rc_to_ga_rehearsal.py`
 58. `scripts/release_control/release_promotion_policy_support.py`

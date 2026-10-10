@@ -4322,6 +4322,21 @@ func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	}
 }
 
+// The post-build root transaction receives only an exact-source identity and
+// synthetic binaries; native failure cannot hide or skip the existing audit.
+func TestFrontendCINativeUpdaterKeepsSecretFreeRequiredVerification(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_systemd.py"), "-v",
+		"NativeContracts.test_exact_workflow_recipe_is_scrubbed_and_propagates_all_failures",
+		"NativeContracts.test_workflow_cannot_hide_or_rebind_native_step",
+		"NativeContracts.test_host_admission_requires_fresh_public_vm_not_worker_or_container")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("secret-free native CI admission controls: %v\n%s", err, out)
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
