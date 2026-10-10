@@ -76,13 +76,6 @@ export interface RecoveryPointTransport extends RecoveryPoint {
   subjectRef?: RecoveryExternalRef | null;
 }
 
-export interface RecoveryResponseMeta {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
-
 export interface RecoveryPointsResponse {
   data: RecoveryPoint[];
 }
@@ -136,5 +129,4 @@ export interface ProtectionPosturePolicy {
 export interface ProtectionPosturesResponse {
   data: ProtectionPosture[];
   policy: ProtectionPosturePolicy;
-  meta: RecoveryResponseMeta;
 }
