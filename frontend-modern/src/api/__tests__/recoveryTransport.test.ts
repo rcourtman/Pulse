@@ -13,6 +13,8 @@ import type {
   RecoveryPoint,
   RecoveryPointDisplay,
   RecoveryPointDisplayTransport,
+  RecoveryPointsResponse,
+  RecoveryPointsTransportResponse,
   RecoveryPointTransport,
 } from '@/types/recovery';
 import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
@@ -51,7 +53,6 @@ describe('recovery transport', () => {
             subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
         ],
-        meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
       }),
     ).toEqual({
       data: [
@@ -65,7 +66,6 @@ describe('recovery transport', () => {
           itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
         },
       ],
-      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
   });
 
@@ -81,9 +81,37 @@ describe('recovery transport', () => {
           display: { subjectLabel: ' tank/apps ', subjectType: 'dataset' },
         },
       ],
-      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     }).data;
     expect(point.display).toEqual({ itemLabel: 'tank/apps', itemType: 'dataset' });
+  });
+
+  it('decodes only the points of a backend response and drops its pagination meta', () => {
+    // The points handler still sends page, limit, total and totalPages next to
+    // the data. No surface reads them, so the response type does not declare
+    // them and the decode does not carry them.
+    const backendResponse: RecoveryPointsTransportResponse & { meta: unknown } = {
+      data: [
+        {
+          id: 'point-4',
+          provider: 'truenas',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'success',
+        },
+      ],
+      meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
+    };
+    expect(normalizeRecoveryPointsResponse(backendResponse)).toStrictEqual({
+      data: [
+        {
+          id: 'point-4',
+          platform: 'truenas',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'success',
+        },
+      ],
+    });
   });
 
   it('hands the TrueNAS Protection tab normalized recovery points', async () => {
@@ -99,7 +127,6 @@ describe('recovery transport', () => {
           display: { subjectLabel: 'tank/apps', subjectType: 'dataset' },
         },
       ],
-      meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
     });
     let dispose = () => {};
     const points = createRoot((rootDispose) => {
@@ -128,10 +155,7 @@ describe('recovery transport', () => {
   it('asks /api/recovery/points only for the page, limit and platform it was given', async () => {
     // The points endpoint accepts more filters, but the only reader sends these
     // three. A caller that casts extra filters in must not get them on the wire.
-    apiFetchJSONMock.mockResolvedValue({
-      data: [],
-      meta: { page: 2, limit: 200, total: 0, totalPages: 1 },
-    });
+    apiFetchJSONMock.mockResolvedValue({ data: [] });
     const smuggled = {
       platform: ' truenas ',
       page: 2.7,
@@ -168,10 +192,7 @@ describe('recovery transport', () => {
   });
 
   it('leaves the platform off a blank request and makes no request without a query', async () => {
-    apiFetchJSONMock.mockResolvedValue({
-      data: [],
-      meta: { page: 1, limit: 200, total: 0, totalPages: 1 },
-    });
+    apiFetchJSONMock.mockResolvedValue({ data: [] });
     let dispose = () => {};
     createRoot((rootDispose) => {
       dispose = rootDispose;
@@ -203,7 +224,6 @@ describe('recovery transport', () => {
     });
     apiFetchJSONMock.mockResolvedValue({
       data: [backendPoint('point-a', 'tank/zeta'), backendPoint('point-b', 'tank/alpha')],
-      meta: { page: 1, limit: 200, total: 2, totalPages: 1 },
     });
     let dispose = () => {};
     const points = createRoot((rootDispose) => {
@@ -239,12 +259,15 @@ describe('recovery transport', () => {
     // Enforced by the frontend type check, not at runtime. The tab sends
     // platform, page and limit and reads the points, the loading and error
     // state and a refetch; the aggregate page's other filters and its meta and
-    // resolvedOnce members went with it.
+    // resolvedOnce members went with it, and the decoded response keeps the
+    // points alone: the endpoint's pagination meta has no reader.
     expectTypeOf<keyof RecoveryPointsQuery>().toEqualTypeOf<'page' | 'limit' | 'platform'>();
     type Result = ReturnType<typeof useRecoveryPoints>;
     expectTypeOf<keyof Result>().toEqualTypeOf<'response' | 'points' | 'refetch'>();
     expectTypeOf<Result>().not.toHaveProperty('meta');
     expectTypeOf<Result>().not.toHaveProperty('resolvedOnce');
+    expectTypeOf<keyof RecoveryPointsResponse>().toEqualTypeOf<'data'>();
+    expectTypeOf<keyof RecoveryPointsTransportResponse>().toEqualTypeOf<'data'>();
     expectTypeOf<Parameters<typeof useRecoveryPoints>[0]>().toEqualTypeOf<
       Accessor<RecoveryPointsQuery | null | undefined>
     >();

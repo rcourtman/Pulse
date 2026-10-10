@@ -84,10 +84,7 @@ export function useRecoveryPoints(query: Accessor<RecoveryPointsQuery | null | u
     source,
     cacheKey: (key) => `recovery-points:${key}`,
     fetcher: async (key) => fetchRecoveryPointsResponse(parseSerializedQuery(key)),
-    initialValue: {
-      data: [],
-      meta: { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 },
-    },
+    initialValue: { data: [] },
     pollMs: REFRESH_MS,
   });
 
