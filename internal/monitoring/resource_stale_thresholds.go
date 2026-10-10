@@ -136,13 +136,14 @@ func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time
 // selects its own intervals and never reads the per-platform overrides, so
 // they must not move freshness there either.
 func (m *Monitor) resourcePollIntervals() resourcePollIntervals {
-	intervals := resourcePollIntervalsForConfig(m.config)
 	if m.scheduler != nil {
-		return intervals
+		return resourcePollIntervalsForConfig(m.config)
 	}
-	intervals.pbs = clampInterval(m.pbsPollingIntervalSetting(), 10*time.Second, time.Hour)
-	intervals.pmg = clampInterval(m.pmgPollingIntervalSetting(), 10*time.Second, time.Hour)
-	return intervals
+	return resourcePollIntervals{
+		pve: m.BasePollInterval(InstanceTypePVE),
+		pbs: m.BasePollInterval(InstanceTypePBS),
+		pmg: m.BasePollInterval(InstanceTypePMG),
+	}
 }
 
 func (m *Monitor) pveNodeOfflineGracePeriod() time.Duration {

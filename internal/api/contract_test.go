@@ -3581,6 +3581,97 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 	}
 }
 
+// Non-default organisations poll against a detached config copy (#1619). A
+// system-settings save updates the server's base config and pushes saved PBS
+// and PMG intervals into each live tenant monitor as runtime overrides, but
+// the copy that configapi hands that org's connections list (m.GetConfig())
+// keeps the old values. Connection freshness must scale by the cadence the
+// monitor polls at, or Settings > Infrastructure rows read stale for part of
+// every slower cycle.
+func TestContract_ConnectionFreshnessFollowsSavedPollingIntervalsInTenantMonitors(t *testing.T) {
+	setMockModeForTest(t, false)
+
+	cases := []struct {
+		name       string
+		configured time.Duration
+		saved      time.Duration
+		wantState  ConnectionState
+	}{
+		{
+			name:       "raised interval keeps an on-schedule poll active",
+			configured: time.Minute,
+			saved:      5 * time.Minute,
+			wantState:  ConnectionStateActive,
+		},
+		{
+			name:       "lowered interval judges the same poll stale",
+			configured: 5 * time.Minute,
+			saved:      time.Minute,
+			wantState:  ConnectionStateStale,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			base := &config.Config{
+				DataPath:           tempDir,
+				ConfigPath:         tempDir,
+				PVEPollingInterval: 10 * time.Second,
+				PBSPollingInterval: tc.configured,
+				PMGPollingInterval: tc.configured,
+			}
+			tenant, err := monitoring.New(base.DeepCopy())
+			if err != nil {
+				t.Fatalf("new tenant monitor: %v", err)
+			}
+			t.Cleanup(tenant.Stop)
+
+			tokenVal := "tenant-polling-token"
+			base.APITokens = []config.APITokenRecord{
+				{ID: "token1", Hash: authpkg.HashAPIToken(tokenVal), Name: "Test Token"},
+			}
+			handler := newTestSystemSettingsHandler(base, config.NewConfigPersistence(tempDir), tenant, func() {}, func() error { return nil })
+			seconds := int(tc.saved / time.Second)
+			body, _ := json.Marshal(map[string]any{"pbsPollingInterval": seconds, "pmgPollingInterval": seconds})
+			req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+			req.Header.Set("X-API-Token", tokenVal)
+			rec := httptest.NewRecorder()
+			handler.HandleUpdateSystemSettings(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("save status = %d, body: %s", rec.Code, rec.Body.String())
+			}
+
+			cfg := tenant.GetConfig()
+			if base.PBSPollingInterval != tc.saved || cfg.PBSPollingInterval != tc.configured {
+				t.Fatalf("PBS interval base = %v, tenant copy = %v; want the save to reach only the base (%v) and the copy to keep %v",
+					base.PBSPollingInterval, cfg.PBSPollingInterval, tc.saved, tc.configured)
+			}
+
+			now := time.Now()
+			lastSuccess := now.Add(-4 * time.Minute)
+			inputs := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, tenant, aggregatorRuntimeSources{orgID: "tenant-a"})
+			inputs.now = now
+			inputs.pbsInstances = []config.PBSInstance{{Name: "backup", Host: "https://pbs.lab.local:8007"}}
+			inputs.pmgInstances = []config.PMGInstance{{Name: "mail", Host: "https://pmg.lab.local:8006"}}
+			inputs.instanceHealth = map[string]monitoring.InstanceHealth{
+				"pbs::backup": {PollStatus: monitoring.InstancePollStatus{LastSuccess: &lastSuccess}},
+				"pmg::mail":   {PollStatus: monitoring.InstancePollStatus{LastSuccess: &lastSuccess}},
+			}
+
+			states := map[ConnectionType]ConnectionState{}
+			for _, conn := range buildConnections(inputs) {
+				states[conn.Type] = conn.State
+			}
+			for _, connType := range []ConnectionType{ConnectionTypePBS, ConnectionTypePMG} {
+				if got := states[connType]; got != tc.wantState {
+					t.Errorf("%s state = %q, want %q for a 4m-old poll after saving %v (tenant copy still %v)",
+						connType, got, tc.wantState, tc.saved, tc.configured)
+				}
+			}
+		})
+	}
+}
+
 func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *testing.T) {
 	setMockModeForTest(t, false)
 

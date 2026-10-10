@@ -133,7 +133,9 @@ type aggregatorInputs struct {
 	pbsReportedNodeNames map[string]string
 
 	// Configured poll cadences, used to scale the active→stale cutoff so slow
-	// cadences (e.g. 5 minutes) don't read as permanently stale. Zero means
+	// cadences (e.g. 5 minutes) don't read as permanently stale. With a
+	// monitor present they are its base cadences (Monitor.BasePollInterval,
+	// which honours runtime polling overrides), not the config copy. Zero means
 	// unknown and falls back to the connectionStaleThreshold floor. VMware and
 	// TrueNAS cadences come from their summaries/instances instead.
 	pvePollingInterval time.Duration

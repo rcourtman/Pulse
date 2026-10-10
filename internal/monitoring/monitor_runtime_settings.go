@@ -80,6 +80,34 @@ func (m *Monitor) pmgPollingIntervalSetting() time.Duration {
 	return m.config.PMGPollingInterval
 }
 
+// BasePollInterval returns the clamped base cadence this monitor polls PVE,
+// PBS or PMG at, honouring the runtime polling overrides. For the built-in
+// providers these are the values the fixed-cadence scheduler reads
+// (baseIntervalForInstanceType); a replacement provider or a task already
+// queued at its previous interval can differ until the next planning pass.
+// This accessor skips the poll-provider lookup, so it never takes m.mu.
+// Non-default tenant monitors poll against a detached config copy (#1619), so
+// a saved PBS or PMG interval reaches them only as an override. Code outside
+// the monitor that judges poll freshness must read the cadence here, not from
+// GetConfig. An adaptive scheduler plans its own intervals independently of
+// this base; see PlannedPollInterval. Zero means the cadence is unknown:
+// another instance type, or a monitor without config.
+func (m *Monitor) BasePollInterval(instanceType InstanceType) time.Duration {
+	if m == nil || m.config == nil {
+		return 0
+	}
+	switch instanceType {
+	case InstanceTypePVE:
+		return m.effectivePVEPollingInterval()
+	case InstanceTypePBS:
+		return clampInterval(m.pbsPollingIntervalSetting(), 10*time.Second, time.Hour)
+	case InstanceTypePMG:
+		return clampInterval(m.pmgPollingIntervalSetting(), 10*time.Second, time.Hour)
+	default:
+		return 0
+	}
+}
+
 // SetBackupPollingEnabled toggles backup polling on the live monitor.
 // Re-enabling clears the per-instance last-poll timestamps so the next
 // polling cycle runs an immediate catch-up poll, matching the behavior of

@@ -9237,6 +9237,15 @@ registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
 
+### Connection freshness cadence only
+
+`internal/api/connections_alerts.go` changed only so PVE, PBS and PMG
+connection rows scale their stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`, which honours runtime polling overrides) rather
+than by a non-default org's detached config copy. Agent connection rows keep
+their own heartbeat cutoff. Agent registration, enrolment, install, update,
+removal and report identity are unchanged.
+
 ### Host snapshots report a linked agent's own heartbeat
 
 `internal/monitoring/monitor.go` changed only so a host produced from the read
