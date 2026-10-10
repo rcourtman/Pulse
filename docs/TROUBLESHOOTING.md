@@ -590,7 +590,58 @@ leave the original host unchanged. Follow
 [Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
 precedence, systemd example and checks after restart.
 
+#### Guest memory is high but available memory is plentiful
+
+A VM's hypervisor memory footprint is not the same as usable memory inside the
+guest. Some Proxmox API readings include reclaimable cache or allocated memory;
+a near-100% value alone does not establish guest pressure or a leak. Conversely,
+a cache-heavy reading does not prove the guest is healthy. Keep an unresponsive
+workload or genuine allocation failure separate from a misleading percentage.
+
+Compare **existing observations of the same guest, kernel and time**, with the
+same units and memory allocation. The Proxmox node's available memory is not the
+VM's available memory, and a single application's RSS is not total guest usage.
+Do not sum process RSS to infer guest pressure: processes can share pages.
+
+| Reading | What it describes | What it does not establish |
+| --- | --- | --- |
+| Linux `available` / `MemAvailable` | An estimate of memory usable for new allocations without swapping, including some reclaimable cache. | It is not just `free`, a guarantee of every allocation succeeding, or a reading for another guest. |
+| Linux `free` and `buff/cache` | Unused pages and memory used for buffers/cache. Cache can be useful and partly reclaimable. | Low `free` alone is not pressure; not all cache is immediately reclaimable. |
+| Proxmox status memory | The platform's selected footprint or estimate. The collection path matters. | A cache-inclusive or allocation-based percentage is not equivalent to cache-aware guest usage. |
+| Application RSS | Resident pages for that process at that time. | It is not total guest usage, Pulse's heap size, or proof that no other process is under pressure. |
+| Missing, retained or undated reading | Incomplete evidence, or an earlier observation. | Missing is not zero; a prior low value or a fresh page refresh is not current recovery. |
+
+For a **same-guest, same-time** Linux example with **20 GiB total** and
+**15.2 GiB available**, cache-aware usage is `(20 - 15.2) / 20 × 100 = 24%`.
+Use the observed total, not a nominal configured limit, and do not mix GB with
+GiB or kernel `kB` (1,024 bytes). This illustrates the distinction; it is not a
+correction to apply blindly to another metric or evidence that an existing
+Patrol finding has cleared. Do not subtract all `buff/cache` from total, or
+substitute `free` for `available`.
+
+Keep the running Pulse/agent and platform versions, collection path (platform
+API, linked Pulse agent, or both), source and original observation time where
+shown. A working agent reading does not prove that the API-only path recovered.
+Unknown source, time or counters can be reported as unknown; existing screenshots
+and the original sequence are enough to begin a report. Do not publish raw API
+responses, full `/proc` output, configuration or private host names; review and
+share only the relevant counters with consistent aliases.
+
+[Memory metric Off](CONFIGURATION.md#metric-thresholds-off-and-inheritance)
+disables that threshold rule only: it does not hide the reading, dismiss a
+separate Patrol finding or establish recovery. Do not disable all monitoring or
+change thresholds merely to make a comparison pass.
+
+Use the guest's ordinary status if it is already available; do not run
+Diagnostics, guest-agent probes or another Patrol run, install an agent, restart
+the guest, drop caches or change memory limits just to obtain evidence or lower
+the number. If the guest is frozen or unresponsive, stop these comparisons and
+follow [backup safety](VM_DISK_MONITORING.md#backup-safety), not a memory probe.
+
 #### Memory use keeps growing
+
+For a monitored VM, start with [guest memory interpretation](#guest-memory-is-high-but-available-memory-is-plentiful);
+the recipe below measures the **Pulse server process**, not a monitored guest.
 
 A Proxmox LXC memory chart covers the container, not just Pulse. It can include
 other processes and filesystem cache; Docker's displayed memory also uses its
