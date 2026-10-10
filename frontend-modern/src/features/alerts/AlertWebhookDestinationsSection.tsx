@@ -10,7 +10,7 @@ interface AlertWebhookDestinationsSectionProps {
   webhooks: Webhook[];
   addWebhook: WebhookConfigProps['onAdd'];
   updateWebhook: WebhookConfigProps['onUpdate'];
-  deleteWebhook: (id: string) => void;
+  deleteWebhook: WebhookConfigProps['onDelete'];
   testWebhook: (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testingWebhook: string | null;
 }

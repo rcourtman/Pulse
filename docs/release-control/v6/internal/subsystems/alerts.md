@@ -15,6 +15,35 @@
 
 ## Purpose
 
+### Webhook list changes share the editor's acknowledged writer
+
+Enable/Disable, deletion, bulk changes and form saves cannot overlap in one
+webhook editor. An open add/edit draft also locks list actions so a saved
+row change cannot invalidate that draft's enabled state or identity. Pending
+list actions expose a live status and keep the saved inventory until the
+server acknowledges each change. Deletion requires `success: true` before
+removing a row; a resolved but unaccepted response retains it.
+
+Bulk Enable/Disable captures only rows whose state needs changing and sends
+them sequentially. A rejected or unconfirmed write stops the remaining batch,
+retains earlier acknowledged changes and gives fixed partial-change guidance.
+No automatic retry or rollback occurs. Unmount withdraws remaining unsent
+calls, without cancelling or undoing a request already issued. Existing masks,
+routing, payloads, endpoint policy and notification delivery remain unchanged.
+The retired destination-tab mutation owner cannot dispatch another call, publish
+a late toast or replace shared inventory belonging to a newly loaded context.
+
+`WebhookConfig.mutations.test.tsx` connects the real editor and destination
+owner to deferred/rejected synthetic API replies for serial batches, shared
+pending admission, no-op rows, partial failure, open drafts, deletion acceptance,
+explicit retry and unmount. `WebhookConfig.test.tsx` retains service, payload,
+form and list coverage with acknowledged bulk sequencing.
+`useAlertWebhookDestinationsState.test.tsx` checks late create/update/delete
+replies against replacement inventory and refuses calls from the retired owner.
+Browser proof uses
+the real existing section, hooks and API adapters at desktop/narrow widths,
+with synthetic local endpoints; it does not establish provider delivery.
+
 ### Existing settings saves retain the pending and newer drafts
 
 One save per loaded editor owns a click-time snapshot of the alert policy and

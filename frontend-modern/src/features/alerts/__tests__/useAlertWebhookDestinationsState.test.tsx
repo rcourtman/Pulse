@@ -1,7 +1,8 @@
 import { renderHook, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NotificationsAPI } from '@/api/notifications';
+import { NotificationsAPI, type Webhook } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { showErrorWithDetail } from '@/utils/toast';
 
@@ -124,4 +125,54 @@ describe('useAlertWebhookDestinationsState', () => {
     expect(notificationStore.success).toHaveBeenCalled();
     expect(showErrorWithDetail).not.toHaveBeenCalled();
   });
+
+  it.each(['create', 'update', 'delete'] as const)(
+    'withdraws the retired %s owner before a late reply can change replacement inventory',
+    async (operation) => {
+      const saved: Webhook = {
+        id: 'old-hook',
+        name: 'Previous context',
+        url: 'https://example.test/old',
+        method: 'POST',
+        headers: {},
+        enabled: true,
+      };
+      const replacement = { ...saved, name: 'Replacement context' };
+      let resolve!: (value: Webhook | { success: boolean }) => void;
+      const pending = new Promise<Webhook | { success: boolean }>((yes) => {
+        resolve = yes;
+      });
+      vi.mocked(NotificationsAPI.createWebhook).mockReturnValue(pending as Promise<Webhook>);
+      vi.mocked(NotificationsAPI.updateWebhook).mockReturnValue(pending as Promise<Webhook>);
+      vi.mocked(NotificationsAPI.deleteWebhook).mockReturnValue(
+        pending as Promise<{ success: boolean }>,
+      );
+      // The shared inventory outlives its child destination-tab owner, as it
+      // does when saved-policy loading replaces that child on an org change.
+      const [webhooks, setWebhooks] = createSignal([saved]);
+      const { result, cleanup: dispose } = renderHook(() =>
+        useAlertWebhookDestinationsState({ webhooks, setWebhooks, autoLoad: false }),
+      );
+      const invoke = () =>
+        operation === 'create'
+          ? result.addWebhook(saved)
+          : operation === 'update'
+            ? result.updateWebhook(saved)
+            : result.deleteWebhook(saved.id);
+      const write = invoke();
+      dispose();
+      setWebhooks([replacement]);
+      resolve(operation === 'delete' ? { success: true } : saved);
+      expect(await write).toBe(false);
+      expect(webhooks()).toEqual([replacement]);
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(notificationStore.error).not.toHaveBeenCalled();
+      expect(await invoke()).toBe(false);
+      expect(
+        vi.mocked(NotificationsAPI.createWebhook).mock.calls.length +
+          vi.mocked(NotificationsAPI.updateWebhook).mock.calls.length +
+          vi.mocked(NotificationsAPI.deleteWebhook).mock.calls.length,
+      ).toBe(1);
+    },
+  );
 });

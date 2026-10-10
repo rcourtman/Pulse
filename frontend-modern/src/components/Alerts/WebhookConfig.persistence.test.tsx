@@ -196,7 +196,7 @@ describe('webhook persistence acknowledgement', () => {
           throw new Error(privateDetail);
         }}
         onUpdate={async () => false}
-        onDelete={() => {}}
+        onDelete={() => true}
         onTest={() => {}}
       />
     ));

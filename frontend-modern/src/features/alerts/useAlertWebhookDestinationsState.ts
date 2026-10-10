@@ -1,4 +1,4 @@
-import { createSignal, onMount, type Accessor, type Setter } from 'solid-js';
+import { createSignal, onCleanup, onMount, type Accessor, type Setter } from 'solid-js';
 
 import { NotificationsAPI, type Webhook } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
@@ -35,6 +35,10 @@ export function useAlertWebhookDestinationsState(
   const [webhookLoadError, setWebhookLoadError] = createSignal<string | null>(null);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = createSignal(options.autoLoad !== false);
   const [testingWebhook, setTestingWebhook] = createSignal<string | null>(null);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
 
   const loadWebhooks = async () => {
     setWebhookLoadError(null);
@@ -77,12 +81,15 @@ export function useAlertWebhookDestinationsState(
   };
 
   const addWebhook = async (webhook: Omit<Webhook, 'id'>) => {
+    if (disposed) return false;
     try {
       const created = await NotificationsAPI.createWebhook(webhook);
+      if (disposed) return false;
       setWebhooks((current) => [...current, normalizeWebhook(created)]);
       notificationStore.success(getAlertWebhookMutationSuccess('add'));
       return true;
     } catch (error) {
+      if (disposed) return false;
       logger.error('Failed to add webhook:', error);
       notificationStore.error(
         error instanceof Error ? error.message : getAlertWebhookMutationFailure('add'),
@@ -92,14 +99,17 @@ export function useAlertWebhookDestinationsState(
   };
 
   const updateWebhook = async (webhook: Webhook) => {
+    if (disposed) return false;
     try {
       const updated = await NotificationsAPI.updateWebhook(webhook.id, webhook);
+      if (disposed) return false;
       setWebhooks((current) =>
         current.map((entry) => (entry.id === webhook.id ? normalizeWebhook(updated) : entry)),
       );
       notificationStore.success(getAlertWebhookMutationSuccess('update'));
       return true;
     } catch (error) {
+      if (disposed) return false;
       logger.error('Failed to update webhook:', error);
       notificationStore.error(
         error instanceof Error ? error.message : getAlertWebhookMutationFailure('update'),
@@ -109,15 +119,23 @@ export function useAlertWebhookDestinationsState(
   };
 
   const deleteWebhook = async (id: string) => {
+    if (disposed) return false;
     try {
-      await NotificationsAPI.deleteWebhook(id);
+      const result = await NotificationsAPI.deleteWebhook(id);
+      if (disposed) return false;
+      if (result.success !== true) {
+        throw new Error(getAlertWebhookMutationFailure('delete'));
+      }
       setWebhooks((current) => current.filter((entry) => entry.id !== id));
       notificationStore.success(getAlertWebhookMutationSuccess('delete'));
+      return true;
     } catch (error) {
+      if (disposed) return false;
       logger.error('Failed to delete webhook:', error);
       notificationStore.error(
         error instanceof Error ? error.message : getAlertWebhookMutationFailure('delete'),
       );
+      return false;
     }
   };
 
