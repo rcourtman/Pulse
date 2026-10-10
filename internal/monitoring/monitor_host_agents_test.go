@@ -5992,6 +5992,187 @@ func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
 	}
 }
 
+// Alert evaluation resolves a target per resource and windowed metric on every
+// pass. A metric tick moves the fixture's data version, not what resources
+// exist, so a lookup after a tick must be served from the cached view instead
+// of building an estate. Before this was pinned, every lookup after a tick
+// rebuilt the view, and a process too starved to finish one build within a tick
+// rebuilt it for every lookup of the pass: startup never reached its listener.
+func TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 4, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	ids := resourceIDsWithTargets(t, warm)
+
+	waitForFixtureTicks(t, 2)
+
+	for _, id := range ids {
+		want := warm.metricsTargets.MetricsTargetForResource(id)
+		got := m.MetricsTargetForResource(id)
+		if !sameMetricsTarget(got, want) {
+			t.Fatalf("MetricsTargetForResource(%q) = %+v after fixture ticks, want %+v", id, got, want)
+		}
+	}
+
+	after, ok := publishedMockView(m)
+	if !ok || after.readState != warm.readState {
+		t.Fatal("target lookups rebuilt the unified view after a metric tick; they must reuse the view built for the current fixture structure")
+	}
+}
+
+// The reused view answers for the estate it was built from. A structural
+// change (here a larger estate) must reach the lookup, not keep serving the
+// old resource set.
+func TestMockMetricsTargetFollowsAStructuralFixtureChange(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	before := m.currentUnifiedStateView()
+	known := make(map[string]struct{}, len(before.resources))
+	for _, resource := range before.resources {
+		known[resource.ID] = struct{}{}
+	}
+
+	grown := mock.GetConfig()
+	grown.NodeCount++
+	mock.SetMockConfig(grown)
+
+	// Another monitor's view of the grown estate names the resources the
+	// first one lacks. The first monitor has not been asked for a view since
+	// the change, so the lookup itself has to notice the structure moved.
+	var added string
+	for _, resource := range newMockEstateMonitor().currentUnifiedStateView().resources {
+		if _, ok := known[resource.ID]; !ok && resource.Type == unifiedresources.ResourceTypeAgent {
+			added = resource.ID
+			break
+		}
+	}
+	if added == "" {
+		t.Fatal("the larger fixture estate lists no agent the first one did not")
+	}
+	if target := m.MetricsTargetForResource(added); target == nil {
+		t.Fatalf("MetricsTargetForResource(%q) = nil after the fixture grew; the cached view outlived its structure", added)
+	}
+}
+
+// Reusing a view across ticks must not change an answer: every resource
+// resolves to what the view's own registry resolves, and an ID the estate does
+// not list resolves to nothing without building a view for it.
+func TestMockMetricsTargetMatchesTheRegistryResolution(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	view := m.currentUnifiedStateView()
+	registryResolver, ok := view.readState.(MetricsTargetResourceStore)
+	if !ok {
+		t.Fatalf("mock view read state %T does not resolve metrics targets", view.readState)
+	}
+	for _, resource := range view.resources {
+		want := registryResolver.MetricsTargetForResource(resource.ID)
+		got := m.MetricsTargetForResource(resource.ID)
+		if !sameMetricsTarget(got, want) {
+			t.Fatalf("MetricsTargetForResource(%q) = %+v, want the registry's %+v", resource.ID, got, want)
+		}
+		if padded := m.MetricsTargetForResource("  " + resource.ID + " "); !sameMetricsTarget(padded, want) {
+			t.Fatalf("MetricsTargetForResource(%q padded) = %+v, want the canonical ID's %+v", resource.ID, padded, want)
+		}
+	}
+	if got := m.MetricsTargetForResource("not-a-mock-resource"); got != nil {
+		t.Fatalf("MetricsTargetForResource(unknown) = %+v, want nil", got)
+	}
+	if after, _ := publishedMockView(m); after.readState != view.readState {
+		t.Fatal("resolving an unknown ID rebuilt the cached view")
+	}
+}
+
+// A lookup for an ID the estate does not list must stay cheap after a tick
+// too: the view has no more to say about it than the one it replaces.
+func TestMockMetricsTargetForUnknownIDDoesNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 3, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 2)
+	for i := 0; i < 50; i++ {
+		if got := m.MetricsTargetForResource(fmt.Sprintf("unknown-%d", i)); got != nil {
+			t.Fatalf("MetricsTargetForResource(unknown) = %+v, want nil", got)
+		}
+	}
+	if after, _ := publishedMockView(m); after.readState != warm.readState {
+		t.Fatal("unknown-ID lookups rebuilt the unified view after a metric tick")
+	}
+}
+
+// An operator link folds one resource into another, which changes what the
+// folded ID resolves to. Whatever rebuilds the view first, a lookup after the
+// resource store applied the link must not resolve the folded resource.
+func TestMockMetricsTargetFollowsAnOperatorLink(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	var vmID, agentID string
+	for _, resource := range m.currentUnifiedStateView().resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+	if m.MetricsTargetForResource(agentID) == nil || m.MetricsTargetForResource(vmID) == nil {
+		t.Fatal("expected the unlinked VM and agent to resolve metrics targets")
+	}
+
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	// Rebuild the resource store so it loads the link, without asking for a
+	// mock view: the lookup itself has to see the link list change.
+	m.updateResourceStore(models.StateSnapshot{}, m.mockModeFence.begin())
+
+	if got := m.MetricsTargetForResource(agentID); got != nil {
+		t.Fatalf("MetricsTargetForResource(folded agent) = %+v after the operator link, want nothing", got)
+	}
+	if m.MetricsTargetForResource(vmID) == nil {
+		t.Fatal("the linked VM lost its metrics target")
+	}
+}
+
+// The reused view was built under one link list; once the resource store
+// applies a different one, a lookup must rebuild rather than answer from it.
+// A rebuild by any other consumer would hide a missing check, so the list the
+// view was built under is changed directly.
+func TestMockMetricsTargetRebuildsWhenTheLinkListMoves(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	id := resourceIDsWithTargets(t, warm)[0]
+
+	m.mockUnifiedViewMu.Lock()
+	m.mockUnifiedViewLinks = []unifiedresources.ResourceLink{{ResourceA: "stale-a", ResourceB: "stale-b", PrimaryID: "stale-a"}}
+	m.mockUnifiedViewMu.Unlock()
+
+	if m.MetricsTargetForResource(id) == nil {
+		t.Fatalf("MetricsTargetForResource(%q) = nil", id)
+	}
+	after, _ := publishedMockView(m)
+	if after.readState == warm.readState {
+		t.Fatal("a lookup answered from a view built under a different operator link list")
+	}
+}
+
 // TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
 // room. Mock mode already suspends pull-based PVE/PBS/PMG collection, but a
 // real agent keeps POSTing regardless; ingesting those reports lands a real

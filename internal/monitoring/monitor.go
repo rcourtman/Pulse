@@ -1216,6 +1216,7 @@ type Monitor struct {
 	mockUnifiedViewMu          sync.Mutex
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
+	mockUnifiedViewStructure   uint64 // fixture structure revision the published view was built at
 	mockUnifiedViewLinks       []unifiedresources.ResourceLink
 	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
@@ -5049,10 +5050,20 @@ func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.
 		return nil
 	}
 
-	if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
-		if resolver, ok := view.(MetricsTargetResourceStore); ok {
-			if target := resolver.MetricsTargetForResource(resourceID); target != nil {
-				return target
+	// Mock mode resolves from the cached view's captured targets and never
+	// asks the view again: this runs once per resource and windowed metric in
+	// every alert pass, and the fixture's data version moves on every tick
+	// (see mockMetricsTarget).
+	target, fromMockView := m.mockMetricsTarget(resourceID)
+	if target != nil {
+		return target
+	}
+	if !fromMockView {
+		if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
+			if resolver, ok := view.(MetricsTargetResourceStore); ok {
+				if target := resolver.MetricsTargetForResource(resourceID); target != nil {
+					return target
+				}
 			}
 		}
 	}
@@ -5210,7 +5221,12 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 		// Read the version and links before the snapshot so a tick or
 		// rebuild landing in between caches newer data under an older
 		// token (harmless rebuild next call) rather than ever serving stale
-		// data under a newer one.
+		// data under a newer one. The structure revision goes first: the
+		// fixture advances its data version before its revision, so a
+		// reader that sees a new revision also reads the new version and
+		// never memoizes the previous estate under it
+		// (mock.FixtureStructureRevision).
+		structure := mock.FixtureStructureRevision()
 		version := mock.FixtureDataVersion()
 		links := m.resourceStoreManualLinks()
 		m.mockUnifiedViewMu.Lock()
@@ -5255,6 +5271,7 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 			m.mockUnifiedView = view
 			m.mockUnifiedViewFixtureAt = fixtureFreshness
 			m.mockUnifiedViewVersion = version
+			m.mockUnifiedViewStructure = structure
 			m.mockUnifiedViewLinks = links
 			m.mockUnifiedViewValid = true
 			m.mockUnifiedViewMu.Unlock()

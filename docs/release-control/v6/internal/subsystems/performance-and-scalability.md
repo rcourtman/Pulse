@@ -3724,6 +3724,35 @@ nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
 
+### Alert passes resolve metrics targets without materializing the estate
+
+An alert pass makes one `Monitor.MetricsTargetForResource` call per resource
+and windowed metric, so that call has to be a lookup, not a view build. In mock
+mode it reads the targets the cached view captured and keeps reading them across
+metric ticks (see "Mock-mode metrics-target lookups ride the fixture structure
+revision" in the monitoring contract). On pulse-dev,
+`BenchmarkMockMetricsTargetResolutionAfterTick` measured a pass of 4,731
+lookups against the default estate, after a tick, at 1.8 ms and 151 KB. The
+data-version key made the first lookup after every tick build the estate, and
+made every lookup of a pass build it once a build outlasted the 2-second tick,
+which stalled startup under CPU starvation. Real mode did not show this cost in
+steady state: the store is itself the read state, and a one-off measurement
+with a temporary counter (not asserted by a test) found a full
+`updateResourceStore` pass over 1,694 resources (populate, metric syncs and
+alert sync) taking 108 ms with 121 registry resolutions that fell back to the
+full-mapping scan, because the registry's typed views are built before the
+alert loop runs. `BenchmarkLiveRegistryMetricsTargetResolution` records only
+the lookup cost of a registry whose views are unbuilt against one whose views
+are built (136 ms against 5 ms per 5,079 lookups); it controls the warming
+itself, so it cannot detect production failing to warm the views before the
+alert loop, which is what the one-off measurement above showed. Run both
+benchmarks with `-benchtime=3x`, since the registry case rebuilds its ingest
+outside the timer. `TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks`
+is the guard that fails on a rebuild per lookup. The remaining startup cost
+under starvation is the monitor's repeated full resource-store passes (one per
+supplemental provider registration) and the other consumers of the shared view,
+which rebuild it whenever they find it stale; neither is changed here.
+
 ### Update evidence reuses the bounded node observation
 
 Package evidence adds only one bounded status, one bounded reason, and the

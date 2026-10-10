@@ -3530,6 +3530,73 @@ and `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
 `TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph` in
 `internal/monitoring/canonical_guardrails_test.go` pins the call.
 
+### Mock-mode metrics-target lookups ride the fixture structure revision
+
+`Monitor.MetricsTargetForResource` is the lookup behind every windowed alert
+metric: an alert pass resolves a target once per resource and metric
+(`metricWindowPoints`). In mock mode it answers from the `metricsTargets` the
+cached mock view captured when it was built (`mockMetricsTarget` in
+`internal/monitoring/metrics_target_resolution.go`), and that view serves
+lookups for as long as `mock.FixtureStructureRevision` and the operator link
+list it was built with are unchanged. A metric tick advances
+`mock.FixtureDataVersion` but moves neither the revision nor any input of a
+target (`BuildMetricsTarget` reads a resource's type, its source mappings and
+the technology, Docker container ID and disk identity of its facets, with the
+resource's own `MetricsTarget` as fallback), so a warm cache no longer sends
+the next lookup off to build an estate. Mock mode being toggled, the estate
+being reconfigured or a link change rebuilds the view on the next lookup; as
+before, two lookups that miss together can each build one, and a cold or
+invalidated cache builds even for an ID the estate does not list. Once the
+view is current an unknown ID resolves to nothing and falls to the raw
+resource store. The view stays keyed on the data version for every other
+consumer (broadcast, `/api/state`, `GetUnifiedReadStateOrSnapshot`), which
+still rebuild it on a data-version miss.
+
+The revision is read before the data version when a view is cached, and the
+fixture advances its data version before its revision
+(`advanceFixtureStructure` in `internal/mock/integration.go`). A reader that
+sees a new revision therefore also sees the new data version and cannot cache
+the previous estate's memoized snapshot under it. The interleaving cannot be
+forced from outside, so `TestFixtureStructureRevisionOrderingContract` pins the
+order of the writes and of the reads in source.
+
+Keyed on the data version, a lookup after a tick built the view (about 0.5 s
+of CPU for the default 1,776-resource estate on an idle core), and a build
+slower than the 2-second tick published an already-stale view, so the next
+lookup built again. Startup runs the first alert pass before the listener
+opens, so on a starved host it never finished: on 2026-10-08 the startup
+watchdog's dump on pulse-dev parked the main goroutine in
+`evaluateMetricWindow` -> `MetricsTargetForResource` -> `currentUnifiedStateView`
+and `/api/health` timed out. The same binary pinned to one core behind four
+busy loops missed the view cache on 675 of 929 requests at a 16-second average
+build and had not served by 606 s; with this change it served at 148 s (13 s
+on the core alone). This was not a regression: builds from 1a094646d7 and
+d2ac0c5112 stall identically under equal contention and both start in 14 to
+16 seconds at normal load. The remaining time on a starved host is the other
+consumers of the shared view, which rebuild it whenever they find it stale (on
+the starved run, 42 view requests in a start of 194 s were all misses, from the
+Docker-alert prune, the connection snapshots and the host-agent evaluation),
+and the monitor's repeated full resource-store passes at startup. Loops that
+still reach the data-version view once per item are unchanged: the mock storage
+chart history (`resolveMockStorageTotal` per uncached pool), the demo patrol's
+finding adds (`patrolResourceOperatorStateProvider`) and, with
+`PULSE_MOCK_KEEP_REAL_POLLING`, the per-node polling lookups
+(`linkedHostForNode`, `getHostAgentTemperatureForNode`).
+
+`TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks` and
+`TestMockMetricsTargetForUnknownIDDoesNotRebuildTheViewAfterFixtureTicks` fail on
+the data-version key; `TestMockMetricsTargetFollowsAStructuralFixtureChange`,
+`TestMockMetricsTargetFollowsAnOperatorLink`,
+`TestMockMetricsTargetRebuildsWhenTheLinkListMoves` and
+`TestMockMetricsTargetMatchesTheRegistryResolution` pin that the reused view is
+replaced when the structure or the links change and answers as the registry
+does. All six are in `internal/monitoring/monitor_host_agents_test.go`, with
+their helpers in `internal/monitoring/metrics_target_resolution_test.go`.
+`TestMetricTicksNeverChangeTheFixtureStructure` in
+`internal/mock/platform_fixtures_test.go` pins the assumption itself: after each
+tick of two cohort rotations the revision, the resource set and every
+resolved target are unchanged.
+
 ### Saved quiet-hours policy before queue activation
 
 `Monitor.New` binds `alerts.Manager.QuietHoursNotificationPolicy` to the
