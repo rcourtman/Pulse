@@ -7437,15 +7437,124 @@ agent's pin while another agent it was split from declares it, and
 `TestOperatorSplitHoldsWhenTheAgentStopsReportingItsMachineID` keeps a split
 whose agent comes back without its machine ID.
 
-What the split does not reach: the agents API's node link
-(`/api/agents/agent/link`) records a monitor-side link intent, not a store
-decision, so it does not override a resource split; rejoin through
-`POST /api/resources/{id}/link`. The monitor's own node record keeps its
-link where it has one, so what reads it still follows the agent: the
-agent's SMART inventory as the node's disk fallback when the Proxmox disk
-query fails, the agent's disk-exclude patterns on the node's disks, and the
-node's linked agent that guest discovery, agent deployment and service
-discovery act on.
+Monitoring's own link honours the split as well, at each place it reads the
+link as evidence: besides the readers below, the temperature read for a
+polled node skips a split agent in its exact-hostname fallback (the held-back
+link would otherwise leave the agent "unlinked" and matchable by name), while
+the check that drops a carried reading once its agent's lease lapses still
+finds a split agent whose hostname is the node's name, so a reading it
+supplied earlier does not outlive that lease. An agent the link tied to the
+node by address (an FQDN, say) is no longer found once split, and a reading it
+supplied earlier stays until the ordinary carry window ends: readings carry
+no source to find it by. `UpdateNodesForInstance` holds the link back before the
+merge key reads it, for the polled instance's nodes and for the retained
+nodes of the other instances, so an agent the operator split from a node
+never proves two connections' views of that node to be one machine. The node's
+`LinkedAgentID` and the agent's `LinkedNodeID` in `models.State` are what
+the agent's SMART inventory as the node's disk fallback, its disk-exclude
+patterns on the node's disks, guest discovery and commands (guests inherit
+the node's linked agent), agent deployment (`already_agent`), service
+discovery, the agent's LXC filesystems and the node and agent's shared
+alert correlation read, so leaving that link standing kept treating the
+two machines as one. The resource store holds the one record of the
+split. `MonitorAdapter.ProxmoxNodeAgentSplit` implements
+`models.NodeAgentSplitDecider` with `splitProxmoxNodeLink`'s rule over the
+two records, and the state holds back both sides of every link it splits
+wherever a link is written (the node poll's link before its merge key reads
+it, the reconcile after manual intent, an agent report). The decider reads
+the adapter's current generation and confirms a split it finds against the
+store's latest decisions. Monitoring writes links before the rebuild that
+loads a newer decision, so without that check a relink would stay held back
+for one more poll, and that rebuild would join the rows by the manual link
+alone, under the link's primary ID (for an agent reporting no machine key, a
+different ID from the one the node's link joins them under). A split
+monitoring misses for the poll before that rebuild is applied by the
+registry to the node's link on that rebuild, as above. With the link held
+back, the registry ingests a node naming no agent and an agent naming no
+node. Every server-side view keeps them apart, within the presentation limit
+this section records for a third same-host row, and the browser's realtime
+coalesce is the limit recorded below. A relink joins them again once
+monitoring infers the link on its next poll.
+
+The decider reads the agent under the ID the registry holds it under too,
+so an agent that stops reporting its machine key, whose pin keeps its
+machine-derived ID, stays split from the node in monitoring as in the
+registry. The agents API's node link (`Monitor.LinkHostAgent`) is the
+operator's newest decision about the pair, so before it records manual
+intent it removes from the store the exclusions that split that node from
+that agent (`LiftProxmoxNodeAgentSplit`, across the same ID sets). If the
+intent then fails to persist, it records them again with their original
+times (`RestoreProxmoxNodeAgentSplit`), and a removal that fails part way
+restores the ones already removed. A restore only fills a pair the operator
+has not decided about since: `ResourceStore.RestoreExclusion` declines a pair
+that has an exclusion in either order or a link recorded at or after the
+exclusion's time, checking and inserting in one transaction, so it does not
+replace a newer decision (it compares the records' times, so a decision
+written with an earlier clock reading looks older), while a link row older
+than the exclusion, left beside it by older data or canonical-ID succession,
+is superseded by it as it was before the take. The pair joins in
+monitoring at once and
+in the registry on its next rebuild. Report-merge's exclusion of the agent's
+own candidate from the machine-derived ID stays, because it never split the
+node. A split recorded after a manual link ends that intent on the agent's
+next report that finds the split confirmed in the store
+(`ProxmoxNodeAgentSplitConfirmed`), which records the agent's link as
+automatic in host continuity. The node is then no longer reserved for that
+agent, and the split holds back the inferred link. Until then, and while
+the store cannot be read, the persisted intent keeps its node. The agents
+API's unlink records no store decision: it clears monitoring's link, so the
+registry stops joining the pair through it, but a resources API link
+between their rows still joins them in the registry, and so can identity
+matching where a node completes a joined-era pin's machine key.
+`TestMonitorStateHoldsBackAnOperatorSplitNodeAgentLink` (`store_test.go`)
+runs the six requests above over four link shapes (unclustered, clustered,
+an agent hostname in another form, an agent reporting no machine key)
+through a `models.State` holding the adapter's decisions, over three
+poll-and-rebuild cycles per step in every view. It checks the state's links
+from the second cycle, checks that a report alone keeps a split pair apart,
+then a relink, an agent-first rebuild that persists its pins, and the
+request again. `TestMonitorStateHoldsBackSplitLinksItStartsWith` holds back
+the links a state already has when the decider is installed, and a manual
+link restored from host continuity once the reconcile writes it.
+`TestOperatorSplitStopsMonitoringTreatingNodeAndAgentAsLinked`
+follows a report-merge through the monitor's readers of the link and keeps
+them all linked under an unrelated exclusion.
+`TestManualNodeLinkReplacesAnOperatorSplit` covers the agents API's link
+after a split (and that a link to another node lifts nothing), a split after
+it, and a resources API relink.
+
+What the split does not reach: a relink through
+`POST /api/resources/{id}/link` joins the registry's rows, but monitoring
+links the pair again only where it infers the link or the agents API sets
+it, so a pair that only that link joins is one row that monitoring does not
+link, as for any manual link. The alert manager's record of which node an
+agent's usage alerts cover (`hostAgentNodeLinks`) changes when it checks the
+agent's next report, or when the agent goes offline, so the node's CPU,
+memory and disk alerts stay with the agent until then. Mock mode's
+consumers read the fixture graph, whose links ignore operator decisions,
+as the mock-mode view does. A rebuild that cannot read the store's
+decisions loads none, so for that generation the registry and the decider
+both treat the pair as undecided, as they do for every operator decision,
+and the next readable rebuild applies the split again. An exclusion that
+names the node by its source-specific ID stops naming it if the node's
+source ID changes, like every exclusion keyed by a canonical ID. A report
+reads the split before it stores the agent and the state reads it again
+when it does (for the agent's own link, then for each node linked to it),
+and the report uses the link the state kept, so a split the decider sees
+between those checks does not reach the node's back link, the agent's
+container filesystem readings, its alert coverage or its persisted
+continuity. The decider answers from the adapter's generation and confirms a
+split it finds against the store, so a split recorded since the last
+rebuild takes effect from the rebuild that loads it, and is applied to the
+link the next report finds. When that report drops the agent's link, or ends
+its manual intent, it also clears the container filesystem readings the
+agent had cached for the node's containers. Those readings are also checked
+when they are shown: a cached reading is not shown for a node the operator
+split from the agent that cached it (`State.NodeSplitFromAgent`), whether or
+not a report ever cleared it, so a report that infers no node for the agent
+(its name no longer matches, or matches several) and clears nothing does not
+leave it on show. The check is the split only: a reading whose link ended
+for another reason is used until it expires, as before.
 Physical disks inside one host join through `resolveLinkedPhysicalDisk`,
 which now honours their operator exclusions ("Operator split separates disks
 inside a linked host" above, upstream #2748). A node split also puts the two
