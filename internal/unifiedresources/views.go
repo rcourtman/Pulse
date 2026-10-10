@@ -2752,6 +2752,16 @@ func (v PBSInstanceView) Hostname() string {
 	return v.r.PBS.Hostname
 }
 
+// NodeName is the hostname the PBS server reports about itself, as opposed to
+// Hostname, which is the host of the address Pulse was configured with. It is
+// empty when the connection cannot read the node-name endpoint (API tokens).
+func (v PBSInstanceView) NodeName() string {
+	if v.r == nil || v.r.PBS == nil {
+		return ""
+	}
+	return v.r.PBS.NodeName
+}
+
 func (v PBSInstanceView) InstanceID() string {
 	if v.r == nil || v.r.PBS == nil {
 		return ""
