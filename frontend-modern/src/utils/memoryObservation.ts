@@ -17,7 +17,43 @@ export interface MemoryObservationPresentation {
   state: 'current' | 'last-known' | 'unavailable' | 'unknown';
   summary: string;
   message: string;
+  // The selected Proxmox source counts cached memory the guest can reuse as
+  // used, so a high percentage alone is not evidence of memory pressure. This
+  // is a property of the source, independent of how fresh the reading is.
+  mayIncludeCache: boolean;
+  // Why a high reading may be benign, and what the user can do about it. Set
+  // exactly when mayIncludeCache is.
+  cacheNote?: string;
 }
+
+// Proxmox's own listing and status values. Pulse selects them only when no
+// cache-aware source (guest agent, linked Pulse agent, node meminfo) answered;
+// the same four sources set MayIncludeCache in unifiedresources.QualifyGuestMemory.
+const cacheInclusiveMemorySources = new Set([
+  'status-mem',
+  'status-freemem',
+  'cluster-resources',
+  'derived-total-minus-used',
+]);
+
+export type MemoryGuestKind = 'vm' | 'container';
+
+const getCacheNote = (kind: MemoryGuestKind | undefined): string => {
+  const noun = kind === 'vm' ? 'VM' : kind === 'container' ? 'container' : 'guest';
+  const caveat = `Proxmox's reading may include cached memory the ${noun} can reuse, so a high percentage alone does not mean it is short of memory.`;
+  // A Pulse agent inside the guest can supply its own figure on any OS (a
+  // container's must report the container's own limit). The QEMU guest agent
+  // path reads Linux /proc/meminfo only and needs installing in the guest and
+  // enabling in Proxmox. Neither is guaranteed to replace every fallback
+  // source, so the advice says "can". Kept short: the drawer column is narrow.
+  if (kind === 'vm') {
+    return `${caveat} Installing a Pulse agent in the VM, or setting up the QEMU guest agent on a Linux VM, can let Pulse show its own figure.`;
+  }
+  if (kind === 'container') {
+    return `${caveat} Installing a Pulse agent in the container can let Pulse show its own figure.`;
+  }
+  return caveat;
+};
 
 const isMemoryPercent = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
@@ -101,16 +137,22 @@ export const getMemoryObservationPresentation = (
   value: number | undefined,
   observation: MemoryObservation | undefined,
   requiresObservation = false,
-  options: { includeCurrent?: boolean } = {},
+  options: { includeCurrent?: boolean; guestKind?: MemoryGuestKind } = {},
 ): MemoryObservationPresentation | null => {
   // Unannotated unrelated platforms retain their existing behaviour. Legacy
   // Proxmox readings lack authority to assert current freshness.
   if (!requiresObservation && !observation) return null;
   const timestamp = memoryObservationTime(observation);
   const state = memoryObservationState(value, observation, timestamp);
+  // An unavailable reading shows no number, so there is nothing to qualify.
+  const mayIncludeCache =
+    state !== 'unavailable' &&
+    observation !== undefined &&
+    cacheInclusiveMemorySources.has(observation.source);
   // Most table rows are current and need no cue. Qualify them identically,
-  // but avoid building source/date strings that will never be rendered.
-  if (state === 'current' && options.includeCurrent === false) return null;
+  // but avoid building source/date strings that will never be rendered. A
+  // current reading from a cache-inclusive source still carries its caveat.
+  if (state === 'current' && options.includeCurrent === false && !mayIncludeCache) return null;
   const observed =
     timestamp !== null
       ? new Date(timestamp)
@@ -132,12 +174,24 @@ export const getMemoryObservationPresentation = (
       ? memorySourceLabels[observation.source]
       : 'Unknown source';
   const time = observed ? `Observed: ${observed}.` : 'Observation time unknown.';
+  const cacheNote = mayIncludeCache ? getCacheNote(options.guestKind) : undefined;
   return {
     state,
-    summary: `${label} · ${source}${observed ? ` · ${observed}` : ' · time unknown'}`,
-    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}`,
+    summary: `${label} · ${source}${mayIncludeCache ? ' (may include cache)' : ''}${observed ? ` · ${observed}` : ' · time unknown'}`,
+    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}${cacheNote ? ` ${cacheNote}` : ''}`,
+    mayIncludeCache,
+    ...(cacheNote ? { cacheNote } : {}),
   };
 };
+
+// A VM can gain a guest-agent figure; a container has no such agent. Legacy
+// rows say qemu/lxc, canonical rows say vm/system-container.
+export const getWorkloadMemoryGuestKind = (guest: WorkloadGuest): MemoryGuestKind | undefined =>
+  guest.type === 'qemu' || guest.workloadType === 'vm'
+    ? 'vm'
+    : guest.type === 'lxc' || guest.workloadType === 'system-container'
+      ? 'container'
+      : undefined;
 
 // Rows and drawers qualify the same selected reading. Neither a disk-read
 // deferral nor a refreshed Last seen can renew the memory observation.
@@ -154,6 +208,9 @@ export const getWorkloadMemoryObservationPresentation = (
     value,
     guest.memory?.observation,
     requiresWorkloadMemoryObservation(guest),
-    options,
+    {
+      ...options,
+      guestKind: getWorkloadMemoryGuestKind(guest),
+    },
   );
 };

@@ -62,6 +62,7 @@ describe('StackedMemoryBar', () => {
         state,
         summary: 'Retained reading',
         message: 'Not a current measurement.',
+        mayIncludeCache: false,
       });
       const { container } = render(() => (
         <StackedMemoryBar

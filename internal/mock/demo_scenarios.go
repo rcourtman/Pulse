@@ -527,6 +527,7 @@ func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadPro
 			workloads[i].IPAddresses = nil
 			workloads[i].NetworkInterfaces = nil
 		}
+		mockSettleGuestMemoryObservation(&workloads[i].Memory, workloads[i].Status != "stopped", "agent")
 		workloads[i].LastBackup = demoProfileLastBackup(profile, now)
 		guestProfiles[workloads[i].VMID] = profile
 	}
@@ -567,6 +568,7 @@ func applyDemoContainerScenario(workloads []models.Container, profiles []demoWor
 			workloads[i].IPAddresses = nil
 			workloads[i].NetworkInterfaces = nil
 		}
+		mockSettleGuestMemoryObservation(&workloads[i].Memory, workloads[i].Status != "stopped", "cluster-resources")
 		workloads[i].LastBackup = demoProfileLastBackup(profile, now)
 		guestProfiles[workloads[i].VMID] = profile
 	}

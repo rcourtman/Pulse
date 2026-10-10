@@ -548,6 +548,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 				vm.Memory.Usage = 0
 				vm.Memory.Free = vm.Memory.Total
 				vm.Memory.SwapUsed = 0
+				mockSettleGuestMemoryObservation(&vm.Memory, false, "")
 				vm.Disk.Used = 0
 				vm.Disk.Free = vm.Disk.Total
 				vm.Disk.Usage = -1
@@ -571,6 +572,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 				lxc.Memory.Usage = 0
 				lxc.Memory.Free = lxc.Memory.Total
 				lxc.Memory.SwapUsed = 0
+				mockSettleGuestMemoryObservation(&lxc.Memory, false, "")
 				lxc.Disk.Used = 0
 				lxc.Disk.Free = lxc.Disk.Total
 				lxc.Disk.Usage = -1
@@ -1275,6 +1277,52 @@ func generateRealisticIO(ioType string) int64 {
 	return 0
 }
 
+// mockGuestMemoryObservation gives a running guest the provenance a real
+// estate reports for its memory reading, so the UI qualifies mock readings the
+// way it qualifies live ones instead of treating every guest as unannotated.
+func mockGuestMemoryObservation(source string) models.MemoryObservation {
+	return models.MemoryObservation{State: "current", Source: source, ObservedAt: time.Now()}
+}
+
+// applyMockVMMemoryProvenance picks the source a running VM's reading comes
+// from. A quarter of VMs have nothing better than Proxmox's cache-inclusive
+// value, which carries no used | cache | free split. Pulse reads guest memory
+// through the QEMU guest agent from Linux /proc/meminfo only, so a Windows VM
+// is cache-aware only through a Pulse agent inside it.
+func applyMockVMMemoryProvenance(mem *models.Memory, osName string) {
+	switch {
+	case rand.Float64() < 0.25:
+		mem.Free += mem.Cache
+		mem.Cache = 0
+		mem.Observation = mockGuestMemoryObservation("status-mem")
+	case strings.Contains(strings.ToLower(osName), "windows"):
+		mem.Observation = mockGuestMemoryObservation("agent")
+	default:
+		mem.Observation = mockGuestMemoryObservation("guest-agent-meminfo")
+	}
+}
+
+// refreshMockMemoryObservation moves a current reading's observation time with
+// the sample just taken; a retained or unavailable observation keeps its own.
+func refreshMockMemoryObservation(mem *models.Memory, at time.Time) {
+	if mem.Observation.State == "current" {
+		mem.Observation.ObservedAt = at
+	}
+}
+
+// mockSettleGuestMemoryObservation keeps a guest's memory provenance in step
+// with a power state a scenario forces after generation: a stopped guest has
+// no reading to qualify, and a guest started later needs a current source. A
+// retained or current observation on a running guest is left as it is.
+func mockSettleGuestMemoryObservation(memory *models.Memory, running bool, runningSource string) {
+	switch {
+	case !running:
+		memory.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
+	case memory.Observation.State == "" || memory.Observation.State == "unavailable":
+		memory.Observation = mockGuestMemoryObservation(runningSource)
+	}
+}
+
 func generateVM(nodeName string, instance string, vmid int, config MockConfig) models.VM {
 	name := generateGuestName("vm", fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid))
 	status := "running"
@@ -1345,6 +1393,8 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			mem.Free -= mem.Cache
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
+	} else {
+		mem.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
 	}
 
 	// Disk stats
@@ -1384,6 +1434,9 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 
 	osName, osVersion := generateGuestOSMetadata()
 	ipAddresses, networkIfaces := generateGuestNetworkInfo()
+	if status == "running" {
+		applyMockVMMemoryProvenance(&mem, osName)
+	}
 
 	vm := models.VM{
 		Name:              name,
@@ -4922,7 +4975,16 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			SwapTotal: swapTotal,
 			SwapUsed:  swapUsed,
 		}
+		// Proxmox reports container memory from the cgroup, cache included;
+		// only a linked Pulse agent supplies a cache-aware figure.
+		if rand.Float64() < 0.15 {
+			mem.Observation = mockGuestMemoryObservation("agent")
+		} else {
+			mem.Observation = mockGuestMemoryObservation("cluster-resources")
+		}
 		uptime = int64(3600 * (1 + rand.Intn(1440))) // 1-1440 hours (up to 60 days)
+	} else {
+		mem.Observation = models.MemoryObservation{State: "unavailable", Source: "powered-off"}
 	}
 
 	// Disk stats - containers typically smaller
@@ -6365,11 +6427,24 @@ func updateFixtureStateMetricsSelectedAt(
 		}
 		*lastSeen = refreshNow
 	}
+	// A current memory reading is observed on the same poll that sights the
+	// guest, so its time moves with the sighting, in static-metrics mode too.
+	stampGuestMemoryObservation := func(nodeName, status string, memory *models.Memory) {
+		if !selection.includesProxmoxNode(nodeName) || status != "running" {
+			return
+		}
+		if _, offline := offlineNodes[nodeName]; offline {
+			return
+		}
+		refreshMockMemoryObservation(memory, refreshNow)
+	}
 	for i := range data.VMs {
 		stampGuestSighting(data.VMs[i].Node, &data.VMs[i].LastSeen)
+		stampGuestMemoryObservation(data.VMs[i].Node, data.VMs[i].Status, &data.VMs[i].Memory)
 	}
 	for i := range data.Containers {
 		stampGuestSighting(data.Containers[i].Node, &data.Containers[i].LastSeen)
+		stampGuestMemoryObservation(data.Containers[i].Node, data.Containers[i].Status, &data.Containers[i].Memory)
 	}
 	for i := range data.Storage {
 		stampGuestSighting(data.Storage[i].Node, &data.Storage[i].LastSeen)

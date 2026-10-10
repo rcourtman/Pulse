@@ -34,7 +34,10 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
-import { getWorkloadMemoryObservationPresentation } from '@/utils/memoryObservation';
+import {
+  getWorkloadMemoryGuestKind,
+  getWorkloadMemoryObservationPresentation,
+} from '@/utils/memoryObservation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
@@ -183,11 +186,22 @@ export function GuestRow(props: GuestRowProps) {
   );
   const memoryReadStatus = createMemo(() => {
     const reading = memoryReading();
-    if (!reading || reading.state === 'current') return undefined;
+    if (!reading) return undefined;
+    // A current reading needs no label, except a VM's cache-inclusive one: the
+    // user can set up the guest agent for the VM's own figure. Containers have
+    // no such step, so their caveat stays in the tooltip and drawer.
+    const cacheCue =
+      reading.state === 'current' &&
+      reading.mayIncludeCache &&
+      getWorkloadMemoryGuestKind(props.guest) === 'vm';
+    if (reading.state === 'current' && !cacheCue) return undefined;
     return {
       message: reading.message,
-      label:
-        reading.state === 'last-known'
+      label: cacheCue
+        ? usesCompactTableLayout()
+          ? 'Cache?'
+          : 'May include cache'
+        : reading.state === 'last-known'
           ? usesCompactTableLayout()
             ? 'Prior'
             : 'Last known'
@@ -198,8 +212,9 @@ export function GuestRow(props: GuestRowProps) {
             : usesCompactTableLayout()
               ? 'Unknown'
               : 'Freshness unknown',
-      valueLabelContext:
-        reading.state === 'last-known'
+      valueLabelContext: cacheCue
+        ? ('current' as const)
+        : reading.state === 'last-known'
           ? ('last known' as const)
           : reading.state === 'unavailable'
             ? ('unavailable' as const)

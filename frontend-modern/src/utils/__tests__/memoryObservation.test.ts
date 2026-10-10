@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
   getCurrentWorkloadMemoryUsage,
@@ -92,6 +92,104 @@ describe('selected workload memory observation', () => {
       expect(getWorkloadMemoryObservationPresentation(input)?.state).toBe('unavailable');
     },
   );
+});
+
+describe('cache-inclusive Proxmox memory sources', () => {
+  const reading = (source: string, state = 'current', changes: Partial<WorkloadGuest> = {}) =>
+    guest({
+      memory: { ...guest().memory, observation: { state, source, observedAt } },
+      ...changes,
+    });
+  beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-01T12:00:00Z'));
+  });
+
+  it.each(['status-mem', 'status-freemem', 'cluster-resources', 'derived-total-minus-used'])(
+    'keeps a current %s reading in the row presentation with its caveat',
+    (source) => {
+      const presentation = getWorkloadMemoryObservationPresentation(reading(source), {
+        includeCurrent: false,
+      });
+      expect(presentation).toMatchObject({ state: 'current', mayIncludeCache: true });
+      expect(presentation?.summary).toContain('Proxmox (may include cache)');
+      expect(presentation?.message).toContain('may include cached memory');
+      expect(presentation?.cacheNote).toBeTruthy();
+    },
+  );
+
+  it.each([
+    'guest-agent-meminfo',
+    'guest-agent-meminfo-derived',
+    'agent',
+    'available-field',
+    'derived-free-buffers-cached',
+    'previous-snapshot',
+    'something-new',
+  ])('does not flag %s as cache-inclusive', (source) => {
+    const presentation = getWorkloadMemoryObservationPresentation(reading(source));
+    expect(presentation?.mayIncludeCache).toBe(false);
+    expect(presentation?.cacheNote).toBeUndefined();
+    expect(presentation?.message).not.toContain('cached memory');
+    expect(presentation?.summary).not.toContain('may include cache');
+    expect(
+      getWorkloadMemoryObservationPresentation(reading(source), { includeCurrent: false }),
+    ).toBeNull();
+  });
+
+  it('names the fix that fits the guest: the QEMU agent is a VM-only, Linux-only option', () => {
+    const vm = getWorkloadMemoryObservationPresentation(reading('status-mem'))!;
+    expect(vm.cacheNote).toContain('memory the VM can reuse');
+    expect(vm.cacheNote).toContain('Pulse agent in the VM');
+    // The advice is conditional: source selection does not promise a replacement.
+    expect(vm.cacheNote).toContain('can let Pulse show its own figure');
+    expect(vm.cacheNote).not.toMatch(/\bwill\b/);
+    expect(vm.cacheNote).toContain('QEMU guest agent on a Linux VM');
+    const canonicalVm = getWorkloadMemoryObservationPresentation(
+      reading('status-mem', 'current', { type: 'vm', workloadType: 'vm' }),
+    )!;
+    expect(canonicalVm.cacheNote).toContain('QEMU guest agent on a Linux VM');
+    for (const changes of [
+      { type: 'lxc' },
+      { type: 'system-container', workloadType: 'system-container' as const },
+    ]) {
+      const note = getWorkloadMemoryObservationPresentation(
+        reading('cluster-resources', 'current', changes),
+      )!.cacheNote;
+      expect(note).toContain('memory the container can reuse');
+      expect(note).toContain('Pulse agent in the container');
+      expect(note).not.toContain('QEMU');
+    }
+    const unknownKind = getWorkloadMemoryObservationPresentation(
+      reading('status-mem', 'current', { type: 'docker' }),
+    )!.cacheNote;
+    expect(unknownKind).toContain('memory the guest can reuse');
+    expect(unknownKind).not.toContain('agent');
+  });
+
+  it('keeps the caveat on a retained reading without calling it current', () => {
+    const presentation = getWorkloadMemoryObservationPresentation(
+      reading('status-mem', 'last-known'),
+    )!;
+    expect(presentation.state).toBe('last-known');
+    expect(presentation.mayIncludeCache).toBe(true);
+    expect(presentation.message).toContain('Not a current measurement.');
+    expect(presentation.message).toContain('may include cached memory');
+  });
+
+  it.each([
+    ['an unavailable observation', reading('status-mem', 'unavailable')],
+    ['a reading with no usable number', reading('status-mem', 'current', { memory: undefined })],
+  ])('never qualifies %s', (_label, input) => {
+    const presentation = getWorkloadMemoryObservationPresentation(input);
+    expect(presentation?.state).toBe('unavailable');
+    expect(presentation?.mayIncludeCache).toBe(false);
+    expect(presentation?.cacheNote).toBeUndefined();
+  });
+
+  it('leaves the selected number unchanged', () => {
+    expect(getCurrentWorkloadMemoryUsage(reading('status-mem'))).toBe(25);
+    expect(getCurrentWorkloadMemoryUsage(reading('cluster-resources'))).toBe(25);
+  });
 });
 
 describe('current workload memory selection', () => {
