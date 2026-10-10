@@ -131,7 +131,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
             });
           const accepted = {
             ...write.payload,
-            id: req.method() === 'POST' ? 'new-hook' : 'saved-hook',
+            id: req.method() === 'POST' ? `new-hook-${writes.length}` : 'saved-hook',
             headers: { Authorization: '********' },
           };
           inventory =
@@ -318,6 +318,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         );
         await other.close();
         assert.equal(writes.length, 5);
+        assert.equal(new Set(inventory.map((hook) => hook.id)).size, inventory.length);
         await noOverflow();
       });
       await page.getByRole('alert').scrollIntoViewIfNeeded();

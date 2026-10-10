@@ -82,7 +82,7 @@ describe('webhook persistence acknowledgement', () => {
     vi.mocked(NotificationsAPI.createWebhook).mockReturnValue(pending.promise);
     const owner = mount([savedWebhook]);
     openNewDraft();
-    const save = screen.getByRole('button', { name: 'Add Webhook', exact: true });
+    const save = screen.getByRole('button', { name: 'Add Webhook' });
     fireEvent.click(save);
     fireEvent.click(save);
 
@@ -91,7 +91,7 @@ describe('webhook persistence acknowledgement', () => {
     expect(screen.getByLabelText('Name')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
     for (const name of ['Cancel', 'Edit', 'Delete', 'Disable All', 'Enabled']) {
-      expect(screen.getByRole('button', { name, exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name })).toBeDisabled();
     }
     expect(owner.webhooks()).toEqual([savedWebhook]);
 
@@ -108,7 +108,7 @@ describe('webhook persistence acknowledgement', () => {
     fireEvent.input(screen.getByLabelText('Custom header 1 value'), {
       target: { value: 'application/custom+json' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Could not confirm'));
     expect(screen.getByLabelText('Name')).toHaveValue('New destination');
@@ -124,7 +124,7 @@ describe('webhook persistence acknowledgement', () => {
       id: 'new-hook',
       name: 'Accepted destination',
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook' }));
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(NotificationsAPI.createWebhook).toHaveBeenCalledTimes(2);
@@ -138,7 +138,7 @@ describe('webhook persistence acknowledgement', () => {
     const pending = deferred<Webhook>();
     vi.mocked(NotificationsAPI.updateWebhook).mockReturnValueOnce(pending.promise);
     const owner = mount([savedWebhook]);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Edited destination' } });
     const draft = screen.getByLabelText('Name');
     fireEvent.click(screen.getByRole('button', { name: 'Update Webhook' }));
@@ -171,7 +171,7 @@ describe('webhook persistence acknowledgement', () => {
     vi.mocked(NotificationsAPI.createWebhook).mockRejectedValue(new Error('Save unavailable'));
     mount();
     openNewDraft();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook' }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: '+ Add Webhook' }));
@@ -194,7 +194,7 @@ describe('webhook persistence acknowledgement', () => {
       />
     ));
     openNewDraft();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Webhook' }));
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('Check the configured destinations'),
     );
