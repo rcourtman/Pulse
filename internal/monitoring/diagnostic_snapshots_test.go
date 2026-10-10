@@ -1390,3 +1390,8 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		}
 	})
 }
+
+func TestGuestMemorySampleCapacityContract(t *testing.T) {
+	t.Run("selection", testGuestMemorySampleCapacitySelection)
+	t.Run("cache-binding", testGuestMemorySampleCapacityCacheBinding)
+}

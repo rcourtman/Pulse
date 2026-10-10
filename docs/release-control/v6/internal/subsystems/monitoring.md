@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### Guest memory readings keep their own capacity
+
+The QEMU memory selector pairs guest availability with the total from the
+same status meminfo or QGA `/proc/meminfo` sample, and linked in-guest agent
+usage with that agent's total. A configured maximum is not guest usage:
+ballooning and kernel reservations can make those capacities differ.
+Existing availability-only payloads retain their configured-capacity fallback.
+Reported totals larger than a known VM maximum are not accepted as guest
+evidence, including a hotplug transition before configured status catches up.
+The existing balloon/free-memory fallback also keeps the denominator it used
+to derive usage, without being upgraded to cache-aware pressure evidence.
+The diagnostic snapshot records `guestAgentMemTotal` alongside the already
+retained configured maximum and memory fields; it adds no read or public log.
+
+Retention keeps the selected total, used, free/cache and original observation
+as one tuple. Configured-capacity changes, including a resize to the old guest
+total, cannot borrow that tuple. The existing source age bounds, backup lock,
+filesystem-first ordering and shared command fences are unchanged; a held or
+expired sample cannot produce new History, breach or recovery evidence.
+`TestGuestMemorySampleCapacityContract` and
+`TestGuestMemorySampleCapacityCanonicalProjection` check selectors, coherent
+cache binding and both ordinary collectors with direct/cluster HTTP clients,
+canonical views, History and actual threshold decisions. Healthy ballooned,
+full-pressure/zero-available, legacy, resize and age controls remain distinct.
+These are secret-free source fixtures, not native balloon or freeze recovery,
+reporter #2762 cause/resolution, or release acceptance.
+
 ### Existing memory origins cannot be renewed by AI consumers
 
 AI query/context/fact consumers now retain the selected guest observation and

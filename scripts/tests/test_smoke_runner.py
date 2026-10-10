@@ -231,6 +231,72 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertIn("No tests found", empty.stderr)
         self.assertEqual(self.observed_calls(), [])
 
+    def test_smoke_shards_cover_all_shell_python_and_future_suites_once(self):
+        names = ["test_a.py", "test_backend.py", "test_future.py", "test_recovery_docs.py",
+                 "test_security.py", "test_z.py"]
+        for name in names:
+            self.python_fixture(name)
+        names.extend(["test-a.sh", "test-z.sh"])
+        for name in names[-2:]:
+            self.shell_fixture(name)
+        self.python_fixture("not_a_test.py", 7)
+        nested = self.tests / "nested"
+        nested.mkdir()
+        (nested / "test_nested.py").write_text("raise SystemExit(7)\n")
+        seen = []
+        for shard in range(2):
+            before = len(self.observed_calls())
+            result = self.run_runner("--smoke-shard", shard)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = self.observed_calls()[before:]
+            self.assertEqual(calls, sorted(names)[shard::2])
+            seen.extend(calls)
+            self.assertIn(f"Smoke shard {shard}/2: 4 of 8 suites", result.stdout)
+        self.assertEqual(sorted(seen), sorted(names))
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_smoke_shards_keep_failures_gating_and_continue_selected_suites(self):
+        names = [f"test_{index}.py" for index in range(6)]
+        for index, name in enumerate(names):
+            self.python_fixture(name, 7 if index < 2 else 0)
+        for shard in range(2):
+            before = len(self.observed_calls())
+            result = self.run_runner("--smoke-shard", shard)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(self.observed_calls()[before:], names[shard::2])
+            self.assertIn("Summary: 2/3 passed", result.stdout)
+            self.assertIn("Failures: 1", result.stdout)
+
+    def test_smoke_discovery_rejects_failed_find_and_sort_before_execution(self):
+        passing = self.python_fixture("test_first.py")
+        self.python_fixture("test_second.py", 7)
+        for name in ("find", "sort"):
+            with self.subTest(producer=name):
+                self.producer(name, 23, [passing])
+                self.assert_discovery_rejected(self.run_runner("--smoke-shard", 0))
+                (self.bin / name).unlink()
+
+    def test_invalid_smoke_shard_stops_before_discovery_or_execution(self):
+        self.python_fixture("test_first.py")
+        self.producer("find", 23)
+        for args in ((), ("-1",), ("2",), ("00",), ("one",), ("0", "test_first.py")):
+            with self.subTest(args=args):
+                result = self.run_runner("--smoke-shard", *args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Usage:", result.stderr)
+                self.assertNotIn("Failed to discover", result.stderr)
+                self.assertEqual(self.observed_calls(), [])
+
+    def test_empty_smoke_inventory_or_shard_is_not_a_pass(self):
+        empty = self.run_runner("--smoke-shard", 0)
+        self.assertNotEqual(empty.returncode, 0)
+        self.assertIn("No tests found", empty.stderr)
+        self.python_fixture("test_first.py")
+        empty = self.run_runner("--smoke-shard", 1)
+        self.assertNotEqual(empty.returncode, 0)
+        self.assertIn("No tests found", empty.stderr)
+        self.assertEqual(self.observed_calls(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

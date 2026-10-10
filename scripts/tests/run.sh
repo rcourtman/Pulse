@@ -10,11 +10,13 @@ TEST_DIR="${ROOT_DIR}/scripts/tests"
 usage() {
   cat <<'EOF'
 Usage: scripts/tests/run.sh [test-script ...]
+       scripts/tests/run.sh --smoke-shard <0|1>
        scripts/tests/run.sh --docs-shard <0|1|2|3>
 
 Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
 when specified. Documentation CI discovers every documentation suite and runs
 one of four disjoint, sorted shards; it does not maintain a second suite list.
+Smoke CI partitions the complete inventory into two isolated, sorted shards.
 EOF
 }
 
@@ -123,6 +125,20 @@ main() {
       tests+=("${doc_tests[index]}")
     done
     printf 'Documentation shard %s/4: %s of %s suites\n' "$2" "${#tests[@]}" "${#doc_tests[@]}"
+  elif [[ "${1:-}" == --smoke-shard ]]; then
+    if [[ $# -ne 2 || ! "${2:-}" =~ ^[0-1]$ ]]; then
+      echo "Usage: scripts/tests/run.sh --smoke-shard <0|1>" >&2
+      return 1
+    fi
+    local -a smoke_tests=()
+    if ! discover_tests smoke_tests; then
+      return 1
+    fi
+    local index
+    for ((index = $2; index < ${#smoke_tests[@]}; index += 2)); do
+      tests+=("${smoke_tests[index]}")
+    done
+    printf 'Smoke shard %s/2: %s of %s suites\n' "$2" "${#tests[@]}" "${#smoke_tests[@]}"
   elif [[ $# -gt 0 ]]; then
     local arg resolved
     for arg in "$@"; do
