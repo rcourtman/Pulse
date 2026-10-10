@@ -9360,6 +9360,15 @@ registration, enrolment, install, update, removal, report identity and
 continuity are unchanged, and an agent's own declared node link still
 ignores exclusions.
 
+A report-merge that names sources now picks links by the member that carries
+the source instead of by the sources a link's folded side took in with it
+(`internal/api/resourceapi/resources.go`, `ReportedManualLinkFolds`). An agent
+that holds a Docker host and sits in a VM leaves the VM only when the agent's
+own source is named, and a report naming only Docker leaves the agent in the
+VM. A report naming every source or none still splits every link. Agent
+registration, enrolment, install, update, removal, report identity and
+continuity are unchanged.
+
 ### Windows installer acceptance engine and absence (8 October 2026)
 
 Native installer parsing, service-removal failure controls and actual lifecycle
@@ -9395,3 +9404,13 @@ for report-merge. No synthetic telemetry, identity key, enrollment or service
 link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
 the monitor and its re-ingested API seed retain the fold across all split
 shapes, then survive pin persistence and a repeated split.
+
+### Mock-mode metrics-target lookups ride the fixture structure revision
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+records the fixture structure revision it was built at and
+`MetricsTargetForResource` resolves mock-mode targets from that view while the
+revision and link list hold (monitoring contract, "Mock-mode metrics-target
+lookups ride the fixture structure revision"). Agent registration, enrolment,
+install, update, removal, report identity and continuity are unchanged, and
+real-mode resolution still goes through the live registry.

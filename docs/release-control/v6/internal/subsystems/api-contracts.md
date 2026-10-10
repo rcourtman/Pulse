@@ -12033,3 +12033,15 @@ pairs with the identity-match exclusions. `400 Resource is not merged` and
 so two linked agents, which share their only source, can be reported.
 `TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
 shape and the link's removal for a VM and the agent linked into it.
+
+A request that names `sources` undoes the links that join a member carrying
+one of those sources to the rest of the merged resource, chosen by member
+(`ReportedManualLinkFolds`) rather than by the sources a link's folded side
+took in along with its own members. Naming the source of a leaf in a chain of
+links no longer also splits the leaf's holder from the resource, and where
+links form a cycle the named member is cut from every link that would rejoin
+it. The request, status codes, response shape and the meaning of an empty
+`sources` (every link) are unchanged, and no new endpoint, field or stored
+decision is added: `exclusions` still counts one link pair each.
+`TestResourceReportMergeSourceFilterDetachesChainMembers` reports a chain
+through the handler and the REST listing.
