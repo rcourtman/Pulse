@@ -90,6 +90,10 @@ jobs:
         working-directory: tests/integration
         run: node --test scripts/report-stable-e2e-failures.test.mjs
 
+      - name: Validate fixture authentication and credential lifetime
+        working-directory: tests/integration
+        run: node scripts/fixture-auth.test.mjs
+
   offline-org-provisioning:
     name: Offline Organization provisioning
     # Fixture acceptance only, not quarantine promotion or private RBAC proof.
