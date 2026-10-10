@@ -19,6 +19,22 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+const (
+	// Bar one deliberately late reply, the fixture answers every request at
+	// once, so the deadlines it sets are hang guards, not latency budgets. A
+	// tight one makes the contract depend on the machine running it: the
+	// guest-agent guard defers a poll whose lock check fails (lock-unverified)
+	// and fences the guest for a minute after a command times out or its body
+	// is cut short (agent-timeout, agent-response-incomplete, then
+	// agent-cooldown). That is right for a real guest and wrong for this
+	// contract. The proxmox transport still limits dialing and the wait for
+	// response headers to ten seconds, and a cluster client probes a new
+	// endpoint within three; the fixture cannot set either.
+	windowsPollingHangGuard = 15 * time.Minute
+	// A reply later than the one-second client budget this fixture used to set.
+	windowsPollingSlowReply = 1200 * time.Millisecond
+)
+
 // Synthetic, ordinary QGA-only polling after a successful Windows OS reply.
 // The deliberately uncertain Linux read is an adverse fixture, not a replay of
 // issue #2619 or a claim about the response/cause on its native installation.
@@ -28,7 +44,10 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 			t.Run(kind+"/"+path, func(t *testing.T) {
 				const mib = uint64(1024 * 1024)
 				var poll, fileReads, fsReads, configReads atomic.Int32
-				var locked atomic.Bool
+				var locked, slowLockCheck atomic.Bool
+				// The four subtests share one client budget, so one late reply
+				// holds it; more would only lengthen the run.
+				lateLockCheck := kind == "client" && path == "cluster"
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Header.Get("Authorization") != "PVEAPIToken=fixture@pve!pulse=fixture" {
 						t.Error("lost configured authentication")
@@ -40,6 +59,11 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 						fmt.Fprint(w, `{"data":[]}`)
 					case strings.HasSuffix(r.URL.Path, "/config"):
 						configReads.Add(1)
+						// One lock check later than the old client budget, in an
+						// otherwise ordinary poll: lateness alone must not defer it.
+						if lateLockCheck && poll.Load() == 2 && slowLockCheck.CompareAndSwap(false, true) {
+							time.Sleep(windowsPollingSlowReply)
+						}
 						if locked.Load() {
 							fmt.Fprint(w, `{"data":{"lock":"backup"}}`)
 						} else {
@@ -72,7 +96,7 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					}
 				}))
 				defer server.Close()
-				cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}
+				cfg := proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: windowsPollingHangGuard}
 				var client PVEClientInterface
 				if kind == "cluster-client" {
 					client = proxmox.NewClusterClient("windows", cfg, []string{server.URL}, nil)
@@ -84,6 +108,8 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					}
 				}
 				m := guestHistoryObservationMonitor(t)
+				m.guestAgentFSInfoTimeout, m.guestAgentNetworkTimeout = windowsPollingHangGuard, windowsPollingHangGuard
+				m.guestAgentOSInfoTimeout, m.guestAgentVersionTimeout = windowsPollingHangGuard, windowsPollingHangGuard
 				m.alertManager = alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
 				t.Cleanup(m.alertManager.Stop)
 				m.config, m.state, m.rateTracker = &config.Config{}, models.NewState(), NewRateTracker()
@@ -107,6 +133,12 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 				id := makeGuestID("windows", "node", 105)
 				res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * mib, MaxDisk: 1000 * mib}
 				build := func() models.VM {
+					// The poll loop takes its cycle start before building, so the
+					// guest is always observed in the cycle it records. A window
+					// measured back from the record call would drop the sample
+					// whenever the state update and resource-store refresh in
+					// between take over a second.
+					cycleStart := time.Now()
 					previous := m.previousGuestContextForInstance("windows").vmsByID[id]
 					var vm models.VM
 					if path == "node" {
@@ -124,7 +156,7 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					}
 					m.state.UpdateVMs([]models.VM{vm})
 					m.updateResourceStore(m.currentStateWithScope())
-					m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
+					m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 					view := m.currentModeReadState().VMs()[0]
 					if view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason || view.OSName() != vm.OSName {
 						t.Error("accepted Windows poll changed at canonical read boundary")
@@ -157,6 +189,9 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					if last.ID != id || last.Disk.Used != wantUsed || last.DiskStatusReason != "" || last.GuestAgentStatus != "available" || last.CPU != res.CPU || last.Memory.Used != int64(2+i)*int64(mib) || last.Memory.Observation.State != "current" {
 						t.Errorf("poll %d lost independent Windows readings: disk=%d reason=%q guest=%q memory=%d/%s cpu=%v", i, last.Disk.Used, last.DiskStatusReason, last.GuestAgentStatus, last.Memory.Used, last.Memory.Observation.State, last.CPU)
 					}
+				}
+				if lateLockCheck && !slowLockCheck.Load() {
+					t.Error("the late lock verification never reached the fixture")
 				}
 				if fileReads.Load() != 0 || fsReads.Load() != 3 || !reflect.DeepEqual(m.vmAgentMemCache[memoryKey], originalMemory) || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], originalMetadata) {
 					t.Errorf("known Windows sent Linux work or renewed evidence: file=%d fs=%d", fileReads.Load(), fsReads.Load())

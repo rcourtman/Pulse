@@ -32,7 +32,9 @@ func guestHistoryObservationMonitor(t *testing.T) *Monitor {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+	// Wait on the maintenance barrier itself. Startup maintenance finishes when
+	// it finishes, and a timer here only fails the test on a busy machine.
+	if err := store.WaitForMaintenance(0); err != nil {
 		t.Fatal(err)
 	}
 	return &Monitor{metricsHistory: NewMetricsHistory(128, 24*time.Hour), metricsStore: store}
@@ -42,7 +44,10 @@ func guestHistoryStoredPoints(t *testing.T, m *Monitor, kind, id, metric string)
 	t.Helper()
 	m.metricsStore.Flush()
 	now := time.Now()
-	points, err := m.metricsStore.Query(kind, id, metric, now.Add(-time.Minute), now.Add(time.Minute), 0)
+	// Every point was written by the calling test. Reach back far enough that a
+	// stalled run cannot age its earliest points out of the window, yet stay
+	// inside the raw tier (ranges up to two hours).
+	points, err := m.metricsStore.Query(kind, id, metric, now.Add(-time.Hour), now.Add(time.Minute), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
