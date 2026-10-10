@@ -1351,10 +1351,9 @@ describe('shared primitive guardrails', () => {
     expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
     expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
     expect(contextualFocusSource).toContain('data-inline-detail-for');
-    expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
-    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
-    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
+    // No table pins or previews a group scope since the Storage group pin went.
+    expect(summaryCardInteractionSource).not.toContain('SummarySeriesGroupScope');
 
     expect(workloadSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
     expect(workloadSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
@@ -1375,9 +1374,8 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('[data-summary-clear-ignore]');
     expect(summaryTableFocusSource).toContain("event.key !== 'Escape'");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
-    expect(summaryTableFocusSource).toContain(
-      "row.scrollIntoView({ behavior: 'smooth', block: 'nearest' })",
-    );
+    expect(summaryTableFocusSource).not.toContain('focusedGroupId');
+    expect(summaryTableFocusSource).not.toContain('activeGroupScope');
     expect(summaryTableFocusSource).not.toContain("window.addEventListener('scroll'");
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
   });
@@ -1388,9 +1386,8 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
     expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
     expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
-    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='preview'] > td");
-    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='pinned'] > td");
-    expect(frontendIndexCssSource).toContain('--color-summary-group-member-pinned-accent');
+    expect(frontendIndexCssSource).not.toContain('data-summary-group-member-active');
+    expect(frontendIndexCssSource).not.toContain('--color-summary-group-member-');
     expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
     expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
     expect(frontendIndexCssSource).toContain(
@@ -1417,7 +1414,7 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('ring-blue-300 dark:ring-blue-600');
     }
 
-    expect(storagePoolRowSource).toContain('data-summary-group-member-active');
+    expect(storagePoolRowSource).not.toContain('data-summary-group-member-active');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupPresentationSource).toContain('getInteractiveGroupedTableRowClass');
     expect(storageGroupPresentationSource).toContain('getGroupedTableRowCellClass');
@@ -1692,11 +1689,13 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('hideWhenRowTappableOnMobile');
     }
 
-    expect(storageGroupRowSource).toContain('createSummaryInteractiveRowPreviewHandlers');
+    // Storage group headers are disclosure rows: no hover preview, no group pin.
+    expect(storageGroupRowSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(storageGroupRowSource).toContain('SummaryRowActionButton');
     expect(storageGroupRowSource).toContain('hideWhenRowTappableOnMobile');
     expect(storageGroupRowSource).not.toContain('hideWhenRowTappableOnMobile={false}');
-    expect(storageGroupRowSource).toContain('props.onToggle();');
+    expect(storageGroupRowSource).toContain('onClick={() => props.onToggle()}');
+    expect(storageGroupRowSource).not.toContain('onFocusChange');
 
     expect(workloadPanelSource).not.toContain('kind="scope"');
     expect(storageGroupRowSource).not.toContain('kind="scope"');

@@ -103,7 +103,6 @@ export const STORAGE_QUERY_PARAMS = {
   resource: 'resource',
   sort: 'sort',
   order: 'order',
-  summaryGroup: 'summaryGroup',
 } as const;
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
@@ -147,7 +146,6 @@ type StorageLinkOptions = {
   resource?: string | null;
   sort?: string | null;
   order?: string | null;
-  summaryGroup?: string | null;
 };
 
 export const parseWorkloadsLinkSearch = (search: string) => {
@@ -314,7 +312,6 @@ export const parseStorageLinkSearch = (search: string) => {
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
     sort: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.sort)),
     order: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.order)),
-    summaryGroup: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -331,7 +328,6 @@ export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): strin
   const resource = normalizeQueryValue(options.resource);
   const sort = normalizeQueryValue(options.sort);
   const order = normalizeQueryValue(options.order);
-  const summaryGroup = normalizeQueryValue(options.summaryGroup);
 
   if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
@@ -344,7 +340,6 @@ export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): strin
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
   if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
   if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
-  if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
 
   return serializedRouteSearch(params);
 };

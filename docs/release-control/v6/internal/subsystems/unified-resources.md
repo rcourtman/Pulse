@@ -4960,6 +4960,10 @@ top-level system is a merged hybrid surface, the route-state helper must
 resolve the deep-link source from the canonical merged source set before
 falling back to raw `platformType`, so TrueNAS-backed hybrid systems do not
 lose their storage context just because agent telemetry is also present.
+Storage route state names no `summaryGroup` param: `STORAGE_QUERY_PARAMS`,
+`parseStorageLinkSearch(...)` and `buildStorageRouteSearch(...)` dropped it
+with the Storage pool-group pin, no link builder passed one, and a leftover
+param in a saved URL is ignored.
 That same routing contract now also owns workload platform scoping without
 restoring the retired `/workloads` top-level route. Workloads URL-sync state,
 and any workload link built through the shared `buildWorkloadsRouteSearch(...)`
