@@ -5,7 +5,8 @@ Usage: go list ... | select-go-package-shard.py WEIGHTS COUNT INDEX
 
 The checked-out source supplies the package universe, never the weights file.
 Assign longest measured packages first to the lightest shard, breaking ties by
-package name and shard index. Print selected packages in their original order.
+package name and shard index. Start selected packages longest first, so slow
+binaries do not wait behind the small-package tail in Go's parallel scheduler.
 Unlike internal/api's test slices, separate package binaries have no shared
 test order to preserve. Missing/renamed weights affect balance, not coverage.
 """
@@ -82,7 +83,7 @@ def main() -> int:
     except (OSError, ValueError, InvalidOperation) as error:
         print(f"package shard selection failed: {error}", file=sys.stderr)
         return 2
-    for name in packages:
+    for name in sorted(packages, key=lambda name: (-weights.get(name, default), name)):
         if assignment[name] == args.index:
             print(name)
     return 0

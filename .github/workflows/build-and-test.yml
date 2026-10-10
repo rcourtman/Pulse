@@ -369,7 +369,9 @@ jobs:
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
         # Source, not the timing file, defines coverage. Longest measured
-        # packages go to the lightest shard; new packages use a default weight.
+        # packages go to the lightest shard and start first within that shard;
+        # new packages use a default weight. Do not leave slow binaries behind
+        # the alphabetically earlier small packages in Go's parallel scheduler.
         # Package binaries are independent, so only internal/api needs the
         # contiguous, order-preserving test slices used in its separate job.
         run: |
