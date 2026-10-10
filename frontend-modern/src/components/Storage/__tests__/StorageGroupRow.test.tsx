@@ -36,12 +36,9 @@ describe('StorageGroupRow', () => {
         <tbody>
           <StorageGroupRow
             group={makeGroup()}
-            groupBy="node"
+            summaryGroupId={null}
             expanded={false}
             onToggle={onToggle}
-            summaryGroupScope={null}
-            summaryActive={false}
-            summaryFocused={false}
           />
         </tbody>
       </table>
@@ -58,29 +55,17 @@ describe('StorageGroupRow', () => {
     expect(container.querySelector('.bg-slate-300')).toBeInTheDocument();
   });
 
-  it('lets the whole group row own disclosure and summary focus', () => {
+  it('lets the whole group row own disclosure and nothing else', () => {
     const onToggle = vi.fn();
-    const onFocusChange = vi.fn();
-    const onHoverChange = vi.fn();
-    const scope = {
-      id: 'storage:node:tower',
-      label: 'tower (2 storage items)',
-      seriesIds: ['pool-1', 'pool-2'],
-    };
 
     render(() => (
       <table>
         <tbody>
           <StorageGroupRow
             group={makeGroup()}
-            groupBy="node"
+            summaryGroupId="storage:node:tower"
             expanded={false}
             onToggle={onToggle}
-            summaryGroupScope={scope}
-            summaryActive={false}
-            summaryFocused={false}
-            onFocusChange={onFocusChange}
-            onHoverChange={onHoverChange}
           />
         </tbody>
       </table>
@@ -91,10 +76,9 @@ describe('StorageGroupRow', () => {
     if (!row) {
       return;
     }
-
-    fireEvent.pointerEnter(row, { pointerType: 'mouse' });
-    expect(onHoverChange).toHaveBeenCalledWith(scope);
-
+    expect(row).toHaveAttribute('data-summary-group-id', 'storage:node:tower');
+    expect(row).not.toHaveAttribute('data-summary-row-active');
+    expect(row).not.toHaveAttribute('data-summary-group-series-count');
     expect(
       screen.queryByRole('button', {
         name: 'Pin summary scope for tower',
@@ -102,7 +86,6 @@ describe('StorageGroupRow', () => {
     ).not.toBeInTheDocument();
 
     fireEvent.click(row);
-    expect(onFocusChange).toHaveBeenCalledWith(scope);
     expect(onToggle).toHaveBeenCalledTimes(1);
 
     const toggleButton = screen.getByRole('button', { name: 'Expand tower' });
@@ -110,8 +93,5 @@ describe('StorageGroupRow', () => {
     expect(toggleButton).toHaveClass('sm:not-sr-only');
     fireEvent.click(toggleButton);
     expect(onToggle).toHaveBeenCalledTimes(2);
-
-    fireEvent.pointerLeave(row, { pointerType: 'mouse' });
-    expect(onHoverChange).toHaveBeenLastCalledWith(null);
   });
 });

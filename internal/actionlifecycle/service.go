@@ -166,8 +166,14 @@ func (s *Service) admissionCoordinator() *PolicyAdmissionCoordinator {
 // lifecycle holds the admission read lock.
 type PolicyAuthorizer func(ctx context.Context, record unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error)
 
-// WithPolicyMutation serializes a policy write against automatic admission.
-// Writers must persist their change before returning.
+// WithPolicyMutation serializes a policy write against dispatch admission,
+// automatic and human alike. Both hold the read side while they revalidate and
+// commit the executing transition, and fire the admission transition hook (and
+// the completion hook for an admission refusal) before releasing it. A write
+// must therefore never be requested from inside those hooks, and a hook must
+// not re-enter Execute or ExecuteUnderPolicy: a second read lock behind a
+// pending writer would deadlock. Writers must persist their change before
+// returning.
 func (s *Service) WithPolicyMutation(write func() error) error {
 	if s == nil || write == nil {
 		return errors.New("policy mutation unavailable")
@@ -1133,6 +1139,12 @@ func (s *Service) validateApprovalFloor(ctx context.Context, record unified.Acti
 // locks are all persisted as refused executions (never silently dropped)
 // and published to the completion hook. There is no bypass that reaches
 // the executor without passing every gate.
+//
+// The gates and the executing transition run under the same admission
+// coordinator as ExecuteUnderPolicy, so the committed admission is the
+// linearization point against an operator policy save: a lock saved before it
+// refuses the dispatch, a lock saved after it queues behind it and does not
+// recall a dispatch that is already admitted.
 func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor unified.ActionActor, reason string) (unified.ActionAuditRecord, error) {
 	actionID = strings.TrimSpace(actionID)
 	if actionID == "" {
@@ -1172,25 +1184,47 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 		return record, nil
 	}
 
+	// Human admission shares the automatic path's boundary: the operator
+	// remediation lock is read and the executing transition committed under
+	// the admission read lock, so a lock save (which takes the write side via
+	// WithPolicyMutation) either lands before the readiness check below and
+	// refuses the dispatch, or queues behind the committed admission. The lock
+	// is released before the executor runs.
+	coordinator := s.admissionCoordinator()
+	coordinator.mu.RLock()
+	started, admitted, admissionErr := s.beginHumanExecution(ctx, orgID, store, record, actorID, reason)
+	coordinator.mu.RUnlock()
+	if !admitted {
+		return started, admissionErr
+	}
+	return s.dispatchCommitted(ctx, orgID, store, started, actorID)
+}
+
+// beginHumanExecution revalidates every dispatch gate and commits the
+// executing transition for a human-approved action. Callers must hold the
+// admission read lock. A true result means the action is executing and its
+// durable dispatch attempt may be driven, including when a concurrent caller
+// won the admission.
+func (s *Service) beginHumanExecution(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actorID, reason string) (unified.ActionAuditRecord, bool, error) {
 	now := s.now()
-	record, err = s.materializeExpiry(store, orgID, record)
+	record, err := s.materializeExpiry(store, orgID, record)
 	if err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	if record.State == unified.ActionStateExpired {
-		return record, unified.ErrActionPlanExpired
+		return record, false, unified.ErrActionPlanExpired
 	}
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
 			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
-				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
+				return unified.ActionAuditRecord{}, false, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
 			s.publishTransition(orgID, failed)
 			s.publishCompleted(failed)
-			return failed, err
+			return failed, false, err
 		}
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	// Reuse the exact gate set applied before approval. This second check is
 	// the dispatch-side half of the boundary: it closes the race between the
@@ -1200,46 +1234,43 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 		if unified.IsPermanentActionExecutionRefusal(err) {
 			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
-				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
+				return unified.ActionAuditRecord{}, false, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
 			s.publishTransition(orgID, failed)
 			s.publishCompleted(failed)
-			return failed, err
+			return failed, false, err
 		}
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 
 	started, startEvent, err := unified.BeginActionExecution(record, actorID, now)
 	if err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	if reason != "" {
 		startEvent.Message = "Action execution started: " + reason
 	}
 	attempt, err := unified.NewActionDispatchAttempt(started.ID, now)
 	if err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	if binder, ok := s.Executor.(DispatchBinder); ok {
 		attempt, err = binder.BindActionDispatch(ctx, started, attempt)
 		if err != nil {
-			return unified.ActionAuditRecord{}, err
+			return unified.ActionAuditRecord{}, false, err
 		}
 	}
 	if err := store.RecordActionExecutionAdmission(started, startEvent, attempt); err != nil {
 		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
-			current, found, queryErr := store.GetActionAudit(actionID)
+			current, found, queryErr := store.GetActionAudit(record.ID)
 			if queryErr == nil && found {
-				if current.State == unified.ActionStateExecuting {
-					return s.dispatchCommitted(ctx, orgID, store, current, actorID)
-				}
-				return current, nil
+				return current, current.State == unified.ActionStateExecuting, nil
 			}
 		}
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution start", Err: err}
+		return unified.ActionAuditRecord{}, false, &PersistError{Op: "action execution start", Err: err}
 	}
 	s.publishTransition(orgID, started)
-	return s.dispatchCommitted(ctx, orgID, store, started, actorID)
+	return started, true, nil
 }
 
 // ExecuteUnderPolicy is the only automatic dispatch boundary. It revalidates

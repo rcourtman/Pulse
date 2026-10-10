@@ -2913,18 +2913,21 @@ canonical pre-handler authorization proof covering both transfer routes.
     page must reuse one resolved active-series ID for row emphasis in both
     views instead of leaving stale row-local IDs or storage-local hover
     branches on the page.
-    Any page, group, or entity scope that becomes pinned through storage
-    interaction must stay row-first: the pinned row or group remains the
-    visible scoped state, and explicit clearing belongs to the shared storage
-    content-card header action plus the shared `Escape` reset path rather than
-    an extra storage-local strip, search-row widget, or filter-bar badge.
+    Any pool or disk focus that becomes pinned through storage interaction
+    must stay row-first: the open row is the scoped state, and explicit
+    clearing belongs to the shared storage content-card header action plus the
+    shared `Escape` reset path rather than an extra storage-local strip,
+    search-row widget, or filter-bar badge. Collapsing the open row's group
+    hides the row without clearing that focus.
     Background whitespace clearing may remain a convenience, but storage must
     not rely on it as the only reversible control.
-    When that scope is a storage
-    pool group, member pool rows should expose shared
-    `data-summary-group-member-active="preview|pinned"` state so the grouped
-    block reads as one scoped set without adding storage-local outlines, pill
-    buttons, or heavy full-row fills.
+    Storage pool-group headers pin nothing. A header click opens or closes its
+    group, exactly like its chevron, so it neither closes an open pool in
+    another group nor writes a `summaryGroup` route param, and Storage reads
+    none. The group pin and its member-row emphasis were removed after the
+    storage summary charts the pinned scope was built to rescope were
+    retired: one click pinned a group and toggled it, so pinning an open
+    group also collapsed it and hid the rows it emphasised.
 18. Keep the storage summary history cache versioned with the chart contract.
     `frontend-modern/src/utils/storageSummaryCache.ts`, which
     `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts` reads
@@ -2950,18 +2953,18 @@ canonical pre-handler authorization proof covering both transfer routes.
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
     rather than carrying storage-local sky fill classes that drift from the
-    rest of the product or obscure inline capacity bars. Storage pool rows,
-    physical-disk rows, and storage group headers must also route pointer,
-    and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`. Pool
-    rows and physical-disk rows may keep deliberate expand/pin ownership on
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, but
-    storage group headers should pin through the row itself and must not add a
-    separate scope/pinned pill button beside the disclosure chevron. Touch
-    pool, physical-disk, and storage group rows own expansion through the whole
-    row, so they must explicitly suppress the redundant visible mobile
-    chevron. Storage group row activation performs disclosure and summary
-    focus together rather than preserving a storage-only chevron exception.
+    rest of the product or obscure inline capacity bars. Storage pool rows
+    and physical-disk rows must also route pointer and focus preview through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, and may
+    keep deliberate expand/pin ownership on
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`.
+    Storage group headers have no preview or pin: the whole row and its
+    disclosure chevron perform the same open/close, the row keeps
+    `data-summary-group-id` so the shared clear-surface click leaves an open
+    pool alone, and the header must not add a separate scope/pinned pill
+    button beside the chevron. Touch pool, physical-disk, and storage group
+    rows own expansion through the whole row, so they must explicitly
+    suppress the redundant visible mobile chevron.
     A drag that selects pool row text, such as a pool name being copied, must
     not expand the row: `StoragePoolRow` wires the shared
     `createRowTextSelectionGuard()` from
@@ -4484,9 +4487,9 @@ for pools and disks. Expanding a pool row or selecting a disk row sets the
 focused summary series ID and row hover sets the hovered one;
 `frontend-modern/src/components/Storage/useStoragePageModel.ts` must resolve
 both through the shared `useSummaryPageInteractionState` bridge in
-`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool, disk,
-and pool-group row emphasis keeps the same page/group/entity semantics as
-workloads instead of preserving a storage-local hover/focus branch. The
+`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool and disk
+row emphasis keeps the same page/entity semantics as workloads instead of
+preserving a storage-local hover/focus branch. The
 storage summary history that `useStorageSummaryCharts.ts` loads feeds only the
 pool Growth column and its sort; no storage summary card strip renders, and
 one that returns must stay page-scoped instead of collapsing to the expanded
@@ -4495,8 +4498,7 @@ That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
 auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
 hands the focused pool or disk series to the `revealActiveSeries` callback,
-which reopens a focused pool's collapsed owning group, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge. Focus
+which reopens a focused pool's collapsed owning group. Focus
 only ever names a row in the active pools or disks view, so the callback never
 switches views; the view-switching branches that served the retired jump to
 the active row are gone. Reveal runs once per deliberate focus change: the

@@ -12,7 +12,6 @@ import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
 import { useStorageContentCardModel } from './useStorageContentCardModel';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 type StorageContentCardProps = {
   view: () => StorageView;
@@ -37,13 +36,7 @@ type StorageContentCardProps = {
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoadingPools: () => boolean;
-  activeSummaryGroupScope: () => SummarySeriesGroupScope | null;
   clearPinnedSummaryScope: () => void;
-  hoveredSummaryGroupScope: () => SummarySeriesGroupScope | null;
-  focusedSummaryGroupScope: () => SummarySeriesGroupScope | null;
-  focusedSummaryGroupId: () => string | null;
-  onGroupFocusChange: (scope: SummarySeriesGroupScope | null) => void;
-  onGroupHoverChange: (scope: SummarySeriesGroupScope | null) => void;
   highlightedSummaryResourceId: () => string | null;
   hoveredStorageResourceId: () => string | null;
   setTableRootRef: (element: HTMLDivElement | undefined) => void;
@@ -58,8 +51,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
     view: props.view,
     selectedNodeId: props.selectedNodeId,
   });
-  const showClearSelection = () =>
-    Boolean(props.focusedSummaryGroupId() || props.expandedPoolId() || props.selectedDiskId());
+  const showClearSelection = () => Boolean(props.expandedPoolId() || props.selectedDiskId());
 
   return (
     <TableCard
@@ -108,12 +100,6 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           highlightedRecordId={props.highlightedRecordId()}
           getRecordAlertState={props.getRecordAlertState}
           isLoading={props.isLoadingPools()}
-          activeSummaryGroupScope={props.activeSummaryGroupScope()}
-          hoveredSummaryGroupScope={props.hoveredSummaryGroupScope()}
-          focusedSummaryGroupScope={props.focusedSummaryGroupScope()}
-          focusedSummaryGroupId={props.focusedSummaryGroupId()}
-          onGroupFocusChange={props.onGroupFocusChange}
-          onGroupHoverChange={props.onGroupHoverChange}
           highlightedSummarySeriesId={props.highlightedSummaryResourceId()}
           onHoverChange={props.setHoveredStorageResourceId}
         />

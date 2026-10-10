@@ -796,8 +796,13 @@ the `white_label` branding entitlement.
     action emergency stop are revalidated under one admission coordinator and
     committed with `executing`. Missing or unreadable policy denies dispatch.
     Human approval remains separate, but `NeverAutoRemediate`, plan drift, and
-    emergency stop are universal. Emergency stop after `executing` is only
-    best-effort cancellation and must never be described as rollback.
+    emergency stop are universal for every new admission, and human dispatch
+    revalidates them under the same admission coordinator rather than before
+    it, so an acknowledged lock save is never followed by a new lifecycle
+    admission. An already admitted dispatch, including one resumed by restart
+    recovery, is not revalidated. Emergency stop after
+    `executing` is only best-effort cancellation and must never be described
+    as rollback.
     The typed host-update executor wired here is likewise not generic command
     authority. It may dispatch only the closed `install_os_updates` operation,
     bound to the server-observed package inventory fingerprint and canonical

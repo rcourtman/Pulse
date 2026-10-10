@@ -1,8 +1,15 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PatrolAutonomyLevel } from '@/api/patrol';
+import {
+  PATROL_CONTROL_ANCHOR,
+  PATROL_CONTROL_PATH,
+  PATROL_CONTROL_PATH_WITH_STARTER,
+  PATROL_OPERATIONS_LOOP_ANCHOR,
+} from '@/routing/resourceLinks';
 import { PatrolIntelligenceHeader } from '../PatrolIntelligenceHeader';
 import type { PatrolIntelligenceState } from '../usePatrolIntelligenceState';
 
@@ -11,7 +18,7 @@ const WATCH_ONLY_DETAIL =
 
 interface HeaderStateOptions {
   autonomyLevel?: PatrolAutonomyLevel;
-  autoFixLocked?: boolean;
+  autoFixLocked?: boolean | (() => boolean);
   setupOnly?: boolean;
   autopilotDialogOpen?: boolean;
 }
@@ -23,7 +30,10 @@ const createState = (options: HeaderStateOptions = {}) => {
     autopilotStatus: () => null,
     autonomyLevel: () => autonomyLevel,
     requestedAutonomyLevel: () => autonomyLevel,
-    autoFixLocked: () => options.autoFixLocked ?? false,
+    autoFixLocked: () => {
+      const locked = options.autoFixLocked ?? false;
+      return typeof locked === 'function' ? locked() : locked;
+    },
     autoFixCapabilityBlock: () => undefined,
     licenseRuntimeIdentity: () => undefined,
     patrolRunHistory: { value: () => [] },
@@ -127,5 +137,100 @@ describe('PatrolIntelligenceHeader Patrol mode placement', () => {
     const dialogs = screen.getAllByRole('dialog');
     expect(dialogs).toHaveLength(1);
     expect(dialogs[0]).toHaveAccessibleName('Activate Autopilot');
+  });
+});
+
+const renderHeaderAt = (url: string, state: PatrolIntelligenceState) => {
+  window.history.replaceState(null, '', url);
+  return renderHeader(state);
+};
+
+const navigateTo = (url: string) => {
+  window.history.pushState(null, '', url);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+// Settings and licence Patrol mode actions link to #patrol-control, and the
+// api-contracts "Patrol control route target" clause requires that anchor to
+// land on a visible Patrol mode selector, not on its collapsed disclosure.
+describe('PatrolIntelligenceHeader Patrol mode anchors', () => {
+  let scrolled: Element[];
+
+  beforeEach(() => {
+    scrolled = [];
+    HTMLElement.prototype.scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolled.push(this);
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it.each([
+    ['the Patrol mode entry points', PATROL_CONTROL_PATH],
+    ['the licence starter handoff', PATROL_CONTROL_PATH_WITH_STARTER],
+    ['the operations-loop compatibility anchor', `/patrol#${PATROL_OPERATIONS_LOOP_ANCHOR}`],
+  ])('opens the Patrol mode selector and scrolls to it for %s', async (_entry, url) => {
+    renderHeaderAt(url, createState().state);
+
+    const details = modeDisclosure();
+    expect(details.open).toBe(true);
+    expect(details.contains(screen.getByRole('group', { name: 'Patrol mode' }))).toBe(true);
+    await vi.waitFor(() => expect(scrolled).toEqual([details]));
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+  });
+
+  it('keeps the disclosure collapsed on a plain Patrol visit', async () => {
+    renderHeaderAt('/patrol', createState().state);
+
+    expect(modeDisclosure().open).toBe(false);
+    await nextFrame();
+    expect(scrolled).toEqual([]);
+  });
+
+  it('opens the disclosure when the selector mounts after the licence loads', async () => {
+    const [locked, setLocked] = createSignal(true);
+    renderHeaderAt(PATROL_CONTROL_PATH, createState({ autoFixLocked: locked }).state);
+    expect(screen.queryByText('Mode and automation')).toBeNull();
+
+    setLocked(false);
+
+    await vi.waitFor(() => expect(modeDisclosure().open).toBe(true));
+    await vi.waitFor(() => expect(scrolled).toEqual([modeDisclosure()]));
+  });
+
+  it('opens the disclosure when navigation moves onto the anchor', async () => {
+    renderHeaderAt('/patrol', createState().state);
+    expect(modeDisclosure().open).toBe(false);
+
+    navigateTo(PATROL_CONTROL_PATH);
+
+    await vi.waitFor(() => expect(modeDisclosure().open).toBe(true));
+  });
+
+  it('leaves a disclosure the user collapsed alone while the anchor stays', async () => {
+    renderHeaderAt(PATROL_CONTROL_PATH, createState().state);
+    const details = modeDisclosure();
+    await vi.waitFor(() => expect(scrolled).toHaveLength(1));
+
+    details.open = false;
+    navigateTo(`/patrol?attention=finding-1#${PATROL_CONTROL_ANCHOR}`);
+    await nextFrame();
+
+    expect(details.open).toBe(false);
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it('needs no disclosure for plan-locked installs', async () => {
+    renderHeaderAt(PATROL_CONTROL_PATH, createState({ autoFixLocked: true }).state);
+
+    expect(document.querySelector('details')).toBeNull();
+    expect(screen.getByText('Patrol mode').closest('#patrol-control')).not.toBeNull();
+    await nextFrame();
+    expect(scrolled).toEqual([]);
   });
 });
