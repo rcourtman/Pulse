@@ -979,6 +979,50 @@ private, and report evidence as unavailable if safe collection is not possible.
 QNAP and Unraid log locations are described in the
 [space troubleshooting section](#installer-fails-with-not-enough-free-disk-space).
 
+### Agent lookup returns HTTP 401 or 403
+
+At `/api/agents/agent/lookup`, Pulse authenticates the request **before**
+searching for the host. **HTTP 401** is an authentication rejection;
+**HTTP 403** with `missing_scope` means the authenticated token lacks
+`agent:report`. An authenticated lookup can return **HTTP 404** when no matching
+host exists. A 401 alone does not identify a mistyped, expired or revoked token,
+the wrong Pulse instance, or an upstream authentication layer.
+
+The silent token prompt only keeps the secret out of the copied command and
+shell history; it does not change reporting permissions. The normal
+**Settings → Infrastructure → Install on a host** flow issues a monitoring
+token. It does not use `--enroll`; the separate cluster deployment flow exchanges
+a bootstrap token for a runtime token. Do not substitute a bootstrap token or
+assume an enrolment-specific correction applies to a normal host installation.
+
+Use the [bounded agent log reader](#collect-agent-logs-safely) on the affected
+agent host, or inspect an already retained excerpt privately. Distinguish:
+
+- `remote_config_client` reporting a lookup failure: this concerns configuration
+  retrieval and does not establish whether ordinary host reports were accepted.
+- **Pulse rejected this agent's API token** from host reporting: keep its HTTP
+  status and redacted error, separately from the lookup failure.
+
+A running local service or successful-looking installer output does not prove
+that Pulse accepted a fresh report. No host-report error in the selected log
+window is inconclusive, not proof of successful reporting. Do not restart,
+re-enrol, delete identity or enable debug logging to manufacture that evidence.
+
+In your signed-in administrator session on the **same Pulse instance** the
+agent targets, check the intended record under **Settings → Security → API
+Tokens** without revealing or copying its secret. Its presence, expiry and
+reporting scope help distinguish server-side rejection, but do not prove that
+the running service is using that record. Keep service environments, token
+files and connection files private; do not paste a credential into a command,
+URL or issue. Do not grant administrator scope, change Proxmox permissions or
+disable authentication/TLS to test a guess.
+
+If reporting this problem, say whether the existing error is lookup-only or
+also affects host reporting, and share only the failure stage, HTTP status and
+manually redacted error line. Keep the installation and saved credentials
+unchanged until the failing stage is understood; a 401 is not itself a reason
+to reinstall or rotate every token.
+
 ### pfSense service disabled after a major upgrade
 
 Pulse installs two service files on pfSense: the FreeBSD rc.d service at
