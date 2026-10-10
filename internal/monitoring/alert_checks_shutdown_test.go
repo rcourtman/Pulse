@@ -58,6 +58,9 @@ func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan struct{}, f
 	cfg.TimeThresholds = map[string]int{}
 	cfg.MetricTimeThresholds = nil
 	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
+	// Canonical fixtures link a host agent to the node, so the agent can own
+	// the memory alert instead of CheckNode. Admit either normal attribution.
+	cfg.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
 	manager.UpdateConfig(cfg)
 	entered, release := make(chan struct{}), make(chan struct{})
 	var enterOnce, releaseOnce sync.Once
