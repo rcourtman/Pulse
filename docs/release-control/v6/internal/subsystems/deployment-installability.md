@@ -7415,67 +7415,49 @@ and tooling proofs, **not native Tailscale/update/recovery acceptance**. That
 requires reviewed publication, infrastructure activation and a terminal hosted
 collection through the fixed Delivery dispatcher.
 
-### Release-line dependency advisory watch (1 October 2026)
+### Main dependency advisory watch (10 October 2026)
 
-On 30 September and 1 October 2026 `GHSA-q2hr-2g5m-vwhr` (`brace-expansion`)
-and `GHSA-p98j-92pf-mc4p` (DOMPurify) were published against unchanged
-`frontend-modern/package-lock.json` graphs. The required *Audit complete
-frontend dependency graph* step in `build-and-test.yml` then failed every pull
-request on `main`, `release/v6.4` and `release/v6.5`. That held the v6.4.6
-preparation pull request and the v6.5 release candidate for days with no owner.
-The scheduled npm audit in `security-scan.yml` only informs, and a scheduled
-workflow runs on the default branch alone, so release lines were never checked
-before a pull request hit them.
+The daily watch was built on 1 October for separately maintained release lines.
+Since 4 October all releases carry main, and those branches are retained history,
+not repair or delivery targets. In run 38027619322 on 10 October, main's complete
+audit passed but the workflow failed only on release/v6.5 and release/v6.6. Its
+summary incorrectly claimed those findings blocked every PR and release and
+recommended landing repairs on the retired lines. The old vulnerability findings
+remain evidence about those old graphs; this scope correction does not clear them
+or prove that shipped software is unaffected or has received main's repairs.
 
 `.github/workflows/dependency-advisory-watch.yml` runs daily and on manual
-dispatch with only `contents: read` on the hosted `ubuntu-24.04` image. It uses
-no secrets, persists no checkout credentials and uploads nothing. Its first job
-lists `main` plus every remote `release/v<major>.<minor>` branch at or newer
-than the line of the release GitHub reports as latest. Patch branches such as
-`release/v6.4.2` and legacy `release/5.1` are never lines. If the latest-release
-lookup fails, every release line is audited instead of none.
+dispatch with only `contents: read` on hosted `ubuntu-24.04`. Its sole audit job
+fetches the fixed main ref and reads only `frontend-modern/package.json` and
+`package-lock.json` as data, recording `AUDITED_MAIN_SHA`. It does not discover
+release branches, query release metadata, check out or execute fetched code,
+install packages, persist checkout credentials, use secrets or upload artifacts.
+The runner comes from the workflow's own checkout. Node.js 24 and the setup-node
+pin still match build-and-test; `package-manager-cache: false` preserves the
+cache-free watch, including setup-node's automatic npm caching behaviour.
 
-The second job is a fail-fast-free matrix over those branches. A scheduled job
-runs in the default branch's cache and token scope, so it never checks out,
-installs or runs another branch's code: each entry fetches the audited branch
-and reads only its `frontend-modern/package.json` and `package-lock.json` as
-data with `git show`, uses no dependency cache (its `actions/setup-node` step
-sets `package-manager-cache: false`, because that pin turns npm caching on by
-itself once `package.json` names npm as its `packageManager`), and repeats the required
-build-and-test audit against that lockfile with the same `actions/setup-node`
-pin and Node.js 24 and `scripts/npm-audit-retry.sh all` with
-`NPM_AUDIT_REQUIRE_RESULT=true`. `npm audit` answers from the lockfile, so the
-verdict is the one the required step reaches after its install. The runner always comes from the workflow's
-own commit, so a line whose build-and-test predates it is held to main's
-verdict, which fails on any finding at any severity just as a plain `npm audit`
-does. `frontend-modern/package-lock.json` is the only lockfile the required
-audit covers, so it is the only one the watch audits. The job fails whenever
-the audit fails. The step summary and one failure annotation name the branch,
-the GHSA identifiers and packages, and the fix: `npm audit fix
---package-lock-only` in `frontend-modern` on that line, then raising the
-matching floors in `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`.
-An unreachable advisory endpoint, or a missing lockfile before any verdict,
-also fails the job but is reported as such and never as an advisory. Only
-validated branch names, package names and GHSA identifiers reach the
-annotation, and registry text in the summary is escaped.
+The watch still runs `scripts/npm-audit-retry.sh all` with
+`NPM_AUDIT_REQUIRE_RESULT=true`: every finding at any severity fails the job,
+as do unavailable or malformed audit results. It does not weaken the required
+build-and-test dependency audit, source-security floors or qualification.
+The summary names the packages and GHSA identifiers, directs compatibility and
+security proof plus repair to main, and distinguishes source landing from a
+containing release. It accurately distinguishes the strict watch from unchanged-
+graph PRs that only warn. Missing lockfiles/tooling and an unavailable endpoint
+are failures without an invented advisory. Only the fixed main name, validated
+package names and GHSA identifiers reach annotations; registry text is escaped.
+The summary CLI refuses retired release branches and arbitrary branch names.
 
-The watch gates nothing directly. The maintainer release-path health timer
-watches it, so a failed run becomes a top-priority Delivery request naming the
-failing line.
-
-Verification: `scripts/tests/test_dependency_advisory_watch.py` covers line
-selection (newest-stable floor, patch and legacy branch exclusion, the
-fail-wide fallback, `main` always present), the summary and annotation for
-advisory, clean, unreachable and install-failure outcomes, escaping of hostile
-registry text, refusal of unexpected branch names, and the workflow contract
-(triggers, read-only hosted shape, matrix wiring, and parity of the Node.js
-pin, install command and audit runner with the required build-and-test step).
-`scripts/check_workflow_trust.py` and actionlint pass. A local run of the
-helper and `npm-audit-retry.sh` against the 1 October 2026 heads selected
-`main`, `release/v6.4` and `release/v6.5`, passed `main`, and failed
-`release/v6.4` (`GHSA-p98j-92pf-mc4p`) and `release/v6.5`
-(`brace-expansion` and DOMPurify advisories). The hosted run is not yet claimed.
-
+Verification: `scripts/tests/test_dependency_advisory_watch.py` checks the sole
+fixed-main job, no release discovery, executes its actual input recipe with a
+closed Git stand-in and an adverse branch environment, and verifies the exact
+main identity marker and two manifest reads. It covers main-only repair guidance,
+retired-branch refusal, advisory/clean/unavailable/tooling outcomes, hostile-text
+escaping, hosted/read-only/no-install/cache-free shape and unchanged action pins.
+The real audit runner still fails the same finding the unchanged-graph PR mode
+only warns on. `scripts/check_workflow_trust.py` and actionlint remain validation
+requirements. This is product dependency monitoring, not release preparation,
+qualification, promotion or a claim of an operationally completed watch repair.
 
 ### Backend test compilation before CI fan-out
 

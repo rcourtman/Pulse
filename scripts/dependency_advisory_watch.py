@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """Helpers for the daily dependency advisory watch workflow.
 
-`lines` turns `git ls-remote --heads` output and the newest stable release tag
-into the JSON list of branches the watch audits: `main` plus every
-`release/v<major>.<minor>` line at or newer than the newest stable's line.
-Without a usable stable tag every release line is kept, so a lookup failure
-widens the watch instead of silently narrowing it.
-
-`summary` reads the output of `scripts/npm-audit-retry.sh` for one branch and
-writes the step summary plus one failure annotation naming the branch, the
-advisories and the fix. Registry-sourced text never reaches the annotation:
-only the validated branch name, package names and GHSA identifiers do.
+`summary` reads the output of `scripts/npm-audit-retry.sh` for main and writes
+the step summary plus one failure annotation naming the advisories and the
+fix. Releases come only from main; retained release branches are not repair
+targets. Registry-sourced text never reaches the annotation: only the fixed
+branch name, validated package names and GHSA identifiers do.
 """
 
 from __future__ import annotations
@@ -22,34 +17,17 @@ import sys
 from pathlib import Path
 
 
-LINE_RE = re.compile(r"^release/v(\d+)\.(\d+)$")
-STABLE_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 GHSA_RE = re.compile(r"GHSA(?:-[23456789cfghjmpqrvwx]{4}){3}")
 PACKAGE_RE = re.compile(r"^(?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$")
 FINDING_PREFIX = "audit finding "
 UNREACHABLE_MARKER = "could not reach the advisory endpoint"
 FIX_STEPS = (
-    "In frontend-modern on that branch run `npm audit fix --package-lock-only`, "
+    "Review the affected graph on main. In frontend-modern run "
+    "`npm audit fix --package-lock-only`, qualify the resulting graph, "
     "then raise the matching floors in "
     "`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` "
-    "and land both on the branch."
+    "and land both on main. A source fix reaches users only in a containing release."
 )
-
-
-def release_lines(ls_remote: str, latest_stable: str) -> list[str]:
-    lines: dict[tuple[int, int], str] = {}
-    for row in ls_remote.splitlines():
-        parts = row.split()
-        if len(parts) != 2 or not parts[1].startswith("refs/heads/"):
-            continue
-        branch = parts[1][len("refs/heads/"):]
-        match = LINE_RE.fullmatch(branch)
-        if match:
-            lines[(int(match.group(1)), int(match.group(2)))] = branch
-    stable = STABLE_RE.fullmatch(latest_stable.strip())
-    floor = (int(stable.group(1)), int(stable.group(2))) if stable else (0, 0)
-    active = [lines[key] for key in sorted(lines) if key >= floor]
-    return ["main", *active]
 
 
 def parse_findings(log: str) -> list[dict]:
@@ -126,23 +104,22 @@ def render(branch: str, outcome: str, log: str) -> tuple[str, str | None]:
             markdown_cell(fix_text))) + " |")
     advisories = ", ".join(sorted(identifiers)) or "see job log"
     body = (header
-            + f"New npm advisories block every pull request and release on `{branch}` through the "
-            + "required *Audit complete frontend dependency graph* check in build-and-test.yml.\n\n"
+            + "The strict daily audit found dependency advisories on main. "
+            + "Pull requests that change the graph must pass the required "
+            + "*Audit complete frontend dependency graph* check; unchanged graphs only warn.\n\n"
             + "\n".join(rows)
             + "\n\n**Suggested fix.** " + FIX_STEPS + "\n")
     annotation = (f"Frontend dependency advisory on {branch}: {advisories} in "
-                  f"{', '.join(sorted(set(packages)))}. This blocks every PR and release on {branch}. "
-                  "The fix is a lockfile advisory floor bump on that line: npm audit fix --package-lock-only "
-                  "in frontend-modern, then raise the floors in dependencySecurity.test.ts.")
+                  f"{', '.join(sorted(set(packages)))}. The strict daily watch failed. "
+                  "Review and qualify a lockfile advisory floor bump on main: "
+                  "npm audit fix --package-lock-only in frontend-modern, "
+                  "then raise the floors in dependencySecurity.test.ts and land both on main.")
     return body, annotation
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    lines = commands.add_parser("lines")
-    lines.add_argument("--heads", required=True, type=Path, help="git ls-remote --heads output")
-    lines.add_argument("--latest-stable", default="", help="newest stable release tag, if known")
     summary = commands.add_parser("summary")
     summary.add_argument("--branch", required=True)
     summary.add_argument("--outcome", required=True)
@@ -150,11 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     summary.add_argument("--summary-file", required=True, type=Path)
     args = parser.parse_args(argv)
 
-    if args.command == "lines":
-        print(json.dumps(release_lines(args.heads.read_text(encoding="utf-8"), args.latest_stable)))
-        return 0
-
-    if args.branch != "main" and not LINE_RE.fullmatch(args.branch):
+    if args.branch != "main":
         print(f"refusing unexpected branch name {args.branch!r}", file=sys.stderr)
         return 2
     try:

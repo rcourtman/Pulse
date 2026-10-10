@@ -4772,7 +4772,7 @@
           },
           {
             "id": "dependency-advisory-watch",
-            "label": "daily release-line dependency advisory watch proof",
+            "label": "daily main dependency advisory watch proof",
             "match_prefixes": [],
             "match_files": [
               ".github/workflows/dependency-advisory-watch.yml",
