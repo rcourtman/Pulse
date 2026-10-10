@@ -3323,9 +3323,11 @@ a new API state machine, queue contract, or verification-accounting field.
    operator-readable even when internal Assistant handoff metadata still uses
    assessment terminology
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
-   and the Patrol control presentation boundary, so the always-visible Patrol
-   control selector owns the selected autonomy level, plan-locked installs keep
-   watch-only as the current capability and the free Patrol working surface must
+   and the Patrol control presentation boundary, so the Patrol mode selector
+   inside the header's collapsed `Mode and automation` disclosure owns the
+   selected autonomy level, plan-locked installs get no selector or disclosure
+   and keep watch-only as the current capability in one inline `Patrol mode`
+   line, and the free Patrol working surface must
    not render a disabled paid-level matrix, compact Pro badges, or any paid-mode
    disclosure. The free surface stays clean of paid-feature surfacing; Pro
    discovery belongs in Settings, website/docs, and contextual at-need prompts,
@@ -3371,10 +3373,15 @@ a new API state machine, queue contract, or verification-accounting field.
    what Patrol may do under the selected control level, and what to run or
    review next, not activation-loop proof, queue internals, or verification
    accounting
-   and the Patrol control dialog plus restored Patrol mode Assistant session copy, so API
-   compatibility identifiers such as `patrol_configuration_failure` may remain
-   stable while user-facing and model-facing labels describe setting, saving,
-   and reviewing Patrol control rather than a generic configuration/apply flow
+   and the restored Patrol mode Assistant session copy, so the API
+   compatibility kind `patrol_configuration_failure`, which only sessions saved
+   by earlier builds carry, may remain stable while the restored drawer title,
+   subject, and action label (`Patrol mode save failure`, `Patrol mode`,
+   `Review Patrol mode issue`) describe saving and reviewing Patrol mode rather
+   than a generic configuration/apply flow. The Patrol header has no Patrol
+   control or configuration dialog: choosing `Watch only`, `Ask first`, or
+   `Safe auto-fix` in its mode selector saves that mode directly, and its one
+   dialog is the Autopilot acknowledgement opened by choosing `Autopilot`
    and the Patrol main-surface treatment itself, so the same governed summary contract lands inside the existing workspace and Current work surfaces while severity travels through compact header accents and icon badges instead of a page-local full-width verdict strip
    and the Patrol workspace badge treatment, so the API-owned finding,
    runtime, and run-history counts remain semantic input only while visible
@@ -3523,8 +3530,9 @@ a new API state machine, queue contract, or verification-accounting field.
    customer-facing copy must name the visible choices as `Watch only`, `Ask first`,
    `Safe auto-fix`, and `Autopilot` rather than leaking compatibility terminology.
    policy rather than changing the compatibility API boundary; setup-only
-   readiness may hide those run/configuration affordances, but the visible
-   Patrol mode selector remains the primary policy boundary during setup
+   readiness may hide those run/configuration affordances, but the Patrol mode
+   selector stays in the header's `Mode and automation` disclosure as the
+   primary policy boundary during setup
    and the Patrol mode presentation boundary, so `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx` routes active Patrol findings into the Patrol-owned findings workflow, renders the first-party loop as check/investigate/act-under-policy/verify/record, uses `Patrol mode` as the human-facing name for the governed autonomy selector while preserving `patrol_control`, `patrolControl*`, and `patrol_autonomy` only for compatibility route and wire identifiers, and demotes Assistant and external-agent readiness out of the primary operator loop without introducing a new API request shape, frontend-authored tool route, serialized remediation plan, or page-local MCP setup contract; direct single-finding CTAs must derive from existing finding-presentation helpers and canonical routes such as the Patrol provider-settings route, selected findings, approvals, and history rows may still open contextual Assistant handoffs through their governed owners, the user-facing `Patrol` route title and `Open work` queue title must remain presentation labels over the same current-work status contract rather than new payload states, setup-only Patrol runtime failures must use existing finding/runtime fields to render the Patrol-owned `Fix Patrol setup` framing, a dedicated setup task, and one direct `Open Provider & Models` action while suppressing the readiness banner, generic issue-row chips, filter chrome, and run-history action chrome that would compete with provider setup, but recent changes, correlations, and policy-coverage payloads must not render as a generic first-party Details/evidence console on the Patrol page, and raw finding lifecycle telemetry must be reserved for explicit all/resolved/history or selected-run review states instead of default active current-issue expansion
    The Patrol page may consume server-authored readiness and preflight-backed
    status, but it must translate that transport state into `Patrol setup issue`
