@@ -17,6 +17,34 @@
 
 ## Purpose
 
+### Guest filesystem guidance honours its caller's logger
+
+Missing-filesystem guidance uses the existing caller context logger, falling
+back to the ordinary global logger when none is set. Message, severity, scope,
+provider-text exclusions and backup precautions are unchanged. The connected
+`TestGuestFilesystemFailureGuidanceUsesObservedEvidence` captures its own
+context-tagged output without replacing a shared logger; the scheduler-health
+fixture stops the monitor it owns. This repairs the observed shared-logger race
+with an otherwise leaked alert-save worker, not a guest or backup recovery.
+
+### Measured zero guest availability stays authoritative
+
+Status/current meminfo distinguishes an explicit numeric `available: 0` from
+an omitted or null field. The measured zero stays selected, including through
+JSON copies, rather than being replaced by free/cache components or another
+memory source. Positive programmatic samples and legacy payloads without
+availability retain their existing behaviour; invalid numeric fields remain
+errors. The internal presence bit never becomes a wire field.
+
+`TestGuestStatusMemoryAvailabilityContract` covers selection and both ordinary
+collectors through direct/cluster HTTP clients, canonical views, History and
+actual threshold evaluation: measured exhaustion raises a breach, missing
+availability cannot clear it or add History, and fresh healthy evidence permits
+recovery. `TestVMStatusMemoryAvailabilityPresence` preserves the wire distinction.
+The sampled capacity, original observation time, guest command/backup-lock
+fences, QGA parser and configured thresholds are unchanged. This is synthetic
+source evidence, not reporter #2762 cause, native recovery or availability.
+
 ### Guest memory readings keep their own capacity
 
 The QEMU memory selector pairs guest availability with the total from the

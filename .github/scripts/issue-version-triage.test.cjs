@@ -263,6 +263,215 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
 });
 
+test("topic classification reads later paragraphs after an empty first line", () => {
+  for (const firstLine of ["None", "<!-- List distinct topics here. -->", "_No response_"]) {
+    const body = [
+      "### Additional actionable topics", firstLine, "",
+      "The second host also loses its Docker inventory.", "",
+      "### Pulse version", "6.5.0",
+    ].join("\n");
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+  }
+});
+
+test("topic classification stops at form fields but retains topic subheadings", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const followingField of ["Pulse version", "Additional context", "Logs, screenshots, or diagnostics", "Confirmations"]) {
+      assert.equal(classifyAdditionalActionableTopics([
+        "### Additional actionable topics", "None", "",
+        `### ${followingField}`, "An error or a second topic outside this field.",
+      ].join(newline)), false);
+    }
+    assert.equal(classifyAdditionalActionableTopics([
+      "### Additional actionable topics", "None", "",
+      "### Separate backup problem", "Backups belong to the wrong host.",
+      "### Pulse version", "6.5.0",
+    ].join(newline)), true);
+  }
+});
+
+test("hidden template fields cannot declare topics or override feedback type", () => {
+  const { classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const hidden = ["<!--", "### Additional actionable topics", "A second bug.",
+    "### Feedback type", "Bug / regression", "-->"].join("\n");
+  assert.equal(classifyAdditionalActionableTopics(hidden), null);
+  assert.equal(classifyV6FeedbackType(hidden), null);
+  assert.equal(classifyAdditionalActionableTopics(
+    `${hidden}\n### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0`
+  ), false);
+  assert.equal(classifyV6FeedbackType(
+    `${hidden}\n### Feedback type\nDocumentation issue\n\n### Pulse version\n6.5.0`
+  ), "documentation");
+  assert.equal(classifyV6FeedbackType(
+    "### Feedback type\nDocumentation issue\n\n### Describe the bug\nBug / regression"
+  ), "documentation");
+});
+
+test("a hidden hint or empty topic field is not an actionable declaration", () => {
+  for (const value of ["", "<!-- A second bug. -->", "None\n\n<!-- Another topic. -->"]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`
+    ), false);
+  }
+});
+
+test("syncLabels surfaces newly added later-line topics without resetting Community state", async () => {
+  const previousBody = "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0";
+  const body = "### Additional actionable topics\nNone\n\n" +
+    "Backup attribution is also wrong.\n\n### Pulse version\n6.5.0";
+  for (const action of ["opened", "edited", "reopened"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2800, title: "Host inventory report", body,
+      labels: [{ name: "enhancement" }, { name: "needs-retest-on-latest" }, { name: "needs-human" }] };
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action, issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels),
+      action === "reopened" ? [] : ["needs-decomposition"]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2800]);
+  }
+});
+
+test("syncLabels ignores hidden bug examples and topic hints", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2801, title: "Documentation wording",
+    body: "<!--\n### Feedback type\nBug / regression\n" +
+      "### Additional actionable topics\nAnother bug.\n-->\n" +
+      "### Feedback type\nDocumentation issue\n\n" +
+      "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0",
+    labels: [{ name: "needs-retest-on-latest" }, { name: "needs-decomposition" }] };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["documentation"]);
+  assert.deepEqual(calls.createLabel.map(call => call.name), []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
+test("fenced examples cannot declare issue metadata", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const fence of ["```", "~~~~", "   ````"]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const body = ["### Existing evidence", `${fence}markdown`,
+        "### Pulse version", "6.4.1", "### Feedback type", "Bug / regression",
+        "### Additional actionable topics", "A copied example, not a new topic.",
+        fence].join(newline);
+      assert.equal(extractPulseVersion("No declared version", body), null, body);
+      assert.equal(extractPulseVersion("Bug on v6.5.0", body), "6.5.0", body);
+      assert.equal(classifyV6FeedbackType(body), null, body);
+      assert.equal(classifyAdditionalActionableTopics(body), null, body);
+    }
+  }
+});
+
+test("only matching complete fences end pasted examples", () => {
+  const { extractPulseVersion, classifyV6FeedbackType } = triage.internals;
+  for (const { open, falseClose } of [
+    { open: "````text", falseClose: "```" },
+    { open: "```text", falseClose: "~~~" },
+    { open: "~~~text", falseClose: "```" },
+    { open: "```text", falseClose: "``` still part of the log" },
+    { open: "```text", falseClose: "" },
+  ]) {
+    const body = [open, "Log text", falseClose, "### Pulse version", "6.4.1",
+      "### Feedback type", "Regression"].join("\n");
+    assert.equal(extractPulseVersion("Unknown", body), null, body);
+    assert.equal(classifyV6FeedbackType(body), null, body);
+  }
+});
+
+test("real declarations after fenced examples remain authoritative", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const fence of ["```", "~~~"]) {
+    const body = [fence, "Pulse version: 6.4.1", "### Pulse version", "6.4.1",
+      "### Feedback type", "Regression", "### Additional actionable topics", "Copied topic", fence,
+      "### Feedback type", "Documentation issue", "### Additional actionable topics", "None",
+      "### Pulse version", "6.5.0"].join("\n");
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+    assert.equal(classifyV6FeedbackType(body), "documentation", body);
+    assert.equal(classifyAdditionalActionableTopics(body), false, body);
+  }
+});
+
+test("indented log fields cannot declare a legacy version", () => {
+  for (const indent of ["    ", "\t"]) {
+    const body = `${indent}Pulse version: 6.4.1\n${indent}Agent version: 6.4.1\n`;
+    assert.equal(triage.internals.extractPulseVersion("No declared version", body), null, body);
+    assert.equal(triage.internals.extractPulseVersion("Bug on v6.5.0", body), "6.5.0", body);
+  }
+});
+
+test("real version fields preserve fenced values without borrowing later evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const field of ["### Pulse version", "Pulse | Version"]) {
+    for (const fence of ["````", "~~~"]) {
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", [field, `${fence}text`,
+        "V6.5.0-rc.1", fence, "### Agent version", "6.4.5"].join("\n")), "6.5.0-rc.1");
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", [field, "unknown", `${fence}text`,
+        "Agent version: 6.5.0", fence].join("\n")), null);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", [field, "6.4", `${fence}text`,
+        "6.5.0", fence].join("\n")), null);
+    }
+  }
+});
+
+test("structured product-named versions remain declared evidence", () => {
+  assert.equal(triage.internals.extractPulseVersion("Bug",
+    "### Pulse version\nPulse v6.4.5-beta.1\n### Agent version\n6.4.5"), "6.4.5-beta.1");
+  assert.equal(triage.internals.extractPulseVersion("Bug",
+    "### Pulse version\nConfirmed on a modified main build around v6.4.5-rc.2\n"), null);
+});
+
+test("fenced headings do not truncate genuine secondary topics", () => {
+  const body = ["### Additional actionable topics", "The generated command also needs review:",
+    "```markdown", "### Pulse version", "A heading in the example, not a new field.", "```",
+    "The command must preserve both mounts.", "### Pulse version", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+});
+
+test("feedback keeps its selected value separate from fenced examples", () => {
+  const body = ["### Feedback type", "Documentation issue", "```text", "Regression example",
+    "### Pulse version", "6.4.1", "```", "### Pulse version", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyV6FeedbackType(body), "documentation");
+  assert.equal(triage.internals.extractPulseVersion("Bug", body), "6.5.0");
+});
+
+test("syncLabels cannot classify copied issue templates or disturb Community state", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2806, title: "Documentation wording",
+    body: "```markdown\n### Feedback type\nBug / regression\n### Pulse version\n6.4.1\n" +
+      "### Additional actionable topics\nCopied example\n```\n",
+    labels: ["enhancement", "needs-retest-on-latest", "needs-human", "needs-decomposition"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2806]);
+});
+
+test("syncLabels keeps structured unknown separate from a quoted agent version", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2807, title: "Upgrade from v6.4.5",
+    body: "### Pulse version\nunknown\n```text\nAgent version: 6.5.0\n```\n",
+    labels: ["bug", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]]);
+  assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+});
+
 test("every actionable issue form exposes the decomposition signal", () => {
   const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
   for (const name of [

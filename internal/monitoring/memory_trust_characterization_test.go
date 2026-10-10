@@ -1198,3 +1198,8 @@ func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T)
 		})
 	}
 }
+
+func TestGuestStatusMemoryAvailabilityContract(t *testing.T) {
+	testGuestStatusMemoryAvailabilitySelection(t)
+	testGuestStatusMemoryAvailabilityPolling(t)
+}

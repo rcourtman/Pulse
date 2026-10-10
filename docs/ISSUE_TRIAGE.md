@@ -197,6 +197,19 @@ topics or create issues automatically. A maintainer or triage agent reviews the
 source context, chooses the correct destination, creates links, and is
 accountable for the disposition.
 
+Classification reads the complete declared field, including later paragraphs
+and topic subheadings, not only its first line. An initial "None" followed by an
+actionable topic is not an empty declaration. Hidden HTML template comments
+cannot supply a field or feedback type, and the next form field's contents are
+not secondary topics. These labels surface review work; they do not establish
+that a defect is reproduced or a request will be built.
+
+Headings and inline fields inside backtick or tilde code blocks and indented
+logs are evidence, not form declarations or field boundaries. A real field can
+still contain a fenced version or topic; do not discard that evidence. Version
+and single-choice feedback fields use their first visible value, so an explicit
+unknown or incomplete version cannot borrow a later example's agent version.
+
 Before changing metadata, the synchronizer reads the current issue body and
 labels, rather than classifying a queued event's older report. A failed read
 stops the job without a stale-data fallback; closed issues and pull requests are
