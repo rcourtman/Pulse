@@ -210,6 +210,15 @@ Version classification does not need the latest release and cannot establish
 relevant-fix availability. The synchronizer makes no release lookup, public
 comment, retest request or closure.
 
+An explicit **Pulse version** field is authoritative even in a legacy inline
+or standalone report. An unknown or incomplete value must not be replaced by
+an upgrade's starting version in the title, a nearby agent/platform version or
+a hidden template example. A standalone legacy field uses only its first
+visible value, not later fields, logs or prose. A `needs-version-info` label is
+not proof that the full thread lacks the version; read existing evidence before
+asking only for a consequential remaining distinction. No refile or new
+diagnostics are required by version classification.
+
 This boundary is deliberate: preserving an explicit reporter declaration is
 safe to automate, while deciding whether two observations are one root cause is
 a product and technical judgment.

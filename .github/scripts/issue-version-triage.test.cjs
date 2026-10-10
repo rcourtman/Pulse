@@ -551,6 +551,94 @@ test("structured Pulse version never falls back to an upgrade source or agent ve
   assert.equal(extractPulseVersion("bug on v5.1.35", "### Pulse version"), null);
 });
 
+test("legacy version fields keep unknown and incomplete values authoritative", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const field of ["Pulse version:", "**Pulse Version:**", "Pulse | Version", "## Pulse - Version"]) {
+    for (const value of ["unknown", "_No response_", "6.4", "6"]) {
+      for (const neighbour of ["### Agent version\n6.5.0", "Operating system: Debian 13.0.0"]) {
+        const body = `${field}\n${value}\n\n${neighbour}`;
+        assert.equal(extractPulseVersion("upgrade from v6.4.5", body), null, body);
+      }
+    }
+  }
+  for (const value of ["unknown", "6.4", "_No response_"]) {
+    assert.equal(extractPulseVersion("upgrade from v6.4.5", `Pulse version: ${value}; Agent version 6.5.0`), null);
+  }
+});
+
+test("legacy version fields stop at their first visible value", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const value of [
+    "### Agent version\n6.5.0",
+    "Agent version: 6.5.0",
+    "**OS / environment:** Debian 13.0.0",
+    "Agent version\n6.5.0",
+    "Not available; the agent runs 6.5.0",
+    "```text\nunknown\n```\n### Agent version\n6.5.0",
+    "",
+  ]) {
+    assert.equal(extractPulseVersion("upgrade from v6.4.5", `Pulse | Version\n\n${value}`), null, value);
+  }
+  // Prose mentioning a field is not itself a version declaration.
+  assert.equal(extractPulseVersion("Bug", "I cannot find the Pulse version.\nAgent version: 6.5.0"), null);
+});
+
+test("legacy version extraction ignores hidden template versions and headings", () => {
+  const { extractPulseVersion } = triage.internals;
+  assert.equal(extractPulseVersion("install", "Pulse version: unknown <!-- example: v6.4.5 -->"), null);
+  assert.equal(extractPulseVersion("upgrade from v6.4.5", "<!-- ### Pulse version\n6.4.5 -->\nPulse version: unknown"), null);
+  assert.equal(extractPulseVersion("Bug", "Pulse | Version\n<!-- example\n6.4.5\n-->\nV6.5.0-rc.1"), "6.5.0-rc.1");
+  assert.equal(extractPulseVersion("Bug", "<!-- ### Pulse version\n6.4.5 -->\n**Pulse Version:** 6.5.0"), "6.5.0");
+});
+
+test("legacy version formats still classify actual version values", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const body of [
+    "Pulse version: V6.5.0-rc.1",
+    "**Pulse Version:** `v6.5.0-rc.1`",
+    "- **Pulse version**: 6.5.0-rc.1",
+    "Pulse | Version\n\nV6.5.0-rc.1\nAgent version: 6.4.5",
+    "## Pulse - Version\r\n\r\n```text\r\n6.5.0-rc.1\r\n```\r\n",
+    "Pulse version: rcourtman/pulse:6.5.0-rc.1",
+    "Pulse | Version\n`rcourtman/pulse:6.5.0-rc.1`",
+  ]) {
+    assert.equal(extractPulseVersion("upgrade from v6.4.5", body), "6.5.0-rc.1", body);
+  }
+});
+
+test("legacy unknown-version sync cannot fabricate release evidence or contact", async () => {
+  for (const body of [
+    "Pulse version: unknown\n### Agent version\n6.5.0",
+    "Pulse | Version\nunknown\nOperating system: Debian 13.0.0",
+    "Pulse version: unknown <!-- example: v6.4.5 -->",
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = {
+      number: 2805, title: "Upgrade from v6.4.5", body,
+      labels: ["bug", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"].map(name => ({ name })),
+    };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"]);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
+test("legacy known-version sync updates only classification labels", async () => {
+  const { github, calls } = createGithub();
+  const issue = {
+    number: 2805, title: "Upgrade from v6.4.5", body: "**Pulse Version:** 6.5.0",
+    labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"].map(name => ({ name })),
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.equal(calls.getLatestRelease.length, 0);
+  assert.equal(calls.createComment.length, 0);
+});
+
 test("ambiguous upgrade version requests information without a retest comment", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.4.1" });
   const issue = {
