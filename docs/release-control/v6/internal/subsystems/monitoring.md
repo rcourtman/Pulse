@@ -6980,7 +6980,10 @@ operator split from the agent that cached it
 (`enrichContainerWithAgentLXCFilesystems`), whether or not a report cleared
 it. A report uses the link `UpsertHost` kept when a split lands between
 the report's own check and the state's store. The split's rules and its one record,
-the resource store, are in the unified-resources contract.
+the resource store, are in the unified-resources contract. A registry
+rebuild that cannot read the store's decisions carries the replaced
+generation's, so the decider keeps reporting a split through a store outage
+and the state does not link the pair again until the store has been read.
 `Monitor.LinkHostAgent` first removes an older split of that pair from the
 store, and records it again if the intent fails to persist, without replacing
 a decision the operator recorded in between. A split recorded

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -98,6 +99,11 @@ type ResourceRegistry struct {
 	splitAgents  map[string]nodeAgentLinkSide // node source ID -> the linked agent the operator split it from
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// overridesUnreadable records that the store could not be read for the
+	// operator's links or exclusions when this registry loaded them, so
+	// links, linksByID and exclusions lack the decisions that read held
+	// (carryOverridesFrom).
+	overridesUnreadable bool
 	// linkFoldIndex maps each canonical ID a manual link folded into another
 	// resource to the rows that took it in (Resource.linkFolds). Folded
 	// resources are still observed, so identity succession treats them as
@@ -264,6 +270,7 @@ func (rr *ResourceRegistry) loadOverrides() {
 		rr.links = links
 	} else {
 		log.Printf("unifiedresources: failed to load manual links from store: %v", err)
+		rr.overridesUnreadable = true
 	}
 	exclusions, err := rr.store.GetExclusions()
 	if err == nil {
@@ -279,7 +286,43 @@ func (rr *ResourceRegistry) loadOverrides() {
 		}
 	} else {
 		log.Printf("unifiedresources: failed to load manual exclusions from store: %v", err)
+		rr.overridesUnreadable = true
 	}
+}
+
+// carryOverridesFrom keeps the operator's decisions across a rebuild that
+// could not read them. A registry whose store read for links or exclusions
+// failed lacks what that read held; with both lost it lists every pair the
+// operator split as one machine again, drops every manual link and answers
+// the monitor's node<->agent split decider (ProxmoxNodeAgentSplit)
+// "undecided", so the rebuild would undo the decisions the generation it
+// replaces applied. It takes that generation's links and exclusions whole,
+// even when only one read failed, as they stood when the store last answered,
+// and the next rebuild that can read the store replaces them with its current
+// ones. Nothing else is carried: the rebuild's resources stay live, since
+// stale resource data is worse than stale decisions. A registry whose reads
+// succeeded keeps what it read.
+func (rr *ResourceRegistry) carryOverridesFrom(previous *ResourceRegistry) {
+	if previous == nil || previous == rr || !rr.overridesUnreadable {
+		return
+	}
+	previous.mu.RLock()
+	defer previous.mu.RUnlock()
+	rr.links = slices.Clone(previous.links)
+	rr.linksByID = indexLinksByID(rr.links)
+	rr.exclusions = maps.Clone(previous.exclusions)
+	if rr.exclusions == nil {
+		rr.exclusions = make(map[string]time.Time)
+	}
+}
+
+// newRegistryFrom builds a registry on the previous generation's store to
+// stand in for that generation, carrying its operator decisions forward when
+// the store cannot be read (carryOverridesFrom).
+func newRegistryFrom(previous *ResourceRegistry) *ResourceRegistry {
+	rr := NewRegistry(previous.store)
+	rr.carryOverridesFrom(previous)
+	return rr
 }
 
 // IngestSnapshot ingests all resources from the current state snapshot.
