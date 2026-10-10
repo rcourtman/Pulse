@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { Show, Suspense, lazy } from 'solid-js';
 
 import { formatDiscoveryAge } from '@/api/discovery';
@@ -75,6 +76,7 @@ interface GuestDrawerOverviewProps {
 }
 
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
   const protectionPresentation = () =>
     getWorkloadsGuestProtectionPresentation({
       ageLabel: props.backupPresentation?.ageLabel,
@@ -332,11 +334,15 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getGuestDrawerAlertAttention(alert, {
-            guest: props.guest,
-            memoryDisplayBasis: props.memoryDisplayBasis,
-            parentMemoryTotal: props.parentMemoryTotal,
-          }),
+          ...getGuestDrawerAlertAttention(
+            alert,
+            {
+              guest: props.guest,
+              memoryDisplayBasis: props.memoryDisplayBasis,
+              parentMemoryTotal: props.parentMemoryTotal,
+            },
+            now,
+          ),
           severity: alert.level,
           acknowledged: alert.acknowledged,
         }))}

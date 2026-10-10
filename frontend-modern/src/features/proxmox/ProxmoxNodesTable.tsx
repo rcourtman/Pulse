@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   For,
   Show,
@@ -217,6 +218,7 @@ export const ProxmoxNodesTable: Component<{
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
+  const now = useRelativeTimeNow();
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => {
     const measuredWidth = props.layoutWidth?.();
@@ -468,7 +470,7 @@ export const ProxmoxNodesTable: Component<{
                 };
                 const temperatureAlertTitle = () => {
                   const alert = temperatureAlert();
-                  const presentation = alert ? getMetricAlertPresentation(alert) : null;
+                  const presentation = alert ? getMetricAlertPresentation(alert, now()) : null;
                   return presentation
                     ? `${presentation.summary}. ${presentation.detail}`
                     : alert?.message;

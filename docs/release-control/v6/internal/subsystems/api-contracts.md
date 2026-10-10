@@ -12101,3 +12101,15 @@ and `TestAlertConnectionSnapshotsKeepConfiguredPlatformRowsWithoutTheHosts` in
 finding's resource reference through `Monitor.GetUnifiedStructureReadState`; in
 mock mode that is the view built for the current fixture structure, outside it
 the read state it used before.
+
+### Loaded availability Settings honours evidence expiry (10 October 2026)
+
+The existing availability Settings client passes the shared current time to
+loaded-resource health classification, count, colour, label and status tooltip. Time
+alone can move a healthy retained observation to attention; it performs no
+new target read, test, mutation or authentication/scope change. Target-only
+fallback, intentional pause, wire fields and configured failure threshold remain
+unchanged. The mounted Settings test holds source/target identities fixed and
+checks one initial list call while the expiry is crossed.
+An expired loaded check reads Stale rather than Online in an amber badge;
+intentional pause and the dedicated stopped-probe label still take precedence.

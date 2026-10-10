@@ -16,6 +16,8 @@ on:
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/e2e_test_images.py'
       - 'scripts/tests/test_e2e_test_images.py'
+      - 'scripts/collect_e2e_container_logs.py'
+      - 'scripts/tests/test_e2e_container_logs.py'
   push:
     branches:
       - main
@@ -32,6 +34,8 @@ on:
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/e2e_test_images.py'
       - 'scripts/tests/test_e2e_test_images.py'
+      - 'scripts/collect_e2e_container_logs.py'
+      - 'scripts/tests/test_e2e_container_logs.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -61,6 +65,9 @@ jobs:
 
       - name: Validate shared E2E image admission
         run: python3 scripts/tests/test_e2e_test_images.py
+
+      - name: Validate bounded container diagnostic retention
+        run: python3 scripts/tests/test_e2e_container_logs.py
 
       - name: Validate browser dependency acquisition policy
         run: python3 scripts/tests/test_playwright_acquisition.py
@@ -370,14 +377,19 @@ jobs:
 
       - name: Collect container logs
         if: always()
-        working-directory: tests/integration
-        run: |
-          echo "=== Docker containers ==="
-          docker ps -a
-          echo "=== Pulse test server logs ==="
-          docker logs pulse-test-server 2>&1 || echo "No pulse-test-server container"
-          echo "=== Mock GitHub server logs ==="
-          docker logs pulse-mock-github 2>&1 || echo "No pulse-mock-github container"
+        timeout-minutes: 3
+        run: python3 scripts/collect_e2e_container_logs.py "$RUNNER_TEMP/pulse-e2e-container-logs"
+
+      # Preserve all diagnostic bytes, including partial/failed reads, while
+      # the combined Actions log stays small enough to inspect its verdicts.
+      - name: Upload complete container diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-container-logs-shard-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-e2e-container-logs/
+          retention-days: 3
+          if-no-files-found: error
 
       # continue-on-error keeps the job green on a probation failure, so
       # failure() never fires for these; key off the step outcome instead.
@@ -473,8 +485,17 @@ jobs:
 
       - name: Collect container logs
         if: always()
-        working-directory: tests/integration
-        run: docker logs pulse-test-server 2>&1 || echo "No pulse-test-server container"
+        timeout-minutes: 3
+        run: python3 scripts/collect_e2e_container_logs.py "$RUNNER_TEMP/pulse-e2e-container-logs" --registration
+
+      - name: Upload complete container diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-container-logs-agent-registration-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-e2e-container-logs/
+          retention-days: 3
+          if-no-files-found: error
 
       - name: Upload Playwright report
         if: failure()

@@ -9229,3 +9229,17 @@ retired reads/callbacks and a replacement owner's independent accepted action.
 Desktop/phone browser controls use the real Overview/Notifications surfaces,
 API adapters, toast and CSS with synthetic responses, not native delivery or
 published queue recovery.
+
+### Existing monitoring surfaces stay truthful while mounted (10 October 2026)
+
+Availability table order/filter/status, fleet status, open probe card and loaded
+Settings count/colour/label age the same retained evidence on the shared clock, not
+only after new props or a reload. Clock readers retire with their owners. Probe
+path verdicts and persisted history are not inferred from time alone. Held node,
+guest and Mail Gateway metric attention uses that clock; non-metric copy does
+not depend on its tick. Existing notification view lifetime boundaries remain.
+
+VmwareOverview retains the page-owned workload state and renders an h2 VMs
+through the WorkloadsSurface tableTitle slot. Kiosk may remove the filter bar,
+not this name. The count is filtered rows once shared-toolbar readiness holds,
+including zero; no extra state, toolbar, route or hidden input is added.

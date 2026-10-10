@@ -4080,3 +4080,14 @@ Its connected monitor control fills each ceiling independently and checks
 complete stored/live windows, measured zero, unchanged original times, reader
 ownership and renewed admission after Reset. It uses an ordinary temporary
 history store, not an installed workload or process-memory measurement.
+
+### Mounted health consumes the existing bounded clock (10 October 2026)
+
+Availability tables/fleet/cards and held guest/node/gateway metric attention
+subscribe to the existing 30-second shared clock and release their subscription
+with their owner. Usable metric status reads a supplied accessor; non-metric
+attention copy does not read it. No per-row timer, new poll, probe, retry or
+notification is introduced. Current snapshot/delta fast paths retain their
+existing scope; only availability complete-record replacement changes, never
+other partial provider facets or independent metric updates. This is truthful
+presentation and scoped invalidation, not a measured whole-fleet CPU saving.
