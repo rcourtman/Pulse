@@ -40,6 +40,23 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unattended service state/rollback controls: %v\n%s", err, out)
 	}
+	// Keep the collector controls part of actual package acceptance, not just
+	// an optional Python check. A green fixture with these methods removed
+	// would otherwise silently lose early-failure and final-line coverage.
+	for _, name := range []string{
+		"test_early_collector_failure_survives_later_success_and_drains_installer",
+		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
+		}
+	}
 }
 
 func extractAutoUpdateServiceFunctions(t *testing.T) string {
