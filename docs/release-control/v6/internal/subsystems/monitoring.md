@@ -1519,7 +1519,9 @@ merged from an already-linked agent. Known automatic associations may be
 re-evaluated and cleared; provenance-bearing host updates remove obsolete
 reverse links without clearing another agent's link. Unmarked legacy forward
 links are retained during report ingestion, and unmarked one-way reverse links
-must survive host updates because SMART fallback also consumes them. Legacy
+must survive host updates because SMART fallback also consumes them, except
+that a link the operator split in the resource store (unlink or report-merge
+in the resources API) is cleared on both sides whatever its provenance. Legacy
 provider reconciliation otherwise keeps its existing behaviour. This deliberately
 does not claim to repair every persisted v6.4.1 association or resolve #1930.
 
@@ -6880,3 +6882,41 @@ malformed records, both client/collector paths, canonical and served state,
 original age/expiry, History, breach continuity and complete removal/recovery.
 These are synthetic source controls, not native thaw, the cause of #2619/#2439,
 or installed/released acceptance.
+
+### Node and agent links honour operator splits
+
+An operator's split of a Proxmox node and its pulse-agent (resources API
+unlink or report-merge) split the registry's rows but left the monitor's
+own link (`Node.LinkedAgentID`, `Host.LinkedNodeID`) standing. What reads
+that link kept treating the two machines as one: the physical disk poll
+took the agent's SMART inventory as the node's disk fallback and applied the
+agent's `--disk-exclude` patterns to the node's disks, `linkedHostForNode`
+fed the node's disk sources, guests inherited the agent for discovery and
+commands, deployment reported the node as already running an agent, service
+discovery routed through it, and alert correlation tied the node to it.
+`models.State` now holds such a link back on both sides through a
+`models.NodeAgentSplitDecider` that `Monitor.SetResourceStore` installs from
+the resource store's adapter. `resetStateLocked` installs it again when mock
+mode replaces the state. Every link write applies it: `UpdateNodesForInstance`
+before the merge key reads a node's link and again after the manual-intent
+reconcile, `UpsertHost`, `LinkNodeToHostAgent`, and report ingest before it
+applies the agent's LXC filesystems. A report that finds an agent's link
+split, or ends its split manual intent, clears that agent's cached container
+filesystem readings. A cached reading is also not shown for a node the
+operator split from the agent that cached it
+(`enrichContainerWithAgentLXCFilesystems`), whether or not a report cleared
+it. A report uses the link `UpsertHost` kept when a split lands between
+the report's own check and the state's store. The split's rules and its one record,
+the resource store, are in the unified-resources contract.
+`Monitor.LinkHostAgent` first removes an older split of that pair from the
+store, and records it again if the intent fails to persist, without replacing
+a decision the operator recorded in between. A split recorded
+after a manual link ends that manual intent on the agent's next report that
+finds the split confirmed in the store. The alert manager's node coverage
+for the agent changes on that agent's next checked report or offline
+transition. Mock mode's fixture graph keeps its own links. Polling cadence,
+link inference and the broadcast payload are unchanged. `TestOperatorSplitStopsMonitoringTreatingNodeAndAgentAsLinked`
+checks each of those readers after a report-merge, against a control
+exclusion that splits nothing, and `TestManualNodeLinkReplacesAnOperatorSplit`
+covers the agents API's link after a split, a split after it, and a
+resources API relink.

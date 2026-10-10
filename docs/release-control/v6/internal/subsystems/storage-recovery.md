@@ -4985,9 +4985,18 @@ that fetched the unfiltered first page had no reader once the aggregate Recovery
 page was deleted, and are gone. A surface that needs one of those filters adds
 it to the query type together with its caller, and sends a linked-resource
 filter as `itemResourceId`, never `subjectResourceId`.
+The decode of that response follows the same rule:
+`normalizeRecoveryPointsResponse` and the `RecoveryPointsResponse` and
+`RecoveryPointsTransportResponse` types in
+`frontend-modern/src/types/recovery.ts` carry the points alone. The endpoint
+still returns its pagination meta (`page`, `limit`, `total`, `totalPages`) and
+that backend contract is unchanged, but no frontend surface reads it, so a
+surface that pages the points adds the meta back to the response types together
+with its reader.
 `frontend-modern/src/api/__tests__/recoveryTransport.test.ts` pins the query
-keys and the result members at the type level and the three parameters that
-reach the wire at runtime.
+keys, the result members and the response keys at the type level, and at
+runtime the three parameters that reach the wire and that a backend response's
+meta does not survive the decode.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and

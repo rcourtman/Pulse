@@ -85,12 +85,10 @@ export interface RecoveryResponseMeta {
 
 export interface RecoveryPointsResponse {
   data: RecoveryPoint[];
-  meta: RecoveryResponseMeta;
 }
 
 export interface RecoveryPointsTransportResponse {
   data: RecoveryPointTransport[];
-  meta: RecoveryResponseMeta;
 }
 
 export type ProtectionState = 'protected' | 'attention' | 'unprotected' | 'unknown';

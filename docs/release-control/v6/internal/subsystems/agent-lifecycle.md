@@ -8915,7 +8915,9 @@ reassociation even when a subsequent report matches. An explicit link can select
 a replacement ID.
 
 Only known automatic associations are re-evaluated destructively against provider
-names and network evidence. Obsolete reverse links are removed with host updates.
+names and network evidence, and an operator's split of the node and the agent in
+the resource store (resources API unlink or report-merge) clears the link in
+state whatever its provenance. Obsolete reverse links are removed with host updates.
 An unmarked persisted link is not assumed automatic: report ingestion retains it,
 so this is deliberately **not** a blanket repair of existing v6.4.1 associations.
 Legacy provider reconciliation otherwise retains its previous behaviour.
@@ -9356,9 +9358,10 @@ identity and continuity are unchanged.
 `internal/api/resourceapi/resources.go` changed only so report-merge on a
 resource an operator linked an agent into (a VM, a node or a Docker host)
 replaces that link, splitting the agent back out as unlink does. Agent
-registration, enrolment, install, update, removal, report identity and
-continuity are unchanged, and an agent's own declared node link still
-ignores exclusions.
+registration, enrolment, install, update, removal and report identity are
+unchanged. An agent's own node link honours the split too, and a manual
+link's persisted intent can end with it ("Agent node links honour operator
+splits" below).
 
 A report-merge that names sources now picks links by the member that carries
 the source instead of by the sources a link's folded side took in with it
@@ -9414,3 +9417,31 @@ revision and link list hold (monitoring contract, "Mock-mode metrics-target
 lookups ride the fixture structure revision"). Agent registration, enrolment,
 install, update, removal, report identity and continuity are unchanged, and
 real-mode resolution still goes through the live registry.
+
+### Agent node links honour operator splits
+
+Report ingest (`monitor_agents.go`) no longer links an agent to a node the
+operator split it from in the resource store (resources API unlink or
+report-merge). The agent's `LinkedNodeID` stays off that node (empty, or
+another node the report infers for it), so its LXC filesystems and node alert
+correlation stay off that node, and when the report finds the link split, or
+ends a split manual intent, the container filesystem readings the agent
+already cached for the node's containers are cleared. A cached reading is
+also not shown for a node the operator split from the agent that cached it,
+whether or not a report cleared it. A report uses the link the state stored, so a split the state
+sees between the report's own check and its store does not reach the
+node, the container readings, the agent's alert coverage or its persisted
+continuity. A split recorded
+after the agents API's manual link ends that manual intent: the agent's next
+report that finds the split confirmed in the resource store records its
+link source as automatic in host continuity, so the node is no longer
+reserved for the agent. Until then a report keeps the manual intent's node
+in host continuity. `Monitor.LinkHostAgent` (`/api/agents/agent/link`)
+removes from the resource store the exclusions that split the pair before it
+records manual intent, because the link is the operator's newer decision and
+both the registry and monitoring read the split from the store. If the
+intent fails to persist, the exclusions are recorded again, except for a
+pair the operator has decided about since. The agents API's unlink is
+unchanged. Registration, enrolment, install, update,
+removal, token binding and report identity are unchanged. The
+unified-resources contract records the split's rules.

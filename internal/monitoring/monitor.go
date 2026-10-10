@@ -4830,6 +4830,33 @@ func (m *Monitor) resetStateLocked() {
 		StartTime: m.startTime,
 		Version:   "2.0.0-go",
 	}
+	m.installNodeAgentSplitDeciderLocked()
+}
+
+// installNodeAgentSplitDeciderLocked makes the state hold back node<->agent
+// links the operator split in the resource store, so the monitor's own link
+// agrees with the registry's rows. Callers hold m.mu.
+func (m *Monitor) installNodeAgentSplitDeciderLocked() {
+	if m.state == nil {
+		return
+	}
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.state.SetNodeAgentSplitDecider(decider)
+}
+
+// nodeAgentSplitFilter reports, for a polled node, whether a read-state host
+// is an agent the operator split from it. Nil when no resource store holds
+// operator decisions.
+func (m *Monitor) nodeAgentSplitFilter(node models.Node) func(*unifiedresources.HostView) bool {
+	m.mu.RLock()
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.mu.RUnlock()
+	if decider == nil {
+		return nil
+	}
+	return func(host *unifiedresources.HostView) bool {
+		return decider.ProxmoxNodeAgentSplit(node, hostFromReadStateView(host))
+	}
 }
 
 // GetStartTime returns the monitor start time
@@ -4906,6 +4933,7 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
 	m.resourceStore = store
 	incidentStore := m.incidentStore
+	m.installNodeAgentSplitDeciderLocked()
 	m.mu.Unlock()
 	m.installOperatorIntentResolver(store)
 	log.Info().Msg("resource store set for polling optimization")
