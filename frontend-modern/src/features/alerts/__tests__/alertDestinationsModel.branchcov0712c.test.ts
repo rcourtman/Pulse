@@ -144,7 +144,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
   // the value-level toStrictEqual checks in the sibling suite.
   // -----------------------------------------------------------------------
   describe('payload contract — exact key set', () => {
-    it('emits exactly the EmailConfig keys in declaration order and omits replyTo/maxRetries/retryDelay/rateLimit', () => {
+    it('emits exactly the EmailConfig keys including rateLimit and omits UI-only fields', () => {
       const result = buildEmailConfigPayload(
         makeUIEmailConfig({
           replyTo: 'reply@example.com',
@@ -164,14 +164,13 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
         'to',
         'tls',
         'startTLS',
+        'rateLimit',
         'minimumSeverity',
       ]);
       expect(result).not.toHaveProperty('replyTo');
       expect(result).not.toHaveProperty('maxRetries');
       expect(result).not.toHaveProperty('retryDelay');
-      // rateLimit exists on EmailConfig (optional) yet is never
-      // forwarded — see GLM_REPORT.md (suspected source bug).
-      expect(result).not.toHaveProperty('rateLimit');
+      expect(result).toHaveProperty('rateLimit', 50);
     });
   });
 
