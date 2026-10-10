@@ -43,19 +43,7 @@ func (m *Monitor) mockMetricsTarget(resourceID string) (*unifiedresources.Metric
 		return nil, false
 	}
 
-	structure := mock.FixtureStructureRevision()
-	links := m.resourceStoreManualLinks()
-
-	m.mockUnifiedViewMu.Lock()
-	view := m.mockUnifiedView
-	reusable := m.mockUnifiedViewValid &&
-		m.mockUnifiedViewStructure == structure &&
-		sameManualLinks(m.mockUnifiedViewLinks, links)
-	m.mockUnifiedViewMu.Unlock()
-
-	if !reusable {
-		view = m.currentUnifiedStateView()
-	}
+	view := m.currentStructureUnifiedStateView()
 	if view.metricsTargets == nil {
 		return nil, true
 	}

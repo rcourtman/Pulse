@@ -15,6 +15,12 @@ type aggregatorRuntimeSources struct {
 	orgID         string
 	vmwarePoller  *monitoring.VMwarePoller
 	truenasPoller *monitoring.TrueNASPoller
+	// platformRowsOnly leaves out what only the agent rows and the PBS host
+	// aliases read: the monitor's hosts and PBS instances. A caller that keeps
+	// the platform rows alone (the connection-degraded alert feed) would
+	// otherwise ask the monitor for both, and in mock mode each ask rebuilds
+	// the whole estate view whenever a metric tick has made it stale.
+	platformRowsOnly bool
 }
 
 func buildAggregatorInputsWithRuntimeSources(
@@ -61,11 +67,15 @@ func buildAggregatorInputsWithRuntimeSources(
 	}
 
 	if monitor != nil {
-		inputs.hosts = monitor.HostsSnapshot()
-		inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts, inputs.apiTokens)
+		if runtime.platformRowsOnly {
+			inputs.hosts = []models.Host{}
+		} else {
+			inputs.hosts = monitor.HostsSnapshot()
+			inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts, inputs.apiTokens)
+			inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
+		}
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
-		inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
 		// A non-default org's cfg is its monitor's detached config copy
 		// (#1619), which a settings save does not update: saved PBS and PMG
 		// intervals reach the monitor only as runtime overrides. Scale the
@@ -155,6 +165,10 @@ func buildAlertConnectionSnapshotsWithRuntimeSources(
 	monitor *monitoring.Monitor,
 	runtime aggregatorRuntimeSources,
 ) []alerts.ConnectionSnapshot {
+	// snapshotConnectionsForAlerts keeps the platform rows (PVE, PBS, PMG,
+	// VMware, TrueNAS) and drops every agent row, and a PBS row's reported node
+	// name only becomes a host alias that the snapshot does not carry.
+	runtime.platformRowsOnly = true
 	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, runtime)
 	return snapshotConnectionsForAlerts(buildConnections(inputs))
 }

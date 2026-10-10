@@ -6784,3 +6784,13 @@ excludes the links that join a member carrying the named source to the rest
 of the merged resource. That changes which pairs the report excludes, through
 the same exclusion write as before; no schema, backup, retention, migration or recovery path is added or
 moved.
+
+### Mock-mode structure views open no storage or recovery path
+
+`internal/api/connections_alerts.go` and `internal/api/router.go` now ask the
+monitor for less in mock mode: the connection-degraded alert feed no longer
+reads the hosts and PBS instances it discards, and the demo Patrol resolver
+reads the structure view (see "Mock-mode metrics-target lookups ride the
+fixture structure revision" in the monitoring contract). Real mode, its stores,
+backups, retention, snapshots, migrations and recovery paths are unchanged, and
+none is added or moved.

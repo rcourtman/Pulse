@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
@@ -312,5 +313,151 @@ func TestRuntimeInventorySourcesHandlerRejectsNonGET(t *testing.T) {
 	handler.HandleRuntimeInventorySources(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// mockMonitorWithStaleView returns a mock-mode monitor whose estate view was
+// built before the fixture last ticked, and the structure read state it holds.
+func mockMonitorWithStaleView(t *testing.T) (*monitoring.Monitor, *config.Config) {
+	t.Helper()
+	previous := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	estate := mock.DefaultConfig
+	estate.NodeCount = 4
+	estate.UpdateInterval = time.Second
+	mock.SetMockConfig(estate)
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		_ = mock.SetEnabled(previous)
+	})
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	monitor.GetUnifiedReadStateOrSnapshot()
+	tick := mock.FixtureDataVersion()
+	deadline := time.Now().Add(5 * time.Minute)
+	for mock.FixtureDataVersion() <= tick {
+		if time.Now().After(deadline) {
+			t.Fatal("the mock fixture did not tick")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return monitor, cfg
+}
+
+// The connection-degraded alert feed keeps the platform rows (PVE, PBS, PMG,
+// VMware, TrueNAS) and drops every agent row, so it has no use for the
+// monitor's hosts or PBS instances. In mock mode each of those reads rebuilds
+// the whole estate view once a metric tick has made it stale, and the feed
+// runs on startup's critical path.
+func TestAlertConnectionSnapshotsDoNotRebuildTheMockViewAfterFixtureTicks(t *testing.T) {
+	monitor, cfg := mockMonitorWithStaleView(t)
+	warm := monitor.GetUnifiedStructureReadState()
+
+	buildAlertConnectionSnapshotsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default"})
+	if monitor.GetUnifiedStructureReadState() != warm {
+		t.Fatal("the alert connection feed rebuilt the unified view after a metric tick; it reads no host or PBS instance")
+	}
+
+	// Control: the connections endpoint does read them, and the test would
+	// pass vacuously if a rebuild left no trace.
+	buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default"})
+	if monitor.GetUnifiedStructureReadState() == warm {
+		t.Fatal("reading the hosts did not rebuild the stale view, so this test cannot see a rebuild")
+	}
+}
+
+// Leaving the hosts and PBS instances out must not change a platform row. The
+// lean inputs are the full ones with exactly what platformRowsOnly omits taken
+// away, so a supplemental fixture tick between two reads cannot make the rows
+// differ for a reason other than the omission.
+func TestAlertConnectionSnapshotsMatchTheFullAggregatorOnPlatformRows(t *testing.T) {
+	monitor, cfg := mockMonitorWithStaleView(t)
+
+	full := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default"})
+	lean := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default", platformRowsOnly: true})
+
+	if len(full.hosts) == 0 {
+		t.Fatal("the mock estate lists no host, so the comparison proves nothing")
+	}
+	if len(lean.hosts) != 0 || lean.agentDesiredConfigs != nil || lean.pbsReportedNodeNames != nil {
+		t.Fatalf("platformRowsOnly kept hosts=%d desiredConfigs=%v pbsNodeNames=%v", len(lean.hosts), lean.agentDesiredConfigs, lean.pbsReportedNodeNames)
+	}
+
+	stripped := full
+	stripped.hosts = lean.hosts
+	stripped.agentDesiredConfigs = nil
+	stripped.pbsReportedNodeNames = nil
+	want := snapshotConnectionsForAlerts(buildConnections(full))
+	got := snapshotConnectionsForAlerts(buildConnections(stripped))
+	if len(want) == 0 {
+		t.Fatal("the mock estate yields no platform connection")
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("platform connections changed without the hosts:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// The patrol resolver turns a finding's resource reference into a canonical ID.
+// It reads identity only, so in mock mode it must not rebuild the estate view
+// after a metric tick (it runs once per finding).
+func TestPatrolOperatorStateResolverDoesNotRebuildTheMockViewAfterFixtureTicks(t *testing.T) {
+	monitor, cfg := mockMonitorWithStaleView(t)
+	warm := monitor.GetUnifiedStructureReadState()
+
+	router := &Router{
+		resourceHandlers: NewResourceHandlers(&config.Config{DataPath: cfg.DataPath}),
+		monitor:          monitor,
+	}
+	t.Cleanup(router.ShutdownResourceStores)
+	provider := router.patrolResourceOperatorStateProvider("default")
+	provider.OperatorStateProjection("some-finding-resource", time.Now())
+
+	if monitor.GetUnifiedStructureReadState() != warm {
+		t.Fatal("the patrol operator-state resolver rebuilt the unified view after a metric tick; it only resolves identity")
+	}
+}
+
+// Mock mode drops the configured PVE, PBS and PMG instances from the ledger, so
+// their rows are checked here with mock mode off: the platform rows an alert
+// is raised from are the same with and without the hosts and PBS reads.
+func TestAlertConnectionSnapshotsKeepConfiguredPlatformRowsWithoutTheHosts(t *testing.T) {
+	previousMock := mock.IsMockEnabled()
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
+	monitor, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+	cfg := &config.Config{
+		DataPath:     t.TempDir(),
+		PVEInstances: []config.PVEInstance{{Name: "pve-lab", Host: "https://pve-lab.example:8006"}},
+		PBSInstances: []config.PBSInstance{{Name: "pbs-lab", Host: "https://pbs-lab.example:8007"}},
+		PMGInstances: []config.PMGInstance{{Name: "pmg-lab", Host: "https://pmg-lab.example:8006"}},
+	}
+
+	full := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default"})
+	lean := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, monitor, aggregatorRuntimeSources{orgID: "default", platformRowsOnly: true})
+	lean.now = full.now
+
+	want := snapshotConnectionsForAlerts(buildConnections(full))
+	got := snapshotConnectionsForAlerts(buildConnections(lean))
+	if len(want) != 3 {
+		t.Fatalf("expected the PVE, PBS and PMG rows, got %+v", want)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("platform connections changed without the hosts:\n got %+v\nwant %+v", got, want)
 	}
 }

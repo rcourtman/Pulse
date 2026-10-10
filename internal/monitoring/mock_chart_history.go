@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 var (
@@ -171,9 +172,14 @@ func latestMetricPoint(points []MetricPoint) (MetricPoint, bool) {
 	return latest, true
 }
 
-func (m *Monitor) resolveMockStorageTotal(storageID string, inMemory map[string][]MetricPoint) float64 {
-	readState := m.GetUnifiedReadStateOrSnapshot()
-	if readState != nil {
+// resolveMockStorageTotal totals one pool for a chart. readState lists the pools
+// and is read here only if the pool's chart is not cached, so a request over
+// many pools reads the estate view once (see GetStorageMetricsForChartBatch)
+// and not once per pool, which on a starved process rebuilt the view for each.
+// It is not the structure view: a linked pool takes its capacity from whichever
+// source was seen last, and that moves without a structure change.
+func (m *Monitor) resolveMockStorageTotal(storageID string, inMemory map[string][]MetricPoint, readState func() unifiedresources.ReadState) float64 {
+	if readState := readState(); readState != nil {
 		for _, pool := range readState.StoragePools() {
 			if pool == nil || strings.TrimSpace(pool.SourceID()) != strings.TrimSpace(storageID) {
 				continue
@@ -191,8 +197,8 @@ func (m *Monitor) resolveMockStorageTotal(storageID string, inMemory map[string]
 	return 0
 }
 
-func (m *Monitor) mockStorageMetricsForChart(storageID string, duration time.Duration, inMemory map[string][]MetricPoint) map[string][]MetricPoint {
-	total := m.resolveMockStorageTotal(storageID, inMemory)
+func (m *Monitor) mockStorageMetricsForChart(storageID string, duration time.Duration, inMemory map[string][]MetricPoint, readState func() unifiedresources.ReadState) map[string][]MetricPoint {
+	total := m.resolveMockStorageTotal(storageID, inMemory, readState)
 	if total <= 0 {
 		return cloneMetricPointMap(inMemory)
 	}

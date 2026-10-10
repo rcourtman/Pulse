@@ -3,6 +3,7 @@ package monitoring
 import (
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -226,7 +227,7 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 		inMemoryResult = m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 	}
 	if mock.IsMockEnabled() {
-		return m.mockStorageMetricsForChartCached(storageID, duration, inMemoryResult)
+		return m.mockStorageMetricsForChartCached(storageID, duration, inMemoryResult, m.GetUnifiedReadStateOrSnapshot)
 	}
 	if m.metricsStore == nil {
 		return inMemoryResult
@@ -729,12 +730,14 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	result := make(map[string]map[string][]MetricPoint, len(storageIDs))
 
 	if mock.IsMockEnabled() {
+		// One read of the estate view for every pool that needs a total.
+		readState := sync.OnceValue(m.GetUnifiedReadStateOrSnapshot)
 		for _, sid := range storageIDs {
 			inMemory := map[string][]MetricPoint{}
 			if m.metricsHistory != nil {
 				inMemory = m.metricsHistory.GetAllStorageMetrics(sid, duration)
 			}
-			result[sid] = m.mockStorageMetricsForChartCached(sid, duration, inMemory)
+			result[sid] = m.mockStorageMetricsForChartCached(sid, duration, inMemory, readState)
 		}
 		return result
 	}
@@ -1179,7 +1182,7 @@ func (m *Monitor) prewarmMockWorkloadChartCaches(duration time.Duration) {
 	}
 
 	requests := boundMockWorkloadChartPrewarmRequests(
-		mockWorkloadChartRequestsForReadState(m.GetUnifiedReadStateOrSnapshot()),
+		mockWorkloadChartRequestsForReadState(m.GetUnifiedStructureReadState()),
 	)
 	if len(requests.vms) > 0 {
 		_ = m.GetGuestMetricsForChartBatch("vm", requests.vms, duration)
@@ -1309,6 +1312,7 @@ func (m *Monitor) mockStorageMetricsForChartCached(
 	storageID string,
 	duration time.Duration,
 	inMemoryResult map[string][]MetricPoint,
+	readState func() unifiedresources.ReadState,
 ) map[string][]MetricPoint {
 	cacheKey := mockChartMetricMapCacheKey{
 		kind:         "storage",
@@ -1325,7 +1329,7 @@ func (m *Monitor) mockStorageMetricsForChartCached(
 		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
 	} else {
 		computed = downsampleMetricMapForMockChart(
-			m.mockStorageMetricsForChart(storageID, duration, inMemoryResult),
+			m.mockStorageMetricsForChart(storageID, duration, inMemoryResult, readState),
 			duration,
 		)
 	}
