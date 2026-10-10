@@ -653,13 +653,18 @@ For a responsive **Linux systemd / Proxmox LXC** install, take this small,
 read-only sample at a normally occurring high point. Run it **inside the Pulse
 container** for LXC, not on the Proxmox host. Substitute the actual service name
 (`pulse-backend` on older installs) in both `systemctl` calls. Use an account
-authorised to read these counters; a failed read is unavailable, not zero.
+already authorised to read these counters. The collector does not elevate
+privileges or prompt; do not add `sudo` inside it. A failed read is unavailable,
+not zero.
 
 ```bash
 # systemd / Proxmox LXC: Pulse resident-memory sample
 (
   set -eu
-  if timeout --kill-after=1s 8s bash <<'PULSE_MEMORY_SAMPLE'
+  command -v timeout >/dev/null 2>&1 || {
+    printf 'Resident-memory sample unavailable: GNU timeout is required.\n' >&2; exit 1
+  }
+  if sample=$(timeout --signal=KILL 8s bash <<'PULSE_MEMORY_SAMPLE' 2>/dev/null
 set -eu
 date -u +'%Y-%m-%dT%H:%M:%SZ'
 pid=$(systemctl show pulse --property=MainPID --value)
@@ -685,23 +690,24 @@ if [ "$pid" != "$current_pid" ] || [ "$identity" != "$current_identity" ]; then
 fi
 printf 'Pulse process (PID and UTC start): %s\n%s\n' "$identity" "$counters"
 PULSE_MEMORY_SAMPLE
-  then
-    :
+  ); then
+    printf '%s\n' "$sample"
   else
     status=$?
-    printf 'Resident-memory sample unavailable; retain the error and stop sampling.\n' >&2
+    printf 'Resident-memory sample unavailable (exit %s); stop sampling.\n' "$status" >&2
     exit "$status"
   fi
 )
 ```
 
 The recipe requires GNU `timeout`: it gives the read-only sampling commands
-eight seconds, with a one-second termination grace, rather than leaving a hung
-reader running indefinitely. It does not stop or restart Pulse. A missing
+eight seconds, then kills its own collection group, including readers that
+ignore TERM. Waiting for the collection shell alone can leave a reader running
+after it exits. This hard deadline does not stop or restart Pulse. A missing
 utility, timeout or reader error means the sample is unavailable; keep the
 failure, and do not remove the deadline or rerun it against an unresponsive
-installation. No complete process/counter sample is printed before every check
-succeeds; the initial UTC timestamp alone is not a memory result.
+installation. No timestamp, process identity, counter or raw reader error is
+printed unless every check succeeds; the failure reports only its exit status.
 
 Linux labels these values `kB`, meaning 1,024 bytes; divide by 1,024 for MiB.
 `VmRSS` is resident process memory, split into anonymous (`RssAnon`),
