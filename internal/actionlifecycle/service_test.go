@@ -1473,6 +1473,60 @@ func TestExecuteRefusesRemediationLockedResource(t *testing.T) {
 	}
 }
 
+// A rebuild moves the operator's rows to the successor ID before it publishes
+// the registry generation that lists it, so an action planned against the old
+// ID can be dispatched, and the planner can be asked about it, while the
+// registry the lifecycle consults still lists the old ID. The lock the
+// operator set on it has moved with its row; the gates must still find it.
+func TestLockMovedBySuccessionStillRefusesTheIDThePreviousGenerationLists(t *testing.T) {
+	locks := map[string]unified.ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: unified.LifecycleStateRetired},
+	}
+	for lockName, lock := range locks {
+		t.Run(lockName, func(t *testing.T) {
+			now := time.Now().UTC()
+			env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
+
+			plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+			if err != nil {
+				t.Fatalf("Plan: %v", err)
+			}
+			state := lock
+			state.CanonicalID = "vm:42"
+			if err := env.store.SetResourceOperatorState(state); err != nil {
+				t.Fatalf("SetResourceOperatorState: %v", err)
+			}
+			if err := env.store.(*unified.MemoryStore).ApplyCanonicalIDSuccessions([]unified.CanonicalIDSuccession{{OldCanonicalID: "vm:42", NewCanonicalID: "vm:42-successor"}}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			if _, listed := env.registry.Get("vm:42"); !listed {
+				t.Fatal("the registry no longer lists vm:42; the fixture does not model the window before the new generation publishes")
+			}
+			if row, found, err := env.store.GetResourceOperatorState("vm:42-successor"); err != nil || !found || !row.BlocksRemediation() {
+				t.Fatalf("the successor does not hold the moved lock: found=%v err=%v state=%+v", found, err, row)
+			}
+
+			// The planner and the Patrol broker read the policy through the lifecycle.
+			planned, found, err := env.service.ResourceOperatorState("default", "vm:42")
+			if err != nil || !found || !planned.BlocksRemediation() {
+				t.Fatalf("the policy read for vm:42 lost the lock: found=%v err=%v state=%+v", found, err, planned)
+			}
+
+			failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), "")
+			if !errors.Is(err, unified.ErrResourceRemediationLocked) {
+				t.Fatalf("error = %v, want ErrResourceRemediationLocked", err)
+			}
+			if env.executor.calls != 0 {
+				t.Fatalf("executor must not run on a locked resource whose row moved, calls = %d", env.executor.calls)
+			}
+			if failed.State != unified.ActionStateFailed {
+				t.Fatalf("refusal must persist a terminal failed audit, state = %q", failed.State)
+			}
+		})
+	}
+}
+
 func TestExecuteRefusesRetiredResourceWithoutDispatch(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))

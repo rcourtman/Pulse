@@ -6583,8 +6583,8 @@ func TestCanonicalIDSuccessionMovesOperatorState(t *testing.T) {
 	}
 	registry.PersistIdentityPins()
 
-	if _, found, err := store.GetResourceOperatorState(shortEraID); err != nil || found {
-		t.Fatalf("operator state still keyed by superseded ID (found=%v, err=%v)", found, err)
+	if _, found := operatorStateRow(t, store, shortEraID); found {
+		t.Fatalf("operator state still keyed by superseded ID")
 	}
 	state, found, err := store.GetResourceOperatorState(newID)
 	if err != nil || !found {
@@ -6683,8 +6683,8 @@ func TestIngestRecordsRecordDeclaredSuccessions(t *testing.T) {
 	}})
 
 	newID := SourceSpecificID(ResourceTypeStorage, SourceTrueNAS, "system:conn-a/pool:tank")
-	if _, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
-		t.Fatalf("expected operator state to leave superseded ID (found=%v err=%v)", found, err)
+	if _, found := operatorStateRow(t, store, oldID); found {
+		t.Fatalf("expected operator state to leave superseded ID")
 	}
 	state, found, err := store.GetResourceOperatorState(newID)
 	if err != nil || !found || !state.NeverAutoRemediate {
@@ -6958,7 +6958,7 @@ func TestProxmoxGuestSuccessionRekeysOperatorState(t *testing.T) {
 	if !state.NeverAutoRemediate {
 		t.Fatalf("re-keyed operator state lost its fields: %+v", state)
 	}
-	if _, stale, _ := store.GetResourceOperatorState(legacyID); stale {
+	if _, stale := operatorStateRow(t, store, legacyID); stale {
 		t.Fatalf("operator state still present under retired ID %q", legacyID)
 	}
 }
@@ -8940,8 +8940,8 @@ func TestSuccessionBatchOrderKeepsLinkedRemediationLock(t *testing.T) {
 					t.Fatalf("%s lost the lock across a batch that returned to its start", id)
 				}
 			}
-			if state, found, err := store.GetResourceOperatorState("loop-b"); err != nil || found {
-				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
+			if state, found := operatorStateRow(t, store, "loop-b"); found {
+				t.Fatalf("the re-keyed intermediate ID was given a row: state=%+v", state)
 			}
 		})
 	}
@@ -9601,6 +9601,140 @@ func TestManualLinkChainCycleLinksAreAllCutByAReportedMember(t *testing.T) {
 			}
 			if len(cut) != 2 {
 				t.Fatalf("order %v, %s: reporting vmware cuts %d links, want the two the vSphere VM holds: %+v", order, name, len(cut), cut)
+			}
+		}
+	}
+}
+
+// successionHookStore runs a callback from inside a rebuild, right after the
+// store applied a canonical-ID succession and before the rebuilt registry is
+// published: the moment the previous generation is still served while the
+// store already answers for the successor.
+type successionHookStore struct {
+	ResourceStore
+	afterSuccession func()
+}
+
+func (s *successionHookStore) ApplyCanonicalIDSuccessions(successions []CanonicalIDSuccession) error {
+	err := s.ResourceStore.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions(successions)
+	if err == nil && s.afterSuccession != nil {
+		s.afterSuccession()
+	}
+	return err
+}
+
+// A rebuild applies a succession to the store (the operator's rows move to the
+// successor) before the generation that lists the successor is published, and
+// the previous generation keeps serving until then. The dispatch gates and the
+// planner read the operator state of the ID the generation they consult lists,
+// so in that window they ask for an ID whose row has gone. A lock the operator
+// set must still be found there: the old ID is the resource the previous
+// generation would act on.
+func TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes(t *testing.T) {
+	now := time.Now().UTC()
+	type scenario struct {
+		before, after models.StateSnapshot
+		// kind is the resource type that changes ID.
+		kind ResourceType
+	}
+	scenarios := map[string]scenario{
+		// A record-declared era (the reporter's source-specific ID), applied
+		// while the snapshot is ingested.
+		"host agent gaining a machine ID": {
+			kind:   ResourceTypeAgent,
+			before: models.StateSnapshot{Hosts: []models.Host{{ID: "agent-window-01", Hostname: "window-01", Status: "online", LastSeen: now}}},
+			after:  models.StateSnapshot{Hosts: []models.Host{{ID: "agent-window-01", Hostname: "window-01", MachineID: "machine-window-01", Status: "online", LastSeen: now}}},
+		},
+		// A pin-driven era, applied once the rebuilt registry persists its pins.
+		"swarm host gaining a full hostname": {
+			kind: ResourceTypeAgent,
+			before: models.StateSnapshot{DockerHosts: []models.DockerHost{{
+				ID: "docker-window-02", Hostname: "cloud", Status: "online", LastSeen: now,
+				Swarm: &models.DockerSwarmInfo{ClusterID: "swarm-window", ClusterName: "prod-swarm"},
+			}}},
+			after: models.StateSnapshot{DockerHosts: []models.DockerHost{{
+				ID: "docker-window-02", Hostname: "cloud.a", Status: "online", LastSeen: now,
+				Swarm: &models.DockerSwarmInfo{ClusterID: "swarm-window", ClusterName: "prod-swarm"},
+			}}},
+		},
+	}
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locks := map[string]ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: LifecycleStateRetired},
+	}
+	idsOf := func(adapter *MonitorAdapter, kind ResourceType) []string {
+		var ids []string
+		for _, resource := range adapter.GetByType(kind) {
+			ids = append(ids, resource.ID)
+		}
+		return ids
+	}
+	for scenarioName, sc := range scenarios {
+		for storeName, newStore := range stores {
+			for lockName, lock := range locks {
+				t.Run(scenarioName+"/"+storeName+"/"+lockName, func(t *testing.T) {
+					hooked := &successionHookStore{ResourceStore: newStore(t)}
+					adapter := NewMonitorAdapter(NewRegistry(hooked))
+					adapter.PopulateFromSnapshot(sc.before)
+					before := idsOf(adapter, sc.kind)
+					if len(before) != 1 {
+						t.Fatalf("first generation lists %v, want the one resource", before)
+					}
+					oldID := before[0]
+					state := lock
+					state.CanonicalID, state.SetAt, state.SetBy = oldID, now.Add(-time.Hour), "operator"
+					if err := hooked.SetResourceOperatorState(state); err != nil {
+						t.Fatalf("lock %s: %v", oldID, err)
+					}
+
+					var (
+						applied       int
+						listedDuring  []string
+						foundDuring   bool
+						lockedDuring  bool
+						readErrDuring error
+					)
+					hooked.afterSuccession = func() {
+						applied++
+						listedDuring = idsOf(adapter, sc.kind)
+						var got ResourceOperatorState
+						got, foundDuring, readErrDuring = adapter.GetResourceOperatorState(oldID)
+						lockedDuring = foundDuring && got.BlocksRemediation()
+					}
+					adapter.PopulateFromSnapshot(sc.after)
+
+					if applied == 0 {
+						t.Fatalf("the rebuild applied no succession; the fixture no longer changes %s's era", oldID)
+					}
+					if !slices.Equal(listedDuring, []string{oldID}) {
+						t.Fatalf("during the rebuild the served generation lists %v, want the previous generation's %s", listedDuring, oldID)
+					}
+					if readErrDuring != nil {
+						t.Fatalf("read operator state of %s during the rebuild: %v", oldID, readErrDuring)
+					}
+					if !lockedDuring {
+						t.Fatalf("while the previous generation still lists %s the lock the operator set on it reads as missing (found=%v)", oldID, foundDuring)
+					}
+
+					after := idsOf(adapter, sc.kind)
+					if len(after) != 1 || after[0] == oldID {
+						t.Fatalf("the published generation lists %v, want the resource under a new ID", after)
+					}
+					if got, found, err := adapter.GetResourceOperatorState(after[0]); err != nil || !found || !got.BlocksRemediation() {
+						t.Fatalf("the published ID %s does not hold the lock: found=%v err=%v state=%+v", after[0], found, err, got)
+					}
+				})
 			}
 		}
 	}

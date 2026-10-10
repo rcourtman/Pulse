@@ -3307,9 +3307,33 @@ func (s *SQLiteResourceStore) GetExportAudits(since time.Time, limit int) ([]Exp
 // canonical ID. Returns (zero, false, nil) on no entry; (state, true,
 // nil) on a hit; (zero, false, error) on a query failure. The found
 // signal is meaningful for the API GET path which returns 404 vs
-// returning the default no-state record.
+// returning the default no-state record. An ID that holds no row but that a
+// canonical-ID succession retired answers with the remediation block its
+// successor carries (followRetiredID), which is what a registry
+// generation still listing the retired ID needs while a rebuild is in flight.
 func (s *SQLiteResourceStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
-	return getResourceOperatorStateSQL(s.db, canonicalID)
+	state, found, err := getResourceOperatorStateSQL(s.db, canonicalID)
+	if err != nil || found {
+		return state, found, err
+	}
+	return s.retiredIDOperatorState(canonicalID)
+}
+
+// retiredIDOperatorState answers for an ID that held no row when it was first
+// read. The walk down its chain is several statements, and a succession that
+// commits between two of them can move the lock off an ID the walk already
+// passed onto one it has seen (a chain that loops back), so the ID's own row and
+// every hop are read in one transaction, which is one snapshot.
+func (s *SQLiteResourceStore) retiredIDOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ResourceOperatorState{}, false, fmt.Errorf("begin resource operator state read: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if state, found, err := getResourceOperatorStateSQL(tx, canonicalID); err != nil || found {
+		return state, found, err
+	}
+	return retiredIDRemediationLockSQL(tx, canonicalID)
 }
 
 type resourceOperatorStateQueryRower interface {
@@ -4683,7 +4707,9 @@ func (m *MemoryStore) GetExportAudits(since time.Time, limit int) ([]ExportAudit
 // canonical resource ID. The found bool distinguishes "no entry" (the
 // default no-state posture) from "explicit empty entry the operator
 // cleared" — both have the same effective behavior but the latter may
-// be surfaced differently on the audit timeline.
+// be surfaced differently on the audit timeline. An ID that holds no row but
+// that a canonical-ID succession retired answers as the SQLite store does, with
+// the remediation block its successor carries.
 func (m *MemoryStore) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
 	canonicalID = strings.TrimSpace(canonicalID)
 	if canonicalID == "" {
@@ -4693,9 +4719,26 @@ func (m *MemoryStore) GetResourceOperatorState(canonicalID string) (ResourceOper
 	defer m.mu.RUnlock()
 	state, ok := m.resourceOperatorState[canonicalID]
 	if !ok {
-		return ResourceOperatorState{}, false, nil
+		lock, carried := m.retiredIDRemediationLockLocked(canonicalID)
+		return lock, carried, nil
 	}
 	return state, true, nil
+}
+
+// retiredIDRemediationLockLocked is the read described at followRetiredID over
+// the in-memory succession record; callers hold m.mu.
+func (m *MemoryStore) retiredIDRemediationLockLocked(retiredID string) (ResourceOperatorState, bool) {
+	lock, carried, _ := followRetiredID(retiredID,
+		func(id string) (string, bool, error) {
+			successor, retired := m.canonicalSuccessions[id]
+			return successor, retired, nil
+		},
+		func(id string) (ResourceOperatorState, bool, error) {
+			state, found := m.resourceOperatorState[id]
+			return state, found, nil
+		},
+	)
+	return lock, carried
 }
 
 // SetResourceOperatorState upserts the supplied state, validating it
