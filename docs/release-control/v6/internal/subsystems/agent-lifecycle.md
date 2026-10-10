@@ -9385,3 +9385,13 @@ for report-merge. No synthetic telemetry, identity key, enrollment or service
 link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
 the monitor and its re-ingested API seed retain the fold across all split
 shapes, then survive pin persistence and a repeated split.
+
+### Mock-mode metrics-target lookups ride the fixture structure revision
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+records the fixture structure revision it was built at and
+`MetricsTargetForResource` resolves mock-mode targets from that view while the
+revision and link list hold (monitoring contract, "Mock-mode metrics-target
+lookups ride the fixture structure revision"). Agent registration, enrolment,
+install, update, removal, report identity and continuity are unchanged, and
+real-mode resolution still goes through the live registry.
