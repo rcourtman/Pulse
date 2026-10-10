@@ -762,12 +762,40 @@ detect_service_name() {
         return
     fi
 
-    if systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
+    local unit_files="" unit="" state="" preset="" extra=""
+    local seen_backend=false seen_pulse=false
+    # grep -q closes a full inventory early: systemctl can report Broken pipe,
+    # and pipefail then hides a real pulse-backend unit behind the default.
+    # Consume one bounded inventory of the two exact historical names instead.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- pulse-backend.service pulse.service 2>/dev/null); then
+        print_error "Cannot identify the Pulse systemd service: unit inventory failed. Reconcile service state before retrying." >&2
+        return 1
+    fi
+    while read -r unit state preset extra; do
+        [[ -n "$unit" ]] || continue
+        if [[ "$unit" == pulse-backend.service && "$seen_backend" == false ]]; then
+            seen_backend=true
+        elif [[ "$unit" == pulse.service && "$seen_pulse" == false ]]; then
+            seen_pulse=true
+        else
+            print_error "Cannot identify the Pulse systemd service: unexpected unit inventory. No default service was selected." >&2
+            return 1
+        fi
+        case "$state" in
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient|masked|masked-runtime) ;;
+            *)
+                print_error "Cannot identify the Pulse systemd service: unknown unit state. No default service was selected." >&2
+                return 1 ;;
+        esac
+        if [[ -n "$extra" ]]; then
+            print_error "Cannot identify the Pulse systemd service: malformed unit inventory. No default service was selected." >&2
+            return 1
+        fi
+    done <<< "$unit_files"
+    if [[ "$seen_backend" == true ]]; then
         echo "pulse-backend"
-    elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
-        echo "pulse"
     else
-        echo "pulse"  # Default for new installations
+        echo "$DEFAULT_SERVICE_NAME"  # A successful empty read permits a new installation.
     fi
 }
 
@@ -2958,7 +2986,9 @@ check_existing_installation() {
     # Detect actual service name if systemd is available
     if command -v systemctl >/dev/null 2>&1; then
         if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
-            detected_service=$(detect_service_name)
+            # Status 1 below means no installation. Keep an unavailable
+            # inventory distinct so main cannot fall through to a fresh install.
+            detected_service=$(detect_service_name) || return 2
             SERVICE_NAME="$detected_service"
         fi
         service_available=true
@@ -3544,7 +3574,10 @@ install_pulse_archive() {
         return 1
     fi
 
-    service_name=$(detect_service_name)
+    if ! service_name=$(detect_service_name); then
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
     PULSE_WAS_ACTIVE="false"
     if ! stop_pulse_for_replacement "$service_name"; then
         rm -rf "$binary_stage" "$temp_extract"
@@ -3997,7 +4030,11 @@ build_from_source() {
         return 1
     fi
 
-    service_name=$(detect_service_name)
+    if ! service_name=$(detect_service_name); then
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
     PULSE_WAS_ACTIVE="false"
     if ! stop_pulse_for_replacement "$service_name"; then
         cd "$original_dir" >/dev/null 2>&1 || true
@@ -4802,7 +4839,7 @@ install_systemd_service() {
     # Use existing service name if found, otherwise use default
     local existing_service="$SERVICE_NAME"
     if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
-        existing_service=$(detect_service_name)
+        existing_service=$(detect_service_name) || return 1
     fi
     if [[ "$existing_service" == "pulse-backend" ]] && [[ -f "/etc/systemd/system/pulse-backend.service" ]]; then
         # Keep using pulse-backend for compatibility (ProxmoxVE)
@@ -4872,7 +4909,7 @@ ensure_systemd_service_installed() {
     command -v systemctl >/dev/null 2>&1 || return 0
     if [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
         print_warn "systemd unit ${SERVICE_NAME}.service is missing; recreating it"
-        install_systemd_service
+        install_systemd_service || return 1
     fi
 }
 
@@ -5111,7 +5148,12 @@ main() {
     check_docker_environment
     
     # Check for existing installation FIRST before asking for configuration
-    if check_existing_installation; then
+    local existing_install_status=0
+    check_existing_installation || existing_install_status=$?
+    if [[ "$existing_install_status" -gt 1 ]]; then
+        return "$existing_install_status"
+    fi
+    if [[ "$existing_install_status" -eq 0 ]]; then
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
             create_user
@@ -5122,7 +5164,7 @@ main() {
             fi
 
             setup_update_command
-            install_systemd_service
+            install_systemd_service || return 1
 
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                 setup_auto_updates
@@ -5154,7 +5196,7 @@ main() {
             offer_existing_auto_updates
 
             # Detect the actual service name before trying to stop it
-            SERVICE_NAME=$(detect_service_name)
+            SERVICE_NAME=$(detect_service_name) || return 1
 
             if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$LATEST_RELEASE"; then
                 exit 1
@@ -5169,7 +5211,7 @@ main() {
             # a missing config dir or reporting success over a missing unit.
             setup_directories
             setup_update_command
-            ensure_systemd_service_installed
+            ensure_systemd_service_installed || return 1
 
             # Setup auto-updates if requested
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
@@ -5374,7 +5416,7 @@ main() {
                 # file back before auto-update setup and start.
                 setup_directories
                 setup_update_command
-                ensure_systemd_service_installed
+                ensure_systemd_service_installed || return 1
 
                 # Setup auto-updates if requested during update; otherwise
                 # refresh assets a previous install already put in place so a
@@ -5403,7 +5445,7 @@ main() {
                 download_pulse
                 setup_directories
                 setup_update_command
-                install_systemd_service
+                install_systemd_service || return 1
                 
                 # Setup auto-updates if requested during reinstall; otherwise
                 # refresh assets a previous install already put in place
@@ -5526,7 +5568,7 @@ main() {
         setup_directories
         download_pulse
         setup_update_command
-        install_systemd_service
+        install_systemd_service || return 1
         
         # Setup auto-updates if requested; a leftover timer from a previous
         # install still gets its helper script and units refreshed
@@ -5641,7 +5683,7 @@ uninstall_pulse() {
 
     # Detect service name
     local service_name
-    service_name=$(detect_service_name)
+    service_name=$(detect_service_name) || return 1
     
     if ! quiesce_pulse_for_removal "$service_name"; then
         print_error "Pulse removal is incomplete; no files have been removed. Previously stopped units are not automatically restarted."
@@ -5732,7 +5774,7 @@ reset_pulse() {
     echo
 
     local service_name unit i prior_enabled
-    service_name=$(detect_service_name)
+    service_name=$(detect_service_name) || return 1
     service_name="${service_name%.service}.service"
     local units=("$UPDATE_TIMER_UNIT") roles=(timer)
     # Historical default aliases share the same configuration. Custom instances

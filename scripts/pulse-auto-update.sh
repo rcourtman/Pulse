@@ -316,12 +316,47 @@ version_greater_than() {
 detect_service_name() {
     if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then
         echo "$SERVICE_NAME"
-    elif systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
-        echo "pulse-backend"
-    elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
+        return
+    fi
+    if ! command -v systemctl >/dev/null 2>&1; then
         echo "pulse"
+        return
+    fi
+
+    local unit_files="" unit="" state="" preset="" extra=""
+    local seen_backend=false seen_pulse=false
+    # Keep the standalone helper aligned with the server installer's bounded
+    # discovery. Its explicit installer handoff must not carry a short-read
+    # default past the installer's own discovery gate.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- pulse-backend.service pulse.service 2>/dev/null); then
+        log error "Cannot identify the Pulse systemd service: unit inventory failed. Reconcile service state before retrying." >&2
+        return 1
+    fi
+    while read -r unit state preset extra; do
+        [[ -n "$unit" ]] || continue
+        if [[ "$unit" == pulse-backend.service && "$seen_backend" == false ]]; then
+            seen_backend=true
+        elif [[ "$unit" == pulse.service && "$seen_pulse" == false ]]; then
+            seen_pulse=true
+        else
+            log error "Cannot identify the Pulse systemd service: unexpected unit inventory. No default service was selected." >&2
+            return 1
+        fi
+        case "$state" in
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient|masked|masked-runtime) ;;
+            *)
+                log error "Cannot identify the Pulse systemd service: unknown unit state. No default service was selected." >&2
+                return 1 ;;
+        esac
+        if [[ -n "$extra" ]]; then
+            log error "Cannot identify the Pulse systemd service: malformed unit inventory. No default service was selected." >&2
+            return 1
+        fi
+    done <<< "$unit_files"
+    if [[ "$seen_backend" == true ]]; then
+        echo "pulse-backend"
     else
-        echo "pulse"  # Default
+        echo "pulse"  # Only a successful absent inventory permits the default.
     fi
 }
 
@@ -379,7 +414,10 @@ ensure_service_restarted() {
 
 perform_update() {
     local new_version=$1
-    local service_name=$(detect_service_name)
+    local service_name=""
+    # A local declaration hides command-substitution failure. Refuse before
+    # prior-active observation, backup, installer download or restart traps.
+    service_name=$(detect_service_name) || return 1
     local installer_tmp=""
     local signature_tmp=""
     local backup_dir=""

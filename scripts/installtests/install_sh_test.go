@@ -4556,6 +4556,21 @@ func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) 
 	}
 }
 
+// Execute both standalone discovery producers and every mutation-owning
+// consumer, including OR-list callers where Bash disables function errexit.
+func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v")
+	cmd.Env = append(os.Environ(),
+		"PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer service discovery/caller controls: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
