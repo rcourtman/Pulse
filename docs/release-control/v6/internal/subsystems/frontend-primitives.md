@@ -653,6 +653,19 @@ fragments do not throw or move focus. The renderer and fragment helper are
 covered by `frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts`,
 with direct-link, reload and keyboard navigation verified in the live viewer.
 
+### Patrol mode route anchor opens its disclosure
+
+Patrol mode entry points in Settings and the licence panel link to
+`/patrol#patrol-control`, while the Patrol header keeps the Patrol mode
+selector in a collapsed `Mode and automation` disclosure. Arriving on that
+anchor, with or without the starter query, or on the `#operations-loop`
+compatibility anchor opens the disclosure and scrolls it into view. The header
+acts again only when the hash or the disclosure element changes, so a
+disclosure the user collapses stays collapsed and a plain `/patrol` visit
+leaves it collapsed. Plan-locked installs render no disclosure.
+`frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.render.test.tsx`
+pins this on a rendered header.
+
 ### Disk mount scrolling
 
 DisksCard keeps every supplied mount in its parent's scrolling flow. It must not

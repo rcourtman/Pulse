@@ -58,6 +58,15 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('Check now');
   });
 
+  it('opens the collapsed Patrol mode disclosure only for its route anchors', () => {
+    // Rendered behaviour lives in PatrolIntelligenceHeader.render.test.tsx.
+    expect(headerSource).toContain('`#${PATROL_CONTROL_ANCHOR}`');
+    expect(headerSource).toContain('`#${PATROL_OPERATIONS_LOOP_ANCHOR}`');
+    expect(headerSource).toContain('<details ref={setModeDisclosure}');
+    expect(headerSource).toContain('PATROL_MODE_ANCHOR_HASHES.has(location.hash)');
+    expect(headerSource).not.toMatch(/<details[^>]*\sopen[\s=>]/);
+  });
+
   it('turns provider-blocked manual run controls into setup actions', () => {
     expect(headerSource).toContain('runBlockedByProviderSetup');
     expect(headerSource).toContain("state.patrolReadiness()?.status === 'not_ready'");

@@ -825,7 +825,12 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    section, which holds the Patrol on/off toggle and the `Mode and automation`
    disclosure with the Patrol mode selector (or, for plan-locked installs, the
    inline `Patrol mode` line), rather than on a separate onboarding banner or
-   generic Patrol container. The Patrol surface must preserve the
+   generic Patrol container. Arriving on either anchor, with or without the
+   starter query, opens that disclosure and scrolls the selector into view, so
+   the entry points land on a visible Patrol mode selector; a plain `/patrol`
+   visit leaves the disclosure collapsed, and a disclosure the operator
+   collapses after arriving stays collapsed until the route hash changes. The
+   Patrol surface must preserve the
    issue-evidence rule: Patrol mode can start from a generic Patrol run
    state, but investigation, approval, verification, and external-agent parity
    require a real finding, investigation, or governed outcome signal. The native
