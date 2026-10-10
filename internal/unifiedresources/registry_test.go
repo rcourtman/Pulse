@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -8531,5 +8532,664 @@ func TestSuccessionBatchOrderKeepsLinkedRemediationLock(t *testing.T) {
 				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
 			}
 		})
+	}
+}
+
+// chainLinkEstate arrives the way the monitor ingests it: two agents, a
+// Proxmox VM and its storage in the snapshot, then two TrueNAS pools and a
+// TrueNAS VM, then a vSphere VM and a vSphere datastore, each record source
+// in its own pass.
+type chainLinkEstate struct {
+	snapshot models.StateSnapshot
+	records  map[DataSource][]IngestRecord
+	// saved is an unlinked host that only saved-host continuity lists.
+	saved models.Host
+	ids   map[string]string
+}
+
+func newChainLinkEstate(t *testing.T) chainLinkEstate {
+	t.Helper()
+	now := time.Now().UTC()
+	pool := func(name string) IngestRecord {
+		return IngestRecord{
+			SourceID: "system:tn-1:pool:" + name,
+			Resource: Resource{
+				Type: ResourceTypeStorage, Name: name, Status: StatusOnline, LastSeen: now,
+				Storage: &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+			},
+		}
+	}
+	estate := chainLinkEstate{
+		snapshot: models.StateSnapshot{
+			LastUpdate: now,
+			VMs: []models.VM{
+				{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:111", VMID: 111, Name: "app-r", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:112", VMID: 112, Name: "app-u", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:113", VMID: 113, Name: "app-x", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:114", VMID: 114, Name: "app-y", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+			},
+			Storage: []models.Storage{{
+				ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available",
+				Total: 1000, Used: 400, Free: 600, Usage: 40, Enabled: true, Active: true, LastSeen: now,
+			}},
+			Hosts: []models.Host{
+				{ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now},
+				{ID: "host-ops", Hostname: "ops-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now},
+			},
+		},
+		records: map[DataSource][]IngestRecord{
+			SourceTrueNAS: {
+				pool("tank"), pool("vault"),
+				{
+					SourceID: "system:tn-1:vm:nas-vm",
+					Resource: Resource{Type: ResourceTypeVM, Name: "nas-vm", Status: StatusOnline, LastSeen: now},
+				},
+			},
+			SourceVMware: {
+				{
+					SourceID: "vc-1:vm:vm-42",
+					Resource: Resource{
+						Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline, LastSeen: now,
+						VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+					},
+					Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+				},
+				{
+					SourceID: "vc-1:datastore:datastore-7",
+					Resource: Resource{
+						Type: ResourceTypeStorage, Technology: "vmware", Name: "ds-7", Status: StatusOnline, LastSeen: now,
+						VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "datastore-7", EntityType: "datastore"},
+					},
+				},
+			},
+		},
+		saved: models.Host{ID: "host-saved", Hostname: "saved-agent", MachineID: "00112233445566aa", Status: "offline", LastSeen: now.Add(-time.Hour)},
+		ids:   map[string]string{},
+	}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	roles := map[string]string{
+		"app-agent": "agent", "ops-agent": "ops-agent", "web": "pve-vm", "local-zfs": "pve-storage",
+		"tank": "tank", "vault": "vault", "nas-vm": "nas-vm", "app-guest": "vsphere-vm", "ds-7": "datastore",
+		"app-r": "vm-r", "app-u": "vm-u", "app-x": "vm-x", "app-y": "vm-y",
+	}
+	for _, resource := range unlinked.GetAll() {
+		if role, ok := roles[resource.Name]; ok {
+			estate.ids[role] = resource.ID
+		}
+	}
+	if len(estate.ids) != len(roles) || len(unlinked.GetAll()) != len(roles) {
+		t.Fatalf("unlinked estate = %+v, want one row per role %v", unlinked.GetAll(), roles)
+	}
+	return estate
+}
+
+// linkOrders lists every order of n links.
+func linkOrders(n int) [][]int {
+	if n == 0 {
+		return [][]int{{}}
+	}
+	var orders [][]int
+	for _, rest := range linkOrders(n - 1) {
+		for i := 0; i <= len(rest); i++ {
+			order := append(append(append([]int{}, rest[:i]...), n-1), rest[i:]...)
+			orders = append(orders, order)
+		}
+	}
+	return orders
+}
+
+// Links that share a member name one identity, so a chain folds into one row
+// chosen by precedence, never by the order the store lists the links in or
+// the order its members' sources arrive. Each estate is rebuilt in every link
+// order and checked after each of two rebuilds (identity pins persist on the
+// first), after a live refresh of every record source, in the read state that overlays a saved host, and in
+// a registry seeded from that read state, as the resources API seeds when the
+// listing already carries every source: each view lists the same row,
+// resolves every member to it and records every link's pair, with the same
+// fold records in every order, refreshes included. Applied one link at a
+// time, a link naming a member an earlier link had folded away found nothing,
+// so one order folded the chain and another left a member standing.
+func TestManualLinkChainsFoldTheSameWayInAnyLinkOrder(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	link := func(a, b, primary string, minute int) ResourceLink {
+		return ResourceLink{
+			ResourceA: estate.ids[a], ResourceB: estate.ids[b], PrimaryID: estate.ids[primary],
+			CreatedAt: created.Add(time.Duration(minute) * time.Minute),
+		}
+	}
+	// The cycle case below needs its two tie-broken VMs in canonical-ID order.
+	vmB, vmC := "vm-x", "vm-y"
+	if estate.ids[vmC] > estate.ids[vmB] {
+		vmB, vmC = vmC, vmB
+	}
+	for _, tc := range []struct {
+		name     string
+		links    []ResourceLink
+		root     string
+		rootType ResourceType
+	}{
+		{
+			// The agent linked from its own page still folds into its guest, and
+			// the guest's own link takes both into the storage it names, all in
+			// the snapshot pass.
+			name:     "agent primary over its guest, guest into storage",
+			links:    []ResourceLink{link("agent", "pve-vm", "agent", 0), link("pve-vm", "pve-storage", "pve-storage", 1)},
+			root:     "pve-storage",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// The same chain with record-sourced storage: the rebuild judges
+			// links once every source is in.
+			name:     "agent primary over its guest, guest into record-sourced storage",
+			links:    []ResourceLink{link("agent", "pve-vm", "agent", 0), link("pve-vm", "tank", "tank", 1)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// Both links name a primary over the agent, and the guest outranks
+			// the storage, though the pools' source sorts before the VM's.
+			name:     "guest outranks storage as competing primary",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("agent", "vsphere-vm", "vsphere-vm", 1)},
+			root:     "vsphere-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name:     "competing storage primaries keep the earliest link's",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("pve-vm", "vault", "vault", 1), link("agent", "pve-vm", "agent", 2)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			name:     "competing storage primaries follow creation time, not names",
+			links:    []ResourceLink{link("agent", "tank", "tank", 2), link("pve-vm", "vault", "vault", 1), link("agent", "pve-vm", "agent", 0)},
+			root:     "vault",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// Every candidate is an agent, so the guest takes its place.
+			name:     "an agent never holds a guest",
+			links:    []ResourceLink{link("pve-vm", "tank", "tank", 0), link("tank", "ops-agent", "ops-agent", 1)},
+			root:     "pve-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name:     "a cycle folds into its best member",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("tank", "vault", "vault", 1), link("vault", "agent", "agent", 2)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// A cycle across the snapshot and two record sources. Folding as the
+			// sources arrived put the TrueNAS VM inside the Proxmox storage
+			// before the vSphere VM's link closed the cycle, so the storage or
+			// the vSphere VM survived; the rebuild judges the whole cycle and
+			// keeps the guest whose link is oldest.
+			name: "a cycle across record sources keeps its best guest",
+			links: []ResourceLink{
+				link("nas-vm", "pve-storage", "pve-storage", 1),
+				link("pve-storage", "vsphere-vm", "vsphere-vm", 2),
+				link("vsphere-vm", "nas-vm", "nas-vm", 0),
+			},
+			root:     "nas-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// The pool folds in through one VM's link while a second VM's link
+			// to it closes a cycle. A TrueNAS refresh recreates the pool's row
+			// (its source maps to a VM); it folds back through the link that
+			// took it in, not the cycle's closing link, so no record turns.
+			name: "a recreated cycle member folds back through its own link",
+			links: []ResourceLink{
+				link(vmB, "vm-r", "vm-r", 0),
+				link("vm-u", "vm-r", "vm-r", 1),
+				link(vmC, "vm-u", "vm-u", 2),
+				link(vmC, "tank", "tank", 3),
+				link("tank", vmB, vmB, 4),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// Two interior members of the chain are recreated by one refresh.
+			// Each folds back along its record; reaching the second through
+			// the VM the first holds would turn that VM's record round and
+			// leave its ID without a row.
+			name: "two recreated interior members fold back along their records",
+			links: []ResourceLink{
+				link("vm-u", "vault", "vault", 0),
+				link("vault", "tank", "tank", 1),
+				link("tank", "vm-r", "vm-r", 2),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name: "two recreated interior members with a closing link",
+			links: []ResourceLink{
+				link("vm-u", "vault", "vault", 0),
+				link("vault", "tank", "tank", 1),
+				link("tank", "vm-r", "vm-r", 2),
+				link("vm-u", "vm-r", "vm-r", 3),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// A TrueNAS refresh recreates the VM's row, since its source maps to
+			// a row of another type; the row folds back through the same pair.
+			name:     "a member a refresh recreates folds back into its root",
+			links:    []ResourceLink{link("nas-vm", "pve-storage", "pve-storage", 0)},
+			root:     "pve-storage",
+			rootType: ResourceTypeStorage,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rootID := estate.ids[tc.root]
+			var reference []ManualLinkFold
+			check := func(order []int, view string, rr *ResourceRegistry) {
+				t.Helper()
+				root, ok := rr.Get(rootID)
+				if !ok || root.Type != tc.rootType {
+					t.Fatalf("order %v, %s: root %s = %+v (listed=%v), want a listed %s", order, view, rootID, root, ok, tc.rootType)
+				}
+				pairs := make(map[string]bool, len(tc.links))
+				for _, l := range tc.links {
+					pairs[exclusionKey(l.ResourceA, l.ResourceB)] = true
+					for _, member := range []string{l.ResourceA, l.ResourceB} {
+						if _, listed := rr.Get(member); listed && member != rootID {
+							t.Fatalf("order %v, %s: member %s still listed beside %s", order, view, member, rootID)
+						}
+						if got, ok := rr.ResolveReferenceID(member); !ok || got != rootID {
+							t.Fatalf("order %v, %s: %s resolved to %q (%v), want %s", order, view, member, got, ok, rootID)
+						}
+					}
+				}
+				folds := rr.ManualLinkFolds(rootID)
+				slices.SortFunc(folds, func(a, b ManualLinkFold) int {
+					return strings.Compare(a.HolderID+"|"+a.FoldedID, b.HolderID+"|"+b.FoldedID)
+				})
+				for _, fold := range folds {
+					delete(pairs, exclusionKey(fold.HolderID, fold.FoldedID))
+				}
+				if len(folds) != len(tc.links) || len(pairs) != 0 {
+					t.Fatalf("order %v, %s: folds %+v, want one per link pair %+v", order, view, folds, tc.links)
+				}
+				if reference == nil {
+					reference = folds
+				} else if !reflect.DeepEqual(folds, reference) {
+					t.Fatalf("order %v, %s: folds %+v, want %+v as in the first order", order, view, folds, reference)
+				}
+			}
+			for _, order := range linkOrders(len(tc.links)) {
+				store := NewMemoryStore()
+				for _, i := range order {
+					if err := store.AddLink(tc.links[i]); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+				}
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+				check(order, "first rebuild", adapter.currentRegistry())
+				adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+				check(order, "second rebuild", adapter.currentRegistry())
+				readState := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(estate.saved)}).(*MonitorAdapter)
+				check(order, "read state", readState.registry)
+				seeded := NewRegistry(store)
+				seeded.IngestResources(readState.GetAll())
+				check(order, "resources API", seeded)
+				for _, source := range []DataSource{SourceTrueNAS, SourceVMware} {
+					adapter.PopulateSupplementalRecords(source, estate.records[source])
+					check(order, "refresh of "+string(source), adapter.currentRegistry())
+				}
+			}
+		})
+	}
+}
+
+// A live refresh can bring a member the last rebuild had not seen, and it
+// cannot undo the folds the rebuild made. The TrueNAS VM is linked into the
+// Proxmox storage, and the storage into a vSphere host that only the refresh
+// reports. The host is the chain's only candidate, but an agent never holds a
+// guest, so the storage that already holds the VM keeps the chain; the next
+// rebuild judges the whole chain and keeps the VM itself.
+func TestManualLinkChainRefreshNeverLeavesAnAgentHoldingAGuest(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	now := time.Now().UTC()
+	host := IngestRecord{
+		SourceID: "vc-1:host:host-9",
+		Resource: Resource{
+			Type: ResourceTypeAgent, Technology: "vmware", Name: "esx-9", Status: StatusOnline, LastSeen: now,
+			VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "host-9", EntityType: "host"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"esx-9"}},
+	}
+	withHost := make(map[DataSource][]IngestRecord, len(estate.records))
+	for source, records := range estate.records {
+		withHost[source] = records
+	}
+	withHost[SourceVMware] = append(slices.Clone(estate.records[SourceVMware]), host)
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(estate.snapshot, withHost)
+	var hostID string
+	for _, resource := range probe.GetAll() {
+		if resource.Name == "esx-9" {
+			hostID = resource.ID
+		}
+	}
+	if hostID == "" {
+		t.Fatalf("probe estate %+v has no vSphere host", probe.GetAll())
+	}
+	vmID, storageID := estate.ids["nas-vm"], estate.ids["pve-storage"]
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: vmID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created},
+		{ResourceA: storageID, ResourceB: hostID, PrimaryID: hostID, CreatedAt: created.Add(time.Minute)},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	assertChainRoot(t, "rebuild without the host", adapter.currentRegistry(), storageID, ResourceTypeStorage, vmID, storageID)
+	adapter.PopulateSupplementalRecords(SourceVMware, withHost[SourceVMware])
+	assertChainRoot(t, "refresh bringing the host", adapter.currentRegistry(), storageID, ResourceTypeStorage, vmID, storageID, hostID)
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, withHost)
+	assertChainRoot(t, "rebuild with the host", adapter.currentRegistry(), vmID, ResourceTypeVM, vmID, storageID, hostID)
+}
+
+func assertChainRoot(t *testing.T, step string, rr *ResourceRegistry, rootID string, rootType ResourceType, members ...string) {
+	t.Helper()
+	root, ok := rr.Get(rootID)
+	if !ok || root.Type != rootType {
+		t.Fatalf("%s: root %s = %+v (listed=%v), want a listed %s", step, rootID, root, ok, rootType)
+	}
+	for _, member := range members {
+		if _, listed := rr.Get(member); listed && member != rootID {
+			t.Fatalf("%s: member %s still listed beside %s", step, member, rootID)
+		}
+		if got, ok := rr.ResolveReferenceID(member); !ok || got != rootID {
+			t.Fatalf("%s: %s resolved to %q (%v), want %s", step, member, got, ok, rootID)
+		}
+	}
+}
+
+// A relink of a Proxmox node and its agent names the node's own ID, which the
+// inferred join consumed before any link applies. The join records that fold
+// before the links resolve their members, so a second link naming the node
+// joins the chain whichever link the store lists first: applied in store
+// order, a link naming the node ahead of the relink found no node and was
+// skipped for good. The folded node keeps the agent shape it had, so a guest
+// linked to it still outranks storage as the chain's root.
+func TestManualLinkToAJoinedNodeFoldsTheSameWayInAnyLinkOrder(t *testing.T) {
+	now := time.Now().UTC()
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-pve1"}
+	host := models.Host{
+		ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", Status: "online", LastSeen: now, LinkedNodeID: node.ID,
+		NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", MAC: "aa:bb:cc:dd:ee:01", Addresses: []string{"10.0.0.5/24"}}},
+	}
+	pool := IngestRecord{
+		SourceID: "system:tn-1:pool:tank",
+		Resource: Resource{
+			Type: ResourceTypeStorage, Name: "tank", Status: StatusOnline, LastSeen: now,
+			Storage: &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+		},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host},
+		VMs: []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+	}
+	records := map[DataSource][]IngestRecord{SourceTrueNAS: {pool}}
+
+	alone := NewRegistry(nil)
+	alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+	nodeID := hostRowsByFacet(t, alone.List()).node
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(snapshot, records)
+	joinedID := hostRowsByFacet(t, probe.GetAll()).joined
+	var poolID, vmID string
+	for _, resource := range probe.GetAll() {
+		switch resource.Type {
+		case ResourceTypeStorage:
+			poolID = resource.ID
+		case ResourceTypeVM:
+			vmID = resource.ID
+		}
+	}
+	if nodeID == "" || joinedID == "" || poolID == "" || vmID == "" || nodeID == joinedID {
+		t.Fatalf("fixture joined node %q and agent into %q beside pool %q and VM %q", nodeID, joinedID, poolID, vmID)
+	}
+
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	relink := ResourceLink{ResourceA: joinedID, ResourceB: nodeID, PrimaryID: joinedID, CreatedAt: created}
+	for _, tc := range []struct {
+		name     string
+		links    []ResourceLink
+		root     string
+		rootType ResourceType
+	}{
+		{
+			name:     "a pool linked to the node",
+			links:    []ResourceLink{relink, {ResourceA: nodeID, ResourceB: poolID, PrimaryID: poolID, CreatedAt: created.Add(time.Minute)}},
+			root:     poolID,
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// The node is an agent-type row whichever way it was folded, so a
+			// guest linked to it folds the chain, not the pool.
+			name: "a guest and a pool linked to the node",
+			links: []ResourceLink{
+				relink,
+				{ResourceA: nodeID, ResourceB: vmID, PrimaryID: nodeID, CreatedAt: created.Add(time.Minute)},
+				{ResourceA: nodeID, ResourceB: poolID, PrimaryID: poolID, CreatedAt: created.Add(2 * time.Minute)},
+			},
+			root:     vmID,
+			rootType: ResourceTypeVM,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var reference []ManualLinkFold
+			for _, order := range linkOrders(len(tc.links)) {
+				store := NewMemoryStore()
+				for _, i := range order {
+					if err := store.AddLink(tc.links[i]); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+				}
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+				seeded := NewRegistry(store)
+				seeded.IngestResources(adapter.GetAll())
+				for _, view := range []struct {
+					name string
+					rr   *ResourceRegistry
+				}{{"monitor", adapter.currentRegistry()}, {"resources API", seeded}} {
+					assertChainRoot(t, fmt.Sprintf("order %v, %s", order, view.name), view.rr, tc.root, tc.rootType, joinedID, nodeID, poolID)
+					folds := view.rr.ManualLinkFolds(tc.root)
+					slices.SortFunc(folds, func(a, b ManualLinkFold) int {
+						return strings.Compare(a.HolderID+"|"+a.FoldedID, b.HolderID+"|"+b.FoldedID)
+					})
+					if reference == nil {
+						reference = folds
+					} else if !reflect.DeepEqual(folds, reference) {
+						t.Fatalf("order %v, %s: folds %+v, want %+v as in the first order", order, view.name, folds, reference)
+					}
+				}
+			}
+		})
+	}
+}
+
+// A registry seeded from a listing keeps the folds that listing's links made,
+// whatever the store holds now: the links changed after the monitor published
+// it. A record that recreates a folded member then folds it under the new
+// links, and every ID the listing's fold records fold in keeps answering to
+// the row that survives. Turning a record the surviving row carries to match
+// the new link would leave the ID it folded in without a row, and so would
+// hanging the folded row's records from the linking member when the surviving
+// row's own ID lies between that member and the folded row.
+func TestManualLinkChangedAfterSeedingKeepsFoldedIDsResolving(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	vmR, vmT, pool, otherPool := estate.ids["vm-r"], estate.ids["vm-u"], estate.ids["tank"], estate.ids["vault"]
+	chain := []ResourceLink{
+		{ResourceA: vmT, ResourceB: pool, PrimaryID: pool},
+		{ResourceA: pool, ResourceB: vmR, PrimaryID: vmR},
+	}
+	// The VM, the pool and the second pool linked in a cycle, rooted at the VM.
+	cycle := []ResourceLink{
+		{ResourceA: pool, ResourceB: vmR, PrimaryID: vmR},
+		{ResourceA: otherPool, ResourceB: vmR, PrimaryID: vmR},
+		{ResourceA: pool, ResourceB: otherPool, PrimaryID: otherPool},
+	}
+
+	for _, tc := range []struct {
+		name      string
+		published []ResourceLink
+		changed   []ResourceLink
+		// root and rootType name the row left after the replay.
+		root     string
+		rootType ResourceType
+		members  []string
+	}{
+		{
+			// The pool now folds into the VM inside the published root.
+			name:      "the pool folds into a member of the root",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: pool, ResourceB: vmT, PrimaryID: vmT}},
+			root:      vmR,
+			rootType:  ResourceTypeVM,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// Only the link to the pool's folded VM stays, so the recreated pool
+			// is the chain's root and the published root folds into it through
+			// that VM, a member its records reach only through the pool.
+			name:      "the recreated pool becomes the root through a member",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: vmT, ResourceB: pool, PrimaryID: pool}},
+			root:      pool,
+			rootType:  ResourceTypeStorage,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// Only the link between the pool and the published root stays, with
+			// the pool primary: the root folds into the recreated pool through
+			// the very ID the pool's records fold it under.
+			name:      "the recreated pool becomes the root over the published root",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: pool, ResourceB: vmR, PrimaryID: pool}},
+			root:      pool,
+			rootType:  ResourceTypeStorage,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// The published records form a cycle, and the links now root it at a
+			// recreated pool. Every record that named the pool as folded turns
+			// away from it, so the new root is never a folded ID.
+			name:      "a recreated pool roots a cycle of records",
+			published: cycle,
+			changed: []ResourceLink{
+				{ResourceA: vmR, ResourceB: pool, PrimaryID: pool},
+				{ResourceA: otherPool, ResourceB: pool, PrimaryID: pool},
+				{ResourceA: vmR, ResourceB: otherPool, PrimaryID: otherPool},
+			},
+			root:     pool,
+			rootType: ResourceTypeStorage,
+			members:  []string{vmR, pool, otherPool},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			published := NewMemoryStore()
+			for i, link := range tc.published {
+				link.CreatedAt = created.Add(time.Duration(i) * time.Minute)
+				if err := published.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+			adapter := NewMonitorAdapter(NewRegistry(published))
+			adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+			assertChainRoot(t, "published", adapter.currentRegistry(), vmR, ResourceTypeVM, tc.members...)
+
+			changed := NewMemoryStore()
+			for i, link := range tc.changed {
+				link.CreatedAt = created.Add(time.Duration(10+i) * time.Minute)
+				if err := changed.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+			seeded := NewRegistry(changed)
+			seeded.IngestResources(adapter.GetAll())
+			assertChainRoot(t, "seeded", seeded, vmR, ResourceTypeVM, tc.members...)
+			seeded.IngestRecords(SourceTrueNAS, estate.records[SourceTrueNAS])
+			assertChainRoot(t, "seeded then replayed", seeded, tc.root, tc.rootType, tc.members...)
+			// Each side keeps what it is on its own through the turned and the
+			// carried records, which report-merge selects links by, and the
+			// surviving row is never recorded as a folded ID, which report-merge
+			// infers its root from when the row is re-keyed.
+			own := map[string][]DataSource{vmR: {SourceProxmox}, vmT: {SourceProxmox}, pool: {SourceTrueNAS}, otherPool: {SourceTrueNAS}}
+			for _, fold := range seeded.ManualLinkFolds(tc.root) {
+				if !reflect.DeepEqual(fold.HolderOwn, own[fold.HolderID]) || !reflect.DeepEqual(fold.FoldedOwn, own[fold.FoldedID]) {
+					t.Fatalf("fold %+v: own sources not %v for holder and %v for folded", fold, own[fold.HolderID], own[fold.FoldedID])
+				}
+				if fold.FoldedID == tc.root {
+					t.Fatalf("fold %+v records the surviving row %s as folded", fold, tc.root)
+				}
+			}
+		})
+	}
+}
+
+// A cycle of links is recorded link by link, so a report-merge naming one
+// member's source cuts every link that member holds: the pair set the chain
+// pass records is what ReportedManualLinkFolds selects from, and the link that
+// closes the cycle is in it with its sides' own sources. A fold recorded for
+// only the links that folded rows in left the reported member joined through
+// the link that closed the cycle.
+func TestManualLinkChainCycleLinksAreAllCutByAReportedMember(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	nasVM, storage, guest := estate.ids["nas-vm"], estate.ids["pve-storage"], estate.ids["vsphere-vm"]
+	links := []ResourceLink{
+		{ResourceA: nasVM, ResourceB: storage, PrimaryID: storage, CreatedAt: created.Add(time.Minute)},
+		{ResourceA: storage, ResourceB: guest, PrimaryID: guest, CreatedAt: created.Add(2 * time.Minute)},
+		{ResourceA: guest, ResourceB: nasVM, PrimaryID: nasVM, CreatedAt: created},
+	}
+	for _, order := range linkOrders(len(links)) {
+		store := NewMemoryStore()
+		for _, i := range order {
+			if err := store.AddLink(links[i]); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+		}
+		adapter := NewMonitorAdapter(NewRegistry(store))
+		adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+		seeded := NewRegistry(store)
+		seeded.IngestResources(adapter.GetAll())
+		for name, rr := range map[string]*ResourceRegistry{"monitor": adapter.currentRegistry(), "resources API": seeded} {
+			folds := rr.ManualLinkFolds(nasVM)
+			cut := ReportedManualLinkFolds(nasVM, folds, func(sources ...DataSource) bool {
+				return slices.Contains(sources, SourceVMware)
+			})
+			pairs := make(map[string]bool, len(cut))
+			for _, fold := range cut {
+				pairs[exclusionKey(fold.HolderID, fold.FoldedID)] = true
+			}
+			for _, link := range links {
+				if link.ResourceA != guest && link.ResourceB != guest {
+					continue
+				}
+				if !pairs[exclusionKey(link.ResourceA, link.ResourceB)] {
+					t.Fatalf("order %v, %s: reporting vmware leaves the link %s - %s joined; cut %+v of %+v", order, name, link.ResourceA, link.ResourceB, cut, folds)
+				}
+			}
+			if len(cut) != 2 {
+				t.Fatalf("order %v, %s: reporting vmware cuts %d links, want the two the vSphere VM holds: %+v", order, name, len(cut), cut)
+			}
+		}
 	}
 }
