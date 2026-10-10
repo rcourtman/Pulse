@@ -9212,3 +9212,20 @@ explains that Pulse manages retries; supported SMTP, TLS, rate-limit, routing
 and off-state editing remain unchanged. Destination payload builders still
 discard unsupported fields from stale drafts. Component, helper, destination
 and local browser controls cover the boundary; they do not prove SMTP delivery.
+
+### Notification recovery callbacks retire with their view
+
+The shared delivery-health owner used by Overview and Notifications ignores
+pending health/action/activity completions after unmount. It cannot show a
+late global toast, restore retired local feedback or initiate post-action
+health/activity reads in a replacement view. Retired entry points do not
+confirm or dispatch an action. Unmount does not cancel or undo a previously
+issued request; active views retain their existing confirmation, latest-read
+ownership and persistent action-failure feedback.
+
+Verification: `useNotificationDeliveryHealth.lifecycle.test.tsx` and the
+connected `useAlertDestinationsTabState.test.tsx` cover both queue actions,
+retired reads/callbacks and a replacement owner's independent accepted action.
+Desktop/phone browser controls use the real Overview/Notifications surfaces,
+API adapters, toast and CSS with synthetic responses, not native delivery or
+published queue recovery.
