@@ -6758,3 +6758,12 @@ links' pairs, which deletes the pair's link row in the resource store as an
 unlink does. Nothing new is persisted: the record is rebuilt with each
 registry generation, and no schema, backup, retention, migration or
 recovery path is added or moved.
+
+Each fold also records its two sides' own sources (`HolderOwn`, `FoldedOwn`),
+in the same unexported in-memory field, and `ReportedManualLinkFolds` in
+`internal/unifiedresources/manual_link_folds.go` uses them so a
+source-filtered report-merge in `internal/api/resourceapi/resources.go`
+excludes the links that join a member carrying the named source to the rest
+of the merged resource. That changes which pairs the report excludes, through
+the same exclusion write as before; no schema, backup, retention, migration or recovery path is added or
+moved.

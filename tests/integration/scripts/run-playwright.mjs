@@ -46,17 +46,23 @@ async function writeManagedVerifyLock(env = process.env) {
   }
 
   const lockPath = managedVerifyLockPath(env);
+  const contents = `pid=${process.pid}\ncreated_at=${new Date().toISOString()}\nrun_id=${String(env.PULSE_E2E_RUN_ID || '').trim()}\n`;
   await fs.mkdir(path.dirname(lockPath), { recursive: true });
-  await fs.writeFile(
-    lockPath,
-    `pid=${process.pid}\ncreated_at=${new Date().toISOString()}\nrun_id=${String(env.PULSE_E2E_RUN_ID || '').trim()}\n`,
-    'utf8',
-  );
+  await fs.writeFile(lockPath, contents, 'utf8');
+  return { lockPath, contents };
 }
 
-async function clearManagedVerifyLock(env = process.env) {
-  const lockPath = managedVerifyLockPath(env);
-  await fs.rm(lockPath, { force: true });
+async function clearManagedVerifyLock(lock) {
+  if (!lock) return;
+  try {
+    // Non-hot-dev runs never acquired this handoff. A later owner may also
+    // have replaced it while teardown ran; do not remove that owner's lock.
+    if (await fs.readFile(lock.lockPath, 'utf8') === lock.contents) {
+      await fs.unlink(lock.lockPath);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
 }
 
 const run = (command, args, options = {}) =>
@@ -68,21 +74,42 @@ const run = (command, args, options = {}) =>
 
 let exitCode = 0;
 const childEnv = buildRunScopedEnv();
+let verifyLock;
+let setupStarted = false;
+
+function reportFailure(phase, err) {
+  console.error(`[integration] ${phase} failed:`, err?.message || err);
+  if (exitCode === 0) exitCode = 1;
+}
 
 try {
-  await writeManagedVerifyLock(childEnv);
-  const pretestCode = await run(nodeCmd, ['./scripts/pretest.mjs'], { env: childEnv });
-  if (pretestCode !== 0) {
-    process.exit(pretestCode);
+  verifyLock = await writeManagedVerifyLock(childEnv);
+  setupStarted = true;
+  exitCode = await run(nodeCmd, ['./scripts/pretest.mjs'], { env: childEnv });
+  // A failed setup may already have started a managed runtime. Keep its
+  // failure, skip Playwright, and still reach the existing teardown below.
+  if (exitCode === 0) {
+    exitCode = await run(npxCmd, ['playwright', 'test', ...playwrightArgs], { env: childEnv });
   }
-
-  exitCode = await run(npxCmd, ['playwright', 'test', ...playwrightArgs], { env: childEnv });
+} catch (err) {
+  reportFailure('setup or test launch', err);
 } finally {
-  const posttestCode = await run(nodeCmd, ['./scripts/posttest.mjs'], { env: childEnv });
-  if (exitCode === 0 && posttestCode !== 0) {
-    exitCode = posttestCode;
+  try {
+    // If lock preparation failed, this invocation never started a runtime
+    // and must not stop a pre-existing one through posttest.
+    if (setupStarted) {
+      const posttestCode = await run(nodeCmd, ['./scripts/posttest.mjs'], { env: childEnv });
+      if (exitCode === 0) exitCode = posttestCode;
+    }
+  } catch (err) {
+    reportFailure('teardown launch', err);
+  } finally {
+    try {
+      await clearManagedVerifyLock(verifyLock);
+    } catch (err) {
+      reportFailure('verification lock cleanup', err);
+    }
   }
-  await clearManagedVerifyLock(childEnv);
 }
 
 process.exit(exitCode);

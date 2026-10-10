@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,6 +143,109 @@ func TestResourceReportMergeSourceFilterSelectsLinks(t *testing.T) {
 	}
 	if split := rebuild(); len(split) != 2 {
 		t.Fatalf("report-merge left %d monitor resources, want two: %+v", len(split), split)
+	}
+}
+
+// A source filter detaches the members of a chain that carry the source. A
+// Docker host linked into an agent that is linked into a VM leaves two folds,
+// and the agent's fold lists the Docker source as well, because its subtree
+// holds the Docker host. Naming Docker used to undo the VM-agent link too, and
+// the pair was apart on every surface; now only the link that holds the Docker
+// host goes. Naming the agent detaches the agent from the VM and keeps the
+// Docker host in the agent, which the report does not name.
+func TestResourceReportMergeSourceFilterDetachesChainMembers(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		LastUpdate:  now,
+		VMs:         []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:       []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "docker-box", Hostname: "dock-box", MachineID: "0011223344556677", Status: "online", LastSeen: now}},
+	}
+	for _, tc := range []struct {
+		name    string
+		sources []string
+		// want lists the sources of each resource left standing, and links
+		// how many of the chain's two links the report leaves in the store.
+		want  []string
+		links int
+	}{
+		{"leaf member", []string{"docker"}, []string{"agent+proxmox", "docker"}, 1},
+		{"member that took another in", []string{"agent"}, []string{"agent+docker", "proxmox"}, 1},
+		{"both members", []string{"agent", "docker"}, []string{"agent", "docker", "proxmox"}, 0},
+		{"every source", []string{"proxmox", "agent", "docker"}, []string{"agent", "docker", "proxmox"}, 0},
+		{"no filter", nil, []string{"agent", "docker", "proxmox"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, store, rebuild := newReportMergeHarness(t, snapshot)
+			var vmID, agentID, dockerID string
+			for _, resource := range rebuild() {
+				switch {
+				case resource.Type == unified.ResourceTypeVM:
+					vmID = resource.ID
+				case resource.Agent != nil:
+					agentID = resource.ID
+				case resource.Docker != nil:
+					dockerID = resource.ID
+				}
+			}
+			if vmID == "" || agentID == "" || dockerID == "" {
+				t.Fatalf("fixture lacks a standalone VM, agent and Docker host: %+v", rebuild())
+			}
+			// Links apply in store order: the agent takes in the Docker host,
+			// then the VM takes in the agent.
+			postResourceAction(t, h, agentID, "link", map[string]any{"targetId": dockerID})
+			postResourceAction(t, h, vmID, "link", map[string]any{"targetId": agentID})
+			chained := rebuild()
+			if got := resourceSourceGroups(chained); !slices.Equal(got, []string{"agent+docker+proxmox"}) {
+				t.Fatalf("links left %v, want the chain folded into one resource", got)
+			}
+			assertRESTSourceGroups(t, h, []string{"agent+docker+proxmox"})
+
+			body := map[string]any{}
+			if tc.sources != nil {
+				body["sources"] = tc.sources
+			}
+			postResourceAction(t, h, chained[0].ID, "report-merge", body)
+			if got := resourceSourceGroups(rebuild()); !slices.Equal(got, tc.want) {
+				t.Fatalf("monitor lists %v after reporting %v, want %v", got, tc.sources, tc.want)
+			}
+			assertRESTSourceGroups(t, h, tc.want)
+			if links, err := store.GetLinks(); err != nil || len(links) != tc.links {
+				t.Fatalf("report-merge left %d links (err %v), want %d: %+v", len(links), err, tc.links, links)
+			}
+		})
+	}
+}
+
+// resourceSourceGroups lists the sources of each resource, sorted, as
+// "a+b" groups in sorted order.
+func resourceSourceGroups(resources []unified.Resource) []string {
+	groups := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		sources := make([]string, 0, len(resource.Sources))
+		for _, source := range resource.Sources {
+			sources = append(sources, string(source))
+		}
+		slices.Sort(sources)
+		groups = append(groups, strings.Join(sources, "+"))
+	}
+	slices.Sort(groups)
+	return groups
+}
+
+func assertRESTSourceGroups(t *testing.T, h *QueryService, want []string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if got := resourceSourceGroups(resp.Data); !slices.Equal(got, want) {
+		t.Fatalf("REST lists %v, want %v", got, want)
 	}
 }
 

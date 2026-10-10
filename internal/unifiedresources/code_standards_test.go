@@ -771,6 +771,7 @@ func TestResourceAPIReportMergeExcludesRegistryLinkFolds(t *testing.T) {
 	for _, snippet := range []string{
 		"linkFolds := registry.ManualLinkFolds(path)",
 		"if len(resource.Sources) < 2 && len(linkFolds) == 0 {",
+		"for _, fold := range unified.ReportedManualLinkFolds(path, linkFolds, selected) {",
 		"pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})",
 	} {
 		if !strings.Contains(source, snippet) {

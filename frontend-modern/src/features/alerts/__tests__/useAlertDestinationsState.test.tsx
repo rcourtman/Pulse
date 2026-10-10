@@ -72,6 +72,7 @@ describe('useAlertDestinationsState', () => {
       to: ['alerts@example.com'],
       tls: true,
       startTLS: true,
+      rateLimit: 17,
       minimumSeverity: 'critical',
     } as any);
     vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({
@@ -129,6 +130,7 @@ describe('useAlertDestinationsState', () => {
     expect(RelayAPI.getConfig).toHaveBeenCalledTimes(1);
     expect(result.emailConfig().server).toBe('smtp.example.com');
     expect(result.emailConfig().minimumSeverity).toBe('critical');
+    expect(result.emailConfig().rateLimit).toBe(17);
     expect(result.appriseConfig().targetsText).toContain('mailto://ops@example.com');
     expect(result.appriseConfig().minimumSeverity).toBe('critical');
     expect(result.deadManPingUrl()).toBe('***REDACTED***');
@@ -165,7 +167,7 @@ describe('useAlertDestinationsState', () => {
     await result.saveDestinations();
 
     expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ server: 'smtp.internal' }),
+      expect.objectContaining({ server: 'smtp.internal', rateLimit: 17 }),
     );
     expect(NotificationsAPI.updateAppriseConfig).toHaveBeenCalledWith(
       expect.objectContaining({
