@@ -196,7 +196,7 @@ export function getAvailabilityTargetStatusTitle(
 ): string | undefined {
   if (getAvailabilityTargetHealth(target, resource, nowMs) !== 'attention') return undefined;
   if (resource && getStandaloneResourceStatusIndicator(resource, nowMs).label === 'Stale') {
-    return 'The last check is stale; it does not establish current availability.';
+    return 'The last check is stale. It does not establish current availability.';
   }
   const status = target.status;
   const failures = status?.consecutiveFailures;

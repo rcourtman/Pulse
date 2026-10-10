@@ -317,7 +317,7 @@ it('ages loaded availability counts, copy and colour without another target read
     expect(container.querySelector('span.bg-amber-100')).not.toBeNull();
     expect(screen.getByText('Stale')).toHaveAttribute(
       'title',
-      'The last check is stale; it does not establish current availability.',
+      'The last check is stale. It does not establish current availability.',
     );
     expect(screen.queryByText('Online')).not.toBeInTheDocument();
     expect(AvailabilityTargetsAPI.list).toHaveBeenCalledOnce();
