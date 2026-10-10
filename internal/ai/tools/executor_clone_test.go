@@ -13,7 +13,6 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	original.SetResolvedContext(resolved)
 	original.SetPatrolFindingCreator(creator)
 	original.SetPatrolObserverProposer(proposer)
-	original.protectedGuests = []string{"101"}
 
 	clone := original.Clone()
 	if clone == nil {
@@ -41,11 +40,6 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	clone.SetContext("vm", "vm-201", true)
 	if original.targetType != "node" || original.targetID != "node-1" || original.isAutonomous {
 		t.Fatalf("original context mutated after clone update: got %q/%q/%v", original.targetType, original.targetID, original.isAutonomous)
-	}
-
-	clone.protectedGuests[0] = "999"
-	if original.protectedGuests[0] != "101" {
-		t.Fatalf("protectedGuests slice is shared between clone and original: got %q", original.protectedGuests[0])
 	}
 }
 

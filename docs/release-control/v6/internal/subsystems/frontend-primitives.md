@@ -30,9 +30,9 @@ The two-option Chat menu keeps radio semantics, keyboard cycling/Escape/focus
 and saved-error recovery. Copy explains infrastructure plans in Actions and
 separate Patrol authority; it does not grant approval or execution. Existing
 scoped resource/alert/Patrol briefings and compact layouts remain intact.
-The retained Protected guests (legacy) field has an accessible description
-explicitly stating that it does not exclude saved action plans. Its saved list
-is not erased or presented as an execution safeguard. The Chat control menu
+The panel has no Protected guests field: it never excluded a saved action plan,
+so it was removed, and a muted line points operators at the resource's Never
+auto-remediate lock instead (`ai-never-auto-remediate-hint`). The Chat control menu
 clamps to the composer and viewport on open and closes on viewport resize,
 so a wrapped toolbar does not clip either option. Mounted geometry checks
 and real 390px/320px browser bounds cover this observed gap.
@@ -3849,7 +3849,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     Patrol autonomy distinct from Assistant chat actions: Patrol's
     hands-on control level belongs on the Patrol page, while the shared settings
     shell may only describe whether Assistant chat can run eligible chat
-    actions.
+    actions. The panel carries no per-guest allowlist or denylist: guests the
+    Assistant must not touch are locked with Never auto-remediate in the
+    resource's Operator overrides, and `AIRuntimeControlsSection.tsx` points
+    there instead of storing a separate Protected guests list.
 11. Keep first-session dashboard empty-state copy on
     `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
     infrastructure setup guidance name the canonical destination explicitly

@@ -116,8 +116,7 @@ type AIConfig struct {
 
 	// AI Infrastructure Control settings
 	// These control whether AI can take actions on infrastructure (start/stop VMs, containers, etc.)
-	ControlLevel    string   `json:"control_level,omitempty"`    // "read_only", "controlled", "autonomous"
-	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
+	ControlLevel string `json:"control_level,omitempty"` // "read_only", "controlled", "autonomous"
 
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
 	PatrolAutonomyLevel             string                                            `json:"patrol_autonomy_level,omitempty"` // "monitor", "approval", "assisted", "full"
@@ -1038,14 +1037,6 @@ func (c *AIConfig) IsAutonomous() bool {
 // IsValidControlLevel checks if a control level string is valid
 func IsValidControlLevel(level string) bool {
 	return agentcapabilities.IsValidControlLevel(level)
-}
-
-// GetProtectedGuests returns the list of protected guests (VMIDs or names)
-func (c *AIConfig) GetProtectedGuests() []string {
-	if c.ProtectedGuests == nil {
-		return []string{}
-	}
-	return c.ProtectedGuests
 }
 
 // GetPatrolAutonomyLevel returns the patrol autonomy level, defaulting to "monitor" if not set

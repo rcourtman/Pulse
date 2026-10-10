@@ -25,9 +25,10 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 
 AI settings responses project legacy Assistant levels to planning for review;
 this grants no agent command, enrolment, identity or transport authority.
-The retained legacy Protected guests list does not exclude canonical saved
-plans. Authenticated execute authority and the action approval policy remain
-separate from that configuration list.
+There is no Protected guests list: the retired setting never excluded canonical
+saved plans. A resource's Never auto-remediate lock, authenticated execute
+authority and the action approval policy are separate authorities, and none of
+them is configured from the AI settings projection.
 Existing agent report/command and shared capability vocabularies remain
 unchanged, including their separate approval and entitlement enforcement.
 

@@ -516,14 +516,6 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewErrorResult(fmt.Errorf("could not find guest '%s': %v", guestID, err)), nil
 	}
 
-	// Check if guest is protected
-	vmidStr := fmt.Sprintf("%d", guest.VMID)
-	for _, protected := range e.protectedGuests {
-		if protected == vmidStr || protected == guest.Name {
-			return NewErrorResult(fmt.Errorf("guest %s (VMID %d) is protected and cannot be controlled by Pulse Assistant", guest.Name, guest.VMID)), nil
-		}
-	}
-
 	// Build the command
 	cmdTool := "pct"
 	if guest.Type == "vm" {

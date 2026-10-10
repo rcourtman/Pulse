@@ -117,14 +117,11 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
-  it('pairs the legacy protected field with its accessible canonical-plan limitation', () => {
-    expect(aiRuntimeControlsSectionSource).toContain('Protected guests (legacy)');
-    expect(aiRuntimeControlsSectionSource).toContain('aria-describedby="ai-protected-guests-help"');
-    expect(aiRuntimeControlsSectionSource).toContain('id="ai-protected-guests-help"');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'This list does not exclude saved action plans.',
-    );
-    expect(aiRuntimeControlsSectionSource).not.toContain('excluded from Assistant action planning');
+  it('points Assistant protection at the per-resource lock instead of a protected guests list', () => {
+    expect(aiRuntimeControlsSectionSource).toContain('data-testid="ai-never-auto-remediate-hint"');
+    expect(aiRuntimeControlsSectionSource).toContain('turn on Never');
+    expect(aiRuntimeControlsSectionSource).not.toMatch(/protected.?guests/i);
+    expect(aiSettingsStateSource).not.toMatch(/protected.?guests/i);
   });
 
   it('keeps the Patrol cost preview on the canonical cost-preview API and presentation helper', () => {

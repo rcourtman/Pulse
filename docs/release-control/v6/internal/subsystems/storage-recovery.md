@@ -32,9 +32,9 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 The AI settings control projection describes read/query or plans for review in
 Actions. It does not authorise a backup, restore, replay or data change; action
 approval/run and independent verification remain separate. Stored legacy
-preferences, recovery-point access, the legacy protected-guests value and
-Patrol policy are preserved. The latter guest list is not a canonical saved-
-plan exclusion or a recovery execution safeguard. The handler change adds no recovery endpoint or execution route.
+preferences, recovery-point access and Patrol policy are preserved. The retired
+Protected guests list was never a canonical saved-plan exclusion or a recovery
+execution safeguard. The handler change adds no recovery endpoint or execution route.
 
 ### Retained guest identity cannot renew QGA eligibility
 

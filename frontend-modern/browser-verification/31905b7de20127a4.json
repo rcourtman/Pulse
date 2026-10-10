@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "410d84c69444ce4b59d00432b0b5510ce3016d0e",
+  "verified_at": "2026-10-10T06:32:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/types/ai.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "08088366e389facd9e43aa9aaffce757546a2252a84bf2f5a386fd3871f4eea5",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "5bdff4f68c116aa9163f98fb1e5f19a126d6daec80953939c644cc762dbb9a64",
+    "frontend-modern/src/types/ai.ts": "ac585de10854c39abf4b2d4199fc90d5bf3ee85468163be66e11308f4150a55e"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/assistant",
+    "/proxmox (web-prod inline drawer, Manage tab)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Settings > Assistant on a private non-mock stack whose saved AI config still carried protected_guests: the old field is gone, no input holds a saved value and the page text has no 'Protected guests'",
+    "Chat action mode Ask first shows the muted 'To keep Assistant away from a guest' line under the mode description; switching to Read-only hides it and switching back restores it",
+    "390px phone width: the line wraps inside the card (card 25-365px, line 42-348px) and the page has no horizontal overflow, at 1280px likewise",
+    "GET /api/settings/ai from the new backend carries no protected_guests key",
+    "web-prod drawer Manage tab shows Operator overrides with Never auto-remediate off, then the lock-confirmation prompt, then Save overrides; the Assistant then declines to plan a restart for it"
+  ],
+  "interactions": [
+    "Changed Chat action mode Read-only <-> Ask first and read the hint's presence",
+    "Clicked Save Assistant settings and captured the PUT body: model, discovery_enabled and discovery_interval_hours only, no protected_guests and no control_level",
+    "Opened the web-prod row, chose Manage, toggled Never auto-remediate, clicked Lock this resource, clicked Save overrides; operator-state API read back neverAutoRemediate true",
+    "Drove one Assistant turn through the real chat route with a stub provider emitting pulse_control restart for web-prod: refused with ACTION_NOT_ALLOWED / resource_remediation_locked and no action in Actions"
+  ]
+}

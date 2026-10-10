@@ -130,7 +130,6 @@ export interface AISettings {
 
   // Infrastructure control settings
   control_level?: 'read_only' | 'controlled' | 'autonomous';
-  protected_guests?: string[];
 
   // AI Discovery settings
   discovery_enabled?: boolean;
@@ -286,7 +285,6 @@ export interface AISettingsUpdateRequest {
 
   // Infrastructure control settings
   control_level?: 'read_only' | 'controlled' | 'autonomous';
-  protected_guests?: string[];
 
   // AI Discovery settings
   discovery_enabled?: boolean;
