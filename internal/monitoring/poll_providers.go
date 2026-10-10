@@ -448,8 +448,15 @@ func (m *Monitor) RegisterPollProvider(provider PollProvider) error {
 	if m.pollProviders == nil {
 		m.pollProviders = make(map[InstanceType]PollProvider)
 	}
+	changed := !sameWiredValue(m.pollProviders[providerType], provider)
 	m.pollProviders[providerType] = provider
+	if changed {
+		m.resourceWiringGeneration.Add(1)
+	}
 	m.mu.Unlock()
+	if changed {
+		m.mockModeFence.advance()
+	}
 
 	m.refreshInstanceInfoCacheFromProviders()
 	return nil
@@ -815,10 +822,82 @@ func (m *Monitor) providerConnectionStatuses(provider PollProvider) map[string]b
 	return statuses
 }
 
+// A resource pass owns one store and one immutable provider selection. Neither
+// records, snapshot ownership nor consume-once changes may resnapshot wiring
+// independently: a replacement between those calls can drain its events into
+// the old store. Capture under m.mu; all optional provider callbacks run after
+// releasing it, including mode filtering.
+type resourceStoreBinding struct {
+	store      ResourceStoreInterface
+	generation uint64
+	providers  supplementalProviderSet
+}
+
+type supplementalProviderSet struct {
+	poll   []PollProvider
+	manual map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
+	orgID  string
+}
+
+func (m *Monitor) captureResourceStoreBinding() resourceStoreBinding {
+	if m == nil {
+		return resourceStoreBinding{providers: supplementalProviderSet{orgID: "default"}}
+	}
+	mode := mock.IsMockEnabled()
+	m.mu.RLock()
+	binding := resourceStoreBinding{store: m.resourceStore, generation: m.resourceWiringGeneration.Load()}
+	binding.providers.orgID = strings.TrimSpace(m.orgID)
+	if binding.providers.orgID == "" {
+		binding.providers.orgID = "default"
+	}
+	byType := make(map[InstanceType]PollProvider, len(m.pollProviders)+4)
+	for typ, provider := range m.pollProviders {
+		if provider != nil {
+			byType[typ] = provider
+		}
+	}
+	binding.providers.manual = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider, len(m.supplementalProviders))
+	for source, provider := range m.supplementalProviders {
+		if provider != nil {
+			binding.providers.manual[source] = provider
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, provider := range []PollProvider{newPVEPollProvider(), newPBSPollProvider(), newPMGPollProvider(), newAvailabilityPollProvider()} {
+		typ := provider.Type()
+		if _, exists := byType[typ]; !exists {
+			byType[typ] = provider
+		}
+	}
+	types := make([]string, 0, len(byType))
+	for typ := range byType {
+		types = append(types, string(typ))
+	}
+	sort.Strings(types)
+	for _, typ := range types {
+		binding.providers.poll = append(binding.providers.poll, byType[InstanceType(typ)])
+	}
+	for source, provider := range binding.providers.manual {
+		if bound, ok := provider.(interface{ SupplementalRecordsMockMode() bool }); ok && bound.SupplementalRecordsMockMode() != mode {
+			delete(binding.providers.manual, source)
+		}
+	}
+	return binding
+}
+
+func (m *Monitor) supplementalProviderSnapshot() map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider {
+	return m.captureResourceStoreBinding().providers.manual
+}
+
 func (m *Monitor) providerOwnedSnapshotSources() []unifiedresources.DataSource {
+	return m.captureResourceStoreBinding().providers.ownedSnapshotSources(m)
+}
+
+func (p supplementalProviderSet) ownedSnapshotSources(m *Monitor) []unifiedresources.DataSource {
 	owned := make(map[string]unifiedresources.DataSource)
 
-	providers := m.pollProviderSnapshotWithBuiltins()
+	providers := p.poll
 	for _, provider := range providers {
 		if provider == nil {
 			continue
@@ -843,13 +922,8 @@ func (m *Monitor) providerOwnedSnapshotSources() []unifiedresources.DataSource {
 		}
 	}
 
-	orgID := "default"
-	if m != nil {
-		if trimmed := strings.TrimSpace(m.orgID); trimmed != "" {
-			orgID = trimmed
-		}
-	}
-	for _, provider := range m.supplementalProviderSnapshot() {
+	orgID := p.orgID
+	for _, provider := range p.manual {
 		if provider == nil {
 			continue
 		}
@@ -891,56 +965,18 @@ func (m *Monitor) providerOwnedSnapshotSources() []unifiedresources.DataSource {
 	return sources
 }
 
-func (m *Monitor) supplementalProviderSnapshot() map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider {
-	if m == nil {
-		return nil
-	}
-
-	m.mu.RLock()
-	if len(m.supplementalProviders) == 0 {
-		m.mu.RUnlock()
-		return nil
-	}
-	snapshot := make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider, len(m.supplementalProviders))
-	for source, provider := range m.supplementalProviders {
-		if provider == nil {
-			continue
-		}
-		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-		if normalized == "" {
-			continue
-		}
-		snapshot[normalized] = provider
-	}
-	m.mu.RUnlock()
-
-	// The flag flips before the router's post-switch hook runs. Use one mode
-	// for the pair, and keep these optional callbacks outside the monitor lock.
-	mode := mock.IsMockEnabled()
-	for source, provider := range snapshot {
-		if bound, ok := provider.(interface{ SupplementalRecordsMockMode() bool }); ok && bound.SupplementalRecordsMockMode() != mode {
-			delete(snapshot, source)
-		}
-	}
-	if len(snapshot) == 0 {
-		return nil
-	}
-	return snapshot
+func (m *Monitor) collectSupplementalRecordsBySource() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
+	return m.captureResourceStoreBinding().providers.recordsBySource(m)
 }
 
-func (m *Monitor) collectSupplementalRecordsBySource() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
-	providers := m.pollProviderSnapshotWithBuiltins()
-	manualProviders := m.supplementalProviderSnapshot()
+func (p supplementalProviderSet) recordsBySource(m *Monitor) map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
+	providers := p.poll
+	manualProviders := p.manual
 	if len(providers) == 0 && len(manualProviders) == 0 {
 		return nil
 	}
 
-	orgID := "default"
-	if m != nil {
-		if trimmed := strings.TrimSpace(m.orgID); trimmed != "" {
-			orgID = trimmed
-		}
-	}
+	orgID := p.orgID
 
 	recordsBySource := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord)
 	for _, provider := range providers {
@@ -994,18 +1030,17 @@ func (m *Monitor) collectSupplementalRecordsBySource() map[unifiedresources.Data
 }
 
 func (m *Monitor) collectSupplementalChanges() []unifiedresources.ResourceChange {
-	providers := m.pollProviderSnapshotWithBuiltins()
-	manualProviders := m.supplementalProviderSnapshot()
+	return m.captureResourceStoreBinding().providers.changes(m)
+}
+
+func (p supplementalProviderSet) changes(m *Monitor) []unifiedresources.ResourceChange {
+	providers := p.poll
+	manualProviders := p.manual
 	if len(providers) == 0 && len(manualProviders) == 0 {
 		return nil
 	}
 
-	orgID := "default"
-	if m != nil {
-		if trimmed := strings.TrimSpace(m.orgID); trimmed != "" {
-			orgID = trimmed
-		}
-	}
+	orgID := p.orgID
 
 	changes := make([]unifiedresources.ResourceChange, 0)
 	for _, provider := range providers {

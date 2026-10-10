@@ -5692,10 +5692,11 @@ type readRefreshResourceStore interface {
 // and identity-pin persistence can take seconds per transaction on slow
 // volumes (#1665: /api/state stuck for minutes with SQLite on NFS).
 func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope mockModeScope) {
-	m.mu.RLock()
-	store := m.resourceStore
-	m.mu.RUnlock()
-
+	if !scope.current() {
+		return
+	}
+	binding := m.captureResourceStoreBinding()
+	store := binding.store
 	if store == nil {
 		return
 	}
@@ -5705,25 +5706,48 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot, scope m
 		return
 	}
 
+	// Preserve the cheap fresh-read path and the cold-start build guarantee.
+	// A warm read never waits behind an ingest publication. Records themselves
+	// are repeatable; collect them outside both publication and adapter locks.
+	cold := false
+	if timed, ok := store.(interface{ LastRebuiltAt() time.Time }); ok {
+		last := timed.LastRebuiltAt()
+		cold = last.IsZero()
+		if !cold && time.Since(last) < readPathRegistryFreshness {
+			return
+		}
+	}
 	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
 		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
-	snapshotForStore := state
-	if ownedSources := m.providerOwnedSnapshotSources(); len(ownedSources) > 0 {
-		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
+	snapshotForStore := unifiedresources.SnapshotWithoutSources(state, binding.providers.ownedSnapshotSources(m))
+	recordsBySource := binding.providers.recordsBySource(m)
+	if cold {
+		m.resourcePublishMu.Lock()
+	} else if !m.resourcePublishMu.TryLock() {
+		return
+	}
+	if m.resourceWiringGeneration.Load() != binding.generation {
+		m.resourcePublishMu.Unlock()
+		return
 	}
 	rebuilt := false
 	mark, published := scope.publish(func() bool {
-		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, m.collectSupplementalRecordsBySource)
-		if rebuilt {
-			recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
-		}
+		rebuilt = readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord {
+			return recordsBySource
+		})
 		return rebuilt
 	})
+	m.resourcePublishMu.Unlock()
 	if !published || !rebuilt {
 		return
 	}
-	m.syncPublishedResourceStore(store, scope, mark)
+	// Once admitted, this pass drains only its captured providers into its
+	// captured store, even if a replacement is now wiring or publishing.
+	recordSupplementalResourceChanges(store, binding.providers.changes(m))
+	if m.resourceWiringGeneration.Load() == binding.generation {
+		m.syncPublishedResourceStore(store, scope, mark)
+	}
 }
 
 // syncPublishedResourceStore runs the metric and alert syncs over the registry
@@ -5752,10 +5776,11 @@ func (m *Monitor) currentStateWithScope() (models.StateSnapshot, mockModeScope) 
 // broadcast hydration so every ReadState consumer observes the same snapshot.
 // The scope must predate the read of state (see currentStateWithScope).
 func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockModeScope) {
-	m.mu.RLock()
-	store := m.resourceStore
-	generation := m.resourceWiringGeneration.Load()
-	m.mu.RUnlock()
+	if !scope.current() {
+		return
+	}
+	binding := m.captureResourceStoreBinding()
+	store, generation := binding.store, binding.generation
 
 	if store == nil {
 		log.Debug().Msg("[Resources] No resource store configured, skipping population")
@@ -5775,7 +5800,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 		Msg("[Resources] Populating resource store from state snapshot")
 
 	snapshotForStore := state
-	ownedSources := m.providerOwnedSnapshotSources()
+	ownedSources := binding.providers.ownedSnapshotSources(m)
 	if len(ownedSources) > 0 {
 		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
 		sourceNames := make([]string, 0, len(ownedSources))
@@ -5792,7 +5817,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 	if !scope.current() {
 		return
 	}
-	recordsBySource := m.collectSupplementalRecordsBySource()
+	recordsBySource := binding.providers.recordsBySource(m)
 	m.resourcePublishMu.Lock()
 	if m.resourceWiringGeneration.Load() != generation {
 		m.resourcePublishMu.Unlock()
@@ -5832,14 +5857,14 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 		return true
 	})
 	m.resourcePublishMu.Unlock()
-	if !published || m.resourceWiringGeneration.Load() != generation {
+	if !published {
 		// The snapshot belongs to the mode the monitor just left.
 		return
 	}
 	// Drain consume-once changes only for a pass that actually published. No
 	// provider callback runs under resourcePublishMu, and changes already
 	// drained remain history even if a subsequent rewire replaces the binding.
-	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	recordSupplementalResourceChanges(store, binding.providers.changes(m))
 	if m.resourceWiringGeneration.Load() == generation {
 		m.syncPublishedResourceStore(store, scope, mark)
 	}

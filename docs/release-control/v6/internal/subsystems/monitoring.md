@@ -7113,3 +7113,20 @@ checks each of those readers after a report-merge, against a control
 exclusion that splits nothing, and `TestManualNodeLinkReplacesAnOperatorSplit`
 covers the agents API's link after a split, a split after it, and a
 resources API relink.
+
+### Resource publication ownership correction (10 October 2026)
+
+One refresh captures its store, binding generation, tenant and provider set once.
+Snapshot-source ownership, records and consume-once changes use that selection;
+changes are drained only after an admitted publication, into that pass's store.
+Replaced or ended-epoch collections and skipped read refreshes leave changes
+pending. An admitted old pass can finish its own history without consuming a
+replacement provider's events. Poll-provider replacement also invalidates pending
+collections. Provider callbacks run outside wiring, publication and adapter locks.
+Read refreshes share ingest publication ordering, retain fresh-generation skips
+and never queue behind a warm ingest; a cold read still builds its first registry.
+
+`resource_publication_ownership_test.go` supplies deterministic channel barriers,
+consume-once replacement-store controls, refused and skipped drains, read-provider
+re-entry, and duplicate/loss assertions, alongside the original initialization,
+tenant withdrawal, saved first-alert policy and joined-shutdown controls.
