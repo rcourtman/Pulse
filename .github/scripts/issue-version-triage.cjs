@@ -10,24 +10,48 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function declarationLines(body) {
+  let fence = null;
+  return stripHTMLComments(body).split(/\r?\n/).map((text) => {
+    const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    let delimiter = false;
+    const inCode = fence !== null;
+    if (fence) {
+      if (marker && marker[1][0] === fence.character &&
+          marker[1].length >= fence.length && !marker[2].trim()) {
+        fence = null;
+        delimiter = true;
+      }
+    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      delimiter = true;
+    }
+    // Pasted examples and logs are evidence, not issue-form structure. Keep
+    // their text as a value under a real field, but never scan it for fields.
+    return { text, delimiter, declaration: !inCode && !delimiter &&
+      !/^(?: {4}|\t)/.test(text) };
+  });
+}
+
+function firstFieldValue(lines) {
+  const value = lines.find((line) => !line.delimiter && line.text.trim());
+  return value ? value.text.trim() : "";
+}
+
 function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
-  // Hidden template instructions are not declarations. Strip them before
-  // locating the section as well as before interpreting its value.
-  const visibleBody = stripHTMLComments(body);
-  const boundary = followingHeadings.length
-    ? followingHeadings.map(escapeRegExp).join("|")
-    : "[^\\n]+";
-  const pattern = new RegExp(
-    // With the multiline flag, $ also matches the end of the first value
-    // line. Only the next field or the actual end of input ends a section.
-    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s*(?:${boundary})\\s*$|(?![\\s\\S]))`,
-    "im"
-  );
-  const match = visibleBody.match(pattern);
-  if (!match) return null;
+  const lines = declarationLines(body);
+  const pattern = new RegExp(`^#+[ \\t]*${escapeRegExp(heading)}[ \\t]*$`, "i");
+  const start = lines.findIndex((line) => line.declaration && pattern.test(line.text));
+  if (start === -1) return null;
+  const boundary = new RegExp(`^#+[ \\t]*(?:${followingHeadings.length
+    ? followingHeadings.map(escapeRegExp).join("|") : "[^\\n]+"})[ \\t]*$`, "i");
+  let end = start + 1;
+  while (end < lines.length && !(lines[end].declaration && boundary.test(lines[end].text))) {
+    end += 1;
+  }
   // An empty declared field differs from a legacy report with no field.
-  return match[1].trim();
+  return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
 function stripHTMLComments(value) {
@@ -76,30 +100,25 @@ function normalizeLegacyVersionValue(value) {
   const visible = String(value).trim().replace(/^[`*_]+/, "");
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|server(?:[ \t]*\+[ \t]*pulse-agent)?[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
     ? normalizeVersion(visible) : null;
 }
 
 function extractPulseVersion(title, body) {
   if (body) {
-    // Hidden template examples and headings are not reporter evidence.
-    const lines = stripHTMLComments(body).split(/\r?\n/);
+    const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
-      /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line)
+      line.declaration && /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line.text)
     );
     if (versionHeading !== -1) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      const value = [];
-      for (let i = versionHeading + 1; i < lines.length; i += 1) {
-        if (/^#{1,6}[ \t]+/.test(lines[i])) break;
-        value.push(lines[i]);
-      }
-      return normalizeVersion(value.join("\n"));
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)));
     }
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i].replace(/\*\*|__/g, "")
+      if (!lines[i].declaration) continue;
+      const line = lines[i].text.replace(/\*\*|__/g, "")
         .replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*][ \t]+)/, "").trim();
       const field = line.match(
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
@@ -111,14 +130,9 @@ function extractPulseVersion(title, body) {
       // an upgrade's starting version from the title.
       const inlineValue = field[1].trim();
       if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
-      for (let j = i + 1; j < lines.length; j += 1) {
-        const value = lines[j].trim();
-        if (!value || /^(?:```|~~~)[\w-]*$/.test(value)) continue;
-        // Accept a version or image reference as the first visible value,
-        // not a neighbouring heading, named field, log or prose paragraph.
-        return normalizeLegacyVersionValue(value);
-      }
-      return null;
+      // A declared value may itself be fenced; that does not turn headings
+      // elsewhere in a fenced log into declarations.
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)));
     }
   }
 
@@ -129,7 +143,8 @@ function classifyV6FeedbackType(body) {
   const feedbackType = extractSectionValue(body, "Feedback type");
   if (!feedbackType) return null;
 
-  const normalized = feedbackType.toLowerCase();
+  // This is a single-choice field, not the later examples pasted beneath it.
+  const normalized = firstFieldValue(declarationLines(feedbackType)).toLowerCase();
   if (
     normalized.includes("bug") ||
     normalized.includes("regression") ||
