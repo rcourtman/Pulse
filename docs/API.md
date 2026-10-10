@@ -634,39 +634,122 @@ Version fields are returned as plain semantic versions (no leading `v`).
 Returns a small public config payload (update channel, auto-update enabled).
 
 ### List Nodes
-`GET /api/config/nodes`
+`GET /api/config/nodes` (admin, `settings:read`)
+
+This administrative inventory covers saved **PVE, PBS and PMG connections**,
+not individual VMs or agents. Keep its response private. Use the returned
+connection `id` for updates, deletion and tests; a display name, VMID or another
+installation's node name is not that ID. Re-read the inventory before a change
+rather than guessing an ID from a list position.
 
 ### Add Node
-`POST /api/config/nodes`
+`POST /api/config/nodes` (admin, `settings:write`)
+
+Adding a connection saves credentials and enables collection; it is not a
+passive validation step. Use an existing dedicated, least-privilege platform
+token. The **Pulse API token** in the private header file authorises this
+configuration request; the **Proxmox token** in the JSON body authorises reads
+from the monitored platform. They are different credentials. Do not use a root
+password or widen a department-scoped token to make denied peer reads succeed;
+follow the [scoped-access checks](TROUBLESHOOTING.md#check-permissions-proxmox).
+For PBS and PMG, use their [PBS](PBS.md#method-1-api-only-connection-recommended)
+and [PMG](MAIL_GATEWAY.md) token guidance. PBS password-based onboarding can
+also try to create a token and ACLs on the PBS server; it is not read-only.
+
+Prepare the request in a private editor, not a credential-bearing shell
+assignment, here-document or command argument. Use the same Bash session as
+the [private-response helper](#api-token-recommended):
+
+```bash
+node_request_dir=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/pulse-node.XXXXXX") &&
+node_request_file="$node_request_dir/node.json" &&
+(umask 077; set -C; : > "$node_request_file") &&
+vi "$node_request_file"
+```
+
+If preparation or the editor fails, stop. In that editor, enter the following
+JSON, replacing the example hostname, connection name, full platform token ID
+(`user@realm!token`) and token-secret placeholder with your intended values:
+
 ```json
 {
   "type": "pve",
-  "name": "Proxmox 1",
-  "host": "https://198.51.100.10:8006",
-  "user": "root@pam",
-  "password": "password"
+  "name": "PVE connection A",
+  "host": "https://pve.example.net:8006",
+  "tokenName": "pulse-monitor@pve!pulse-readonly",
+  "tokenValue": "<platform-token-secret>",
+  "verifySSL": true
 }
 ```
 
-### Test Connection
-`POST /api/config/nodes/test-connection`
-Validate credentials before saving.
+Set `verifySSL` explicitly to `true`: omission on these new-connection and
+test request paths does **not** enable certificate verification. The example
+requires a certificate trusted by the Pulse server for that hostname. For a
+self-signed/private certificate, also supply `fingerprint` with the SHA-256
+certificate fingerprint verified through an independent trusted channel.
+A fingerprint merely fetched from the endpoint is not established trust.
+Do not clear an existing pin, set `verifySSL` to `false`, or change to HTTP to
+work around a certificate failure.
 
-### Test Node Config (Validation Only)
-`POST /api/config/nodes/test-config`
-Validates node config without saving.
+After reviewing this one intended configuration change, send the file:
+
+```bash
+pulse_api POST /api/config/nodes < "$node_request_file"
+```
+
+The helper retains the response privately and makes one bounded request,
+without retries. A lost response can follow a successful save: re-read the
+saved inventory before deciding whether another request is needed. HTTP success
+does not establish fresh readings for every node, guest, backup or History view.
+Keep both request and response files out of reports and shared repositories;
+remove the temporary request under your credential policy when no longer needed.
+
+### Test Connection
+`POST /api/config/nodes/test-connection` (admin, `settings:write`)
+
+Tests supplied credentials with live platform requests without saving the
+connection. Use the same private JSON-file transport and explicit TLS settings,
+only when a live connection test is appropriate; it is not a required precursor
+to filing a report. Success covers the reads performed by that test, not all
+collection permissions, guest recovery or sustained monitoring.
+
+### Test Node Config (No Save, Live Request)
+`POST /api/config/nodes/test-config` (admin, `settings:write`)
+
+This also contacts the platform using the supplied credentials; **no save**
+does not mean offline schema validation. Do not run either test merely to
+collect new evidence during a freeze/thaw, backup or unresponsive-host incident.
+Use existing observations and the [safe diagnostic guidance](TROUBLESHOOTING.md#collect-diagnostics-safely).
 
 ### Update Node
-`PUT /api/config/nodes/{id}`
+`PUT /api/config/nodes/{id}` (admin, `settings:write`)
+
+Review the current connection and submit only the intended supported changes
+from a private JSON file. Do not copy masked credentials from a GET response
+back as new secrets. Credential rotation and trust changes are separate
+decisions; preserve the existing credential and fingerprint when not changing
+them. A response failure does not prove the update was unapplied.
 
 ### Delete Node
-`DELETE /api/config/nodes/{id}`
+`DELETE /api/config/nodes/{id}` (admin, `settings:write`)
+
+Removes the Pulse connection, not the platform workloads or the upstream token.
+Collection and related alert coverage can stop. Check the exact connection and
+arrange any needed independent coverage before an intentional removal; do not
+delete and re-add a connection to diagnose missing readings or identity mixing.
 
 ### Test Node (Legacy)
-`POST /api/config/nodes/{id}/test`
+`POST /api/config/nodes/{id}/test` (admin, `settings:write`)
+
+Uses the saved connection for a live test. It is not a passive read of its
+last result or a guarantee that ordinary collection recovered.
 
 ### Refresh Cluster Nodes
-`POST /api/config/nodes/{id}/refresh-cluster`
+`POST /api/config/nodes/{id}/refresh-cluster` (admin, `settings:write`)
+
+Actively rediscovers a saved PVE connection's cluster membership. It does not
+select authorised nodes, grant missing permissions or repair an unrelated
+standalone installation. Keep intentional token restrictions intact.
 
 ### Export Configuration
 `POST /api/config/export` (instance admin for the default organization, tenant
