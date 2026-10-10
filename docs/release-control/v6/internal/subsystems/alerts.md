@@ -33,6 +33,14 @@ unsent writes; they cannot cancel or undo an already-issued request. The newer
 context alone owns load results and pending flags. Apprise response masking
 replaces only the untouched submitted draft, not newer input.
 
+Save admission additionally requires a successful saved-policy read in the
+current editor context. Initial load and every replacement withdraw that
+admission before resetting draft defaults. A failed read leaves editing and
+saving unavailable; an explicit reload must obtain the saved policy and finish
+destination loading before admitting writes. An older failed read cannot
+withdraw a newer successful context. Destination partial-load failures retain
+their existing separate save block. Defaults are not a recovered saved policy.
+
 `alertSettingsSave.acknowledgement.test.tsx` exercises the real policy and
 destination owners with deferred/rejected API replies, coherent snapshots,
 newer edits, duplicate admission, tab navigation, retry, normal masking and
@@ -41,6 +49,8 @@ same downstream snapshot; `alertConfigPresentation.test.ts` distinguishes
 pending, accepted and newer-unsaved messages. Browser proof mounts the real
 configuration surface at desktop and narrow widths with synthetic local
 endpoints. These are source controls, not ordinary notification delivery.
+The acknowledgement controls also require failed-initial/replacement-read
+write refusal, deliberate reload recovery and superseded-error ownership.
 
 
 ### PMG collection opt-outs are not recovery evidence

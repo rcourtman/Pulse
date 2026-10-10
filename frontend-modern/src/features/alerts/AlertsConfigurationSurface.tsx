@@ -3,6 +3,8 @@ import { createMemo, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   getAlertConfigDiscardLabel,
+  getAlertConfigLoadingLabel,
+  getAlertConfigReloadLabel,
   getAlertConfigSaveChangesLabel,
   getAlertConfigSaveFailure,
   getAlertConfigUnsavedChangesLabel,
@@ -45,6 +47,34 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
     <>
       <Show
         when={
+          !state.isConfigLoaded() &&
+          (props.activeTab() === 'thresholds' ||
+            props.activeTab() === 'schedule' ||
+            props.activeTab() === 'destinations')
+        }
+      >
+        <Card tone={state.configLoadError() ? 'danger' : 'muted'} padding="sm" class="sm:p-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p
+              role={state.configLoadError() ? 'alert' : 'status'}
+              class="text-sm text-base-content"
+            >
+              {state.configLoadError() || getAlertConfigLoadingLabel()}
+            </p>
+            <Show when={state.configLoadError()}>
+              <button
+                class="min-h-11 shrink-0 rounded-md border border-border px-4 py-2 text-sm text-base-content hover:bg-surface-hover"
+                onClick={() => void state.loadAlertConfiguration()}
+              >
+                {getAlertConfigReloadLabel()}
+              </button>
+            </Show>
+          </div>
+        </Card>
+      </Show>
+
+      <Show
+        when={
           props.hasUnsavedChanges() &&
           props.activeTab() !== 'overview' &&
           props.activeTab() !== 'history'
@@ -71,6 +101,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
               <button
                 class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={
+                  !state.isConfigLoaded() ||
                   state.isReloadingConfig() ||
                   state.isLoadingDestinations() ||
                   state.isSavingConfig() ||
@@ -104,7 +135,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
         </Card>
       </Show>
 
-      <Show when={props.activeTab() === 'thresholds'}>
+      <Show when={props.activeTab() === 'thresholds' && state.isConfigLoaded()}>
         <ThresholdsTab
           overrides={state.overrides}
           setOverrides={state.setOverrides}
@@ -237,7 +268,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
         />
       </Show>
 
-      <Show when={props.activeTab() === 'destinations'}>
+      <Show when={props.activeTab() === 'destinations' && state.isConfigLoaded()}>
         <DestinationsTab
           setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           deadManPingUrl={state.deadManPingUrl}
@@ -257,7 +288,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
         />
       </Show>
 
-      <Show when={props.activeTab() === 'schedule'}>
+      <Show when={props.activeTab() === 'schedule' && state.isConfigLoaded()}>
         <ScheduleTab
           setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           quietHours={state.scheduleQuietHours}

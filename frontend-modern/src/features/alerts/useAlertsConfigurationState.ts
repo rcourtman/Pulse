@@ -9,6 +9,7 @@ import type { ActivationState } from '@/types/alerts';
 import type { Resource, ResourceType } from '@/types/resource';
 import {
   getAlertConfigDiscardedSuccess,
+  getAlertConfigLoadError,
   getAlertConfigReloadFailure,
   getAlertConfigSaveSuccess,
 } from '@/utils/alertConfigPresentation';
@@ -45,6 +46,8 @@ export interface AlertsConfigurationSurfaceProps {
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
+  const [isConfigLoaded, setIsConfigLoaded] = createSignal(false);
+  const [configLoadError, setConfigLoadError] = createSignal<string | null>(null);
   const [isSavingConfig, setIsSavingConfig] = createSignal(false);
   let draftRevision = 0;
   let configurationVersion = 0;
@@ -59,7 +62,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   });
   const destinationsState = useAlertDestinationsState({
     activeTab: props.activeTab,
-    canReload: () => !props.hasUnsavedChanges() && !isSavingConfig() && !isReloadingConfig(),
+    canReload: () =>
+      isConfigLoaded() && !props.hasUnsavedChanges() && !isSavingConfig() && !isReloadingConfig(),
   });
   const overridesState = useAlertOverridesState({
     allResources: props.allResources,
@@ -75,6 +79,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     // cancel or undo a request that has already reached the server.
     setIsSavingConfig(false);
     setIsReloadingConfig(true);
+    setIsConfigLoaded(false);
+    setConfigLoadError(null);
     setSuppressDirtyFlag(true);
     props.setHasUnsavedChanges(false);
     destinationsState.resetDestinations();
@@ -93,12 +99,14 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
       await destinationsState.loadDestinations();
       if (thisVersion !== configurationVersion) return;
+      setIsConfigLoaded(true);
 
       if (options.notify) {
         notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (error) {
       if (thisVersion !== configurationVersion) return;
+      setConfigLoadError(getAlertConfigLoadError());
       logger.error('Failed to load alert configuration:', error);
       if (options.notify) {
         notificationStore.error(getAlertConfigReloadFailure());
@@ -115,6 +123,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   const saveAlertConfiguration = async () => {
     if (
+      !isConfigLoaded() ||
       isSavingConfig() ||
       isReloadingConfig() ||
       destinationsState.isLoadingDestinations() ||
@@ -166,6 +175,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   return {
     isReloadingConfig,
+    isConfigLoaded,
+    configLoadError,
     isSavingConfig,
     guardedSetHasUnsavedChanges,
     isLoadingDestinations: destinationsState.isLoadingDestinations,

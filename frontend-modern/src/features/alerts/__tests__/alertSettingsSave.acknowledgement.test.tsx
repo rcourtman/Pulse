@@ -138,6 +138,75 @@ describe('alert settings save acknowledgement', () => {
     expect(result.dirty()).toBe(true);
   });
 
+  it('refuses default writes after a failed policy read until saved settings are loaded', async () => {
+    vi.mocked(AlertsAPI.getConfig).mockRejectedValueOnce(
+      new Error('Synthetic policy read failure'),
+    );
+    const { result } = await editor();
+    expect(result.isConfigLoaded()).toBe(false);
+    expect(result.configLoadError()).toContain('Saved alert settings could not be loaded');
+    editEmail(result, 'smtp.not-loaded.example.test');
+    await result.saveAlertConfiguration();
+    expect(AlertsAPI.updateConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.updateEmailConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.updateAppriseConfig).not.toHaveBeenCalled();
+    expect(AlertsAPI.updateDeadManConfig).not.toHaveBeenCalled();
+    expect(notificationStore.success).not.toHaveBeenCalled();
+
+    await result.loadAlertConfiguration();
+    expect(result.isConfigLoaded()).toBe(true);
+    expect(result.configLoadError()).toBeNull();
+    editEmail(result, 'smtp.loaded.example.test');
+    await result.saveAlertConfiguration();
+    expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ server: 'smtp.loaded.example.test' }),
+    );
+    expect(result.dirty()).toBe(false);
+  });
+
+  it('withdraws save admission while replacing a previously loaded context', async () => {
+    const { result } = await editor();
+    const pending = deferred<Awaited<ReturnType<typeof AlertsAPI.getConfig>>>();
+    vi.mocked(AlertsAPI.getConfig).mockReturnValueOnce(pending.promise);
+    const reload = result.loadAlertConfiguration();
+    expect(result.isConfigLoaded()).toBe(false);
+    await result.saveAlertConfiguration();
+    expect(AlertsAPI.updateConfig).not.toHaveBeenCalled();
+    pending.resolve({ overrides: {} } as never);
+    await reload;
+    expect(result.isConfigLoaded()).toBe(true);
+  });
+
+  it("does not reuse the old context's write admission when its replacement read fails", async () => {
+    const { result } = await editor();
+    vi.mocked(AlertsAPI.getConfig).mockRejectedValueOnce(
+      new Error('Synthetic replacement failure'),
+    );
+    eventBus.emit('org_switched', 'synthetic-unavailable-org');
+    await waitFor(() => {
+      expect(AlertsAPI.getConfig).toHaveBeenCalledTimes(2);
+      expect(result.isReloadingConfig()).toBe(false);
+    });
+    expect(result.isConfigLoaded()).toBe(false);
+    editEmail(result, 'smtp.stale-context.example.test');
+    await result.saveAlertConfiguration();
+    expect(AlertsAPI.updateConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.updateEmailConfig).not.toHaveBeenCalled();
+  });
+
+  it('does not let an older failed read withdraw a newer loaded context', async () => {
+    const { result } = await editor();
+    const pending = deferred<Awaited<ReturnType<typeof AlertsAPI.getConfig>>>();
+    vi.mocked(AlertsAPI.getConfig).mockReturnValueOnce(pending.promise);
+    const superseded = result.loadAlertConfiguration();
+    await result.loadAlertConfiguration();
+    expect(result.isConfigLoaded()).toBe(true);
+    pending.reject(new Error('Synthetic superseded read failure'));
+    await superseded;
+    expect(result.isConfigLoaded()).toBe(true);
+    expect(result.configLoadError()).toBeNull();
+  });
+
   it('keeps edits made during a destination write dirty after acknowledgement', async () => {
     const { result } = await editor();
     const pending = deferred<{ success: boolean }>();

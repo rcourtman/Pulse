@@ -96,6 +96,10 @@ export const ALERT_CONFIG_SUMMARY_ALL_DISABLED =
   '• All notification controls are disabled - alerts will be sent immediately';
 export const ALERT_CONFIG_DISCARDED_SUCCESS = 'Changes discarded';
 export const ALERT_CONFIG_RELOAD_FAILURE = 'Failed to reload configuration';
+export const ALERT_CONFIG_LOAD_ERROR =
+  'Saved alert settings could not be loaded. Reload them before editing or saving.';
+export const ALERT_CONFIG_LOADING = 'Loading saved alert settings…';
+export const ALERT_CONFIG_RELOAD_LABEL = 'Reload settings';
 export const ALERT_CONFIG_SAVE_SUCCESS = 'Configuration saved successfully!';
 export const ALERT_CONFIG_SAVE_FAILURE = 'Failed to save configuration';
 export const ALERT_CONFIG_DISCARD_LABEL = 'Discard';
@@ -108,6 +112,18 @@ export const ALERT_CONFIG_TOGGLE_DISABLED = 'Disabled';
 
 export function getAlertConfigUnsavedChangesLabel() {
   return ALERT_CONFIG_UNSAVED_CHANGES;
+}
+
+export function getAlertConfigLoadError() {
+  return ALERT_CONFIG_LOAD_ERROR;
+}
+
+export function getAlertConfigLoadingLabel() {
+  return ALERT_CONFIG_LOADING;
+}
+
+export function getAlertConfigReloadLabel() {
+  return ALERT_CONFIG_RELOAD_LABEL;
 }
 
 export function getAlertConfigSaveChangesLabel(isSaving = false) {

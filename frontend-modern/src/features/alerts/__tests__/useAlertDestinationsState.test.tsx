@@ -1,4 +1,4 @@
-import { renderHook } from '@solidjs/testing-library';
+import { renderHook, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -287,5 +287,35 @@ describe('useAlertDestinationsState', () => {
 
     expect(result.isLoadingDestinations()).toBe(false);
     expect(result.emailConfig().server).toBe('smtp.current.example.test');
+  });
+
+  it('does not refresh destinations before the policy owner admits a loaded context', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({
+      enabled: true,
+      server: 'smtp.loaded.example.test',
+    } as never);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+    const [activeTab, setActiveTab] = createSignal<'overview' | 'destinations'>('overview');
+    const [canReload, setCanReload] = createSignal(false);
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab, canReload }));
+
+    setActiveTab('destinations');
+    await Promise.resolve();
+    expect(NotificationsAPI.getEmailConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.getAppriseConfig).not.toHaveBeenCalled();
+    expect(AlertsAPI.getDeadManConfig).not.toHaveBeenCalled();
+    expect(NotificationsAPI.getWebhooks).not.toHaveBeenCalled();
+    setCanReload(true);
+    await Promise.resolve();
+    expect(NotificationsAPI.getEmailConfig).not.toHaveBeenCalled();
+
+    setActiveTab('overview');
+    setActiveTab('destinations');
+    await waitFor(() => expect(result.emailConfig().server).toBe('smtp.loaded.example.test'));
+    expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(1);
+    expect(RelayAPI.getConfig).not.toHaveBeenCalled();
   });
 });

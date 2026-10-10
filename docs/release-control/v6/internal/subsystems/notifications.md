@@ -27,6 +27,14 @@ remaining unsent calls, without cancelling or undoing an issued request.
 Failed multi-endpoint saves can have earlier persisted writes and are not
 represented as atomic rollback or provider delivery.
 
+The aggregate editor refuses all policy/destination writes until it has loaded
+the saved policy for its current context. A rejected policy GET is not permission
+to save empty or disabled destination defaults. Explicit reload restores normal
+admission only after saved policy and destination loading finish; existing
+destination-load errors still block saves. The acknowledgement controls require
+no downstream writes after initial or replacement policy-read failures, without
+changing provider, queue or retry semantics.
+
 `useAlertDestinationsState.test.tsx` and
 `alertSettingsSave.acknowledgement.test.tsx` use deferred and rejected replies
 to prove the snapshot, draft, retry and context boundaries. The genuine browser

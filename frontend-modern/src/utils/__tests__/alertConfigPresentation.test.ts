@@ -63,6 +63,9 @@ import {
   getAlertConfigEscalationNotifyLabel,
   getAlertConfigQuietHourSuppressOptions,
   getAlertConfigLeaveConfirmation,
+  getAlertConfigLoadError,
+  getAlertConfigLoadingLabel,
+  getAlertConfigReloadLabel,
   getAlertConfigReloadFailure,
   getAlertConfigRecoveryHelp,
   getAlertConfigResetDefaultsLabel,
@@ -83,6 +86,14 @@ import {
 } from '@/utils/alertConfigPresentation';
 
 describe('alertConfigPresentation', () => {
+  it('explains that a failed saved-settings read is not an editable default configuration', () => {
+    expect(getAlertConfigLoadError()).toBe(
+      'Saved alert settings could not be loaded. Reload them before editing or saving.',
+    );
+    expect(getAlertConfigLoadingLabel()).toBe('Loading saved alert settings…');
+    expect(getAlertConfigReloadLabel()).toBe('Reload settings');
+  });
+
   it('distinguishes a pending save from accepted settings with newer unsaved edits', () => {
     expect(getAlertConfigSaveChangesLabel(true)).toBe('Saving…');
     expect(getAlertConfigSaveChangesLabel(false)).toBe('Save Changes');
