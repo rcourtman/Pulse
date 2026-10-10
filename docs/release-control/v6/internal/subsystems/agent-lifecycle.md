@@ -9459,3 +9459,20 @@ pair the operator has decided about since. The agents API's unlink is
 unchanged. Registration, enrolment, install, update,
 removal, token binding and report identity are unchanged. The
 unified-resources contract records the split's rules.
+
+### Host-agent evaluation lists nodes only when an offline host needs them
+
+`Monitor.evaluateHostAgents` (`internal/monitoring/monitor_agents.go`) runs on
+every monitor tick. It used to list every Proxmox node through
+`NodesSnapshot` before looking at a single host, only to give an offline host
+its shared-system alert correlation (`sharedSystemAlertCorrelationForHost`,
+which reads node ID, linked agent and instance). It now lists the nodes when
+the first offline host that names a linked node asks, through
+`structureNodes`, which in mock mode serves the view built for the current
+fixture structure instead of rebuilding the estate after each metric tick. The
+liveness window, the online and offline transitions, the host lifecycle, the
+telemetry expiry and the alert correlation itself are unchanged, and no agent
+report, enrollment, lease or command path is touched
+(`TestSharedSystemAlertCorrelationForHostLazyListsNodesOnDemand` and
+`TestMockStructureConsumersDoNotRebuildTheViewAfterFixtureTicks` in
+`internal/monitoring/monitor_host_agents_test.go`).

@@ -3610,7 +3610,10 @@ func (m *Monitor) NodesSnapshot() []models.Node {
 	if m == nil {
 		return nil
 	}
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	return nodesSnapshotFromReadState(m.GetUnifiedReadStateOrSnapshot())
+}
+
+func nodesSnapshotFromReadState(readState unifiedresources.ReadState) []models.Node {
 	if readState == nil {
 		return nil
 	}

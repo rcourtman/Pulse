@@ -3634,9 +3634,34 @@ being reconfigured or a link change rebuilds the view on the next lookup; as
 before, two lookups that miss together can each build one, and a cold or
 invalidated cache builds even for an ID the estate does not list. Once the
 view is current an unknown ID resolves to nothing and falls to the raw
-resource store. The view stays keyed on the data version for every other
-consumer (broadcast, `/api/state`, `GetUnifiedReadStateOrSnapshot`), which
-still rebuild it on a data-version miss.
+resource store. The view stays keyed on the data version for the consumers
+that read what a tick moves (broadcast, `/api/state`,
+`GetUnifiedReadStateOrSnapshot`), which still rebuild it on a data-version
+miss.
+
+Callers that read the estate's identity and topology only share the
+structure-keyed view instead (`currentStructureUnifiedStateView`, with
+`GetUnifiedStructureReadState` and `currentModeStructureReadState` over it in
+`internal/monitoring/unified_structure_view.go`): the Docker-alert prune
+(`pruneStaleDockerAlerts`, host IDs), the host-agent evaluation
+(`evaluateHostAgents`, which runs on every monitor tick and lists nodes through
+`structureNodes`, for their IDs and links, only when an offline host names a
+linked node), the chart cache prewarm (metric IDs) and the demo patrol's
+operator-state resolver (`patrolResourceOperatorStateProvider`, canonical ID
+resolution). Such a caller can be handed a view several ticks old, so it must
+not read status, metric values, timestamps, sensors or anything a link merges by
+freshness, and a new consumer that does belongs on the data-version view. The
+mock storage chart history (`resolveMockStorageTotal`) is one of those: a linked
+pool takes its capacity from whichever source was seen last, which moves
+without a structure change, so it totals each pool whose chart is not cached
+from the data-version view, and `GetStorageMetricsForChartBatch` reads that view
+once for all the pools of a request instead of once per pool
+(`TestMockStorageChartReadsTheEstateOnlyForAnUncachedChart`). The connection-degraded alert feed
+(`buildAlertConnectionSnapshotsWithRuntimeSources`) reads neither the hosts nor
+the PBS instances: it keeps the platform rows and drops every agent row, and a
+PBS row's reported node name only becomes a host alias that the alert snapshot
+does not carry, so it asks the aggregator for platform rows only
+(`aggregatorRuntimeSources.platformRowsOnly`).
 
 The revision is read before the data version when a view is cached, and the
 fixture advances its data version before its revision
@@ -3658,16 +3683,36 @@ busy loops missed the view cache on 675 of 929 requests at a 16-second average
 build and had not served by 606 s; with this change it served at 148 s (13 s
 on the core alone). This was not a regression: builds from 1a094646d7 and
 d2ac0c5112 stall identically under equal contention and both start in 14 to
-16 seconds at normal load. The remaining time on a starved host is the other
-consumers of the shared view, which rebuild it whenever they find it stale (on
-the starved run, 42 view requests in a start of 194 s were all misses, from the
-Docker-alert prune, the connection snapshots and the host-agent evaluation),
-and the monitor's repeated full resource-store passes at startup. Loops that
-still reach the data-version view once per item are unchanged: the mock storage
-chart history (`resolveMockStorageTotal` per uncached pool), the demo patrol's
-finding adds (`patrolResourceOperatorStateProvider`) and, with
-`PULSE_MOCK_KEEP_REAL_POLLING`, the per-node polling lookups
-(`linkedHostForNode`, `getHostAgentTemperatureForNode`).
+16 seconds at normal load. The remaining time on a starved host was the other
+consumers of the shared view, which rebuilt it whenever they found it stale (on
+the starved run, 42 view requests in a start of 194 s were all misses: the
+Docker-alert prune 18, the connection snapshots 13, the host-agent evaluation 8,
+the chart prewarm 2 and the metrics-target lookup 1), and the monitor's repeated full resource-store
+passes at startup. The consumers above now ride the structure view or skip the
+read, and the passes are one (see "Store and provider wiring publishes the
+estate once, and only when it changed"). The loops that still reach the
+data-version view once per item are the per-node polling lookups of a monitor
+that keeps real polling in mock mode (`PULSE_MOCK_KEEP_REAL_POLLING`):
+`linkedHostForNode`, `getHostAgentTemperatureForNode` and
+`carriedTemperatureOutlivesAgentLease`. They read a host's status, disks,
+sensors and report lease, which a tick moves, so the structure view cannot
+answer them; hoisting the read out of the per-node loop would need the read
+state threaded through the node poller, and they run in the polling goroutines
+after startup, not before the listener opens.
+
+Measured on pulse-dev (single runs on a shared host at load 50 to 90, the
+process pinned to one core with GOMAXPROCS=1, probe builds counting estate
+builds): before the listener answered, a start of the previous build made 19
+store passes and 25 estate view builds; with the wiring change alone it made one
+pass and two builds (the first metrics-target lookup and the Docker-alert
+prune); with the structure view as well it makes one pass and one build. With no
+client connected, a mock-mode process kept building the estate about once every
+nine seconds (33 builds in the 299-second life of a run with the wiring change
+alone) and used 12.3 seconds of CPU over a 180-second window; with the
+structure view it built the estate twice in all, both at startup, and used 3.3
+seconds over the same window. The previous build used 9.0 seconds over that
+window in a separate run, so read the 12.3 against 3.3 as the comparison, not as
+exact percentages.
 
 `TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks` and
 `TestMockMetricsTargetForUnknownIDDoesNotRebuildTheViewAfterFixtureTicks` fail on

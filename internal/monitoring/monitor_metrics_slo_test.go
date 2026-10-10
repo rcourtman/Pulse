@@ -823,3 +823,33 @@ func TestMockChartCacheInvalidatesAfterMockHistoryRefresh(t *testing.T) {
 		}, lastPoint)
 	}
 }
+
+// A storage chart request totals each pool whose chart is not cached, and a
+// linked pool takes its capacity from whichever source was seen last, which
+// moves without a structure change, so the totals read the data-version view.
+// A batch hands every pool one shared read (GetStorageMetricsForChartBatch):
+// the view is rebuilt after a tick, and on a starved process a read per pool
+// rebuilt it for each. A pool whose chart is cached reads nothing.
+func TestMockStorageChartReadsTheEstateOnlyForAnUncachedChart(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	m := newMockEstateMonitor()
+	pools := m.currentUnifiedStateView().readState.StoragePools()
+	if len(pools) == 0 {
+		t.Fatal("the mock estate lists no storage pool")
+	}
+	id := pools[0].SourceID()
+
+	reads := 0
+	readState := func() unifiedresources.ReadState {
+		reads++
+		return m.GetUnifiedReadStateOrSnapshot()
+	}
+	first := m.mockStorageMetricsForChartCached(id, time.Hour, nil, readState)
+	if reads != 1 || len(first["total"]) == 0 {
+		t.Fatalf("an uncached chart read the estate %d times and returned %d total points, want one read and a total series", reads, len(first["total"]))
+	}
+	m.mockStorageMetricsForChartCached(id, time.Hour, nil, readState)
+	if reads != 1 {
+		t.Fatalf("a cached chart read the estate again: %d reads", reads)
+	}
+}

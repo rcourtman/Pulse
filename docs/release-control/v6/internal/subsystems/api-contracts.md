@@ -12080,3 +12080,22 @@ it. The request, status codes, response shape and the meaning of an empty
 decision is added: `exclusions` still counts one link pair each.
 `TestResourceReportMergeSourceFilterDetachesChainMembers` reports a chain
 through the handler and the REST listing.
+
+### The connection-degraded alert feed reads platform rows only
+
+`buildAlertConnectionSnapshotsWithRuntimeSources` (`internal/api/connections_alerts.go`)
+feeds the connection-degraded alert, and `snapshotConnectionsForAlerts` keeps
+only the PVE, PBS, PMG, VMware and TrueNAS rows. It now builds the aggregator's
+inputs with `aggregatorRuntimeSources.platformRowsOnly`, which leaves out the
+monitor's hosts, their desired-config fingerprints and the PBS reported node
+names: they only feed agent rows, which that snapshot drops, and a PBS host
+alias, which it does not carry. The connections endpoint, diagnostics and the
+runtime inventory sources still read them. No route, request, response, status
+code, header or payload changes, and a platform row is the same with and
+without those reads (`TestAlertConnectionSnapshotsMatchTheFullAggregatorOnPlatformRows`
+and `TestAlertConnectionSnapshotsKeepConfiguredPlatformRowsWithoutTheHosts` in
+`internal/api/runtime_inventory_sources_test.go`). The demo Patrol resolver
+(`patrolResourceOperatorStateProvider` in `internal/api/router.go`) resolves a
+finding's resource reference through `Monitor.GetUnifiedStructureReadState`; in
+mock mode that is the view built for the current fixture structure, outside it
+the read state it used before.

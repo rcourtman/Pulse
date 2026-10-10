@@ -2242,7 +2242,7 @@ func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOp
 				return ai.ResourceOperatorStateProjection{}, false
 			}
 			canonicalID := resourceRef
-			if resolver, ok := r.resolveMonitorForOrg(orgID).GetUnifiedReadStateOrSnapshot().(canonicalResourceIDResolver); ok {
+			if resolver, ok := r.resolveMonitorForOrg(orgID).GetUnifiedStructureReadState().(canonicalResourceIDResolver); ok {
 				if resolvedID, resolved := resolver.ResolveCanonicalResourceID(resourceRef); resolved {
 					canonicalID = resolvedID
 				}

@@ -175,8 +175,9 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 
 	// The inventory is the fixture read view in mock mode. A prune that read
 	// it must not remove Docker alerts the other mode raised after a switch.
+	// Only the hosts' IDs matter, so the view may predate the last metric ticks.
 	scope := m.mockModeFence.begin()
-	readState := m.currentModeReadState()
+	readState := m.currentModeStructureReadState()
 	if readState == nil {
 		return false
 	}

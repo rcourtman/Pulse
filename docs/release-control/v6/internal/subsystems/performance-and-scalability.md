@@ -3748,9 +3748,18 @@ alert loop, which is what the one-off measurement above showed. Run both
 benchmarks with `-benchtime=3x`, since the registry case rebuilds its ingest
 outside the timer. `TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks`
 is the guard that fails on a rebuild per lookup. The remaining startup cost
-under starvation is the monitor's repeated full resource-store passes (one per
-supplemental provider registration) and the other consumers of the shared view,
-which rebuild it whenever they find it stale; neither is changed here.
+under starvation was the monitor's repeated full resource-store passes (one per
+supplemental provider registration, 19 before the listener answered) and the
+other consumers of the shared view, which rebuilt it whenever they found it
+stale. A start now makes one pass and one estate build, and a mock-mode process
+with no client connected no longer builds the estate on every monitor tick (the
+data-version consumers, broadcast and `/api/state`, still rebuild it after a
+tick for a connected client). The callers that read
+identity and topology only share the view built for the current fixture
+structure, and the connection-degraded alert feed no longer asks the monitor for
+hosts or PBS instances it throws away (see "Mock-mode metrics-target lookups
+ride the fixture structure revision" in the monitoring contract for the callers
+and the measurements).
 
 ### Update evidence reuses the bounded node observation
 
