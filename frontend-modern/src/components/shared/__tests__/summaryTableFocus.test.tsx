@@ -286,7 +286,7 @@ describe('useSummaryPageInteractionState', () => {
   });
 
   it('does not clear pinned scope when operators click ignored controls inside the clear root', () => {
-    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();
     const clearRoot = document.createElement('div');
     const root = document.createElement('div');
@@ -300,7 +300,7 @@ describe('useSummaryPageInteractionState', () => {
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
         clearPinnedScope,
-        focusedGroupId,
+        focusedSeriesId,
       }),
     );
 
@@ -312,7 +312,7 @@ describe('useSummaryPageInteractionState', () => {
   });
 
   it('clears pinned scope when operators click neutral whitespace inside the table root', () => {
-    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();
     const clearRoot = document.createElement('div');
     const root = document.createElement('div');
@@ -324,7 +324,7 @@ describe('useSummaryPageInteractionState', () => {
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
         clearPinnedScope,
-        focusedGroupId,
+        focusedSeriesId,
       }),
     );
 
@@ -336,7 +336,7 @@ describe('useSummaryPageInteractionState', () => {
   });
 
   it('does not clear pinned scope when page-shell clicks land above the table root', () => {
-    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();
     const clearRoot = document.createElement('div');
     const root = document.createElement('div');
@@ -356,7 +356,7 @@ describe('useSummaryPageInteractionState', () => {
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
         clearPinnedScope,
-        focusedGroupId,
+        focusedSeriesId,
       }),
     );
 

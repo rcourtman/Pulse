@@ -6,7 +6,6 @@ import {
   buildVmwarePath,
   buildWorkloadsRouteSearch,
   KUBERNETES_PATH,
-  STORAGE_QUERY_PARAMS,
   TRUENAS_PATH,
   VMWARE_PATH,
   WORKLOADS_QUERY_PARAMS,
@@ -160,13 +159,6 @@ describe('buildStorageRouteSearch branch coverage', () => {
     expect(buildStorageRouteSearch({})).toBe('');
   });
 
-  it('emits the summaryGroup param the sibling suite omits', () => {
-    expect(buildStorageRouteSearch({ summaryGroup: 'capacity' })).toBe(
-      `?${STORAGE_QUERY_PARAMS.summaryGroup}=capacity`,
-    );
-    expect(STORAGE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
-  });
-
   it('canonicalizes raw ceph-family storage types through normalizeStorageSourceKey switch arms', () => {
     expect(buildStorageRouteSearch({ source: 'ceph' })).toBe('?source=ceph');
     expect(buildStorageRouteSearch({ source: 'cephfs' })).toBe('?source=ceph');
@@ -196,7 +188,6 @@ describe('buildStorageRouteSearch branch coverage', () => {
         resource: '   ',
         sort: '',
         order: null,
-        summaryGroup: undefined,
       }),
     ).toBe('');
   });
@@ -215,10 +206,9 @@ describe('buildStorageRouteSearch branch coverage', () => {
         resource: 'r-1',
         sort: 'usage',
         order: 'desc',
-        summaryGroup: 'capacity',
       }),
     ).toBe(
-      '?tab=disks&group=storage&source=ceph&status=available&diskRole=nvme&diskGroup=data&node=pve1&q=lvm&resource=r-1&sort=usage&order=desc&summaryGroup=capacity',
+      '?tab=disks&group=storage&source=ceph&status=available&diskRole=nvme&diskGroup=data&node=pve1&q=lvm&resource=r-1&sort=usage&order=desc',
     );
   });
 });

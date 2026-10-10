@@ -5068,8 +5068,10 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 
 		rr.recordLinkOwnPin(primaryID, primary)
 		rr.recordLinkOwnPin(otherID, other)
-		rr.mergeResourceData(primary, other, thresholds)
+		// The fold records what each side is on its own, so it reads the
+		// primary before the other side's sources join its list.
 		recordManualLinkFold(primary, primaryID, other, otherID)
+		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
 		// The fold record names every ID along a chain of links, so the chain
 		// resolves to its last primary; the folded row's own index entries

@@ -3565,6 +3565,87 @@ stable token. Finding-suppression integrations consume the same
 `ResourceOperatorState` shape via the
 `ResourceOperatorStateProvider` interface in `internal/ai`.
 
+A remediation lock follows the resource through the identity changes the
+stores can see. The planner, the action broker and the dispatch gate
+(`validateExecutionPolicy`) read the row keyed by the one canonical ID the
+registry lists, so a lock left on an ID the registry no longer lists would let
+Pulse act on a resource the operator told it never to touch. The members of a
+live manual-link component therefore share the block
+(`shareRemediationLockAcrossLinksSQL`, `CarryRemediationLock`). `AddLink` writes
+a block held by any member of the linked component to every member, in the
+link's own transaction, because the store cannot see resource types and so
+cannot know which member the registry keeps (a guest outlives an agent running
+inside it whichever way the link points); a chain of links is one component.
+`AddExclusion` does the same just before an unlink splits the pair, so each
+member the unlink leaves keeps the lock the merged resource carried.
+`ApplyCanonicalIDSuccessions` carries the predecessor's block onto a successor
+row that already exists, which would otherwise shadow it. The IDs the
+predecessor's and successor's links joined before the re-key stay one group:
+once the re-key has run (so a successor with no row still receives the
+predecessor's whole row, retirement, maintenance, notes and attribution
+included), the group shares the block even where re-keying a link onto the
+successor lets a newer exclusion supersede it. Successions apply hop by hop in
+the order they are declared; the stores do not reorder a batch, so a chain
+declared against its direction in one batch, or into an intermediate ID whose
+own succession was recorded earlier, carries one hop per succession. A
+succession applies once per predecessor in both stores, so a lock the operator
+lifts on the successor, by editing or clearing its row, is not brought back by
+a re-declared succession. Opening a store that has not run the one-shot
+upgrade carry (`migrateRemediationLockCarry`, recorded in
+`resource_store_migrations`) restores the locks that earlier links and
+already-recorded successions dropped, following a recorded chain to every ID
+that still has a row and repeating with the links until nothing changes; it
+records itself done only once it has converged, does not run again after that,
+so a lock lifted afterwards stays lifted, and a failure is logged and retried
+at the next start rather than keeping the store closed. Sharing after a
+succession batch waits until every predecessor's row in the batch has moved
+and follows each group's members through the re-keys applied after it, in
+application order, so a block-only row made
+for one predecessor cannot take the place of another's whole row and an ID a
+later succession in the batch re-keyed away is not given a row. The link reads
+that settle a lock take only the columns that decide a pair and treat a time
+the driver cannot read as the zero time, so a malformed link row cannot stop a
+succession, a link or an unlink.
+
+What crosses is the block only, as `NeverAutoRemediate`, and `Retired` counts
+as a block: retirement also silences alerts and Patrol attention, which is
+monitoring posture rather than a safety property, so a retired donor does not
+retire the survivor. Every other setting an existing survivor row holds is left
+untouched, a member with no row gets a row carrying the block alone, and the
+carried row is attributed `system:identity-change` rather than to a person.
+The operator lifts the lock on the resource the registry lists, which is where
+the operator-state API resolves a folded ID to, and a restart, a rebuild or a
+re-declared succession does not put it back. The copies the sharing wrote on
+folded members cannot be reached through that API while the pair is linked, so
+they share again at the component's next link, unlink or succession. Unlinking
+the pair removes no carried lock from either side; once no other link still
+joins them, each member can be edited or cleared on its own.
+
+The sharing is bounded by when it runs, and the contract does not claim more.
+A lock written to a linked ID after the link was recorded reaches the other
+members at the component's next link, unlink or succession, and reaches the
+survivor at once only when the ID resolves through the registry, as the operator-state API
+resolves a folded ID to its holder; a lock written while the registry cannot
+resolve the ID (a member absent from the current generation) stays on that ID
+until then. The store cannot see which links the registry declines to fold
+(availability-owned endpoints, a node and agent pair a newer split separated),
+so those share too, which can lock a host because a linked probe was retired.
+Re-recording an existing link shares again. Canonical ID changes that reach
+neither a link nor `ApplyCanonicalIDSuccessions` are not covered here: a
+physical disk re-keyed in place to a machine-scoped ID
+(`rekeyPhysicalDiskLocked` moves no operator state), and a host whose earlier
+ID never held an identity pin, which no pin-driven succession can name. Proof:
+`TestResourceRegistry_ManualLinkFoldKeepsRemediationLock`,
+`TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings`,
+`TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks`,
+`TestSQLiteStoreRestoresLocksEarlierIdentityChangesDropped` and
+`TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains` in
+`internal/unifiedresources/registry_test.go`, and
+`TestCanonicalIDSuccessionCarriesRemediationLockOntoExistingSuccessorRow`,
+`TestCanonicalIDSuccessionLockReachesLinkedSurvivor` and
+`TestCanonicalIDSuccessionKeepsLinkedMembersTogether` in
+`internal/unifiedresources/canonical_id_succession_test.go`.
+
 `actions.go` now owns the canonical action preflight and audit-normalization
 contract. Action plans must carry dry-run availability, safety checks, and
 verification steps through `preflight`, and `RecordActionAudit` plus
@@ -3897,7 +3978,10 @@ reported hostname or machine-identity changes, and separate connections with
 the same hostname remain distinct. Legacy hostname-derived IDs may be exposed
 as explicit `SupersededCanonicalIDs`; registry persistence may re-key owned
 operator state and delete the retired pin, while ordinary aliases remain
-read-only lookup compatibility. Identity pins from an unrelated Pulse Agent
+read-only lookup compatibility. A successor row that already exists keeps
+its own settings, but on the succession's first application the predecessor's
+remediation lock is carried onto it (`CarryRemediationLock`) and across the
+successor's links rather than shadowed. Identity pins from an unrelated Pulse Agent
 must not complete or merge a TrueNAS connection identity.
 
 `canonicalIdentity.supersededIds` is preserved across backend projection and
@@ -4960,6 +5044,10 @@ top-level system is a merged hybrid surface, the route-state helper must
 resolve the deep-link source from the canonical merged source set before
 falling back to raw `platformType`, so TrueNAS-backed hybrid systems do not
 lose their storage context just because agent telemetry is also present.
+Storage route state names no `summaryGroup` param: `STORAGE_QUERY_PARAMS`,
+`parseStorageLinkSearch(...)` and `buildStorageRouteSearch(...)` dropped it
+with the Storage pool-group pin, no link builder passed one, and a leftover
+param in a saved URL is ignored.
 That same routing contract now also owns workload platform scoping without
 restoring the retired `/workloads` top-level route. Workloads URL-sync state,
 and any workload link built through the shared `buildWorkloadsRouteSearch(...)`
@@ -6919,7 +7007,12 @@ links" below).
   merged row's maintenance and monitoring mode, not an operator-state
   row left under the folded ID, whenever that read state folds the
   agent, or holds the saved agent beside the guest after a restart
-  (above). History does
+  (above). The folded row's remediation lock is the one part of it that
+  does not stay behind: the store shares it across the link's component when
+  the link is recorded or unlinked, and once on upgrade for earlier links, so
+  the gates, which read the merged row's ID, still refuse (the remediation
+  lock note under the operator-state contract above, which also states its
+  limits). History does
   not follow the fold: a history binding persists, and
   `expandHistoryAliases` walks bindings in both directions, so binding a
   folded ID would join the two journals for good. Folded IDs are never
@@ -7554,14 +7647,37 @@ fold already recorded (the holder still carries what the earlier fold
 brought). The record is unexported and rides in-memory
 clones, so it reaches the resources API's registry, which seeds from the
 monitor's already-linked listing and never holds the folded row.
-Report-merge excludes the pair of every link whose folded side brought a
-reported source category (`ResourceRegistry.ManualLinkFolds`), and the
-store's one-decision-per-pair rule deletes that link row, so the pair splits
-on every surface from the monitor's next rebuild, as with unlink. The drawer
-reports every merged source. Categories are not attributed to individual
-contributors: naming one that some folded side carried undoes that link even
-where the holder carries it too, and a source that arrived along a chain of
-links undoes every link on its way to the merged resource.
+A fold's `Sources` is its folded side's whole subtree, so it cannot say
+which member of a chain a source belongs to. Selecting links by it undid every
+link on the way to a reported source (a Docker host linked into an agent
+linked into a VM: naming Docker split the agent from the VM too), and where
+links form a cycle it left the reported member joined through the link it did
+not name. Each fold therefore also records what its two sides are on their own
+(`HolderOwn`, `FoldedOwn`): the sources the side's row listed before any link
+folded something into it, which a side that already took members in reads from
+the record its first fold made. `recordManualLinkFold` runs before the other
+side is merged for that reason, and a repeated pair unions the own sources as
+it does `Sources`.
+
+Report-merge picks links by member (`ReportedManualLinkFolds`, fed by
+`ResourceRegistry.ManualLinkFolds`). A member whose own sources include a
+reported source is reported, whatever it took in; the resource being reported
+on never is, since it is what stays. A link is undone when it joins a reported
+member to a member that stays, one the resource still reaches without passing
+through a reported member, or to another reported member. A member that hangs
+below a reported one and carries no reported source goes with it, and the link
+holding it there stays: the report names a source that is not theirs to undo.
+Where links form a cycle, a reported member linked both to the resource and to
+a member that stays is cut from both, so the surviving link cannot fold it
+back in. The store's one-decision-per-pair rule deletes each undone link row,
+so the pair splits on every surface from the monitor's next rebuild, as with
+unlink. The drawer reports every merged source, which undoes every link, and
+so does a report naming none. A fold recorded without its sides' own sources
+falls back to its folded subtree, and a member several folds name takes the
+union of what they record, since a refold unions into its own pair's fold
+only. A resource the records no longer name (re-keyed after the links folded)
+is replaced by the one holder no link folded; when no single holder qualifies,
+which the recorder does not produce, the folds' subtrees decide, as before.
 
 A link joins only the pair its row names. Canonical-ID succession re-keys
 link endpoints with `UPDATE OR IGNORE` but moves `primary_id`
@@ -7589,8 +7705,18 @@ monitor's registry and on one seeded from its listing, and
 `TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests` folds a TrueNAS
 system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
-sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
-keeps the handler on the registry's fold record.
+sources than it first brought. `TestManualLinkFoldOwnSourcesComeFromTheFirstRecord`
+keeps a holder's own sources from growing with what it takes in.
+`TestReportedManualLinkFoldsDetachMembersCarryingTheSource` selects links for a
+leaf, a holder, both and a cycle (a TrueNAS VM taking in a Proxmox storage and
+a vSphere VM that is also linked to the storage), and
+`TestReportedManualLinkFoldsLeaveNoReportedMemberJoined` checks that no
+reported member stays joined to the resource through the links left, which the
+subtree rule fails on that cycle. `TestResourceReportMergeSourceFilterDetachesChainMembers`
+reports a Docker host linked into an agent linked into a VM through the API,
+for the leaf, the holder, both, every source and no filter, on the monitor and
+the REST surface. `TestResourceAPIReportMergeExcludesRegistryLinkFolds` keeps
+the handler on the registry's fold record.
 
 ### Reconciled node-agent relink fold bookkeeping
 

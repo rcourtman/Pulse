@@ -8032,3 +8032,504 @@ func proxmoxNodeSensorSetupOutdated(t *testing.T, resources []Resource, nodeName
 	}
 	return *found.Proxmox.SensorSetupOutdated
 }
+
+// An operator's remediation lock is a safety property of the thing they
+// locked, not of one canonical ID. Linking a locked resource into another
+// folds it out of the registry, and the surviving resource is the only ID the
+// planner and the dispatch gate ever read, so the lock has to be readable
+// there. Lock state is judged the way the gates judge it: the stored row of
+// the ID the registry lists.
+func TestResourceRegistry_ManualLinkFoldKeepsRemediationLock(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		guestID = "vm-cluster-a-node-1-501"
+		agentID = "agent-inside-vm-501"
+	)
+	ingest := func(rr *ResourceRegistry) {
+		rr.IngestResources([]Resource{
+			{
+				ID: guestID, Type: ResourceTypeVM, Name: "vm-501", Status: StatusOnline, LastSeen: now,
+				Sources:      []DataSource{SourceProxmox},
+				SourceStatus: map[DataSource]SourceStatus{SourceProxmox: {Status: "online", LastSeen: now}},
+				Proxmox:      &ProxmoxData{SourceID: "cluster-a-node-1-501", VMID: 501},
+			},
+			{
+				ID: agentID, Type: ResourceTypeAgent, Name: "vm-501", Status: StatusOnline, LastSeen: now,
+				Sources:      []DataSource{SourceAgent},
+				SourceStatus: map[DataSource]SourceStatus{SourceAgent: {Status: "online", LastSeen: now}},
+				Agent:        &AgentData{AgentID: agentID},
+			},
+		})
+	}
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locks := map[string]ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: LifecycleStateRetired},
+	}
+	for storeName, newStore := range stores {
+		for lockName, lock := range locks {
+			for _, tc := range []struct {
+				name   string
+				locked string
+				// primary is the side the link names as its primary. The registry
+				// keeps a guest over an agent running inside it whichever way the
+				// link points, so a lock on the guest-folded agent has to survive
+				// a link that names the agent the primary and a link that names the
+				// guest.
+				primary string
+			}{
+				{name: "locked agent folded into the guest, agent named primary", locked: agentID, primary: agentID},
+				{name: "locked agent folded into the guest, guest named primary", locked: agentID, primary: guestID},
+				{name: "control: locked guest absorbing the agent", locked: guestID, primary: agentID},
+			} {
+				t.Run(storeName+"/"+lockName+"/"+tc.name, func(t *testing.T) {
+					store := newStore(t)
+					state := lock
+					state.CanonicalID = tc.locked
+					state.SetAt = now.Add(-time.Hour)
+					state.SetBy = "operator"
+					if err := store.SetResourceOperatorState(state); err != nil {
+						t.Fatalf("lock %s: %v", tc.locked, err)
+					}
+					if err := store.AddLink(ResourceLink{ResourceA: guestID, ResourceB: agentID, PrimaryID: tc.primary}); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+
+					rr := NewRegistry(store)
+					ingest(rr)
+					survivors := rr.List()
+					if len(survivors) != 1 {
+						t.Fatalf("link did not fold the pair into one resource: %d resources", len(survivors))
+					}
+					survivor := survivors[0].ID
+
+					got, found, err := store.GetResourceOperatorState(survivor)
+					if err != nil {
+						t.Fatalf("read operator state of survivor %s: %v", survivor, err)
+					}
+					if !found || !got.BlocksRemediation() {
+						t.Fatalf("surviving resource %s lost the lock on %s: found=%v state=%+v", survivor, tc.locked, found, got)
+					}
+					if got.SuppressesAllAttention() != (lockName == "retired" && tc.locked == survivor) {
+						t.Fatalf("lock on %s changed the survivor's alert attention: %+v", tc.locked, got)
+					}
+				})
+			}
+		}
+	}
+}
+
+// Carrying the lock must not rewrite anything else the survivor's operator
+// said: its note, priority and monitoring posture stay as they were.
+func TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	const (
+		keeperID = "vm-cluster-a-node-1-502"
+		foldedID = "agent-inside-vm-502"
+	)
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:    keeperID,
+		MonitoringMode: MonitoringModeExpectedOffline,
+		Criticality:    CriticalityHigh,
+		Note:           "database host",
+		SetAt:          now.Add(-time.Hour),
+		SetBy:          "alice",
+	}); err != nil {
+		t.Fatalf("seed survivor state: %v", err)
+	}
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID: foldedID, NeverAutoRemediate: true, SetAt: now.Add(-2 * time.Hour), SetBy: "bob",
+	}); err != nil {
+		t.Fatalf("seed folded state: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: keeperID, ResourceB: foldedID, PrimaryID: keeperID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	got, found, err := store.GetResourceOperatorState(keeperID)
+	if err != nil || !found {
+		t.Fatalf("survivor state missing: found=%v err=%v", found, err)
+	}
+	if !got.NeverAutoRemediate {
+		t.Fatalf("survivor did not take the folded resource's lock: %+v", got)
+	}
+	if got.MonitoringMode != MonitoringModeExpectedOffline || got.Criticality != CriticalityHigh || got.Note != "database host" || got.LifecycleState != LifecycleStateActive {
+		t.Fatalf("carrying the lock rewrote the survivor's own settings: %+v", got)
+	}
+	if got.SetBy != RemediationLockCarriedBy {
+		t.Fatalf("carried lock is attributed to %q, not to the identity change", got.SetBy)
+	}
+
+	// Unlinking splits the pair again; the lock was the operator's on both, so
+	// neither side loses it.
+	if err := store.AddExclusion(ResourceExclusion{ResourceA: keeperID, ResourceB: foldedID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	for _, id := range []string{keeperID, foldedID} {
+		if state, found, err := store.GetResourceOperatorState(id); err != nil || !found || !state.NeverAutoRemediate {
+			t.Fatalf("unlinking dropped the lock on %s: found=%v err=%v state=%+v", id, found, err, state)
+		}
+	}
+}
+
+// Links recorded before locks travelled with them already folded a locked
+// resource out from under its lock, and a succession that landed on an existing
+// successor row left its predecessor's lock behind. Opening a store that has
+// not yet run the carry restores those once; an operator who then lifts the
+// survivor's lock is not overruled by the dormant row on every later start.
+func TestSQLiteStoreRestoresLocksEarlierIdentityChangesDropped(t *testing.T) {
+	dir := t.TempDir()
+	const (
+		lockedID     = "agent-legacy-locked"
+		survivorID   = "vm-legacy-survivor"
+		chainEndID   = "vm-legacy-chain-end"
+		unlinkedA    = "agent-legacy-unlinked-locked"
+		unlinkedB    = "vm-legacy-unlinked-open"
+		oldEraID     = "agent-legacy-old-era"
+		newEraID     = "agent-legacy-new-era"
+		linkedAt     = "2026-09-01T10:00:00Z"
+		unlinkedAt   = "2026-09-02T10:00:00Z"
+		operator     = "operator"
+		legacyReason = "recorded before locks travelled"
+	)
+	open := func() *SQLiteResourceStore {
+		t.Helper()
+		store, err := NewSQLiteResourceStore(dir, "default")
+		if err != nil {
+			t.Fatalf("NewSQLiteResourceStore: %v", err)
+		}
+		return store
+	}
+	now := time.Now().UTC()
+
+	store := open()
+	for _, id := range []string{lockedID, unlinkedA, oldEraID} {
+		if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: id, NeverAutoRemediate: true, SetAt: now.Add(-48 * time.Hour), SetBy: operator}); err != nil {
+			t.Fatalf("lock %s: %v", id, err)
+		}
+	}
+	// A successor row written before the succession was declared, as the
+	// succession that shadowed the predecessor's lock found it.
+	if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: newEraID, Note: "set under the new ID", SetAt: now.Add(-24 * time.Hour), SetBy: operator}); err != nil {
+		t.Fatalf("seed successor: %v", err)
+	}
+	// Rows exactly as a store that did not carry locks wrote them: a live link,
+	// a chain extension of it, one a later unlink superseded (its exclusion is
+	// newer), and a succession already recorded with the predecessor's row left
+	// behind.
+	for _, row := range []struct{ a, b, primary, at string }{
+		{lockedID, survivorID, survivorID, linkedAt},
+		{survivorID, chainEndID, chainEndID, linkedAt},
+		{unlinkedA, unlinkedB, unlinkedB, linkedAt},
+	} {
+		if _, err := store.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			row.a, row.b, row.primary, legacyReason, operator, row.at); err != nil {
+			t.Fatalf("seed legacy link: %v", err)
+		}
+	}
+	if _, err := store.db.Exec(`INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?)`,
+		unlinkedA, unlinkedB, "unlinked", operator, unlinkedAt); err != nil {
+		t.Fatalf("seed legacy exclusion: %v", err)
+	}
+	if _, err := store.db.Exec(`INSERT INTO canonical_id_successions (old_canonical_id, new_canonical_id) VALUES (?, ?)`, oldEraID, newEraID); err != nil {
+		t.Fatalf("seed recorded succession: %v", err)
+	}
+	// This store has never run the carry.
+	if _, err := store.db.Exec(`DELETE FROM resource_store_migrations`); err != nil {
+		t.Fatalf("forget the carry marker: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	store = open()
+	for _, id := range []string{survivorID, chainEndID, newEraID} {
+		got, found, err := store.GetResourceOperatorState(id)
+		if err != nil || !found || !got.BlocksRemediation() {
+			t.Fatalf("%s did not get the lock an earlier identity change dropped: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+	if got, _, _ := store.GetResourceOperatorState(newEraID); got.Note != "set under the new ID" {
+		t.Fatalf("restoring the successor's lock rewrote its own settings: %+v", got)
+	}
+	if other, found, err := store.GetResourceOperatorState(unlinkedB); err != nil || found {
+		t.Fatalf("a pair the operator unlinked was carried: found=%v err=%v state=%+v", found, err, other)
+	}
+
+	for _, id := range []string{survivorID, newEraID} {
+		if err := store.ClearResourceOperatorState(id); err != nil {
+			t.Fatalf("operator clears %s: %v", id, err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	store = open()
+	defer store.Close()
+	for _, id := range []string{survivorID, newEraID} {
+		if got, found, err := store.GetResourceOperatorState(id); err != nil || found {
+			t.Fatalf("a restart re-locked %s, which the operator cleared: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+}
+
+// The registry keeps one member of a link and acts only on that ID, so a lock
+// has to be on every member of the linked component, not just the two IDs of
+// the newest link, and it has to stay on each member the unlink splits off.
+func TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	now := time.Now().UTC()
+	for name, newStore := range stores {
+		t.Run(name+"/chain", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "host-a", ResourceB: "host-b", PrimaryID: "host-a"}); err != nil {
+				t.Fatalf("link a-b: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "host-c", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock c: %v", err)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: "host-b", ResourceB: "host-c", PrimaryID: "host-c"}); err != nil {
+				t.Fatalf("link b-c: %v", err)
+			}
+			for _, id := range []string{"host-a", "host-b", "host-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s is outside the lock of its linked component", id)
+				}
+			}
+		})
+		t.Run(name+"/lock set on the survivor after the link, then unlinked", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "vm-1", ResourceB: "agent-1", PrimaryID: "vm-1"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "vm-1", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("operator locks the merged resource: %v", err)
+			}
+			if locked(t, store, "agent-1") {
+				t.Fatalf("the lock reached the folded member before any identity change")
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-1", ResourceB: "agent-1"}); err != nil {
+				t.Fatalf("unlink: %v", err)
+			}
+			for _, id := range []string{"vm-1", "agent-1"} {
+				if !locked(t, store, id) {
+					t.Fatalf("unlinking left %s without the merged resource's lock", id)
+				}
+			}
+		})
+		t.Run(name+"/lock on one end of a chain, unlinking the other end", func(t *testing.T) {
+			store := newStore(t)
+			for _, link := range []ResourceLink{
+				{ResourceA: "chain-a", ResourceB: "chain-b", PrimaryID: "chain-a"},
+				{ResourceA: "chain-b", ResourceB: "chain-c", PrimaryID: "chain-b"},
+			} {
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("link %s-%s: %v", link.ResourceA, link.ResourceB, err)
+				}
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "chain-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("operator locks the merged resource: %v", err)
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "chain-b", ResourceB: "chain-c"}); err != nil {
+				t.Fatalf("unlink b-c: %v", err)
+			}
+			for _, id := range []string{"chain-a", "chain-b", "chain-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s left the chain without the lock the whole chain carried", id)
+				}
+			}
+		})
+		t.Run(name+"/unlinking a pair that was never linked carries nothing", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "vm-2", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-2", ResourceB: "agent-2"}); err != nil {
+				t.Fatalf("exclude: %v", err)
+			}
+			if locked(t, store, "agent-2") {
+				t.Fatalf("an exclusion between unlinked resources locked one of them")
+			}
+		})
+	}
+}
+
+// Recorded successions can chain, and an intermediate row may have moved on to
+// its own successor, so the upgrade carry follows the chain instead of
+// stepping one succession at a time; a lock it restores then spreads over the
+// links of the ID it lands on.
+func TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains(t *testing.T) {
+	dir := t.TempDir()
+	open := func() *SQLiteResourceStore {
+		t.Helper()
+		store, err := NewSQLiteResourceStore(dir, "default")
+		if err != nil {
+			t.Fatalf("NewSQLiteResourceStore: %v", err)
+		}
+		return store
+	}
+	now := time.Now().UTC()
+	store := open()
+	defer func() { _ = store.Close() }()
+
+	// a1 -> b1 -> c1: b1's settings row moved to c1, so b1 has no row and the
+	// shadowed lock on a1 has to reach c1 across the gap.
+	// a2 -> b2 -> c2, recorded in the opposite order from the chain: both
+	// intermediate rows still exist.
+	// a3 -> b3 with a live link b3 - c3: the restored lock must reach c3.
+	seed := func(id string, state ResourceOperatorState) {
+		t.Helper()
+		state.CanonicalID, state.SetAt = id, now.Add(-72*time.Hour)
+		if err := store.SetResourceOperatorState(state); err != nil {
+			t.Fatalf("seed %s: %v", id, err)
+		}
+	}
+	seed("chain-a1", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-c1", ResourceOperatorState{Note: "moved here from b1"})
+	seed("chain-a2", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-b2", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-c2", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-a3", ResourceOperatorState{LifecycleState: LifecycleStateRetired})
+	seed("chain-b3", ResourceOperatorState{Note: "unlocked"})
+	// a4 -> b4 and c4 -> d4 with a live link b4 - c4: the lock restored onto b4
+	// spreads over the link to c4, and from c4 on to d4, which the first pass
+	// over the successions had already passed.
+	seed("chain-a4", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-b4", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-c4", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-d4", ResourceOperatorState{Note: "unlocked"})
+	for _, succession := range [][2]string{
+		{"chain-b2", "chain-c2"}, {"chain-a2", "chain-b2"},
+		{"chain-a1", "chain-b1"}, {"chain-b1", "chain-c1"},
+		{"chain-a3", "chain-b3"},
+		{"chain-a4", "chain-b4"}, {"chain-c4", "chain-d4"},
+	} {
+		if _, err := store.db.Exec(`INSERT INTO canonical_id_successions (old_canonical_id, new_canonical_id) VALUES (?, ?)`, succession[0], succession[1]); err != nil {
+			t.Fatalf("record succession %v: %v", succession, err)
+		}
+	}
+	for _, link := range [][2]string{{"chain-b3", "chain-c3"}, {"chain-b4", "chain-c4"}} {
+		if _, err := store.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			link[0], link[1], link[0], "linked before locks travelled", "operator", "2026-09-01T10:00:00Z"); err != nil {
+			t.Fatalf("seed link: %v", err)
+		}
+	}
+	if _, err := store.db.Exec(`DELETE FROM resource_store_migrations`); err != nil {
+		t.Fatalf("forget the carry marker: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	store = open()
+	for _, id := range []string{"chain-c1", "chain-b2", "chain-c2", "chain-b3", "chain-c3", "chain-b4", "chain-c4", "chain-d4"} {
+		got, found, err := store.GetResourceOperatorState(id)
+		if err != nil || !found || !got.BlocksRemediation() {
+			t.Fatalf("%s did not get the lock its succession chain dropped: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+	if got, _, _ := store.GetResourceOperatorState("chain-c1"); got.Note != "moved here from b1" {
+		t.Fatalf("restoring the lock rewrote the successor's own settings: %+v", got)
+	}
+}
+
+// A succession batch is applied in the order it is declared, and each group of
+// linked IDs it saved follows only the re-keys applied after it. A batch
+// declared against its direction, and one that returns an ID to its start, both
+// leave the lock on the IDs that survive and give no row to an ID re-keyed away.
+func TestSuccessionBatchOrderKeepsLinkedRemediationLock(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	now := time.Now().UTC()
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	for name, newStore := range stores {
+		t.Run(name+"/declared against its direction", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "rev-a", ResourceB: "rev-b", PrimaryID: "rev-b"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "rev-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "rev-b", NewCanonicalID: "rev-c"},
+				{OldCanonicalID: "rev-a", NewCanonicalID: "rev-b"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"rev-b", "rev-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock when the batch was declared against its direction", id)
+				}
+			}
+		})
+		t.Run(name+"/returns an ID to its start", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "loop-a", ResourceB: "loop-x", PrimaryID: "loop-x"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "loop-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "loop-a", NewCanonicalID: "loop-b"},
+				{OldCanonicalID: "loop-b", NewCanonicalID: "loop-a"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"loop-a", "loop-x"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock across a batch that returned to its start", id)
+				}
+			}
+			if state, found, err := store.GetResourceOperatorState("loop-b"); err != nil || found {
+				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
+			}
+		})
+	}
+}

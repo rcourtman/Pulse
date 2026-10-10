@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "base_sha": "27576b90ff416cd16d1ef744cd299b83af4a2f36",
+  "verified_at": "2026-10-10T03:40:27.414721Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts": "1af3cc1bfcc6202d1033f56f8982a1f785a65dc93b2fd1734e1cfe124748e18c",
+    "frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx": "131354cd4a7c835973173ea391a01d912e58cad0969f520c2dfb805a984bcb47"
+  },
+  "routes": [
+    "Existing Alerts Notifications SMTP section via browser-tests/email-rate-limit.html (fixture only)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Loaded non-default limit, saved unrelated edit, edited limit with reload, switched-off email with inspectable/editable settings, explicit legacy zero sentinel. Desktop light/dark and WebKit phone/narrow light."
+  ],
+  "interactions": [
+    "Actual Email section, editor, destination mutation owner, payload builder and API client against synthetic persisted GET/PUT responses.",
+    "Each viewport preserves loaded 17 through an unrelated edit, saves 12 and reloads it, switches email off then inspects/edits/saves 9 without enabling email or the Test button, and preserves zero on the wire.",
+    "Thirty-six assertion groups and twelve individually inspected full-page captures. Masks, STARTTLS, tag routing and warning severity remain unchanged. No Test, retry, dismissal, Relay/native operation or external/provider request."
+  ],
+  "screenshots": [
+    {
+      "file": "desktop-light-loaded.png",
+      "sha256": "bec915910540fd8f0936531b5e5a47723baf2eeeac0be774b839a3b5738da4da"
+    },
+    {
+      "file": "desktop-light-saved.png",
+      "sha256": "555902f2581fff7237f187fe9d34908ad5c1c1dc06f11ce3e856012f3c974455"
+    },
+    {
+      "file": "desktop-light-off.png",
+      "sha256": "54a29af969607ac81f63dee0c1120b7a508023bdba154cf790b1d31cb5153811"
+    },
+    {
+      "file": "desktop-dark-loaded.png",
+      "sha256": "f9ca2e82f774dbeee06f8d310da6832bbb612d501bed7e72fd7ac7c1da0d15ef"
+    },
+    {
+      "file": "desktop-dark-saved.png",
+      "sha256": "47575ae1a3fe600054e2dbb5a42f93b7d13049495b7b656ba1c9a8b915110a24"
+    },
+    {
+      "file": "desktop-dark-off.png",
+      "sha256": "2f0186f278b17996175e564b98c42670fbc01f393b4b7d0a7941ccc2324086c2"
+    },
+    {
+      "file": "phone-dark-loaded.png",
+      "sha256": "51bfbe5bda8b7a0a434a8c7de684c76b4995c6ab265fc3ffda66a3836c7482da"
+    },
+    {
+      "file": "phone-dark-saved.png",
+      "sha256": "9f70f6c89242953b9e301b70f094c01b3cf3dae4fc2b5be831f39eb3106eb89d"
+    },
+    {
+      "file": "phone-dark-off.png",
+      "sha256": "689c31341391f6102646d60a43e58089754ba11251d1725378fa2fd25e3ea4ba"
+    },
+    {
+      "file": "narrow-light-loaded.png",
+      "sha256": "43bbf97b82cd562d151f80c04e8cc75d3b74003c5330c3533a923ca0a8a1aea1"
+    },
+    {
+      "file": "narrow-light-saved.png",
+      "sha256": "f48237f0ebe5a6365cae3c9b52c7a86efe71660cb733bc4301818f2c5cd9fa24"
+    },
+    {
+      "file": "narrow-light-off.png",
+      "sha256": "902b2cb9af2dba6429c1a64824a4b9dd9bc9962c271dc4b7bf4314eddf5f3d38"
+    }
+  ],
+  "tools": {
+    "playwright": "1.56.1",
+    "browser_versions": [
+      {
+        "name": "desktop-light",
+        "version": "141.0.7390.37"
+      },
+      {
+        "name": "desktop-dark",
+        "version": "141.0.7390.37"
+      },
+      {
+        "name": "phone-dark",
+        "version": "26.0"
+      },
+      {
+        "name": "narrow-light",
+        "version": "26.0"
+      }
+    ]
+  }
+}

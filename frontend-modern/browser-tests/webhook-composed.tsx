@@ -7,7 +7,10 @@ import '../src/index.css';
 
 function Fixture() {
   const [operations, setOperations] = createSignal(0);
-  const unexpectedOperation = () => setOperations((count) => count + 1);
+  const unexpectedOperation = () => {
+    setOperations((count) => count + 1);
+    return false;
+  };
   return (
     <main class="mx-auto min-h-screen max-w-4xl space-y-4 bg-surface p-4 text-base-content">
       <h1 class="text-lg font-semibold">Webhook setup</h1>

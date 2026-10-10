@@ -9,19 +9,6 @@ import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
-const buildVisibleRect = (): DOMRect =>
-  ({
-    x: 0,
-    y: 120,
-    width: 960,
-    height: 32,
-    top: 120,
-    bottom: 152,
-    left: 0,
-    right: 960,
-    toJSON: () => ({}),
-  }) as DOMRect;
-
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -865,46 +852,73 @@ describe('Storage', () => {
     expect(queryStorageChip('Node')).toBeNull();
   });
 
-  it('pins storage group scope into the route without conflating it with expansion', async () => {
+  it('toggles a storage group from its header row without pinning a group scope', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),
       buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
     ];
     mockLocationSearch = '?group=node';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
 
     render(() => <Storage />);
 
     await waitFor(() => {
       expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
     });
-
-    let groupRow = document.querySelector(
+    const groupRow = document.querySelector(
       'tr[data-summary-group-id="storage:node:pve1"]',
-    ) as HTMLTableRowElement | null;
-    expect(groupRow).not.toBeNull();
-    if (!groupRow) {
-      return;
-    }
-    Object.defineProperty(groupRow, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => buildVisibleRect(),
-    });
+    ) as HTMLTableRowElement;
+
+    fireEvent.pointerEnter(groupRow, { pointerType: 'mouse' });
+    expect(document.querySelector('tr[data-summary-group-member-active]')).toBeNull();
+    expect(groupRow).not.toHaveAttribute('data-summary-row-active');
 
     fireEvent.click(groupRow);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
+      expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
+    expect(screen.getByText('Edge-Store')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('storage-content-surface')).queryByRole('button', {
+        name: 'Clear selection',
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(groupRow);
+
+    await waitFor(() => {
+      expect(screen.getByText('Node-Store')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
+    for (const [path] of navigateSpy.mock.calls) {
+      expect(String(path)).not.toContain('summaryGroup');
+    }
+  });
+
+  it('keeps an open pool open when another group header is clicked', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+    await waitFor(() => {
+      expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
     });
 
-    expect(
-      screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(
+      document.querySelector('tr[data-summary-group-id="storage:node:pve2"]') as HTMLElement,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Edge-Store')).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Collapse Node-Store' })).toBeInTheDocument();
+    expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
   });
 
   it('reopens the collapsed group of a pool focused by an in-app storage link', async () => {
@@ -1009,91 +1023,26 @@ describe('Storage', () => {
     expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
   });
 
-  it('clears pinned storage group scope from the content-card header action', async () => {
+  it('ignores a summaryGroup param left in a storage URL', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),
       buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
     ];
     mockLocationSearch = '?group=node&summaryGroup=storage%3Anode%3Apve1';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
 
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
+      expect(screen.getByText('Node-Store')).toBeInTheDocument();
     });
-
-    const clearButton = within(screen.getByTestId('storage-content-surface')).getByRole('button', {
-      name: 'Clear selection',
-    });
-    fireEvent.click(clearButton);
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
-    });
-  });
-
-  it('uses shared preview and pinned group-member emphasis for storage pool rows', async () => {
-    hookResources = [
-      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
-      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
-    ];
-    mockLocationSearch = '?group=node';
-    navigateSpy.mockImplementation((nextPath: string) => {
-      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
-    });
-
-    render(() => <Storage />);
-
-    await waitFor(() => {
-      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
-    });
-
-    const groupRow = document.querySelector(
-      'tr[data-summary-group-id="storage:node:pve1"]',
-    ) as HTMLTableRowElement | null;
-    expect(groupRow).not.toBeNull();
-    if (!groupRow) {
-      return;
-    }
-
-    fireEvent.pointerEnter(groupRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
-      ).toHaveLength(1);
-    });
-
-    fireEvent.pointerLeave(groupRow, { pointerType: 'mouse' });
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
-      ).toHaveLength(0);
-    });
-
-    fireEvent.click(groupRow);
-
-    await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith(
-        '/proxmox/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
-        ROUTE_STATE_REPLACE_OPTIONS,
-      );
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand pve1' }));
-
-    await waitFor(() => {
-      expect(
-        document.querySelectorAll('tr[data-summary-group-member-active="pinned"]'),
-      ).toHaveLength(1);
-    });
+    expect(screen.getByText('Edge-Store')).toBeInTheDocument();
+    expect(document.querySelector('tr[data-summary-group-member-active]')).toBeNull();
+    expect(document.querySelector('tr[data-summary-row-active="true"]')).toBeNull();
+    expect(
+      within(screen.getByTestId('storage-content-surface')).queryByRole('button', {
+        name: 'Clear selection',
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps a storage pool row closed when a drag selects its text', async () => {

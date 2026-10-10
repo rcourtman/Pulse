@@ -936,32 +936,111 @@ an agent assignment remain available in every edition.
 
 ### ICMP probe privileges
 
-ICMP probes run the system `ping` binary, which needs the `CAP_NET_RAW`
-capability. The systemd unit written by the installer hardens the service
-with `NoNewPrivileges=true`, which strips ping's setuid bit and file
-capabilities, so the unit also grants the capability directly with
-`AmbientCapabilities=CAP_NET_RAW`. Units written by older versions of the
-installer lack that line, and ICMP probes fail with
-`icmp probe failed: ping: socktype: SOCK_RAW ... missing cap_net_raw+p capability`.
+ICMP checks execute the system `ping` binary **on the selected observation
+host**. A local permission error (`Operation not permitted`, `cap_net_raw` or
+`icmp probe blocked`) is not evidence that the target is down, nor proof that
+one particular service setting caused it. First distinguish **This Pulse
+server** from an external agent observation. Changing the server's unit cannot
+repair an agent's permissions on another host.
 
-To fix an existing install, either re-run the install script (it rewrites
-the unit) or add the capability as an override:
+For Linux systemd servers, the current installer grants both
+`AmbientCapabilities=CAP_NET_RAW` and `CapabilityBoundingSet=CAP_NET_RAW`, while
+keeping `NoNewPrivileges=true`. This allows the child `ping` to inherit the
+capability without gaining it through setuid or file capabilities. Older units
+can lack the ambient grant. **Updates preserve an existing service unit**;
+rerunning an installer is not a reliable unit repair, even if an older error
+message recommends it. Do not reinstall over a working data directory.
+
+#### Inspect the actual systemd server first
+
+On the machine running the Pulse server, read only these effective properties.
+For a Pulse LXC, run this **inside the Pulse LXC**, not on the Proxmox host or a
+monitored guest. The example uses `pulse.service`; substitute your actual server
+unit throughout, such as `pulse-backend.service` on some older installs,
+**not pulse-agent.service**:
 
 ```bash
-systemctl edit pulse   # pulse-backend on ProxmoxVE community-script installs
+timeout --signal=TERM --kill-after=1s 8s systemctl show pulse.service \
+  --property=LoadState,ActiveState,User,NoNewPrivileges,AmbientCapabilities,CapabilityBoundingSet
 ```
+
+Interpret the result only after a successful read with `LoadState=loaded`.
+A missing unit, failed or timed-out read is **unknown**, not an empty capability
+set or a stopped server. This command does not print environment values,
+credentials or full unit contents; keep those private.
+
+| Existing observation | What follows |
+| --- | --- |
+| `NoNewPrivileges=yes`, ceiling includes `cap_net_raw`, ambient grant missing | An older non-root server unit may need the narrow override below. |
+| Both capability properties already include `cap_net_raw` | Do not add the grant again. Check the selected observation host, installed ping and its OS/container restrictions through normal administration. |
+| Ceiling excludes `cap_net_raw`, or the deployment deliberately forbids it | An ambient line alone cannot overcome the ceiling. Preserve that restriction; do not replace the capability set with a permissive one. |
+| `User=` is empty/root, or the service is custom | This is not the standard non-root server recipe. Review its existing privilege and data-access requirements using [manual-service guidance](INSTALL.md#2-bare-metal--systemd). Do not change the user or grant broader privileges just to clear the error. |
+
+#### Narrow override for an older non-root server
+
+Use this only for an **active** non-root server whose capability ceiling already
+permits `cap_net_raw`, whose ambient grant is missing, and where granting it is
+consistent with the deployment's intended policy. Keep deliberately inactive
+services inactive. Record the existing drop-in locally before editing; it may
+contain private configuration. Preserve every unrelated setting:
+
+```bash
+sudo systemctl edit pulse.service
+```
+
+Add just this service setting to the drop-in:
 
 ```ini
 [Service]
 AmbientCapabilities=CAP_NET_RAW
 ```
 
-Then `systemctl daemon-reload && systemctl restart pulse`.
+Keep `NoNewPrivileges` enabled; do not run Pulse as root, set file capabilities
+on the system-wide ping binary or remove sandbox settings. Do not reset or widen
+`CapabilityBoundingSet` to make this example apply to a different profile.
 
-Docker installs are unaffected: Docker's default capability set includes
-`NET_RAW`. If you run the container with `--cap-drop=ALL`, add
-`--cap-add=NET_RAW` to keep ICMP probes working. TCP and HTTP/HTTPS probes
-need no special privileges.
+```bash
+sudo systemctl daemon-reload
+```
+
+If editing or reloading fails, stop. Repeat the read-only property check above
+to confirm the intended ambient grant and preserved ceiling/hardening. Reload
+changes systemd's configuration, **not the running process's capabilities**.
+
+Schedule the restart as maintenance, outside backups or other guest operations.
+**Pulse monitoring and alerts are unavailable during the restart**; arrange
+independent outage coverage. Only after the checks pass, for the server that
+was active beforehand:
+
+```bash
+sudo systemctl restart pulse.service && \
+  timeout --signal=TERM --kill-after=1s 8s systemctl is-active pulse.service
+```
+
+`active` proves service startup, not ICMP recovery or notification delivery.
+Check the next normally scheduled observation from the **same location**;
+do not induce a workload failure or another notification to prove recovery.
+A failed/unknown restart needs normal recovery, not repeated restarts. To undo
+this change, edit only the added line, preserve other drop-in content and
+reload; do not use `systemctl revert`, which can remove unrelated overrides.
+Apply any further restart only under the same maintenance and prior-active
+conditions. Preserve the data directory and encryption key throughout.
+
+#### Containers and external agents
+
+Docker's default capability set includes `NET_RAW`, but that does not prove ICMP
+works in every rootless, non-root or restricted container. For an intentionally
+restricted deployment, review only the selected observation host's ping/socket
+permissions and saved deployment. Do not use `--privileged`, `--cap-add=ALL`,
+disable user namespaces or recreate a container as a diagnostic. A deliberate
+capability change must use the deployment's normal maintenance route while
+preserving data and configuration; the systemd override above does not apply.
+
+External agents have their own OS/service requirements; see
+[Agent Security](AGENT_SECURITY.md). Do not grant command execution or widen
+agent privileges merely because the server's ICMP check failed. TCP and
+HTTP/HTTPS checks need no raw-socket capability, but measure different behaviour;
+switching protocol or observation location is not proof that ICMP recovered.
 
 ---
 

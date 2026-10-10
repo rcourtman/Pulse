@@ -67,10 +67,7 @@ export function AlertEmailDestinationsSection(props: AlertEmailDestinationsSecti
           />
         }
       >
-        <div
-          ref={settingsRegion}
-          class={`${!props.config.enabled ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}`}
-        >
+        <div ref={settingsRegion}>
           <EmailProviderSelect
             config={props.config}
             onChange={(config) => {

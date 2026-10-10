@@ -3458,7 +3458,12 @@ a new API state machine, queue contract, or verification-accounting field.
    while `/patrol#operations-loop` remains inbound compatibility only, rather
    than becoming an API payload field, Assistant prompt body, or backend
    completion state machine. The canonical anchor must resolve to the visible
-   Patrol mode selector, not to the assessment workspace; that anchor may
+   Patrol mode selector, not to the assessment workspace: arriving on
+   `#patrol-control`, with or without the starter query, or on the
+   `#operations-loop` compatibility anchor opens the Patrol header's collapsed
+   `Mode and automation` disclosure and scrolls it into view, a plain `/patrol`
+   visit leaves it collapsed, and plan-locked installs, which have no selector,
+   land on the header's inline `Patrol mode` line; that anchor may
    route a new Pro user to Patrol mode from a generic Patrol run state, but issue-backed
    progress through Assistant, governed decision, verification, and MCP parity
    must still derive from real Patrol finding, investigation, approval, action,
@@ -5333,6 +5338,36 @@ compatibility path. A current executor whose agent supports the feasibility
 transport fails closed when the connected agent cannot answer it. Registry or
 readiness-check infrastructure failures remain
 nonterminal internal errors rather than false permanent refusals.
+
+Human `Execute` admits through the same policy admission coordinator as
+`ExecuteUnderPolicy`. It holds the admission read lock from the live-readiness
+gates, including the operator remediation lock (`NeverAutoRemediate`) and the
+Retired lifecycle state, through the committed `executing` transition, and
+releases it before the executor's `ExecuteAction` is called, so a slow
+dispatch never blocks a policy save. Executor readiness and binding calls and
+the admission hooks still run under the lock, so they can delay a save and must
+never request a policy write or re-enter `Execute`/`ExecuteUnderPolicy`. An
+operator lock saved through `WithPolicyMutation` therefore either lands before
+the readiness check and refuses the approved action with a persisted
+refused-before-dispatch failure, or queues behind the committed admission. A
+save that has been acknowledged to the operator is never followed by a new
+lifecycle admission (`Execute` or `ExecuteUnderPolicy`) for that resource.
+The committed `executing` transition is the policy linearization point for both
+paths: a lock refuses new admissions and does not recall an admitted
+dispatch. That includes an attempt that was admitted but never sent (a crash
+between admission and send), which `RecoverExecutingActions` resumes without
+re-reading the lock. Recalling known-unsent work would need an atomic,
+conditional pre-send terminalization that neither store has
+(`RecordActionExecutionRefusal` accepts only planned, pending, and approved
+rows, and `ForceFail` records inconclusive truth), so operator-facing copy must
+say that an action already admitted can still run. Proof:
+`TestExecuteAdmissionLinearizesWithOperatorLockSave*` asserts the coordinator
+excludes a policy writer between the readiness check and the admission commit
+and orders a real concurrent lock save against the admission,
+`TestExecuteAdmittedDispatchIsNotRecalledByLaterOperatorLock` pins release
+before dispatch and no recall, and
+`TestRecoverExecutingActionsDoesNotRecallQueuedAttemptAfterOperatorLock` pins
+the unsent-attempt boundary.
 
 The public Patrol investigation boundary now carries independent
 `max_turns` and `max_evidence_calls` request limits and returns `model_turns`,
@@ -12033,3 +12068,15 @@ pairs with the identity-match exclusions. `400 Resource is not merged` and
 so two linked agents, which share their only source, can be reported.
 `TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
 shape and the link's removal for a VM and the agent linked into it.
+
+A request that names `sources` undoes the links that join a member carrying
+one of those sources to the rest of the merged resource, chosen by member
+(`ReportedManualLinkFolds`) rather than by the sources a link's folded side
+took in along with its own members. Naming the source of a leaf in a chain of
+links no longer also splits the leaf's holder from the resource, and where
+links form a cycle the named member is cut from every link that would rejoin
+it. The request, status codes, response shape and the meaning of an empty
+`sources` (every link) are unchanged, and no new endpoint, field or stored
+decision is added: `exclusions` still counts one link pair each.
+`TestResourceReportMergeSourceFilterDetachesChainMembers` reports a chain
+through the handler and the REST listing.

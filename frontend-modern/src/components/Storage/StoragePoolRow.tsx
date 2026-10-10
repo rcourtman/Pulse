@@ -32,7 +32,6 @@ import {
   type StoragePoolTableColumnId,
   type StoragePoolTableLayoutMode,
 } from '@/features/storageBackups/storagePagePresentation';
-import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
@@ -50,7 +49,6 @@ interface StoragePoolRowProps {
   summarySeriesId: string;
   expanded: boolean;
   summaryHighlighted?: boolean;
-  summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   onToggleExpand: () => void;
   onHoverChange?: (recordId: string | null) => void;
   rowClass: string;
@@ -94,11 +92,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         }}
         {...interactiveRowHandlers}
         data-summary-series-id={props.summarySeriesId}
-        data-summary-group-member-active={
-          props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
-            ? props.summaryGroupMemberState
-            : undefined
-        }
         data-summary-row-active={props.summaryHighlighted && !props.expanded ? 'true' : 'false'}
         {...props.alertDataAttrs}
       >

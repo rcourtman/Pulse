@@ -650,6 +650,7 @@ describe('buildEmailConfigPayload — branch coverage additions (0713)', () => {
         to: ['alerts@example.com'],
         tls: true,
         startTLS: true,
+        rateLimit: 0,
         minimumSeverity: 'all',
       });
     });

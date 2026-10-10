@@ -255,6 +255,45 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def assert_fixture_admission(self, workflow):
+        consumer = job_block(workflow, "e2e")
+        image_admission = consumer.index("- name: Admit the source-bound test images")
+        startup = consumer.index("- name: Start test containers")
+        fixture_admission = consumer.index("- name: Admit the default mock runtime")
+        stable = consumer.index("- name: Run stable-tier E2E suite")
+        probation = consumer.index("- name: Run probation-tier E2E suite")
+        self.assertLess(image_admission, startup)
+        self.assertLess(startup, fixture_admission)
+        self.assertLess(fixture_admission, stable)
+        end = consumer.index("\n      - name:", fixture_admission)
+        admission = consumer[fixture_admission:end]
+        self.assertIn("npx playwright test --config=fixture-readiness.config.ts", admission)
+        self.assertIn('PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"', admission)
+        for ignored in ("continue-on-error", "if:", "||"):
+            self.assertNotIn(ignored, admission)
+        for receipt in ("Upload Playwright report", "Upload JUnit results"):
+            start = consumer.index(f"- name: {receipt}\n")
+            self.assertLess(stable, start)
+            self.assertLess(start, probation)
+            end = consumer.index("\n      - name:", start)
+            self.assertIn("!cancelled() && steps.stable.outcome == 'failure'", consumer[start:end])
+
+    def test_fixture_admission_cannot_skip_source_images_or_lose_completed_receipts(self):
+        self.assert_fixture_admission(WORKFLOW.read_text())
+
+    def test_ignored_fixture_and_late_receipt_mutants_are_rejected(self):
+        source = WORKFLOW.read_text()
+        for old, new in (
+            ("run: npx playwright test --config=fixture-readiness.config.ts",
+             "run: npx playwright test --config=fixture-readiness.config.ts || true"),
+            ("        id: fixture\n", "        id: fixture\n        continue-on-error: true\n"),
+            ('PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"', 'PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "false"'),
+            ("!cancelled() && steps.stable.outcome == 'failure'", "failure()"),
+        ):
+            with self.subTest(mutation=new):
+                with self.assertRaises(AssertionError):
+                    self.assert_fixture_admission(source.replace(old, new))
+
     def assert_workflow(self, workflow):
         producer = job_block(workflow, "test-images")
         self.assertIn("needs: tier-selection", producer)

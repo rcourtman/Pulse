@@ -20,6 +20,11 @@ import {
   runtimeStatePath,
 } from "./runtime-defaults";
 
+import {
+  defaultMockInventoryReady,
+  defaultMockHistoryReady,
+} from "../scripts/default-mock-readiness.mjs";
+
 const helpersDir = path.dirname(fileURLToPath(import.meta.url));
 
 const runtimePrimaryAPIToken = (): string => {
@@ -1140,37 +1145,12 @@ async function storageStateHasLiveSession(
   }
 }
 
-type E2ERuntimeStateResource = {
-  name?: string;
-  sources?: string[];
-  type?: string;
-};
-
-type E2ERuntimeState = {
-  connectedInfrastructure?: Array<{ name?: string }>;
-  resources?: E2ERuntimeStateResource[];
-};
-
-type E2EMetricPoint = {
-  timestamp?: number;
-};
-
-type E2EStorageCharts = {
-  pools?: Record<string, { used?: E2EMetricPoint[] }>;
-  disks?: Record<string, { temperature?: E2EMetricPoint[] }>;
-};
-
 const requiresDefaultMockRuntimeReadiness = (): boolean =>
   ["1", "true", "yes", "on"].includes(
     String(process.env.PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY || "")
       .trim()
       .toLowerCase(),
   );
-
-const resourceHasSource = (
-  resource: E2ERuntimeStateResource,
-  source: string,
-): boolean => resource.sources?.includes(source) === true;
 
 export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
   if (!requiresDefaultMockRuntimeReadiness()) {
@@ -1185,48 +1165,7 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
           return false;
         }
 
-        const state = (await response.json()) as E2ERuntimeState;
-        const resources = Array.isArray(state.resources) ? state.resources : [];
-        const infrastructure = Array.isArray(state.connectedInfrastructure)
-          ? state.connectedInfrastructure
-          : [];
-
-        return (
-          resources.some(
-            (resource) =>
-              resource.name === "nvme-primary" &&
-              resource.type === "storage" &&
-              resourceHasSource(resource, "vmware"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.type === "k8s-cluster" &&
-              resourceHasSource(resource, "kubernetes"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.name === "tank" &&
-              resourceHasSource(resource, "truenas"),
-          ) &&
-          resources.some(
-            (resource) =>
-              (resource.type === "vm" ||
-                resource.type === "system-container") &&
-              resourceHasSource(resource, "proxmox"),
-          ) &&
-          resources.some(
-            (resource) =>
-              resource.name === "esxi-01.lab.local" &&
-              resource.type === "agent" &&
-              resourceHasSource(resource, "vmware"),
-          ) &&
-          resources.some((resource) => resource.type === "docker-host") &&
-          resources.some((resource) => resource.type === "pbs") &&
-          resources.some((resource) => resource.type === "pmg") &&
-          infrastructure.some(
-            (entry) => entry.name === "esxi-01.lab.local",
-          )
-        );
+        return defaultMockInventoryReady(await response.json());
       },
       {
         message:
@@ -1236,17 +1175,6 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
       },
     )
     .toBe(true);
-
-  const hasDeepSeries = (points: E2EMetricPoint[] | undefined): boolean => {
-    const timestamps = (points ?? [])
-      .map((point) => Number(point.timestamp))
-      .filter(Number.isFinite)
-      .sort((left, right) => left - right);
-    if (timestamps.length < 2) {
-      return false;
-    }
-    return timestamps[timestamps.length - 1] - timestamps[0] > 5 * 24 * 60 * 60 * 1000;
-  };
 
   // Inventory becomes available before the monitor has finished building its
   // historical mock timeline. Do not advertise the shared browser fixture as
@@ -1264,15 +1192,7 @@ export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> 
           return false;
         }
 
-        const charts = (await response.json()) as E2EStorageCharts;
-        return (
-          Object.values(charts.pools ?? {}).some((pool) =>
-            hasDeepSeries(pool.used),
-          ) &&
-          Object.values(charts.disks ?? {}).some((disk) =>
-            hasDeepSeries(disk.temperature),
-          )
-        );
+        return defaultMockHistoryReady(await response.json());
       },
       {
         message:

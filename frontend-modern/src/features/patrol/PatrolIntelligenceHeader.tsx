@@ -1,5 +1,5 @@
-import { createMemo, Show } from 'solid-js';
-import { A } from '@solidjs/router';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { A, useLocation } from '@solidjs/router';
 import PlayIcon from 'lucide-solid/icons/play';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import DownloadIcon from 'lucide-solid/icons/download';
@@ -33,6 +33,11 @@ import {
 import { PatrolAutopilotAcknowledgementDialog } from './PatrolAutopilotAcknowledgementDialog';
 
 export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
+
+const PATROL_MODE_ANCHOR_HASHES = new Set([
+  `#${PATROL_CONTROL_ANCHOR}`,
+  `#${PATROL_OPERATIONS_LOOP_ANCHOR}`,
+]);
 
 export function getPatrolAutopilotExpiry(expiresAt?: string | null): Date | null {
   if (!expiresAt?.trim()) return null;
@@ -275,6 +280,18 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     </>
   );
 
+  // Patrol mode entry points link to these anchors, so arriving on one opens the
+  // collapsed disclosure and brings the selector into view. This re-runs only
+  // when the hash or the disclosure element changes, so a manual collapse holds.
+  const location = useLocation();
+  const [modeDisclosure, setModeDisclosure] = createSignal<HTMLDetailsElement>();
+  createEffect(() => {
+    const disclosure = modeDisclosure();
+    if (!disclosure || !PATROL_MODE_ANCHOR_HASHES.has(location.hash)) return;
+    disclosure.open = true;
+    requestAnimationFrame(() => disclosure.scrollIntoView({ block: 'center' }));
+  });
+
   return (
     <div class="space-y-4">
       <PatrolAutopilotAcknowledgementDialog state={state} />
@@ -373,7 +390,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
         <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
         <Show when={shouldShowAutonomyActionColumn()}>
-          <details class="border-t border-border-subtle px-1 py-1 sm:px-2">
+          <details ref={setModeDisclosure} class="border-t border-border-subtle px-1 py-1 sm:px-2">
             <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
               Mode and automation
             </summary>
