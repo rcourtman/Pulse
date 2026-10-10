@@ -59,7 +59,11 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 		if oldID == "" || newID == "" || oldID == newID {
 			continue
 		}
-		if successor, done := recorded[oldID]; done && successor == newID {
+		// The record is keyed by the predecessor, so it re-keys once, to the
+		// successor it first had (as MemoryStore does). A later, different
+		// successor could only be refused by the insert below, after a write
+		// transaction and a pin-cache invalidation on every rebuild.
+		if _, done := recorded[oldID]; done {
 			continue
 		}
 		pending = append(pending, CanonicalIDSuccession{OldCanonicalID: oldID, NewCanonicalID: newID})

@@ -3168,3 +3168,18 @@ that node's row in the same monitor. This only withholds or substitutes values
 the caller could already read; the new `NodeView` and `DockerHostView`
 `SourceStatus` accessors expose no field beyond the delivery state the registry
 already records on the resource.
+
+### Patrol operator-state resolution keeps its org scoping
+
+`patrolResourceOperatorStateProvider` (`internal/api/router.go`) resolves a
+finding's resource reference to a canonical ID before it reads the operator
+state, and now reads the monitor's structure read state
+(`Monitor.GetUnifiedStructureReadState`) for that. The org is resolved by
+`resolveMonitorForOrg` as before, the operator-state store is the org's own, and
+the resolver is identity-only. In mock mode the read state can be several metric
+ticks old; the fixture moves no pod between nodes and re-IDs nothing on a tick
+(pod node names are set when the estate is built, and they feed the platform
+aliases a reference can resolve through), so a reference resolves to the same
+canonical ID for as long as the fixture structure holds. Outside mock mode it
+is the read state the resolver used before. No authentication, authorization, token or
+tenant-isolation path is touched.

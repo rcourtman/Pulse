@@ -6173,6 +6173,151 @@ func TestMockMetricsTargetRebuildsWhenTheLinkListMoves(t *testing.T) {
 	}
 }
 
+// The estate view is keyed on the fixture data version, which advances on
+// every metric tick, and a build costs about half a second of CPU on an idle
+// core (several seconds on a starved process). Callers that read the estate's
+// identity and topology only share the view built for the current fixture
+// structure instead (currentStructureUnifiedStateView); startup runs every one
+// of them before the listener opens, and on a starved process each used to
+// build its own estate.
+func TestMockStructureConsumersDoNotRebuildTheViewAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 4, time.Second)
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 2)
+
+	consumers := []struct {
+		name string
+		run  func()
+	}{
+		{"structure read state", func() { m.GetUnifiedStructureReadState() }},
+		{"mode structure read state", func() { m.currentModeStructureReadState() }},
+		{"structure node listing", func() { m.structureNodes() }},
+		{"docker alert prune", func() { m.pruneStaleDockerAlerts() }},
+		{"host agent evaluation", func() { m.evaluateHostAgents(time.Now()) }},
+		{"chart cache prewarm", func() { m.prewarmMockDashboardChartCaches() }},
+		{"host agent evaluation with an offline linked host", func() {
+			m.state.UpsertHost(models.Host{ID: "offline-agent", Hostname: "offline-agent", LinkedNodeID: "pve1-node", Status: "online", LastSeen: time.Now().Add(-24 * time.Hour)})
+			m.evaluateHostAgents(time.Now())
+		}},
+	}
+	for _, consumer := range consumers {
+		consumer.run()
+		after, ok := publishedMockView(m)
+		if !ok || after.readState != warm.readState {
+			t.Fatalf("%s rebuilt the unified view after a metric tick; it only reads identity and topology, which the view built for the current fixture structure holds", consumer.name)
+		}
+	}
+}
+
+// The host-agent evaluation lists nodes only for a host that names a linked
+// node, and only when it has to.
+func TestSharedSystemAlertCorrelationForHostLazyListsNodesOnDemand(t *testing.T) {
+	listed := 0
+	nodes := func() []models.Node {
+		listed++
+		return []models.Node{{ID: "node-1", Instance: "lab", LinkedAgentID: "host-1"}}
+	}
+
+	if got := sharedSystemAlertCorrelationForHostLazy(models.Host{ID: "host-1"}, nodes); got != nil || listed != 0 {
+		t.Fatalf("an unlinked host listed nodes %d times and correlated %v", listed, got)
+	}
+	if got := sharedSystemAlertCorrelationForHostLazy(models.Host{LinkedNodeID: "node-1"}, nodes); got != nil || listed != 0 {
+		t.Fatalf("a host without an ID listed nodes %d times and correlated %v", listed, got)
+	}
+	got := sharedSystemAlertCorrelationForHostLazy(models.Host{ID: "host-1", LinkedNodeID: "node-1"}, nodes)
+	if listed != 1 {
+		t.Fatalf("a linked host listed nodes %d times, want once", listed)
+	}
+	want := sharedSystemAlertCorrelationForHost(models.Host{ID: "host-1", LinkedNodeID: "node-1"}, nodes())
+	if got == nil || want == nil || got.Key != want.Key {
+		t.Fatalf("a linked host correlated %+v, want %+v", got, want)
+	}
+}
+
+// The data-version view must keep serving the callers that read values: a
+// consumer of statuses, sensors and metrics must see the tick, so the
+// structure view cannot have replaced it.
+func TestMockDataVersionViewStillRebuildsAfterFixtureTicks(t *testing.T) {
+	useMockEstate(t, 3, time.Second)
+	m := newMockEstateMonitor()
+
+	warm := m.currentUnifiedStateView()
+	waitForFixtureTicks(t, 1)
+
+	if m.GetUnifiedReadStateOrSnapshot() == warm.readState {
+		t.Fatal("GetUnifiedReadStateOrSnapshot served the view from before a metric tick")
+	}
+}
+
+// The structure view answers for the estate it was built from. A structural
+// change must reach its callers, not keep serving the old resource set.
+func TestMockStructureReadStateFollowsAStructuralFixtureChange(t *testing.T) {
+	useMockEstate(t, 3, 5*time.Minute)
+	m := newMockEstateMonitor()
+
+	before := m.GetUnifiedStructureReadState()
+	if before == nil || len(before.Nodes()) == 0 {
+		t.Fatal("the mock estate lists no nodes")
+	}
+
+	grown := mock.GetConfig()
+	grown.NodeCount++
+	mock.SetMockConfig(grown)
+
+	after := m.GetUnifiedStructureReadState()
+	if after == before {
+		t.Fatal("the structure view outlived a structural fixture change")
+	}
+	if len(after.Nodes()) <= len(before.Nodes()) {
+		t.Fatalf("the structure view lists %d nodes after the estate grew from %d", len(after.Nodes()), len(before.Nodes()))
+	}
+}
+
+// An operator link folds one resource into another; the structure view must
+// stop listing the folded resource once the resource store applies the link.
+func TestMockStructureReadStateFollowsAnOperatorLink(t *testing.T) {
+	useMockEstate(t, 4, 5*time.Minute)
+	store := unifiedresources.NewMemoryStore()
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(m.alertManager.Stop)
+
+	var vmID, agentID string
+	for _, resource := range m.currentStructureUnifiedStateView().resources {
+		switch {
+		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Agent == nil:
+			vmID = resource.ID
+		case agentID == "" && resource.Type == unifiedresources.ResourceTypeAgent && resource.Agent != nil &&
+			len(resource.Sources) == 1 && resource.Sources[0] == unifiedresources.SourceAgent:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" {
+		t.Fatalf("fixture graph needs an agentless VM and a standalone agent, got vm=%q agent=%q", vmID, agentID)
+	}
+
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: vmID, ResourceB: agentID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	m.updateResourceStore(models.StateSnapshot{}, m.mockModeFence.begin())
+
+	for _, resource := range m.currentStructureUnifiedStateView().resources {
+		if resource.ID == agentID {
+			t.Fatalf("the structure view still lists the agent %q the operator folded into %q", agentID, vmID)
+		}
+	}
+}
+
 // TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
 // room. Mock mode already suspends pull-based PVE/PBS/PMG collection, but a
 // real agent keeps POSTing regardless; ingesting those reports lands a real

@@ -230,6 +230,46 @@ func TestCanonicalIDSuccessionCarriesRemediationLockOntoExistingSuccessorRow(t *
 	}
 }
 
+// A succession is recorded by its predecessor: the predecessor re-keys once, to
+// the successor it first had, and a later declaration naming another successor
+// (a reporter whose key changed again re-declares every rebuild) changes
+// nothing, in either store.
+func TestCanonicalIDSuccessionRekeysAPredecessorOnce(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	for name, newStore := range stores {
+		t.Run(name, func(t *testing.T) {
+			store := newStore(t)
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "once-old", NeverAutoRemediate: true, SetAt: time.Now().UTC(), SetBy: "operator"}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			succeeder := store.(canonicalIDSuccessor)
+			for _, successor := range []string{"once-first", "once-second", "once-first"} {
+				if err := succeeder.ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{{OldCanonicalID: "once-old", NewCanonicalID: successor}}); err != nil {
+					t.Fatalf("ApplyCanonicalIDSuccessions(%s): %v", successor, err)
+				}
+			}
+			if state, found, err := store.GetResourceOperatorState("once-first"); err != nil || !found || !state.BlocksRemediation() {
+				t.Fatalf("the first successor lost the lock: found=%v err=%v state=%+v", found, err, state)
+			}
+			for _, id := range []string{"once-old", "once-second"} {
+				if state, found, err := store.GetResourceOperatorState(id); err != nil || found {
+					t.Fatalf("%s holds a row after the predecessor re-keyed once: found=%v err=%v state=%+v", id, found, err, state)
+				}
+			}
+		})
+	}
+}
+
 // The registry keeps one member of a manual link, and a succession re-keys the
 // link onto the successor. The successor's lock (whether it kept its own row
 // or took the predecessor's whole row) has to reach the member that survives.

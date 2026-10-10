@@ -5227,7 +5227,15 @@ func hostAgentHealthWindow(interval int) time.Duration {
 // evaluateHostAgents updates health for host agents based on last report time.
 func (m *Monitor) evaluateHostAgents(now time.Time) {
 	hosts := m.state.GetHosts()
-	nodes := m.NodesSnapshot()
+	// Only an offline host that names a linked node asks which node it is
+	// linked to, and only for the node's identity, so the nodes are listed when
+	// the first one does, from the structure view: this runs on every monitor
+	// tick, and in mock mode a listing of the data-version view rebuilds the
+	// whole estate after each metric tick.
+	nodes := sync.OnceValue(m.structureNodes)
+	offlineCorrelation := func(host models.Host) *alerts.AlertCorrelation {
+		return sharedSystemAlertCorrelationForHostLazy(host, nodes)
+	}
 	liveHostIDs := make(map[string]struct{}, len(hosts))
 	resourceRefreshNeeded := false
 	for _, host := range hosts {
@@ -5279,7 +5287,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOfflineWithCorrelation(
 					hostCopy,
-					sharedSystemAlertCorrelationForHost(hostCopy, nodes),
+					offlineCorrelation(hostCopy),
 				)
 			}
 		}
@@ -5304,7 +5312,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 		if m.alertManager != nil {
 			m.alertManager.HandleHostOfflineWithCorrelation(
 				host,
-				sharedSystemAlertCorrelationForHost(host, nodes),
+				offlineCorrelation(host),
 			)
 		}
 	}
@@ -5312,6 +5320,15 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 	if resourceRefreshNeeded {
 		m.refreshUnifiedResourceStoreAfterAgentStateChange()
 	}
+}
+
+// sharedSystemAlertCorrelationForHostLazy is sharedSystemAlertCorrelationForHost
+// for a caller that lists the nodes only when the host names a linked node.
+func sharedSystemAlertCorrelationForHostLazy(host models.Host, nodes func() []models.Node) *alerts.AlertCorrelation {
+	if strings.TrimSpace(host.LinkedNodeID) == "" || strings.TrimSpace(host.ID) == "" {
+		return nil
+	}
+	return sharedSystemAlertCorrelationForHost(host, nodes())
 }
 
 func sharedSystemAlertCorrelationForHost(host models.Host, nodes []models.Node) *alerts.AlertCorrelation {
