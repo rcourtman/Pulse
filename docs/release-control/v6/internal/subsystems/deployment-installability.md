@@ -122,6 +122,8 @@ cleanup removes only objects created by this attempt. Compiler and root-command
 failures stay gating under the existing job's deadline; a seven-day closed receipt
 contains source/binary/output hashes, all phases and cleanup, never signer keys,
 persistent contents or raw application/installer logs.
+The private fixture disables telemetry and binds the existing service to loopback;
+it exposes no test server on the hosted VM's external interface.
 
 `TestAutoUpdateNativeSystemdHarnessContracts` checks the exact recipe, admission,
 closed transport, real local signatures and phase refusals, and runs the connected

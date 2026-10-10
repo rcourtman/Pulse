@@ -232,7 +232,7 @@ class NativeLab:
                    'install_pulse_archive "$PULSE_NATIVE_ROOT/archives/pulse-v0.0.1-linux-amd64.tar.gz" v0.0.1; '
                    'install_systemd_service; setup_update_command')
         data = self.root / "data"
-        (data / ".env").write_text("PULSE_TELEMETRY=false\n")
+        (data / ".env").write_text("PULSE_TELEMETRY=false\nBIND_ADDRESS=127.0.0.1\n")
         (data / "system.json").write_text('{"autoUpdateEnabled":false,"updateChannel":"stable"}\n')
         (data / "native-persistence-sentinel").write_text("original persistent data\n")
         self.run("systemctl", "start", self.unit.name)

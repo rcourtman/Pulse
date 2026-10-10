@@ -314,6 +314,8 @@ else: sys.exit(97)
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
                     try:
                         lab.prepare()
+                        self.assertEqual((lab.root / "data/.env").read_text(),
+                                         "PULSE_TELEMETRY=false\nBIND_ADDRESS=127.0.0.1\n")
                         lab.exercise()
                     except RuntimeError as error:
                         self.fail(str(error) + "\nConfined fixture output:\n" + lab._last_output.decode())
