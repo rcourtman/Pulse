@@ -21,60 +21,80 @@ import (
 // Execute the actual reference recipes against synthetic peers only. In
 // particular, action examples must not acquire an automatic retry or emit a
 // private response just because a POST failed or its response was incomplete.
-func pulseAPIRecipes(doc string) (preparation, helper string, calls []string, err error) {
-	// These controls own authentication and action/audit examples. Node setup
-	// has its own private request-file preparation and copied-command controls
-	// in scripts/tests/test_node_api_docs.py; it is not an action recipe.
-	doc, _, _ = strings.Cut(doc, "## 🖥️ Nodes & Config\n")
+type pulseAPIRequestContract struct {
+	name, firstLine, method, uri, input string
+}
+
+// Match each copied request to its own transport contract, not its position in
+// the guide. New examples must gain a fixture rather than disabling every
+// existing check with an unexplained recipe-count mismatch.
+func pulseAPIRequestContracts() []pulseAPIRequestContract {
+	return []pulseAPIRequestContract{
+		{"summary", "pulse_api GET /api/state/summary", "GET", "/api/state/summary", ""},
+		{"connections", "pulse_api GET /api/connections", "GET", "/api/connections", ""},
+		{"capabilities", "pulse_api GET /api/agent/resource-capabilities/vm%3A42", "GET", "/api/agent/resource-capabilities/vm%3A42", ""},
+		{"plan", "pulse_api POST /api/actions/plan <<'JSON'", "POST", "/api/actions/plan", "heredoc"},
+		{"decision", "pulse_api POST /api/actions/act_.../decision <<'JSON'", "POST", "/api/actions/act_.../decision", "heredoc"},
+		{"execute", "pulse_api POST /api/actions/act_.../execute <<'JSON'", "POST", "/api/actions/act_.../execute", "heredoc"},
+		{"audit", "pulse_api GET '/api/audit/actions?resourceId=vm%3A42&limit=10'", "GET", "/api/audit/actions?resourceId=vm%3A42&limit=10", ""},
+		{"events", "pulse_api GET /api/audit/actions/act_.../events", "GET", "/api/audit/actions/act_.../events", ""},
+		{"add-node", `pulse_api POST /api/config/nodes < "$node_request_file"`, "POST", "/api/config/nodes", "file"},
+	}
+}
+
+type pulseAPIRecipe struct {
+	contract pulseAPIRequestContract
+	command  string
+}
+
+func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRecipe, err error) {
+	contracts := make(map[string]pulseAPIRequestContract)
+	for _, contract := range pulseAPIRequestContracts() {
+		contracts[contract.firstLine] = contract
+	}
+	seen := make(map[string]bool)
 	for _, match := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(doc, -1) {
 		block := match[1]
 		switch {
 		case strings.Contains(block, "api-header") && strings.Contains(block, "vi "):
+			if preparation != "" {
+				return "", "", nil, fmt.Errorf("duplicate credential preparation recipe")
+			}
 			preparation = block
 		case strings.HasPrefix(block, "pulse_api() ("):
+			if helper != "" {
+				return "", "", nil, fmt.Errorf("duplicate private-response helper")
+			}
 			helper = block
 		case strings.HasPrefix(block, "pulse_api "):
-			calls = append(calls, block)
+			firstLine, _, _ := strings.Cut(block, "\n")
+			contract, ok := contracts[firstLine]
+			if !ok {
+				return "", "", nil, fmt.Errorf("request example lacks a transport fixture: %s", firstLine)
+			}
+			if seen[firstLine] {
+				return "", "", nil, fmt.Errorf("duplicate request example: %s", contract.name)
+			}
+			seen[firstLine] = true
+			calls = append(calls, pulseAPIRecipe{contract, block})
+		case strings.Contains(block, "pulse_api "):
+			return "", "", nil, fmt.Errorf("request example must start with the private-response helper")
 		case strings.Contains(block, "curl "):
 			return "", "", nil, fmt.Errorf("request bypasses the private-response helper")
 		}
 	}
-	if preparation == "" || helper == "" || len(calls) != 8 {
-		err = fmt.Errorf("missing credential/helper recipe or request examples (got %d)", len(calls))
+	if preparation == "" || helper == "" {
+		return "", "", nil, fmt.Errorf("missing credential preparation or private-response helper")
+	}
+	for _, contract := range pulseAPIRequestContracts() {
+		if !seen[contract.firstLine] {
+			return "", "", nil, fmt.Errorf("missing request example: %s", contract.name)
+		}
 	}
 	return
 }
 
-func TestPulseAPIRecipesKeepNodeSetupSeparateWithoutWeakeningActionControls(t *testing.T) {
-	doc, err := os.ReadFile(repoFile("docs", "API.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	prefix, nodes, found := strings.Cut(string(doc), "## 🖥️ Nodes & Config\n")
-	if !found || !strings.Contains(nodes, `pulse_api POST /api/config/nodes < "$node_request_file"`) {
-		t.Fatal("the separately tested node request specimen is missing")
-	}
-	for _, tc := range []struct {
-		name, extra string
-		wantError   bool
-	}{
-		{"node setup does not shift action calls", "", false},
-		{"extra action request still rejected", "```bash\npulse_api GET /api/actions/unexpected\n```\n", true},
-		{"action request bypass still rejected", "```bash\ncurl http://127.0.0.1:7655/api/actions/unexpected\n```\n", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, _, calls, err := pulseAPIRecipes(prefix + tc.extra + "## 🖥️ Nodes & Config\n" + nodes)
-			if (err != nil) != tc.wantError {
-				t.Fatalf("recipe boundary error = %v, want error %v", err, tc.wantError)
-			}
-			if !tc.wantError && (len(calls) != 8 || !strings.HasPrefix(calls[5], "pulse_api POST /api/actions/act_.../execute")) {
-				t.Fatal("node setup shifted the one-shot action controls")
-			}
-		})
-	}
-}
-
-func pulseAPIReference(t *testing.T) (string, string, []string) {
+func pulseAPIReferenceDocument(t *testing.T) string {
 	t.Helper()
 	doc, err := os.ReadFile(repoFile("docs", "API.md"))
 	if err != nil {
@@ -84,11 +104,63 @@ func pulseAPIReference(t *testing.T) (string, string, []string) {
 	if err != nil || string(doc) != string(mirror) {
 		t.Fatal("shipped API reference differs from the tested recipes")
 	}
-	prep, helper, calls, err := pulseAPIRecipes(string(doc))
+	return string(doc)
+}
+
+func pulseAPIReference(t *testing.T) (string, string, []pulseAPIRecipe) {
+	t.Helper()
+	prep, helper, calls, err := pulseAPIRecipes(pulseAPIReferenceDocument(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return prep, helper, calls
+}
+
+func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing.T) {
+	doc := pulseAPIReferenceDocument(t)
+	prep, helper, calls := pulseAPIReference(t)
+	fence := func(block string) string { return "```bash\n" + block + "```\n" }
+	reordered := fence(prep) + fence(helper)
+	for i := len(calls) - 1; i >= 0; i-- {
+		reordered += fence(calls[i].command)
+	}
+	cases := []struct{ name, doc, wantError string }{
+		{"current", doc, ""},
+		{"reordered", reordered, ""},
+		{"missing preparation", strings.Replace(doc, prep, "", 1), "missing credential preparation"},
+		{"missing helper", strings.Replace(doc, helper, "", 1), "missing credential preparation"},
+		{"duplicate preparation", doc + fence(prep), "duplicate credential preparation"},
+		{"duplicate helper", doc + fence(helper), "duplicate private-response helper"},
+		{"unqualified request", doc + fence("pulse_api GET /api/unqualified\n"), "lacks a transport fixture"},
+		{"hidden request", doc + fence("# Request\npulse_api GET /api/state/summary\n"), "must start with"},
+		{"direct curl", doc + fence("curl --disable http://127.0.0.1:7655/api/state/summary\n"), "bypasses"},
+		{"changed method", strings.Replace(doc, "pulse_api GET /api/state/summary\n", "pulse_api PUT /api/state/summary\n", 1), "lacks a transport fixture"},
+		{"changed node input", strings.Replace(doc, `pulse_api POST /api/config/nodes < "$node_request_file"`, "pulse_api POST /api/config/nodes", 1), "lacks a transport fixture"},
+	}
+	for _, call := range calls {
+		cases = append(cases,
+			struct{ name, doc, wantError string }{"missing " + call.contract.name, strings.Replace(doc, call.command, "", 1), "missing request example"},
+			struct{ name, doc, wantError string }{"duplicate " + call.contract.name, doc + fence(call.command), "duplicate request example"})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, got, err := pulseAPIRecipes(tc.doc)
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("recipe catalogue error = %v, want %q", err, tc.wantError)
+				}
+				return
+			}
+			if err != nil || len(got) != len(pulseAPIRequestContracts()) {
+				t.Fatalf("complete catalogue rejected: %v", err)
+			}
+			for _, call := range got {
+				if !strings.HasPrefix(call.command, call.contract.firstLine+"\n") {
+					t.Fatal("request was bound to another example's transport contract")
+				}
+			}
+		})
+	}
 }
 
 func runPulseAPIRecipe(t *testing.T, script, home, bin string, extraEnv ...string) (string, int) {
@@ -281,10 +353,9 @@ type apiRecipeRequest struct{ method, uri, token, contentType, body string }
 
 func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing.T) {
 	_, helper, calls := pulseAPIReference(t)
-	paths := []string{"/api/state/summary", "/api/connections", "/api/agent/resource-capabilities/vm%3A42", "/api/actions/plan", "/api/actions/act_.../decision", "/api/actions/act_.../execute", "/api/audit/actions?resourceId=vm%3A42&limit=10", "/api/audit/actions/act_.../events"}
-	for index, call := range calls {
+	for _, call := range calls {
 		for _, scenario := range []string{"success", "401", "403", "redirect", "partial", "untrusted HTTPS", "trusted HTTPS"} {
-			t.Run(fmt.Sprintf("request-%d/%s", index, scenario), func(t *testing.T) {
+			t.Run(call.contract.name+"/"+scenario, func(t *testing.T) {
 				home, bin := t.TempDir(), t.TempDir()
 				dir := filepath.Join(home, ".config", "pulse")
 				if err := os.MkdirAll(dir, 0755); err != nil {
@@ -348,11 +419,40 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 				t.Cleanup(server.Close)
 				recipe = strings.Replace(recipe, "http://127.0.0.1:7655", server.URL, 1)
 				extra := []string{"API_ARGV=" + capture, "API_CURL=" + realCurl}
+				contentType, body := "", ""
+				var nodeInput string
+				switch call.contract.input {
+				case "heredoc":
+					contentType = "application/json"
+					_, body, _ = strings.Cut(call.command, "<<'JSON'\n")
+					body = strings.TrimSuffix(body, "JSON\n")
+				case "file":
+					// Fixed, non-credential body bytes test the private-file
+					// transport. The node guide's schema/trust specimen and
+					// preparation are independently covered by test_node_api_docs.py.
+					contentType, body = "application/json", "{\"fixture\":\"node-api-doc-fixture\"}\n"
+					file, err := os.CreateTemp(home, "node-request-*.json")
+					if err != nil {
+						t.Fatal(err)
+					}
+					info, err := file.Stat()
+					if err != nil || info.Mode().Perm() != 0600 {
+						_ = file.Close()
+						t.Fatal("node input must be private before writing")
+					}
+					_, writeErr := io.WriteString(file, body)
+					closeErr := file.Close()
+					if writeErr != nil || closeErr != nil {
+						t.Fatal("could not prepare the synthetic node input")
+					}
+					nodeInput = file.Name()
+					extra = append(extra, "node_request_file="+nodeInput)
+				}
 				if !strings.Contains(scenario, "HTTPS") {
 					// The local recipe must not send credentials to an ambient proxy.
 					extra = append(extra, "http_proxy=http://127.0.0.1:1", "ALL_PROXY=http://127.0.0.1:1")
 				}
-				output, exit := runPulseAPIRecipe(t, recipe+"\n"+call, home, bin, extra...)
+				output, exit := runPulseAPIRecipe(t, recipe+"\n"+call.command, home, bin, extra...)
 				wantExit := map[string]int{"success": 0, "401": 22, "403": 22, "redirect": 1, "partial": 18, "untrusted HTTPS": 60, "trusted HTTPS": 0}[scenario]
 				if exit != wantExit {
 					t.Fatalf("request exit %d, want %d", exit, wantExit)
@@ -361,7 +461,7 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 				if err != nil || !strings.HasPrefix(string(argv), "--disable\x00") {
 					t.Fatal("curl did not ignore configuration first")
 				}
-				for _, sensitive := range []string{token, "private-fixture-name", "private-fixture-event"} {
+				for _, sensitive := range []string{token, "private-fixture-name", "private-fixture-event", "node-api-doc-fixture"} {
 					if strings.Contains(output, sensitive) || strings.Contains(string(argv), sensitive) {
 						t.Fatal("request printed private credentials or response data")
 					}
@@ -382,6 +482,13 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 				if data, err := os.ReadFile(retained); err != nil || string(data) != "previous-result" {
 					t.Fatal("request replaced an earlier response")
 				}
+				if nodeInput != "" {
+					data, readErr := os.ReadFile(nodeInput)
+					info, statErr := os.Stat(nodeInput)
+					if readErr != nil || statErr != nil || string(data) != body || info.Mode().Perm() != 0600 {
+						t.Fatal("request changed its private node input")
+					}
+				}
 				if scenario == "untrusted HTTPS" {
 					if len(requests) != 0 {
 						t.Fatal("untrusted TLS peer received credentials")
@@ -391,14 +498,7 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 						t.Fatal("request was missing, redirected or retried")
 					}
 					got := <-requests
-					method := "GET"
-					contentType, body := "", ""
-					if index >= 3 && index <= 5 {
-						method, contentType = "POST", "application/json"
-						_, body, _ = strings.Cut(call, "<<'JSON'\n")
-						body = strings.TrimSuffix(body, "JSON\n")
-					}
-					if got != (apiRecipeRequest{method, paths[index], token, contentType, body}) {
+					if got != (apiRecipeRequest{call.contract.method, call.contract.uri, token, contentType, body}) {
 						t.Fatal("request method, endpoint, private header or JSON body differs from the example")
 					}
 					if data, err := os.ReadFile(responses[0]); err != nil || string(data) != response {
@@ -410,8 +510,49 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 	}
 }
 
+func TestPulseAPIGuidanceMissingNodeInputStopsBeforeCurl(t *testing.T) {
+	_, helper, calls := pulseAPIReference(t)
+	home, bin := t.TempDir(), t.TempDir()
+	dir := filepath.Join(home, ".config", "pulse")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "api-header"), []byte("X-API-Token: synthetic-header\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	called := filepath.Join(home, "curl-called")
+	if err := os.WriteFile(filepath.Join(bin, "curl"), []byte("#!/bin/sh\nprintf started > \"$API_CALLED\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range calls {
+		if call.contract.name != "add-node" {
+			continue
+		}
+		_, exit := runPulseAPIRecipe(t, helper+"\n"+call.command, home, bin,
+			"node_request_file="+filepath.Join(home, "absent.json"), "API_CALLED="+called)
+		if _, err := os.Stat(called); exit == 0 || !os.IsNotExist(err) {
+			t.Fatal("missing private node input reached curl or succeeded")
+		}
+		responses, err := filepath.Glob(filepath.Join(dir, "api-response.*"))
+		if err != nil || len(responses) != 0 {
+			t.Fatal("missing node input entered the request helper")
+		}
+		return
+	}
+	t.Fatal("node request recipe is missing")
+}
+
 func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
 	_, helper, calls := pulseAPIReference(t)
+	var execute string
+	for _, call := range calls {
+		if call.contract.name == "execute" {
+			execute = call.command
+		}
+	}
+	if execute == "" {
+		t.Fatal("execution request recipe is missing")
+	}
 	home, bin := t.TempDir(), t.TempDir()
 	dir := filepath.Join(home, ".config", "pulse")
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -439,7 +580,7 @@ func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
 	// A deliberate preparation delay exceeds the old whole-shell comparison
 	// once added to the actual twenty-second request. It must not shorten curl's
 	// limit or be mistaken for request time.
-	result, err := observeGuidanceRecipe(t, "sleep 12\n"+helper+"\n"+calls[5], home, bin, guidanceRecipeLimits(20*time.Second))
+	result, err := observeGuidanceRecipe(t, "sleep 12\n"+helper+"\n"+execute, home, bin, guidanceRecipeLimits(20*time.Second))
 	if err != nil {
 		t.Fatalf("timed-out POST observation failed: %v; %s", err, result.summary())
 	}
