@@ -1,12 +1,14 @@
 package installtests
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {
@@ -2346,14 +2348,13 @@ esac
 // must recreate the config dir and the unit, and start_pulse must fail
 // loudly when the unit does not exist at all.
 func TestRootInstallScriptUpdateFlowsRepairHalfRemovedInstall(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_repair.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("read root install.sh: %v", err)
-	}
-
-	wired := regexp.MustCompile(`(?m)^\s*download_pulse\n(?:\s*#[^\n]*\n)*\s*setup_directories\n\s*setup_update_command\n\s*ensure_systemd_service_installed$`)
-	if got := len(wired.FindAll(content, -1)); got != 2 {
-		t.Fatalf("expected both update flows (--version and menu update) to run setup_directories and ensure_systemd_service_installed after download_pulse, found %d", got)
+		t.Fatalf("half-removed installer update/repair controls: %v\n%s", err, out)
 	}
 }
 
