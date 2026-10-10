@@ -3637,6 +3637,43 @@ until then. The store cannot see which links the registry declines to fold
 so those share too, which can lock a host because a linked probe was retired.
 Re-recording an existing link shares again.
 
+A rebuild applies the successions it finds to the store before it publishes
+the generation that lists the successors, and the generation it replaces keeps
+serving in between. The planner, the Patrol broker and the dispatch gates
+(`validateExecutionPolicy`, `isResourceRemediationLocked`) read the row of the ID
+that generation lists, so for the length of the rebuild they ask for an ID whose
+row has just moved. `GetResourceOperatorState` therefore follows the recorded
+successions (`canonical_id_successions`) in both stores when the ID it is asked
+about holds no row (`followRetiredID`, one walker for both): it answers as the
+ID its chain ends on would, with that row's remediation block alone
+(`retiredIDRemediationLock`, which is `CarryRemediationLock` into an empty
+survivor), as `NeverAutoRemediate`, attributed `system:identity-change` and
+dated by the row it came from so two reads agree (a plan's policy revision
+hashes the state). Nothing is written, so `ListResourceOperatorStates` still
+lists only the rows the stores hold. The end of the chain decides, because it is
+the ID the next generation lists: a lock the operator lifted there, by editing
+or clearing its row, is not read back from the stale row a succession leaves on
+an ID before it when its successor already had a row, and an unlocked stale row
+does not hide a lock held at the end. An ID that holds a row of its own answers
+with that row. A chain is as long as the identity changes were and has no cap;
+a chain that returns to an ID it has seen has no end, so a lock held anywhere on
+it counts. Only the block crosses, so while the window is open the retired ID
+reads none of the row's other settings (retirement as a lifecycle state,
+maintenance windows, criticality, notes), as it read none before. The walk is
+one snapshot: the SQLite store reads the ID's own row and every hop in one
+transaction, because a succession that commits between two of the statements
+can move the lock onto an ID the walk has already passed. The window ends when
+the new generation publishes: that generation lists the successor, and a
+lifecycle plan made against the retired ID drifts (`resource ... is no longer
+present`). An operator edit to the retired ID inside the window goes to the
+retired ID's own row, not the successor's: the operator-state API writes the ID
+the registry it consults lists, and a succession applies once per predecessor.
+A lock set there does not reach the successor, which the next generation lists
+and reads, and a lock lifted there leaves the successor's lock in place, which
+is the safe direction; the retired ID's own row still answers reads of that ID.
+A retired ID that a different resource later mints again, with no row of its
+own, reads the successor's lock until the operator writes it a row.
+
 A host or Docker reporter that had no machine ID, DMI UUID or cluster slot is
 keyed by its source-specific ID (unless a link or match folds it into another
 resource) and held no identity pin (a pin needs one of those keys), so when a
@@ -3669,10 +3706,10 @@ era of every keyed reporter that passes those checks, in the batches of its
 ingest passes, and also restores a lock or row an earlier keyless-to-keyed
 change left behind, even where the operator has edited the keyed row since. An ID held under a report ID the reporter no longer sends is
 not recomputable. Like every succession, the move happens while the previous
-generation is still being served, so when the keyed ID had no row an action
-planned against the old ID in that window finds no row there, and a link the
-succession rewrites takes effect in the next generation, because a registry
-loads its links when it is built (the lock is shared across the pair at once).
+generation is still being served, which is why a read of the old ID follows the
+succession (above); a link the succession rewrites takes effect in the next
+generation, because a registry loads its links when it is built (the lock is
+shared across the pair at once).
 
 Canonical ID changes that reach neither a link nor `ApplyCanonicalIDSuccessions`
 carry nothing: a physical disk re-keyed in place to a machine-scoped ID
@@ -3688,6 +3725,7 @@ array disk, a record-fed disk), and `TestProviderDiskRecordsAdvertiseNoActionCap
 in `internal/truenas/provider_test.go` when the TrueNAS provider's records do.
 The disk's other operator settings (retirement, maintenance, notes) are
 orphaned by the same re-key and are not carried. Proof:
+`TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes`,
 `TestReporterGainingAStrongKeyKeepsItsRemediationLock`,
 `TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains`,
 `TestPhysicalDiskResourcesAdvertiseNoActionCapability`,
@@ -3698,6 +3736,10 @@ orphaned by the same re-key and are not carried. Proof:
 `TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains` in
 `internal/unifiedresources/registry_test.go`, and
 `TestCanonicalIDSuccessionCarriesRemediationLockOntoExistingSuccessorRow`,
+`TestRetiredCanonicalIDReadsTheLockItsSuccessorHolds`,
+`TestRetiredCanonicalIDReadFollowsASuccessionChain`,
+`TestRetiredCanonicalIDReadsWhatTheEndOfItsChainHolds`,
+`TestRetiredCanonicalIDReadEndsOnARecordedLoop`,
 `TestCanonicalIDSuccessionRekeysAPredecessorOnce`,
 `TestCanonicalIDSuccessionLockReachesLinkedSurvivor` and
 `TestCanonicalIDSuccessionKeepsLinkedMembersTogether` in

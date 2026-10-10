@@ -2,6 +2,8 @@ package unifiedresources
 
 import (
 	"fmt"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
@@ -54,8 +56,8 @@ func TestSQLiteApplyCanonicalIDSuccessions(t *testing.T) {
 		t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
 	}
 
-	if _, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
-		t.Fatalf("operator state still keyed by superseded ID (found=%v, err=%v)", found, err)
+	if _, found := operatorStateRow(t, store, oldID); found {
+		t.Fatalf("operator state still keyed by superseded ID")
 	}
 	state, found, err := store.GetResourceOperatorState(newID)
 	if err != nil || !found {
@@ -262,8 +264,8 @@ func TestCanonicalIDSuccessionRekeysAPredecessorOnce(t *testing.T) {
 				t.Fatalf("the first successor lost the lock: found=%v err=%v state=%+v", found, err, state)
 			}
 			for _, id := range []string{"once-old", "once-second"} {
-				if state, found, err := store.GetResourceOperatorState(id); err != nil || found {
-					t.Fatalf("%s holds a row after the predecessor re-keyed once: found=%v err=%v state=%+v", id, found, err, state)
+				if state, found := operatorStateRow(t, store, id); found {
+					t.Fatalf("%s holds a row after the predecessor re-keyed once: state=%+v", id, state)
 				}
 			}
 		})
@@ -471,8 +473,8 @@ func TestCanonicalIDSuccessionKeepsLinkedMembersTogether(t *testing.T) {
 					t.Fatalf("%s lost the lock across a chain declared in one batch", id)
 				}
 			}
-			if state, found, err := store.GetResourceOperatorState("fwd-b"); err != nil || found {
-				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
+			if state, found := operatorStateRow(t, store, "fwd-b"); found {
+				t.Fatalf("the re-keyed intermediate ID was given a row: state=%+v", state)
 			}
 		})
 		t.Run(name+"/predecessor linked to its successor keeps its whole row", func(t *testing.T) {
@@ -541,5 +543,410 @@ func TestSQLiteSuccessionAndUpgradeCarryIgnoreMalformedLinkRows(t *testing.T) {
 	var recorded int
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM resource_store_migrations`).Scan(&recorded); err != nil || recorded != 1 {
 		t.Fatalf("the upgrade carry did not complete past the unrelated link row: markers=%d err=%v", recorded, err)
+	}
+}
+
+// retiredIDTestStores builds each store the succession record lives in.
+func retiredIDTestStores() map[string]func(t *testing.T) ResourceStore {
+	return map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+}
+
+// operatorStateRowIDs lists the IDs that hold a stored operator-state row, which
+// GetResourceOperatorState does not: it answers for an ID a succession retired
+// with the lock its successor holds, though the retired ID holds nothing.
+func operatorStateRowIDs(t *testing.T, store ResourceStore) []string {
+	t.Helper()
+	states, err := store.ListResourceOperatorStates()
+	if err != nil {
+		t.Fatalf("ListResourceOperatorStates: %v", err)
+	}
+	ids := make([]string, 0, len(states))
+	for _, state := range states {
+		ids = append(ids, state.CanonicalID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// operatorStateRow returns the row an ID itself holds, for the tests that assert
+// where a succession left a row rather than what a read of an ID answers.
+func operatorStateRow(t *testing.T, store ResourceStore, id string) (ResourceOperatorState, bool) {
+	t.Helper()
+	states, err := store.ListResourceOperatorStates()
+	if err != nil {
+		t.Fatalf("ListResourceOperatorStates: %v", err)
+	}
+	for _, state := range states {
+		if state.CanonicalID == id {
+			return state, true
+		}
+	}
+	return ResourceOperatorState{}, false
+}
+
+// A rebuild applies a succession to the store while the previous registry
+// generation, which still lists the retired ID, keeps serving. The row moved
+// with the succession, so a read of the retired ID has to find the lock where
+// it went: the dispatch gates and the planner read the row of the ID the
+// generation they consult lists, and a retired ID that answers "no row" lets
+// Pulse act on a resource the operator locked.
+func TestRetiredCanonicalIDReadsTheLockItsSuccessorHolds(t *testing.T) {
+	locks := map[string]ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: LifecycleStateRetired},
+	}
+	for storeName, newStore := range retiredIDTestStores() {
+		for lockName, lock := range locks {
+			t.Run(storeName+"/"+lockName, func(t *testing.T) {
+				store := newStore(t)
+				const oldID, newID = "retired-old", "retired-new"
+				setAt := time.Now().UTC().Add(-72 * time.Hour).Truncate(time.Second)
+
+				predecessor := lock
+				predecessor.CanonicalID = oldID
+				predecessor.Criticality = CriticalityHigh
+				predecessor.Note = "the operator's own words"
+				predecessor.SetAt, predecessor.SetBy = setAt, "operator"
+				if err := store.SetResourceOperatorState(predecessor); err != nil {
+					t.Fatalf("seed predecessor: %v", err)
+				}
+				if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{{OldCanonicalID: oldID, NewCanonicalID: newID}}); err != nil {
+					t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+				}
+
+				moved, found, err := store.GetResourceOperatorState(newID)
+				if err != nil || !found || moved.Note != predecessor.Note {
+					t.Fatalf("the predecessor's row did not move to %s: found=%v err=%v state=%+v", newID, found, err, moved)
+				}
+				got, found, err := store.GetResourceOperatorState(oldID)
+				if err != nil {
+					t.Fatalf("read operator state of %s: %v", oldID, err)
+				}
+				if !found || !got.BlocksRemediation() {
+					t.Fatalf("the retired ID %s reads no lock although %s holds it: found=%v state=%+v", oldID, newID, found, got)
+				}
+				// Only the block crosses, as it does for a link fold: retirement
+				// and the rest of the row are monitoring posture the retired ID
+				// never carried over.
+				if got.CanonicalID != oldID || !got.NeverAutoRemediate || got.LifecycleState == LifecycleStateRetired ||
+					got.Criticality != "" || got.Note != "" || got.SetBy != RemediationLockCarriedBy || !got.SetAt.Equal(setAt) {
+					t.Fatalf("the retired ID reads more or less than the carried block: %+v", got)
+				}
+				// The policy revision of a plan hashes this state, so it must not
+				// change between two reads.
+				if again, _, _ := store.GetResourceOperatorState(oldID); !reflect.DeepEqual(again, got) {
+					t.Fatalf("two reads of the retired ID differ: %+v vs %+v", got, again)
+				}
+				if ids := operatorStateRowIDs(t, store); !reflect.DeepEqual(ids, []string{newID}) {
+					t.Fatalf("reading the retired ID wrote a row; rows are %v", ids)
+				}
+
+				// A row the operator writes on the retired ID is theirs to decide
+				// with: it answers, and clearing it hands the read back.
+				if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: oldID, Note: "explicit", SetAt: setAt, SetBy: "operator"}); err != nil {
+					t.Fatalf("operator writes the retired ID: %v", err)
+				}
+				if explicit, found, err := store.GetResourceOperatorState(oldID); err != nil || !found || explicit.BlocksRemediation() || explicit.Note != "explicit" {
+					t.Fatalf("an explicit row on the retired ID did not answer: found=%v err=%v state=%+v", found, err, explicit)
+				}
+				if err := store.ClearResourceOperatorState(oldID); err != nil {
+					t.Fatalf("operator clears the retired ID: %v", err)
+				}
+				if again, found, err := store.GetResourceOperatorState(oldID); err != nil || !found || !again.BlocksRemediation() {
+					t.Fatalf("clearing the explicit row did not hand the read back to the successor: found=%v err=%v state=%+v", found, err, again)
+				}
+
+				// The lock is the operator's to lift on the successor, and the
+				// retired ID must not keep reporting what was lifted, whether the
+				// row was edited or cleared.
+				lifted := moved
+				lifted.NeverAutoRemediate = false
+				lifted.LifecycleState = LifecycleStateActive
+				if err := store.SetResourceOperatorState(lifted); err != nil {
+					t.Fatalf("operator lifts the lock on %s: %v", newID, err)
+				}
+				if after, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
+					t.Fatalf("the retired ID still reports a lock the operator lifted: found=%v err=%v state=%+v", found, err, after)
+				}
+				if err := store.SetResourceOperatorState(moved); err != nil {
+					t.Fatalf("operator locks %s again: %v", newID, err)
+				}
+				if again, found, err := store.GetResourceOperatorState(oldID); err != nil || !found || !again.BlocksRemediation() {
+					t.Fatalf("the retired ID did not follow a lock set on the successor: found=%v err=%v state=%+v", found, err, again)
+				}
+				if err := store.ClearResourceOperatorState(newID); err != nil {
+					t.Fatalf("operator clears %s: %v", newID, err)
+				}
+				if after, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
+					t.Fatalf("the retired ID still reports a lock the operator cleared: found=%v err=%v state=%+v", found, err, after)
+				}
+			})
+		}
+	}
+}
+
+// The era an ID leaves can itself be left again, one succession at a time or in
+// one batch, and the read follows the record to wherever the row ended up. A
+// chain is as long as the identity changes were, so nothing caps it.
+func TestRetiredCanonicalIDReadFollowsASuccessionChain(t *testing.T) {
+	const length = 150
+	chain := make([]string, length)
+	for i := range chain {
+		chain[i] = fmt.Sprintf("era-%03d", i)
+	}
+	hops := make([]CanonicalIDSuccession, 0, length-1)
+	for i := 0; i+1 < length; i++ {
+		hops = append(hops, CanonicalIDSuccession{OldCanonicalID: chain[i], NewCanonicalID: chain[i+1]})
+	}
+	apply := map[string]func(t *testing.T, store ResourceStore){
+		"one hop per succession": func(t *testing.T, store ResourceStore) {
+			for _, hop := range hops {
+				if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{hop}); err != nil {
+					t.Fatalf("ApplyCanonicalIDSuccessions %v: %v", hop, err)
+				}
+			}
+		},
+		"one batch": func(t *testing.T, store ResourceStore) {
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions(hops); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+		},
+	}
+	for storeName, newStore := range retiredIDTestStores() {
+		for applyName, applyChain := range apply {
+			t.Run(storeName+"/"+applyName, func(t *testing.T) {
+				store := newStore(t)
+				if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: chain[0], NeverAutoRemediate: true, SetAt: time.Now().UTC(), SetBy: "operator"}); err != nil {
+					t.Fatalf("lock %s: %v", chain[0], err)
+				}
+				applyChain(t, store)
+
+				end := chain[length-1]
+				if ids := operatorStateRowIDs(t, store); !reflect.DeepEqual(ids, []string{end}) {
+					t.Fatalf("the row did not end up on %s: rows are %v", end, ids)
+				}
+				for _, id := range []string{chain[0], chain[1], chain[length/2], chain[length-2], end} {
+					if state, found, err := store.GetResourceOperatorState(id); err != nil || !found || !state.BlocksRemediation() {
+						t.Fatalf("%s does not read the lock %s holds: found=%v err=%v state=%+v", id, end, found, err, state)
+					}
+				}
+				if state, found, err := store.GetResourceOperatorState("era-unrelated"); err != nil || found {
+					t.Fatalf("an ID no succession names read a row: found=%v err=%v state=%+v", found, err, state)
+				}
+
+				if err := store.ClearResourceOperatorState(end); err != nil {
+					t.Fatalf("operator clears %s: %v", end, err)
+				}
+				for _, id := range []string{chain[0], chain[length/2], end} {
+					if state, found, err := store.GetResourceOperatorState(id); err != nil || found {
+						t.Fatalf("%s still reads a lock the operator cleared on %s: found=%v err=%v state=%+v", id, end, found, err, state)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Successions are recorded by predecessor, so two eras can name each other
+// (a reporter that gains a key, loses it and gains it again). A read of an ID
+// on such a loop ends, and finds the row wherever the loop left it.
+func TestRetiredCanonicalIDReadEndsOnARecordedLoop(t *testing.T) {
+	for storeName, newStore := range retiredIDTestStores() {
+		t.Run(storeName, func(t *testing.T) {
+			store := newStore(t)
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "loop-a", NewCanonicalID: "loop-b"},
+				{OldCanonicalID: "loop-b", NewCanonicalID: "loop-c"},
+				{OldCanonicalID: "loop-c", NewCanonicalID: "loop-a"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			readsEnd := func(id string, wantLock bool) {
+				t.Helper()
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					state, found, err := store.GetResourceOperatorState(id)
+					if err != nil {
+						t.Errorf("read operator state of %s: %v", id, err)
+						return
+					}
+					if got := found && state.BlocksRemediation(); got != wantLock {
+						t.Errorf("%s: lock read = %v, want %v (found=%v state=%+v)", id, got, wantLock, found, state)
+					}
+				}()
+				select {
+				case <-done:
+				case <-time.After(10 * time.Second):
+					t.Fatalf("reading %s did not end on a loop of recorded successions", id)
+				}
+			}
+			for _, id := range []string{"loop-a", "loop-b", "loop-c"} {
+				readsEnd(id, false)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "loop-b", NeverAutoRemediate: true, SetAt: time.Now().UTC()}); err != nil {
+				t.Fatalf("lock loop-b: %v", err)
+			}
+			for _, id := range []string{"loop-a", "loop-b", "loop-c"} {
+				readsEnd(id, true)
+			}
+		})
+	}
+}
+
+// A succession that lands on an ID with a row of its own leaves the
+// predecessor's row where it was, so an ID early on a chain can hold a row that
+// no longer says what the resource is. A retired ID reads what the end of its
+// chain holds, the ID the next generation will list.
+func TestRetiredCanonicalIDReadsWhatTheEndOfItsChainHolds(t *testing.T) {
+	for storeName, newStore := range retiredIDTestStores() {
+		t.Run(storeName+"/an unlocked row left behind does not hide the lock at the end", func(t *testing.T) {
+			store := newStore(t)
+			now := time.Now().UTC()
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "stale-b", Note: "set under the middle ID", SetAt: now, SetBy: "operator"}); err != nil {
+				t.Fatalf("seed the middle ID: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "stale-c", NeverAutoRemediate: true, SetAt: now, SetBy: "operator"}); err != nil {
+				t.Fatalf("lock the last ID: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "stale-a", NewCanonicalID: "stale-b"},
+				{OldCanonicalID: "stale-b", NewCanonicalID: "stale-c"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			if _, left := operatorStateRow(t, store, "stale-b"); !left {
+				t.Fatal("the middle ID's row moved; the fixture no longer leaves one behind")
+			}
+			if state, found, err := store.GetResourceOperatorState("stale-a"); err != nil || !found || !state.BlocksRemediation() {
+				t.Fatalf("a row left on the way hid the lock at the end of the chain: found=%v err=%v state=%+v", found, err, state)
+			}
+		})
+		t.Run(storeName+"/a lock left behind is not read once the end lifted it", func(t *testing.T) {
+			store := newStore(t)
+			now := time.Now().UTC()
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "lift-a", NeverAutoRemediate: true, SetAt: now, SetBy: "operator"}); err != nil {
+				t.Fatalf("lock the first ID: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "lift-c", Note: "set under the last ID", SetAt: now, SetBy: "operator"}); err != nil {
+				t.Fatalf("seed the last ID: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "lift-a", NewCanonicalID: "lift-b"},
+				{OldCanonicalID: "lift-b", NewCanonicalID: "lift-c"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			end, found, err := store.GetResourceOperatorState("lift-c")
+			if err != nil || !found || !end.BlocksRemediation() {
+				t.Fatalf("the last ID did not take the lock: found=%v err=%v state=%+v", found, err, end)
+			}
+			if left, found := operatorStateRow(t, store, "lift-b"); !found || !left.BlocksRemediation() {
+				t.Fatalf("the middle ID's locked row moved; the fixture no longer leaves one behind: found=%v state=%+v", found, left)
+			}
+			if state, found, err := store.GetResourceOperatorState("lift-a"); err != nil || !found || !state.BlocksRemediation() {
+				t.Fatalf("the first ID does not read the lock the last holds: found=%v err=%v state=%+v", found, err, state)
+			}
+
+			lifted := end
+			lifted.NeverAutoRemediate = false
+			if err := store.SetResourceOperatorState(lifted); err != nil {
+				t.Fatalf("operator lifts the lock on lift-c: %v", err)
+			}
+			if state, found, err := store.GetResourceOperatorState("lift-a"); err != nil || found {
+				t.Fatalf("the first ID still reads a lock the operator lifted on the last: found=%v err=%v state=%+v", found, err, state)
+			}
+			if err := store.ClearResourceOperatorState("lift-c"); err != nil {
+				t.Fatalf("operator clears lift-c: %v", err)
+			}
+			if state, found, err := store.GetResourceOperatorState("lift-a"); err != nil || found {
+				t.Fatalf("the first ID still reads a lock the operator cleared on the last: found=%v err=%v state=%+v", found, err, state)
+			}
+		})
+	}
+}
+
+// The lock can move between two IDs on a chain that loops while a read walks
+// it, since every move commits on its own. At every instant one of the two holds
+// the lock (the mover writes the new holder before it clears the old one), so a
+// read of either ID that answers "not locked" has walked the chain across a
+// move instead of reading one state.
+func TestRetiredCanonicalIDReadSeesOneStateWhileTheLockMoves(t *testing.T) {
+	for storeName, newStore := range retiredIDTestStores() {
+		t.Run(storeName, func(t *testing.T) {
+			store := newStore(t)
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "move-a", NewCanonicalID: "move-b"},
+				{OldCanonicalID: "move-b", NewCanonicalID: "move-a"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			lock := func(id string) ResourceOperatorState {
+				return ResourceOperatorState{CanonicalID: id, NeverAutoRemediate: true, SetAt: time.Now().UTC(), SetBy: "operator"}
+			}
+			if err := store.SetResourceOperatorState(lock("move-b")); err != nil {
+				t.Fatalf("lock move-b: %v", err)
+			}
+
+			stop := make(chan struct{})
+			moverDone := make(chan error, 1)
+			go func() {
+				holder, other := "move-b", "move-a"
+				for {
+					select {
+					case <-stop:
+						moverDone <- nil
+						return
+					default:
+					}
+					if err := store.SetResourceOperatorState(lock(other)); err != nil {
+						moverDone <- err
+						return
+					}
+					if err := store.ClearResourceOperatorState(holder); err != nil {
+						moverDone <- err
+						return
+					}
+					holder, other = other, holder
+				}
+			}()
+
+			reads, misses := 0, 0
+			var firstMiss string
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				for _, id := range []string{"move-a", "move-b"} {
+					state, found, err := store.GetResourceOperatorState(id)
+					if err != nil {
+						close(stop)
+						<-moverDone
+						t.Fatalf("read operator state of %s: %v", id, err)
+					}
+					reads++
+					if !found || !state.BlocksRemediation() {
+						if misses++; firstMiss == "" {
+							firstMiss = fmt.Sprintf("%s: found=%v state=%+v", id, found, state)
+						}
+					}
+				}
+			}
+			close(stop)
+			if err := <-moverDone; err != nil {
+				t.Fatalf("moving the lock: %v", err)
+			}
+			if misses > 0 {
+				t.Fatalf("%d of %d reads answered unlocked while the lock was held throughout; first: %s", misses, reads, firstMiss)
+			}
+		})
 	}
 }

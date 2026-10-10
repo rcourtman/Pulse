@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -16,6 +17,93 @@ import (
 // resource, and the members of a link component share the block whenever the
 // component changes (a link, an unlink) and whenever a succession lands on one
 // of them. CarryRemediationLock owns what is written onto a row.
+
+// A rebuild applies a succession to the store before it publishes the registry
+// generation that lists the successor, and the previous generation, which still
+// lists the retired ID, keeps serving in between. The gates read the operator
+// state of the ID they are asked about, and the succession moved that ID's row,
+// so a retired ID that answers "no row" lets Pulse act on a resource the
+// operator locked. A read of an ID that holds no row therefore follows the
+// recorded successions (canonical_id_successions) to the end of its chain and
+// answers as the ID the chain ends on would: with the remediation block that
+// ID's row carries, the block alone as a link fold carries it, attributed to the
+// identity change and dated by the row it came from so two reads agree (a
+// plan's policy revision hashes the state). The end of the chain decides, so a
+// lock the operator lifted on the successor, by editing or clearing its row, is
+// not read back from a stale row left behind on an ID before it; an ID that
+// holds a row of its own answers with it; and a chain that returns to an ID it
+// has seen has no end, so a lock held anywhere on it counts.
+func followRetiredID(
+	retiredID string,
+	successorOf func(id string) (successor string, retired bool, err error),
+	rowOf func(id string) (ResourceOperatorState, bool, error),
+) (ResourceOperatorState, bool, error) {
+	seen := map[string]struct{}{retiredID: {}}
+	var end, nearestLock ResourceOperatorState
+	var endFound, lockFound bool
+	for current := retiredID; ; {
+		successor, retired, err := successorOf(current)
+		if err != nil {
+			return ResourceOperatorState{}, false, err
+		}
+		successor = CanonicalResourceID(successor)
+		if !retired || successor == "" {
+			if endFound {
+				lock, carried := retiredIDRemediationLock(retiredID, end)
+				return lock, carried, nil
+			}
+			return ResourceOperatorState{}, false, nil
+		}
+		if _, again := seen[successor]; again {
+			if lockFound {
+				lock, carried := retiredIDRemediationLock(retiredID, nearestLock)
+				return lock, carried, nil
+			}
+			return ResourceOperatorState{}, false, nil
+		}
+		seen[successor] = struct{}{}
+		row, found, err := rowOf(successor)
+		if err != nil {
+			return ResourceOperatorState{}, false, err
+		}
+		end, endFound = row, found
+		if found && !lockFound && row.BlocksRemediation() {
+			nearestLock, lockFound = row, true
+		}
+		current = successor
+	}
+}
+
+// retiredIDRemediationLock is what a retired ID reads of the row an ID on its
+// chain holds: that row's remediation block, if it has one, and nothing else.
+func retiredIDRemediationLock(retiredID string, holder ResourceOperatorState) (ResourceOperatorState, bool) {
+	return CarryRemediationLock(retiredID, ResourceOperatorState{}, false, holder, true, holder.SetAt)
+}
+
+// retiredIDRemediationLockSQL is the read above for the SQLite store: one
+// statement per hop, on the connection the succession's transaction commits on,
+// so a read that finds the row gone from an ID also finds the succession that
+// moved it.
+func retiredIDRemediationLockSQL(queryer resourceOperatorStateQueryRower, canonicalID string) (ResourceOperatorState, bool, error) {
+	retiredID := CanonicalResourceID(canonicalID)
+	if retiredID == "" {
+		return ResourceOperatorState{}, false, nil
+	}
+	return followRetiredID(retiredID,
+		func(id string) (string, bool, error) {
+			var successor string
+			err := queryer.QueryRow(`SELECT new_canonical_id FROM canonical_id_successions WHERE old_canonical_id = ?`, id).Scan(&successor)
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", false, nil
+			}
+			if err != nil {
+				return "", false, fmt.Errorf("query canonical ID succession of %q: %w", id, err)
+			}
+			return successor, true, nil
+		},
+		func(id string) (ResourceOperatorState, bool, error) { return getResourceOperatorStateSQL(queryer, id) },
+	)
+}
 
 // carriedLock records one remediation block written onto `to` from `from`.
 type carriedLock struct {
