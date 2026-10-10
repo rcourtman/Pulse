@@ -1019,17 +1019,17 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 		reason = "reported_incorrect_merge"
 	}
 
-	// An operator link that brought a reported source in is undone by
-	// excluding the link's own pair, which replaces the link in the store.
-	// Identity merges are kept apart by excluding the candidate ID each
-	// source's record takes when no match is allowed; for a linked source that
-	// candidate names neither side of the link.
+	// An operator link that joins a member carrying a reported source to the
+	// part that stays is undone by excluding the link's own pair, which
+	// replaces the link in the store. A fold's sources span everything its
+	// folded side took in, so the registry picks links by member instead
+	// (ReportedManualLinkFolds). Identity merges are kept apart by excluding
+	// the candidate ID each source's record takes when no match is allowed;
+	// for a linked source that candidate names neither side of the link.
 	type exclusionPair struct{ a, b string }
 	pairs := make([]exclusionPair, 0, len(linkFolds)+len(sourceTargets))
-	for _, fold := range linkFolds {
-		if selected(fold.Sources...) {
-			pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})
-		}
+	for _, fold := range unified.ReportedManualLinkFolds(path, linkFolds, selected) {
+		pairs = append(pairs, exclusionPair{fold.HolderID, fold.FoldedID})
 	}
 	for _, target := range sourceTargets {
 		if !selected(target.Source) || target.CandidateID == "" || target.CandidateID == path {

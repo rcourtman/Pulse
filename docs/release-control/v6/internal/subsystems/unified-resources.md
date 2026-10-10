@@ -7554,14 +7554,37 @@ fold already recorded (the holder still carries what the earlier fold
 brought). The record is unexported and rides in-memory
 clones, so it reaches the resources API's registry, which seeds from the
 monitor's already-linked listing and never holds the folded row.
-Report-merge excludes the pair of every link whose folded side brought a
-reported source category (`ResourceRegistry.ManualLinkFolds`), and the
-store's one-decision-per-pair rule deletes that link row, so the pair splits
-on every surface from the monitor's next rebuild, as with unlink. The drawer
-reports every merged source. Categories are not attributed to individual
-contributors: naming one that some folded side carried undoes that link even
-where the holder carries it too, and a source that arrived along a chain of
-links undoes every link on its way to the merged resource.
+A fold's `Sources` is its folded side's whole subtree, so it cannot say
+which member of a chain a source belongs to. Selecting links by it undid every
+link on the way to a reported source (a Docker host linked into an agent
+linked into a VM: naming Docker split the agent from the VM too), and where
+links form a cycle it left the reported member joined through the link it did
+not name. Each fold therefore also records what its two sides are on their own
+(`HolderOwn`, `FoldedOwn`): the sources the side's row listed before any link
+folded something into it, which a side that already took members in reads from
+the record its first fold made. `recordManualLinkFold` runs before the other
+side is merged for that reason, and a repeated pair unions the own sources as
+it does `Sources`.
+
+Report-merge picks links by member (`ReportedManualLinkFolds`, fed by
+`ResourceRegistry.ManualLinkFolds`). A member whose own sources include a
+reported source is reported, whatever it took in; the resource being reported
+on never is, since it is what stays. A link is undone when it joins a reported
+member to a member that stays, one the resource still reaches without passing
+through a reported member, or to another reported member. A member that hangs
+below a reported one and carries no reported source goes with it, and the link
+holding it there stays: the report names a source that is not theirs to undo.
+Where links form a cycle, a reported member linked both to the resource and to
+a member that stays is cut from both, so the surviving link cannot fold it
+back in. The store's one-decision-per-pair rule deletes each undone link row,
+so the pair splits on every surface from the monitor's next rebuild, as with
+unlink. The drawer reports every merged source, which undoes every link, and
+so does a report naming none. A fold recorded without its sides' own sources
+falls back to its folded subtree, and a member several folds name takes the
+union of what they record, since a refold unions into its own pair's fold
+only. A resource the records no longer name (re-keyed after the links folded)
+is replaced by the one holder no link folded; when no single holder qualifies,
+which the recorder does not produce, the folds' subtrees decide, as before.
 
 A link joins only the pair its row names. Canonical-ID succession re-keys
 link endpoints with `UPDATE OR IGNORE` but moves `primary_id`
@@ -7589,8 +7612,18 @@ monitor's registry and on one seeded from its listing, and
 `TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests` folds a TrueNAS
 system into a VM across repeated record ingests, and
 `TestManualLinkFoldRepeatedPairKeepsEarlierSources` refolds a side with fewer
-sources than it first brought. `TestResourceAPIReportMergeExcludesRegistryLinkFolds`
-keeps the handler on the registry's fold record.
+sources than it first brought. `TestManualLinkFoldOwnSourcesComeFromTheFirstRecord`
+keeps a holder's own sources from growing with what it takes in.
+`TestReportedManualLinkFoldsDetachMembersCarryingTheSource` selects links for a
+leaf, a holder, both and a cycle (a TrueNAS VM taking in a Proxmox storage and
+a vSphere VM that is also linked to the storage), and
+`TestReportedManualLinkFoldsLeaveNoReportedMemberJoined` checks that no
+reported member stays joined to the resource through the links left, which the
+subtree rule fails on that cycle. `TestResourceReportMergeSourceFilterDetachesChainMembers`
+reports a Docker host linked into an agent linked into a VM through the API,
+for the leaf, the holder, both, every source and no filter, on the monitor and
+the REST surface. `TestResourceAPIReportMergeExcludesRegistryLinkFolds` keeps
+the handler on the registry's fold record.
 
 ### Reconciled node-agent relink fold bookkeeping
 

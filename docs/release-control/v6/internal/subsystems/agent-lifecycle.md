@@ -9350,6 +9350,15 @@ registration, enrolment, install, update, removal, report identity and
 continuity are unchanged, and an agent's own declared node link still
 ignores exclusions.
 
+A report-merge that names sources now picks links by the member that carries
+the source instead of by the sources a link's folded side took in with it
+(`internal/api/resourceapi/resources.go`, `ReportedManualLinkFolds`). An agent
+that holds a Docker host and sits in a VM leaves the VM only when the agent's
+own source is named, and a report naming only Docker leaves the agent in the
+VM. A report naming every source or none still splits every link. Agent
+registration, enrolment, install, update, removal, report identity and
+continuity are unchanged.
+
 ### Windows installer acceptance engine and absence (8 October 2026)
 
 Native installer parsing, service-removal failure controls and actual lifecycle

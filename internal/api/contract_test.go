@@ -14971,6 +14971,90 @@ func TestContract_ResourceReportMergeReplacesOperatorLink(t *testing.T) {
 	}
 }
 
+// A source-filtered report-merge undoes the links that join the members
+// carrying the named source, not every link along the way to it: a Docker
+// host linked into an agent linked into a VM leaves the VM and the agent
+// merged when only the Docker source is named.
+func TestContract_ResourceReportMergeSourceFilterKeepsLinksOfUnreportedMembers(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
+		LastUpdate:  now,
+		VMs:         []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts:       []models.Host{{ID: "host-box", Hostname: "box-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "docker-box", Hostname: "dock-box", MachineID: "0011223344556677", Status: "online", LastSeen: now}},
+	}})
+	list := func() []unifiedresources.Resource {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/resources status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode /api/resources: %v", err)
+		}
+		return resp.Data
+	}
+	var vmID, agentID, dockerID string
+	for _, resource := range list() {
+		switch {
+		case resource.Type == unifiedresources.ResourceTypeVM:
+			vmID = resource.ID
+		case resource.Docker != nil:
+			dockerID = resource.ID
+		case resource.Agent != nil:
+			agentID = resource.ID
+		}
+	}
+	if vmID == "" || agentID == "" || dockerID == "" {
+		t.Fatalf("fixture did not list a separate VM, agent and Docker host: %+v", list())
+	}
+	link := func(fromID, targetID string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleLink(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+fromID+"/link", strings.NewReader(`{"targetId":"`+targetID+`"}`)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("link status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	// Links apply in store order: the agent takes in the Docker host, then the
+	// VM takes in the agent.
+	link(agentID, dockerID)
+	link(vmID, agentID)
+	if chained := list(); len(chained) != 1 {
+		t.Fatalf("links listed %d resources, want the chain folded into one: %+v", len(chained), chained)
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleReportMerge(rec, httptest.NewRequest(http.MethodPost, "/api/resources/"+vmID+"/report-merge", strings.NewReader(`{"sources":["docker"]}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("report-merge status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	links, err := store.GetLinks()
+	if err != nil || len(links) != 1 {
+		t.Fatalf("report-merge of the Docker source left links %+v (err %v), want only the VM and agent link", links, err)
+	}
+	if (links[0].ResourceA != vmID || links[0].ResourceB != agentID) && (links[0].ResourceA != agentID || links[0].ResourceB != vmID) {
+		t.Fatalf("report-merge kept link %+v, want the VM and agent link", links[0])
+	}
+	split := list()
+	if len(split) != 2 {
+		t.Fatalf("report-merge listed %d resources, want the VM with its agent and the Docker host apart: %+v", len(split), split)
+	}
+	for _, resource := range split {
+		docker := slices.Contains(resource.Sources, unifiedresources.SourceDocker)
+		if docker != (len(resource.Sources) == 1) {
+			t.Fatalf("report-merge listed %s with sources %v, want the Docker host alone and the VM without Docker", resource.ID, resource.Sources)
+		}
+	}
+}
+
 func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	now := time.Date(2026, 3, 17, 10, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
