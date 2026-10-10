@@ -7388,8 +7388,23 @@ of durable state through it.
   finished list instead dropped the check with the folded row.
 - A link reaches the view when the adapter's next rebuild loads it, the same
   point at which the live broadcast picks it up. The view's cache is keyed on
-  the fixture data version and on the links' resource pairs and primaries, so
-  a link change rebuilds it without waiting for a fixture tick. Freshness is
+  the fixture data version and on each link's resource pair, primary and
+  creation time, so a link change rebuilds it without waiting for a fixture
+  tick. The creation time is part of the key because, among otherwise equal
+  candidates, a chain folds into the primary of its earliest-created link
+  (the "Links apply as chains" bullet of "Operator links reach
+  record-ingested resources"): link lists that differ only in a creation
+  time can leave a different row standing. In the storage, TrueNAS VM and
+  vSphere VM cycle above both VMs outrank the storage, so the TrueNAS VM
+  keeps its row while its link is older than the vSphere VM's and the
+  vSphere VM keeps it once the TrueNAS VM's link is newer. A key that
+  compared pairs and primaries alone kept serving the row the old times
+  chose with the fixture data version unchanged, while the live rebuild,
+  which reloads the links from the store, served the new one. The structure
+  view that serves
+  callers reading identity and topology only keys on the fixture structure
+  revision and the same link comparison, so a creation time change rebuilds
+  it too. Freshness is
   assigned in publication order: a view built from the same fixture
   freshness and links as the one it replaces keeps its freshness, and any
   other view gets a later one than every view published before it, even when
@@ -7416,6 +7431,11 @@ the rebuild and freshness advance on a link change with the fixture data
 version held, the cached build afterwards, the same rows as a store-backed
 registry seeded through resource ingest the way the resources API seeds, and
 no change rows reaching the store through the view.
+`TestMockUnifiedViewFollowsALinkCreationTimeChange` in the same file pins the
+creation time in the cache key: the cycle above, with only the TrueNAS VM's
+link time moved and the fixture data version held, swaps the surviving VM in
+the structure view and in the data-version view, each matching the row a
+linked mock build keeps.
 `TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` and
 `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
 `internal/mock/platform_fixtures_test.go` pin the rebuild's boundary (the
