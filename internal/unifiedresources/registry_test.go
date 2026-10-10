@@ -8875,6 +8875,173 @@ func TestPhysicalDiskResourcesAdvertiseNoActionCapability(t *testing.T) {
 	}
 }
 
+// A physical disk's operator-state row is keyed by the canonical ID the disk
+// holds, and that ID changes: a disk keyed by a serial one machine reports takes
+// the unscoped ID, a second machine reporting the serial re-keys every copy to a
+// machine-scoped ID, and the unscoped ID returns on the rebuild after the other
+// copy goes away. No row moves with it, by decision. The registry cannot tell
+// which copy a row was set for (one disk seen from two machines, or two disks
+// behind one fixed serial), and a retirement or mute carried onto a disk the
+// operator never silenced can hide that disk's failure alerts, where a row left
+// behind makes the disk alert again at the split. The one quiet outcome is when
+// the other machine goes away: the original row applies again over what the
+// operator wrote on the scoped ID since, which the contract accepts.
+//
+// This characterizes the registry and both stores: the alias a PVE disk alert
+// carries resolves to the disk's current ID, and that ID's own row is the one
+// found. It does not run the alert, Patrol or API readers, so a carry added
+// inside one of them would not fail here; the contract paragraph names those
+// readers. Rows are compared whole, so a carry of one field (a note, a window)
+// fails as well as a carry of the row. A change that carries disk rows has to
+// reconsider the trade in the disk paragraph of the unified-resources contract,
+// not discover it here.
+func TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	alertRef := ProxmoxPhysicalDiskAlertResourceID("pve", "pve2", "/dev/sda")
+	windowStart, windowEnd := now.Add(-time.Hour), now.Add(24*time.Hour)
+	sameTime := func(a, b *time.Time) bool {
+		if a == nil || b == nil {
+			return a == b
+		}
+		return a.Equal(*b)
+	}
+	for name, newStore := range stores {
+		t.Run(name, func(t *testing.T) {
+			store := newStore(t)
+			// Each step is a fresh registry over one store, as each rebuild is.
+			ingest := func(at time.Time, nodes ...string) *ResourceRegistry {
+				rr := NewRegistry(store)
+				rr.IngestSnapshot(sharedSerialDiskSnapshot(at, false, nodes...))
+				return rr
+			}
+			row := func(id string) (ResourceOperatorState, bool) {
+				t.Helper()
+				state, found, err := store.GetResourceOperatorState(id)
+				if err != nil {
+					t.Fatalf("read operator state of %s: %v", id, err)
+				}
+				return state, found
+			}
+			// What the alert and Patrol readers see for pve2's disk: the alert
+			// reference resolved to a canonical ID, then that ID's row.
+			seen := func(rr *ResourceRegistry) (string, ResourceOperatorState, bool) {
+				t.Helper()
+				id, ok := rr.ResolveReferenceID(alertRef)
+				if !ok {
+					t.Fatalf("alert reference %s does not resolve", alertRef)
+				}
+				state, found := row(id)
+				return id, state, found
+			}
+			// isRow compares everything the operator sets, so a carry of one
+			// field fails too. want is normalized as the stores normalize.
+			isRow := func(label string, got ResourceOperatorState, found bool, want ResourceOperatorState) {
+				t.Helper()
+				want = NormalizeResourceOperatorState(want)
+				if !found {
+					t.Errorf("%s: no row, want %+v", label, want)
+					return
+				}
+				if got.CanonicalID != want.CanonicalID || got.MonitoringMode != want.MonitoringMode ||
+					got.LifecycleState != want.LifecycleState || got.IntentionallyOffline != want.IntentionallyOffline ||
+					got.NeverAutoRemediate != want.NeverAutoRemediate || got.Criticality != want.Criticality ||
+					got.Note != want.Note || got.MaintenanceScope != want.MaintenanceScope ||
+					got.MaintenanceReason != want.MaintenanceReason || !sameTime(got.MaintenanceStartAt, want.MaintenanceStartAt) ||
+					!sameTime(got.MaintenanceEndAt, want.MaintenanceEndAt) || !got.SetAt.Equal(want.SetAt) {
+					t.Errorf("%s: row is %+v, want %+v", label, got, want)
+				}
+			}
+
+			single := ingest(now, "pve2")
+			unscoped := sharedSerialDisksByNode(t, single)["pve2"].ID
+			retired := ResourceOperatorState{
+				CanonicalID: unscoped, LifecycleState: LifecycleStateRetired, MonitoringMode: MonitoringModeMuted,
+				Criticality: CriticalityHigh, Note: "retired after the RMA",
+				MaintenanceStartAt: &windowStart, MaintenanceEndAt: &windowEnd, MaintenanceReason: "shelf swap",
+				SetAt: now,
+			}
+			if err := store.SetResourceOperatorState(retired); err != nil {
+				t.Fatalf("retire the disk: %v", err)
+			}
+			id, state, found := seen(single)
+			if id != unscoped {
+				t.Fatalf("one machine: the alert reference reads %s, want %s", id, unscoped)
+			}
+			isRow("one machine: the alert reference's row", state, found, retired)
+
+			split := ingest(now.Add(time.Minute), "pve2", "pve3")
+			copies := sharedSerialDisksByNode(t, split)
+			if len(copies) != 2 || copies["pve2"].ID == unscoped || copies["pve3"].ID == unscoped || copies["pve2"].ID == copies["pve3"].ID {
+				t.Fatalf("second machine: copies %s and %s, want two machine-scoped IDs apart from %s", copies["pve2"].ID, copies["pve3"].ID, unscoped)
+			}
+			for node, disk := range copies {
+				if _, found := row(disk.ID); found {
+					t.Errorf("second machine: the %s copy %s holds a row set on the unscoped ID", node, disk.ID)
+				}
+			}
+			if id, _, found := seen(split); id != copies["pve2"].ID || found {
+				t.Errorf("second machine: the alert reference reads %s (row %v), want %s with no row", id, found, copies["pve2"].ID)
+			}
+			state, found = row(unscoped)
+			isRow("second machine: the unscoped ID's row", state, found, retired)
+
+			// The operator writes a row on pve2's copy: a note, which also puts
+			// the copy back to active monitoring.
+			scoped := copies["pve2"].ID
+			restored := ResourceOperatorState{CanonicalID: scoped, Note: "pve2 copy restored", SetAt: now.Add(2 * time.Minute)}
+			if err := store.SetResourceOperatorState(restored); err != nil {
+				t.Fatalf("write the pve2 copy's row: %v", err)
+			}
+			reordered := sharedSerialDisksByNode(t, ingest(now.Add(3*time.Minute), "pve3", "pve2"))
+			if reordered["pve2"].ID != scoped || reordered["pve3"].ID != copies["pve3"].ID {
+				t.Fatalf("ingest order moved the copies: pve2 %s -> %s, pve3 %s -> %s", scoped, reordered["pve2"].ID, copies["pve3"].ID, reordered["pve3"].ID)
+			}
+			if _, found := row(copies["pve3"].ID); found {
+				t.Errorf("the pve3 copy %s holds a row though none was set on it", copies["pve3"].ID)
+			}
+			state, found = row(scoped)
+			isRow("after the ingest order changed: the pve2 copy's row", state, found, restored)
+
+			gone := ingest(now.Add(4*time.Minute), "pve2")
+			if disk := sharedSerialDisksByNode(t, gone)["pve2"]; disk.ID != unscoped {
+				t.Fatalf("other machine gone: the disk holds %s, want the unscoped %s back", disk.ID, unscoped)
+			}
+			id, state, found = seen(gone)
+			if id != unscoped {
+				t.Fatalf("other machine gone: the alert reference reads %s, want %s", id, unscoped)
+			}
+			isRow("other machine gone: the alert reference's row (the original, over the later write)", state, found, retired)
+			state, found = row(scoped)
+			isRow("other machine gone: the row written on the scoped ID", state, found, restored)
+
+			// A row already on a scoped ID applies again whenever that copy is
+			// scoped again: the scoped ID depends only on the serial and machine.
+			again := ingest(now.Add(5*time.Minute), "pve2", "pve3")
+			if got := sharedSerialDisksByNode(t, again); got["pve2"].ID != scoped || got["pve3"].ID != copies["pve3"].ID {
+				t.Fatalf("second split: copies %s and %s, want the earlier %s and %s", got["pve2"].ID, got["pve3"].ID, scoped, copies["pve3"].ID)
+			}
+			id, state, found = seen(again)
+			if id != scoped {
+				t.Fatalf("second split: the alert reference reads %s, want %s", id, scoped)
+			}
+			isRow("second split: the alert reference's row", state, found, restored)
+			state, found = row(unscoped)
+			isRow("second split: the unscoped ID's row", state, found, retired)
+		})
+	}
+}
+
 // A succession batch is applied in the order it is declared, and each group of
 // linked IDs it saved follows only the re-keys applied after it. A batch
 // declared against its direction, and one that returns an ID to its start, both

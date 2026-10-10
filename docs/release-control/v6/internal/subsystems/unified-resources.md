@@ -3684,11 +3684,47 @@ one must first make the lock follow the disk;
 registry's producers does (a Proxmox disk, an agent's SMART disk, an Unraid
 array disk, a record-fed disk), and `TestProviderDiskRecordsAdvertiseNoActionCapability`
 in `internal/truenas/provider_test.go` when the TrueNAS provider's records do.
-The disk's other operator settings (retirement, maintenance, notes) are
-orphaned by the same re-key and are not carried. Proof:
+The disk's other operator settings (retirement, muting, maintenance windows,
+criticality, notes) are not carried either, and that is a decision, not a gap.
+The readers that resolve a disk's reference (alert intent, Patrol's
+operator-state provider, the resources API and the agent resource context) read
+the row of the ID it resolves to, so after the re-key they read none unless a
+row already sits on that scoped ID, and on the rebuild after the other
+machine's copy goes away the disk takes the unscoped ID back and its original
+row applies again, over anything written on the scoped ID since. A row left on
+an ID the disk no longer holds stays stored (the maintenance sentinel still
+enumerates every persisted row) but no reference-resolving reader finds it, and
+it applies again if that copy is scoped again. The registry cannot tell which
+copy a row was set for: one disk seen from two machines (a dual-ported SAS
+shelf) and two disks behind one serial (fixed-serial USB bridges, cloned VMs
+with an explicit serial) look alike. Carrying the row to one copy would pick an
+arbitrary one. Carrying it to every copy, as a split recorded against the
+unscoped ID applies to every copy, is right for the shelf and wrong for the two
+disks, and the outcomes differ in kind: an exclusion that reaches an extra copy
+only costs an extra row, but a retirement or mute that reaches a disk the
+operator never silenced can hide that disk's failure alerts. Leaving the row
+makes the disk alert again at the split, and the operator sets it on the copy.
+It is not safe throughout: when the other machine goes away, the original row
+can silence the disk again over what the operator wrote since. That is accepted
+for the narrow sequence it takes (a split, an operator write on the copy that
+suppresses less than the original, and the other machine leaving), because
+every fix that closes it needs more. A one-time transfer that honours a later
+clear needs durable provenance (a clear deletes the row, so a copy-if-absent
+would bring back what the operator cleared); a read-side fallback to the
+unscoped row needs none but extends one disk's posture to unrelated disks and
+cannot be cleared per copy; keeping a serial scoped once it has split, so the
+unscoped ID does not return, needs a durable marker and its own policy for a
+scope that changes when the machine resolves. No report of a posture lost this
+way is known (#1516 and #1654 concern missing and duplicated disks). Revisit on
+such a report, or when a disk gains an action capability, which already
+requires the lock to follow the disk (above).
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit` characterizes the
+registry and both stores through the PVE disk alert alias; it does not run the
+readers, so a carry added inside one of them is for review to catch. Proof:
 `TestReporterGainingAStrongKeyKeepsItsRemediationLock`,
 `TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains`,
 `TestPhysicalDiskResourcesAdvertiseNoActionCapability`,
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit`,
 `TestResourceRegistry_ManualLinkFoldKeepsRemediationLock`,
 `TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings`,
 `TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks`,
@@ -5743,7 +5779,9 @@ its unscoped ID, apart from observations an operator split off. Residuals: like
 any serial-keyed ID, the unscoped ID still passes to a same-serial disk that
 appears once the previous holder is gone; a disk's ID changes when a
 same-serial disk first appears on another machine and back when it goes away,
-and alert-history rows owned under the unscoped ID do not follow a re-key; a
+and alert-history rows owned under the unscoped ID do not follow a re-key, nor
+do its operator-state rows, which is a decision (see the remediation-lock
+paragraph); a
 disk two reporters share is scoped to its canonical parent when the identity
 first spans machines, which the fixed ingest order (snapshot sources, then
 supplemental records) and source priority decide; and across reporters,
