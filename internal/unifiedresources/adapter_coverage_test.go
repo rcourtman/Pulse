@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/stretchr/testify/require"
 )
 
 func strPointer(v string) *string {
@@ -117,6 +118,73 @@ func TestMonitorSourceType(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Only the operator's decisions are carried. A rebuild that cannot read the
+// store still publishes the snapshot it was given, so resource data is never
+// held back to protect the decisions.
+func TestRebuildThatCannotReadDecisionsStillPublishesFreshResources(t *testing.T) {
+	f, flaky, apart, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	f.state.UpsertHost(models.Host{
+		ID: "host-late", Hostname: "late-arrival", MachineID: "machine-late", Status: "online", LastSeen: time.Now().UTC(),
+	})
+	// The first rebuild after the outage starts leaves the rows apart whether
+	// or not the decisions are carried, since the state still holds the link
+	// back; it is the decider's answer, and so the next report, that differs.
+	for cycle := 1; cycle <= 2; cycle++ {
+		f.cycle()
+		listed := f.adapter.GetAll()
+		late := false
+		for _, resource := range listed {
+			late = late || resource.Name == "late-arrival"
+		}
+		require.True(t, late, "cycle %d: a host reported during the outage was not published", cycle)
+		requirePairApart(t, listed, apart)
+		require.True(t, f.splitReadByDecider(), "cycle %d: the decider lost the split", cycle)
+	}
+}
+
+// requirePairApart checks, by ID, that the node and the agent are still two
+// rows in a listing that may hold other agents.
+func requirePairApart(t *testing.T, listed []Resource, apart nodeAgentRows) {
+	t.Helper()
+	byID := map[string]Resource{}
+	for _, resource := range listed {
+		byID[resource.ID] = resource
+	}
+	node, agent := byID[apart.node], byID[apart.agent]
+	require.NotNil(t, node.Proxmox, "the node row %s is gone", apart.node)
+	require.Nil(t, node.Agent, "the node row took the agent in")
+	require.NotNil(t, agent.Agent, "the agent row %s is gone", apart.agent)
+	require.Nil(t, agent.Proxmox, "the agent row took the node in")
+}
+
+// The overlay a read builds for saved-host continuity is a registry of its
+// own on the same store, so it carries the decisions of the generation it
+// overlays when the store cannot be read. The rows it copies from that
+// generation are already split, so the overlay's own decisions are what is
+// checked: its split decider and the presentation listing it coalesces.
+func TestHostContinuityOverlayKeepsDecisionsItsStoreCannotRead(t *testing.T) {
+	f, flaky, apart, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	saved := models.Host{ID: "host-saved", Hostname: "saved-away", MachineID: "machine-saved", Status: "offline", LastSeen: time.Now().UTC().Add(-time.Hour)}
+	view := ReadStateWithHostContinuity(f.adapter, []IngestRecord{HostIngestRecord(saved)})
+	overlay, ok := view.(*MonitorAdapter)
+	require.True(t, ok)
+	require.NotSame(t, f.adapter, overlay, "the saved host did not build an overlay")
+	require.True(t, overlay.currentRegistry().overridesUnreadable, "the overlay read the store")
+
+	saw := false
+	for _, resource := range overlay.GetAll() {
+		saw = saw || resource.Name == "saved-away"
+	}
+	require.True(t, saw, "the overlay lost the saved host")
+	snapshot := f.state.GetSnapshot()
+	require.True(t, overlay.ProxmoxNodeAgentSplit(snapshot.Nodes[0], snapshot.Hosts[0]), "the overlay's decider lost the split")
+	requirePairApart(t, overlay.currentRegistry().ListForPresentation(), apart)
 }
 
 func TestResourceFromVMProjectsExpectedGuestAgentOutageIncident(t *testing.T) {

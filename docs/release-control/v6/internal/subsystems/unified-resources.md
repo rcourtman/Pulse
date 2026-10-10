@@ -7682,10 +7682,21 @@ agent's usage alerts cover (`hostAgentNodeLinks`) changes when it checks the
 agent's next report, or when the agent goes offline, so the node's CPU,
 memory and disk alerts stay with the agent until then. Mock mode's
 consumers read the fixture graph, whose links ignore operator decisions,
-as the mock-mode view does. A rebuild that cannot read the store's
-decisions loads none, so for that generation the registry and the decider
-both treat the pair as undecided, as they do for every operator decision,
-and the next readable rebuild applies the split again. An exclusion that
+as the mock-mode view does. A rebuild that cannot read the store's links or
+exclusions carries the decisions of the generation it replaces, whole
+(`carryOverridesFrom`), even when only one of the two reads failed, so for
+that generation the registry keeps the pair split and applies the same manual
+links, and the decider finds the same split (it still confirms a split
+against the store's latest decisions when they can be read); the next
+readable rebuild loads the store's current decisions, one recorded or lifted during
+the outage included. Carried decisions keep the IDs they were loaded under,
+so a canonical-ID succession during the outage reaches them when the store
+can be read again. Only the decisions are carried: the rebuild still
+publishes its snapshot, since stale resource data is worse than stale
+decisions. The overlay a read builds for saved-host continuity carries them
+the same way. The resources API's own registry, rebuilt from the store for a
+listing, does not. A first generation built while the store is unreadable
+has nothing to carry and holds only what its reads returned. An exclusion that
 names the node by its source-specific ID stops naming it if the node's
 source ID changes, like every exclusion keyed by a canonical ID. A report
 reads the split before it stores the agent and the state reads it again
