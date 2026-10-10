@@ -3759,12 +3759,54 @@ one must first make the lock follow the disk;
 registry's producers does (a Proxmox disk, an agent's SMART disk, an Unraid
 array disk, a record-fed disk), and `TestProviderDiskRecordsAdvertiseNoActionCapability`
 in `internal/truenas/provider_test.go` when the TrueNAS provider's records do.
-The disk's other operator settings (retirement, maintenance, notes) are
+The disk's other operator settings (retirement, muting, maintenance windows,
+criticality, notes) are not carried either, and that is a decision, not a gap.
+The readers that resolve a disk's reference (alert intent, Patrol's
+operator-state provider, the resources API and the agent resource context) read
+the row of the ID it resolves to, so after the re-key they read none unless a
+row already sits on that scoped ID (a row written on a scoped ID applies again
+whenever a copy with the same serial and machine scope is scoped again). On the
+rebuild after the other machine's copy goes away the disk takes the unscoped ID
+back and its original row applies again, over anything written on the scoped ID
+since. A row left on an ID the disk no longer holds stays stored (the
+maintenance sentinel still enumerates every persisted row, and a read that
+names the ID literally still finds it), but resolving the live disk's reference
+does not select it. The registry cannot tell which copy a row was set for: one
+disk seen from two machines (a dual-ported SAS shelf) and two disks behind one
+serial (fixed-serial USB bridges, cloned VMs with an explicit serial) look
+alike. Carrying the row to one copy, say the one that held the unscoped ID,
+picks a winner without knowing which disk the operator meant. Carrying it to
+every copy, as a split recorded against the unscoped ID applies to every copy,
+is right for the shelf and wrong for the two disks, and the outcomes differ in
+kind: an exclusion that reaches an extra copy only costs an extra row, but a
+retirement or mute that reaches a disk the operator never silenced can hide
+that disk's failure alerts. Leaving the row makes the disk eligible to alert
+again at the split, and the operator sets the posture on the copy. It is not
+safe throughout: when the other machine goes away the original row applies
+again, and if the operator had written a row on the scoped ID that suppresses
+less (a restored monitoring state, a shorter window) the original silences the
+disk again over it. That is accepted because the sequence it takes is narrow (a
+split, such a write, and the other machine leaving) and the fixes considered all
+need more. A copy that keeps the original would bring a cleared row back at the
+next rebuild unless a durable record says it was made (a clear deletes the row),
+and a move needs a policy for the return; a read-side fallback to the unscoped
+row needs no record but extends one disk's posture to unrelated disks and
+cannot be cleared per copy; keeping a serial scoped once it has split, so the
+unscoped ID does not return, needs a durable marker and its own policy for a
+scope that changes when the machine resolves. No report of a posture lost this
+way is known (#1516 and #1654 concern missing and duplicated disks). Revisit on
+such a report, or when a disk gains an action capability, which already
+requires the lock to follow the disk (above).
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit` drives the monitor
+adapter's rebuild on both stores and reads as alert intent does; it does not run
+the API write path, Patrol's provider or the other readers, so a carry added
+there is for review to catch. In short, the disk's other operator settings are
 orphaned by the same re-key and are not carried. Proof:
 `TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes`,
 `TestReporterGainingAStrongKeyKeepsItsRemediationLock`,
 `TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains`,
 `TestPhysicalDiskResourcesAdvertiseNoActionCapability`,
+`TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit`,
 `TestResourceRegistry_ManualLinkFoldKeepsRemediationLock`,
 `TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings`,
 `TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks`,
@@ -5823,7 +5865,9 @@ its unscoped ID, apart from observations an operator split off. Residuals: like
 any serial-keyed ID, the unscoped ID still passes to a same-serial disk that
 appears once the previous holder is gone; a disk's ID changes when a
 same-serial disk first appears on another machine and back when it goes away,
-and alert-history rows owned under the unscoped ID do not follow a re-key; a
+and alert-history rows owned under the unscoped ID do not follow a re-key, nor
+do its operator-state rows, which is a decision (see the remediation-lock
+paragraph); a
 disk two reporters share is scoped to its canonical parent when the identity
 first spans machines, which the fixed ingest order (snapshot sources, then
 supplemental records) and source priority decide; and across reporters,
