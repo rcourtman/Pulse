@@ -114,6 +114,25 @@ profiles, heap dumps, databases or full process command lines in a public
 thread; use locally reviewed counter summaries, without restarting, creating
 load or changing polling or retention just to measure.
 
+For VM or LXC memory disagreements, retain where each existing reading appears
+(overview, History, alert, Patrol or another tool), whether the comparison was
+measured inside the affected guest or on its hypervisor node, and the original
+times, units and selected memory source or sample age if already known. Use
+consistent private aliases; unknown is valid, and existing reports need no
+refile. Compare the same target and episode before inferring a discrepancy.
+Available memory, buff/cache and a process's RSS measure different things:
+RSS alone is not total guest usage, and a cache-inclusive hypervisor footprint
+does not establish guest pressure. A Proxmox VM API connection may still obtain QEMU guest-agent (QGA) readings
+without a Pulse agent.
+
+Keep the displayed number, its qualification and the resulting finding separate.
+An unexplained or retained reading is not measured zero or verified recovery.
+Today's live memory source cannot establish the source of a historical sample;
+do not reattribute History or a past warning from the current view. Reconcile
+the full thread before asking only for a consequential remaining distinction.
+Do not request commands, Diagnostics or guest-agent probes, an agent install,
+memory or workload changes, or another backup just to fill this context.
+
 For notification reports, distinguish an already-observed **Test** result from
 ordinary alert delivery: single, grouped/digest or resolved. A successful Test
 does not establish ordinary delivery or correct identity. Retain the destination
