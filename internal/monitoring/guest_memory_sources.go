@@ -60,7 +60,7 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 		memInfo.Cached == 0
 
 	switch {
-	case memInfo.Available > 0 && (memInfo.Total == 0 || memInfo.Available <= memInfo.Total):
+	case memInfo.HasAvailable() && (memInfo.Total == 0 || memInfo.Available <= memInfo.Total):
 		return memInfo.Available, "available-field"
 	case memInfo.Free > 0 || memInfo.Buffers > 0 || memInfo.Cached > 0:
 		if availableFromUsed > 0 && missingCacheMetrics {

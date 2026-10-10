@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -640,20 +641,30 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 			return nil, reason, false
 		}
 		reason := classifyGuestAgentDiskStatusError(err)
-		logVMFilesystemUnavailable(instanceName, res, reason)
+		logVMFilesystemUnavailable(ctx, instanceName, res, reason)
 		return nil, classifyGuestAgentDiskStatusError(err), false
 	}
 	if len(fsInfo) == 0 {
-		logVMFilesystemUnavailable(instanceName, res, "no-filesystems")
+		logVMFilesystemUnavailable(ctx, instanceName, res, "no-filesystems")
 		return nil, "no-filesystems", false
 	}
 	return fsInfo, "", true
 }
 
+// Keep ordinary process logging when no context logger is installed. Tests and
+// callers with an explicit logger can own their output without global mutation.
+func guestFilesystemLogger(ctx context.Context) *zerolog.Logger {
+	logger := log.Ctx(ctx)
+	if logger.GetLevel() == zerolog.Disabled {
+		return &log.Logger
+	}
+	return logger
+}
+
 // Missing optional readings do not establish a need to activate/restart QGA,
 // change backup policy, or reconfigure a shared Proxmox role. Keep this guidance
 // independent of provider error text and the guest's operating system.
-func logVMFilesystemUnavailable(instanceName string, res proxmox.ClusterResource, reason string) {
+func logVMFilesystemUnavailable(ctx context.Context, instanceName string, res proxmox.ClusterResource, reason string) {
 	message := "Guest filesystem query failed; check disk usage inside the guest. Keep existing guest-agent and backup settings."
 	switch reason {
 	case "agent-not-running":
@@ -665,7 +676,7 @@ func logVMFilesystemUnavailable(instanceName string, res proxmox.ClusterResource
 	case "no-filesystems":
 		message = "Guest agent returned no filesystem readings; check disk usage inside the guest. Keep existing guest-agent and backup settings."
 	}
-	log.Info().
+	guestFilesystemLogger(ctx).Info().
 		Str("instance", instanceName).
 		Str("vm", res.Name).
 		Int("vmid", res.VMID).

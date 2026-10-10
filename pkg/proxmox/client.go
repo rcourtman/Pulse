@@ -2649,6 +2649,47 @@ type VMMemInfo struct {
 	Buffers   uint64 `json:"buffers,omitempty"`
 	Cached    uint64 `json:"cached,omitempty"`
 	Shared    uint64 `json:"shared,omitempty"`
+
+	availablePresent bool // Measured zero must not become missing availability.
+}
+
+// HasAvailable distinguishes a guest's measured zero availability from older
+// status payloads without that field. Nonzero programmatically built samples
+// retain their existing meaning.
+func (m VMMemInfo) HasAvailable() bool {
+	return m.availablePresent || m.Available > 0
+}
+
+func (m *VMMemInfo) UnmarshalJSON(data []byte) error {
+	type plain VMMemInfo
+	var decoded plain
+	wire := struct {
+		*plain
+		Available *uint64 `json:"available"`
+	}{plain: &decoded}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Available != nil {
+		decoded.Available = *wire.Available
+		decoded.availablePresent = true
+	}
+	*m = VMMemInfo(decoded)
+	return nil
+}
+
+// Keep explicit zero through status copies/JSON round trips without inventing
+// an available field for legacy payloads. Internal presence is not a wire field.
+func (m VMMemInfo) MarshalJSON() ([]byte, error) {
+	type plain VMMemInfo
+	var available *uint64
+	if m.HasAvailable() {
+		available = &m.Available
+	}
+	return json.Marshal(struct {
+		plain
+		Available *uint64 `json:"available,omitempty"`
+	}{plain: plain(m), Available: available})
 }
 
 // VMBalloonInfo describes guest memory details returned by status/current when

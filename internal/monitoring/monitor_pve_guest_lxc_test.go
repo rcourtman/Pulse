@@ -20,7 +20,6 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestGuestMemoryCarryForwardExpiryContract(t *testing.T) {
@@ -934,12 +933,11 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			var output bytes.Buffer
-			previousLogger := log.Logger
-			log.Logger = zerolog.New(&output)
-			defer func() { log.Logger = previousLogger }()
+			logger := zerolog.New(&output).With().Str("receipt_scope", "fixture").Logger()
+			ctx := logger.WithContext(context.Background())
 			m := &Monitor{guestAgentFSInfoTimeout: time.Second, guestAgentRetries: 2}
 			res := proxmox.ClusterResource{Node: "node", VMID: 105, Name: "fixture-vm", Type: "qemu", Status: "running", MaxDisk: 1000}
-			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture-instance", res, client, 1000, 0, 0)
+			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(ctx, "fixture-instance", res, client, 1000, 0, 0)
 			if reason != tc.reason || fromAgent || usage != -1 || total != 1000 || used != 0 || free != 1000 || disks != nil {
 				t.Errorf("unavailable reading = %d/%d/%d/%v/%v/%t/%q", total, used, free, usage, disks, fromAgent, reason)
 			}
@@ -980,7 +978,7 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 				}
 				guidance++
 				message, _ := event["message"].(string)
-				if !tc.logged || event["level"] != "info" || event["instance"] != "fixture-instance" || event["vm"] != "fixture-vm" || event["reason"] != tc.reason || !strings.HasPrefix(message, tc.message) {
+				if !tc.logged || event["receipt_scope"] != "fixture" || event["level"] != "info" || event["instance"] != "fixture-instance" || event["vm"] != "fixture-vm" || event["reason"] != tc.reason || !strings.HasPrefix(message, tc.message) {
 					t.Errorf("observed-evidence guidance lost: %v", event)
 				}
 				if !strings.Contains(message, "guest-agent and backup settings") {
