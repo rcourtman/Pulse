@@ -1416,22 +1416,24 @@ func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (
 		}
 		for _, vm := range node.VMs {
 			nodeContext.VMs = append(nodeContext.VMs, assistantInventoryWorkload{
-				AnswerLabel:   assistantInventoryGuestAnswerLabel("VM", vm.VMID, vm.Name),
-				VMID:          vm.VMID,
-				Name:          vm.Name,
-				Status:        vm.Status,
-				CPUPercent:    vm.CPU,
-				MemoryPercent: vm.Memory,
+				AnswerLabel:    assistantInventoryGuestAnswerLabel("VM", vm.VMID, vm.Name),
+				VMID:           vm.VMID,
+				Name:           vm.Name,
+				Status:         vm.Status,
+				CPUPercent:     vm.CPU,
+				MemoryPercent:  vm.Memory,
+				MemoryEvidence: vm.MemoryEvidence,
 			})
 		}
 		for _, container := range node.Containers {
 			nodeContext.Containers = append(nodeContext.Containers, assistantInventoryWorkload{
-				AnswerLabel:   assistantInventoryGuestAnswerLabel("CT", container.VMID, container.Name),
-				VMID:          container.VMID,
-				Name:          container.Name,
-				Status:        container.Status,
-				CPUPercent:    container.CPU,
-				MemoryPercent: container.Memory,
+				AnswerLabel:    assistantInventoryGuestAnswerLabel("CT", container.VMID, container.Name),
+				VMID:           container.VMID,
+				Name:           container.Name,
+				Status:         container.Status,
+				CPUPercent:     container.CPU,
+				MemoryPercent:  container.Memory,
+				MemoryEvidence: container.MemoryEvidence,
 			})
 		}
 		context.Proxmox.Nodes = append(context.Proxmox.Nodes, nodeContext)
@@ -1545,12 +1547,13 @@ type assistantInventoryProxmoxNode struct {
 }
 
 type assistantInventoryWorkload struct {
-	AnswerLabel   string  `json:"answer_label"`
-	VMID          int     `json:"vmid"`
-	Name          string  `json:"name"`
-	Status        string  `json:"status"`
-	CPUPercent    float64 `json:"cpu_percent,omitempty"`
-	MemoryPercent float64 `json:"memory_percent,omitempty"`
+	AnswerLabel    string                                `json:"answer_label"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPUPercent     float64                               `json:"cpu_percent,omitempty"`
+	MemoryPercent  *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 type assistantInventoryDockerHost struct {

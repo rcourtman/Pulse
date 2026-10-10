@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -573,5 +574,49 @@ func TestGuestMemoryMetricObservationFollowsSelectedSource(t *testing.T) {
 	merged := mergeMetrics(&platform, agent, platform.Metrics, SourceProxmox, time.Now(), nil, nil)
 	if merged.Memory == nil || merged.Memory.Observation.State != "current" || merged.Memory.Observation.Source != "agent" || !merged.Memory.Observation.ObservedAt.Equal(at) || *merged.Memory.Used != 40 {
 		t.Fatalf("cross-source selection lost agent receipt or trusts supplied provenance: %+v", merged.Memory)
+	}
+}
+
+func TestGuestMemoryEvidenceQualification(t *testing.T) {
+	now := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Minute)
+	for _, source := range []string{"available-field", "derived-free-buffers-cached", "guest-agent-meminfo", "guest-agent-meminfo-derived", "agent"} {
+		for _, percent := range []float64{0, 24, 96, 100} {
+			e := QualifyGuestMemory(percent, models.MemoryObservation{State: "current", Source: source, ObservedAt: at}, true, true, now)
+			if !e.Available || !e.PressureKnown || e.Source != source || e.ObservedAt != at || e.MayIncludeCache {
+				t.Errorf("current measured control rejected: %s/%g: %+v", source, percent, e)
+			}
+		}
+	}
+	for _, source := range []string{"status-mem", "status-freemem", "cluster-resources", "derived-total-minus-used", "previous-snapshot", "unrecognised-source"} {
+		e := QualifyGuestMemory(96, models.MemoryObservation{State: "current", Source: source, ObservedAt: at}, true, true, now)
+		if !e.Available || e.PressureKnown || !strings.Contains(e.Format(96), "guest pressure unknown") {
+			t.Errorf("unqualified source became pressure: %s: %+v", source, e)
+		}
+		if source == "unrecognised-source" && e.Source != "" {
+			t.Fatal("unknown source text leaked into context")
+		}
+	}
+	for _, percent := range []float64{-1, 101, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		e := QualifyGuestMemory(percent, models.MemoryObservation{State: "current", Source: "agent", ObservedAt: at}, true, true, now)
+		if e.Available || e.PressureKnown || e.State != "unavailable" {
+			t.Errorf("invalid percentage became evidence: %+v", e)
+		}
+	}
+	for _, badTime := range []time.Time{{}, time.Unix(0, 0), now.Add(time.Second)} {
+		e := QualifyGuestMemory(24, models.MemoryObservation{State: "current", Source: "agent", ObservedAt: badTime}, true, true, now)
+		if e.PressureKnown || !e.ObservedAt.IsZero() || e.State != "unknown" {
+			t.Errorf("invalid origin became current: %+v", e)
+		}
+	}
+	for _, state := range []string{"last-known", "", "future-state", "unavailable"} {
+		e := QualifyGuestMemory(24, models.MemoryObservation{State: state, Source: "agent", ObservedAt: at}, true, true, now)
+		if e.PressureKnown {
+			t.Errorf("unqualified state became current: %s: %+v", state, e)
+		}
+	}
+	legacy := QualifyGuestMemory(24, models.MemoryObservation{}, true, false, now)
+	if !legacy.Available || !legacy.PressureKnown || legacy.Format(24) != "24%" {
+		t.Fatal("other platform contract changed")
 	}
 }

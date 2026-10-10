@@ -98,7 +98,8 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 			Percent float64 `json:"percent"`
 		} `json:"cpu"`
 		Memory struct {
-			Percent float64 `json:"percent"`
+			Percent  float64                               `json:"percent"`
+			Evidence *unifiedresources.GuestMemoryEvidence `json:"evidence"`
 		} `json:"memory"`
 		// Error field for not-found responses
 		Error string `json:"error"`
@@ -156,7 +157,9 @@ func extractQueryGetFacts(input map[string]interface{}, resultText string) []Fac
 	if resource.CPU.Percent > 0 {
 		parts = append(parts, fmt.Sprintf("CPU=%.1f%%", resource.CPU.Percent))
 	}
-	if resource.Memory.Percent > 0 {
+	if resource.Memory.Evidence != nil {
+		parts = append(parts, "Mem="+resource.Memory.Evidence.Format(resource.Memory.Percent))
+	} else if resource.Memory.Percent > 0 {
 		parts = append(parts, fmt.Sprintf("Mem=%.1f%%", resource.Memory.Percent))
 	}
 

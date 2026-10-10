@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Shared interpretation of selected guest memory
+
+`GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
+qualify only the selected numeric metric through `QualifyGuestMemory`. Presence
+and finite 0–100 values distinguish a measured zero from absence. Only current,
+dated cache-aware Proxmox/QGA/agent origins establish pressure; fallback/cache-
+inclusive, unknown and retained origins keep their limitations. Consumers cannot
+borrow raw-facet provenance or resource LastSeen. Collection owns current/last-
+known state and its lease; local observers additionally enforce their configured
+age on the original memory observation, without creating a new collection TTL.
+
+Source names are allowlisted before entering AI context; unknown names remain
+unknown. Other-platform readings without this Proxmox observation contract keep
+existing semantics. `TestGuestMemoryEvidenceQualification` covers these boundaries
+and `TestGuestMemoryEvidenceUsesSelectedMetricOnly` covers selected/raw disagreement,
+absence and refreshed rows in both views. This shared interpretation changes
+no registry wire format, metric selection, guest collection, History, correlation,
+identity or permission. AI query projections own their additional evidence fields.
+
 ### Selected guest memory observation in typed read state
 
 VM and system-container views expose a value-copy of the selected memory

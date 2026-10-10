@@ -390,6 +390,11 @@ func (v VMView) MemoryObservation() (models.MemoryObservation, bool) {
 	return selectedMemoryObservation(v.r)
 }
 
+// MemoryEvidence qualifies the selected metric without borrowing a raw facet or row timestamp.
+func (v VMView) MemoryEvidence(now time.Time) GuestMemoryEvidence {
+	return GuestMemoryEvidenceForResource(v.r, now)
+}
+
 func selectedMemoryObservation(r *Resource) (models.MemoryObservation, bool) {
 	if r == nil || r.Metrics == nil || r.Metrics.Memory == nil {
 		return models.MemoryObservation{}, false
@@ -725,6 +730,11 @@ func (v ContainerView) MemoryPercent() float64 {
 
 func (v ContainerView) MemoryObservation() (models.MemoryObservation, bool) {
 	return selectedMemoryObservation(v.r)
+}
+
+// MemoryEvidence qualifies the selected metric without borrowing a raw facet or row timestamp.
+func (v ContainerView) MemoryEvidence(now time.Time) GuestMemoryEvidence {
+	return GuestMemoryEvidenceForResource(v.r, now)
 }
 
 func (v ContainerView) DiskUsed() int64 {

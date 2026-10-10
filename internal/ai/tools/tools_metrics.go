@@ -28,6 +28,10 @@ Types:
 - baselines: Learned normal behavior baselines for resources
 - patterns: Detected operational patterns and predictions
 
+Performance responses expose numeric guest-memory samples without per-sample memory-source
+provenance. Do not infer a guest leak, pressure or current recovery from a high
+historical percentage alone, or lend past samples today's selected source.
+
 Examples:
 - Get 24h metrics: type="performance", period="24h"
 - Get VM metrics: type="performance", resource_id="101"
@@ -162,6 +166,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 
 	response := EmptyMetricsResponse()
 	response.Period = period
+	if resourceType == "vm" || resourceType == "system-container" {
+		response.MemoryInterpretation = guestMemoryHistoryInterpretation
+	}
 
 	if resourceID != "" {
 		response.ResourceID = resourceID
@@ -173,6 +180,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 				return NewErrorResult(err), nil
 			}
 			response.ResourceID = resource.ID
+			if resource.Type == unifiedresources.ResourceTypeVM || resource.Type == unifiedresources.ResourceTypeSystemContainer {
+				response.MemoryInterpretation = guestMemoryHistoryInterpretation
+			}
 			target := e.resourceMetricsTarget(resource)
 			if target == nil || strings.TrimSpace(target.ResourceID) == "" {
 				return NewTextResult(fmt.Sprintf("No metrics target is available for resource %s.", resource.ID)), nil
@@ -232,6 +242,9 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 		}
 		metric := summary[id]
 		metric.ResourceType = canonicalMetricsResourceType(metric.ResourceType)
+		if metric.ResourceType == "vm" || metric.ResourceType == "system-container" {
+			response.MemoryInterpretation = guestMemoryHistoryInterpretation
+		}
 		filtered[id] = metric
 		total++
 	}
@@ -251,6 +264,8 @@ func (e *PulseToolExecutor) executeGetMetrics(_ context.Context, args map[string
 
 	return NewJSONResult(response.NormalizeCollections()), nil
 }
+
+const guestMemoryHistoryInterpretation = "This guest memory history response has no per-sample source or pressure qualification. Percentages may include reclaimable cache and do not independently prove guest pressure, a leak or current recovery. Live observations cannot reattribute past samples."
 
 func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceID, _ := args["resource_id"].(string)
