@@ -78,6 +78,10 @@ and installer tooling.
   private. Do not attach configuration or `.env` files, private keys, **Copy as
   cURL** commands or full network exports. Never put credentials in a command
   line, URL or thread.
+- If private information has already been posted, follow the
+  [containment steps](docs/TROUBLESHOOTING.md#if-you-already-posted-private-information).
+  Removing a post is not credential revocation or proof that every copy is gone;
+  do not repost the original evidence to ask for help.
 - For CPU, memory or disk-write reports, use existing readings or safe passive
   observations. Where known, say whether they measure the Pulse process, its
   container or the whole host, with units, measurement window and uptime.
