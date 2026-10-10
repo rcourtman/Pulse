@@ -4974,6 +4974,20 @@ those exports read, have been removed.
 frontend boundary: raw compatibility fields such as `provider` may still
 arrive from older `/api/recovery/points` payloads, but the points it returns
 are canonical `platform` models.
+The hook also holds only what the TrueNAS Protection tab reads. Its query
+carries `platform`, `page`, and `limit`, it needs a query accessor, and it
+returns the points, the loading and error state, and a refetch. The points
+endpoint accepts more filters, but no surface sends them: the hook's other
+query options (rollup, kind, mode, outcome, item type, linked resource, text,
+cluster, node, namespace, workload scope, verification, and the time window),
+its `meta` and `resolvedOnce` results, and the call without a query accessor
+that fetched the unfiltered first page had no reader once the aggregate Recovery
+page was deleted, and are gone. A surface that needs one of those filters adds
+it to the query type together with its caller, and sends a linked-resource
+filter as `itemResourceId`, never `subjectResourceId`.
+`frontend-modern/src/api/__tests__/recoveryTransport.test.ts` pins the query
+keys and the result members at the type level and the three parameters that
+reach the wire at runtime.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and

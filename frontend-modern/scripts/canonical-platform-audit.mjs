@@ -28,12 +28,9 @@ const ALLOWLIST = new Set([
   'src/components/shared/workloadTypeBadges.ts',
   'src/utils/emptyStatePresentation.ts',
   'src/components/Storage/storagePageState.ts',
-  'src/components/Storage/storageSourceOptions.ts',
   'src/components/Storage/useStorageExpansionState.ts',
   'src/components/Storage/useStorageResourceHighlight.ts',
   'src/features/alerts/useAlertGroupExpansion.ts',
-  'src/components/Infrastructure/resourceBadges.ts',
-  'src/components/Settings/reportingResourceTypes.ts',
   'src/utils/canonicalResourceTypes.ts',
   'src/utils/reportableResourceTypes.ts',
   'src/utils/reportingResourceTypes.ts',
@@ -60,7 +57,6 @@ const ALLOWLIST = new Set([
   'src/features/storageBackups/rowPresentation.ts',
   'src/features/storageBackups/groupPresentation.ts',
   'src/features/storageBackups/storageRowAlertPresentation.ts',
-  'src/utils/clusterEndpointPresentation.ts',
   'src/utils/agentCapabilityPresentation.ts',
   'src/utils/unifiedAgentInventoryPresentation.ts',
   'src/utils/unifiedAgentStatusPresentation.ts',
@@ -73,17 +69,9 @@ const ALLOWLIST = new Set([
   'src/utils/securityScorePresentation.ts',
   'src/utils/securityAuthPresentation.ts',
   'src/utils/serviceHealthPresentation.ts',
-  'src/utils/aiExplorePresentation.ts',
   'src/utils/aiFindingPresentation.ts',
   'src/utils/discoveryPresentation.ts',
-  'src/utils/aiSessionDiffPresentation.ts',
-  'src/utils/aiQuickstartPresentation.ts',
-  'src/utils/pmgPresentation.ts',
-  'src/utils/pmgThreatPresentation.ts',
-  'src/utils/pmgQueuePresentation.ts',
-  'src/components/PMG/ServiceHealthBadge.tsx',
   'src/utils/relayPresentation.ts',
-  'src/utils/deployStatusPresentation.ts',
   'src/utils/alertIncidentPresentation.ts',
   'src/utils/alertAdministrationPresentation.ts',
   'src/utils/alertHistoryPresentation.ts',
@@ -99,7 +87,6 @@ const ALLOWLIST = new Set([
   'src/utils/alertTabsPresentation.ts',
   'src/utils/alertGroupingPresentation.ts',
   'src/utils/alertSchedulePresentation.ts',
-  'src/utils/configuredNodeCapabilityPresentation.ts',
   'src/utils/auditWebhookPresentation.ts',
   'src/utils/auditLogPresentation.ts',
   'src/utils/diagnosticsPresentation.ts',
@@ -135,8 +122,6 @@ const ALLOWLIST = new Set([
   'src/utils/k8sNamespacePresentation.ts',
   'src/components/shared/EnvironmentLockBadge.tsx',
   'src/utils/workloadGuestPresentation.ts',
-  'src/utils/deployFlowPresentation.ts',
-  'src/utils/infrastructureEmptyStatePresentation.ts',
 ]);
 
 const platformSupportManifest = JSON.parse(fs.readFileSync(PLATFORM_SUPPORT_MANIFEST_PATH, 'utf8'));
@@ -331,13 +316,6 @@ const HELPER_RULES = [
       "Do not hardcode a locale in date or number formatting. Pass undefined so the viewer's own locale and clock convention are used.",
   },
   {
-    rule: 'canonical-infrastructure/no-local-empty-state-copy',
-    regex:
-      /No infrastructure resources yet|No resources match filters|Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring\.|Try adjusting the search, source, or status filters\.|Unable to load infrastructure|We couldn’t fetch unified resources\. Check connectivity or retry\./g,
-    message:
-      'Do not define local infrastructure empty-state copy in page code. Use @/utils/infrastructureEmptyStatePresentation instead.',
-  },
-  {
     rule: 'canonical-workloads/no-local-workload-empty-state-copy',
     regex:
       /No infrastructure hosts connected|No guests found|Install the Pulse agent to connect a host and unlock v6 infrastructure data, or add a Proxmox connection in Settings → Infrastructure → Proxmox\.|No guests match your current filters|No guests match your search |Loading dashboard data\.\.\.|Connecting to monitoring service|Reconnecting to monitoring service…|Real-time data is currently unavailable\. Showing last-known state\.|Real-time data is reconnecting\. Showing last-known state\.|Dashboard unavailable|Real-time dashboard data is currently unavailable\. Reconnect to try again\.|No resources yet|Once connected platforms report resources, your dashboard overview will appear here\./g,
@@ -381,12 +359,6 @@ const HELPER_RULES = [
       /import\s*\{([\s\S]*?(?:getSourcePlatformLabel|normalizeSourcePlatformKey)[\s\S]*?)\}\s*from\s*['"]@\/components\/shared\/sourcePlatformBadges['"]/g,
     message:
       'Do not import canonical source/platform labels or normalization from the badge component. Use @/utils/sourcePlatforms for non-rendering logic.',
-  },
-  {
-    rule: 'canonical-source/no-imports-from-storage-component-shim',
-    regex: /import\s*\{[\s\S]*?\}\s*from\s*['"]@\/components\/Storage\/storageSourceOptions['"]/g,
-    message:
-      'Do not import storage source normalization from the Storage component shim. Use @/utils/storageSources instead.',
   },
   {
     rule: 'canonical-source/no-local-storage-source-presentation-helper',
@@ -505,24 +477,10 @@ const HELPER_RULES = [
       'Do not branch Proxmox backup workload badge colors locally. Map PBS-native backup types to the shared workload type badge presentation instead.',
   },
   {
-    rule: 'canonical-type/no-imports-from-resource-badge-component',
-    regex:
-      /import\s*\{[\s\S]*?(?:getPlatformBadge|getSourceBadge|getTypeBadge|getUnifiedSourceBadges|getContainerRuntimeBadge|ResourceBadge)[\s\S]*?\}\s*from\s*['"]@\/components\/Infrastructure\/resourceBadges['"]/g,
-    message:
-      'Do not import canonical resource badge presentation from the component shim. Use @/utils/resourceBadgePresentation for non-rendering logic.',
-  },
-  {
     rule: 'canonical-type/no-local-canonical-resource-type-list',
     regex: /\bconst\s+CANONICAL_RESOURCE_TYPES\s*=\s*\[/g,
     message:
       'Do not define local canonical resource type lists in component code. Use @/utils/canonicalResourceTypes instead.',
-  },
-  {
-    rule: 'canonical-type/no-imports-from-reporting-type-component',
-    regex:
-      /import\s*\{[\s\S]*?toReportingResourceType[\s\S]*?\}\s*from\s*['"](?:\.\/reportingResourceTypes|@\/components\/Settings\/reportingResourceTypes)['"]/g,
-    message:
-      'Do not import reporting resource type translation from the Settings component shim. Use @/utils/reportingResourceTypes instead.',
   },
   {
     rule: 'canonical-type/no-local-reportable-resource-policy',
@@ -563,13 +521,6 @@ const HELPER_RULES = [
       /\bfilter\(\)\s*===\s*['"](?:active|all|resolved)['"]\b[\s\S]{0,240}bg-surface-alt\s+text-base-content\s+border-border\s+shadow-sm|\bfilter\(\)\s*===\s*['"](?:attention|approvals)['"]\b[\s\S]{0,240}bg-amber-50\s+dark:bg-amber-900\s+text-amber-700\s+dark:text-amber-300\s+border-amber-300\s+dark:border-amber-700\s+shadow-sm/g,
     message:
       'Do not define local findings filter selected-button classes in component code. Use the shared segmented button contract instead.',
-  },
-  {
-    rule: 'canonical-ai/no-local-quickstart-credits-presentation',
-    regex:
-      /\bquickstart_credits_remaining\b[\s\S]{0,360}bg-blue-50\s+dark:bg-blue-950\s+border-blue-200\s+dark:border-blue-800\s+text-blue-700\s+dark:text-blue-300|\bquickstart_credits_remaining\b[\s\S]{0,360}bg-amber-50\s+dark:bg-amber-950\s+border-amber-200\s+dark:border-amber-800\s+text-amber-700\s+dark:text-amber-300/g,
-    message:
-      'Do not define local AI quickstart credits badge presentation in page code. Use @/utils/aiQuickstartPresentation instead.',
   },
   {
     rule: 'canonical-patrol/no-local-empty-state-copy',
@@ -653,12 +604,6 @@ const HELPER_RULES = [
       'Do not define local unified-agent lookup status helpers in component code. Use @/utils/unifiedAgentStatusPresentation instead.',
   },
   {
-    rule: 'canonical-overview/no-local-problem-status-variant',
-    regex: /\b(?:const|function)\s+statusVariant\s*\(\s*pr\s*:\s*ProblemResource\s*\)/g,
-    message:
-      'Do not define local problem-resource status helpers in page code. Use @/utils/problemResourcePresentation instead.',
-  },
-  {
     rule: 'canonical-alerts/no-local-alerts-tone',
     regex: /\b(?:const|function)\s+alertsTone\b/g,
     message:
@@ -715,18 +660,6 @@ const HELPER_RULES = [
     regex: /\b(?:const|function)\s+summarizeServiceHealthTone\b/g,
     message:
       'Do not define local service summary tone helpers in component code. Use @/utils/serviceHealthPresentation instead.',
-  },
-  {
-    rule: 'canonical-ai/no-local-explore-status-presentation-helper',
-    regex: /\b(?:const|function)\s+(?:phaseLabel|phaseClasses)\b/g,
-    message:
-      'Do not define local AI explore status label or tone helpers in component code. Use @/utils/aiExplorePresentation instead.',
-  },
-  {
-    rule: 'canonical-ai/no-local-session-diff-status-presentation-helper',
-    regex: /\b(?:const|function)\s+(?:formatDiffStatus|diffStatusClasses)\b/g,
-    message:
-      'Do not define local AI session diff status presentation helpers in component code. Use @/utils/aiSessionDiffPresentation instead.',
   },
   {
     rule: 'canonical-ai/no-local-control-level-presentation-helper',
@@ -994,13 +927,6 @@ const HELPER_RULES = [
       'Do not define local Workloads guest fallback copy or backup status maps in component code. Use @/utils/workloadGuestPresentation instead.',
   },
   {
-    rule: 'canonical-infrastructure/no-local-deploy-flow-copy',
-    regex:
-      /Loading cluster nodes\.\.\.|No online source agents found\. At least one node in this cluster must have a connected Pulse agent to deploy to other nodes\.|No nodes found in this cluster\.|Loading install command\.\.\./g,
-    message:
-      'Do not define local infrastructure deploy flow loading or empty-state copy in component code. Use @/utils/deployFlowPresentation instead.',
-  },
-  {
     rule: 'canonical-settings/no-local-diagnostics-empty-copy',
     regex: /No PBS configured/g,
     message:
@@ -1156,42 +1082,10 @@ const HELPER_RULES = [
       'Do not define local Ceph page-state copy in page code. Use @/features/storageBackups/storageDomain instead.',
   },
   {
-    rule: 'canonical-pmg/no-local-threat-bar-presentation-helper',
-    regex: /\b(?:const|function)\s+(?:barColor|textColor)\b[\s\S]{0,500}quarantine/g,
-    message:
-      'Do not define local PMG threat bar presentation helpers in component code. Use @/utils/pmgThreatPresentation instead.',
-  },
-  {
-    rule: 'canonical-pmg/no-local-queue-severity-helper',
-    regex: /\b(?:const|function)\s+queueSeverity\b/g,
-    message:
-      'Do not define local PMG queue severity helpers in component code. Use @/utils/pmgQueuePresentation instead.',
-  },
-  {
-    rule: 'canonical-pmg/no-local-service-health-badge',
-    regex:
-      /\bconst\s+StatusBadge:\s*Component<\{\s*status:\s*string;\s*health\?:\s*string\s*\}>\b/g,
-    message:
-      'Do not define local PMG service health badge components in page code. Use the shared PMG ServiceHealthBadge component instead.',
-  },
-  {
-    rule: 'canonical-pmg/no-local-empty-state-copy',
-    regex:
-      /No Mail Gateways configured|Add a Proxmox Mail Gateway via Settings → Infrastructure → Proxmox to start collecting mail analytics and security metrics\.|Loading mail gateway data\.\.\.|Search gateways\.\.\.|No gateways match "|No PMG details for this resource yet|Pulse hasn't ingested PMG analytics for this instance\.|Loading mail gateway details\.\.\.|Fetching PMG resource details\.|Failed to load PMG details/g,
-    message:
-      'Do not define local PMG loading, failure, or empty-state copy in component code. Use @/utils/pmgPresentation instead.',
-  },
-  {
     rule: 'canonical-relay/no-local-connection-status-helper',
     regex: /\b(?:const|function)\s+(?:connectionStatusVariant|connectionStatusText)\b/g,
     message:
       'Do not define local relay connection status helpers in component code. Use @/utils/relayPresentation instead.',
-  },
-  {
-    rule: 'canonical-deploy/no-local-deploy-status-config',
-    regex: /\bconst\s+statusConfig\s*:\s*Record<DeployTargetStatus/g,
-    message:
-      'Do not define local deploy status presentation maps in component code. Use @/utils/deployStatusPresentation instead.',
   },
   {
     rule: 'canonical-alerts/no-local-incident-status-or-level-classes',
@@ -1261,13 +1155,6 @@ const HELPER_RULES = [
       /quietHours\(\)\.days\[day\.id\][\s\S]{0,220}rounded-md\s+bg-blue-500\s+text-white\s+shadow-sm[\s\S]{0,220}rounded-md\s+text-muted\s+hover:bg-surface-hover/g,
     message:
       'Do not define local quiet-day button presentation in page code. Use @/utils/alertSchedulePresentation instead.',
-  },
-  {
-    rule: 'canonical-settings/no-local-configured-node-capability-badges',
-    regex:
-      /'monitorVMs'\s+in\s+node|'monitorDatastores'\s+in\s+node|\bmonitorMailStats\b[\s\S]{0,220}(?:bg-blue-100|bg-green-100)/g,
-    message:
-      'Do not define local configured-node capability badge branches in component code. Use @/utils/configuredNodeCapabilityPresentation instead.',
   },
   {
     rule: 'canonical-settings/no-local-audit-log-badge-helpers',
@@ -1470,22 +1357,6 @@ const MAP_RULES = [
     validate: (snippet) => containsAny(snippet, PLATFORM_TOKENS),
   },
   {
-    rule: 'canonical-storage/no-local-ceph-summary-card-classes',
-    regex:
-      /title=\{cluster\.healthMessage\}[\s\S]{0,220}text-\[11px\] text-muted truncate max-w-\[240px\]|cluster\.healthLabel[\s\S]{0,220}px-1\.5 py-0\.5 rounded text-\[10px\] font-medium/g,
-    message:
-      'Do not define Ceph summary card styling inline. Use @/features/storageBackups/cephSummaryCardPresentation instead.',
-    validate: () => true,
-  },
-  {
-    rule: 'canonical-storage/no-local-zfs-health-tooltip-classes',
-    regex:
-      /hoveredTooltip\(\)\?\.\w+[\s\S]{0,320}fixed z-\[9999\] pointer-events-none|hoveredTooltip\(\)\?\.\w+[\s\S]{0,320}bg-surface text-base-content text-\[10px\] rounded-md shadow-sm px-2 py-1\.5 min-w-\[120px\] border border-border/g,
-    message:
-      'Do not define ZFS health-map tooltip styling inline. Use @/features/storageBackups/zfsHealthMapPresentation instead.',
-    validate: () => true,
-  },
-  {
     rule: 'canonical-ai/no-local-finding-source-map',
     regex:
       /\b(?:const|let|var)\s+(?:sourceLabels|sourceColors|loopStateColors|lifecycleLabels)\s*=\s*\{([\s\S]*?)\n\};?/g,
@@ -1609,14 +1480,6 @@ const MAP_RULES = [
     regex: /\b(?:const|let|var)\s+(?:statusColors|iconColors)\s*=\s*\{/g,
     message:
       'Do not define local semantic tone maps in component code. Use @/utils/semanticTonePresentation instead.',
-    validate: () => true,
-  },
-  {
-    rule: 'canonical-settings/no-inline-cluster-endpoint-status-color',
-    regex:
-      /endpoint\.online\s*&&\s*pulseStatus\s*===\s*['"]reachable['"][\s\S]{0,260}pulseStatus\s*===\s*['"]unreachable['"]/g,
-    message:
-      'Do not inline cluster endpoint status-color logic in settings UI. Use @/utils/clusterEndpointPresentation instead.',
     validate: () => true,
   },
   {
