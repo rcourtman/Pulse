@@ -28,15 +28,6 @@ func (m *mockStateProvider) ReadSnapshot() models.StateSnapshot {
 	return args.Get(0).(models.StateSnapshot)
 }
 
-type mockCommandPolicy struct {
-	mock.Mock
-}
-
-func (m *mockCommandPolicy) Evaluate(command string) agentexec.PolicyDecision {
-	args := m.Called(command)
-	return args.Get(0).(agentexec.PolicyDecision)
-}
-
 type mockAgentServer struct {
 	mock.Mock
 	agents []agentexec.ConnectedAgent

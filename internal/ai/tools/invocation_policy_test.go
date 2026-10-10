@@ -91,7 +91,6 @@ func TestAutonomousDenyMutationsCannotMutateDocker(t *testing.T) {
 	updates := &mockUpdatesProvider{}
 	exec := NewPulseToolExecutor(ExecutorConfig{UpdatesProvider: updates})
 	exec.SetControlLevel(ControlLevelAutonomous)
-	exec.SetAutonomousMode(true)
 	exec.SetDenyInfrastructureMutations(true)
 
 	text := executeBlockedText(t, exec, "pulse_docker", map[string]interface{}{
@@ -125,14 +124,13 @@ func TestFabricatedEnumValuesFailClosedAtRuntime(t *testing.T) {
 
 func TestRetiredMutationProfileMatrixDeniesBeforeHandlers(t *testing.T) {
 	profiles := []struct {
-		name       string
-		level      ControlLevel
-		profile    ExecutionProfile
-		autonomous bool
+		name    string
+		level   ControlLevel
+		profile ExecutionProfile
 	}{
 		{name: "interactive-read-only", level: ControlLevelReadOnly, profile: ProfileInteractiveAssistant},
 		{name: "interactive-controlled", level: ControlLevelControlled, profile: ProfileInteractiveAssistant},
-		{name: "interactive-autonomous", level: ControlLevelAutonomous, profile: ProfileInteractiveAssistant, autonomous: true},
+		{name: "interactive-autonomous", level: ControlLevelAutonomous, profile: ProfileInteractiveAssistant},
 		{name: "patrol-detection", level: ControlLevelAutonomous, profile: ProfilePatrolDetection},
 		{name: "patrol-investigation", level: ControlLevelAutonomous, profile: ProfilePatrolInvestigation},
 	}
@@ -152,7 +150,6 @@ func TestRetiredMutationProfileMatrixDeniesBeforeHandlers(t *testing.T) {
 		t.Run(posture.name, func(t *testing.T) {
 			exec := newInvocationPolicyExecutor(t)
 			exec.SetControlLevel(posture.level)
-			exec.SetAutonomousMode(posture.autonomous)
 			exec.ApplyExecutionProfile(posture.profile)
 			for _, call := range calls {
 				text := executeBlockedText(t, exec, call.tool, call.args)
@@ -423,14 +420,9 @@ func TestRegistrationAuthorityIsSplitAndAppendOnly(t *testing.T) {
 func TestPatrolDetectionProfileEnforcesAllowlistedPulseState(t *testing.T) {
 	exec := newInvocationPolicyExecutor(t)
 	exec.SetControlLevel(ControlLevelAutonomous)
-	exec.SetAutonomousMode(true)
 	exec.ApplyExecutionProfile(ProfilePatrolDetection)
 
-	// Applying a Patrol profile clears inherited autonomy and denies
-	// infrastructure outright.
-	if exec.isAutonomous {
-		t.Fatal("detection profile must clear inherited autonomous mode")
-	}
+	// Applying a Patrol profile denies infrastructure outright.
 	text := executeBlockedText(t, exec, "pulse_docker", map[string]interface{}{
 		"action": "update", "container": "nginx", "host": "tower",
 	})
@@ -475,12 +467,7 @@ func TestPatrolDetectionProfileEnforcesAllowlistedPulseState(t *testing.T) {
 func TestPatrolInvestigationProfileIsStructurallyReadOnly(t *testing.T) {
 	exec := newInvocationPolicyExecutor(t)
 	exec.SetControlLevel(ControlLevelAutonomous)
-	exec.SetAutonomousMode(true)
 	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
-
-	if exec.isAutonomous {
-		t.Fatal("investigation profile must clear inherited autonomous mode")
-	}
 
 	// No infrastructure mutations.
 	text := executeBlockedText(t, exec, "pulse_kubernetes", map[string]interface{}{"type": "scale"})

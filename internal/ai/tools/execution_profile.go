@@ -70,8 +70,8 @@ func patrolDetectionPulseStateAllowlist() map[string]bool {
 
 // ApplyExecutionProfile applies the profile's policy to this executor
 // instance (normally a request-scoped clone). Both Patrol profiles deny
-// infrastructure mutations, clear any inherited autonomous mode, and mark
-// the executor non-interactive; they differ only in pulse-state policy.
+// infrastructure mutations and mark the executor non-interactive; they
+// differ only in pulse-state policy.
 // Unknown profiles are rejected outright (panic on programmer error)
 // rather than falling through to the interactive default's permissions.
 func (e *PulseToolExecutor) ApplyExecutionProfile(profile ExecutionProfile) {
@@ -81,11 +81,9 @@ func (e *PulseToolExecutor) ApplyExecutionProfile(profile ExecutionProfile) {
 	e.executionProfile = profile
 	switch profile {
 	case ProfilePatrolDetection:
-		e.isAutonomous = false
 		e.denyInfrastructureMutations = true
 		e.pulseStateAllowlist = patrolDetectionPulseStateAllowlist()
 	case ProfilePatrolInvestigation:
-		e.isAutonomous = false
 		e.denyInfrastructureMutations = true
 		e.pulseStateAllowlist = map[string]bool{agentcapabilities.PatrolProposeActionToolName: true}
 	default:

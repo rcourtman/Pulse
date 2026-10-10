@@ -1800,7 +1800,7 @@ func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *te
 		AgentServer:  agentServer,
 		ControlLevel: tools.ControlLevelAutonomous,
 	})
-	executor.SetContext("agent", "agent-1", true)
+	executor.SetContext("agent", "agent-1")
 
 	providerCallCount := 0
 	provider := &stubServiceProvider{

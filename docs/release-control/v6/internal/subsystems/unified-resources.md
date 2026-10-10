@@ -2861,10 +2861,9 @@ application resource-provider or WebSocket lifecycle.
 21. Keep post-execution verification outcome on the canonical execution
     result. `ExecutionResult.Verification` carries
     `ActionVerificationResult` with `Ran`, `Command`, `Output`,
-    `Success`, `RanAt`, and `Note`. The broker runs the
-    class-derived read-after-write check after a successful dispatch
-    and persists the outcome through the existing `result_json`
-    column; no schema migration is required. Verification is
+    `Success`, `RanAt`, and `Note`. When a read-after-write check runs
+    after a successful dispatch, its outcome persists through the
+    existing `result_json` column; no schema migration is required. Verification is
     best-effort: classes without a derivable check leave
     `Verification` nil rather than fabricating a verified=true entry,
     matching the no-fabrication rule used elsewhere in the trust
@@ -2881,13 +2880,11 @@ application resource-provider or WebSocket lifecycle.
     approved a different action vs approval window passed) and audit
     review and operator UI surfaces should treat them differently. The
     drift contract is "the operator approved exactly this (command,
-    target, reason) combination"; the freshly-recomputed
-    approval-equivalent hash and the recorded `planHash` are how we
-    enforce that. New broker call sites that introduce additional
-    governed-action paths must either reuse the existing approval-
-    equivalent hash or extend the canonical hash set in
-    `internal/ai/tools/action_audit.go` rather than adding ad-hoc
-    comparison logic.
+    target, reason) combination"; the freshly recomputed plan hash and
+    the recorded `planHash` are how we enforce that. New broker call
+    sites that introduce additional governed-action paths must reuse
+    the canonical plan hash from `internal/actionplanner/planner.go`
+    rather than adding ad-hoc comparison logic.
 23. Keep the `ActionVerificationResult` frontend mirror canonical and
     pin the operator-facing render location.
     `frontend-modern/src/types/actionAudit.ts` defines the TS
@@ -3555,13 +3552,13 @@ DELETE) in `internal/api/resources_operator_state.go` is the
 operator-facing consumer of this contract; the URL canonical_id always wins over the
 body, server-side `setAt` / `setBy` populate from request time and
 authenticated identity, and validation rejections surface a stable
-`operator_state_invalid` error code. The action broker
-(`executeCommandWithAudit`) consults the same store on every dispatch
-and refuses with `ErrResourceRemediationLocked` when the operator has
-set `NeverAutoRemediate=true`; the refusal is persisted as a Failed
-audit record with `resource_remediation_locked:` prefix on the
-`ErrorMessage` so audit-UI filters and alert rules can branch on the
-stable token. Finding-suppression integrations consume the same
+`operator_state_invalid` error code. The Pulse Actions lifecycle
+(`validateExecutionPolicy` in `internal/actionlifecycle/service.go`)
+consults the same store at the dispatch decision point and refuses with
+`ErrResourceRemediationLocked` when the operator has set
+`NeverAutoRemediate=true`; the API reports it as
+`resource_remediation_locked` so audit-UI filters and alert rules can
+branch on the stable token. Finding-suppression integrations consume the same
 `ResourceOperatorState` shape via the
 `ResourceOperatorStateProvider` interface in `internal/ai`.
 

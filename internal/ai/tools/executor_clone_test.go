@@ -8,7 +8,7 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	resolved := &mockResolvedContext{}
 
 	original := NewPulseToolExecutor(ExecutorConfig{})
-	original.SetContext("node", "node-1", false)
+	original.SetContext("node", "node-1")
 	original.SetOrgID("tenant-a")
 	original.SetResolvedContext(resolved)
 	original.SetPatrolFindingCreator(creator)
@@ -31,16 +31,16 @@ func TestPulseToolExecutorCloneIsolatesSessionState(t *testing.T) {
 	if clone.GetPatrolObserverProposer() != proposer {
 		t.Fatal("Clone() should retain patrol observer proposer availability for the new run")
 	}
-	if clone.targetType != original.targetType || clone.targetID != original.targetID || clone.isAutonomous != original.isAutonomous {
-		t.Fatalf("Clone() lost base execution context: got %q/%q/%v", clone.targetType, clone.targetID, clone.isAutonomous)
+	if clone.targetType != original.targetType || clone.targetID != original.targetID {
+		t.Fatalf("Clone() lost base execution context: got %q/%q", clone.targetType, clone.targetID)
 	}
 	if clone.orgID != original.orgID {
 		t.Fatalf("Clone() orgID = %q, want %q", clone.orgID, original.orgID)
 	}
 
-	clone.SetContext("vm", "vm-201", true)
-	if original.targetType != "node" || original.targetID != "node-1" || original.isAutonomous {
-		t.Fatalf("original context mutated after clone update: got %q/%q/%v", original.targetType, original.targetID, original.isAutonomous)
+	clone.SetContext("vm", "vm-201")
+	if original.targetType != "node" || original.targetID != "node-1" {
+		t.Fatalf("original context mutated after clone update: got %q/%q", original.targetType, original.targetID)
 	}
 
 	clone.protectedGuests[0] = "999"
