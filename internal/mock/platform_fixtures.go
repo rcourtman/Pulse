@@ -190,14 +190,16 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 }
 
 // UnifiedResourceSnapshotWithLinks returns the current mock world as unified
-// resources with the operator's manual links applied at each ingest stage, as
-// the live monitor's registry rebuild applies them: a link whose side arrives
-// as a supplemental record, or whose folded side an availability check names
-// by source, folds as it would live. Folding the finished list instead loses
-// both. The registry has no store, so nothing the fixtures ingest is
-// persisted. Without links this is UnifiedResourceSnapshot; with links it
-// builds afresh on every call, so callers cache it per fixture data version
-// and link set, and its result is the caller's own.
+// resources with the operator's manual links applied where the live monitor's
+// registry rebuild applies them: once the snapshot and every supplemental
+// record source are in, and before availability. A chain whose members arrive
+// as supplemental records is judged over the whole estate, so it settles on the
+// row the live view keeps, and an availability check that names the folded
+// resource by source resolves through the fold onto the primary. Folding the
+// finished list instead loses both. The registry has no store, so nothing the
+// fixtures ingest is persisted. Without links this is UnifiedResourceSnapshot;
+// with links it builds afresh on every call, so callers cache it per fixture
+// data version and link set, and its result is the caller's own.
 func UnifiedResourceSnapshotWithLinks(links []unifiedresources.ResourceLink) ([]unifiedresources.Resource, time.Time) {
 	if len(links) == 0 {
 		return UnifiedResourceSnapshot()
@@ -213,15 +215,26 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 }
 
 func (g FixtureGraph) unifiedResourceSnapshot(registry *unifiedresources.ResourceRegistry) ([]unifiedresources.Resource, time.Time) {
+	// The links apply at the monitor rebuild's boundary
+	// (MonitorAdapter.replaceRegistryLocked): after the snapshot and every
+	// source but availability, so a chain is judged over the assembled estate
+	// instead of folded as its members' sources arrive, and before
+	// availability, so a check linked to a folded resource projects onto its
+	// primary.
+	registry.DeferManualLinks()
 	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, SupplementalOwnedSources()))
 
 	for _, source := range SupplementalOwnedSources() {
+		if source == unifiedresources.SourceAvailability {
+			registry.ApplyDeferredManualLinks(nil)
+		}
 		records := g.SupplementalRecords(source)
 		if len(records) == 0 {
 			continue
 		}
 		registry.IngestRecords(source, records)
 	}
+	registry.ApplyDeferredManualLinks(nil)
 
 	freshness := g.State.LastUpdate
 	for _, candidate := range []time.Time{

@@ -466,54 +466,152 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	}
 }
 
-// TestFixtureGraphAppliesManualLinksAtEachIngestStage pins the linked build
-// behind the mock-mode unified view. Folding the curated Docker service into a
-// VM must move its availability check onto the VM, as the live rebuild's
-// availability ingest resolves the check's source reference through the fold;
-// folding the finished list dropped the facet with the folded row.
-func TestFixtureGraphAppliesManualLinksAtEachIngestStage(t *testing.T) {
+// TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary pins the linked
+// build behind the mock-mode unified view to the live rebuild's link boundary
+// (MonitorAdapter.replaceRegistryLocked): the links apply once the snapshot
+// and every supplemental source but availability are in, and before
+// availability. Two things hang on it. Availability goes in after the pass, so
+// folding the curated Docker service into a VM moves its availability check
+// onto the VM, as the live rebuild's availability ingest resolves the check's
+// source reference through the fold; folding the finished list dropped the
+// facet with the folded row. And a chain of links is judged over the assembled
+// estate, so mock mode keeps the row the live rebuild keeps instead of the one
+// a pass per source happens to leave.
+func TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary(t *testing.T) {
 	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
 	graph := buildFixtureGraph(DefaultConfig, now)
 	unlinked, _ := graph.UnifiedResourceSnapshot()
 
-	const checkID = "mock-availability-docker-frontend-service"
-	var serviceID, vmID string
-	for _, resource := range unlinked {
-		switch {
-		case resource.Type == unifiedresources.ResourceTypeDockerService && resource.Availability != nil &&
-			resource.Availability.TargetID == checkID:
-			serviceID = resource.ID
-		case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Proxmox != nil:
-			vmID = resource.ID
+	t.Run("an availability check follows the fold onto the primary", func(t *testing.T) {
+		const checkID = "mock-availability-docker-frontend-service"
+		var serviceID, vmID string
+		for _, resource := range unlinked {
+			switch {
+			case resource.Type == unifiedresources.ResourceTypeDockerService && resource.Availability != nil &&
+				resource.Availability.TargetID == checkID:
+				serviceID = resource.ID
+			case vmID == "" && resource.Type == unifiedresources.ResourceTypeVM && resource.Proxmox != nil:
+				vmID = resource.ID
+			}
 		}
-	}
-	if serviceID == "" || vmID == "" {
-		t.Fatalf("fixture graph needs the checked Docker service and a Proxmox VM, got service=%q vm=%q", serviceID, vmID)
-	}
+		if serviceID == "" || vmID == "" {
+			t.Fatalf("fixture graph needs the checked Docker service and a Proxmox VM, got service=%q vm=%q", serviceID, vmID)
+		}
 
-	links := []unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: serviceID, PrimaryID: vmID}}
-	linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
-	var vm, endpoint *unifiedresources.Resource
-	for i := range linked {
-		switch {
-		case linked[i].ID == serviceID:
-			t.Fatalf("linked build still lists the folded Docker service %s", serviceID)
-		case linked[i].ID == vmID:
-			vm = &linked[i]
-		case linked[i].Type == unifiedresources.ResourceTypeNetworkEndpoint && linked[i].Availability != nil &&
-			linked[i].Availability.TargetID == checkID:
-			endpoint = &linked[i]
+		links := []unifiedresources.ResourceLink{{ResourceA: vmID, ResourceB: serviceID, PrimaryID: vmID}}
+		linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+		var vm, endpoint *unifiedresources.Resource
+		for i := range linked {
+			switch {
+			case linked[i].ID == serviceID:
+				t.Fatalf("linked build still lists the folded Docker service %s", serviceID)
+			case linked[i].ID == vmID:
+				vm = &linked[i]
+			case linked[i].Type == unifiedresources.ResourceTypeNetworkEndpoint && linked[i].Availability != nil &&
+				linked[i].Availability.TargetID == checkID:
+				endpoint = &linked[i]
+			}
 		}
-	}
-	if vm == nil || vm.Docker == nil {
-		t.Fatalf("linked VM %s = %+v, want it to carry the folded service's Docker facet", vmID, vm)
-	}
-	if vm.Availability == nil || vm.Availability.TargetID != checkID {
-		t.Fatalf("linked VM availability = %+v, want the folded service's check projected onto it", vm.Availability)
-	}
-	if !hasChecksEdgeTo(endpoint, vmID) {
-		t.Fatalf("check relationships = %+v, want the checks edge to follow the fold to %s", endpoint, vmID)
-	}
+		if vm == nil || vm.Docker == nil {
+			t.Fatalf("linked VM %s = %+v, want it to carry the folded service's Docker facet", vmID, vm)
+		}
+		if vm.Availability == nil || vm.Availability.TargetID != checkID {
+			t.Fatalf("linked VM availability = %+v, want the folded service's check projected onto it", vm.Availability)
+		}
+		if !hasChecksEdgeTo(endpoint, vmID) {
+			t.Fatalf("check relationships = %+v, want the checks edge to follow the fold to %s", endpoint, vmID)
+		}
+	})
+
+	// A Proxmox storage, a TrueNAS VM and a vSphere VM linked in a cycle keep
+	// the TrueNAS VM, whose link is the oldest. A pass after the TrueNAS
+	// records has already folded that VM into the storage when the vSphere
+	// records bring a guest that outranks the storage, so folding as the
+	// sources arrive keeps the vSphere VM instead.
+	t.Run("a chain of links is judged over the assembled estate", func(t *testing.T) {
+		soleSource := func(resource unifiedresources.Resource, source unifiedresources.DataSource) bool {
+			return len(resource.Sources) == 1 && resource.Sources[0] == source
+		}
+		var storageID, nasVMID, guestID string
+		for _, resource := range unlinked {
+			switch {
+			case storageID == "" && resource.Type == unifiedresources.ResourceTypeStorage &&
+				soleSource(resource, unifiedresources.SourceProxmox):
+				storageID = resource.ID
+			case nasVMID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+				soleSource(resource, unifiedresources.SourceTrueNAS):
+				nasVMID = resource.ID
+			case guestID == "" && resource.Type == unifiedresources.ResourceTypeVM &&
+				soleSource(resource, unifiedresources.SourceVMware):
+				guestID = resource.ID
+			}
+		}
+		if storageID == "" || nasVMID == "" || guestID == "" {
+			t.Fatalf("fixture graph needs a Proxmox storage, a TrueNAS VM and a vSphere VM, got storage=%q nas=%q guest=%q",
+				storageID, nasVMID, guestID)
+		}
+		created := time.Date(2026, time.October, 1, 9, 0, 0, 0, time.UTC)
+		links := []unifiedresources.ResourceLink{
+			{ResourceA: nasVMID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created.Add(time.Minute)},
+			{ResourceA: storageID, ResourceB: guestID, PrimaryID: guestID, CreatedAt: created.Add(2 * time.Minute)},
+			{ResourceA: guestID, ResourceB: nasVMID, PrimaryID: nasVMID, CreatedAt: created},
+		}
+		// cycleRows is what is left of the three members: type, ID and sources.
+		cycleRows := func(resources []unifiedresources.Resource) []string {
+			var rows []string
+			for _, resource := range resources {
+				if resource.ID != storageID && resource.ID != nasVMID && resource.ID != guestID {
+					continue
+				}
+				sources := make([]string, 0, len(resource.Sources))
+				for _, source := range resource.Sources {
+					sources = append(sources, string(source))
+				}
+				slices.Sort(sources)
+				rows = append(rows, fmt.Sprintf("%s %s %v", resource.Type, resource.ID, sources))
+			}
+			return rows
+		}
+		owned := SupplementalOwnedSources()
+		snapshot := unifiedresources.SnapshotWithoutSources(graph.State, owned)
+		records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+		for _, source := range owned {
+			records[source] = graph.SupplementalRecords(source)
+		}
+
+		// The monitor's rebuild is the reference the mock build must match.
+		store := unifiedresources.NewMemoryStore()
+		for _, link := range links {
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+		}
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+		adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+		live := cycleRows(adapter.GetAll())
+		if len(live) != 1 || !strings.HasPrefix(live[0], "vm "+nasVMID+" ") {
+			t.Fatalf("live rebuild kept %v, want the TrueNAS VM %s alone", live, nasVMID)
+		}
+
+		// A registry that ingests the same sources one call at a time judges
+		// the chain at each call. It must settle elsewhere, or this fixture no
+		// longer separates the boundary from per-call passes.
+		perCall := unifiedresources.NewRegistryWithManualLinks(links)
+		perCall.IngestSnapshot(snapshot)
+		for _, source := range owned {
+			if len(records[source]) > 0 {
+				perCall.IngestRecords(source, records[source])
+			}
+		}
+		if got := cycleRows(perCall.List()); slices.Equal(got, live) {
+			t.Fatalf("a pass per source also kept %v, so this fixture no longer separates the rebuild's boundary from per-call passes", got)
+		}
+
+		linked, _ := graph.unifiedResourceSnapshot(unifiedresources.NewRegistryWithManualLinks(links))
+		if got := cycleRows(linked); !slices.Equal(got, live) {
+			t.Fatalf("mock build kept %v, want what the live rebuild keeps: %v", got, live)
+		}
+	})
 }
 
 // TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked pins the
