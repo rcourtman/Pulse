@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "4471dcaaba82a1dab370bf853e0df275ec5d03a2",
+  "verified_at": "2026-10-10T12:05:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts",
+    "frontend-modern/src/types/recovery.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "ad70f23ea9bad5d25bf99db28a96f50222cd4c7414498ef47b479e22d8e7ee48",
+    "frontend-modern/src/types/recovery.ts": "92f98ab28931bd691381e3563a15fd8ab5813f70c3b357a8d7720f1c34a5c636"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Before/after pair on the Mac: production vite builds of this commit's parent (4471dcaaba) and of the same tree with this change (the two source files in changed_paths carry exactly the hashes recorded here), each served with vite preview and proxied to a private mock backend (a copy of the built dev binary on its own port, throwaway data dir, dev admin bypass, a mock estate sized so the tab's postures request splits into two batches). Driven by the same headless Chromium script at 1440x900 and 390x844, two runs per build interleaved before, after, before, after.",
+    "Proxmox Backups, By date and Coverage: the Backup health strip reads 221 targets, 725 restore points, 91 with PBS snapshots, 109 protected, 61 attention, 38 unprotected, 10 unknown, 0 checking, 3 not evaluated, with the posture rule footnote; 144 table rows at desktop and 40 at phone in both views; the first rows, the filter chips and the digit-masked text of the whole main region are identical between the builds (the masked text files are byte-identical in all four view and width combinations). All 38 recorded measurements have exactly one distinct value across the four runs.",
+    "Postures requests are unchanged: opening either view sends /api/recovery/postures?...&limit=200 twice, one with 200 resource IDs and one with 18, so the hook joins two batches in the real tab, and the 33 s on By date adds the same two requests. No failing responses and no console errors in any run.",
+    "The backend response is unchanged and the page ignores it: every /api/recovery/postures response body in both builds has the top-level keys data, meta and policy, meta carries limit, page, total and totalPages, and the two bodies have 200 and 18 rows.",
+    "With /api/recovery/postures stubbed to a 500 the \"Protection posture is unavailable\" notice shows in both builds at both widths and the evidence rows stay (144 desktop, 40 phone).",
+    "Dist proof: 189 files each side; 94 byte-identical (the CSS included), 94 differ only in chunk-hash names and SRI strings, and 1 differs in code. After normalising hashes and short identifiers, Proxmox-*.js (276802 to 276696 bytes) loses only the meta field of the initial value, its page/limit/total/totalPages literal, the meta field of the joined response and its page/limit/total/totalPages literal, and the local that held the joined rows (now inlined in the return); the statements that replace them are the data-only initial value and the data-only joined response.",
+    "check-bundle-size.mjs passes on both builds with no chunk renamed and .bundlesize.json unchanged: Proxmox 77.78 to 77.74 kB gzip, total JS 1365.65 to 1365.57 kB, total CSS 31.92 kB in both.",
+    "Unit evidence: on this tree tsc, eslint and prettier are clean and 33 files with 706 tests pass over the hook, the Proxmox features, the recovery transport and the platform-table guardrails; a wide run over src/features, hooks, utils, api, types, __tests__, components/shared, Workloads and Storage on the PR 2787 head plus this change passes 946 of 948 files (16054 tests), the one failing file being agentInstallCommand.test.ts, whose pty helper raises a termios ioctl error on this Mac and which imports nothing this change touches. Single-flaw controls: re-adding meta to the response type fails tsc on the new pin (and with the pin deleted nothing else fails, so the pin is the guard); dropping the joined rows or the policy, keeping only the first batch, joining batches in reverse, re-sorting the rows, or spreading the first batch's wire meta back into the joined response each fail the new hook test."
+  ],
+  "interactions": [
+    "Load /proxmox/backups/date, wait for the Backup health strip, read the strip text and counts, the table row count and first rows, the filter chips and the text of the main region; stay on the page for 33 s and record every /api/recovery/postures request (resource IDs per request, limit) and every response body shape; repeat at 390x844.",
+    "Load /proxmox/backups/coverage, wait for the strip, read the same measurements; repeat at 390x844.",
+    "In a fresh page stub /api/recovery/postures to a 500 before loading /proxmox/backups/date and read whether the unavailable notice shows and how many rows render; repeat at 390x844.",
+    "Run the same script twice against each of the before and after builds and compare the JSON results and the saved page text; screenshots of both viewports inspected."
+  ]
+}
