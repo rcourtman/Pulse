@@ -239,11 +239,19 @@ if pathlib.Path(sys.argv[0]).name == "id":
  if sys.argv[1:] != ["-u", "pulse"]: sys.exit(97)
  if not marker.exists(): sys.exit(1)
  print("1234")
-else:
+elif pathlib.Path(sys.argv[0]).name == "useradd":
+ if sys.argv[1:] != ["--system", "--home-dir", str(marker.parent / "install"), "--shell", "/bin/false", "pulse"]: sys.exit(97)
+ marker.write_text("owned confined fixture account\n")
+elif pathlib.Path(sys.argv[0]).name == "userdel":
  if sys.argv[1:] != ["pulse"]: sys.exit(97)
  marker.unlink()
+elif pathlib.Path(sys.argv[0]).name == "chown":
+ args = [arg for arg in sys.argv[1:] if arg != "-R"]
+ if len(args) < 2 or args[0] != "pulse:pulse": sys.exit(97)
+ if any(not pathlib.Path(p).is_relative_to(marker.parent) for p in args[1:]): sys.exit(97)
+else: sys.exit(97)
 '''
-            for name in ("id", "userdel"):
+            for name in ("id", "useradd", "userdel", "chown"):
                 tool = tools / name; tool.write_text(account); tool.chmod(0o755)
             program = base / "fixture.go"
             program.write_text('package main\nimport "fmt"\nvar Version string\nfunc main(){fmt.Println("Pulse " + Version)}\n')
@@ -262,7 +270,6 @@ else:
                     before = "cat > /etc/systemd/system/$SERVICE_NAME.service << EOF"
                     self.assertEqual(data.count(before), 1)
                     data = data.replace(before, 'cat > "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
-                    data += '\ncreate_user() { touch "$PULSE_NATIVE_ROOT/fixture-user"; }\nchown() { :; }\n'
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
