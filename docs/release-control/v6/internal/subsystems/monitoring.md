@@ -1743,9 +1743,11 @@ guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy
 guest-agent evidence may become `expected-unreachable`.
 Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
-the stale threshold is derived from the configured polling interval with a
-minimum floor, so API-facing resource status must not degrade merely because a
-healthy source is between normal poll cycles.
+the stale threshold is derived from the cadence the monitor actually polls at
+(the configured polling interval, or the adaptive scheduler's maximum interval
+when adaptive polling is enabled) with a minimum floor, so API-facing resource
+status must not degrade merely because a healthy source is between normal poll
+cycles.
 Each unified view carries the thresholds its listed registry generation was
 judged by, read with the listing from the same generation: the resource
 store's configured ones, or none (the defaults) for a view built from mock
@@ -2027,9 +2029,11 @@ VMID)`: it survives node migration, separates QEMU from LXC, and prevents
 duplicate configured cluster identities from sharing a concurrent baseline.
 Idle and partial samples still refresh tracker liveness.
 Proxmox row liveness uses the same cadence-derived threshold as source
-freshness (`max(2 * configured poll interval, 60s)`). Node offline grace and
-guest preservation must not expire between healthy 60- or 90-second polls, and
-must not use a separate fixed 60-second timer.
+freshness (`max(2 * poll cadence, 60s)`, the cadence being the configured poll
+interval or, under adaptive polling, the scheduler's maximum interval). Node
+offline grace and guest preservation must not expire between healthy 60- or
+90-second polls, or between adaptive polls, and must not use a separate fixed
+60-second timer.
 Tenant monitor enumeration is monitoring-owned runtime topology, not a
 reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not
@@ -2764,14 +2768,40 @@ service-history reads plus denial/recovery without fabricated samples.
    overrides. Under fixed-cadence scheduling, `Monitor.resourceStaleThresholds`
    reads those overrides through the same clamped setting readers as the
    scheduler, so a saved interval moves the monitor's resource freshness and
-   polling together. An adaptive scheduler selects its own intervals and
-   ignores those overrides, so freshness there keeps deriving from the
-   configured per-platform intervals. A PVE interval save reloads every
-   monitor from saved config instead. `ResourceStaleThresholdsForConfig` stays
-   the config-only derivation for callers without a live monitor, such as
-   adapter construction. Regression coverage:
+   polling together. A PVE interval save reloads every monitor from saved
+   config instead. `ResourceStaleThresholdsForConfig` stays the config-only
+   derivation for callers without a live monitor, such as adapter
+   construction. Regression coverage:
    `TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides` in
    `internal/monitoring/canonical_guardrails_test.go`.
+   An adaptive scheduler (`ADAPTIVE_POLLING_ENABLED` or `system.json`; off by
+   default, no UI) selects its own intervals and never reads the per-platform
+   intervals or those overrides. A healthy instance's staleness score is near
+   zero after each success, so its cadence stretches toward the scheduler's
+   maximum interval (5 minutes by default; a healthy instance polls a few
+   minutes apart). Selected intervals never exceed it; a poll can still run
+   later than its slot while workers are busy; the factor of two gives
+   headroom for that. Under adaptive scheduling
+   `Monitor.resourcePollIntervals` therefore derives PVE, PBS and PMG
+   freshness from `AdaptiveScheduler.MaxInterval()`, and
+   `ResourceStaleThresholdsForConfig` derives it from the
+   `AdaptivePolling*Interval` bounds normalized by `normalizedSchedulerConfig`,
+   the normalization the scheduler itself applies. Deriving it from the
+   per-platform intervals (1 minute for PBS and PMG, 10 seconds for PVE) left
+   healthy rows stale for much of every cycle. The Proxmox threshold is also
+   the window the node grace helpers (`determineNodeIDAndStatus`,
+   `preserveOrExpireNodes`) hold a node online after it was last seen online,
+   and the node temperature carry window derives from the same cadence with
+   its five-minute floor. With the defaults that hold is 10 minutes, observed
+   at the next poll after it lapses: a longer detection delay than fixed
+   polling, which is the price of polling a healthy fleet every few minutes.
+   A valid `/cluster/status` membership report that a member is offline is
+   authoritative (`reconcilePVENodeInventory`) and still applies immediately.
+   Regression coverage:
+   `TestMonitorResourceFreshnessFollowsAdaptiveCadence`,
+   `TestResourceStaleThresholdsForConfigFollowAdaptiveBounds` and
+   `TestAdaptiveNodeOfflineGraceSpansTheAdaptiveCycle` in
+   `internal/monitoring/adaptive_resource_freshness_test.go`.
    Periodic out-of-scheduler platform pollers (TrueNAS, VMware) share their
    lifecycle and config-resolution scaffold through
    `internal/monitoring/platform_poller_shared.go`: `startPollerLoop` owns
@@ -5072,7 +5102,8 @@ reading with that report time. Past the lease the lookup falls back to the
 cluster sensor cache, which keeps its own recency check. When every source
 returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
 a previous reading, with its original `LastUpdate`, only inside the carry window
-(twice the PVE polling interval, never under five minutes); an older reading is
+(twice the PVE polling cadence, which under adaptive polling is the
+scheduler's maximum interval, never under five minutes); an older reading is
 dropped rather than re-presented as current. A carried reading also keeps a
 lapsed host agent's lease. Agent readings are stamped with the agent's report
 time, so `carriedTemperatureOutlivesAgentLease` drops a carried reading stamped
