@@ -179,6 +179,33 @@ func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
 	m.clearResourceOfflineAlert(pmg.ID, pmg.Name, pmg.Host, "PMG", offlineRecoveryConfirmationsDefault)
 }
 
+// pmgQueuesComplete requires observations from every discovered node before
+// evaluating aggregate queue health. Missing/disabled collection is not zero.
+func pmgQueuesComplete(pmg models.PMGInstance) bool {
+	if len(pmg.Nodes) == 0 {
+		return false
+	}
+	for _, node := range pmg.Nodes {
+		if node.QueueStatus == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// A partial non-negative queue reading is a lower bound. It can establish the
+// highest configured severity, but never recovery or a lower severity that
+// could downgrade an alert supported by the missing node.
+func pmgQueueMetricEvaluable(pmg models.PMGInstance, value, warning, critical int) bool {
+	if pmgQueuesComplete(pmg) {
+		return true
+	}
+	if critical > 0 {
+		return value >= critical
+	}
+	return warning > 0 && value >= warning
+}
+
 // checkPMGQueueDepths checks PMG mail queue depths and creates alerts
 // Evaluates all queue types (total, deferred, hold) independently
 func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresholdConfig) {
@@ -193,12 +220,18 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 		}
 	}
 
-	m.checkPMGQueueDepth(pmg, defaults.QueueTotalWarning, defaults.QueueTotalCritical, totalQueue, "queue-total", "queue-depth",
-		"PMG %s has %d total messages in queue (threshold: %d)", "total_queue")
-	m.checkPMGQueueDepth(pmg, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical, totalDeferred, "queue-deferred", "queue-deferred",
-		"PMG %s has %d deferred messages (threshold: %d)", "deferred_queue")
-	m.checkPMGQueueDepth(pmg, defaults.HoldQueueWarn, defaults.HoldQueueCritical, totalHold, "queue-hold", "queue-hold",
-		"PMG %s has %d held messages (threshold: %d)", "hold_queue")
+	if pmgQueueMetricEvaluable(pmg, totalQueue, defaults.QueueTotalWarning, defaults.QueueTotalCritical) {
+		m.checkPMGQueueDepth(pmg, defaults.QueueTotalWarning, defaults.QueueTotalCritical, totalQueue, "queue-total", "queue-depth",
+			"PMG %s has %d total messages in queue (threshold: %d)", "total_queue")
+	}
+	if pmgQueueMetricEvaluable(pmg, totalDeferred, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical) {
+		m.checkPMGQueueDepth(pmg, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical, totalDeferred, "queue-deferred", "queue-deferred",
+			"PMG %s has %d deferred messages (threshold: %d)", "deferred_queue")
+	}
+	if pmgQueueMetricEvaluable(pmg, totalHold, defaults.HoldQueueWarn, defaults.HoldQueueCritical) {
+		m.checkPMGQueueDepth(pmg, defaults.HoldQueueWarn, defaults.HoldQueueCritical, totalHold, "queue-hold", "queue-hold",
+			"PMG %s has %d held messages (threshold: %d)", "hold_queue")
+	}
 }
 
 func thresholdForCanonicalSeverity(severity alertspecs.AlertSeverity, warningThreshold, criticalThreshold float64) float64 {
@@ -334,6 +367,10 @@ func (m *Manager) checkPMGOldestMessage(pmg models.PMGInstance, defaults PMGThre
 		if node.QueueStatus != nil && node.QueueStatus.OldestAge > oldestAge {
 			oldestAge = node.QueueStatus.OldestAge
 		}
+	}
+
+	if !pmgQueueMetricEvaluable(pmg, int(oldestAge/60), defaults.OldestMessageWarnMins, defaults.OldestMessageCritMins) {
+		return
 	}
 
 	if oldestAge == 0 {
@@ -595,8 +632,7 @@ func calculateMedianInt(values []int) int {
 // checkPMGQuarantineBacklog checks quarantine backlog and growth rates
 func (m *Manager) checkPMGQuarantineBacklog(pmg models.PMGInstance, defaults PMGThresholdConfig) {
 	if pmg.Quarantine == nil {
-		m.clearAlert(buildCanonicalStateID(pmg.ID, fmt.Sprintf("%s-quarantine-spam", pmg.ID)))
-		m.clearAlert(buildCanonicalStateID(pmg.ID, fmt.Sprintf("%s-quarantine-virus", pmg.ID)))
+		// A disabled or failed collector supplies no recovery evidence.
 		return
 	}
 

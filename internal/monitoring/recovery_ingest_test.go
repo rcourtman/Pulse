@@ -323,3 +323,32 @@ func TestRecoveryIngestPendingKeepsDistinctScopesAndEventBatches(t *testing.T) {
 		t.Fatalf("pending batches = %d, want two source enumerations and one event batch", got)
 	}
 }
+
+// Partial PBS batches must stay before the complete recovery that supersedes
+// them: coalescing across a non-authoritative batch would resurrect deleted
+// points after a later successful empty enumeration.
+func TestRecoveryIngestCompletePollCannotOvertakePartialBatch(t *testing.T) {
+	m, manager := recoveryIngestTestMonitor(t)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	m.recoveryIngestRunning = true
+	scope := recoveryReconcileScope{provider: string(recovery.ProviderProxmoxPVE), idPrefix: "pve-backup:", instance: "pve1"}
+	point := recoveryIngestTestPoint("pve-backup:old", "pve1", time.Now().UTC())
+	m.enqueueRecoveryIngest(recoveryIngestBatch{points: []recovery.RecoveryPoint{point}, reconcile: &scope})
+	m.enqueueRecoveryIngest(recoveryIngestBatch{points: []recovery.RecoveryPoint{point}})
+	m.enqueueRecoveryIngest(recoveryIngestBatch{reconcile: &scope})
+	// Repeated complete recovery may still coalesce on its own side of the barrier.
+	m.enqueueRecoveryIngest(recoveryIngestBatch{reconcile: &scope})
+	if got := len(m.recoveryIngestPending); got != 3 {
+		t.Fatalf("pending=%d, want complete/partial/complete in source order", got)
+	}
+	for _, batch := range m.recoveryIngestPending {
+		m.ingestRecoveryPointsBestEffort(context.Background(), batch)
+	}
+	if ids := listRecoveryPointIDs(t, manager); len(ids) != 0 {
+		t.Fatalf("partial history resurrected after authoritative empty recovery: %v", ids)
+	}
+}

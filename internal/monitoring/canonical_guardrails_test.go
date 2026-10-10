@@ -375,18 +375,13 @@ func TestDockerInventoryConvertersPreserveNativeRuntimeFields(t *testing.T) {
 	}
 }
 
-func TestPVEBackupPermissionWarningsPreserveTokenACLRepair(t *testing.T) {
-	warning := pveBackupPermissionWarning(&config.PVEInstance{
-		TokenName: "pulse-monitor@pve!pulse-example",
-	})
-
-	for _, snippet := range []string{
-		"pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin",
-		"pveum aclmod /storage -token 'pulse-monitor@pve!pulse-example' -role PVEDatastoreAdmin",
-	} {
-		if !strings.Contains(warning, snippet) {
-			t.Fatalf("expected warning to contain %q, got %q", snippet, warning)
-		}
+func TestPVEBackupPermissionWarningsPreserveNonDestructiveGuidance(t *testing.T) {
+	warning := pveBackupPermissionWarning(&config.PVEInstance{TokenName: "different-reader@pve!manual"})
+	if !strings.Contains(warning, "saved PVE connection") || !strings.Contains(warning, "privilege separation") || !strings.Contains(warning, "rejected endpoint") {
+		t.Fatalf("missing identity/scope guidance: %q", warning)
+	}
+	if strings.Contains(warning, "pveum") || strings.Contains(warning, "PVEDatastoreAdmin") || strings.Contains(warning, "pulse-monitor@pve") {
+		t.Fatalf("unconditional ACL recipe survived: %q", warning)
 	}
 }
 
@@ -956,7 +951,7 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			// the resolver must not consult guest RRD between the preferred
 			// guest-agent pass and the retry pass.
 			"// No RRD fallback here: PVE guest rrddata carries only cache-inclusive",
-			"if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
+			"agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)",
 			"memorySource = agentSource",
 			"guestRaw.GuestAgentMemAvailable = agentAvailable",
 			`memorySource = "unavailable"`,
@@ -1127,6 +1122,20 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 			}
 		}
 	}
+}
+
+func TestGuestDiskObservationContract(t *testing.T) {
+	t.Run("legacy-origin-admission", testGuestDiskLegacyObservationAge)
+	t.Run("original-source-age", testGuestDiskOriginalObservationAge)
+	t.Run("repeated-canonical-polls", testGuestDiskRepeatedPollsAndCanonicalOrigin)
+	t.Run("ordinary-deferral-expiry-recovery", testGuestDiskOrdinaryDeferralExpiryAndRecovery)
+}
+
+func TestGuestAgentAdmissionEvidenceContract(t *testing.T) {
+	t.Run("retained-identity-cannot-renew", testGuestAgentRetainedIdentityCannotRenewAdmission)
+	t.Run("original-age", testGuestAgentEvidenceOriginalAge)
+	t.Run("canonical-continuity", testGuestAgentEvidenceCanonicalContinuity)
+	t.Run("accepted-read-origins", testGuestAgentEvidenceAcceptedReadOrigins)
 }
 
 func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {
@@ -3152,6 +3161,15 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
 }
 
+func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
+	t.Run("current-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, false) })
+	t.Run("recent-evidence-without-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, true) })
+}
+
+func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
+	testGuestWindowsMeminfoPolling(t)
+}
+
 func TestGuestMemoryObservationContract(t *testing.T) {
 	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
 	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)
@@ -3237,6 +3255,10 @@ func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 	}
 }
 
+func TestGuestAgentUnrecognisedHTTPStatusContract(t *testing.T) {
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "conflict response", "too early response", "client closed response")
+}
+
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 	for _, reason := range []string{"agent-redirect", "agent-transport-unverified", "agent-completion-unverified"} {
 		for _, prefix := range []string{"", "prev-"} {
@@ -3250,7 +3272,14 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 			t.Errorf("completed/ordinary error %q became transport uncertainty", reason)
 		}
 	}
-	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "lost reply", "redirect", "server error", "gateway error")
+}
+
+func TestGuestAgentSuccessEnvelopeMonitoringContract(t *testing.T) {
+	// A complete HTTP 200 is not enough to renew guest caches or History when
+	// it only supplies a malformed, ambiguous or prefix-only reply. These
+	// real client/builder controls also keep independent CPU progressing.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "malformed success", "ambiguous success", "trailing success")
 }
 
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
@@ -3267,4 +3296,8 @@ func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 			t.Errorf("%s has %d shared backup evaluations, want %d", path, got, want)
 		}
 	}
+}
+
+func TestGuestMemorySampleCapacityCanonicalProjection(t *testing.T) {
+	testGuestMemorySampleCapacityPolling(t)
 }

@@ -224,7 +224,9 @@ func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *test
 			call := "pulse_api GET /api/state/summary"
 			switch mode {
 			case "unsupported method":
-				call = "pulse_api DELETE /api/actions/act_example"
+				// DELETE and PUT are supported by the existing RBAC recipes.
+				// Keep the rejection control outside that reviewed method set.
+				call = "pulse_api PATCH /api/actions/act_example"
 			case "full URL":
 				call = "pulse_api GET https://not-this-instance.invalid/api/state"
 			case "extra argument":

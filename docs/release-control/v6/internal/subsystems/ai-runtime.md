@@ -25,6 +25,164 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Guest memory remains qualified through tools and local observers
+
+The existing guest get/list/topology tools and Assistant inventory context carry
+selected memory evidence with the percentage. Unavailable/invalid memory is
+null, not zero usage; a measured zero stays numeric. Evidence retains source,
+state and original observation time, including unknown pressure and possible
+reclaimable cache. Condensed query facts retain the same qualification rather
+than saving a bare percentage. `TestGuestMemoryQueryEvidence` and
+`TestAssistantGuestMemoryContextAndFacts` check the real tool/context/fact paths.
+
+The existing local memory observer uses that same interpretation for VM/system
+containers. Unknown pressure wakes it with an explicit evidence gap, not a
+numeric breach or a healthy predicate. A known selected guest sample is bounded
+by its own observation age; refreshing the resource through another source does
+not renew it. Other-platform legacy readings and other metric observers retain
+their existing semantics. `TestPatrolObserverGuestMemoryOrigin` checks unknown,
+retained, undated, future, invalid and stale origins alongside genuine low/zero/
+high pressure and the age boundary. This changes no objective ABI, threshold,
+collection lease, observer authority or guest-command admission.
+
+Performance-tool guest memory history remains numeric, but explicitly lacks
+per-sample source/pressure qualification. A live current reading cannot reattribute
+past samples or prove that past high usage was pressure/a leak.
+`TestGuestMemoryHistoryDoesNotBorrowLiveOrigin` checks unchanged numeric history,
+its truthful limitation and non-guest compatibility. No History writer/schema
+or existing stored finding is changed. These controls do not establish #2762's
+running source, episode cause, native recovery or a containing release.
+
+### Patrol guest memory is qualified evidence, not an unlabelled percentage
+
+Patrol consumes the selected guest memory metric's original observation,
+including absence, last-known state, source and time. It does not borrow a
+different raw Proxmox facet, a refreshed resource timestamp or disk readiness.
+Current, dated cache-aware Proxmox/QGA/Pulse-agent readings can support guest
+pressure flags, anomalies, forecasts, actionability and recovery verification.
+Cache-inclusive status/cluster/total-minus-used estimates, unknown sources,
+undated/future origins and retained readings remain visible but cannot establish
+current pressure or recovery. Missing memory is N/A, not measured zero; real
+current zero and real high pressure both retain their meaning. Other platforms
+without Proxmox observations keep their existing selected readings.
+
+Full, quiet and condensed inventory and actual triage seeds preserve these
+qualifications, including unflagged running guests within the existing analysis scope. Guest
+analysis opt-outs do not acquire the new evidence section. The no-flag rollup is
+not a health verdict. Native guest runtime status, rather than canonical collection
+status, owns running/paused/stopped eligibility. A snapshot-only alert review
+cannot auto-resolve a memory alert from unknown guest pressure; independently
+verified current recovery and removed-resource handling remain separate.
+
+`TestPatrolGuestMemoryEvidence`, `TestPatrolGuestMemoryForecastsAndAnomalies`,
+`TestPatrolGuestMemoryAlertRecovery` and
+`TestPatrolGuestMemorySelectedMetricAndOtherPlatforms` exercise these connected
+paths. `TestIssue2762NamedMemoryFields` checks the existing named MemAvailable
+parser against synthetic cache-heavy/reordered evidence, not a new free-table
+parser. These controls do not establish issue #2762's installed input or cause,
+a cleared finding, or a containing release. Monitoring collection, guest-agent
+admission, configured alert thresholds, history storage and access are unchanged.
+
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
+
+### Legacy protection copy is not a canonical-plan guarantee
+
+The retained Protected guests list is older configuration, not a filter of
+canonical saved resource plans. Settings and both existing help pages must
+state that limitation and direct the operator to Actions target/approval review.
+The value is preserved on unrelated saves. Mounted component, accessible
+description and mirrored-help checks prevent a false exclusion promise.
+`TestService_isAutonomousModeEnabled` also covers every current saved level,
+explicit core-owned investigation enable/disable and unchanged stored values.
+
+### Interactive Assistant modes reflect action planning
+
+Interactive Assistant offers Read-only and Ask first (`controlled`).
+`config.AssistantControlLevel` projects legacy `autonomous` to controlled only
+for interactive responses/tool availability. Saved bytes, shared capability
+vocabulary, entitlement checks and legacy `IsAutonomous` approval-admission
+remain intact; removing that legacy check would relax command approval.
+Chat's control tool saves typed plans to Actions without execution. Scoped
+handoff flags, execute authority, policy and action lifecycle
+review/run/verification remain necessary; Patrol mode/Autopilot is separate.
+Unrelated Settings saves compare normalised values and preserve saved legacy
+preferences. Runtime, real encrypted-settings roundtrip/API, mounted component
+and public-help controls cover this boundary; no installed action is proved.
+
+### Assistant action plans do not guess an installation from session placement
+
+An explicit current canonical resource ID takes precedence over stale session
+aliases in `pulse_control`. Without one, session-to-inventory binding must have
+one canonical match: repeated VMID/node pairs, container-ID/host pairs, agent
+names or conflicting canonical aliases cannot select the first listed resource.
+Ambiguity returns the canonical alternatives with the tool error bit before
+calling the action planner, including for an older session-only reference.
+The advertised-action projection omits these ambiguous targets too.
+
+Unique placement, canonical aliases and inventory-only lookup remain usable
+without another discovery step. Inventory-only canonical lookup retains session
+registration. Capability checks, approval policy and execution remain with the
+existing action lifecycle; these source controls establish no native action or
+cross-installation monitoring recovery.
+`control_target_identity_test.go` covers both inventory orders, all four control
+resource kinds, conflicting aliases, planning refusal, stale-session canonical
+override, unique placement and session continuity.
+
+### Guest-config tools require an unambiguous resource identity
+
+The existing VM/system-container configuration tool selects an exact canonical
+resource ID before considering a name or bare VMID. A name/VMID matching more
+than one guest or a target lacking complete provider placement returns a useful
+error without invoking the config provider. Successful configuration and its
+governance metadata come directly from the selected typed guest view, never a
+second name-based resolution. Unique aliases remain supported; app-container configuration,
+command authority and provider permissions are unchanged.
+
+`TestGuestConfigToolIdentity` covers both inventory orders, shared names/VMIDs,
+canonical-ID/name collisions, unique aliases and missing/invalid placement at
+the actual tool/provider boundary. It checks config attribution and no provider
+read on refusal. Source controls are not installed multi-instance recovery.
+
+
+### Permanent suppression rules remain reversible — issue #2528
+
+The existing manual suppression API/store semantics remain unchanged. Patrol
+Activity now exposes scoped list/confirm/remove/readback for explicitly manual
+rules. Deleting a rule permits future matches but does not reopen historical
+dismissals, erase findings, broaden creation scope or modify other rules.
+Finding-specific Reopen and remembered decisions remain distinct. Frontend
+API/component controls plus authenticated handler/store controls verify these
+boundaries; source/browser proof does not establish installed or reporter
+acceptance.
+
+Manual-rule confirmation retains a readable scope and exact ID with a scrollable long reason and separate action footer. This is an existing-flow accessibility repair, not a change to deletion, finding history or server authority.
+
+
+### Host filesystem alerts retain exact subjects in scoped Patrol
+
+An alert-button request may name a collected child subject such as
+`agent:<source-id>/disk:docker-data`. Patrol binds that reference through the
+shared current-inventory resolver only when the exact collected alert identifier
+and subject agree. The canonical owner becomes the collection scope. The alert
+keeps its original child identity, filesystem metadata, observed value, threshold
+and message in both full and budgeted model context. Related child alert evidence
+is retained only for the selected current owner. Missing owners, caller-authored
+child paths, names and conflicting source identities cannot broaden scope.
+
+Linked VM, container and node owners retain their agent observations. Node/host
+views of the same proven canonical owner are one identity. Automatic alert type
+hints follow that owner while explicit caller type restrictions stay intact.
+Admission and execution resolve independently against current collection state.
+`patrol_alert_scope_test.go` covers linked owners, evidence, repeated resolution
+and rejected subjects. `patrol_host_disk_scope_test.go` exercises the production
+host alert evaluator and HTTP handler. The opt-in browser backend and
+`scripts/check-host-disk-patrol.mjs` verify `/alerts` admission and feedback at
+1440 and 390 pixels. Browser fixtures qualify admission, not model diagnosis.
+
 ### Fully cached Patrol usage — issues #2118 / #2350
 
 Zero ordinary input tokens do not mean a run was free or skipped. Any positive
@@ -128,24 +286,18 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
-### Process-wide memory ID sequences
+### Process-wide memory ID ownership
 
-`internal/ai/memory` mints incident, incident-event, remediation-record and
-context-memory IDs from package-level sequences that every store in the process
-shares. Multi-tenant monitoring gives each tenant monitor its own
-`IncidentStore`, and their alert checks call `RecordAlertFired` from separate
-goroutines, while a store's mutex covers only its own state. Each sequence is
-therefore an `atomic.Int64` minted through `nextSequencedID` in
-`internal/ai/memory/ids.go`, never a plain package counter. The ID shape stays
-`<prefix><local second>-<n>`, but `n` no longer wraps at 1000. The old
-`counter%1000` suffix repeated an ID whenever one generator minted more than a
-thousand in a wall-clock second, and incident notes resolve an incident by ID
-while timeline merges deduplicate events by ID. Within one process IDs are now
-unique by construction. Across restarts only the timestamp separates them, so a
-repeated local second (DST fall-back or a backward clock step) can still meet a
-restarted sequence's suffix. Persisted IDs and the stored format are unchanged.
-`internal/ai/memory/ids_test.go` mints from every generator concurrently and
-records alerts into two tenant stores concurrently; run it under `-race`.
+`internal/ai/memory` preserves random UUID incident and incident-event IDs from
+the reviewed occurrence repair. They have no shared mutable counter and do not
+reuse a local timestamp after restart. Existing persisted references remain valid.
+Remediation-record and context-memory IDs use the upstream package-wide atomic
+`Int64` sequences through `nextSequencedID` in `ids.go`, without wrapping at 1000.
+Their existing `<prefix><local second>-<n>` format remains; across restarts those
+four sequences still depend on the local timestamp and retain that limitation.
+`ids_test.go` checks all six actual formats and concurrent uniqueness, plus
+independent concurrent tenant-store recording under `-race`. The reviewed
+`incidents_identity_test.go` continues to pin UUID occurrence/event ownership.
 
 ### Canonical incident-history queries
 
@@ -358,6 +510,17 @@ linked node or guest) replaces the per-type trigger, and an override or agent
 default that switches the host's alerts off leaves no heat to judge. A disk no
 agent reports gets the per-type policy. The global alerts switch and the agent
 alert-type switch stop `CheckHost` without changing this policy, as before.
+A TrueNAS disk (`alerts.IsTrueNASDiskResource`, the disks the unified evaluator
+alerts on as `truenas-disk`) skips that walk, because its TrueNAS system carries
+a synthetic `Agent.AgentID` that would pass for a host agent:
+`physicalDiskTemperatureLimits` resolves it through
+`ThresholdProvider.GetTrueNASDiskTemperatureThreshold(resourceID, diskType)`
+(the alert manager's `TrueNASDiskTemperatureThreshold`, the `truenas-disk`
+tiers of `effectiveAlertPolicyNoLock`), so the disk's own override, then the
+TrueNAS-wide TrueNAS Disks value, then the per-type policy decide, as for its
+temperature alert, and a disabled override or TrueNAS Disks default leaves no
+heat. A host override under the system's synthetic ID no longer reaches its
+disks, and Disable all TrueNAS silences the alert without changing this policy.
 The run state carries the provider (`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
 configuration applies. A disk is hot from its trigger: a triage warning, a disk
 issue and an AI chat "needing attention" entry, as its temperature alert and
@@ -368,9 +531,13 @@ verification unknown rather than recovered. Scoped runs keep the provider, and a
 provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
 quiet and a SATA disk at 56C is flagged. Proofs:
 `internal/ai/patrol_disk_temperature_test.go` (a real registry with one
-overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`),
-`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` and
-`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` in
+overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`,
+and TrueNAS fixture disks under a per-disk override, a TrueNAS-wide value and a
+host override on the system ID, one with a retained reading, in
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers`),
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy`,
+`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` and
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` in
 `internal/ai/alert_threshold_adapter_test.go`.
 
 Retained summaries disclose that point and bucket timestamps describe returned

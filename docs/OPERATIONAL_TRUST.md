@@ -181,25 +181,67 @@ shape is now a local display adapter, not a writable source of truth.
 
 Before upgrading:
 
-1. back up the Pulse data directory;
-2. confirm that the v6 process can write its alert, notification, recovery, and
-   action database directories;
-3. confirm supported clients can read additive JSON fields;
-4. expose the metrics listener to a protected scraper if rollout telemetry is
-   required;
-5. verify Pulse Pro entitlement connectivity before relying on action offers.
+1. Record the running version, edition and deployment configuration. Keep a
+   consistent private backup of the actual data directory, matching encryption
+   and audit signing keys, and any external stores; use the
+   [full-state recovery guidance](MIGRATION.md#full-state-recovery), not a copy
+   of a live database file or a configuration-only export.
+2. Check the existing service account and persistent mounts through the normal
+   deployment configuration. Do not broaden permissions or replace keys to
+   make an upgrade check pass.
+3. Keep independent monitoring and alert coverage available during the update.
+   For affected freeze-enabled Proxmox backups, preserve the separate
+   [guest-safety precaution](VM_DISK_MONITORING.md#backup-safety).
+4. Keep the previous binary or image and its matching data backup until
+   recovery is checked. Reverting a binary does not reverse data migrations;
+   follow the deployment's [update and rollback guidance](AUTO_UPDATE.md#rollback).
 
-After upgrading:
+### Read-only checks after upgrading
 
-1. confirm the Patrol navigation count matches the active queue;
-2. inspect an active item through its deepest evidence and protection detail;
-3. acknowledge and unacknowledge a test item;
-4. verify a bounded suppression returns to active attention;
-5. confirm stale collection remains visible rather than resolving;
-6. exercise notification retry/dead-letter monitoring;
-7. if using Pulse Pro actions, complete a review/approve/run/verify journey.
+Use an existing authenticated browser session and ordinary collection. These
+checks inspect existing evidence; they do not require a new incident or a
+change to a workload, notification queue or alert lifecycle.
+
+1. Check the running server version and edition, then the normal connection
+   health and observation times. Compare the same connection, resource and time
+   range before and after the upgrade; reused names or VMIDs are not identity.
+2. Compare the Patrol navigation count with the active queue using the same
+   organisation, access scope and filters. Open an existing item, if present,
+   and inspect its resource, lifecycle, evidence and protection detail. An
+   empty queue does not establish complete or healthy collection.
+3. Confirm that retained evidence still shows its observation time and any
+   stale, denied, partial or unknown state. Do not disconnect a collector or
+   induce a fault to obtain a test case. A successful task or action is not
+   fresh detector evidence of recovery, guest thaw or a tested restore.
+4. Inspect **Recent delivery activity** in Alert History and existing failed
+   delivery details, if any. Compare the original alert, queued attempt and
+   recipient's actual message separately; Test success does not establish
+   ordinary, grouped or resolved delivery. Use the
+   [notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+   for the actual symptom.
+5. If using Pro actions, inspect existing execution and verification records
+   separately. A successful execution does not establish verified recovery;
+   an unavailable action offer is not by itself a monitoring failure.
+
+**Do not acknowledge, suppress, retry, dismiss or clear records, send a Test,
+or approve or run an action merely to validate an upgrade.** Retry can send a
+real notification, suppression changes active attention, and an offered Docker
+restart changes a workload. These controls remain available for intentional
+operator work, not passive diagnostics. If a check needs an event that has not
+occurred, record it as unverified rather than manufacture one. Exercise those
+paths only in an isolated non-production fixture with synthetic destinations
+and disposable workloads, never against live resources.
+
+Keep any existing metrics listener private; reading through an already
+protected scraper is optional, not a reason to expose a new listener or widen
+network access. Keep authentication, TLS verification and least-privilege
+collection unchanged. Preserve errors and existing delivery/action records;
+share only the affected view, version, time and locally redacted explanation,
+not credentials, full inventories, notification payloads or Debug exports. See
+[safe issue reporting](TROUBLESHOOTING.md#-getting-help).
 
 If a migration fails, stop the upgraded process, preserve the data directory
-and logs, and restore the prior release with the pre-upgrade data backup. Do
-not delete lifecycle, evidence, notification, recovery, or action records to
-force startup.
+and private logs, and use the deployment's recovery procedure with the prior
+release and its matching consistent pre-upgrade data backup. A failed read or
+an empty queue alone is not a reason to restore data. Do not delete lifecycle,
+evidence, notification, recovery or action records to force startup.

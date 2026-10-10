@@ -85,13 +85,17 @@ PY
 
 systemctl_if_available() {
     if ! command -v systemctl >/dev/null 2>&1; then
-        return 0
+        print_warn "systemctl is unavailable; legacy service cleanup is unconfirmed"
+        return 1
     fi
-    systemctl "$@" >/dev/null 2>&1 || true
+    systemctl "$@" >/dev/null 2>&1
 }
 
 disable_legacy_units() {
     local unit=""
+    local load_state=""
+    local active_state=""
+    local result=0
     local units=(
         pulse-sensor-proxy.service
         pulse-sensor-proxy-selfheal.timer
@@ -100,11 +104,35 @@ disable_legacy_units() {
         pulse-sensor-cleanup.service
     )
 
+    if ! command -v systemctl >/dev/null 2>&1; then
+        print_warn "systemctl is unavailable; legacy service cleanup is unconfirmed"
+        return 1
+    fi
     for unit in "${units[@]}"; do
-        systemctl_if_available stop "$unit"
-        systemctl_if_available disable "$unit"
+        if ! load_state=$(systemctl show "$unit" --property=LoadState --value 2>/dev/null); then
+            print_warn "Cannot inspect legacy unit ${unit}; cleanup is incomplete"
+            result=1
+            continue
+        fi
+        [[ "$load_state" == "not-found" ]] && continue
+        if [[ -z "$load_state" ]] || ! systemctl_if_available stop "$unit"; then
+            print_warn "Cannot stop legacy unit ${unit}; cleanup is incomplete"
+            result=1
+            continue
+        fi
+        if ! active_state=$(systemctl show "$unit" --property=ActiveState --value 2>/dev/null) ||
+            [[ "$active_state" != "inactive" && "$active_state" != "failed" ]]; then
+            print_warn "Legacy unit ${unit} is not confirmed stopped; cleanup is incomplete"
+            result=1
+            continue
+        fi
+        if ! systemctl_if_available disable "$unit"; then
+            print_warn "Cannot disable legacy unit ${unit}; cleanup is incomplete"
+            result=1
+        fi
     done
-    systemctl_if_available daemon-reload
+    systemctl_if_available daemon-reload || result=1
+    return "$result"
 }
 
 remove_managed_keys_from_authorized_keys_file() {
@@ -257,88 +285,137 @@ cleanup_cluster_authorized_keys() {
     return "$status"
 }
 
-main_section_snapshot_line() {
-    local conf="$1"
-    grep -n '^\[' "$conf" 2>/dev/null | head -1 | cut -d: -f1
+# Only current (pre-snapshot) mount entries are eligible for cleanup.
+sensor_proxy_mount_keys() {
+    awk '
+        /^\[/ { exit }
+        /^mp[0-9]+:.*pulse-sensor-proxy/ { sub(/:.*/, ""); print }
+        /^lxc\.mount\.entry:.*pulse-sensor-proxy/ { print "lxc.mount.entry" }
+    ' "$1"
 }
 
 cleanup_sensor_proxy_lines_in_conf() {
     local conf="$1"
-    local snapshot_line="${2:-}"
     local tmp_file=""
 
-    tmp_file=$(mktemp)
-    if [[ -n "$snapshot_line" && "$snapshot_line" -gt 1 ]]; then
-        awk -v snapshot_line="$snapshot_line" '
-            NR < snapshot_line && ($0 ~ /^mp[0-9]+:.*pulse-sensor-proxy/ || $0 ~ /^lxc\.mount\.entry:.*pulse-sensor-proxy/) { next }
-            { print }
-        ' "$conf" >"$tmp_file"
-    else
-        awk '
-            $0 ~ /^mp[0-9]+:.*pulse-sensor-proxy/ { next }
-            $0 ~ /^lxc\.mount\.entry:.*pulse-sensor-proxy/ { next }
-            { print }
-        ' "$conf" >"$tmp_file"
+    tmp_file=$(mktemp) || return 1
+    if ! awk '
+        /^\[/ { snapshot = 1 }
+        !snapshot && ($0 ~ /^mp[0-9]+:.*pulse-sensor-proxy/ || $0 ~ /^lxc\.mount\.entry:.*pulse-sensor-proxy/) { next }
+        { print }
+    ' "$conf" >"$tmp_file" ||
+        ! chmod --reference="$conf" "$tmp_file" ||
+        ! chown --reference="$conf" "$tmp_file" ||
+        ! mv "$tmp_file" "$conf"; then
+        rm -f "$tmp_file"
+        return 1
     fi
+}
 
-    chmod --reference="$conf" "$tmp_file" 2>/dev/null || true
-    chown --reference="$conf" "$tmp_file" 2>/dev/null || true
-    mv "$tmp_file" "$conf"
+sensor_proxy_container_status() {
+    local status=""
+    status=$(pct status "$1" 2>/dev/null) || return 1
+    case "$status" in
+        "status: running") printf 'running\n' ;;
+        "status: stopped") printf 'stopped\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+cleanup_sensor_proxy_container() {
+    local ctid="$1"
+    local conf="$2"
+    local keys=""
+    local key=""
+    local status=""
+    local was_running=false
+    local result=0
+
+    keys=$(sensor_proxy_mount_keys "$conf") || return 1
+    [[ -z "$keys" ]] && return 0
+    print_info "Cleaning stale pulse-sensor-proxy mount entries from container ${ctid}"
+    if ! status=$(sensor_proxy_container_status "$ctid"); then
+        print_warn "Container ${ctid} status is unknown; no configuration edits or restart attempted"
+        return 1
+    fi
+    if [[ "$status" == "running" ]]; then
+        was_running=true
+        if ! timeout --kill-after=1s 30 pct stop "$ctid" >/dev/null 2>&1; then
+            print_warn "Container ${ctid} stop failed; no configuration edits or restart attempted; check its state locally"
+            return 1
+        fi
+    fi
+    # A successful stop command is not a stopped-state observation. Recheck
+    # before every mutation, including the direct legacy mount-line removal.
+    if ! status=$(sensor_proxy_container_status "$ctid") || [[ "$status" != "stopped" ]]; then
+        print_warn "Container ${ctid} is not confirmed stopped; no configuration edits or restart attempted"
+        return 1
+    fi
+    while IFS= read -r key; do
+        [[ "$key" == "lxc.mount.entry" ]] && continue
+        if ! status=$(sensor_proxy_container_status "$ctid") || [[ "$status" != "stopped" ]]; then
+            print_warn "Container ${ctid} stopped state was lost; no further edits or restart attempted"
+            return 1
+        fi
+        if ! timeout --kill-after=1s 15 pct set "$ctid" -delete "$key" >/dev/null 2>&1; then
+            print_warn "Container ${ctid} mount ${key} removal failed; no direct configuration fallback attempted"
+            result=1
+            break
+        fi
+    done <<<"$keys"
+    if (( result == 0 )); then
+        if ! status=$(sensor_proxy_container_status "$ctid") || [[ "$status" != "stopped" ]]; then
+            print_warn "Container ${ctid} stopped state was lost; no further edits or restart attempted"
+            return 1
+        fi
+        if ! cleanup_sensor_proxy_lines_in_conf "$conf"; then
+            print_warn "Container ${ctid} configuration cleanup failed"
+            result=1
+        elif ! keys=$(sensor_proxy_mount_keys "$conf") || [[ -n "$keys" ]]; then
+            print_warn "Container ${ctid} still has legacy mount entries; cleanup is incomplete"
+            result=1
+        fi
+    fi
+    if [[ "$was_running" == "true" ]]; then
+        if ! status=$(sensor_proxy_container_status "$ctid") || [[ "$status" != "stopped" ]]; then
+            print_warn "Container ${ctid} state is unconfirmed for restoration; no restart attempted"
+            return 1
+        fi
+        if ! timeout --kill-after=1s 30 pct start "$ctid" >/dev/null 2>&1 ||
+            ! status=$(sensor_proxy_container_status "$ctid") || [[ "$status" != "running" ]]; then
+            print_warn "Container ${ctid} was running before cleanup but its running state was not restored; check it locally"
+            result=1
+        fi
+    fi
+    return "$result"
 }
 
 cleanup_stale_sensor_proxy_mounts() {
     local ctid=""
     local conf=""
-    local snapshot_line=""
-    local status=""
-    local was_running=false
-    local mp_keys=""
-    local mp_key=""
-    local cleaned=0
+    local containers=""
+    local result=0
 
     if ! command -v pct >/dev/null 2>&1; then
-        return 0
+        print_warn "pct is unavailable; LXC mount cleanup is unconfirmed"
+        return 1
     fi
-
+    if ! containers=$(pct list 2>/dev/null) || [[ "$containers" != VMID* ]]; then
+        print_warn "Cannot list local containers; LXC mount cleanup is incomplete"
+        return 1
+    fi
     while IFS= read -r ctid; do
         [[ -z "$ctid" ]] && continue
+        if [[ ! "$ctid" =~ ^[0-9]+$ ]]; then
+            print_warn "Invalid container identity; LXC mount cleanup is incomplete"
+            result=1
+            continue
+        fi
         conf="/etc/pve/lxc/${ctid}.conf"
         [[ -f "$conf" ]] || continue
-        grep -q 'pulse-sensor-proxy' "$conf" 2>/dev/null || continue
-
-        print_info "Cleaning stale pulse-sensor-proxy mount entries from container ${ctid}"
-        status=$(pct status "$ctid" 2>/dev/null | awk '{print $2}') || true
-        was_running=false
-        [[ "$status" == "running" ]] && was_running=true
-
-        if [[ "$was_running" == "true" ]]; then
-            timeout 30 pct stop "$ctid" >/dev/null 2>&1 || true
-            sleep 2
-        fi
-
-        snapshot_line=$(main_section_snapshot_line "$conf")
-        if [[ -n "$snapshot_line" && "$snapshot_line" -gt 1 ]]; then
-            mp_keys=$(head -n "$((snapshot_line - 1))" "$conf" 2>/dev/null | grep -E '^mp[0-9]+:.*pulse-sensor-proxy' | sed 's/:.*//') || true
-        else
-            mp_keys=$(grep -E '^mp[0-9]+:.*pulse-sensor-proxy' "$conf" 2>/dev/null | sed 's/:.*//') || true
-        fi
-
-        while IFS= read -r mp_key; do
-            [[ -z "$mp_key" ]] && continue
-            timeout 15 pct set "$ctid" -delete "$mp_key" >/dev/null 2>&1 || true
-            cleaned=$((cleaned + 1))
-        done <<<"$mp_keys"
-
-        cleanup_sensor_proxy_lines_in_conf "$conf" "$snapshot_line"
-
-        if [[ "$was_running" == "true" ]]; then
-            timeout 30 pct start "$ctid" >/dev/null 2>&1 || print_warn "Container ${ctid} was running before cleanup but could not be restarted automatically"
-        fi
-    done < <(pct list 2>/dev/null | tail -n +2 | awk '{print $1}')
-
-    if (( cleaned > 0 )); then
-        print_success "Removed legacy pulse-sensor-proxy mount entries from Proxmox LXC config(s)"
-    fi
+        cleanup_sensor_proxy_container "$ctid" "$conf" || result=1
+    done < <(printf '%s\n' "$containers" | tail -n +2 | awk '{print $1}')
+    return "$result"
 }
 
 remove_path_if_present() {
@@ -443,6 +520,7 @@ PY
 
 main() {
     local cluster_key_cleanup_status=0
+    local container_cleanup_status=0
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -496,12 +574,22 @@ main() {
     done
 
     print_info "Starting legacy pulse-sensor-proxy cleanup"
-    disable_legacy_units
+    if ! disable_legacy_units; then
+        print_warn "Legacy service cleanup is incomplete; leaving keys, containers, files and API access unchanged"
+        return 1
+    fi
     cleanup_cluster_authorized_keys || cluster_key_cleanup_status=$?
-    cleanup_stale_sensor_proxy_mounts
+    cleanup_stale_sensor_proxy_mounts || container_cleanup_status=$?
+    if (( container_cleanup_status != 0 )); then
+        print_warn "LXC cleanup is incomplete; leaving legacy files and API access unchanged; check affected containers locally"
+        return "$container_cleanup_status"
+    fi
     remove_legacy_files
     remove_proxmox_access
-    systemctl_if_available daemon-reload
+    if ! systemctl_if_available daemon-reload; then
+        print_warn "Cannot reload service configuration; cleanup is incomplete"
+        return 1
+    fi
     if (( cluster_key_cleanup_status != 0 )); then
         print_warn "Local cleanup completed, but one or more remote cluster nodes still require trusted, local cleanup"
         return "$cluster_key_cleanup_status"

@@ -14,22 +14,95 @@ import (
 
 const pveReplicationPollTimeout = 10 * time.Second
 
+// pveReplicationPoll owns one background observation. The claim is installed
+// before dispatch and checked under m.mu together with the registered client at
+// publication, so a retired/replaced instance cannot publish a late inventory.
+type pveReplicationPoll struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	client PVEClientInterface
+	done   chan struct{}
+}
+
 func (m *Monitor) pollReplicationStatusAsync(instanceName string, client PVEClientInterface, vms []models.VM) {
-	parentCtx := m.getRuntimeContext()
+	m.mu.Lock()
+	if client == nil || m.pveClients[instanceName] != client {
+		m.mu.Unlock()
+		return
+	}
+	parentCtx := m.runtimeCtx
 	if parentCtx == nil {
 		parentCtx = context.Background()
 	}
+	if parentCtx.Err() != nil {
+		m.mu.Unlock()
+		return
+	}
+	if m.pveReplicationPolls == nil {
+		m.pveReplicationPolls = make(map[string]*pveReplicationPoll)
+	}
+	if previous := m.pveReplicationPolls[instanceName]; previous != nil {
+		if previous.client == client && previous.ctx.Err() == nil {
+			m.mu.Unlock()
+			return // A slow read must not stack up once per ordinary cycle.
+		}
+		previous.cancel()
+	}
+	ctx, cancel := context.WithTimeout(parentCtx, pveReplicationPollTimeout)
+	owner := &pveReplicationPoll{ctx: ctx, cancel: cancel, client: client, done: make(chan struct{})}
+	m.pveReplicationPolls[instanceName] = owner
+	m.mu.Unlock()
+
 	guestSnapshot := append([]models.VM(nil), vms...)
+	if vms == nil {
+		// Only replication identity is needed; do not clone guest enrichment or
+		// rebuild all prior guest/agent indexes for each scheduled cycle.
+		if state := m.GetUnifiedReadStateOrSnapshot(); state != nil {
+			for _, vm := range state.VMs() {
+				if vm != nil && vm.Instance() == instanceName {
+					guestSnapshot = append(guestSnapshot, models.VM{VMID: vm.VMID(), Name: vm.Name(), Type: "qemu", Node: vm.Node()})
+				}
+			}
+		}
+	}
 	go func() {
+		defer func() {
+			cancel()
+			m.mu.Lock()
+			if m.pveReplicationPolls[instanceName] == owner {
+				delete(m.pveReplicationPolls, instanceName)
+			}
+			m.mu.Unlock()
+			close(owner.done)
+		}()
 		defer recoverFromPanic(fmt.Sprintf("pollReplicationStatus-%s", instanceName))
-		ctx, cancel := context.WithTimeout(parentCtx, pveReplicationPollTimeout)
-		defer cancel()
-		m.pollReplicationStatus(ctx, instanceName, client, guestSnapshot)
+		m.pollReplicationStatusOwned(ctx, instanceName, client, guestSnapshot, owner)
 	}()
+}
+
+// publishReplicationJobs never treats an interrupted observation as an empty
+// inventory, and never lets an old client overwrite its replacement's result.
+func (m *Monitor) publishReplicationJobs(ctx context.Context, instanceName string, jobs []models.ReplicationJob, owner *pveReplicationPoll) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
+	if owner != nil && (m.pveReplicationPolls[instanceName] != owner || m.pveClients[instanceName] != owner.client) {
+		return
+	}
+	m.state.UpdateReplicationJobsForInstance(instanceName, jobs)
 }
 
 // pollReplicationStatus polls storage replication jobs for a PVE instance.
 func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM) {
+	m.pollReplicationStatusOwned(ctx, instanceName, client, vms, nil)
+}
+
+func (m *Monitor) pollReplicationStatusOwned(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM, owner *pveReplicationPoll) {
+	if ctx.Err() != nil {
+		return
+	}
 	log.Debug().Str("instance", instanceName).Msg("polling replication status")
 
 	jobs, err := client.GetReplicationStatus(ctx)
@@ -40,7 +113,7 @@ func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string
 			log.Debug().
 				Str("instance", instanceName).
 				Msg("Replication API not available on this Proxmox instance")
-			m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
+			// An unavailable endpoint is not a successful empty inventory.
 			return
 		}
 
@@ -52,8 +125,11 @@ func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string
 		return
 	}
 
+	if ctx.Err() != nil {
+		return
+	}
 	if len(jobs) == 0 {
-		m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
+		m.publishReplicationJobs(ctx, instanceName, []models.ReplicationJob{}, owner)
 		return
 	}
 
@@ -170,7 +246,7 @@ func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string
 		})
 	}
 
-	m.state.UpdateReplicationJobsForInstance(instanceName, converted)
+	m.publishReplicationJobs(ctx, instanceName, converted, owner)
 }
 
 func formatSeconds(total int) string {

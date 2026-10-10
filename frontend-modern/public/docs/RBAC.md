@@ -55,15 +55,29 @@ full-access (`*`) API token bound to an authorised administrator; a monitoring
 token is not enough. Do not widen an agent's token for this job.
 
 If you already use an administration token, prepare its private header file
-as described in [API authentication](API.md#-authentication). The examples read
-`$HOME/.config/pulse/api-header`; never paste the token or a session cookie into
-a command. Keep this file outside shared repositories and diagnostics.
+and define `pulse_api` **in the same Bash session** using
+[API authentication](API.md#-authentication). The helper is local example code,
+not an installed Pulse command. Never paste the token or a session cookie into
+a command, URL or report, or use browser **Copy as cURL**.
 
-The loopback URLs work on the Pulse host. For remote use, substitute your
-Pulse HTTPS URL and keep certificate verification enabled. Use curl 7.76 or
-later; `--disable` must remain first to ignore local trace/verbose defaults,
-and `--fail-with-body` makes HTTP failures return a non-zero exit. Run each
-change separately and check its response before continuing.
+On the Pulse host, the helper uses loopback; for remote use, follow that guide's
+HTTPS-origin instructions and keep certificate verification enabled. It makes
+one request with a five-second connection limit and a twenty-second total limit,
+prints only the HTTP status and saves each response in a new owner-only file.
+Inspect the file privately, including on failure: role lists, user identities
+and errors can contain private information. Share only a relevant redacted
+excerpt, not full responses, header files or tokens. HTTP 401/402/403, redirects
+and transport errors are not an empty role or user list.
+
+**These are separate operations, not a script to run from top to bottom.**
+Choose the intended target and change before making a request; preserve an
+existing administrator recovery path. Deleting a role or user and sending an
+empty role list remove access. After a change, check that target's saved roles
+and intended access through the normal UI or a separate read-only request.
+The helper does not follow redirects or retry. A timeout or partial response
+can occur **after the change was applied**; inspect the current state before
+deciding what to do, rather than repeating the mutation blindly. HTTP success
+alone does not establish the intended access or disable an upstream IdP account.
 
 ### Creating a Role
 
@@ -74,9 +88,7 @@ Use a new custom role ID. Built-in roles (`admin`, `operator`, `viewer`,
 
 **API:**
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST \
-  --data-binary @- http://127.0.0.1:7655/api/admin/roles <<'JSON'
+pulse_api POST /api/admin/roles <<'JSON'
   {
     "id": "alert-manager",
     "name": "Alert Manager",
@@ -93,16 +105,13 @@ JSON
 ### Listing Roles
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/admin/roles
+pulse_api GET /api/admin/roles
 ```
 
 ### Updating a Role
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request PUT \
-  --data-binary @- http://127.0.0.1:7655/api/admin/roles/alert-manager <<'JSON'
+pulse_api PUT /api/admin/roles/alert-manager <<'JSON'
   {
     "name": "Alert Manager",
     "description": "Updated description",
@@ -119,8 +128,7 @@ JSON
 ### Deleting a Role
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request DELETE http://127.0.0.1:7655/api/admin/roles/alert-manager
+pulse_api DELETE /api/admin/roles/alert-manager
 ```
 
 ---
@@ -130,8 +138,7 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
 ### Listing Users and Their Roles
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/admin/users
+pulse_api GET /api/admin/users
 ```
 
 SSO users are displayed using the latest configured username claim and email
@@ -148,9 +155,7 @@ SSO principal). `jane` below is an example local username. Create the custom
 role before assigning it; do not run the deletion example first.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request PUT \
-  --data-binary @- http://127.0.0.1:7655/api/admin/users/jane/roles <<'JSON'
+pulse_api PUT /api/admin/users/jane/roles <<'JSON'
 {"roleIds": ["alert-manager", "viewer"]}
 JSON
 ```
@@ -158,9 +163,7 @@ JSON
 To clear a user's entire role assignment, including built-in roles, send an empty list:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request PUT \
-  --data-binary @- http://127.0.0.1:7655/api/admin/users/jane/roles <<'JSON'
+pulse_api PUT /api/admin/users/jane/roles <<'JSON'
 {"roleIds": []}
 JSON
 ```
@@ -170,8 +173,7 @@ Note: Users cannot modify their own role assignments (self-escalation prevention
 ### Removing User Access
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request DELETE http://127.0.0.1:7655/api/admin/users/jane
+pulse_api DELETE /api/admin/users/jane
 ```
 
 This removes the Pulse identity and all role assignments and revokes its active

@@ -3,6 +3,10 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -86,7 +90,7 @@ func TestGuestExecCommandPreflightAndPostflight(t *testing.T) {
 				if name != localGuestExecQM || !reflect.DeepEqual(args, []string{"guest", "exec", "105", "--", "sh", "-c", "echo original"}) {
 					t.Errorf("changed command/identity: %s %#v", name, args)
 				}
-				return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"original-result"}'`)
+				return guestExecTestCommand(t, ctx, "original-result", "")
 			}
 			t.Cleanup(func() { execCommandContext = oldExec })
 			payload := testApprovedCommandPayload(t, c, executeCommandPayload{RequestID: "scan", Command: "echo original", TargetType: " VM ", TargetID: "000105", Trusted: true})
@@ -174,6 +178,78 @@ func TestGuestExecSerializationCancellationCapacityAndExplicitResumption(t *test
 	cleaned(false)
 }
 
+// guestExecTestCommand runs this package's own test executable rather than a
+// platform-specific shell. The wait mode acknowledges that the child actually
+// started; command construction or elapsed wall time is not handoff evidence.
+func guestExecTestCommand(t *testing.T, ctx context.Context, mode, address string) *exec.Cmd {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return exec.CommandContext(ctx, self, "-test.run=^TestGuestExecControlledChild$", "--", "guest-exec-child", mode, address)
+}
+
+func TestGuestExecControlledChild(t *testing.T) {
+	args := os.Args
+	if len(args) < 4 || args[len(args)-3] != "guest-exec-child" {
+		return // ordinary package invocation, not the controlled child
+	}
+	mode, address := args[len(args)-2], args[len(args)-1]
+	if mode != "wait" {
+		fmt.Printf(`{"exited":1,"exitcode":0,"out-data":%q}`, mode)
+		os.Exit(0) // do not append the test runner's PASS to the QGA payload
+	}
+	conn, err := net.DialTimeout("tcp", address, 10*time.Second)
+	if err != nil {
+		os.Exit(2)
+	}
+	defer conn.Close()
+	if _, err := io.WriteString(conn, "started\n"); err != nil {
+		os.Exit(3)
+	}
+	// No timer completes this child. Only the production cancellation path
+	// kills it; a handshake failure closes the parent endpoint for cleanup.
+	var release [1]byte
+	_, _ = conn.Read(release[:])
+	os.Exit(4)
+}
+
+func TestGuestExecCanceledBeforeAdmissionNeverDispatches(t *testing.T) {
+	var reads, calls atomic.Int32
+	g := newGuestExecGuard(func(context.Context, string) ([]byte, error) {
+		reads.Add(1)
+		return []byte("name: vm\n"), nil
+	})
+	c := &CommandClient{guestExecAdmission: g}
+	oldExec := execCommandContext
+	execCommandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		calls.Add(1)
+		return guestExecTestCommand(t, ctx, "fresh", "")
+	}
+	t.Cleanup(func() { execCommandContext = oldExec })
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{Command: "echo original", TargetType: "vm", TargetID: "105", Trusted: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got := c.executeCommand(ctx, payload)
+	want := agentexec.GuestExecDeferred("the command was canceled before guest admission").Error()
+	if got.Success || got.Error != want || got.ExitCode != -1 || got.Stdout != "" || got.Stderr != "" || reads.Load() != 0 || calls.Load() != 0 {
+		t.Fatalf("pre-admission cancellation dispatched or published evidence: %#v reads=%d calls=%d", got, reads.Load(), calls.Load())
+	}
+	g.mu.Lock()
+	entries := len(g.entries)
+	g.mu.Unlock()
+	if entries != 0 {
+		t.Fatalf("pre-admission cancellation retained %d entries", entries)
+	}
+	// A separate, explicit request is allowed: nothing was handed off and
+	// therefore no completion-unknown cooldown should have been created.
+	got = c.executeCommand(context.Background(), payload)
+	if !got.Success || got.Stdout != "fresh" || reads.Load() != 2 || calls.Load() != 1 {
+		t.Fatalf("fresh request after pre-admission cancellation: %#v reads=%d calls=%d", got, reads.Load(), calls.Load())
+	}
+}
+
 func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *testing.T) {
 	var reads, calls atomic.Int32
 	g := newGuestExecGuard(func(context.Context, string) ([]byte, error) { reads.Add(1); return []byte("name: vm\n"), nil })
@@ -181,20 +257,60 @@ func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *
 	g.now = func() time.Time { return now }
 	c := &CommandClient{guestExecAdmission: g}
 	oldExec := execCommandContext
-	execCommandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	// This deadline is only a failing-test watchdog. It never initiates the
+	// expected cancellation and cannot turn pre-admission into a passing test.
+	if err := listener.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		calls.Add(1)
-		return exec.CommandContext(ctx, "sh", "-c", "sleep 5")
+		if name != localGuestExecQM || !reflect.DeepEqual(args, []string{"guest", "exec", "105", "--", "sh", "-c", "echo original"}) {
+			t.Errorf("changed handoff command/identity: %s %#v", name, args)
+		}
+		return guestExecTestCommand(t, ctx, "wait", listener.Addr().String())
 	}
 	t.Cleanup(func() { execCommandContext = oldExec })
 	payload := testApprovedCommandPayload(t, c, executeCommandPayload{Command: "echo original", TargetType: "vm", TargetID: "105", Trusted: true})
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	handoff := make(chan error, 1)
+	reaped := make(chan struct{})
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			defer conn.Close()
+			err = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			if err == nil {
+				var ready [8]byte
+				_, err = io.ReadFull(conn, ready[:])
+				if err == nil && string(ready[:]) != "started\n" {
+					err = fmt.Errorf("unexpected child handshake: %q", ready)
+				}
+			}
+		}
+		// Even on failure cancel and join the execution; no orphaned test child.
+		cancel()
+		handoff <- err
+		// Keep the peer open until executeCommand has reaped its child below.
+		if err == nil {
+			<-reaped
+		}
+	}()
 	got := c.executeCommand(ctx, payload)
-	if got.Success || got.Error != agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error() {
-		t.Fatalf("canceled result=%#v", got)
+	close(reaped)
+	if err := <-handoff; err != nil {
+		t.Fatalf("command never acknowledged handoff: %v (result=%#v)", err, got)
+	}
+	if got.Success || got.Error != agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error() || reads.Load() != 1 || calls.Load() != 1 {
+		t.Fatalf("canceled result=%#v reads=%d calls=%d", got, reads.Load(), calls.Load())
 	}
 	next := c.executeCommand(context.Background(), payload)
-	if next.Success || calls.Load() != 1 || reads.Load() != 1 {
+	if next.Success || next.Error != agentexec.GuestExecDeferred(agentexec.GuestExecCooldown).Error() || calls.Load() != 1 || reads.Load() != 1 {
 		t.Fatalf("canceled handoff replayed: %#v calls=%d reads=%d", next, calls.Load(), reads.Load())
 	}
 	g.mu.Lock()
@@ -202,7 +318,7 @@ func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *
 	g.mu.Unlock()
 	execCommandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		calls.Add(1)
-		return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"resumed"}'`)
+		return guestExecTestCommand(t, ctx, "resumed", "")
 	}
 	got = c.executeCommand(context.Background(), payload)
 	if !got.Success || got.Stdout != "resumed" || reads.Load() != 3 || calls.Load() != 2 {

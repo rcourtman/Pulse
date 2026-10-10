@@ -37,17 +37,37 @@ const makeGuest = (i: number, overrides?: Partial<WorkloadGuest>): WorkloadGuest
 
 describe('workloadSelectors (branch coverage)', () => {
   describe('createWorkloadSortComparator', () => {
-    it('sorts by memory usage in both directions and falls back to 0 for null memory', () => {
+    it('sorts current memory in both directions and keeps missing memory last', () => {
       const guests = [
         makeGuest(1, {
           id: 'high',
           name: 'high-mem',
-          memory: { total: 100, used: 80, free: 20, usage: 0.8 },
+          memory: {
+            total: 100,
+            used: 80,
+            free: 20,
+            usage: 80,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'low',
           name: 'low-mem',
-          memory: { total: 100, used: 10, free: 90, usage: 0.1 },
+          memory: {
+            total: 100,
+            used: 10,
+            free: 90,
+            usage: 10,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(3, {
           id: 'null',
@@ -62,24 +82,44 @@ describe('workloadSelectors (branch coverage)', () => {
       expect(memAsc).not.toBeNull();
       expect(memDesc).not.toBeNull();
 
-      // null-mem (0) < low-mem (0.1) < high-mem (0.8)
-      expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['null', 'low', 'high']);
+      // Missing is not a measured zero, in either direction.
+      expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['low', 'high', 'null']);
       expect([...guests].sort(memDesc!).map((g) => g.id)).toEqual(['high', 'low', 'null']);
     });
 
-    it('treats memory.usage of 0 as 0 via the || fallback', () => {
+    it('preserves a current measured zero', () => {
       const guests = [
         makeGuest(1, {
           id: 'a',
           name: 'alpha',
           cpu: 0.5,
-          memory: { total: 100, used: 0, free: 100, usage: 0 },
+          memory: {
+            total: 100,
+            used: 0,
+            free: 100,
+            usage: 0,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'b',
           name: 'beta',
           cpu: 0.5,
-          memory: { total: 100, used: 50, free: 50, usage: 0.5 },
+          memory: {
+            total: 100,
+            used: 50,
+            free: 50,
+            usage: 0.5,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
 
@@ -92,12 +132,32 @@ describe('workloadSelectors (branch coverage)', () => {
         makeGuest(1, {
           id: 'large-allocation',
           name: 'large-allocation',
-          memory: { total: 100, used: 60, free: 40, usage: 60 },
+          memory: {
+            total: 100,
+            used: 60,
+            free: 40,
+            usage: 60,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
         makeGuest(2, {
           id: 'large-host-share',
           name: 'large-host-share',
-          memory: { total: 100, used: 20, free: 80, usage: 20 },
+          memory: {
+            total: 100,
+            used: 20,
+            free: 80,
+            usage: 20,
+            observation: {
+              state: 'current',
+              source: 'status-mem',
+              observedAt: '2026-10-08T00:00:00Z',
+            },
+          },
         }),
       ];
       const hostShare = new Map([
@@ -521,13 +581,13 @@ describe('workloadSelectors (branch coverage)', () => {
       ).toBe(100);
     });
 
-    it('returns 0 for usage of 0 and clamps negative usage to 0', () => {
+    it('keeps a reported zero but treats negative usage as unavailable', () => {
       expect(
         getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 0, free: 100, usage: 0 } })),
       ).toBe(0);
       expect(
         getDiskUsagePercent(makeGuest(2, { disk: { total: 100, used: 0, free: 100, usage: -5 } })),
-      ).toBe(0);
+      ).toBeNull();
     });
 
     it('falls back to used/total when usage is non-finite (Infinity)', () => {
@@ -582,7 +642,7 @@ describe('workloadSelectors (branch coverage)', () => {
         instance: 'inst-1',
         node: 'node-1',
       });
-      expect(getWorkloadGroupKey(guest)).toBe('inst-1-node-1');
+      expect(getWorkloadGroupKey(guest)).toBe('node|inst-1|node-1');
     });
 
     it('falls back through contextLabel -> node -> instance -> namespace -> id', () => {
@@ -730,9 +790,9 @@ describe('workloadSelectors (branch coverage)', () => {
 
       const result = groupWorkloads(guests, 'grouped', null);
 
-      expect(Object.keys(result)).toEqual(['inst-nd']);
+      expect(Object.keys(result)).toEqual(['node|inst|nd']);
       // Original insertion order preserved (no comparator)
-      expect(result['inst-nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
+      expect(result['node|inst|nd'].map((g) => g.id)).toEqual(['b-id', 'a-id']);
     });
 
     it('returns an empty object for empty guests in grouped mode', () => {

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
@@ -84,6 +85,46 @@ func sanitizeEmailHeaderValue(value string) string {
 	clean := strings.ReplaceAll(value, "\r", " ")
 	clean = strings.ReplaceAll(clean, "\n", " ")
 	return strings.TrimSpace(clean)
+}
+
+// RFC 2047 encoding keeps non-ASCII host/resource names readable without
+// requiring SMTPUTF8. Fold only at spaces (including between encoded words),
+// never inside a character or encoded word. Short ASCII subjects are unchanged.
+func emailSubjectHeader(subject string) string {
+	clean := sanitizeEmailHeaderValue(subject)
+	encoded := mime.QEncoding.Encode("UTF-8", clean)
+	if encoded == clean && strings.Contains(clean, "=?") {
+		// The standard encoder leaves printable ASCII unchanged. A literal
+		// encoded-word in a supplied name would then be decoded as syntax by
+		// mail clients, changing the identity. Wrap it once, in <=75-byte
+		// encoded words. This branch is ASCII-only, so byte cuts are safe.
+		var words []string
+		for len(clean) > 0 {
+			end := min(45, len(clean))
+			words = append(words, "=?UTF-8?b?"+base64.StdEncoding.EncodeToString([]byte(clean[:end]))+"?=")
+			clean = clean[end:]
+		}
+		encoded = strings.Join(words, " ")
+	}
+	var header strings.Builder
+	column := len("Subject: ")
+	for i, word := range strings.Split(encoded, " ") {
+		space := ""
+		if i > 0 {
+			space = " "
+		}
+		if column+len(space)+len(word) > 78 {
+			space = "\r\n "
+			column = 1
+		}
+		header.WriteString(space)
+		header.WriteString(word)
+		column += len(word)
+		if space == " " {
+			column++
+		}
+	}
+	return header.String()
 }
 
 type resolvedEmailAddresses struct {
@@ -232,7 +273,7 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 			return nil, fmt.Errorf("write reply-to header: %w", err)
 		}
 	}
-	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", emailSubjectHeader(subject)); err != nil {
 		return nil, fmt.Errorf("write subject header: %w", err)
 	}
 	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {
@@ -291,7 +332,7 @@ func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses,
 			return nil, fmt.Errorf("write reply-to header: %w", err)
 		}
 	}
-	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", emailSubjectHeader(subject)); err != nil {
 		return nil, fmt.Errorf("write subject header: %w", err)
 	}
 	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {

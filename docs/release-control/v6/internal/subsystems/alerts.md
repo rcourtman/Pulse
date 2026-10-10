@@ -15,6 +15,76 @@
 
 ## Purpose
 
+### PMG collection opt-outs are not recovery evidence
+
+Missing node queues (including an entirely disabled collector) cannot resolve
+aggregate queue-depth or oldest-message alerts: recovery and lower severity
+require every discovered node's observation. A partial non-negative reading
+is a lower bound and can still establish the highest configured severity
+(critical when configured, otherwise warning), never downgrade or resolve it.
+Observed per-node queues retain their existing independent evaluation. Missing quarantine totals preserve both category alerts
+and add no zero growth sample; a successful complete zero remains real recovery
+evidence. Explicit alert-policy disablement and the existing offline policy
+remain separate and unchanged. `pmg_collection_test.go` and the corrected
+nil-quarantine control in `alerts_test.go` cover missing/partial datasets and
+complete oldest-message recovery, known-high partial activation and refusal
+to downgrade a critical alert using an incomplete lower reading.
+
+### Connection confirmations cannot span unknown or disabled observations
+
+The existing PVE/PBS/PMG/vSphere/TrueNAS connection-degraded detector requires
+three consecutive degraded observations to activate and three consecutive
+healthy observations to recover. Pending or unknown connection state is neither
+degradation nor recovery: it drops pending activation and intent grace, restarts
+recovery confirmation, and retains an active occurrence's identity, severity,
+acknowledgement, trusted metadata and observation time without fire/resolve
+callbacks. Paused connections, disabled connections and owning-resource offline
+policy disablement clear active alerts immediately and reset pending activation
+even when no active alert exists. Healthy evidence also ends pending intent grace.
+
+Resets address exactly the connection's canonical discrete-state key, not another
+connection, condition or metric. Core and optional shadow reducer observe the same
+reset. Intent bookkeeping and its persisted checkpoint lose the interrupted run;
+re-enabled detection must establish fresh confirmations and any explicit grace.
+No new alert family, threshold, grace policy, route or external probe is added.
+
+`connection_confirmation_gap_test.go` covers all five platforms, six interruption
+paths, exact-connection isolation, fresh activation/grace, acknowledged recovery
+and exactly-once callbacks with shadow parity. `TestInterruptDiscreteRun` in
+`reducer/discrete_test.go` pins exact-key isolation, retained firing state,
+acknowledgement, no fabricated resolution and idempotent interruption. These
+synthetic source checks do not establish native outage or destination delivery.
+
+### Metric timing requires continuous observed evidence
+
+Unknown metric evidence interrupts timing, not the occurrence. Missing or
+rejected unified values, non-finite current readings, and unavailable,
+incomplete or invalid rolling windows drop a pending activation run and reset
+an open incident's recovery run. Explicit metric-intent grace and its durable
+pending checkpoint are reset as well. Fresh evidence must complete a new full
+configured delay; unknown time cannot fulfil a sustained-for or recovery rule.
+Existing alert values, identity, start time, acknowledgement, notification and
+lifecycle records are not refreshed or resolved by that interruption.
+
+Guest backup/QGA deferrals apply this boundary to retained memory and aggregate
+and per-filesystem disk readings. Failed or expired empty disk inventory
+interrupts tracked filesystem runs, including a guest's former node-scoped
+identities, without implying filesystem removal. Different guests, instances,
+metrics and independently current CPU/I/O remain independent. Host memory also
+interrupts timing when its usage is unknown; explicit rule disablement still
+uses its normal clearing path independently of telemetry. Node temperature's
+existing interruption rule is unchanged. Typed metric dispatchers must exclude
+metrics they evaluate separately from their own missing-value checks: node
+usage dispatch does not infer a temperature gap before the node's independent
+temperature evaluator observes its actual reading.
+
+`metric_observation_continuity_test.go` verifies actual legacy/canonical,
+unified, host and VM entry points, full-delay fresh activation/recovery,
+explicit grace, empty/migrated filesystem inventory and rejected-value/source
+isolation. `guest_observation_test.go` no longer treats a retained-reading gap
+as elapsed breach evidence. These controls establish source lifecycle
+truthfulness, not native freeze/thaw safety or external notification delivery.
+
 ### Open threshold alerts carry a volatile live status — issue #2068
 
 `evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own
@@ -31,6 +101,40 @@ observation (`lastObservedAt`), so an alert held below its trigger for over a
 day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
+
+The optional `metricStatus.lastBreachAt` dates the evaluated value retained in
+`Alert.Value`, not the newer `observedAt` of a hold or recovery. A breaching
+sample (including equality at the trigger) advances it; a held or recovering
+sample uses the existing alert's `LastSeen`. Unknown/zero dates are omitted,
+never replaced by the occurrence start, restart or poll time. It remains
+volatile with the status, so restart rebuilds it from the saved breach and a
+hold does not rewrite the recovery mirror. Resolution drops the whole status.
+
+`TestMetricBreachTimeTracksTheEvaluatedBreach` checks holds, recovery progress
+and reset, exact-trigger and renewed breaches. The existing live-status and
+checkpoint controls also assert the breach date; restart controls cover both
+durable active state and the JSON mirror, unchanged mirror bytes/mtime, and
+legacy unknown-date recovery through a new breach.
+
+### Held breach dates in attention and Assistant
+
+`getMetricAlertLastBreachAt` selects a valid timezone-qualified ISO
+`metricStatus.lastBreachAt` before a valid legacy `Alert.lastSeen`.
+Unknown, malformed, impossible-calendar and Go-zero dates stay undated; the
+occurrence start, current poll and recovery start are never substitutes.
+Attention, overview/incident hover and active History share this selection.
+Relative ages use the caller's clock. Assistant model-only context carries
+the normalised UTC ISO date as `Last Breach At` when known, separate from
+the retained breach value and live reading/clear rule. The existing compact
+Chat attachment is unchanged; no removed detail surface is restored.
+Missing live status after restart keeps the existing recorded-message path.
+The scoped target and explicit operator-approval boundary are unchanged.
+
+Verification: date-selection/attention controls in `helpers.test.ts`,
+`alertAssistantHandoffModel.test.ts` and final-byte desktop/phone production
+surface fixture `browser-tests/held-breach-time.cjs`. These are synthetic
+source/rendering controls, not native readings, inference, notification
+provider delivery or restart recovery acceptance.
 
 ### Alert card and open incident lead with the live reading — issue #2068
 
@@ -688,6 +792,7 @@ default construction path still restores.
 47a. `internal/alerts/capacity_forecast.go`
 47b. `internal/alerts/windowed_metric.go`
 48. `internal/alerts/node.go`
+48a. `internal/alerts/host_agent_node_links.go`
 49. `internal/alerts/host.go`
 50. `internal/alerts/backup_snapshot.go`
 51. `internal/alerts/disk_health.go`
@@ -1998,11 +2103,13 @@ Disks Global Defaults cell reads `By type` while unset
 default switches the policy off, and switching it on then stages an explicit
 TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
 trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
-The TrueNAS disk drawer tones a current reading from the same per-type trigger
-(`getDiskTemperatureThresholds` passed into `buildTrueNASDetailSections`), so it
-no longer judges heat from a fixed 55C. Judges that still differ: the TrueNAS
-storage table and drawer do not apply a TrueNAS-wide value or per-disk
-override.
+The TrueNAS storage table and disk drawer now judge current disk heat through
+`getTrueNASDiskTemperatureThresholds(disk)`: the disk's canonical-ID temperature
+override, then a TrueNAS-wide value, then the per-type policy. Disabled disks
+or TrueNAS Disks defaults and explicit Off values leave readings unjudged;
+retained values never count as current heat. The API-only disk does not inherit
+a host Disk Temp override or the agent alerts switch. Patrol/AI use the disk-specific backend resolver described below; the
+frontend and backend retain their own verification boundaries.
 `TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
 `TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
 `internal/alerts/unified_eval_test.go` pin the tiers and retained readings;
@@ -2388,24 +2495,45 @@ clears the incident. `TestStorageUnknownConnectivityDoesNotRecover` and
 capacity activation, normalised offline activation and confirmed recovery.
 Proxmox node alert evaluation now lives in `internal/alerts/node.go`. That file
 owns node metric and temperature projection, node offline lifecycle handling,
-host-agent deduplication bookkeeping, and instance-scoped node display-name
-cache updates; future Proxmox node alert behavior should extend that resource
+and instance-scoped node display-name cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
 When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
 automatic or operator-set identity decision), the agent resource owns each
 CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
 its own copy of those metrics through the disabled-threshold path every cycle:
 the pending run is dropped and any node alert still open from before the link is
-resolved, never left frozen until the agent goes offline. `CheckHost` registers
-the link only after evaluation, recording which metrics the agent is configured
-to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
-summary filesystem `models.SummaryDisk` picks, which is also what the linked
-node's disk metric reports), and removes it while agent alerts are disabled.
-Ownership follows configuration, not one report's data, so a missing agent
-reading keeps the agent's alert open instead of handing the metric back to the
-node for a cycle. With several agents linked to one node, a metric is owned when
-any of them evaluates it. A metric no agent evaluates stays with the node, so
-deduplication never leaves a machine unmonitored.
+resolved, never left frozen until the agent goes offline. `CheckHost` applies
+its link outcome after evaluation in per-agent report order. CPU and memory
+ownership requires a live threshold plus a usable, finite observation with a
+ready evaluation window, or a still-open agent alert or reducer run. For disk,
+that evidence must belong to the summary filesystem `models.SummaryDisk` picks,
+which is also what the linked node's disk metric reports. Configuration alone
+is not coverage: an agent with no observation and no open run leaves the node
+responsible. Missing readings keep an existing agent alert, without creating a
+node duplicate; observation-gap interruption and fresh confirmation/recovery
+remain unchanged. Disabling a usage metric releases canonical/shadow pending
+runs and explicit intent grace, even without a reading. A disabled agent or host
+also releases its CPU/memory pending runs. `UpdateConfig` immediately revokes
+unsupported link coverage, and in-flight reports recheck current policy before
+applying their outcome. Newer reports, offline and removal invalidate older
+link updates and removals. Several linked agents contribute the union of their
+coverage; stale alert metadata alone never suppresses a node. The accepted
+short duplicate window remains restart-before-first-report and
+first-offline-before-confirmed-offline; manually linked sibling agents retain
+their own alerts. Explicit host/inherited disk overrides beat `DiskFillByType`,
+as do direct filesystem overrides. A saved direct filesystem disable revokes
+summary disk ownership without a new agent report. Per-type defaults retain
+the existing normalization contract (zero is restored to the type default);
+this repair does not add a per-type Off setting. A nil effective filesystem
+threshold drops its pending run.
+
+A node-side close is an ownership handover, not observed recovery: each released
+metric carries `moved_to_agent` and the identity/name of an agent actually
+covering that metric in the same link snapshot. If several agents cover it,
+the lowest covering agent ID wins deterministically; a sibling covering only
+another metric must not be named. Resolved consumers still receive the close.
+`internal/alerts/host_agent_node_links.go` owns ordered links and per-metric
+successor selection, without persisting stale coverage across restart.
 Deduplication keys on that link,
 never on a hostname match, so a same-named node in another instance keeps its
 alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
@@ -2424,13 +2552,26 @@ instance name in `Instance`.
 `TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
 `TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
-`TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
-`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns`,
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger`,
 `TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
-`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
-`internal/alerts/threshold_resolution_shared_test.go`, and
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate`,
+`TestCheckNodeKeepsMetricsTheAgentCannotEvaluate`,
+`TestDisabledAgentThresholdReleasesPendingRunWithoutReading`,
+`TestHostAgentNodeLinkFollowsConfigAndReportOrder`,
+`TestCheckNodeTakesBackMetricsWhenAgentUnlinks`,
+`TestHostDiskOverrideBeatsDiskFillByType`,
+`TestReleaseCanonicalMetricAlertClearsIntentPending` in
+`internal/alerts/threshold_resolution_shared_test.go` and
+`TestReportedAlertOwnershipComposition` in
+`internal/alerts/reported_alert_composition_test.go`, plus
 `TestHostAgentDeduplicationFollowsNodeLink` in
-`internal/alerts/host_dedup_test.go`, pin these rules.
+`internal/alerts/host_dedup_test.go` and
+`TestCheckMetricReportsWhetherObservationWasUsable` in
+`internal/alerts/windowed_metric_test.go`, pin these rules.
+The real monitor lifecycle/History route is exercised by
+`TestMonitorReportedAgentHandoverUsesActualMetricOwner` in
+`internal/monitoring/monitor_alert_handling_test.go`.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
@@ -4241,3 +4382,173 @@ display name differs from its hostname was never highlighted, and Machines rows
 had no alert highlighting at all. `getAlertStyles` keeps its
 id-plus-node-name matching for the platform tables whose alerts are keyed that
 way.
+
+### SMART temperature continuity and pending-only policy intervals
+
+Disk temperature activation/grace and recovery require continuous accepted
+observations. Empty SMART inventory, one disk omission, standby, non-positive
+readings, explicit missing/unavailable/unsupported collection and reporting-lease
+expiry interrupt pending/recovery timing without changing an open alert, its
+acknowledgement or lifecycle events. Positive legacy readings without temperature
+provenance remain accepted; an expired last-known positive value is not live
+health. Canonical and shadow reducers plus explicit intent grace are interrupted
+together. A non-empty inventory still resolves a departed disk only after three
+consecutive omissions; empty/expired inventory breaks that confirmation sequence.
+
+Configuration saves reset pending-only runs when global agent policy, host or
+inherited node/guest overrides, or the applicable disk-type threshold disables
+evaluation, even if no report arrives before re-enablement. Existing known-type
+default normalisation is unchanged; the zero-type save control uses a custom
+type whose zero threshold the normaliser preserves. Only live pending
+identity/link/type context is retained; unrelated saves preserve a known enabled
+run and explicit overrides retain precedence over type defaults. Restored intent
+without that context restarts conservatively on a save rather than inventing
+continuous enablement. Cleared intent grace is checkpointed. Existing active-alert
+per-type/save/offline/removal resolution remains unchanged.
+
+`metric_observation_continuity_test.go` and `host_unraid_lifecycle_test.go` cover
+valid/legacy/provenance controls, missing/rejected/expiry gaps on both timing
+edges, explicit grace, acknowledgement/event preservation, host isolation,
+configuration intervals, override precedence and departure. These deterministic
+source tests do not establish installed temperatures or native guest recovery.
+
+### SMART risk inventory gaps and disabled rules
+
+Agent `disk-health` and `disk-wearout` alerts follow the SMART inventory, not
+filesystem usage cleanup. Empty inventory, standby and unobserved risk fields
+hold the existing occurrence and acknowledgement without recovery/refiring.
+Departure requires three consecutive non-empty reports omitting the disk;
+listing it again, an empty inventory or reporting-lease expiry restarts that
+confirmation. Both risk families on the same disk count once per report.
+Filesystem absence still resolves usage on its first missing report. Temperature
+pending/grace/recovery interruption and departure semantics remain unchanged.
+
+Disabling every recorded cause releases that risk alert without a reading,
+both on a configuration save and on an empty report. Partially enabled causes,
+missing legacy cause metadata and unknown codes remain conservative. Re-enabling
+cannot raise an alert from absent evidence; fresh bad evidence uses the existing
+stateful refire/cooldown history policy. Node linking retains existing node ownership, including when the
+agent's SMART inventory is empty; host removal and policy disablement release
+agent risk state and stale absence counts. Counts are ephemeral and restart
+conservatively after a process restart.
+
+`TestHostSMARTRisk*` in `host_unraid_lifecycle_test.go` exercises actual `CheckHost`, expiry, configuration
+save, firing/recovery callbacks and event history with synthetic telemetry.
+It covers both families sharing a disk, interruption/reconfirmation, partial
+rule disablement, re-enablement, legacy/unknown causes, filesystem and host
+isolation, removal and node-link ownership. These are source lifecycle controls,
+not collector, smartctl, installed notification or native disk-recovery proof.
+
+### Storage observation gaps restart confirmation and timing
+
+An absent or `unknown` storage connectivity status interrupts activation,
+recovery confirmations and pending offline intent grace without resolving an
+existing outage or changing its acknowledgement. Capacity is independently
+observable while connectivity is unknown. Missing/unconfirmed-zero capacity,
+negative usage and offline/unavailable storage interrupt capacity activation,
+and intent grace timing; they do not supply healthy capacity evidence.
+Capacity recovery retains its existing immediate measured-clear behaviour,
+not the recovery stability window used by memory and temperature gauges.
+A confirmed empty store still supplies a genuine zero-usage recovery reading.
+Fresh observations must satisfy the existing full confirmation/delay after a
+gap. Interruption is scoped to the storage's canonical identity and applied to
+both live and shadow reducers; interrupted intent is checkpointed for restart.
+
+`TestStorageConnectivityObservationGaps` and
+`TestStorageConnectivityGapRestartsIntentGrace` exercise the real storage
+entry point, acknowledged occurrence retention, neighbour isolation, fresh
+reconfirmation and empty intent checkpoint. Storage routes in
+`TestMetricObservationGapRestartsActivation` covers capacity gaps and explicit
+intent grace; `TestStorageCapacityGapHoldsOccurrence` verifies retained,
+acknowledged capacity incidents and genuine immediate empty-store recovery. Existing restart, empty-capacity and predictive-capacity controls
+remain required. These source controls are not native storage recovery or
+installed destination-delivery evidence.
+
+`TestStorageConnectivityGapWebhook` also exercises the production Monitor
+callbacks, ordinary notification queue and guest-local HTTP receiver: the gap
+and first fresh healthy poll send no recovery; confirmed recovery sends one
+resolved receipt with the original occurrence identity, and the queue drains
+without failed/DLQ work. This is synthetic callback/receiver acceptance, not a
+native appliance or external webhook-provider result.
+
+### Composed host filesystem threshold ownership
+
+The shared filesystem resolver preserves the explicit host or linked-resource
+Disk override ahead of per-hardware-type defaults, for both host reports and
+configuration-save reevaluation. A filesystem-specific override still takes
+precedence. Disabling that filesystem releases its canonical usage metric and
+pending intent, retaining the reviewed agent/node ownership semantics.
+`TestHostDiskOverrideBeatsDiskFillByType` checks agent and inherited overrides
+through a configuration save and the next report without losing the occurrence;
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` retains per-filesystem
+and per-type controls. This is source composition, not installed delivery proof.
+
+### Shared disk-temperature composition and pending ownership
+
+Host temperature evaluation retains the upstream shared SMART/Unraid reading and
+per-type threshold judgement, including Unraid-only disks and competing readings
+on one device. It also retains reviewed observation-gap interruption and pending
+host/link/type context for configuration saves. A live Unraid-only row is not an
+observation gap merely because SMART is empty; absent or uncollected rows still
+restart confirmation. `TestUnraidOnlyTemperatureRetainsPendingContinuity` checks
+continuous, spun-down, omitted and type-off intervals under both grace paths;
+existing SMART pending, override, departure and upstream Unraid controls remain.
+
+### Applied configuration input ownership
+
+`Manager.UpdateConfig` clones the supplied configuration before normalisation
+and retention. Callers keep ownership of its JSON-shaped maps, slices and
+threshold pointers, just as they own `GetConfig` snapshots. Subsequent edits
+do not alter running policy until explicitly reapplied; normalisation cannot
+rewrite an input concurrently encoded for persistence or a response. The
+existing typed clone's non-JSON custom filter-value limitation is unchanged.
+`ApplyConfigUpdate` already decodes an owned configuration under the manager
+lock and keeps its atomic partial-update semantics.
+
+`config_validation_test.go` requires unchanged caller inputs, normalised
+live thresholds, isolated edits, ordinary guest CPU evaluation, explicit
+resubmission and concurrent response encoding/update under the race detector.
+Existing snapshot, persistence, partial-update and threshold tests remain
+required. This is source ownership acceptance, not installed notification or
+guest-agent recovery evidence.
+
+### TrueNAS disk heat policy for Patrol and Assistant
+
+`Manager.TrueNASDiskTemperatureThreshold(resourceID, diskType)` resolves the
+`truenas-disk` tiers of `effectiveAlertPolicyNoLock`: the disk's canonical or
+identity-resolved override, then TrueNAS Disks defaults, then disk-type policy.
+A disabled disk/default or non-positive trigger leaves no heat policy.
+Global/platform alert switches silence alert evaluation without changing this
+policy, matching existing agent-disk semantics. Callers receive a copy; config
+normalisation, saved Off/custom/inherited values and alert severity are unchanged.
+`IsTrueNASDiskResource` uses the evaluator's classification, including merged
+agent/TrueNAS disks. Patrol/Assistant do not walk those disks to a synthetic
+TrueNAS system agent and accidentally apply an unrelated host override.
+Retained temperature readings remain unjudged, not affirmative recovery.
+
+Verification: `TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts`
+and `TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` in
+`internal/alerts/threshold_resolution_shared_test.go` cover tier, identity,
+Off/disabled, untyped, clone and nil-manager compatibility.
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` and
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers` cover adapter, Patrol triage,
+verification and Assistant context while preserving agent-host overrides.
+Frontend table/drawer tiers use the Web resolver described below; these
+backend tests do not establish browser or native appliance acceptance.
+
+### TrueNAS disk display reconciliation (8 October 2026)
+
+The TrueNAS storage table and inline resource drawer resolve temperature by
+the disk resource's own `temperature` override, then `truenasDiskDefaults`,
+then the per-type disk policy. Explicit zero/negative thresholds or a disabled
+disk/TrueNAS default leave readings visible but unjudged. Host `diskTemperature`
+overrides and the agent alerts switch do not control API-only TrueNAS disks.
+The shared agent disk resolver and Proxmox `pulse-relaxed` guest resolution
+remain unchanged. Existing Off-save normalization and inherited TrueNAS
+threshold editors on main are retained, not replaced by the older PR stack.
+
+Verification: `src/utils/__tests__/metricThresholds.test.ts`,
+`src/features/truenas/__tests__/TrueNASStorageTopologyTable.test.tsx` and the
+production table/drawer fixture `browser-tests/truenas-disk-thresholds.cjs`.
+The containing backend also resolves the disk-specific tiers for Patrol.
+Frontend checks do not establish native appliance or notification recovery.

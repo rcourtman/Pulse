@@ -17,6 +17,303 @@
 
 ## Purpose
 
+### Guest filesystem guidance honours its caller's logger
+
+Missing-filesystem guidance uses the existing caller context logger, falling
+back to the ordinary global logger when none is set. Message, severity, scope,
+provider-text exclusions and backup precautions are unchanged. The connected
+`TestGuestFilesystemFailureGuidanceUsesObservedEvidence` captures its own
+context-tagged output without replacing a shared logger; the scheduler-health
+fixture stops the monitor it owns. This repairs the observed shared-logger race
+with an otherwise leaked alert-save worker, not a guest or backup recovery.
+
+### Measured zero guest availability stays authoritative
+
+Status/current meminfo distinguishes an explicit numeric `available: 0` from
+an omitted or null field. The measured zero stays selected, including through
+JSON copies, rather than being replaced by free/cache components or another
+memory source. Positive programmatic samples and legacy payloads without
+availability retain their existing behaviour; invalid numeric fields remain
+errors. The internal presence bit never becomes a wire field.
+
+`TestGuestStatusMemoryAvailabilityContract` covers selection and both ordinary
+collectors through direct/cluster HTTP clients, canonical views, History and
+actual threshold evaluation: measured exhaustion raises a breach, missing
+availability cannot clear it or add History, and fresh healthy evidence permits
+recovery. `TestVMStatusMemoryAvailabilityPresence` preserves the wire distinction.
+The sampled capacity, original observation time, guest command/backup-lock
+fences, QGA parser and configured thresholds are unchanged. This is synthetic
+source evidence, not reporter #2762 cause, native recovery or availability.
+
+### Guest memory readings keep their own capacity
+
+The QEMU memory selector pairs guest availability with the total from the
+same status meminfo or QGA `/proc/meminfo` sample, and linked in-guest agent
+usage with that agent's total. A configured maximum is not guest usage:
+ballooning and kernel reservations can make those capacities differ.
+Existing availability-only payloads retain their configured-capacity fallback.
+Reported totals larger than a known VM maximum are not accepted as guest
+evidence, including a hotplug transition before configured status catches up.
+The existing balloon/free-memory fallback also keeps the denominator it used
+to derive usage, without being upgraded to cache-aware pressure evidence.
+The diagnostic snapshot records `guestAgentMemTotal` alongside the already
+retained configured maximum and memory fields; it adds no read or public log.
+
+Retention keeps the selected total, used, free/cache and original observation
+as one tuple. Configured-capacity changes, including a resize to the old guest
+total, cannot borrow that tuple. The existing source age bounds, backup lock,
+filesystem-first ordering and shared command fences are unchanged; a held or
+expired sample cannot produce new History, breach or recovery evidence.
+`TestGuestMemorySampleCapacityContract` and
+`TestGuestMemorySampleCapacityCanonicalProjection` check selectors, coherent
+cache binding and both ordinary collectors with direct/cluster HTTP clients,
+canonical views, History and actual threshold decisions. Healthy ballooned,
+full-pressure/zero-available, legacy, resize and age controls remain distinct.
+These are secret-free source fixtures, not native balloon or freeze recovery,
+reporter #2762 cause/resolution, or release acceptance.
+
+### Existing memory origins cannot be renewed by AI consumers
+
+AI query/context/fact consumers now retain the selected guest observation and
+explicit availability. The existing local VM/system-container memory observer
+judges pressure only from a qualified selected sample and applies its age bound
+to that original observation, not a fresh resource LastSeen from another source.
+Unknown pressure is an evidence-gap wake, not a measured threshold breach or
+recovery. `TestPatrolObserverGuestMemoryOrigin` and
+`TestGuestMemoryEvidenceUsesSelectedMetricOnly` cover these consumption boundaries.
+Collectors, guest commands, native leases, shared safety pauses, History storage
+and configured thresholds remain unchanged; this is not native #2762 recovery.
+
+### Guest memory evidence survives typed consumers
+
+The monitor's existing guest memory observation remains source-owned when
+Patrol reads it through VM/system-container views. Selected canonical memory,
+not a retained raw Proxmox facet, supplies provenance; absent memory is distinct
+from measured zero. `TestGuestViewMemoryObservationKeepsSelectedOrigin` checks
+that read boundary and `TestPatrolGuestMemoryEvidence` checks the consumer's
+qualifications through ordinary snapshot ingestion. This changes no memory
+collector/parser, guest command, TTL, shared safety pause, alert threshold or
+History writer. Synthetic named-field checks and qualified summaries are not
+native acceptance of #2762's reported input or guest recovery.
+
+### Cluster recovery preserves established certificate pins
+
+Startup and unhealthy-endpoint recovery must not replace the configured primary
+fingerprint or a saved/previously captured member fingerprint after a TLS
+mismatch. No authenticated retry or unverified certificate capture is admitted
+for those known endpoints; their failure remains visible until the trusted
+certificate returns or the operator independently verifies and saves new trust.
+Equivalent URL spellings preserve the same pin without merging distinct scheme,
+port or base-path authorities.
+
+First-use trust remains available for a declared, previously untrusted member
+that fails the primary fingerprint check. Only the typed local TLS verifier
+failure admits this bootstrap, not a provider message quoting a mismatch.
+Capture itself sends no API credential. The subsequent API request verifies the
+captured pin. A competing capture cannot replace a pin established while its
+probe was in flight, and cancelled work cannot initiate or commit new trust.
+Runtime captures belong to the client, not the caller's saved fingerprint map.
+This does not add a certificate-management surface or persist new runtime trust.
+
+`TestClusterClientFingerprintTrustContract` checks changed and restored real TLS
+leaves through startup/recovery, token containment, known/equivalent pins,
+provider-text/undeclared/cancelled exclusions, concurrent first-use capture and
+ordinary first-use authenticated acceptance. The existing #1664 new-member
+control remains. These are secret-free loopback source proofs, not live cluster
+or installed acceptance, exploitation evidence or native guest recovery.
+
+### Known Windows guests do not receive Linux-only memory reads
+
+An accepted guest OS reply identifying Windows suppresses the optional
+`/proc/meminfo` fallback for that instance/node/VM, including after an earlier
+failure cache expires. The classification has its own original OS observation
+time, bounded by the existing ten-minute guest evidence age; other useful
+network/version replies and retained display strings cannot renew it. Missing,
+future and expired origins do not suppress the existing fallback. A completed
+empty OS reply invalidates the classification; a subsequent Linux reply permits
+ordinary memory polling, including measured zero availability. An accepted OS
+outcome survives a later version-command deferral without publishing partial
+identity or renewing general QGA availability evidence.
+
+This avoids an inapplicable command that can start a shared uncertainty pause.
+It does not invent a negative memory observation or clear an existing pause.
+Independent status/balloon/linked-agent memory, filesystem-first ordering,
+unknown-OS compatibility and all command/backup-lock admission remain intact.
+The first unknown-OS poll can still attempt the existing Linux fallback; this
+change does not add a probe or infer an OS from a display name/configuration hint.
+
+`TestGuestWindowsMeminfoPollingContract` covers the real direct/cluster clients
+and both collectors after an actual OS read: repeated NTFS usage through zero,
+canonical/public read state, in-memory and persistent History, live CPU/memory,
+unchanged original caches, backup-lock deferral and unlocked resumption. Unit
+controls pin exact OS-name boundaries, original age/identity, partial-fetch
+evidence, Linux recovery and cache/source compatibility. These are synthetic
+source controls, not native QEMU-only Windows recovery, thaw, cross-process or
+restart containment, reporter resolution or release acceptance.
+
+### QGA fallback eligibility keeps its original observation age
+
+A successful unlocked VM-status availability, usable filesystem reading or
+useful guest metadata can establish fallback query eligibility. A later poll
+that preserves optional IP/OS/version strings does not renew that evidence.
+Internal `GuestAgentEvidence` crosses model, canonical and previous-state
+snapshots, including an explicit missing origin. Legacy direct snapshots import
+their receipt once, while already annotated disk-only evidence uses its recorded
+filesystem origin, never a linked-agent origin or renewed VM receipt. Expired,
+missing and future origins cannot admit a fallback.
+The existing ten-minute boundary, authoritative unavailable status, metadata
+backoff and every-command backup-lock/shared uncertainty fences remain intact.
+Cached display identity remains available, but cannot upgrade a failed/empty
+refresh to current availability: a fallback needs a usable filesystem or useful
+metadata observed in that cycle to claim availability. Linked Pulse-agent disks
+remain independent.
+`TestGuestAgentAdmissionEvidenceContract` checks the original-age boundaries,
+repeated canonical replacement and both cluster/node collectors through a
+cancelled detail cycle, unavailable status, missing status and ordinary recovery
+with measured-zero disk usage. This is synthetic source proof, not native thaw,
+QEMU-only Windows acceptance or reporter resolution.
+
+
+### QEMU disk fallbacks retain their original filesystem source time
+
+A successful QGA filesystem read owns the disk observation's source and original
+receipt time. Internal model, canonical facet and previous-state copies preserve
+that evidence. Repeated polling, cached OS/version identity and an optional
+metadata failure cannot renew the existing ten-minute carry-forward window.
+Recent disk-only readings remain eligible without optional metadata; expired,
+future, missing or non-QGA origins do not. A legacy direct reading may use its
+receipt once; an already unavailable/retained legacy value with unknown origin
+cannot borrow the latest poll time. A new ordinary successful read restores the
+observation, including measured zero. Linked Pulse-agent disks retain their own
+source and precedence, not a fabricated QGA origin. Guest-command admission,
+backup safety, History and alert missing-observation rules remain unchanged.
+
+`TestGuestDiskObservationContract` covers original/legacy age boundaries,
+repeated canonical replacement, disk-only continuity, real-client deferral and
+expiry in cluster/node collectors, cancelled detail, current zero recovery,
+unchanged prior History and alert continuity. These are synthetic source checks,
+not native thaw, QEMU-only Windows acceptance or completion of #2439/#2619.
+
+### Automatic Proxmox agent attribution preserves distinct FQDNs
+
+Hostname-only attribution uses the common full-hostname equivalence rule:
+case, surrounding whitespace and a DNS root dot are normalised; a short name
+may match an FQDN, but different full domains never identify the same machine.
+A bare name matching multiple provider nodes/guests stays unlinked. Explicit
+endpoint and unique provider-network hints retain their existing precedence.
+The connection FQDN and Pulse display name are not guest-hostname evidence.
+
+`TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs` covers node, VM and LXC
+selection, a sole unrelated domain, ambiguous short names and legacy short/full
+pairs. `TestCrossInstallationIdentitySurvivesStandaloneAddition` adds FQDN
+connections with overlapping native node names/VMIDs and distinct guest domains,
+checking original node health, scoped backups, Docker inventory and agent link
+continuity. These are source controls, not the established reporter cause or
+native three-surface recovery for #2681.
+
+
+### PMG saved collection scope and incomplete observations
+
+The PMG poller snapshots the selected connection's saved scope once per poll.
+Mail statistics, mail-count trends and spam-score reads follow `MonitorMailStats`;
+each discovered node's queue read follows `MonitorQueues`; both quarantine
+category reads follow `MonitorQuarantine`; domain reads follow `MonitorDomainStats`.
+Disabled datasets make no requests and supply no current observation. Version,
+cluster discovery and configuration-backup reads remain independent of these
+four switches; pausing the connection prevents every subsequent ordinary poll.
+An edit or pause does not revoke an already running poll's snapshot.
+
+A successful version read still establishes online connection health, not
+complete collection. Downstream read failures are retained as failed poll
+evidence, with missing fields instead of synthetic zero readings. Quarantine
+totals require both category reads. Collector controls in `monitor_pmg_test.go`
+cover sixteen scopes, next-poll edits/pause/resume, in-flight snapshots, each
+read failure, recovery, legacy defaults and cancelled/unknown connections.
+These synthetic controls are not native PMG or installed privacy acceptance.
+
+The PMG client rejects omitted/null object payloads for version, mail, queue
+and quarantine instead of materialising them as zero structs. Explicit
+successful zero objects remain observations. `TestPMGCollectionMissingObjectData`
+and `TestPMGCollectionObservedZeroData` in `pkg/pmg/client_test.go` exercise the
+real request/decoder boundary using an in-memory HTTP transport, with no listener.
+
+### Guest configuration reads preserve installation and node identity
+
+Resolving omitted placement for the existing guest-config read honours every
+supplied instance/node constraint and requires one distinct current placement.
+A bare VMID or node/VMID shared by installations or missing placement returns an error without reading a provider. Current canonical
+inventory, including an empty inventory, takes precedence over stale state.
+Explicit complete placement still reads that exact provider and preserves its
+original error. This read neither dispatches QGA nor changes operation locks,
+backup policy, guest-command admission or permissions.
+
+`TestGuestConfigPlacement*` in `monitor_additional_test.go` verifies VM/LXC
+placement constraints, both inventory orders, zero-provider ambiguous/missing
+reads, canonical versus stale state, direct/provider-failure preservation and
+concurrent snapshot publication. These are synthetic config-read controls, not
+native recovery or a diagnosis of #2681.
+
+
+### Automatic system-mount exclusions respect directory boundaries
+
+The shared filesystem filter excludes a named system directory and its
+descendants, not independent local mounts with the same text prefix. Volumes
+such as `/snapshots`, `/runtime` and `/var/lib/docker-data` remain eligible for
+capacity, current usage and ordinary alert evaluation without an explicit
+include override. Genuine system directories, virtual/read-only/remote types
+and container layers remain excluded. Explicit operator wildcard/exact excludes
+and include precedence are unchanged; guest commands and their safety admission
+are untouched.
+
+`mount_boundary_test.go` in `pkg/fsfilters` and `internal/hostmetrics` cover the
+directory boundary, real pre-usage collector admission and skip/override
+controls. `filesystem_mount_boundary_test.go` carries local mount counters
+through QGA aggregation and both report/state/canonical-read paths, and host
+usage alert onset/recovery. These synthetic controls do not establish native
+guest polling, installed agent recovery or completion of a reported incident.
+
+### QEMU Windows capacity is owned by the volume, not the physical drive
+
+The guest filesystem aggregate uses the reported Windows volume GUID when
+present, or a normalised drive/mount path without one. QGA `disk.dev` names
+the backing `PhysicalDriveN`, so equal-sized partitions on that drive must not
+be treated as one filesystem. Multiple mount paths for one GUID still count
+capacity once; each admitted mount row and its original device metadata remain
+visible. Non-Windows device/subvolume deduplication, byte-validation and the
+signed aggregate-overflow fence are unchanged. These temporary capacity keys
+are not hardware identity, guest identity or History keys.
+
+`guest_filesystem_identity_test.go` checks separate equal-size volumes, alias
+mounts, missing GUIDs, Linux bind/device peers and overflow. Its synthetic
+QGA-only polling lifecycle is intended to check complete capacity, volume removal
+and explicit zero through the VM builder, canonical read state and both
+in-memory/persistent History. Executing that lifecycle is separate from the
+non-listening capacity checks: fixture presence or compilation alone does not
+establish polling/History acceptance, native Windows/PVE recovery or a diagnosis
+of issue #2619. The optional-read lifecycle fixture also carries the same
+captured mock-mode scope through poll publication and broadcast after the
+mode-fence API change, rather than recapturing an epoch for stale state. Guest
+commands, operation locks, shared admission, retries, timeout and backup policy
+are unchanged.
+
+### Sustained poll failures preserve the capped retry fence
+
+Scheduler circuit-breaker backoff saturates before duration arithmetic can
+wrap. Every failure episode retains the existing threshold, exponential
+sequence up to the configured cap and single half-open probe window; prolonged
+failure cannot turn that cap into an immediate retry or a past retry timestamp.
+A successful poll still resets the failure count, interval and outstanding
+error, and one connection's failures do not block another connection.
+
+`TestCircuitBreaker_BackoffNeverOverflows` compares 130 failure transitions
+against an independent unbounded-integer oracle, including odd and maximum
+representable duration caps, exact retry boundaries and success/new-episode
+recovery. `TestMonitorPersistentFailureBackoffAndRecovery` carries persistent
+failure through actual scheduler result/admission and health entry points,
+including unrelated-instance progress and cleared error state. These are
+in-memory source controls, not native guest recovery, appliance request repair
+or installed CPU/network relief. No database or provider operation is involved.
+
 ### Active-alert state projection carries the live metric status — issue #2068
 
 `activeAlertsSnapshot` copies the alert manager's volatile `MetricStatus`
@@ -24,6 +321,13 @@ into `models.Alert.metricStatus`, so the websocket and `/api/state` alert
 lists carry the reading being evaluated now for a threshold alert held below
 its trigger, while `value` and `message` keep the last breach. The projection
 adds no copy of its own: `GetActiveAlerts` already returns deep clones.
+
+The optional status field `lastBreachAt` carries the held breach's original
+`LastSeen` through that same projection, without publishing the poll-varying
+`LastSeen` of other lifecycle alerts. `observedAt` still dates the current
+comparison. `TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert` checks
+the concrete frontend JSON as well as the in-memory held reading, with an
+independent breach date and omitted legacy `lastSeen`.
 
 ### Fresh broadcast projection owns one resource/target capture
 
@@ -112,6 +416,23 @@ resumption through unified and served conversions; wire and source-selection
 controls cover omission, cloning and independent live agent data. These are
 synthetic source proofs, not native QGA/HAOS acceptance or delivered relief.
 
+Low-trust memory stabilisation uses the original memory observation time for
+its existing two-minute reconnect and ten-minute healthy-guest windows, not
+the diagnostic poll's `RetrievedAt`. Repeated carried-forward polls cannot
+extend either window. Missing/future original times and explicit unavailable
+or incomplete observations cannot supply fallback usage. A legacy direct
+reading can still use its own receipt time; a legacy `previous-snapshot`
+without original provenance cannot acquire another lease from a new poll.
+Expiry leaves the independently selected current source in place (including
+unavailability when that source has no usage); it neither queues QGA commands
+nor changes cache/admission, current PVE/agent selection, alert thresholds or
+History's rejection of retained observations.
+`TestGuestMemoryCarryForwardExpiryContract` covers the original-age boundaries,
+repeated polling, real-client lock-unverified deferral, canonical served values,
+in-memory History, independent PVE readings and ordinary QGA read recovery.
+The existing cluster/node preservation tests use an original source timestamp;
+these fixtures do not establish native thaw, HAOS/Windows readings or shipment.
+
 ### Unavailable backup-age evaluation is not silent recovery
 
 PVE, PBS and mock backup checks share one failure-preserving evaluator. The
@@ -186,27 +507,147 @@ source selection and wire formats are unchanged. The History cleanup tests
 cover every supported series, byte-array reclamation and connected readers;
 these controls do not attribute a reporter's native process-memory growth.
 
-### Podman zero-percentage fallback — issue #2447
+### Podman interval CPU selection — issue #2447
 
-One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
-CPU samples. The collector records every interval and uses Podman's CPU-time
-nanoseconds over elapsed wall-clock nanoseconds, independent of host core count.
-A positive finite reported percentage remains authoritative, preserving #1391.
-Counter resets or a changed container start establish a new baseline; duplicate
-and out-of-order reads cannot create subsequent spikes. No timestamp means no
-measurable counter interval. The existing report CPU field, graph/alert units,
-Docker system-counter calculation, memory and permission scopes are unchanged.
-`TestCollectContainerPodmanCPUIntervals` in `agent_internal_test.go` covers the
-actual JSON/collector boundary, including changing percentage availability.
-Native Podman shape and graph/alert acceptance remain separate evidence.
+Every Podman one-shot response uses consecutive cumulative CPU-time nanoseconds
+over elapsed wall-clock nanoseconds. The compatibility `cpu` percentage is not
+bound to that interval and cannot replace it, whether positive, zero, missing or
+invalid; measured idle remains zero. First samples, counter resets and container
+start changes establish a baseline instead of presenting lifetime CPU as current
+usage. A new lifetime also rebaselines across a backward clock; duplicate or older
+reads in the same lifetime cannot move that baseline. Missing timestamps cannot
+invent an interval. The collector keeps the 100%-per-core scale (#1391), and the
+server converts exactly once to host-capacity percent for History and alerts.
+Docker's system-counter calculation, memory, report shape and permissions stay
+unchanged. `Container CPU selected for report` logs the final selected raw value,
+not a preliminary calculation or a claim of successful delivery.
+
+`TestCollectContainerPodmanCPUIntervals` covers decoding, idle, restarts, backward
+clocks, duplicates and Docker isolation. `TestPodmanCPUCollectorHistoryAndAlerts`
+in `internal/dockeragent/cpu_roundtrip_test.go` follows deliberately conflicting
+synthetic percentages through real compressed HTTPS report delivery, scoped
+authentication, ingestion, memory and persistent HTTP History, and alert identity
+and units on 8- and 4-CPU hosts. Genuine high usage still breaches its configured
+threshold; no clipping or smoothing masks spikes. These source controls do not
+establish the reporter's native payload, installed cause or containing release.
+
+### Filesystem collection precedes optional guest reads — discussion #2538
+
+Filesystem byte observations do not default absent, null, negative or
+fractional usage to a healthy zero. Positive capacity requires an explicit
+integral used-byte count within capacity; counters and the deduplicated guest
+aggregate must fit the signed disk model. Numeric strings, integral decimal
+and exponent forms, privileged-total fallback, genuine zero/full readings and
+Windows mount/device metadata retain their existing support. Exact integer
+bytes do not round through a JSON float, including object-style replies.
+Ambiguous duplicate/case-conflicting byte fields are not usage evidence.
+
+Malformed array rows remain isolated from usable peers. If no usable reading
+survives, the existing unavailable/previous-reading path remains in force.
+An unrepresentable aggregate is unavailable, not a wrapped or silently partial
+total; invalid counters are not labelled as special mounts. These completed
+replies do not alter command admission, locks, retries, cooldown or backup
+behaviour. `guest_filesystem_bytes_test.go` in both Proxmox and monitoring
+covers exact counters, wire/object/peer admission, signed arithmetic and an
+ordinary later poll with an explicit healthy zero. This establishes source
+reading integrity, not native QEMU-only recovery or independent thaw.
+
+Both the detailed-status and recent-evidence/no-status QEMU builders collect
+filesystem usage before optional Linux `/proc/meminfo` and guest metadata.
+Windows/Android guests may answer filesystem queries without supporting every
+optional command. A completed, verified filesystem response can therefore reach
+the read projection and History even if a subsequent optional command starts a
+shared pause. Memory and metadata helpers return admission deferral separately
+from observations: a successful disk must not hide later uncertainty.
+
+No completion-error exemption, operation-lock requirement, timeout, retry,
+failover or process-local coordination rule changes. An unknown optional reply
+still blocks every later command, including newly constructed clients and cold
+collectors in the same process. Subsequent paused polls retain old values without
+adding disk/memory History or renewing original memory evidence. Explicit
+unsupported replies retain their existing terminal/error and negative-cache
+semantics. Independent current provider counters remain usable. This does not
+establish the reporter's original failed command, supported native filesystem
+response, process-restart safety, thaw or installed/released repair.
+
+`TestGuestAgentOptionalReadOrderingContract` drives actual single/cluster clients,
+normal and recent-evidence/no-status builders, unified JSON readback and memory,
+persistent and chart History for NTFS/ext4 success, terminal unsupported memory/OS
+and uncertain memory/network/OS/version replies across repeated polls and cold
+collectors. Existing backup, lock, transport and observation contracts remain
+required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
+
+A completed OS-info outcome keeps its existing suppression semantics even when
+the later agent-version read is deferred. Unsupported OS-info still disables
+that optional command; ordinary completed failures still accumulate towards
+the existing three-failure limit, and a supported reply resets that count.
+Only these safety fields are retained on version deferral: partial network/OS
+metadata is not published, old identity is not made fresh, and the shared pause
+and configured retry backoff remain in force. A network or OS-info deferral
+does not establish another completed OS-info failure.
+
+`guest_metadata_suppression_test.go` covers cold and retained caches, threshold
+accumulation, supported reset and earlier deferrals. Its real HTTP fixture
+drives cluster and node poll entry points through a lock appearing before the
+version request, then ordinary disk/network/version resumption without another
+suppressed OS-info request and with fresh disk History. It changes no native
+guest, backup policy, lock admission, cooldown, retry or single-attempt rule.
+These source controls do not establish native recovery or a reported cause.
+
+The process-local admission table remains capped at 4,096 endpoint/VMID
+entries. Expired entries replaced by a new admission consume no extra slot;
+when new aliases would exceed the bound, expired idle entries are reclaimed
+before returning `agent-capacity`, even before the periodic cleanup deadline.
+In-flight commands and unexpired uncertainty cooldowns are never evicted,
+shortened or renewed to make space. An alias group is reserved atomically or
+not at all; full protected capacity still defers before any HTTP request.
+
+`pkg/proxmox/guest_agent_capacity_test.go` covers near-limit expired alias
+replacement, immediate expiry reclamation through all six HTTP readers,
+backup-lock rejection and ordinary resumption, plus fully protected capacity
+and incomplete group admission. These are synthetic source controls, not
+native recovery or a diagnosis of a reported shared pause. Existing lock,
+no-replay, cooldown, endpoint/VMID isolation and restart limitations remain.
+
+
+Filesystem-query diagnostics preserve this safety boundary. Missing, empty,
+unsupported or refused readings do not prescribe installing, activating or
+restarting QGA, changing backup settings, re-running setup or broadening a
+shared Proxmox role. Operator logs identify the existing guest and fixed reason,
+lead to guest-local disk checks, and keep existing guest-agent/backup settings.
+An actual HTTP 401/403 leads only to checking the existing credential's access
+to that VM. A stopped-agent reason requires exact command-bound rejection
+evidence, not an HTTP 500 or a status/diagnosis quoted in provider text.
+Unsupported commands remain errors without claiming that QGA is stopped.
+Untyped local timeout/deadline errors keep their conservative timeout reason;
+this diagnostic correction does not turn local uncertainty into recovery.
+Deferrals retain their fixed reasons and do not gain new diagnostic commands.
+`TestGuestFilesystemFailureGuidanceUsesObservedEvidence` crosses the real
+client/collector/log boundary and preserves unavailable disk sentinels and
+single-attempt uncertainty. The error-reason controls preserve original error
+text/causes and terminal-rejection admission. These synthetic diagnostics are
+not independent thaw, every-filesystem writes or native backup recovery.
 
 All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo
 callers, share fail-fast per-guest admission within this Pulse process. Clients
 for the same endpoint and configured cluster aliases coordinate across methods;
 VMIDs remain serial through node migration. Other VMs and independent endpoints
 remain independent. No guest payload or credentials enter coordination state.
+Coordination keys treat DNS hostname case, numeric/default HTTP(S) ports and
+equivalent IPv6 spellings as the same configured origin. Alias registration
+uses that same key, including when a standalone request is already in flight
+or two configured alias groups are joined. Scheme, non-default port, base-path
+case, IPv6 zone and VMID still separate independent sources. No DNS lookup or
+unconfigured cluster inference is performed. Request URLs, credential scope,
+TLS/proxy policy and wire Host headers are not rewritten or shared.
+`pkg/proxmox/guest_agent_endpoint_test.go` binds these keys to all six actual
+HTTP readers: a streamed in-flight body and an uncertain completed transport
+cannot queue follow-up commands through another spelling. Other VMs, independent
+origins and known-completed resumption retain normal admission. These source
+controls do not establish native QGA completion, thaw or restart protection;
+the existing process-local one-minute uncertainty pause is unchanged.
 Before each command and before returning its fully received bounded payload,
 Pulse reads the operation lock from VM config. Any nonempty lock (not just
 backup), missing/malformed config or an unverifiable lock defers the command.
@@ -249,9 +690,36 @@ replay through another cluster endpoint. Coordination retains at most 4,096
 active/cooling endpoint-guest entries and expires cooldowns. Explicit API
 permission refusals and unsupported commands remain errors, not successes.
 
+A successful guest reply also needs direct HTTP 200 and exactly one complete
+UTF-8 JSON envelope with one canonical `data` dictionary. Malformed, missing,
+null/scalar data, extra values, duplicate/escaped-duplicate envelope or data
+fields, competing error envelopes, or differently cased `data`, `result`,
+`content` or `truncated` fields cannot establish a completed reply. The check
+runs while admission is held, before method decoding or postflight lock reads;
+failure retains `agent-completion-unverified` and the existing one-minute
+VM-wide uncertainty pause. Other methods, fresh clients and configured cluster
+aliases cannot immediately follow it with QGA work. Unexpected 2xx statuses
+(including accepted/no-content/partial responses) have the same boundary.
+
+Valid empty dictionaries, null/empty results, object-style rows, Unicode and
+trailing whitespace retain existing method semantics, including partial row
+admission and known truncated-file rejection. Ordinary API reads, permissions,
+budgets, trust and backup settings are unchanged. The six-reader wire controls
+pin no immediate redispatch, independent live counters, alias/VM/source isolation
+and fresh admission after cooldown. `TestGuestAgentSuccessEnvelopeMonitoringContract`
+connects malformed, duplicate and prefix-only replies to real polling builders:
+original metadata/memory timestamps and guest History are not renewed, labelled
+last-known values remain and current CPU advances. These checks establish reply
+consistency, not native payload-to-command provenance, thaw, cross-process
+coordination or restart safety. The native recovery precaution below remains.
+
 The completed-error boundary uses the actual HTTP status retained by the request
-layer, not an `API error` phrase in provider or proxy text. HTTP 408 and
-unexplained server/proxy failures (including PVE 595) retain the same per-VM
+layer, not an `API error` phrase in provider or proxy text. The supported
+explicit request/access/command refusals (HTTP 400, 401, 403, 404, 405, 422 and
+429) remain errors, never successful observations. Other client-error statuses,
+including conflict/early-request responses and non-standard client-disconnect
+statuses, cannot establish command completion merely by belonging to HTTP 4xx.
+HTTP 408 and unexplained server/proxy failures (including PVE 595) retain the same per-VM
 uncertainty cooldown, even when their bodies finish: command completion is still
 unverified. Another method, diagnostic client or configured cluster alias cannot
 immediately send a command. Only complete, exact command-bound terminal QGA
@@ -268,6 +736,14 @@ independent status counters and cross-client cooldown; cluster and semantic
 controls pin no failover, definitive refusals and conservative error provenance.
 The connected transport/History lifecycle and counter-receipt controls also
 cover complete server/gateway failures without refreshing old guest evidence.
+`TestGuestAgentUnrecognisedHTTPStatusDefersEveryRead` and its alias/resumption
+control cover fourteen unrecognised 4xx statuses across all six readers, fixed
+wire-status preservation, no follow-up command/config work, independent VM and
+endpoint admission, normal post-cooldown admission and unchanged endpoint health.
+`TestGuestAgentUnrecognisedHTTPStatusContract` connects conflict, early-request
+and client-disconnect responses to polling, last-known disk/memory continuity,
+unrenewed metadata/memory caches and History while live CPU advances. These
+synthetic checks are not a diagnosis of a frozen guest or native recovery.
 
 Guest commands also prevent transport-level replay: each uses a fresh single-use
 HTTP/1 connection, with no pooled-connection or HTTP/2-stream retries and no
@@ -346,6 +822,36 @@ record consistency, not independent payload-to-command provenance.
 Local tests are not native freeze/thaw evidence; supplied
 platform/artifact provenance and mount completeness still need independent
 review. The tools add no runtime interface, recovery action or release gate.
+
+
+Metadata enrichment owns one fetch per existing `(instance, node, VMID)` cache
+key until the whole fetch returns, including slot waiting and early deferral.
+The configured hold remains retry timing, not proof that an in-flight fetch
+completed. A cold cache cannot override another owner's reservation or an early
+failure's backoff. A denied reservation returns only previously retained
+identity (or none), without creating fresh evidence, a transport deferral or a
+new retry deadline. Other keys remain independent; completion releases only
+in-flight ownership and preserves normal refresh/backoff scheduling. Deliberate
+cache invalidation on agent unavailability also discards its obsolete scheduling
+deadline, so a later available poll can begin a fresh metadata lifecycle; it
+never discards an outstanding fetch owner or the shared Proxmox command fence.
+
+`guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
+and retained caches, active and expired scheduling holds, early unverified-lock
+and cancelled-slot exits, independent VMs and ordinary resumption. The existing
+shared Proxmox busy/cooldown fence, lock checks and no-replay policy are unchanged.
+These source controls establish neither a reported freeze cause nor native
+QEMU-only recovery.
+
+The monitor's random source is shared by concurrent guest metadata refresh
+jitter and ordinary poll retry backoff. Both accesses, including lazy backoff
+initialisation, hold the same dedicated random-source mutex. The limiter mutex
+alone cannot protect the source: other guest keys and poll retries also use it.
+Keep seeded distributions, configured intervals, half-open jitter bounds and
+the existing no-jitter behaviour when metadata scheduling has no source.
+`monitor_random_test.go` checks source ownership deterministically, mixed
+concurrent seeded/lazy access under the race detector, and real HTTP enrichment
+for independent guests with bounded refresh and unchanged command counts.
 
 ### Exact TrueNAS subscription termination — issue #2396
 
@@ -559,6 +1065,36 @@ checks the actual saved probe and list handlers against never-polled and
 previously observed-but-failing runtime states. A synthetic successful login
 with a required pool-method failure is not attribution of the native #2382
 regression; the failing appliance/session method remains field evidence.
+
+### TrueNAS app CPU JSON numbers preserve readings and sessions — issue #2400
+
+`app.stats` CPU usage is a percentage-valued JSON number, not an integer
+counter. Fractional values and idle `0.0` must decode without rejecting the
+whole event; legacy integer values remain supported. Preserve the emitted
+percentage without truncation or an additional ×100 conversion. Memory,
+network and block-I/O integer fields retain their existing units and decoding.
+
+Successful subscribe/read/unsubscribe must reuse the authenticated session
+across GetApps and provider polls. A fresh event advances its collected-at
+observation and the connection-scoped canonical CPU/memory/network readings
+and History; rereading the same observation must not renew History. Malformed
+CPU types and out-of-range JSON numbers still reject the complete event,
+discard its unusable session and return no partial sample, without retrying a
+non-transport decoding error. Existing permission/termination/deadline,
+transport retry, cleanup, authentication, identity and tenant boundaries stay.
+No session lifetime, keepalive, poll interval or freshness threshold changes.
+
+`TestJSONRPCAppStatsNumbersReuseSession` and
+`TestJSONRPCAppStatsRejectsMalformedCPUNumbers` in
+`internal/truenas/transport_test.go` exercise actual GetApps subscriptions,
+reused login, numeric compatibility and malformed-event disposal/recovery.
+`TestTrueNASFractionalAppStatsPollAndHistory` in
+`internal/monitoring/monitor_polling_test.go` connects TLS/RPC, thirteen-app
+inventory, repeated actual provider polls, canonical resources and all four
+CPU/memory/network History series with stable connection/tenant identity. Its
+first poll also crosses the real persisted/chart History read path.
+These short local polls are source regressions, not native SCALE/Traefik
+sixty-second session acceptance, installed restart or containing publication.
 
 ### TrueNAS empty app inventories and session-disposal evidence
 
@@ -853,7 +1389,22 @@ opt-in owned tmpfs collector fixture. Installed-agent and model qualification
 are tracked separately in PATROL_ASSISTANT_CUSTOMER_JOURNEY.md.
 
 The same observer reads Proxmox LXC guests for the host agent and its typed
-helper (#2511). An `lxc` request names the decimal VMID; the pinned process
+helper (#2511). Its socket-free producer must not label the first 128 guests as
+a complete inventory without inspecting later configs. A 129th running guest or
+an unknown guest after the limit leaves collection unavailable/degraded through
+the existing bounded fallback; a stopped later guest does not invalidate 128
+established guests. This preserves the consumer's distinction between complete
+inventory replacement and explicit partial omissions. The producer boundary is
+covered by `TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory`;
+partial-wire, omitted-reading and complete-empty cache tests remain authoritative.
+Wide cgroup trees do not by themselves disqualify a verified init: the producer
+inspects `ns/init.scope` before unrelated workload siblings using at most 64
+cgroup process reads and 4,096 candidate PIDs. Exhausted, unreadable, cancelled
+or identity-invalid searches remain unknown/degraded; no omitted guest becomes
+healthy empty telemetry. The wide-tree helper collection and search-boundary
+controls in `internal/hostagent/privilege_helper_client_test.go` preserve measured
+capacity and exact identity without IPC commands. They are not native recovery.
+An `lxc` request names the decimal VMID; the pinned process
 must sit in that guest's exact `lxc/<vmid>` cgroup and be its init (`NSpid` is
 exactly `<pid> 1`, so the PID 1 of a namespace nested inside the guest, such
 as Docker in LXC, cannot stand in for it), checked before and after the read.
@@ -1756,6 +2307,21 @@ supporting inventory rather than a new batch of independent exits, so the
 confirmed host incident clears child alerts instead of producing one alert per
 container.
 
+Mock Docker hosts also keep the live removal boundary. Nested Docker-in-LXC
+hosts are named after their guest's VMID, so a runtime mock config change can
+drop one from the estate; `evaluateMockDockerHosts` then routes it through
+`HandleDockerHostRemoved`, as a deleted live host is. `pruneStaleDockerAlerts`
+clears the same alerts, but only on a state read or subscribed broadcast, so an
+unwatched stack would otherwise keep them active for `/api/alerts/active`,
+Patrol and escalations. The Docker pass shares the host-agent pass's lock and
+mock-mode check, and leaving mock mode removes the fixture Docker hosts too, so
+a pass in flight cannot leave Docker alerts behind in live mode.
+`TestMockDockerHostLeavingFixtureUsesRemovalLifecycle`,
+`TestMockDockerPassAfterLeavingMockModeRaisesNothing`,
+`TestLeavingMockModeRemovesFixtureDockerHostAlerts`,
+`TestMockFixturePassFromBeforeAnEstateRebuildIsRejected` and
+`TestMockFixturePassPausedAcrossDisableAndReenableIsRejected` pin this.
+
 Mock alert evaluation covers host agents the same way. Live agents are
 evaluated by `CheckHost` as each report lands. Mock mode discards reports, and
 the `evaluateHostAgents` health sweep reads monitor state, which never holds
@@ -1770,19 +2336,25 @@ boundaries:
   report and would mark the host online.
 - Agents are evaluated before nodes, so a node with an online linked agent
   hands its CPU, memory and disk alerts to the agent on the first tick, as
-  host-agent hostname deduplication does in production.
+  node-link deduplication does in production.
 - A runtime mock config change rebuilds the estate. An agent that leaves it
   goes through `HandleHostRemoved`, as a deleted live agent does, so its alerts
-  and hostname deduplication do not outlive it.
+  and node link do not outlive it.
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
-  `ClearActiveAlerts` drops their alerts but not their hostname registrations,
-  and a real node named like a fixture agent (`pve1`) would otherwise keep its
-  metric alerts suppressed with no agent to own them. `SetMockMode` ends the
-  mock-mode epoch before it forgets them, so a pass whose snapshot predates the
-  switch finds its epoch ended under the same lock and evaluates nothing, and
-  an agent whose departure the switch refused stays in the forgotten set. Two
-  overlapping passes in one epoch can still evaluate an older snapshot after a
-  newer one; the next pass reconciles the set again.
+  `ClearActiveAlerts` drops their alerts but not their node links, and a
+  leftover link would keep suppressing CPU, memory and disk alerts on any node
+  that later carries the linked fixture node's ID. `SetMockMode` ends the
+  mock-mode epoch before forgetting fixture hosts, so evaluations holding an
+  older epoch cannot recreate alerts after the clear. Departures refused by
+  the epoch fence remain tracked for the switch to remove.
+- Ticks start passes concurrently, so a pass whose snapshot predates an
+  estate rebuild can reach the lock after a newer one. The agent and Docker
+  steps also carry the fixture's structural revision and reject revisions
+  older than the last applied or disabled one. Both checks apply: the epoch
+  stops mode-crossing evaluations, while the revision stops an older estate
+  replacing newer host ownership within one epoch. Guest, node, storage, PBS,
+  PMG and physical-disk evaluations use the epoch fence, not host revision
+  tracking.
 
 Fixture agents must carry readings a real agent could report. Mock Kubernetes
 pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
@@ -1800,7 +2372,7 @@ pass. Those are measurements, not test guarantees. The tests pin the
 boundaries:
 `TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes`,
 `TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures`,
-`TestLeavingMockModeReleasesFixtureAgentHostnames` and
+`TestLeavingMockModeReleasesFixtureAgentNodeLinks` and
 `TestMockHostAgentPassAfterLeavingMockModeRegistersNothing` in
 `internal/monitoring/monitor_mock_alerts_test.go`,
 `TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in
@@ -2110,6 +2682,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 46. `internal/monitoring/temperature.go`
 47. `internal/truenas/client.go`
 47a. `internal/truenas/transport.go`
+47b. `internal/truenas/pool_capacity.go`
 48. `internal/truenas/disk_health.go`
 49. `internal/truenas/provider.go`
 50. `internal/models/ceph_cluster_identity.go`
@@ -2136,6 +2709,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 63b. `internal/config/guest_metadata.go`
 
 ## Shared Boundaries
+
+Helper-backed Proxmox inventories carry explicit complete/partial status and omitted VMIDs. Before cache mutation the monitor validates this shared contract. A complete inventory replaces only the exact linked-node/agent cache; a partial inventory removes that agent's explicitly omitted guests without renewing their data. Legacy reports retain legacy row admission and expiry.
 
 PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:
 each poll starts unavailable and only a successful non-nil node-status result
@@ -2661,6 +3236,8 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+`internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
+
 ### Discovery accepts successful command evidence only
 
 Only stdout from a successful result with zero exit status and no error enters
@@ -2823,6 +3400,68 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 
 ## Current State
+
+### Interface-associated guest address selection
+
+LXC status, configuration and existing runtime-interface fallback collection,
+and QEMU guest-agent network metadata, select display addresses by their named
+interface rather than globally sorting flattened IP text. Name-ordered guest
+interfaces without common local-container/overlay names lead; remaining scalar
+addresses keep unknown association, and secondary interfaces remain useful as
+fallbacks. All collected addresses and interface/traffic metadata are retained.
+Within an interface valid IPs sort numerically, IPv4 before IPv6; unparsed
+metadata retains a deterministic fallback. This is a display hint, not evidence
+of physical NICs, default routes or reachability. No new guest query, permission,
+poll cadence, cache/backoff or machine-identity behaviour is introduced.
+
+`TestIssue2757ContainerAddressSelection` covers status, stopped/config-only,
+DHCP fallback, IPv6, duplicates, numeric sorting, unknown associations and
+secondary-only/management-bridge paths through canonical listing and broadcast.
+`TestIssue2757VMAddressSelectionAndCache` exercises the actual metadata fetch
+and warm cache with reversed input order, preserving interfaces and ownership.
+These source fixtures are not native #2757 recovery or released availability.
+
+### TrueNAS physical-disk History — issue #2519
+
+The actual all-metric drawer request also reaches this reader when stored I/O
+exists but thermal coverage does not. API single/all-metric supplementation
+keeps independent stored metrics, issued-window filtering, existing aggregate
+bounds and store-error behaviour; complete local coverage makes no native
+call. The connected authenticated route includes ordinary store-backed controls.
+
+The existing disk drawer's `smart_temp` chart consumes the same tenant-scoped
+native temperature-history provider as physical-disk sparklines when local
+history is shallow. Sufficient local coverage and unrelated SMART/I/O metrics
+make no new native call. Native Celsius values retain their original sample
+times; downsampling and existing canonical metrics-target resolution remain.
+Neither chart pads a missing or single sample into a fabricated flat history.
+
+A successful `reporting.get_data` response with missing disk series permits
+one `reporting.netdata_get_data` query for those identifiers alone. Both reads
+share the original start/end window, `aggregate:true`, authenticated session
+and operation deadline. Failure of the first method does not select another
+method, transport or credential. Failure of the second is retained alongside
+independently successful series; missing disks do not become observed zero.
+Only requested, valid timestamped samples inside the requested window are
+admitted, never aggregation summaries, future values or unrequested identities.
+
+Providers map native disk names through the current inventory to canonical
+metric IDs, detach returned series and reject ambiguous aliases. In-flight
+inventory replacement cannot attach an old disk's series to a new disk at its
+former device name. Pollers isolate tenants, reject cross-connection ambiguous
+metric IDs and recheck provider ownership after reads so removed/replaced
+connections cannot serve stale in-flight output. No host-temperature summary,
+CPU substitution, permission widening, store schema or retention change is
+introduced. Native appliance and containing-release acceptance remain separate
+from synthetic client/provider/authenticated-route controls.
+
+`disk_history_netdata_test.go`, `disk_history_identity_test.go`,
+`truenas_disk_history_scope_test.go`, `disk_drawer_native_history_test.go` and
+`truenas_disk_history_integration_test.go` cover method distinction, partial
+failure, empty/invalid/windowed samples, canonical identity, revocation,
+existing reader behaviour and the real authenticated/scoped Pulse route.
+
+V2 partial inventories preserve usable filesystem readings while leaving typed-helper health degraded. Global inventory failure still yields no inventory. No host-network exception, guest mutation, database/retention change or temperature substitution accompanies this repair.
 
 ### Discovery observes VM guest execution pauses
 
@@ -3094,6 +3733,20 @@ update-readiness agent-continuity check) age the agent from its last report
 rather than the PVE poll time, applying their own heartbeat cutoff.
 `TestSilentLinkedAgentStopsFeedingNodeDisk` drives the disk and projection
 path through `evaluateHostAgents` and the registry-backed store refresh.
+
+The metrics-history API's live fallback relies on the same projection: it
+treats a host row reading `offline` as past its lease, and an agent linked to
+a Proxmox node then answers from the node row. For node rows it takes a
+projected `offline` or `unknown` as the lapse and otherwise reads the
+registry's sightings (`NodeView.SourceStatus`), because a projected `warning`
+is ambiguous: the stale pass shows an unreachable node that way, and so does a
+reporting linked agent's storage risk. The projection does not always carry
+the poller's verdict: a node merged with a silent linked agent projects
+`online` while its Proxmox sighting is current, even after the poller reports
+it offline. Docker host rows likewise lose the `offline` that
+`evaluateDockerAgents` set, to the stale pass's `warning` or to a merged
+agent's status, so that consumer also reads the Docker source's own sighting
+from `DockerHostView.SourceStatus(SourceDocker)`.
 
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
@@ -4654,6 +5307,44 @@ drift in non-identity display fields such as `buildtime`, including structured
 date/value wrappers, and still preserve the canonical hostname, version,
 machine ID, capacity, and poll-health path instead of failing connection tests
 or background refreshes during JSON decoding.
+### TrueNAS pool capacity is an observation, not a default zero
+
+`internal/truenas/pool_capacity.go` owns validation of the existing pool-specific
+byte sources. Legacy REST consumes only its flat `size`, `allocated`, and
+optional `free` fields. RPC retains its existing pool-state/property envelope;
+the property envelope is also used by the separate boot-pool reader. Neither
+that boot source nor a hypothetical nested REST shape establishes a supported
+CORE data-pool capacity fallback. Missing native capacity remains unavailable;
+datasets, quotas, physical disks, and vdevs must not be summed to invent it.
+
+A usable reading requires exact non-negative integer total and allocated bytes,
+with a positive total and allocated no greater than total. Optional free bytes
+are derived from those same two pool bytes only when absent; an explicitly
+reported free value must equal their difference. Null, malformed, fractional,
+overflowing, negative, or contradictory fields invalidate the capacity reading,
+not the pool's identity, health, topology, scan, or the rest of the snapshot.
+Numeric strings are accepted without float conversion. RPC pool results use
+number-preserving decoding, and flat/property readings never mix or use a real
+zero as a fallback trigger. Transport, permission and invalid JSON-envelope
+errors retain their existing failure behaviour; there is no extra method call.
+
+The provider emits no pool usage metric for an unavailable or out-of-bounds
+reading. A host aggregate is available only if every inventoried pool has valid
+usage and its byte sum fits int64; a known boot pool is not a whole-host reading
+when a data pool is unknown. Available per-pool and dataset readings remain
+independent. Unknown polls must not append a zero or refresh an old observation
+in either memory or persistent storage History. Existing historical readings
+remain intact, and a later valid poll resumes at that poll's observation time.
+
+`internal/truenas/pool_capacity_test.go` covers the TLS legacy snapshot through
+provider/registry ingestion, real empty/full pools, absent/malformed fields,
+exact RPC bytes, source separation and incomplete/overflowing aggregates.
+`internal/monitoring/truenas_pool_capacity_test.go` connects TLS collection,
+provider refresh, two same-named connection-scoped estates, canonical ingestion,
+memory and persistent History over known/unknown/malformed/recovered polls.
+Its deterministic polling clock and API bodies are declared fixtures, not native
+CORE acceptance, a containing release or an alternative capacity source.
+
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
 legacy `disk.temperatures` from the REST API or `reporting.get_data` `disktemp`
@@ -5919,6 +6610,111 @@ HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
 
+### Observed Proxmox replication sync outcome
+
+Replication configuration is enriched only from the source node's per-job
+status endpoint. A successful timestamp plus an explicitly valid zero failure
+count and no failure/unknown-state evidence yields `lastSyncStatus: ok`;
+error text, positive failures or an explicit failed state yields `error`,
+including error-with-zero-failures. Missing, denied, malformed, never-synced,
+invalid-count or unknown-state responses do not acquire success from defaults.
+Job/source mismatches and ambiguous array identities are rejected before any
+status fields merge. Single legacy rows without IDs retain endpoint binding;
+a multi-row response requires exactly one matching job.
+
+`replication_test.go` covers native field shapes, failure/unknown controls,
+HTTP enrichment and identity. `monitor_full_coverage_test.go` carries the real
+client through four normal fourteen-job/five-node polls into model/wire state,
+with zero-count error, denied status, recovery and another-instance isolation.
+The unchanged replication table consumes those explicit outcomes. These local
+HTTP controls are not native restart recovery; issue #2606 remains separate.
+
+### Next guest polls preserve correlated agent filesystem inventory
+
+The previous-guest context carries disks and their original agent source time
+from a manually correlated VM/container even when the standalone host row was
+removed, and even if agent memory is unavailable. Standalone linked hosts use
+the same source-owned eligibility; a current platform row cannot renew agent
+disk evidence. The existing VM disk preference consumes this inventory without
+issuing another guest-agent read. Empty replacements, expiry and withdrawal
+remove eligibility; a new ordinary report restores it. Guest-read safety and
+backup deferrals remain independent of usable Pulse-agent filesystem data.
+
+`guest_linked_agent_disks_test.go` carries actual registry correlation, retained
+links and automatic link hints through ordinary VM construction and canonical
+projection. It covers disk-only evidence, source time, missing links, identical
+VMIDs in separate instances, expiry/offline/empty/withdrawal/recovery and a
+backup lock with zero filesystem calls. Sequential snapshot replacement pins
+inventory removal/recovery without restarting the monitor. These are synthetic
+source controls, not a native cause, thaw or installed recovery for #2616/#2619.
+
+### Runtime-owned Proxmox replication observations — #2606
+
+The ordinary PVE scheduler/provider/executor dispatches a bounded replication
+read independently of `cluster/resources` availability, traditional guest
+fallback and disabled guest-detail monitoring. Its ten-second context is
+captured from the monitor runtime before dispatch, not from the short-lived
+scheduled task. One read per registered instance/client coalesces overlapping
+cycles; runtime replacement and retirement cancel/invalidate the claim. A
+replacement client can recover on the next ordinary cycle without waiting for
+an old read. Publication checks cancellation, the claim and the current client
+under the same lock; a late obsolete completion cannot overwrite or clear a
+newer result, including a successful empty inventory.
+
+Only an explicitly decoded `data` array is a complete replication inventory.
+Missing/null/malformed envelopes, cancellation (including after final status
+body consumption), access/transport errors and unavailable endpoints preserve
+the prior jobs and their original `LastPolled`. A complete successful empty
+array removes only that instance's jobs. Individual uncanceled status-access
+failures retain the existing unknown-outcome contract, not inferred success.
+No wire fields, classification, permission contract or scheduler cadence change.
+
+`monitor_pve_replication_lifecycle_test.go` exercises ordinary fallback/disabled
+paths and canceled/unavailable versus complete empty reads; the owned-boundary
+controls in `monitor_pve_replication_owner_test.go` cover coalescing, cycle/runtime
+cancellation, replacement, retirement, late completion and ordinary recovery.
+`pkg/proxmox/replication_lifecycle_test.go` binds envelope and cancellation
+controls to the real HTTP client. Synthetic proofs do not establish #2606's
+reported eleven-hour cause, native PVE recovery or published availability.
+
+### Non-destructive PVE backup access guidance
+
+Backup storage-list/content access warnings name the attempted endpoint and
+point operators to the actual saved PVE connection, installed-version endpoint
+permissions and both user/token scopes without disabling privilege separation.
+Observed HTTP 401 is an authentication rejection; 403 is an access denial, not
+proof of a particular missing role. Unknown errors and proxy bodies quoting
+another status remain unconfirmed. The private HTTP error wrapper exposes only
+its numeric wire status for this distinction, never its body or credentials.
+Warnings and associated log guidance contain no unconditional ACL command,
+assumed account, token ID, token secret or role prescription. Endpoint text is
+bounded and control-quoted. Collection, inventory/error completeness, polling
+cadence and setup permissions are unchanged.
+
+`monitor_backup_poll_test.go` and `canonical_guardrails_test.go` retain the safe
+saved-identity/manual-token contract. `pve_backup_warning_test.go` exercises
+401/403/proxy errors through the real client and storage-list/content producer,
+as well as unknown evidence and hostile endpoint text. The HTTP status helper
+has wrapped-error/body-injection controls in `api_error_status_test.go`. These
+are local source controls, not a native permission diagnosis or availability.
+
+### Physical-disk chart metadata without invented History
+
+`GetPhysicalDiskTemperatureCharts` preserves a currently collected physical
+disk's identity, display name, node and instance even when its stored
+temperature series is empty. A retained-only disk with no observed samples
+does not introduce an empty chart entry. Neither current nor retained readings
+create historical timestamps, duplicate a single stored point or pad a flat
+series: stored sample values and times remain unchanged. This composes current
+disk metadata with the sparse-history and retained-observation boundaries;
+collection policy and native health claims are unchanged.
+
+`TestDiskTemperatureChartsRetainOnlyObservedSamples` in
+`internal/monitoring/monitor_metrics_slo_test.go` binds live-without-history
+metadata, retained-without-history exclusion and original single-point
+observations to the production chart path. These source controls do not
+establish native temperature collection or installed History acceptance.
+
 ### Broadcast host coalescing honours operator splits
 
 The websocket broadcast coalesced top-level host views with
@@ -5939,3 +6735,21 @@ and REST row counts with and without the split, and
 `TestBroadcastPresentationCoalescePrefersTheListingReadState` pins the
 listing read state over an older store generation and the store's exclusions
 for a mock-style view.
+
+### Reconciled node-agent relink fold bookkeeping
+
+A declared node-agent join can consume one split row before its newer
+operator relink is applied. The relink records that side's ID and source in
+the current holder-bound `ManualLinkFold` index, so identity-pin succession
+keeps the operator decision and the resources API seed retains the same fold
+for report-merge. No synthetic telemetry, identity key, enrollment or service
+link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
+the monitor and its re-ingested API seed retain the fold across all split
+shapes, then survive pin persistence and a repeated split.
+
+Mock-link lifecycle validation drives the owning ingest/rebuild boundary
+after unlink and relink: read hydration intentionally reuses a registry
+generation younger than two seconds. The decision takes effect in the next
+loaded generation, not retroactively in the listing already served. The
+fixture seed keeps default thresholds while the configured live adapter
+retains its four-minute Proxmox threshold.

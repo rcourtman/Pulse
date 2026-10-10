@@ -21,6 +21,73 @@
 
 ## Purpose
 
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
+
+### Assistant planning mode grants no recovery execution
+
+The AI settings control projection describes read/query or plans for review in
+Actions. It does not authorise a backup, restore, replay or data change; action
+approval/run and independent verification remain separate. Stored legacy
+preferences, recovery-point access, the legacy protected-guests value and
+Patrol policy are preserved. The latter guest list is not a canonical saved-
+plan exclusion or a recovery execution safeguard. The handler change adds no recovery endpoint or execution route.
+
+### Retained guest identity cannot renew QGA eligibility
+
+The shared VM's internal `GuestAgentEvidence` bounds eligibility when a fresh
+VM-status read is unavailable. Snapshot copy and canonical replacement keep
+its original time, including explicit missing evidence, without changing disk
+capacity, usage, History storage or linked-agent precedence. No JSON field,
+credential or command path is added.
+`TestGuestAgentEvidenceIsInternalSnapshotEvidence` checks the shared-model
+copy/wire boundary; `TestGuestAgentAdmissionEvidenceContract` covers expiry,
+unknown/future origins and ordinary zero-reading recovery through both collectors.
+Synthetic source proof does not establish native recovery or published availability.
+
+
+### Shared guest disk evidence is not recovery-point identity
+
+The canonical Proxmox facet carries internal QGA filesystem source/time evidence
+for bounded monitoring fallback. It is omitted from JSON and does not change
+guest identity, backup attribution, storage selection or recovery-point keys.
+Complete guest observations replace a missing/expired origin rather than
+inheriting it. Canonical disk observation wire/identity and merge controls cover
+this shared type boundary; no native backup or recovery acceptance follows.
+
+### PMG collection scope remains separate from backup recovery
+
+PMG settings readback emits explicit false dataset options; absence must not
+re-enable the existing edit form defaults. Backup polling remains independent
+of these mail/queue/quarantine/domain options and requires a pause to stop.
+
+Shared node-settings and connections code preserves PMG collection opt-outs
+without changing storage identity, capacity, History or recovery semantics.
+The four mail/queue/quarantine/domain switches do not disable PMG configuration
+backup discovery, and pausing the PMG connection still prevents subsequent
+ordinary polls including backup reads. `TestPMGCollectionScope` in
+`monitor_pmg_test.go` checks independent backup reads in every scope; no backup
+restore, mail manipulation or native recovery is introduced or proved.
+
+### Persisted trust edits and restart consistency
+
+The shared `internal/api/` settings path durably saves an explicit empty
+`allowedOrigins` before clearing live CORS policy. An omitted field does not
+replace a different effective value; a failed or deployment-locked patch does
+not partially change disk/runtime/cache state. Production config reload retains
+the saved clear while existing deployment overrides stay authoritative.
+Webhook edits resolve every saved placeholder before persistence or live
+publication, and saved-form Test uses the same resolution without changing
+configuration. Unknown/ambiguous placeholders fail rather than silently lose a
+credential. `TestAllowedOriginsSavedEffectiveLifecycle`,
+`TestAllowedOriginsSaveFailurePreservesPolicy` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` cover these shared boundaries.
+No database/driver/schema, backup recovery, retention or old queue snapshot
+policy changes are part of this repair.
+
 ### Storage usage headline follows the alert phase — issue #2068
 
 `describeStorageAlertHeadline` says "Over N% usage limit" only while a usage
@@ -1510,6 +1577,16 @@ recovery scope, or a storage/recovery-owned secret source.
    handover resolution (moved to a Pulse agent, not recovered). That changes
    how a report states alert health only; it opens no storage, backup or
    recovery path, and report backups still come from the recovery store.
+   Machine (`agent`) reports now list the storage pools and physical disks
+   whose unified parent is the machine, through the same row builders as
+   node reports. Storage reports attach their pool's own alerts (the Proxmox
+   source ID plus ZFS pool and device children, or the agent's alert on an
+   Unraid array), and physical-disk reports attach the Proxmox health and
+   wearout alerts owned by the disk's recorded hardware through the journal's
+   shared serial/WWN and ambiguity rules, including earlier paths, rather
+   than inheriting a replacement's current path. All of it reads the existing unified storage
+   and disk projections only; it opens no storage, backup or recovery path
+   and grants no storage action.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery
@@ -2549,6 +2626,17 @@ is outside backup, restore, and recovery, and a missing or corrupt tally must be
 discarded and rebuilt rather than surfaced as a recovery failure. Nothing may
 take a correctness dependency on its contents.
 
+### Bounded audit investigation scope
+
+Audit list/export/summary consumers must not mistake a malformed time bound
+for an unfiltered storage read. `internal/api/activity_audit_handlers.go`
+rejects supplied empty/invalid RFC3339 bounds and equal/reversed windows with
+HTTP 400 before querying; list/export also validate literal success booleans.
+Absent filters and existing export/summary non-pagination remain supported.
+This boundary adds no database/schema, retention, signing, quota or recovery
+change. Fake persistent-logger controls in
+`internal/api/audit_filter_validation_test.go` prove rejection without a store.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
@@ -2998,6 +3086,25 @@ vdev layout is reported` in
     `pkg/auth/sqlite_manager_test.go`.
 
 ## Current State
+
+Webhook destination edits restore submitted masks per key while preserving
+explicit map edits/removals. They retain encrypted persistence, serialized
+save-before-publish and owned rollback on live publication failure; invalid
+masks fail before either write. Restored secrets do not reach the response.
+The connected notification edit/reopen test verifies durable new settings;
+already admitted queue work remains a snapshot, not an implied retry or rewrite.
+No storage schema, retention, database internals or recovery mechanism changes.
+
+### Stored disk I/O cannot suppress native thermal History
+
+The existing disk History response can supplement only its absent/shallow
+thermal series after a successful persistent-store read. Independent stored
+I/O values, timestamps and aggregate bounds stay intact; a closed/failed
+store returns its existing error rather than native success. No retention,
+pruning, schema, writer, recovery or database-internal change is involved.
+The connected native History route covers ordinary store writes, shallow
+readback, sufficient coverage and the error boundary.
+
 
 The agent config-fetch audit suppression cache is bounded to 4,096
 organisation/agent pairs, independently of persisted security audit history.
@@ -6559,6 +6666,12 @@ migration or recovery authority is added or moved.
 The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
+
+The handler likewise withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, or answers a lapsed linked agent from its node row. It reads
+only snapshot status and the registry's per-source sightings, and writes
+nothing.
 
 ### Safe methods refused on discovery settings and SAML logout
 

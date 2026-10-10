@@ -6,13 +6,21 @@ on:
     paths:
       - '.github/workflows/unified-agent-native.yml'
       - 'cmd/pulse-agent/**'
+      - 'cmd/pulse-agent-helper/**'
+      - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
+      - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
       - 'internal/kubernetesagent/**'
       - 'internal/remoteconfig/**'
+      - 'internal/updatesignature/**'
       - 'pkg/agents/**'
+      # Every native platform installs/builds this graph, and Windows uses its
+      # Vitest runtime for the generated PowerShell 5.1 install command.
+      - 'frontend-modern/package.json'
+      - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'
@@ -25,13 +33,19 @@ on:
     paths:
       - '.github/workflows/unified-agent-native.yml'
       - 'cmd/pulse-agent/**'
+      - 'cmd/pulse-agent-helper/**'
+      - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
+      - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
       - 'internal/kubernetesagent/**'
       - 'internal/remoteconfig/**'
+      - 'internal/updatesignature/**'
       - 'pkg/agents/**'
+      - 'frontend-modern/package.json'
+      - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/install.sh'
@@ -84,6 +98,28 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # These source-only checks need neither Node nor generated assets. Reject
+      # a broken pin before frontend acquisition/build and native runtime work;
+      # the complete installer inventory still runs below on passing source.
+      - name: Check immutable integration images before frontend preparation
+        if: matrix.unix
+        run: go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests
+
+      - name: Set up Node.js for native runtime test assets
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install frontend test dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
+      - name: Build real frontend assets for API-linked native tests
+        working-directory: frontend-modern
+        run: npm run build
+
       - name: Supply GNU timeout for macOS guidance checks
         if: runner.os == 'macOS'
         shell: bash
@@ -115,26 +151,60 @@ jobs:
           ./internal/kubernetesagent
           ./internal/remoteconfig
 
+      # The privileged helper is Linux-only. Keep its protocol, executable
+      # identity and shared filesystem fences in both native Linux jobs, even
+      # when a change leaves the unprivileged agent's source untouched. These
+      # tests run as the ordinary runner user; no helper service is installed.
+      - name: Test native Linux helper boundaries
+        if: runner.os == 'Linux'
+        run: >-
+          go test -race -count=1 -timeout 5m
+          ./cmd/pulse-agent-helper
+          ./internal/agenthelper
+          ./internal/filesystemprobe
+          ./internal/updatesignature
+          ./pkg/agents/host
+
+      - name: Build native Linux helper
+        if: runner.os == 'Linux'
+        run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
+
+      # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
+      # Keep their supported Bash/GNU metadata semantics local to that step;
+      # native macOS agent/runtime tests still use the runner's own utilities.
+      - name: Supply Linux server installer fixture tools on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install bash
+          linux_bash="$(brew --prefix bash)/bin/bash"
+          test -x "$linux_bash"
+          "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
+          coreutils_bin="$(brew --prefix coreutils)/bin"
+          fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
+          ln -s "$linux_bash" "$fixture_bin/bash"
+          for tool in stat chmod chown; do
+            executable="$coreutils_bin/g$tool"
+            test -x "$executable"
+            "$executable" --version | grep -q 'GNU coreutils'
+            ln -s "$executable" "$fixture_bin/$tool"
+          done
+          printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
+
       - name: Test native Unix installer contracts
         if: matrix.unix
-        run: go test ./scripts/installtests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${PULSE_INSTALLER_FIXTURE_BIN:-}" ]]; then
+            export PATH="$PULSE_INSTALLER_FIXTURE_BIN:$PATH"
+          fi
+          python3 scripts/installtests/run_unix_contracts.py
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}
         run: go test ./scripts/installtests -run '^Test(InstallPS1|WindowsAgentLifecycle)'
-
-      - name: Set up Node.js for Windows command proof
-        if: ${{ !matrix.unix }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
-
-      - name: Install frontend test dependencies
-        if: ${{ !matrix.unix }}
-        working-directory: frontend-modern
-        run: npm ci
 
       - name: Execute generated command with Windows PowerShell 5.1
         if: ${{ !matrix.unix }}
@@ -154,12 +224,17 @@ jobs:
         if: ${{ !matrix.unix }}
         shell: pwsh
         run: |
+          # PowerShell does not stop on native nonzero exits. Check each one
+          # before a later success can replace LASTEXITCODE.
           go build -o pulse-agent-native.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent build failed (exit $LASTEXITCODE)." }
           .\pulse-agent-native.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent version check failed (exit $LASTEXITCODE)." }
           $selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'
           $selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'
           New-Item -ItemType Directory -Path $selfTestStateDir -Force | Out-Null
           .\pulse-agent-native.exe --self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent self-test failed (exit $LASTEXITCODE)." }
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path 'scripts/install.ps1'),
@@ -173,20 +248,15 @@ jobs:
 
       - name: Exercise native Windows service lifecycle
         if: ${{ !matrix.unix }}
-        shell: pwsh
+        shell: powershell
         timeout-minutes: 10
         run: |
-          if (Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue) {
-            throw 'PulseAgent is already installed; refusing to clear lifecycle state.'
-          }
-          $lifecycleStateDir = Join-Path $env:ProgramData 'Pulse'
-          if (Test-Path $lifecycleStateDir) {
-            Write-Host "Removing test-only Pulse state before clean lifecycle proof: $lifecycleStateDir"
-            Remove-Item -Path $lifecycleStateDir -Recurse -Force
-          }
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v1 build failed (exit $LASTEXITCODE)." }
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v2 build failed (exit $LASTEXITCODE)." }
           go build -buildvcs=false -trimpath -o windows-lifecycle-server.exe ./scripts/installtests/windowslifecycleserver
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle server build failed (exit $LASTEXITCODE)." }
           & ./scripts/installtests/windows_agent_lifecycle.ps1 `
             -Phase Full `
             -ServerBinary ./windows-lifecycle-server.exe `
@@ -194,6 +264,7 @@ jobs:
             -AgentV2 ./pulse-agent-windows-ci-2.exe `
             -InstallerPath ./scripts/install.ps1 `
             -ConfirmLifecycleMutation
+          if ($LASTEXITCODE -ne 0) { throw "Windows service lifecycle proof failed (exit $LASTEXITCODE)." }
 
   freebsd-build-contract:
     name: FreeBSD cross-build contract

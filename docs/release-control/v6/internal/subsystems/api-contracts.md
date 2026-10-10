@@ -20,6 +20,146 @@
 
 ## Purpose
 
+### AI guest memory projections preserve uncertainty
+
+Existing AI get/list/topology responses carry selected guest memory evidence:
+availability, pressure qualification, source, state and original observation time.
+A missing/invalid guest percentage is JSON null rather than zero; a measured zero
+is explicitly numeric, including in list/topology and Assistant inventory. Get
+usage bytes are null when unavailable. Non-guest response numbers remain unchanged.
+The added evidence is a read-only projection, not a new route, command, feature,
+collector or diagnostic authority. `TestGuestMemoryQueryEvidence` exercises actual
+tool serialization and `TestAssistantGuestMemoryContextAndFacts` preserves it
+through Assistant condensation. Performance responses add a guest-history source
+limitation without relabelling past samples or changing their numbers; their
+actual tool controls are in `TestGuestMemoryHistoryDoesNotBorrowLiveOrigin`.
+
+The retained `protected_guests` settings field is legacy compatibility data,
+not an exclusion filter for canonical saved action plans. Existing Assistant
+help now states that limitation and requires target/approval review in Actions.
+No field value, GET/PUT shape, scope or approval authority changes.
+
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
+
+### Assistant control_level is an interactive projection
+
+AI settings GET/PUT responses expose `read_only` or `controlled`: an entitled
+legacy `autonomous` preference presents planning for operator review, never
+unprompted execution. Existing legacy PUT validation and `ai_autofix` checks
+remain; an entitled old client can retain the stored preference, an unentitled
+request is refused. Unrelated saves do not rewrite it. Shared external-agent
+vocabulary, Patrol settings, protected-guest arrays and authenticated authority
+remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
+and the actual persistence/handler tests pin responses and compatibility.
+
+### Optional held-alert breach date consumer
+
+`MetricAlertStatus.lastBreachAt?: string` mirrors the existing backend ISO
+field dating `Alert.value`. Older servers and restart-before-evaluation may
+omit it. Consumers validate it, then a valid legacy `lastSeen`, without
+creating a date from start/poll time. Frontend type and consumer regression
+controls are in `types/api.ts`, `features/alerts/__tests__/helpers.test.ts`
+and `components/Alerts/__tests__/alertAssistantHandoffModel.test.ts`.
+No endpoint, required field or mobile capability changes.
+
+### PMG scope readback preserves explicit all-off settings
+
+Settings node responses carry explicit false for all four PMG scope booleans,
+including all-off and partial selections. The existing edit form defaults
+omitted mail/queue/quarantine flags to on; `omitempty` must not resurrect an
+opt-out during a later unrelated save. Real GET-payload controls in
+`configapi/pmg_scope_test.go` and `TestContract_PMGFalseScopeIsExplicitOnWire`
+cover this consumer boundary without changing frontend source.
+
+Existing node add/update payloads keep their four boolean collection options.
+PMG saves persist the internal `monitoringConfigured` discriminator: legacy
+all-zero entries retain the existing mail-statistics default, while a saved
+all-off scope remains off through readback and restart. Partial scope patches
+first materialise that legacy default, then apply the supplied options; omitted
+options and unrelated edits do not erase an opt-out. PMG additions/edits publish
+the new runtime connection only after the durable save succeeds. Nodes and
+connection aggregation use the same effective mail-statistics rule.
+
+`configapi/pmg_scope_test.go`, `connections_aggregator_test.go` and the PMG
+branch controls cover defaults, saved/partial/failed patches and readback.
+`TestContract_PMGUncollectedDatasetsRemainAbsent` preserves missing optional
+readings across the existing PMG endpoint; it adds no route or payload dataset.
+
+### Origin-trust reversal and consistent webhook placeholders
+
+`POST /api/system/settings/update` treats the presence of a string
+`allowedOrigins` as a patch: an explicit empty string removes saved and runtime
+CORS trust, while omission changes neither. Null is not an empty-string clear.
+Persist first; a failed save changes no runtime policy or settings cache.
+`GET /api/system/settings` reports the effective value. Deployment-owned origins
+remain authoritative: changing them returns `409 env_locked` before any save;
+the form's unchanged locked value does not replace the underlying saved value
+or prevent other settings edits. Authentication, settings scopes, CSRF, TLS,
+comma-separated exact-origin matching and embedding policy stay independent.
+`TestAllowedOriginsPatchBoundaries`, `TestAllowedOriginsSavedEffectiveLifecycle`,
+`TestAllowedOriginsSaveFailurePreservesPolicy` and
+`TestAllowedOriginsGetUsesDeploymentPolicy` bind these boundaries to the real
+handlers, middleware, persisted settings, settings reload and production config
+loader. This is source acceptance, not an installed deployment observation.
+
+Webhook Create, Update and saved-form Test use one masked-value resolver.
+`***REDACTED***` means keep the corresponding saved value, not omit the field:
+missing, masked or conflicting saved identities return `400` before saving,
+live publication or a Test send. HTTP header names share case-insensitive
+identity, including aliases alongside an exact match; custom-field keys remain
+case-sensitive. Conflicting submitted header aliases are also rejected.
+A masked signing secret needs a non-empty, non-placeholder saved secret.
+Explicit additions/changes, omitted-map replacement/removals and blank-header
+normalization retain the existing semantics; list/create/update responses stay
+masked. Unsaved forms must supply literal values rather than saved masks.
+`TestWebhookPlaceholderBoundaryAgreement` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` exercise every entry point and a
+real Test request plus encrypted edit/readback. Existing ordinary-delivery
+integration retains grouped/ungrouped firing, resolution and restart controls;
+these do not establish native Telegram acceptance or alter old queued jobs.
+
+### Existing disk History keeps native thermal fallback reachable
+
+The authenticated disk History endpoint supplements a missing or shallow
+`smart_temp` series even when independent I/O metrics already exist in the
+persistent store. Single-metric and the drawer's all-metric requests use the
+same monitor-owned native/local selection. Only a broader series (or more
+actual samples at equal span) replaces the thermal series; unrelated stored
+values and min/max bounds stay unchanged. Samples stay within the issued
+window and use the existing aggregation and fallback-source wire contract.
+Complete local coverage makes no native history call. Store errors remain
+HTTP 500 rather than being concealed by native fallback.
+
+`TestTrueNASDiskHistoryAuthenticatedRoute` traverses the real authenticated TLS
+client, provider, tenant poller, monitor and router using declared appliance
+responses and ordinary store writes. It covers nil store, I/O-only store, a
+single thermal row, complete local coverage, store errors, token scope, tenant
+binding and revocation. It preserves original Celsius samples/timestamps and
+independent I/O, not synthetic temperature padding or CPU substitution. This
+is connected source proof, not an installed appliance or containing release.
+
+### Confirmed Patrol rule operations preserve tenant context — issue #2528
+
+The manual-rule confirmation presents the returned exact ID and scope before a
+keyboard-scrollable reason; the readable header and Cancel/Remove footer remain
+separate from long data. This does not truncate the stored reason or change
+authorised pre-read, one DELETE, readback or uncertainty handling.
+
+The frontend consumes the existing GET/DELETE suppression endpoints without a
+wire or permission change. The optional client expectedOrgID pins the request
+header and checks context before and after CSRF preparation; retry:false
+disables auth, invalid-organisation, CSRF and rate-limit retries for this flow.
+Other callers retain their defaults. Current auth, scope and CSRF checks remain
+authoritative; an abort or mismatched context stops dispatch. The suppression
+client rejects malformed or duplicate rows, accepts the existing empty nil
+slice, and only deletes a rule_ identity with explicit manual origin and no
+finding/dismissal attribution. Transport success alone is not removal: the UI
+must read the same collection back and establish exact-ID absence.
+
 ### Open threshold alerts expose their live evaluation — issue #2068
 
 `Alert.metricStatus` (`/api/alerts/active`, the websocket state and
@@ -32,6 +172,18 @@ while recovering, `recoveryStartedAt` and `recoveryElapsedSeconds`. Legacy
 `value`, `message` and `lastSeen` keep meaning the last reading that met the
 trigger. The field is absent for non-threshold alerts and until the first
 evaluation after a restart, and clients then fall back to `message`.
+
+`metricStatus.lastBreachAt` optionally dates the alert's retained evaluated
+breach value. Holds and recovery do not advance it to `observedAt`, and an
+unknown/zero date is omitted. The websocket and `/api/state` projection still
+omit legacy `lastSeen`; `/api/alerts/active` retains it. Old clients may ignore
+the additive field; consumers without it may use a valid legacy `lastSeen`
+but must not fabricate the date from `startTime` or the current observation.
+After restart no live status exists until evaluation; resolved rows have none.
+
+`TestMetricBreachTimeStateDeltasPreserveAndWithdraw` reconstructs the client
+baseline through held, recovery, renewed-breach, unknown-date and no-status
+keyed patches, including removal rather than retention of an obsolete date.
 
 ### Organisation deletion retains data after incomplete monitoring shutdown
 
@@ -3888,6 +4040,20 @@ deliberately not instrumented, because instrumenting both endpoints would
 double-count a single operator action and corrupt the failure share the
 counters exist to measure.
 
+### Audit investigation filter rejection
+
+The existing GET `/api/audit`, `/api/audit/export` and `/api/audit/summary`
+validate every supplied `startTime` and `endTime` as RFC3339 and reject empty,
+malformed, equal or reversed bounds with HTTP 400 before querying events.
+List and export likewise reject supplied `success` values other than literal
+`true` or `false`. Absence remains unfiltered; event/user filters, tenant,
+licence, role and method boundaries, formats and signature verification remain.
+Export/summary do not inherit list pagination, and summary has no success
+filter. No export quota or new endpoint is introduced. Actual handlers and
+exporter are pinned by `internal/api/audit_filter_validation_test.go` with
+fake persistent loggers, including query non-execution and tenant isolation;
+`internal/api/audit_handlers_test.go` pins valid export/summary filter payloads.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test
@@ -4786,6 +4952,26 @@ auto-register mutation boundary.
     when configured.
 
 ## Current State
+
+### Masked webhook updates preserve edits without disclosing saved fields
+
+The existing webhook PUT replacement-map contract resolves masks per submitted
+key, not per entire map. A masked header may match a saved name under HTTP's
+case-insensitive spelling; custom-field names remain exact after existing
+service alias normalisation. Explicit edits/additions/blanks/removals beside
+unchanged credentials are honoured. Omitted maps retain replacement semantics.
+Unknown, already-masked or ambiguous preserved values return HTTP 400 before
+persistence or manager mutation. Saved custom fields restored from a mask stay
+masked in the update response; explicitly submitted values still round-trip.
+No endpoint, permission, payload shape, routing, signing, SSRF or queue retry
+policy changes. The existing config-write mutex and save-before-publish rollback
+remain authoritative.
+
+`internal/api/alerting/notifications_test.go` verifies exact request/response
+values and no-write failure cases, then traverses masked reads/PUT, encrypted
+reload, grouped and individual firing/recovery, persistent receipts and HTTP
+payloads for built-in Telegram and custom Generic destinations. Existing signing,
+Pushover aliases, routing and persistence failure controls remain required.
 
 ### Credential-safe container diagnostics response (1 October 2026)
 
@@ -6555,6 +6741,37 @@ from the clear value and red from the trigger, as the Physical Disks Temp
 column does, and leaves it plain when disk temperature alerting is off. It no
 longer uses a fixed 50/60C. Proof:
 `TestContract_ReportsCarryDiskTemperatureAlertThresholds`.
+
+The live fallback for the other row types withholds the point when the
+snapshot row's source has stopped reporting. A host agent row gets none once
+`HostsSnapshot` reports it `offline` (the reporting lease
+`State.ExpireHostTelemetry` enforces); an agent linked to a Proxmox node then
+answers from the node row its `LinkedNodeID` names, under the node rule, and
+gets none when no node row has that ID. A Proxmox node row, also reached
+through the `agent` type, gets none when its projected status is `offline` or
+`unknown`. A VM, system container, node, or integration host row without an
+agent sighting gets none once the registry has marked stale every sighting it
+records from Proxmox, an agent, Docker, vSphere or TrueNAS; a `warning` status
+alone is not a lapse, since a linked agent's storage risk sets it on a row that
+still reports. A Docker host, and an app container through its host, gets none
+once its projected status is `offline` or its Docker sighting is stale. Power
+state and health are not a lapse: a stopped VM keeps its zero CPU point and a
+degraded Docker host that still reports keeps its point. Inside the PVE offline
+grace a node keeps its carried readings and its live point, as on other
+surfaces.
+These checks read row status and sightings, not the source each merged metric
+came from, so rows merged across sources keep the registry's merge decisions.
+A Docker row merged with a reporting host agent shows the agent's status until
+its Docker sighting goes stale. A node merged with a silent linked agent
+projects `online` while its Proxmox sighting is current, even after the poller
+reports the node offline. A hypervisor-managed guest merged with another
+source keeps its platform CPU after the platform stops reporting.
+With the metrics store available a withheld range stays empty; without a
+store, a request with no other fallback still answers 503, as one for a
+resource with no data does.
+`TestContract_MetricsHistoryLivePointOnlyWhileSourceReports` drives each lapse
+from the state transition that records it, and
+`TestContract_MetricsHistoryLiveReadingSightingsLapsed` pins the sighting rule.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics
@@ -9970,14 +10187,64 @@ aggregate, health card, table and resource blocks, and the fleet heuristic
 recommends checking the agent it moved to. "Triggered and resolved" counts
 recoveries only, and the report narrator's payload marks a covered handover
 with `successor_alert_listed` so the model describes the condition once.
-Reports requested as `agent`, which is how the Reports picker addresses every
-Proxmox node and standalone agent in v6, carry no alert rows yet:
-`enrichReportRequest` enriches node, VM and container reports only, so an
-agent report's deterministic verdict ignores its machine's alerts (HEALTHY,
-or NO DATA without metrics). The rule above reaches those reports once they
-attach the machine's alerts. The fleet heuristic offers its all-clear
-pattern and "No fleet-wide action required" only while no alert, moved
-ones included, is active.
+The fleet heuristic offers its all-clear pattern and "No fleet-wide action
+required" only while no alert, moved ones included, is active.
+Reports requested as `agent`, which is how the Reports picker addresses
+every Proxmox node and standalone Pulse agent in v6, attach the machine's
+alerts through `enrichAgentReport` in
+`internal/api/reporting_subject_alerts.go`. `reportAlertScopeFor` builds a
+subject's alert identities from its unified resource, never from host or
+node names, and an alert belongs to the report of each resource whose
+identity it was raised under. For a machine that is the requested unified
+ID, the metrics-target ID, the linked Proxmox node's source ID
+(`<instance>-<node>`, the node's own alerts) and, when the agent source is
+present, the Pulse agent's `agent:<host>` alerts with every component child
+the agent raises under that identity (`agent:<host>/disk:...`, disk
+temperature, SMART, RAID, the Unraid array, custom sensors). When the alert
+engine records a node alert's handover to the agent (`moved_to_agent`), the
+moved alert and the agent's own alert for that metric land in one report,
+where the rule above counts them once
+(`TestContract_AgentReportCountsAMovedNodeAlertOnce`). Guests, containers,
+Proxmox storage pools and physical disks raise alerts under their own
+identities, so those stay on their own reports, and a same-named node in
+another cluster never leaks in
+(`TestContract_AgentReportAttachesTheMachinesOwnAlerts`). The one alert
+raised under two identities is the agent's Unraid array alert
+(`agent:<host>/storage:unraid-array`), which appears on both the machine's
+and the array's report. The agent report also fills resource details from
+the resource's Proxmox and agent payloads and lists the storage pools and
+physical disks whose unified parent is the machine through the node
+report's row builders, so a disk shows only a collected temperature,
+coloured by the alert thresholds. Every other type
+without a dedicated enricher attaches the alerts in its scope: the unified
+and metrics-target IDs; `alerts.DockerHostResourceID`,
+`DockerContainerResourceID` and `DockerServiceResourceID` for Docker
+runtimes, containers (by name when they have no ID) and Swarm services; a Proxmox storage pool's source ID with its ZFS pool and device
+children; and the Proxmox health and wearout alerts on a disk's device-path
+reference (`ProxmoxPhysicalDiskAlertResourceID`) through the journal's shared
+recorded-hardware ownership decision (`ProxmoxPhysicalDiskAlertOwner`), not
+through the current device path. Usable serials and WWNs match through
+`diskinventory.HardwareIdentityMatch`, rejecting placeholders and retaining
+cross-source framing. A uniquely shared WWN decides duplicate serials;
+otherwise ambiguous identities are excluded. A row without usable identity
+matches only the single identity-less disk at its exact path. Earlier paths
+and nodes still reach the hardware that owns the alert; a replacement or
+path-shaped metrics alias never overrides ownership. The reference's canonical
+health/wearout alert identifier must also agree
+(`TestReportPhysicalDiskAlertsFollowRecordedHardware`)
+(`TestContract_UnenrichedReportTypesAttachTheSubjectsAlerts`). The legacy
+`node` enricher keeps its name-based match for direct API callers.
+
+`reporting_subject_alerts.go` is an exact shared-default-pipeline exception in
+the Go and shell repository-boundary classifiers, not new migration debt. It
+registers no route, changes no entitlement and imports no private licensing
+implementation. The existing reporting admin binder and execution/scheduling
+licence gates remain in place. `reporting_boundary_test.go` and
+`scripts/repo-boundary-regression.py` run the real Go and shell classifiers
+against the helper, unreviewed neighbouring filenames and private imports:
+neither a prefix exemption nor a licensing-import exemption is allowed. The
+boundary workflow runs the shell controls after installing its declared ripgrep
+dependency; the Go/API suite requires no new external tool.
 Multi-resource fleet reports (`engine.GenerateMulti`) now also carry an
 optional fleet-level narrative through a distinct
 `pkg/reporting.FleetNarrator` interface, kept separate from the

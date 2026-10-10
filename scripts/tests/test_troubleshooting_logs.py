@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise copied log-correlation recipes with synthetic service log readers.
+"""Exercise copied incident-log recipes with synthetic service log readers.
 
 This checks shell behaviour, not an installed Pulse service or Docker daemon.
 """
@@ -10,7 +10,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -26,53 +29,73 @@ CONSOLE_LOG = f"WRN Request failed request_id={REQUEST_ID} status=503\n"
 DECOY_LOG = "WRN Request failed request_id=traceX123:abc status=503\n"
 
 
-def section() -> str:
+def section(heading: str = "### Correlate Logs with Requests") -> str:
     return DOC.read_text(encoding="utf-8").split(
-        "### Correlate Logs with Requests\n", 1
+        heading + "\n", 1
     )[1].split("\n### ", 1)[0]
 
 
-def recipes() -> dict[str, str]:
-    blocks = re.findall(r"```bash\n(.*?)```", section(), re.DOTALL)
+def recipes(heading: str = "### Correlate Logs with Requests") -> dict[str, str]:
+    blocks = re.findall(r"```bash\n(.*?)```", section(heading), re.DOTALL)
     return {"docker" if "# Docker" in block else "journalctl": block
             for block in blocks}
 
 
-READER = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
-name = pathlib.Path(sys.argv[0]).name
-expected = (['-u', 'pulse', '--since', '15 minutes ago', '--lines', '1000', '--no-pager']
-            if name == 'journalctl' else ['logs', '--since', '15m', '--tail', '1000', 'pulse'])
+READER = f'''#!{sys.executable}
+import json, os, pathlib, signal, sys, time
 pathlib.Path(os.environ['READER_ARGV']).write_text(json.dumps(sys.argv[1:]))
-if sys.argv[1:] != expected:
-    print('unexpected log-reader arguments', file=sys.stderr)
-    sys.exit(64)
 sys.stdout.write(os.environ.get('LOG_STDOUT', ''))
 sys.stderr.write(os.environ.get('LOG_STDERR', ''))
+sys.stdout.flush()
+sys.stderr.flush()
+if os.environ.get('READER_HANG'):
+    if os.environ['READER_HANG'] == 'ignore-term':
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    time.sleep(30)
 sys.exit(int(os.environ.get('READER_EXIT', '0')))
 '''
 
 
+def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: str = "",
+                        exit_code: int = 0, hang: str = "", missing_timeout: bool = False):
+    """Own and clean up only this synthetic shell's process group on failure."""
+    with tempfile.TemporaryDirectory() as temporary:
+        directory = Path(temporary)
+        command = directory / reader
+        command.write_text(READER, encoding="utf-8")
+        command.chmod(0o700)
+        argv = directory / "argv.json"
+        path = str(directory) if missing_timeout else f"{directory}:{os.environ['PATH']}"
+        env = dict(os.environ, PATH=path, READER_ARGV=str(argv), LOG_STDOUT=stdout,
+                   LOG_STDERR=stderr, READER_EXIT=str(exit_code), READER_HANG=hang)
+        with subprocess.Popen([shutil.which("bash"), "-c", copied], env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, start_new_session=True) as process:
+            try:
+                output, errors = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate(timeout=5)
+                raise
+        result = subprocess.CompletedProcess(process.args, process.returncode, output, errors)
+        return result, json.loads(argv.read_text()) if argv.exists() else None
+
+
 class TroubleshootingLogRecipesTest(unittest.TestCase):
     def exercise(self, reader: str, *, stdout: str = "", stderr: str = "",
-                 exit_code: int = 0, recipe: str | None = None):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            command = directory / reader
-            command.write_text(READER, encoding="utf-8")
-            command.chmod(0o700)
-            argv = directory / "argv.json"
-            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
-                       READER_ARGV=str(argv), LOG_STDOUT=stdout, LOG_STDERR=stderr,
-                       READER_EXIT=str(exit_code))
-            copied = (recipe if recipe is not None else recipes()[reader]).replace(
-                "REQUEST_ID='abc123'", f"REQUEST_ID='{REQUEST_ID}'"
-            )
-            result = subprocess.run(["bash", "-c", copied], env=env,
-                                    capture_output=True, text=True, timeout=10)
-            self.assertTrue(argv.exists(), "copied recipe did not invoke its log reader")
-            self.assertNotEqual(result.returncode, 64, result.stderr)
-            return result
+                 exit_code: int = 0, recipe: str | None = None, **settings):
+        copied = (recipe if recipe is not None else recipes()[reader]).replace(
+            "REQUEST_ID='abc123'", f"REQUEST_ID='{REQUEST_ID}'"
+        )
+        result, argv = exercise_log_recipe(reader, copied, stdout=stdout, stderr=stderr,
+                                          exit_code=exit_code, **settings)
+        expected = (["-u", "pulse", "--since", "15 minutes ago", "--lines", "1000", "--no-pager"]
+                    if reader == "journalctl" else ["logs", "--since", "15m", "--tail", "1000", "pulse"])
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
 
     def test_shipped_document_is_the_same_guide(self):
         self.assertEqual(DOC.read_bytes(),
@@ -88,10 +111,12 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
                     self.assertEqual(result.stdout, log)
                     self.assertEqual(result.stderr, "")
 
-    def test_docker_logs_written_to_stderr_are_searchable(self):
-        result = self.exercise("docker", stdout=DECOY_LOG, stderr=JSON_LOG)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, JSON_LOG)
+    def test_logs_written_to_stderr_are_searchable_for_both_readers(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout=DECOY_LOG, stderr=JSON_LOG)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, JSON_LOG)
 
     def test_no_match_is_nonzero_and_does_not_print_unrelated_logs(self):
         for reader in recipes():
@@ -106,8 +131,26 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
         for reader in recipes():
             with self.subTest(reader=reader):
                 result = self.exercise(reader, stdout=JSON_LOG, stderr=error, exit_code=2)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(error, result.stderr)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn(error, result.stderr)
+                self.assertIn("Log read unavailable (exit 2)", result.stderr)
+
+    def test_hung_readers_withhold_partial_matches_and_stop_by_deadline(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout=JSON_LOG, hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable", result.stderr)
+
+    def test_missing_timeout_stops_before_either_reader(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, missing_timeout=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
 
     def test_console_only_selector_is_a_negative_control_for_json(self):
         copied = recipes()["journalctl"].replace(
@@ -128,6 +171,139 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
             self.assertIn(boundary, guide)
         self.assertNotRegex("\n".join(recipes().values()),
                             r"curl\b|--follow\b|\s-f\b|--token\b|--api-token\b")
+
+
+class GeneralLogEvidenceTest(unittest.TestCase):
+    """The general help entry must reach the same bounded readers, without an ID."""
+
+    def test_getting_help_reaches_bounded_readers_without_a_second_attempt(self):
+        help_text = " ".join(section("## 🆘 Getting Help").split())
+        self.assertIn("[bounded Pulse log readers](#inspect-notification-logs)", help_text)
+        self.assertNotRegex(help_text, r"journalctl\b|docker logs\b")
+        for boundary in ("Pulse server's deployment, not the monitored target",
+                         "record limit alone does not bound a hung reader",
+                         "do not use an unbounded substitute",
+                         "No request ID is required",
+                         "do not repeat the failed action"):
+            self.assertIn(boundary, help_text)
+        self.assertIn("also apply to other server errors",
+                      " ".join(section("### Inspect Notification Logs").split()))
+
+    def exercise(self, reader: str, **settings):
+        copied = recipes("### Inspect Notification Logs")[reader]
+        self.assertNotIn("REQUEST_ID", copied)
+        result, argv = exercise_log_recipe(reader, copied, **settings)
+        expected = (["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"]
+                    if reader == "journalctl" else ["logs", "--since", "15m", "--tail", "200", "pulse"])
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
+
+    def test_general_readers_keep_complete_stdout_and_stderr_without_an_id(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="server error\n", stderr="detail\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                # The two streams can flush in either order; require both
+                # records exactly once, not cross-stream chronology.
+                self.assertCountEqual(result.stdout.splitlines(), ["server error", "detail"])
+                self.assertEqual(result.stderr, "")
+
+    def test_general_readers_withhold_partial_errors_on_failed_reads(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="partial error\n",
+                                       stderr="private access error\n", exit_code=2)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 2)", result.stderr)
+                self.assertNotIn("private access error", result.stderr)
+
+    def test_general_readers_stop_and_withhold_partial_errors_at_real_deadline(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, stdout="partial error\n", hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_general_readers_do_not_fall_back_when_timeout_is_missing(self):
+        for reader in recipes("### Inspect Notification Logs"):
+            with self.subTest(reader=reader):
+                result = self.exercise(reader, missing_timeout=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
+
+
+class SeverityLogEvidenceTest(unittest.TestCase):
+    """Priority filtering must not bypass the incident reader's safety bounds."""
+
+    heading = "#### Filter Pulse's systemd journal by severity"
+
+    def copied(self):
+        # Stop at the next H4; the generic section helper stops at H3.
+        text = section(self.heading).split("\n#### ", 1)[0]
+        blocks = re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
+        self.assertEqual(len(blocks), 1)
+        return blocks[0]
+
+    def exercise(self, **settings):
+        result, argv = exercise_log_recipe("journalctl", self.copied(), **settings)
+        expected = ["-u", "pulse", "-p", "warning", "--since", "15 minutes ago",
+                    "--lines", "200", "--no-pager"]
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
+
+    def test_priority_reader_keeps_incident_bounds_without_privilege_or_mutation(self):
+        copied = self.copied()
+        for bound in ("--signal=TERM --kill-after=1s 8s", "--since '15 minutes ago'",
+                      "--lines 200", "--no-pager"):
+            self.assertIn(bound, copied)
+        self.assertNotRegex(copied, r"\b(?:sudo|systemctl|curl|grep)\b|--follow")
+        self.assertEqual(DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+
+    def test_success_keeps_both_complete_streams(self):
+        result = self.exercise(stdout=JSON_LOG, stderr=CONSOLE_LOG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertCountEqual(result.stdout.splitlines(),
+                              (JSON_LOG + CONSOLE_LOG).splitlines())
+        self.assertEqual(result.stderr, "")
+
+    def test_failed_reader_withholds_partial_warning_and_private_error(self):
+        result = self.exercise(stdout=JSON_LOG, stderr="synthetic private error\n", exit_code=2)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 2)", result.stderr)
+        self.assertNotIn("synthetic private error", result.stderr)
+
+    def test_real_deadline_withholds_partial_warning(self):
+        result = self.exercise(stdout=JSON_LOG, hang="term")
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_missing_timeout_stops_before_reading(self):
+        result = self.exercise(missing_timeout=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("no unbounded fallback", result.stderr)
+
+    def test_empty_success_does_not_invent_a_warning_or_reader_error(self):
+        result = self.exercise()
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_old_unit_and_sharing_guidance_does_not_require_incident_reinstallation(self):
+        guide = " ".join(section(self.heading).split("\n#### ", 1)[0].split())
+        for boundary in ("inside the Pulse container, not on the Proxmox host",
+                         "not sanitised", "#inspect-notification-logs",
+                         "An empty filtered read does not prove", "info priority",
+                         "bounded unfiltered systemd reader", "check locally",
+                         "do not post the full unit or environment",
+                         "Do not reinstall or restart Pulse just to obtain logs",
+                         "planned maintenance window", "settings and data"):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("systemctl cat", guide)
 
 
 if __name__ == "__main__":

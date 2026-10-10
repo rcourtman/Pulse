@@ -270,6 +270,7 @@ verify downloaded files offline against the candidate-builder identity.
 **File**: `issue-version-label-sync.yml`
 
 - The silent metadata path runs on `opened`, `edited`, and `reopened` issue events. The shared helper at `.github/scripts/issue-version-triage.cjs` maintains version labels, `needs-version-info`, feedback classification and `needs-decomposition`.
+- It reads the current report and labels before classifying; failed reads stop without an event-snapshot fallback, and closed issues or pull requests are skipped. A superseded declaration event cannot restore a cleared decomposition task. No release lookup is needed for metadata classification.
 - Version-only retest posting and marked-request timeout closure workflows are retired. An older reported version or silence is not evidence of resolution.
 - Community owns public follow-up and closure after whole-thread review, relevant-fix verification and confirmed released-source inclusion. The synchronizer neither adds nor removes the community-owned `needs-retest-on-latest` label. Classification uses individual label additions/removals rather than replacing the event snapshot, preserving concurrent Community label decisions. Existing labels and comments are context, not proof that a reporter has or has not replied.
 - `needs-decomposition` is driven only by the structured **Additional actionable topics** form field. The [triage contract](../../docs/ISSUE_TRIAGE.md) requires human or agent judgment to create linked dispositions; the workflow does not infer or auto-create issues from free text.

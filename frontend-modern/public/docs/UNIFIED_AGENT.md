@@ -106,33 +106,82 @@ connection is usually enough for TrueNAS inventory and usage; an agent is
 optional for host-local data.
 
 1. In that shell, protect the file before opening the editor. Save only the
-   Pulse agent token, with no quotes or header. Use your own private directory
-   and regular files, not shared paths or symlinks:
+   Pulse agent token, with no quotes or header. This preparation preserves an
+   existing regular token file and refuses symlinked or non-regular credential
+   paths. **Stop if preparation fails**; do not continue to the installer:
 
    ```bash
-   umask 077
-   mkdir -p "$HOME/.config/pulse"
-   chmod 700 "$HOME/.config/pulse"
-   touch "$HOME/.config/pulse/agent-token"
-   chmod 600 "$HOME/.config/pulse/agent-token"
-   vi "$HOME/.config/pulse/agent-token"
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     credential_file="$config_dir/agent-token"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+       printf 'Refusing a symlinked credential path.\n' >&2
+       exit 1
+     fi
+     if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+       printf 'Credential file must be a regular file.\n' >&2
+       exit 1
+     fi
+     mkdir -p "$config_dir"
+     chmod 700 "$config_dir"
+     touch "$credential_file"
+     chmod 600 "$credential_file"
+     vi "$credential_file"
+   )
    ```
 
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
-   in both the download and installation commands. Download to a file:
+   in both the download and installation commands. Download to a new private
+   file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
+   and does not follow redirects or overwrite an existing installer:
 
    ```bash
-   curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
-     --output "$HOME/.config/pulse/agent-install.sh" \
-     https://pulse.example.com/install.sh
+   (
+     set -eu
+     umask 077
+     config_dir="$HOME/.config/pulse"
+     installer_file="$config_dir/agent-install.sh"
+     if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ ! -d "$config_dir" ]; then
+       printf 'Prepare the private token directory first.\n' >&2
+       exit 1
+     fi
+     if [ -e "$installer_file" ] || [ -L "$installer_file" ]; then
+       printf 'Refusing to replace an existing installer path.\n' >&2
+       exit 1
+     fi
+     chmod 700 "$config_dir"
+     download_file=$(mktemp "$config_dir/agent-download.XXXXXX")
+     curl_exit=0
+     status=$(curl --disable --fail --silent --show-error --proto '=https' \
+       --connect-timeout 10 --max-time 60 --output "$download_file" \
+       --write-out '%{http_code}' https://pulse.example.com/install.sh) || curl_exit=$?
+     printf 'HTTP %s\n' "$status"
+     [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+     [ "$status" = 200 ]
+     mv -n "$download_file" "$installer_file"
+     [ ! -e "$download_file" ]
+   )
    ```
 
-   **Stop if the download fails.** Inspect the saved script before executing
-   it. Do not bypass certificate verification or pipe an unchecked response
-   into a privileged shell. For a private CA, add curl's `--cacert` with the
-   separately verified CA file, and supply the installer's `--cacert` option
-   for the agent connection as well. Do not substitute GitHub's top-level
-   `install.sh`: that installs the Pulse server, not the agent.
+   **Stop if the download fails.** A temporary download, redirect or TLS error
+   is not an installer; do not execute its temporary file. Inspect the saved
+   `agent-install.sh` only after a successful download. If that path already
+   exists, review it locally rather than deleting or overwriting it blindly;
+   retargeting needs the installer from the **new** server, not an older saved
+   copy. Preserve any earlier copy separately through normal maintenance
+   before downloading again.
+
+   Keep `--disable` first in the curl command: local settings could enable
+   tracing, redirects or a TLS bypass. Do not bypass certificate verification
+   or pipe an unchecked response into a privileged shell. For a private CA,
+   add curl's `--cacert` **after `--disable`**, using a separately verified CA
+   file, and supply the installer's `--cacert` option for the agent connection
+   as well. A successful download is not signature verification; inspect and
+   trust the serving Pulse installation before executing its script. Do not
+   substitute GitHub's top-level `install.sh`: that installs the Pulse server,
+   not the agent.
 
 3. Install with the private token file, adding a profile from
    [Installation Options](#installation-options) when needed:
@@ -533,11 +582,15 @@ Apply and verify the change:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl restart pulse-agent
-sudo journalctl -u pulse-agent --since "5 minutes ago"
 ```
 
-Set the value to `debug` temporarily when collecting diagnostics, then restore
-`info` or `warn`. For a container agent, set `LOG_LEVEL=warn` in the container
+These are configuration changes, not evidence-collection steps: apply them in
+a suitable maintenance window, not just to file a report. Inspect the existing
+journal with the [bounded agent log reader](#collect-agent-logs-safely).
+Start with the current log level; changing it to `debug` can expose more private
+details and a restart changes the run being investigated. Do not enable debug
+logging or restart the agent merely to manufacture a missing diagnostic entry.
+For a container agent, set `LOG_LEVEL=warn` in the container
 environment and recreate the container. Pro installations can also manage
 `log_level` with an [agent configuration profile](CENTRALIZED_MANAGEMENT.md).
 
@@ -804,7 +857,13 @@ Pro, legacy Pro+, and Cloud can push centralized settings to agents via Agent Pr
 Behavior:
 - The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
-- Profile changes take effect on the next agent restart.
+- With the host module running, current agents refresh about once a minute.
+  Host `interval`, `report_ip` and `disable_ceph` settings can apply live; other
+  profile keys require a successful startup fetch. A refresh is not an
+  all-module live reload, and a saved assignment is not applied-state proof.
+- Removing an assignment does not undo settings already applied to a running
+  process, revoke its token or stop monitoring. Keep incident recovery separate
+  from profile rollout; do not restart or re-enrol solely to diagnose a reading.
 - Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
@@ -871,6 +930,54 @@ readinessProbe:
 Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
 
 ## Troubleshooting
+
+### Collect agent logs safely
+
+Prefer existing observations from the original failure. On a **Linux systemd
+agent host**, use this bounded Bash reader with an account already authorised
+to read that journal. Run it on the affected agent host, not the Pulse server
+or a different Proxmox node; use the actual service name and original time
+window if they differ from the example. This reads logs only: it does not
+contact Pulse, a container runtime or a guest agent.
+
+```bash
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Agent log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if agent_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse-agent.service --since '15 minutes ago' --lines 200 --no-pager --output=cat 2>&1); then
+  if [ -n "$agent_logs" ]; then
+    printf '%s\n' "$agent_logs"
+  fi
+else
+  agent_log_status=$?
+  printf 'Agent log read unavailable (exit %s); no partial excerpt shown.\n' "$agent_log_status" >&2
+  exit "$agent_log_status"
+fi
+)
+```
+
+This requires **GNU `timeout`**, reads at most 200 records from the default
+15-minute window, and allows eight seconds plus a one-second termination grace.
+A failed or timed-out read is unavailable, not an empty search; partial output
+is withheld. Stop if the utility, service journal or existing access is
+unavailable; do not follow the journal indefinitely, remove the deadline or
+broaden permissions to collect it. A successful empty read is inconclusive:
+the event may be outside the window or absent at the configured log level.
+Do not restart, re-enrol or enable debug logging just to obtain an entry.
+
+The excerpt is **not sanitised**. Review it locally before searching for the
+relevant error or sharing a manually redacted timestamp and failure stage.
+Tokens, cookies, URLs, private names or addresses can appear in errors; do not
+post the full excerpt, service environment, connection files or saved identity.
+A log message does not prove fresh readings, successful updates or delivery.
+
+For a container agent or a non-systemd host, use the existing deployment's log
+source instead; this journal recipe does not apply. Keep its read bounded and
+private, and report evidence as unavailable if safe collection is not possible.
+QNAP and Unraid log locations are described in the
+[space troubleshooting section](#installer-fails-with-not-enough-free-disk-space).
 
 ### pfSense service disabled after a major upgrade
 
@@ -953,7 +1060,8 @@ space problem is resolved; verify fresh reporting, free space and log growth
 after any planned repair. Keep log contents, connection files and tokens private.
 
 ### Agent Not Updating
-- Check logs: `journalctl -u pulse-agent -f`
+- Inspect existing errors with the [bounded agent log reader](#collect-agent-logs-safely);
+  a missing update entry is not proof that an update succeeded.
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
 - Confirm the agent can authenticate and that its saved connection state still
@@ -1098,11 +1206,8 @@ monitoring report or **Automatic updates ready** also does not prove that this
 separate WebSocket channel is working. Changing Proxmox API permissions cannot
 repair a Pulse command-channel connection.
 
-For a systemd agent, inspect the recent journal **locally on the affected node**:
-
-```bash
-sudo journalctl -u pulse-agent.service --since '15 minutes ago' -n 200 --no-pager --output=cat
-```
+For a systemd agent, inspect the recent journal **locally on the affected node**
+with the [bounded agent log reader](#collect-agent-logs-safely).
 
 Look for **Connected and registered with Pulse command server**, or
 **WebSocket connection failed repeatedly, reconnecting** and its error. A
@@ -1133,10 +1238,10 @@ launchctl list | grep pulse
 
 If your Docker Swarm cluster isn't being detected:
 
-1. **Check runtime detection**: Pulse disables Swarm for Podman. Look for "Podman runtime detected" in logs:
-   ```bash
-   journalctl -u pulse-agent | grep -i podman
-   ```
+1. **Check runtime detection**: Pulse disables Swarm for Podman. Look locally
+   for "Podman runtime detected" in the existing excerpt from the
+   [bounded agent log reader](#collect-agent-logs-safely). An empty search does
+   not establish that Docker was detected or that Swarm collection succeeded.
 
 2. **Force Docker runtime**: If auto-detection is incorrect:
    ```bash
@@ -1156,29 +1261,56 @@ If your Docker Swarm cluster isn't being detected:
    typed-helper summary does not include Swarm inventory; granting broader
    socket access is a security decision, not a routine permission repair.
 
-5. **Enable debug logging**: For more detail:
-   ```bash
-   # Set the service to debug as described under "Agent log level", restart it,
-   # then follow the service journal.
-   journalctl -u pulse-agent -f
-   ```
+5. **Keep the original failure evidence**: retain the failure stage and a
+   reviewed, redacted error, or say that no relevant entry is available. Do
+   not enable debug logging, restart the agent or change its runtime merely
+   to obtain a log entry. Use the existing observations before deciding that
+   any configuration repair is needed.
 
 ### PVE Backups Not Showing (Recovery)
 
-If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
+Pulse's **server collects PVE backup inventory through the saved Proxmox API
+connection**, including storage and storage-content requests. A working host
+agent or successful `--enable-proxmox` setup does not prove that this separate
+API collection is current. Guest-agent disk readings are not backup inventory.
 
-1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
-   ```bash
-   pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
-   pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
-   ```
-   Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse.
-   Privilege-separated PVE tokens need the storage ACL on the token as well as the service user.
+1. **Check existing evidence in Proxmox first.** In the native PVE interface,
+   identify the existing archive's node, storage, guest type/ID and time. Do not
+   run another backup or restore to create evidence. A missing Pulse row is not
+   proof that the archive is absent, and an OK task does not prove guest thaw.
+2. **Compare the same source in Pulse.** Open **Proxmox → Backups → By date**
+   and check the selected connection and filters against that archive. Coverage
+   posture is a different reading: expand its explanation rather than treating
+   an unprotected badge as a missing backup. Direct PBS collection and backups
+   seen through PVE are distinct sources; see [PBS data sources](PBS.md#data-source-indicator)
+   and [Recovery](RECOVERY.md#missing-or-inconsistent-evidence).
+3. **Inspect ordinary collection, not a new probe.** In **Settings →
+   Infrastructure**, check the affected saved PVE connection and existing
+   status. Keep connection/agent liveness separate from backup collection
+   freshness; use existing collection timestamps where available, and retain
+   the original redacted error and time. The server checks online nodes and queryable storage configured for
+   backup content. A failed, unavailable or partial read is not an empty
+   inventory; a successful connection test is not proof of sustained collection.
+4. **Repair access only when the evidence supports it.** Ask the Proxmox
+   administrator to compare the actual rejected endpoint and installed PVE
+   version with the configured service user and token's effective storage
+   permissions. With privilege separation, both user and token ACLs must allow
+   the request, including the relevant scope and inheritance. Audit-only
+   inventory access does not establish access to every backup-content request.
+   Do not apply blanket storage-administrator ACLs merely because a table is
+   empty, disable privilege separation or use an administrator token as a test.
+   See [Proxmox permission checks](TROUBLESHOOTING.md#check-permissions-proxmox).
 
-2. **Re-run setup**: Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Recent versions grant this permission automatically.
+**Do not delete the monitored node, remove registration state or rerun setup as
+a diagnostic.** Setup can rotate an existing API token and change permissions;
+it is not a harmless refresh. Preserve the connection, credentials, registration
+state and backup/history data. Make any evidenced configuration repair through
+normal maintenance outside backups, then observe ordinary polling without
+manual guest-agent probes, restarts or repeated **Test Connection** requests.
 
-3. **Check state file**: If re-running doesn't trigger setup, remove the state file:
-   ```bash
-   rm /var/lib/pulse-agent/proxmox-pve-registered
-   ```
-   Then restart the agent.
+For freeze-enabled backups, follow the [backup safety precaution](VM_DISK_MONITORING.md#backup-safety).
+It is not an incident recovery procedure or proof of a repaired thaw failure.
+If reporting a continuing mismatch, retain the running server version, source,
+original time, relevant missing privilege or redacted error and the differing
+native/Pulse observations. Keep token secrets, full ACL listings and private
+infrastructure details out of public reports; follow [Getting Help](TROUBLESHOOTING.md#-getting-help).

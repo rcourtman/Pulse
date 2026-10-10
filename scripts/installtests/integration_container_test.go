@@ -30,6 +30,47 @@ func TestIntegrationContainersUseGovernedImmutableBases(t *testing.T) {
 }
 
 func regexpDigestPinnedImage(image string, content string) bool {
-	pattern := regexp.MustCompile(`(?m)^\s*image:\s*` + regexp.QuoteMeta(image) + `@sha256:[0-9a-f]{64}\s*$`)
+	pin := regexp.QuoteMeta(image) + `@sha256:[0-9a-f]{64}`
+	// The same-run CI bundle uses this fixed override; the local default must
+	// still be a complete governed pin. Do not admit arbitrary interpolation.
+	pattern := regexp.MustCompile(`(?m)^[ \t]*image:[ \t]*(?:` + pin + `|\$\{PULSE_E2E_SEED_IMAGE:-` + pin + `\})[ \t]*\r?$`)
 	return pattern.MatchString(content)
+}
+
+func TestIntegrationContainerImagePinForms(t *testing.T) {
+	pin := "alpine:3.24@sha256:" + strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{"literal", "image: " + pin + "\n", true},
+		{"indented-literal", "    image: " + pin + "\n", true},
+		{"same-run-override", "    image: ${PULSE_E2E_SEED_IMAGE:-" + pin + "}\n", true},
+		{"crlf-override", "\timage:\t${PULSE_E2E_SEED_IMAGE:-" + pin + "} \r\n", true},
+		{"unpinned-literal", "image: alpine:3.24\n", false},
+		{"unpinned-default", "image: ${PULSE_E2E_SEED_IMAGE:-alpine:3.24}\n", false},
+		{"missing-default", "image: ${PULSE_E2E_SEED_IMAGE}\n", false},
+		{"retired-line", "image: ${PULSE_E2E_SEED_IMAGE:-" + strings.Replace(pin, "3.24", "3.20", 1) + "}\n", false},
+		{"mutable-line", "image: ${PULSE_E2E_SEED_IMAGE:-" + strings.Replace(pin, "3.24", "latest", 1) + "}\n", false},
+		{"other-variable", "image: ${OTHER_IMAGE:-" + pin + "}\n", false},
+		{"unset-only-default", "image: ${PULSE_E2E_SEED_IMAGE-" + pin + "}\n", false},
+		{"alternate-operator", "image: ${PULSE_E2E_SEED_IMAGE:+" + pin + "}\n", false},
+		{"short-literal-digest", "image: " + pin[:len(pin)-1] + "\n", false},
+		{"short-default-digest", "image: ${PULSE_E2E_SEED_IMAGE:-" + pin[:len(pin)-1] + "}\n", false},
+		{"long-default-digest", "image: ${PULSE_E2E_SEED_IMAGE:-" + pin + "a}\n", false},
+		{"invalid-default-digest", "image: ${PULSE_E2E_SEED_IMAGE:-" + strings.Replace(pin, "sha256:a", "sha256:g", 1) + "}\n", false},
+		{"missing-close", "image: ${PULSE_E2E_SEED_IMAGE:-" + pin + "\n", false},
+		{"default-suffix", "image: ${PULSE_E2E_SEED_IMAGE:-" + pin + ":other}\n", false},
+		{"override-suffix", "image: ${PULSE_E2E_SEED_IMAGE:-" + pin + "}/other\n", false},
+		{"multiline-value", "image:\n" + pin + "\n", false},
+		{"multiline-default", "image: ${PULSE_E2E_SEED_IMAGE:-\n" + pin + "}\n", false},
+		{"commented-pin", "# image: " + pin + "\nimage: alpine:latest\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := regexpDigestPinnedImage("alpine:3.24", tc.value); got != tc.want {
+				t.Fatalf("governed seed image admission = %t, want %t", got, tc.want)
+			}
+		})
+	}
 }

@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -25,7 +26,7 @@ type EnhancedWebhookConfig struct {
 	RetryCount      int                    `json:"retryCount"`
 	FilterRules     WebhookFilterRules     `json:"filterRules"`
 	CustomFields    map[string]interface{} `json:"customFields"`    // For template variables
-	ResponseLogging bool                   `json:"responseLogging"` // Log response for debugging
+	ResponseLogging bool                   `json:"responseLogging"` // Log structured response metadata, never provider text
 }
 
 // WebhookFilterRules defines filtering for this webhook
@@ -336,7 +337,6 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					} else {
 						log.Debug().
 							Str("webhook", webhook.Name).
-							Str("retryAfter", retryAfter).
 							Msg("invalid Retry-After header; falling back to exponential backoff")
 					}
 				}
@@ -504,6 +504,12 @@ func parseRetryAfterBackoff(retryAfter string, now time.Time) (time.Duration, bo
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry
 func isRetryableWebhookError(err error) bool {
+	// A local security/configuration refusal is authoritative too. In
+	// particular, retrying an origin-changing redirect cannot make it safe.
+	var declared *NotificationFailureError
+	if errors.As(err, &declared) && declared.Class != "" {
+		return declared.Class.Retryable()
+	}
 	// An explicit HTTP rejection takes precedence over diagnostic body text:
 	// a 403 mentioning "timeout" is not a transport timeout. Errors without
 	// a recognised status (including network failures) remain retryable below.
@@ -577,10 +583,10 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)", webhookEventID(testAlert.ID, "alert"))
 	if err != nil {
 		if result != nil {
-			return result.statusCode, result.body, err
+			return result.statusCode, result.responseSummary(), err
 		}
 		return 0, "", err
 	}
 
-	return result.statusCode, result.body, nil
+	return result.statusCode, result.responseSummary(), nil
 }

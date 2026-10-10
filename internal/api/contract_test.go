@@ -4948,6 +4948,361 @@ func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
 	}
 }
 
+// reportAlertResourceIDs lists a report request's alert rows by resource ID,
+// sorted, so a test can state exactly which alerts a report attributes to
+// its subject.
+func reportAlertResourceIDs(req reporting.MetricReportRequest) []string {
+	ids := make([]string, 0, len(req.Alerts))
+	for _, alert := range req.Alerts {
+		ids = append(ids, alert.ResourceID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Every Proxmox node and standalone Pulse agent is an `agent` resource in v6,
+// and the Reports picker requests it as one. Its report must carry the
+// machine's own alerts, matched through the identities its unified resource
+// carries: the linked node's source ID, the agent's "agent:<host>" alerts and
+// their component children. Guests, storage pools and same-named nodes in
+// another cluster are not the machine.
+func TestContract_AgentReportAttachesTheMachinesOwnAlerts(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-24 * time.Hour)
+	machineID := "agent-west-a"
+	memoryTotal, diskTotal := int64(64<<30), int64(1<<40)
+	storageTotal, storageUsed := int64(2<<40), int64(1<<40)
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{
+			{
+				ID:      machineID,
+				Type:    unifiedresources.ResourceTypeAgent,
+				Name:    "West Production A",
+				Status:  unifiedresources.StatusOnline,
+				Uptime:  86400,
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+				Identity: unifiedresources.ResourceIdentity{
+					IPAddresses: []string{"192.0.2.10"},
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Memory: &unifiedresources.MetricValue{Total: &memoryTotal},
+					Disk:   &unifiedresources.MetricValue{Total: &diskTotal},
+				},
+				Proxmox: &unifiedresources.ProxmoxData{
+					SourceID:      "cluster-a-pve1",
+					NodeName:      "pve1",
+					Instance:      "cluster-a",
+					HostURL:       "https://pve1.example:8006",
+					PVEVersion:    "8.2.4",
+					KernelVersion: "6.8.12-1-pve",
+					ClusterName:   "cluster-a",
+					CPUInfo:       &unifiedresources.CPUInfo{Model: "Xeon E5-2680", Cores: 16, Sockets: 2},
+				},
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "host-pve1",
+					OSName:    "Debian GNU/Linux",
+					OSVersion: "12",
+				},
+			},
+			{
+				ID:       "storage-west-a-zfs",
+				Type:     unifiedresources.ResourceTypeStorage,
+				Name:     "local-zfs",
+				Status:   unifiedresources.StatusOnline,
+				ParentID: &machineID,
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{Total: &storageTotal, Used: &storageUsed, Percent: 50},
+				},
+				Storage: &unifiedresources.StorageMeta{Type: "zfspool", Content: "images"},
+				Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+			},
+			{
+				ID:           "physical-disk-west-a-nvme0",
+				Type:         unifiedresources.ResourceTypePhysicalDisk,
+				ParentID:     &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/nvme0n1", Model: "Samsung 990", DiskType: "nvme", Health: "PASSED", Temperature: 41},
+			},
+			{
+				// A disk in standby keeps its last-known temperature, which a
+				// report must not tabulate as measured.
+				ID:       "physical-disk-west-a-sdb",
+				Type:     unifiedresources.ResourceTypePhysicalDisk,
+				ParentID: &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+					DevPath: "/dev/sdb", DiskType: "hdd", Health: "PASSED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Temperature: diskinventory.FieldStatus{State: diskinventory.FieldUnavailable, Reason: "standby"},
+					},
+				},
+			},
+			{
+				ID:       "vm-west-a-101",
+				Type:     unifiedresources.ResourceTypeVM,
+				ParentID: &machineID,
+			},
+		},
+		ActiveAlerts: []models.Alert{
+			// The node's own alert, keyed by the Proxmox source ID.
+			{ID: "node-cpu", Type: "cpu", Level: "critical", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent's own alert and a filesystem it reports.
+			{ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "agent-disk", Type: "disk", Level: "warning", ResourceID: "agent:host-pve1/disk:/", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent raises its Unraid array alert under its own identity,
+			// so it belongs to the machine as well as to the array's report.
+			{ID: "agent-array", Type: "unraid-array", Level: "warning", ResourceID: "agent:host-pve1/storage:unraid-array", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// A provider incident keyed by the unified ID.
+			{ID: "incident", Type: "resource-incident", Level: "warning", ResourceID: machineID, StartTime: now.Add(-time.Hour)},
+			// Not the machine: a guest, a storage pool, a same-named node in
+			// another cluster, and an agent whose host ID shares a prefix.
+			{ID: "guest", Type: "powered-off", Level: "warning", ResourceID: "cluster-a-pve1-101", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "pool", Type: "zfs-pool-errors", Level: "warning", ResourceID: "cluster-a-pve1-local-zfs/zfs-pool:local-zfs", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-cluster", Type: "cpu", Level: "critical", ResourceID: "cluster-b-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-agent", Type: "memory", Level: "critical", ResourceID: "agent:host-pve10", Node: "pve10", StartTime: now.Add(-time.Hour)},
+		},
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert:        models.Alert{ID: "node-temp", Type: "temperature", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-3 * time.Hour)},
+				ResolvedTime: now.Add(-2 * time.Hour),
+			},
+			{
+				Alert:        models.Alert{ID: "node-old", Type: "cpu", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-50 * time.Hour)},
+				ResolvedTime: now.Add(-48 * time.Hour),
+			},
+		},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, start, now)
+
+	wantAlerts := []string{"agent-west-a", "agent:host-pve1", "agent:host-pve1/disk:/", "agent:host-pve1/storage:unraid-array", "cluster-a-pve1", "cluster-a-pve1"}
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, wantAlerts) {
+		t.Fatalf("agent report alerts = %v, want %v", got, wantAlerts)
+	}
+	for _, alert := range req.Alerts {
+		if alert.Type == "temperature" && (alert.ResolvedTime == nil || !alert.Recovered()) {
+			t.Fatalf("node alert resolved inside the window must read as a recovery, got %+v", alert)
+		}
+	}
+
+	res := req.Resource
+	if res == nil {
+		t.Fatal("agent report carries no resource details")
+	}
+	if res.Name != "West Production A" || res.Host != "https://pve1.example:8006" || res.PVEVersion != "8.2.4" ||
+		res.KernelVersion != "6.8.12-1-pve" || res.CPUModel != "Xeon E5-2680" || res.CPUCores != 16 || res.CPUSockets != 2 ||
+		res.MemoryTotal != memoryTotal || res.DiskTotal != diskTotal || res.Uptime != 86400 ||
+		res.OSName != "Debian GNU/Linux" || res.OSVersion != "12" || res.ClusterName != "cluster-a" ||
+		!reflect.DeepEqual(res.IPAddresses, []string{"192.0.2.10"}) {
+		t.Fatalf("agent report resource details = %+v", res)
+	}
+	if len(req.Storage) != 1 || req.Storage[0].Name != "local-zfs" || req.Storage[0].Type != "zfspool" || req.Storage[0].UsagePerc != 50 {
+		t.Fatalf("agent report storage = %+v", req.Storage)
+	}
+	// Disk rows share the node report's builder: only a collected temperature
+	// is tabulated, coloured by the disk temperature alert thresholds.
+	if len(req.Disks) != 2 {
+		t.Fatalf("agent report disks = %+v", req.Disks)
+	}
+	nvme, standby := req.Disks[0], req.Disks[1]
+	if nvme.Device != "/dev/nvme0n1" || nvme.Health != "PASSED" || nvme.Temperature != 41 ||
+		nvme.TemperatureCritical <= 0 || nvme.TemperatureWarning <= 0 || nvme.TemperatureWarning > nvme.TemperatureCritical {
+		t.Fatalf("collected disk row = %+v", nvme)
+	}
+	if standby.Device != "/dev/sdb" || standby.Temperature != 0 {
+		t.Fatalf("a retained disk temperature must not be reported as measured, got %+v", standby)
+	}
+}
+
+// A node alert that moved to the machine's Pulse agent and the agent's own
+// alert for that metric both belong to the machine's report, and the report
+// verdict counts the condition once.
+func TestContract_AgentReportCountsAMovedNodeAlertOnce(t *testing.T) {
+	now := time.Now()
+	machineID := "agent-west-a"
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{{
+			ID:      machineID,
+			Type:    unifiedresources.ResourceTypeAgent,
+			Name:    "West Production A",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1", NodeName: "pve1"},
+			Agent:   &unifiedresources.AgentData{AgentID: "host-pve1"},
+		}},
+		ActiveAlerts: []models.Alert{{
+			ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1",
+			Message: "Agent memory at 94%", StartTime: now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID: "node-memory", Type: "memory", Level: "warning", ResourceID: "cluster-a-pve1",
+				Message: "Node memory at 95%", StartTime: now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-pve1",
+					SuccessorName:       "pve1 (Host Agent)",
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, []string{"agent:host-pve1", "cluster-a-pve1"}) {
+		t.Fatalf("agent report alerts = %v", got)
+	}
+	narrative, err := reporting.HeuristicNarrator{}.Narrate(context.Background(), reporting.NarrativeInput{Alerts: req.Alerts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrative.HealthStatus != "WARNING" || narrative.HealthMessage != "1 warning detected - review recommended" {
+		t.Fatalf("moved node alert and its successor must count once, got %q / %q", narrative.HealthStatus, narrative.HealthMessage)
+	}
+}
+
+// Report types without a dedicated enricher still list the alerts raised on
+// their subject: the unified ID, the metrics-target ID, and the IDs each
+// alert producer builds for a Docker runtime, a container or a storage pool's
+// ZFS components. Workloads under a runtime stay with their own reports.
+func TestContract_UnenrichedReportTypesAttachTheSubjectsAlerts(t *testing.T) {
+	now := time.Now()
+	resources := []unifiedresources.Resource{
+		{
+			// Docker runtimes are agent-typed internally and travel as
+			// docker-host.
+			ID:      "agent-docker-1",
+			Type:    unifiedresources.ResourceTypeAgent,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "app-container-web",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "web",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ContainerID: "web-1"},
+		},
+		{
+			// A container reported without an ID is referenced by its name.
+			ID:      "app-container-sidecar",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "sidecar",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "storage-zfs",
+			Type:    unifiedresources.ResourceTypeStorage,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+		},
+		{
+			ID:   "k8s-cluster-prod",
+			Type: unifiedresources.ResourceTypeK8sCluster,
+		},
+		{
+			ID:            "pmg-eu",
+			Type:          unifiedresources.ResourceTypePMG,
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "agent", ResourceID: "pmg-main"},
+		},
+		{
+			ID:      "docker-service-web",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ServiceID: "svc-1"},
+		},
+		{
+			// A service without an ID is named by the adapter's resource
+			// name, which the producer falls back to.
+			ID:      "docker-service-api",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Name:    "api",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			// A Pulse agent reports the Unraid array as storage keyed by
+			// its own source ID, which is the metrics target.
+			ID:            "storage-unraid",
+			Type:          unifiedresources.ResourceTypeStorage,
+			Sources:       []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "storage", ResourceID: "host-1/storage:unraid-array"},
+		},
+		{
+			ID:           "physical-disk-sda",
+			Type:         unifiedresources.ResourceTypePhysicalDisk,
+			Sources:      []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox:      &unifiedresources.ProxmoxData{Instance: "cluster-a", NodeName: "pve1"},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sda", Serial: "SER-B"},
+		},
+	}
+	active := func(resourceID string) models.Alert {
+		return models.Alert{ID: resourceID + "-alert", Type: "status", Level: "warning", ResourceID: resourceID, StartTime: now.Add(-time.Hour)}
+	}
+	// Proxmox disk alerts reference the device path, which a replacement disk
+	// in the same slot takes over, and record the serial of the disk they
+	// were raised on.
+	diskRef := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("cluster-a", "pve1", "/dev/sda")
+	diskAlert := func(id, serial string) models.Alert {
+		alert := active(diskRef)
+		alert.ID, alert.Type, alert.Message = unifiedresources.ProxmoxPhysicalDiskAlertIdentifiers(diskRef)[0], "disk-health", id
+		alert.Metadata = map[string]interface{}{"disk_serial": serial}
+		return alert
+	}
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: resources,
+		ActiveAlerts: []models.Alert{
+			active(alerts.DockerHostResourceID("docker-host-1")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")),
+			active("cluster-a-pve1-local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2"),
+			active("cluster-a-pve1-local-zfs2"),
+			active("k8s-cluster-prod"),
+			active("pmg-main"),
+			active(alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")),
+			active(alerts.DockerServiceResourceID("docker-host-1", "", "api")),
+			active("agent:host-1/storage:unraid-array"),
+			diskAlert("disk-health-replacement", "SER-B"),
+			diskAlert("disk-health-predecessor", "SER-A"),
+		},
+	}
+
+	for _, tc := range []struct {
+		resourceType string
+		resourceID   string
+		want         []string
+	}{
+		{"docker-host", "agent-docker-1", []string{alerts.DockerHostResourceID("docker-host-1")}},
+		{"app-container", "app-container-web", []string{alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")}},
+		{"app-container", "app-container-sidecar", []string{alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")}},
+		{"storage", "storage-zfs", []string{
+			"cluster-a-pve1-local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2",
+		}},
+		{"k8s", "k8s-cluster-prod", []string{"k8s-cluster-prod"}},
+		{"pmg", "pmg-eu", []string{"pmg-main"}},
+		{"app-container", "docker-service-web", []string{alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")}},
+		{"app-container", "docker-service-api", []string{alerts.DockerServiceResourceID("docker-host-1", "", "api")}},
+		{"storage", "storage-unraid", []string{"agent:host-1/storage:unraid-array"}},
+		{"disk", "physical-disk-sda", []string{diskRef}},
+	} {
+		req := reporting.MetricReportRequest{ResourceType: tc.resourceType, ResourceID: tc.resourceID}
+		NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+		if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s report alerts = %v, want %v", tc.resourceType, got, tc.want)
+		}
+		// Only the alert naming the replacement disk's serial is its own;
+		// its predecessor's alert on the same path stays off its report.
+		if tc.resourceType == "disk" && req.Alerts[0].Message != "disk-health-replacement" {
+			t.Fatalf("disk report alert = %+v", req.Alerts[0])
+		}
+	}
+}
+
 func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
@@ -13171,6 +13526,223 @@ func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T
 	}
 	if len(resp.Points) != 3 {
 		t.Fatalf("expected 3 cpu points, got %d", len(resp.Points))
+	}
+}
+
+// A live point claims a reading taken now, while snapshot rows keep a silent
+// source's last readings as context. An empty range therefore answers with a
+// live point only while the source behind the row still reports: an agent
+// inside its lease, a node the poller sees online, a guest or Docker host
+// whose registry sighting is current. Power state and health are not a lapse:
+// a stopped guest and a degraded Docker host keep their live point.
+func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
+	// Complete store setup before capturing current-report times. Slow setup
+	// must not age a live fixture past the existing reporting lease.
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	now := time.Now()
+	lapsed := now.Add(-time.Hour)
+	state := models.NewState()
+
+	state.UpsertHost(models.Host{
+		ID: "agent-silent", Hostname: "silent", Status: "online", IntervalSeconds: 30, LastSeen: lapsed,
+		CPUUsage: 55, Memory: models.Memory{Total: 100, Used: 40, Usage: 40},
+		Disks:   []models.Disk{{Mountpoint: "/", Total: 100, Used: 70, Usage: 70}},
+		Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 61}},
+	})
+	if expired, changed := state.ExpireHostTelemetry("agent-silent", lapsed); !changed || expired.Status != "offline" {
+		t.Fatalf("lease expiry did not mark the silent agent offline: %+v", expired)
+	}
+	if hosts := state.GetHosts(); len(hosts) != 1 || hosts[0].CPUUsage != 55 {
+		t.Fatalf("lease expiry should keep the last telemetry as context, got %+v", hosts)
+	}
+	state.UpsertHost(models.Host{
+		ID: "agent-reporting", Hostname: "reporting", Status: "online", IntervalSeconds: 30, LastSeen: now,
+		CPUUsage: 12, Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 48}},
+	})
+
+	nodeMemory := models.Memory{Total: 100, Used: 45, Usage: 45}
+	state.UpdateNodesForInstance("pve", []models.Node{
+		// The PVE grace policy keeps an unreachable node's memory and disk.
+		{ID: "pve-unreachable", Name: "unreachable", Instance: "pve", Type: "node", Status: "offline", ConnectionHealth: "error", Memory: nodeMemory, LastSeen: lapsed},
+		// The cluster reports this member offline on a fresh poll.
+		{ID: "pve-down", Name: "down", Instance: "pve", Type: "node", Status: "offline", ConnectionHealth: "error", Memory: nodeMemory, LastSeen: now},
+		// A member the cluster lists online that this poll did not observe.
+		{ID: "pve-unobserved", Name: "unobserved", Instance: "pve", Type: "node", Status: "unknown", ConnectionHealth: "degraded", Memory: nodeMemory, LastSeen: now},
+		{ID: "pve-online", Name: "online", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.2, Memory: nodeMemory, LastSeen: now},
+		// Nodes merged with a linked host agent: one agent past its lease,
+		// one reporting a degraded array.
+		{ID: "pve-merged", Name: "merged", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.35, Memory: nodeMemory, LastSeen: now, LinkedAgentID: "agent-merged"},
+		{ID: "pve-raid", Name: "raid", Instance: "pve", Type: "node", Status: "online", ConnectionHealth: "healthy", CPU: 0.45, Memory: nodeMemory, LastSeen: now, LinkedAgentID: "agent-raid"},
+	})
+	state.UpsertHost(models.Host{
+		ID: "agent-merged", Hostname: "merged", Status: "online", IntervalSeconds: 30, LastSeen: lapsed, LinkedNodeID: "pve-merged",
+		CPUUsage: 77, Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 66}},
+	})
+	if _, changed := state.ExpireHostTelemetry("agent-merged", lapsed); !changed {
+		t.Fatal("lease expiry did not mark the linked agent offline")
+	}
+	state.UpsertHost(models.Host{
+		ID: "agent-raid", Hostname: "raid", Status: "online", IntervalSeconds: 30, LastSeen: now, LinkedNodeID: "pve-raid", CPUUsage: 45,
+		RAID: []models.HostRAIDArray{{Device: "/dev/md2", Level: "raid1", State: "degraded", TotalDevices: 2, ActiveDevices: 1, WorkingDevices: 1, FailedDevices: 1}},
+	})
+	state.UpdateVMsForInstance("pve", []models.VM{
+		{ID: "pve:unreachable:101", VMID: 101, Name: "kept", Node: "unreachable", Instance: "pve", Type: "qemu", Status: "running", CPU: 0.3, LastSeen: lapsed},
+		{ID: "pve:online:102", VMID: 102, Name: "running", Node: "online", Instance: "pve", Type: "qemu", Status: "running", CPU: 0.4, LastSeen: now},
+		{ID: "pve:online:103", VMID: 103, Name: "stopped", Node: "online", Instance: "pve", Type: "qemu", Status: "stopped", LastSeen: now},
+	})
+	state.UpdateContainersForInstance("pve", []models.Container{
+		{ID: "pve:unreachable:201", VMID: 201, Name: "kept-ct", Node: "unreachable", Instance: "pve", Type: "lxc", Status: "running", CPU: 0.25, LastSeen: lapsed},
+		{ID: "pve:online:202", VMID: 202, Name: "running-ct", Node: "online", Instance: "pve", Type: "lxc", Status: "running", CPU: 0.15, LastSeen: now},
+	})
+
+	dockerHost := func(id string, status string, interval int, lastSeen time.Time, cpu float64, containerMemory float64) models.DockerHost {
+		return models.DockerHost{
+			ID: id, AgentID: id + "-agent", Hostname: id, Status: status, IntervalSeconds: interval, LastSeen: lastSeen, CPUs: 4, CPUUsage: cpu,
+			Containers: []models.DockerContainer{{ID: id + "-app", Name: id + "-app", State: "running", Status: "Up", MemoryPercent: containerMemory}},
+		}
+	}
+	// evaluateDockerAgents marks a host offline once its report is overdue.
+	// The silent host is past the registry's stale window too; the overdue
+	// one is past its own lease but not yet stale.
+	state.UpsertDockerHost(dockerHost("docker-silent", "online", 30, lapsed, 20, 6))
+	state.UpsertDockerHost(dockerHost("docker-overdue", "online", 10, now.Add(-time.Minute), 22, 7))
+	for _, id := range []string{"docker-silent", "docker-overdue"} {
+		if !state.SetDockerHostStatus(id, "offline") {
+			t.Fatalf("%s: offline transition not applied", id)
+		}
+	}
+	state.UpsertDockerHost(dockerHost("docker-degraded", "degraded", 30, now, 33, 9))
+	state.UpsertDockerHost(dockerHost("docker-reporting", "online", 30, now, 21, 8))
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	// Preserve the source's own verdict through the stale pass (#2634): a
+	// poller-expired node stays offline, not warning. A reporting degraded
+	// array is warning, an unobserved member is unknown, and a live node stays
+	// online after its linked agent's lease expires. None of those verdicts
+	// turns a retained metric into a newly observed reading.
+	nodeStatus := make(map[string]string)
+	for _, node := range monitor.NodesSnapshot() {
+		nodeStatus[node.ID] = node.Status
+	}
+	if nodeStatus["pve-unreachable"] != "offline" || nodeStatus["pve-down"] != "offline" || nodeStatus["pve-unobserved"] != "unknown" ||
+		nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" {
+		t.Fatalf("node statuses = %v, want expired/down nodes offline, unobserved unknown, degraded array warning and live merged node online", nodeStatus)
+	}
+
+	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?range=5m&"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", query, rec.Code, rec.Body.String())
+		}
+		var single metricsHistoryResponse
+		var all struct {
+			Metrics map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+			t.Fatalf("%s: decode: %v", query, err)
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+			t.Fatalf("%s: decode metrics: %v", query, err)
+		}
+		return single, all.Metrics
+	}
+
+	for _, tc := range []struct{ resourceType, resourceID, metric string }{
+		{"agent", "agent-silent", "cpu"},
+		{"agent", "agent-silent", "temperature"},
+		{"node", "pve-unreachable", "memory"},
+		{"node", "pve-down", "memory"},
+		{"node", "pve-unobserved", "memory"},
+		{"agent", "pve-unreachable", "memory"},
+		{"vm", "pve:unreachable:101", "cpu"},
+		{"system-container", "pve:unreachable:201", "cpu"},
+		{"docker-host", "docker-silent", "cpu"},
+		{"docker-host", "docker-overdue", "cpu"},
+		{"app-container", "docker-silent-app", "memory"},
+		{"app-container", "docker-overdue-app", "memory"},
+	} {
+		target := "resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID
+		if resp, _ := history(target + "&metric=" + tc.metric); resp.Source == "live" || len(resp.Points) != 0 {
+			t.Fatalf("%s %s: retained %s served as current: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
+		}
+		if _, all := history(target); len(all) != 0 {
+			t.Fatalf("%s %s: retained readings served as current: %v", tc.resourceType, tc.resourceID, all)
+		}
+	}
+
+	// The linked agent's retained sensor reading is not served; its node has
+	// no temperature of its own to stand in.
+	if resp, _ := history("resourceType=agent&resourceId=agent-merged&metric=temperature"); resp.Source == "live" || len(resp.Points) != 0 {
+		t.Fatalf("linked agent's retained temperature served as current: source=%q points=%+v", resp.Source, resp.Points)
+	}
+	if _, all := history("resourceType=agent&resourceId=agent-merged"); all["temperature"] != nil || all["cpu"] == nil {
+		t.Fatalf("linked agent all-metrics live points = %v, want the node's readings without the agent's temperature", all)
+	}
+
+	for _, tc := range []struct {
+		resourceType, resourceID, metric string
+		want                             float64
+	}{
+		{"agent", "agent-reporting", "cpu", 12},
+		// The poll keeps the linked node's readings current after the agent
+		// falls silent.
+		{"agent", "agent-merged", "cpu", 35},
+		{"node", "pve-raid", "cpu", 45},
+		{"agent", "agent-raid", "cpu", 45},
+		{"agent", "agent-reporting", "temperature", 48},
+		{"node", "pve-online", "cpu", 20},
+		{"vm", "pve:online:102", "cpu", 40},
+		{"vm", "pve:online:103", "cpu", 0},
+		{"system-container", "pve:online:202", "cpu", 15},
+		{"docker-host", "docker-reporting", "cpu", 21},
+		{"docker-host", "docker-degraded", "cpu", 33},
+		{"app-container", "docker-reporting-app", "memory", 8},
+		{"app-container", "docker-degraded-app", "memory", 9},
+	} {
+		resp, _ := history("resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID + "&metric=" + tc.metric)
+		if resp.Source != "live" || len(resp.Points) != 1 || math.Abs(resp.Points[0].Value-tc.want) > 0.001 {
+			t.Fatalf("%s %s: current %s not served as a live point: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
+		}
+	}
+}
+
+// A row lapses only when it records a reading source and every one it records
+// is stale; one current reading source keeps it reporting. A sighting never
+// delivered (unknown) is no evidence of a lapse, and availability probes and
+// PBS sightings supply no readings either way.
+func TestContract_MetricsHistoryLiveReadingSightingsLapsed(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		sightings map[unifiedresources.DataSource]string
+		want      bool
+	}{
+		{"no sightings", nil, false},
+		{"availability probe only", map[unifiedresources.DataSource]string{unifiedresources.SourceAvailability: "stale"}, false},
+		{"current PBS sighting supplies no readings", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourcePBS: "online"}, true},
+		{"provider stale", map[unifiedresources.DataSource]string{unifiedresources.SourceVMware: "stale"}, true},
+		{"every source stale", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourceAgent: "stale"}, true},
+		{"one source current", map[unifiedresources.DataSource]string{unifiedresources.SourceProxmox: "stale", unifiedresources.SourceAgent: "online"}, false},
+		{"never delivered", map[unifiedresources.DataSource]string{unifiedresources.SourceTrueNAS: "unknown"}, false},
+	} {
+		got := readingSightingsLapsed(func(source unifiedresources.DataSource) (unifiedresources.SourceStatus, bool) {
+			status, ok := tc.sightings[source]
+			return unifiedresources.SourceStatus{Status: status}, ok
+		})
+		if got != tc.want {
+			t.Fatalf("%s: lapsed = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 
@@ -26456,5 +27028,77 @@ func TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport(t
 	reduced := reportIdentityToken(t, h.config, runtimeTokenID)
 	if got := reduced.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != agenttokens.CredentialKindMonitoringCollector {
 		t.Fatalf("runtime role after reduction = %q, want %q", got, agenttokens.CredentialKindMonitoringCollector)
+	}
+}
+
+func TestContract_PMGUncollectedDatasetsRemainAbsent(t *testing.T) {
+	source := models.PMGInstance{ID: "pmg-scope", Name: "gateway", Status: "online", ConnectionHealth: "healthy", Nodes: []models.PMGNodeStatus{{Name: "one", Status: "online"}}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{source}})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+	router := &Router{monitor: monitor}
+	rec := httptest.NewRecorder()
+	router.handleListPMGInstances(rec, httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-scope", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp PMGInstancesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("data=%+v", resp.Data)
+	}
+	got := resp.Data[0]
+	if got.Status != "online" || got.ConnectionHealth != "healthy" || got.MailStats != nil || got.Quarantine != nil || len(got.Nodes) != 1 || got.Nodes[0].QueueStatus != nil || len(got.MailCount) != 0 || len(got.DomainStats) != 0 {
+		t.Fatalf("missing dataset became zero/healthy data: %+v", got)
+	}
+}
+
+func TestContract_PMGFalseScopeIsExplicitOnWire(t *testing.T) {
+	node := configapi.NodeResponse{ID: "pmg-0", Type: "pmg", Name: "gateway"}
+	raw, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"monitorMailStats", "monitorQueues", "monitorQuarantine", "monitorDomainStats"} {
+		value, exists := payload[key]
+		if !exists || string(value) != "false" {
+			t.Fatalf("saved opt-out omitted/changed %s: %s", key, raw)
+		}
+	}
+}
+
+func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
+	for _, entitled := range []bool{false, true} {
+		tmp := t.TempDir()
+		persistence := config.NewConfigPersistence(tmp)
+		cfg := config.NewDefaultAIConfig()
+		cfg.ControlLevel = config.ControlLevelAutonomous
+		if err := persistence.SaveAIConfig(*cfg); err != nil {
+			t.Fatal(err)
+		}
+		handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+		handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: entitled})
+		rec := httptest.NewRecorder()
+		handler.HandleGetAISettings(rec, newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if string(payload["control_level"]) != `"controlled"` {
+			t.Fatalf("interactive control_level %s", payload["control_level"])
+		}
+		if string(payload["protected_guests"]) != "[]" {
+			t.Fatalf("protected_guests must remain an explicit array: %s", payload["protected_guests"])
+		}
 	}
 }

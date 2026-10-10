@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "8be86746a9d20ff5f76dba95b033b76017cf1109",
+  "verified_at": "2026-10-05T21:43:41.002Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx": "93cc116973ea1e30a640077525ca76b57c94986320f1954917846a84174b4a45"
+  },
+  "routes": [
+    "/settings/infrastructure \u2192 existing cluster member Install agent dialog (isolated production-component fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Exact assigned parent af23eaec61 falsely labels a disconnected linked node Reporting and calls installed in both engines.",
+    "Current successful job plus saved link/sibling live connection cannot confirm target success; settled timeout says it is unconfirmed and retains installer fallback.",
+    "Current live target on the exact cluster becomes Connected to Pulse once. No metrics/reporting or native installation claim. Wrong cluster gives a visible error.",
+    "Ten final animation-settled captures inspected: desktop Chromium light and touch-emulated WebKit dark; wrapping status and error text fit at 320px."
+  ],
+  "interactions": [
+    "Keyboard install retains dismissal focus; Escape returns to launch control. Keyboard scoped installer fallback closes without another install.",
+    "Exactly one preflight and one job POST to the synthetic selected target per case, with exact body checks. Installed callback stays zero until same-node live confirmation.",
+    "Playwright 1.56.1; Chromium 141.0.7390.37/WebKit 26.0. No page errors or off-origin requests. Each browser context and preview server closes normally. Synthetic proof, not native, physical-phone or release acceptance."
+  ]
+}

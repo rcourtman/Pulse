@@ -19424,7 +19424,7 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 	spamQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-spam")
 	virusQuarantineState := buildCanonicalStateID("pmg1", "pmg1-quarantine-virus")
 
-	t.Run("nil quarantine clears alerts", func(t *testing.T) {
+	t.Run("nil quarantine preserves alerts", func(t *testing.T) {
 		m := newTestManager(t)
 
 		// Create an existing quarantine alert
@@ -19453,11 +19453,11 @@ func TestCheckPMGQuarantineBacklog(t *testing.T) {
 		_, virusExists := testLookupActiveAlert(t, m, virusQuarantineState)
 		m.mu.RUnlock()
 
-		if spamExists {
-			t.Error("spam alert should be cleared when quarantine is nil")
+		if !spamExists {
+			t.Error("spam alert must be preserved when quarantine is nil")
 		}
-		if virusExists {
-			t.Error("virus alert should be cleared when quarantine is nil")
+		if !virusExists {
+			t.Error("virus alert must be preserved when quarantine is nil")
 		}
 	})
 
@@ -22472,13 +22472,16 @@ func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
 
 func TestMetricStatusStaysOutOfDurableAlertSnapshots(t *testing.T) {
 	m, clock := newMetricStatusTestManager(t)
-	fireNodeTemperatureAlert(t, m, clock, 85)
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
 	clock.advance(30 * time.Second)
 	checkMetricStatusNode(m, 78)
 
 	live := m.GetActiveAlerts()
 	if len(live) != 1 || live[0].MetricStatus == nil || live[0].MetricStatus.Value != 78 {
 		t.Fatalf("live alerts do not carry the current reading: %+v", live)
+	}
+	if got := metricBreachTime(t, live[0].MetricStatus); !got.Equal(fired.LastSeen) {
+		t.Fatalf("live status lost the breach's date: %v, want %v", got, fired.LastSeen)
 	}
 	for _, alert := range m.snapshotActiveAlerts() {
 		if alert.MetricStatus != nil {

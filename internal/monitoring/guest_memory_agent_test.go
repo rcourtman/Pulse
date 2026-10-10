@@ -66,7 +66,7 @@ func TestResolveGuestStatusMemoryNeverConsultsGuestRRD(t *testing.T) {
 		stubPVEClient: &stubPVEClient{},
 	}
 
-	total, used, source := mon.resolveGuestStatusMemory(
+	total, used, source, _ := mon.resolveGuestStatusMemory(
 		context.Background(),
 		client,
 		"pve-a",
@@ -105,7 +105,7 @@ func TestResolveGuestStatusMemoryAcceptsExplicitZeroGuestAgentAvailable(t *testi
 		},
 	}
 
-	total, used, source := mon.resolveGuestStatusMemory(
+	total, used, source, _ := mon.resolveGuestStatusMemory(
 		context.Background(),
 		client,
 		"pve-a",
@@ -318,7 +318,7 @@ func TestResolveGuestStatusMemoryUsesGuestAgentMeminfoFallback(t *testing.T) {
 	}
 	raw := &VMMemoryRaw{}
 
-	memTotal, memUsed, source := mon.resolveGuestStatusMemory(
+	memTotal, memUsed, source, _ := mon.resolveGuestStatusMemory(
 		context.Background(),
 		client,
 		"pve-a",
@@ -367,7 +367,7 @@ func TestResolveGuestStatusMemoryPrefersGuestAgentMeminfoForSaturatedStatus(t *t
 	}
 	raw := &VMMemoryRaw{}
 
-	memTotal, memUsed, source := mon.resolveGuestStatusMemory(
+	memTotal, memUsed, source, _ := mon.resolveGuestStatusMemory(
 		context.Background(),
 		client,
 		"cluster-a",

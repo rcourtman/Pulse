@@ -110,7 +110,7 @@ describe('workloadRouteModel (branch coverage 2)', () => {
         makeGuest({ id: 'vm-real', node: 'node-a', instance: 'cluster-a' }),
       ]);
 
-      expect(options).toEqual([{ value: 'cluster-a-node-a', label: 'node-a' }]);
+      expect(options).toEqual([{ value: 'node|cluster-a|node-a', label: 'node-a' }]);
     });
 
     it('skips app-container guests whose host scope is empty string (all host-id candidates blank)', () => {
@@ -149,7 +149,7 @@ describe('workloadRouteModel (branch coverage 2)', () => {
         makeGuest({ id: 'with-node', node: 'node-a', instance: 'c2' }),
       ]);
 
-      expect(options).toEqual([{ value: 'c2-node-a', label: 'node-a' }]);
+      expect(options).toEqual([{ value: 'node|c2|node-a', label: 'node-a' }]);
     });
 
     it('falls back to the bare node name when a duplicate node has no instance to disambiguate with', () => {
@@ -165,8 +165,8 @@ describe('workloadRouteModel (branch coverage 2)', () => {
       ]);
 
       expect(options).toEqual([
-        { value: '-shared', label: 'shared' },
-        { value: 'c1-shared', label: 'shared (c1)' },
+        { value: 'node||shared', label: 'shared' },
+        { value: 'node|c1|shared', label: 'shared (c1)' },
       ]);
     });
 
@@ -182,7 +182,7 @@ describe('workloadRouteModel (branch coverage 2)', () => {
         makeGuest({ id: 'vm-a', node: 'node-a', instance: 'cluster-a' }),
       ]);
 
-      expect(options).toEqual([{ value: 'cluster-a-node-a', label: 'node-a' }]);
+      expect(options).toEqual([{ value: 'node|cluster-a|node-a', label: 'node-a' }]);
     });
 
     it('returns an empty array for an empty guest list', () => {

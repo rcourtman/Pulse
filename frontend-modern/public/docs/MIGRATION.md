@@ -119,4 +119,4 @@ and avoid two active writers. There is no guaranteed five-minute recovery time.
   identities just because the dashboard is empty.
 - **Need help:** retain the source/destination versions, deployment types,
   operation time and exact redacted error. Follow [safe
-  reporting](TROUBLESHOOTING.md#getting-help); do not attach the recovery backup.
+  reporting](TROUBLESHOOTING.md#-getting-help); do not attach the recovery backup.

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -1747,14 +1748,16 @@ func cloneTime(value time.Time) *time.Time {
 	return &cloned
 }
 
-var incidentCounter, incidentEventCounter atomic.Int64
-
+// IDs are opaque persisted references. Store-local locks cannot protect a
+// process-wide counter across tenant monitors, and a wrapping counter can
+// collide within a burst or after a restart. Random UUIDs need no shared state
+// and leave previously persisted IDs usable without a migration.
 func generateIncidentID() string {
-	return nextSequencedID("inc-", &incidentCounter)
+	return "inc-" + uuid.NewString()
 }
 
 func generateIncidentEventID() string {
-	return nextSequencedID("inc-evt-", &incidentEventCounter)
+	return "inc-evt-" + uuid.NewString()
 }
 
 func formatAlertSummary(alert *alerts.Alert) string {

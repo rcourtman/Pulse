@@ -1,20 +1,320 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 )
+
+func TestGuestMemoryCarryForwardExpiryContract(t *testing.T) {
+	t.Run("original-age", testGuestMemoryCarryForwardOriginalAge)
+	t.Run("repeated-polls", testGuestMemoryCarryForwardRepeatedPollsDoNotExtendAge)
+	t.Run("ordinary-deferral-recovery", testGuestMemoryCarryForwardOrdinaryDeferralAndRecovery)
+}
 
 type stubPVEClientLXCStatus struct {
 	stubPVEClient
 
 	containerStatus *proxmox.Container
 	statusCalls     int
+}
+
+type issue2757ContainerClient struct {
+	stubPVEClient
+	status                   *proxmox.Container
+	config                   map[string]interface{}
+	interfaces               []proxmox.ContainerInterface
+	statusCalls, configCalls int
+	interfaceCalls           int
+}
+
+func (c *issue2757ContainerClient) GetContainerStatus(context.Context, string, int) (*proxmox.Container, error) {
+	c.statusCalls++
+	return c.status, nil
+}
+
+func (c *issue2757ContainerClient) GetContainerConfig(context.Context, string, int) (map[string]interface{}, error) {
+	c.configCalls++
+	return c.config, nil
+}
+
+func (c *issue2757ContainerClient) GetContainerInterfaces(context.Context, string, int) ([]proxmox.ContainerInterface, error) {
+	c.interfaceCalls++
+	return c.interfaces, nil
+}
+
+// These are source fixtures, not the reporter's inventory or native recovery.
+// All addresses are synthetic; choosing one says nothing about its default route.
+func TestIssue2757ContainerAddressSelection(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name           string
+		status         *proxmox.Container
+		config         map[string]interface{}
+		interfaces     []proxmox.ContainerInterface
+		stopped        bool
+		want           []string
+		wantIfaceCalls int
+	}{
+		{
+			name: "status interface association beats flattened text order",
+			status: &proxmox.Container{IP: "10.88.0.1 192.0.2.80", Network: map[string]proxmox.ContainerNetworkConfig{
+				"net1": {Name: "podman0", IP: "10.88.0.1/16"},
+				"net0": {Name: "eth0", IP: "192.0.2.80/24"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "stopped config-only guest needs no runtime query",
+			config: map[string]interface{}{
+				"net1": "name=podman0,ip=10.88.0.1/16",
+				"net0": "name=eth0,ip=192.0.2.80/24",
+			},
+			stopped: true,
+			want:    []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name:   "DHCP interfaces fallback keeps named addresses and filters loopback",
+			config: map[string]interface{}{"net0": "name=eth0,ip=dhcp,ip6=auto"},
+			interfaces: []proxmox.ContainerInterface{
+				{Name: "podman0", Inet: "10.88.0.1/16"},
+				{Name: "veth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "10.89.0.1/16"}}},
+				{Name: "eth0", IPAddresses: []proxmox.ContainerInterfaceAddress{{Address: "192.0.2.80/24"}, {Address: "2001:db8::80/64"}, {Address: "fe80::1/64"}}},
+				{Name: "lo", Inet: "127.0.0.1/8 ::1/128"},
+			},
+			want:           []string{"192.0.2.80", "2001:db8::80", "10.88.0.1", "10.89.0.1"},
+			wantIfaceCalls: 1,
+		},
+		{
+			name: "IPv6 on preferred interface precedes secondary IPv4",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "eth0": {IP6: "2001:db8::80"},
+			}},
+			want: []string{"2001:db8::80", "10.88.0.1"},
+		},
+		{
+			name: "secondary-only guest keeps useful addresses",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "docker0": {IP: "192.0.2.80"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "management bridge is not discarded or treated as a container bridge",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"}, "br0": {IP: "192.0.2.80"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "unassociated status IP stays useful without inventing its interface",
+			status: &proxmox.Container{IP: "192.0.2.80", Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"},
+			}},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name:   "empty preferred interface does not hide the only address",
+			config: map[string]interface{}{"net0": "name=eth0,ip=dhcp"},
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"podman0": {IP: "10.88.0.1"},
+			}},
+			want: []string{"10.88.0.1"},
+		},
+		{
+			name: "deduplicate globally but sort numerically only within each interface",
+			status: &proxmox.Container{Network: map[string]proxmox.ContainerNetworkConfig{
+				"eth0": {IP: "192.0.2.10 192.0.2.2", IP6: "2001:db8::10 2001:db8::2"},
+				"eth1": {IP: "10.0.0.1"}, "podman0": {IP: "192.0.2.2 10.88.0.1"},
+			}},
+			want: []string{"192.0.2.2", "192.0.2.10", "2001:db8::2", "2001:db8::10", "10.0.0.1", "10.88.0.1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &issue2757ContainerClient{status: tc.status, config: tc.config, interfaces: tc.interfaces}
+			before, err := json.Marshal([]interface{}{client.status, client.config, client.interfaces})
+			if err != nil {
+				t.Fatal(err)
+			}
+			container := models.Container{ID: "site-a-node-a-2757", VMID: 2757, Name: "guest", Instance: "site-a", Node: "node-a", Status: "running", Type: "lxc", LastSeen: time.Now()}
+			if tc.stopped {
+				container.Status = "stopped"
+			}
+			monitor := &Monitor{}
+			monitor.enrichContainerMetadata(context.Background(), client, "site-a", "node-a", &container)
+			if !reflect.DeepEqual(container.IPAddresses, tc.want) {
+				t.Fatalf("guest IP selection = %v, want %v", container.IPAddresses, tc.want)
+			}
+			wantStatusCalls := 1
+			if tc.stopped {
+				wantStatusCalls = 0
+			}
+			if client.configCalls != 1 || client.statusCalls != wantStatusCalls || client.interfaceCalls != tc.wantIfaceCalls {
+				t.Fatalf("metadata query counts = status:%d config:%d interfaces:%d", client.statusCalls, client.configCalls, client.interfaceCalls)
+			}
+			after, err := json.Marshal([]interface{}{client.status, client.config, client.interfaces})
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("client changed while enriching")
+			}
+			monitor.state = models.NewState()
+			monitor.state.UpdateContainers([]models.Container{container})
+			assertIssue2757GuestWire(t, monitor, container.ID, tc.want, container.NetworkInterfaces)
+		})
+	}
+}
+
+type issue2757VMClient struct {
+	emptyGuestMetadataClient
+	interfaces []proxmox.VMNetworkInterface
+	calls      int
+}
+
+func (c *issue2757VMClient) GetVMNetworkInterfaces(context.Context, string, int) ([]proxmox.VMNetworkInterface, error) {
+	c.calls++
+	return c.interfaces, nil
+}
+
+func TestIssue2757VMAddressSelectionAndCache(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		interfaces []proxmox.VMNetworkInterface
+		want       []string
+	}{
+		{
+			name: "prefer named interface even with lower secondary addresses",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "eth1", IPAddresses: []proxmox.VMIPAddress{{Address: "10.0.0.1"}}},
+				{Name: "eth0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.10"}, {Address: "192.0.2.2"}, {Address: "2001:db8::10"}, {Address: "2001:db8::2"}, {Address: "192.0.2.2"}, {Address: "fe80::1"}}},
+			},
+			want: []string{"192.0.2.2", "192.0.2.10", "2001:db8::2", "2001:db8::10", "10.0.0.1", "10.88.0.1"},
+		},
+		{
+			name: "secondary-only VM keeps every useful address",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "docker0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.80"}}},
+			},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+		{
+			name: "management bridge remains a usable first interface",
+			interfaces: []proxmox.VMNetworkInterface{
+				{Name: "podman0", IPAddresses: []proxmox.VMIPAddress{{Address: "10.88.0.1"}}},
+				{Name: "br0", HardwareAddr: "02:00:00:00:00:01", IPAddresses: []proxmox.VMIPAddress{{Address: "192.0.2.80"}}, Statistics: map[string]interface{}{"rx-bytes": float64(123), "tx-bytes": float64(456)}},
+			},
+			want: []string{"192.0.2.80", "10.88.0.1"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for permutation := 0; permutation < 2; permutation++ {
+				raw := append([]proxmox.VMNetworkInterface(nil), tc.interfaces...)
+				if permutation == 1 {
+					for i, j := 0, len(raw)-1; i < j; i, j = i+1, j-1 {
+						raw[i], raw[j] = raw[j], raw[i]
+					}
+				}
+				before, err := json.Marshal(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := &issue2757VMClient{interfaces: raw}
+				monitor := &Monitor{}
+				status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
+				for poll := 0; poll < 2; poll++ {
+					ips, ifaces, _, _, _, deferred := monitor.fetchGuestAgentMetadata(context.Background(), client, "site-a", "node-a", "guest", 2757, status, false)
+					if deferred || !reflect.DeepEqual(ips, tc.want) {
+						t.Fatalf("guest IP selection = %v, deferred:%v, want %v", ips, deferred, tc.want)
+					}
+					monitor.state = models.NewState()
+					monitor.state.UpdateVMs([]models.VM{{ID: "site-a-node-a-2757", VMID: 2757, Name: "guest", Instance: "site-a", Node: "node-a", Status: "running", LastSeen: time.Now(), IPAddresses: ips, NetworkInterfaces: ifaces}})
+					assertIssue2757GuestWire(t, monitor, "site-a-node-a-2757", tc.want, ifaces)
+				}
+				if client.calls != 1 {
+					t.Fatalf("fresh cache issued %d network queries, want one", client.calls)
+				}
+				after, err := json.Marshal(raw)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatal("guest-agent input was mutated")
+				}
+			}
+		})
+	}
+}
+
+func assertIssue2757GuestWire(t *testing.T, monitor *Monitor, nativeID string, want []string, interfaces []models.GuestNetworkInterface) {
+	t.Helper()
+	monitor.state.UpdateNodes([]models.Node{{ID: "site-a-node-a", Name: "node-a", Instance: "site-a", Status: "online", LastSeen: time.Now()}})
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(nil)
+	frontend := monitor.BuildBroadcastFrontendState()
+	var listed *unifiedresources.Resource
+	for _, resource := range monitor.GetUnifiedResources() {
+		if resource.Proxmox != nil && resource.Proxmox.SourceID == nativeID {
+			copy := resource
+			listed = &copy
+		}
+	}
+	if listed == nil || !reflect.DeepEqual(listed.Identity.IPAddresses, want) {
+		t.Fatalf("canonical listing lost guest addresses: %+v, want %v", listed, want)
+	}
+	var projected *models.ResourceFrontend
+	for _, resource := range frontend.Resources {
+		if resource.ID == listed.ID {
+			copy := resource
+			projected = &copy
+		}
+	}
+	if projected == nil || projected.Identity == nil || !reflect.DeepEqual(projected.Identity.IPs, want) {
+		t.Fatalf("broadcast lost guest address order: %+v, want %v", projected, want)
+	}
+	var facet unifiedresources.ProxmoxData
+	if err := json.Unmarshal(projected.Proxmox, &facet); err != nil {
+		t.Fatal(err)
+	}
+	if facet.SourceID != nativeID || facet.Instance != "site-a" || facet.NodeName != "node-a" || facet.VMID != 2757 || listed.ParentID == nil || projected.ParentID != *listed.ParentID {
+		t.Fatalf("broadcast changed guest ownership: %+v, listing parent:%v broadcast parent:%q", facet, listed.ParentID, projected.ParentID)
+	}
+	parentFound := false
+	for _, resource := range monitor.GetUnifiedResources() {
+		if resource.ID == *listed.ParentID && resource.Proxmox != nil && resource.Proxmox.SourceID == "site-a-node-a" {
+			parentFound = true
+		}
+	}
+	if !parentFound {
+		t.Fatalf("guest parent does not name the supplying node: %s", *listed.ParentID)
+	}
+	if len(facet.NetworkInterfaces) != len(interfaces) || len(listed.Proxmox.NetworkInterfaces) != len(interfaces) {
+		t.Fatalf("listing/broadcast lost named interfaces: %+v", facet.NetworkInterfaces)
+	}
+	for i, iface := range interfaces {
+		// Empty address collections are omitted on the JSON wire and may be
+		// normalised to [] in memory. Compare their values on both surfaces;
+		// keep every name/address/traffic/owner assertion, not nil-vs-empty.
+		for _, wire := range []unifiedresources.NetworkInterface{listed.Proxmox.NetworkInterfaces[i], facet.NetworkInterfaces[i]} {
+			if wire.Name != iface.Name || wire.MAC != iface.MAC || !slices.Equal(wire.Addresses, iface.Addresses) || wire.RXBytes != uint64(max(0, iface.RXBytes)) || wire.TXBytes != uint64(max(0, iface.TXBytes)) {
+				t.Fatalf("interface association or traffic changed: %+v, want %+v", wire, iface)
+			}
+		}
+	}
 }
 
 func (s *stubPVEClientLXCStatus) GetContainerStatus(ctx context.Context, node string, vmid int) (*proxmox.Container, error) {
@@ -565,5 +865,141 @@ func TestIssue2148LXCRejectsAgentMemoryWithMismatchedTotal(t *testing.T) {
 	}
 	if container.Memory.Used != int64(resource.Mem) {
 		t.Fatalf("memory used = %d, want provider value %d", container.Memory.Used, resource.Mem)
+	}
+}
+
+func TestGuestFilesystemStatusDoesNotDiagnoseFromErrorText(t *testing.T) {
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{nil, ""},
+		{errors.New("API error 500: internal server error"), "agent-error"},
+		{errors.New("API error 500: unsupported command: guest-get-fsinfo"), "agent-error"},
+		{errors.New("API error 500: QEMU guest agent is not running"), "agent-error"},
+		{errors.New("request for VM 500 failed"), "agent-error"},
+		{errors.New("API error 400: upstream API error 403: permission denied"), "agent-error"},
+		{errors.New("QEMU guest agent is not running"), "agent-not-running"},
+		{context.DeadlineExceeded, "agent-timeout"},
+		{fmt.Errorf("wrapped: %w", context.DeadlineExceeded), "agent-timeout"},
+		{errors.New("guest agent request timeout"), "agent-timeout"},
+		{errors.New("guest agent request: context deadline exceeded"), "agent-timeout"},
+	}
+	for _, tc := range cases {
+		if got := classifyGuestAgentDiskStatusError(tc.err); got != tc.want {
+			t.Errorf("%v: reason = %q, want %q", tc.err, got, tc.want)
+		}
+	}
+}
+
+// These synthetic responses exercise the production command guard, filesystem
+// collector, unavailable sentinel and emitted operator guidance together. They
+// perform no native QGA, backup, guest activation or recovery action.
+func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
+	cases := []struct {
+		name, body, reason, message string
+		status                      int
+		logged                      bool
+	}{
+		{"stopped", `{"message":"QEMU guest agent is not running"}`, "agent-not-running", "Proxmox reports the guest agent is not running", 500, true},
+		{"unsupported", "unsupported command: guest-get-fsinfo", "agent-error", "Guest filesystem query failed", 500, true},
+		{"forbidden", "provider-private-detail", "permission-denied", "Guest filesystem query was not authorised", 403, true},
+		{"unauthorised-quotes-stopped", "API error 500: QEMU guest agent is not running", "permission-denied", "Guest filesystem query was not authorised", 401, true},
+		{"bad-request-quotes-permission", "API error 403: permission denied", "agent-error", "Guest filesystem query failed", 400, true},
+		{"empty", `{"data":{"result":[]}}`, "no-filesystems", "Guest agent returned no filesystem readings", 200, true},
+		{"malformed", `{"data":`, "agent-completion-unverified", "", 200, false},
+		{"server-uncertain", "provider-private-detail", "agent-completion-unverified", "", 500, false},
+		{"gateway-quotes-stopped", "QEMU guest agent is not running", "agent-completion-unverified", "", 502, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/status/current") {
+					fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				calls.Add(1)
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			logger := zerolog.New(&output).With().Str("receipt_scope", "fixture").Logger()
+			ctx := logger.WithContext(context.Background())
+			m := &Monitor{guestAgentFSInfoTimeout: time.Second, guestAgentRetries: 2}
+			res := proxmox.ClusterResource{Node: "node", VMID: 105, Name: "fixture-vm", Type: "qemu", Status: "running", MaxDisk: 1000}
+			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(ctx, "fixture-instance", res, client, 1000, 0, 0)
+			if reason != tc.reason || fromAgent || usage != -1 || total != 1000 || used != 0 || free != 1000 || disks != nil {
+				t.Errorf("unavailable reading = %d/%d/%d/%v/%v/%t/%q", total, used, free, usage, disks, fromAgent, reason)
+			}
+			beforeStatus := time.Now()
+			status, err := client.GetVMStatus(context.Background(), res.Node, res.VMID)
+			afterStatus := time.Now()
+			if err != nil {
+				t.Fatal(err)
+			}
+			presence := status.IOCounters.Effective()
+			if status.CPU != 0.25 || status.DiskRead != 0 || status.NetIn != 42 || !presence.DiskRead || !presence.NetworkIn || presence.DiskWrite || presence.NetworkOut || status.ObservedAt.Before(beforeStatus) || status.ObservedAt.After(afterStatus) {
+				t.Errorf("filesystem failure changed independent live counters/presence/receipt: %+v", status)
+			}
+			if calls.Load() != 1 {
+				t.Errorf("wire guest commands = %d, want one even with retries configured", calls.Load())
+			}
+			if guestAgentDiskDeferred(tc.reason) {
+				diagnostic, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = diagnostic.GetVMAgentInfo(context.Background(), res.Node, res.VMID)
+				if proxmox.GuestAgentDeferredReason(err) != "agent-cooldown" || calls.Load() != 1 {
+					t.Errorf("filesystem uncertainty let a fresh diagnostic queue another command: %v calls=%d", err, calls.Load())
+				}
+			}
+			guidance := 0
+			for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+				if len(line) == 0 {
+					continue
+				}
+				var event map[string]interface{}
+				if json.Unmarshal(line, &event) != nil {
+					t.Fatalf("invalid structured log: %s", line)
+				}
+				if event["vmid"] != float64(res.VMID) {
+					continue // Request-layer status logs are separate, not guidance.
+				}
+				guidance++
+				message, _ := event["message"].(string)
+				if !tc.logged || event["receipt_scope"] != "fixture" || event["level"] != "info" || event["instance"] != "fixture-instance" || event["vm"] != "fixture-vm" || event["reason"] != tc.reason || !strings.HasPrefix(message, tc.message) {
+					t.Errorf("observed-evidence guidance lost: %v", event)
+				}
+				if !strings.Contains(message, "guest-agent and backup settings") {
+					t.Errorf("backup-settings precaution missing: %s", message)
+				}
+				if tc.reason == "permission-denied" && (!strings.Contains(message, "this VM") || !strings.Contains(message, "Do not broaden shared roles")) {
+					t.Errorf("credential advice is not scoped: %s", message)
+				}
+				for _, unsafe := range []string{"Install and start", "restart", "systemctl", "ps aux", "Re-run", "PulseMonitor", "VM.Monitor", "Sys.Audit", "provider-private-detail"} {
+					if strings.Contains(message, unsafe) {
+						t.Errorf("unsafe/unobserved advice %q: %s", unsafe, message)
+					}
+				}
+			}
+			wantGuidance := 0
+			if tc.logged {
+				wantGuidance = 1
+			}
+			if guidance != wantGuidance {
+				t.Errorf("guidance records = %d, want %d", guidance, wantGuidance)
+			}
+		})
 	}
 }

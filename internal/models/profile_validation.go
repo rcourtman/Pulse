@@ -44,7 +44,7 @@ var ValidConfigKeys = []ConfigKeyDefinition{
 	{
 		Key:         "enable_host",
 		Type:        ConfigTypeBool,
-		Description: "Enable host monitoring (metrics + command execution)",
+		Description: "Enable host metrics collection; command execution is controlled separately by local authority",
 		Default:     true,
 	},
 	{

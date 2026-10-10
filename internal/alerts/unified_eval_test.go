@@ -1641,6 +1641,40 @@ func TestUnifiedMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T)
 	}
 }
 
+func TestNodeUsageDispatchPreservesSeparatelyEvaluatedTemperature(t *testing.T) {
+	m, elapsed := continuityManager(t, false)
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.mu.Unlock()
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 85}
+	m.CheckNode(node)
+	elapsed.Store(int64(40 * time.Second))
+	m.CheckNode(node)
+	incident, ok := continuityIncident(m, node.ID, "temperature")
+	if !ok || incident.State != reducer.StatePending {
+		t.Fatal("temperature control did not remain pending")
+	}
+	originalStart := incident.PendingSince
+	elapsed.Store(int64(59 * time.Second))
+	m.CheckNode(node)
+	incident, _ = continuityIncident(m, node.ID, "temperature")
+	if !incident.PendingSince.Equal(originalStart) {
+		t.Fatal("usage dispatch interrupted a separately observed temperature")
+	}
+	elapsed.Store(int64(time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("continuous node temperature did not complete its delay")
+	}
+	node.Temperature = nil
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("actual missing temperature became recovery")
+	}
+}
+
 // metricStatusClock drives a manager's wall and monotonic clocks together so
 // recovery runs measure exactly the time the test advances.
 type metricStatusClock struct {
@@ -1717,7 +1751,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	fired := fireNodeTemperatureAlert(t, m, clock, 85)
 	status := fired.MetricStatus
 	if status == nil || status.Phase != models.MetricAlertPhaseBreaching || status.Value != 85 ||
-		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" {
+		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" ||
+		!metricBreachTime(t, status).Equal(fired.LastSeen) {
 		t.Fatalf("breaching status = %+v", status)
 	}
 	if status.RecoveryDelaySeconds <= 0 {
@@ -1738,7 +1773,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 		t.Fatalf("hold rewrote the breach snapshot: value=%v message=%q lastSeen=%v", held.Value, held.Message, held.LastSeen)
 	}
 	if got := held.MetricStatus; got == nil || got.Phase != models.MetricAlertPhaseLatched || got.Value != 78 ||
-		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil {
+		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("latched status = %+v", got)
 	}
 
@@ -1748,13 +1784,15 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	checkMetricStatusNode(m, 72)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
 		got.Phase != models.MetricAlertPhaseRecovering || got.Value != 72 ||
-		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 {
+		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("recovery start status = %+v", got)
 	}
 	clock.advance(delay / 2)
 	checkMetricStatusNode(m, 75)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
-		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) {
+		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("recovery progress status = %+v", got)
 	}
 
@@ -1762,7 +1800,8 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	clock.advance(30 * time.Second)
 	checkMetricStatusNode(m, 77)
 	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
-		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 {
+		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 ||
+		!metricBreachTime(t, got).Equal(firedLastSeen) {
 		t.Fatalf("status after recovery reset = %+v", got)
 	}
 	if got := len(notified); got != notifications {

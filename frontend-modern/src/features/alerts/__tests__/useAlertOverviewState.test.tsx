@@ -169,7 +169,7 @@ describe('useAlertOverviewState', () => {
       old: makeAlert('old', new Date(now - 3 * 86_400_000).toISOString(), false),
     });
     const activeAlerts = () => alertsById;
-    const [showAcknowledged] = createSignal(false);
+    const [showAcknowledged, setShowAcknowledged] = createSignal(false);
     const updateAlert = vi.fn((alertIdentifier: string, updates: Partial<Alert>) => {
       setAlertsById(alertIdentifier, { ...alertsById[alertIdentifier], ...updates });
     });
@@ -209,9 +209,17 @@ describe('useAlertOverviewState', () => {
     );
     expect(notificationStore.success).toHaveBeenCalledWith('Alert acknowledged');
     expect(result.processingAlerts().has('warning')).toBe(true);
-    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['old']);
+    // Hiding/counting acknowledgement is not deletion or measured recovery.
     expect(result.alertStats()).toMatchObject({ active: 1, acknowledged: 2 });
-
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['old']);
+    expect(Object.keys(activeAlerts())).toHaveLength(3);
+    setShowAcknowledged(true);
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual([
+      'old',
+      'warning',
+      'acknowledged',
+    ]);
+    setShowAcknowledged(false);
     // The server confirms, then another session unacknowledges: the card
     // returns without a reload.
     setAlertsById('warning', reconcile({ ...warning(), acknowledged: true, ackUser: 'admin' }));

@@ -21,8 +21,27 @@ run the unified agent directly.
 If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
 
 ### How do I change the port?
-- **Systemd**: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart.
-- **Docker**: Use `-p 8080:7655` in your run command.
+
+Distinguish Pulse's web listener from a container's published host port.
+`FRONTEND_PORT` controls the listener (default **7655**); the separate
+`PULSE_AGENT_INGEST_PORT` is not the web UI port.
+
+- **Systemd / Proxmox LXC**: change the active Pulse service's managed port
+  setting. For LXC, work inside the Pulse container, not on the Proxmox host.
+  A unit or drop-in change needs a service-manager reload and a restart of that
+  service during a suitable maintenance window.
+- **Docker / Compose**: with the default listener, `8080:7655` publishes the UI
+  on host port **8080**; it does not require changing `FRONTEND_PORT`. The
+  repository's Compose file uses `PULSE_PORT` for this host-side mapping.
+  Apply the change through your existing container manager's recreate/redeploy
+  operation, preserving the same image, data mount and other settings.
+  `docker restart` does not apply a new port mapping. Do not delete a data volume
+  or replace your existing deployment with a fresh `docker run` command.
+
+Update the reverse proxy's upstream port separately if needed; do not expose
+Pulse directly or broadly open the firewall to bypass it. Follow the
+[deployment-specific port checks](TROUBLESHOOTING.md#port-change-didnt-take-effect)
+and keep full service environments and container inspections private.
 
 ### Does updating the Pulse server update every agent immediately?
 
@@ -38,7 +57,28 @@ update. Use **Settings → Infrastructure → Install on a host** for first inst
 and v5-to-v6 upgrades. See [Unified Agent](UNIFIED_AGENT.md#auto-update).
 
 ### Why can't I change settings in the UI?
-If a setting is disabled with an amber warning, it's being overridden by an environment variable (e.g., `DISCOVERY_ENABLED`). Remove the env var to regain UI control.
+
+A warning that names an environment variable means that deployment setting
+manages the value, rather than the UI. If it is intentional, keep it and ask
+the deployment administrator to change that setting; do not remove unrelated
+authentication or security overrides.
+
+To hand that particular setting back to the UI, remove only its override from
+the active deployment source. Apply through the same deployment: environment
+changes for Docker require recreation/redeployment, not `docker restart`; a
+systemd unit or drop-in change needs a service-manager reload and restart.
+Preserve the image, data mount, credentials and other settings. Merely editing
+a file does not change the running process's environment.
+
+Re-open Settings afterwards and check both the warning and effective value.
+Removing an override does not necessarily erase the saved value underneath it
+or turn the setting off. For example, a saved CORS allowlist can remain after
+`ALLOWED_ORIGINS` is removed. See
+[environment precedence](CONFIGURATION.md#common-overrides-environment-variables) and
+[CORS checks](TROUBLESHOOTING.md#cors-errors). If no environment warning is
+shown, retain the displayed error rather than assuming an override is the cause.
+Do not post full environment, Compose or configuration dumps; they can contain
+passwords and tokens.
 
 ---
 
@@ -63,8 +103,24 @@ Pushover destination under **Alerts** and open Pulse in your phone's browser.
 See [Relay / Pulse Mobile](RELAY.md) for the existing pairing and security details.
 
 ### Why do VMs show "-" for disk usage?
-Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
-See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
+
+A dash means filesystem usage is unavailable, **not zero**. Allocated virtual-disk
+size is not used space inside the guest. Pulse can read that usage through a
+supported QEMU Guest Agent, but a failed read does not establish that the agent
+is absent or stopped. Read the explanation and observation time; use the guest's
+own filesystem readings rather than treating a retained Pulse value as current.
+
+Do not install, enable or restart an agent solely to clear a disk dash. During a
+backup, freeze/thaw or an unresponsive-guest incident, defer setup and live probes.
+Follow [Backup safety](VM_DISK_MONITORING.md#backup-safety); an OK backup does not
+prove thaw. Keep the monitoring-outage precaution until independent checks confirm
+thaw, fresh writes to every covered filesystem and workload liveness. Restore only
+services and timers that were previously active.
+
+Outside those conditions, review the existing configuration and supported setup
+for the guest OS. The Linux package name is not a Windows or Android installation
+instruction; if no supported agent is available, use guest-local filesystem tools.
+See [Missing-reading and setup guidance](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis).
 
 ### Does Pulse monitor Ceph?
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
@@ -95,12 +151,28 @@ older release candidate.
 Yes. Go to **Alerts → Thresholds** and use the On/Off toggle next to any metric while editing, or set the value to `-1`. You can do this globally or per-resource (VM/Node).
 
 ### How do I monitor temperature?
-Recommended: install the unified agent on your Proxmox hosts with Proxmox integration enabled:
 
-1. Install `lm-sensors` on the host (`apt install lm-sensors && sensors-detect`)
-2. Install `pulse-agent` with `--enable-proxmox`
+Check the affected host's active agent version, sensor and observation time
+before changing its setup. A current Pulse server does not update every agent.
+Compare the same host and sensor at the same time; CPU/SoC temperature is not
+physical-disk SMART temperature. A missing reading is unavailable, **not zero**.
 
-If you do not run the agent, Pulse can collect temperatures over SSH. When the agent is reporting usable temperatures, Pulse uses the agent path and does not also require SSH for that host. See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+On Linux, the agent reads existing `sensors -j` output and recognised CPU/SoC
+thermal sysfs sources. `lm-sensors` is not required for the CPU/SoC fallback.
+Start with the [bounded, private local reading check](TEMPERATURE_MONITORING.md#check-existing-linux-readings-safely)
+on the monitored host, not inside the Pulse container.
+
+Do not run hardware detection, bus scans, load drivers or reboot the host merely
+to fill a temperature row. Necessary sensor setup belongs in that host's normal
+maintenance window. During backups, freeze/thaw or an unresponsive-host incident,
+defer setup and diagnostics.
+
+For a new Proxmox agent installation, follow the
+[verified HTTPS and token-file setup](TEMPERATURE_MONITORING.md#recommended-pulse-agent-proxmox).
+Recent usable agent temperature data does not also require SSH for that host;
+do not mount root SSH keys into Pulse or loosen an existing restricted key to
+repair a missing reading. Other platforms have different providers and limits:
+see [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 ---
 
@@ -137,19 +209,63 @@ Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider sup
 ## ⚠️ Troubleshooting
 
 ### No data showing?
-- Check Proxmox API is reachable (port 8006).
-- Verify credentials in **Settings → Infrastructure**.
-- Check logs: `journalctl -u pulse -f` or `docker logs -f pulse`.
+
+First distinguish what is missing; Pulse monitors more than Proxmox.
+
+| Missing item | Check existing evidence first |
+| --- | --- |
+| Whole page or resource | Open its platform page, not just Machines. Follow the [current navigation guide](TROUBLESHOOTING.md#old-bookmarks-dont-work) for moved pages and bookmarks. |
+| Current readings | Check the affected connection in **Settings → Infrastructure**: is it enabled, and does its last activity advance during ordinary polling? For an agent, compare **Last seen** with the particular missing reading. |
+| History only | Check the selected resource and time range. A current value does not prove that samples were stored for that chart; use [History troubleshooting](METRICS_HISTORY.md#troubleshooting). |
+
+A green connection badge, recent **Last seen** or successful **Test Connection**
+does not prove that every reading is fresh. Missing or unavailable is not zero.
+Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
+[empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty),
+[missing or stale PVE replication jobs](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing) or
+[missing VM disk usage](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis). Check Proxmox
+[effective permissions](TROUBLESHOOTING.md#check-permissions-proxmox) only when
+the affected operation reports an access error, not on a missing chart alone.
+
+Keep the original time and displayed error. Do not replace credentials, delete
+connections or re-enrol agents just to populate a chart. During a backup,
+freeze/thaw or an unresponsive-host incident, defer setup, live tests and
+**Run Diagnostics**; follow [safe evidence collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
+If logs are needed, use a bounded excerpt from the original incident and review
+it locally before sharing, as described in [Getting Help](TROUBLESHOOTING.md#-getting-help).
 
 ### Connection refused?
-- Check if Pulse is running: `systemctl status pulse` or `docker ps`.
-- Verify the port (default 7655) is open on your firewall.
+
+Distinguish your browser's connection to Pulse from Pulse's connection to a
+monitored platform. If the browser cannot reach Pulse, check the actual service,
+listening port and proxy using the [connection guide](TROUBLESHOOTING.md#connection-refused).
+If Pulse opens but a platform request is refused, preserve that request's
+redacted error and use its platform guide above; changing Pulse's listening
+port does not repair the platform connection.
 
 ### CORS errors?
-Pulse defaults to same-origin only. If you access the API from a different domain, set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` (single origin, or `*` if you explicitly want all origins).
+
+Keep the default same-origin policy when Pulse and its API use the same public
+origin, including behind a reverse proxy. If a separate trusted browser app
+needs cross-origin API access, allow only its exact origin (scheme, host and
+port); `*` is not a login or proxy repair. Follow the
+[CORS checks](TROUBLESHOOTING.md#cors-errors) before broadening browser access.
 
 ### High memory usage?
-If you are storing long history windows, reduce metrics retention (see [METRICS_HISTORY.md](METRICS_HISTORY.md)). Also confirm your polling intervals match your environment size.
+For a monitored VM, first check [guest memory, cache and available memory](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
+A high hypervisor footprint and one application's RSS measure different things;
+compare existing readings from the same guest and time, not the Proxmox node.
+
+First distinguish container usage from Pulse's resident memory (RSS); a high
+LXC or Docker chart alone does not establish a leak. Use the
+[read-only memory checks](TROUBLESHOOTING.md#memory-use-keeps-growing) for your
+deployment while it is responsive.
+
+Do not shorten retention, slow polling, restart Pulse or drop caches just to
+lower the reading. Shorter retention removes history, and slower polling can
+delay monitoring; neither establishes the cause. If the container is near its
+memory limit or the host is unresponsive, stop sampling and prioritise safe
+recovery.
 
 ### Can Pulse monitor 50 or more Proxmox hosts?
 

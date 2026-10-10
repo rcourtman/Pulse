@@ -32,9 +32,17 @@ and installer tooling.
   repository.
 - Unsolicited pull requests may be closed without detailed review, even when the
   underlying idea is valid.
-- If I want code help on a specific issue, I will explicitly ask for it there.
-- Opening an issue first is the right path; it lets me confirm whether the
-  change fits the product direction before anyone spends time building a patch.
+- A report, diagnostic question or linked design is not an invitation to open
+  a pull request. You do not need to write a patch to report a problem.
+- If you already have a tested patch or branch, link it in the existing issue
+  as evidence, following [Sharing a tested patch](#sharing-a-tested-patch).
+  Maintainers handle implementation and source review through the project's
+  normal process; a supplied patch does not guarantee acceptance.
+- If a pull request already exists, especially one requested in an earlier
+  conversation, keep its link in that conversation. Do not recreate it or
+  refile evidence. It is owed a reply and a disposition in its own thread:
+  reviewed landing, or an equivalent maintainer fix with credit and a commit
+  link when the contribution is used.
 
 ## How To Make An Issue Useful
 
@@ -46,11 +54,36 @@ and installer tooling.
   give the attempted version or release asset (or say "unknown") and identify
   the installer or helper when known. Include an image tag or digest only for a
   running container, not for a bare-metal or LXC install.
-- Include screenshots, redacted logs, API output, or diagnostics when they
-  clarify the problem. If Pulse is running and it is safe to collect, use
-  `Settings -> Diagnostics -> Export for GitHub (sanitized)` for connection or
-  data failures. Never paste credentials, tokens, private keys, or a command
-  line containing them into an issue.
+- Where already known, give the affected platform and release (for example,
+  TrueNAS SCALE or CORE), separately from the Pulse server OS and version.
+  Say whether its readings come through the platform API, a Pulse agent, or
+  both. Use existing settings or observations; blank or "unknown" is valid.
+  Do not run diagnostics, probe, restart or change a connection to fill this in.
+- Include only evidence relevant to the symptom: a screenshot or exact redacted
+  error may be enough for a visual problem; existing logs or observations may
+  explain a connection or data failure. Diagnostics are optional, not a condition
+  of reporting. If a result is already displayed in **Settings → Diagnostics**,
+  its download buttons reuse that result without running checks again.
+- **Run Diagnostics** can make live API and guest-agent requests. Do not run it
+  during a backup, freeze/thaw or an unresponsive-host incident just to file a
+  report. Keep the original evidence instead; a successful one-off check does
+  not prove that normal monitoring has recovered or a guest has thawed. See
+  [safe diagnostics collection](docs/TROUBLESHOOTING.md#collect-diagnostics-safely).
+- Diagnostics downloads save a local file, not an upload. Choose **GitHub (review
+  first)** (called **Export for GitHub (sanitized)** in older versions), and review
+  files and screenshots locally before posting: a sanitized export is not a
+  guarantee that free-text errors contain no private information. Remove
+  credentials, session cookies, secret URLs and private host, network or personal
+  details, including those echoed in errors. Keep **Full (private)** exports
+  private. Do not attach configuration or `.env` files, private keys, **Copy as
+  cURL** commands or full network exports. Never put credentials in a command
+  line, URL or thread.
+- For CPU, memory or disk-write reports, use existing readings or safe passive
+  observations. Where known, say whether they measure the Pulse process, its
+  container or the whole host, with units, measurement window and uptime.
+  Unavailable readings are valid evidence. Do not restart, create load or change
+  polling or retention just to measure; do not attach raw profiles, heap dumps,
+  databases or full process command lines.
 - Lead with one primary bug or operator outcome. If the context also exposes
   another actionable topic, put it in the issue form's dedicated field. Triage
   will preserve it with a linked disposition; you do not need to refile text
@@ -187,8 +220,10 @@ claims on the current documentation surface.
 
 ## Testing Expectations
 
-- Every requested PR should note the tests run (`go test`, frontend tests, or
-  `scripts/tests/run.sh`, as applicable).
+- Source changes and supplied patch evidence should note the tests actually run
+  (`go test`, frontend tests, or `scripts/tests/run.sh`, as applicable), the
+  source version and any untested behaviour. A passing test is not proof that
+  a change is available in a published release.
 - Add regression coverage when fixing bugs.
 - Mention manual verification steps (e.g., “Proxmox LXC installer tested on
   PVE 8.1”) if automated coverage is not feasible.
@@ -205,19 +240,22 @@ claims on the current documentation surface.
 
 ---
 
-## Submitting Requested Changes
+## Sharing a tested patch
 
-For maintainer-requested code help on a tracked issue:
+If you already have a patch or branch, link it from the **existing issue**;
+do not open a new pull request to submit it. Include the source version, the
+reported behaviour it changes, tests actually run and known limits. Existing
+test results are useful; do not repeat an unsafe failure or run against a
+production installation just to prepare a patch. A patch is optional evidence,
+not a condition of reporting and not a promise that the change will be used.
 
-1. Link the issue where the maintainer requested the patch.
-2. Fork + branch (`git checkout -b feature/my-change`).
-3. Make your edits and run relevant tests.
-4. Update docs and changelog entries as needed.
-5. Open a PR describing:
-   - What changed
-   - Why it changed
-   - Testing performed
-   - Rollout / migration concerns
+Review the linked branch, diff, logs and screenshots before sharing. Remove
+credentials, private configuration, diagnostics and identifying details; a
+public branch also exposes its commit history. Do not publish sensitive
+security evidence here; follow [SECURITY.md](SECURITY.md) instead.
 
-Reviewers will focus on correctness, security, and upgrade paths, so call out
-anything unusual up front.
+When a contribution is used, the fix reply credits its author and links the
+reviewed commit. A merged change is not necessarily in a published release;
+release availability and reporter confirmation remain separate facts. The
+development notes above are for local reproduction and validation, not an
+invitation to submit a pull request.

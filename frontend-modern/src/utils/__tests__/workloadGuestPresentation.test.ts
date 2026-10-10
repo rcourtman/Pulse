@@ -10,6 +10,25 @@ import {
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each(['permission-denied', 'prev-permission-denied'])(
+    'keeps %s separate from permission expansion and guest health',
+    (reason) => {
+      const message = getWorkloadGuestDiskStatusMessage(reason);
+      expect(message).toContain('If this VM is an intended monitoring target');
+      expect(message).toContain("configured account and token's effective read permissions");
+      expect(message).toContain('VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+)');
+      expect(message).toContain(
+        'Do not widen intentionally scoped access just to clear this error',
+      );
+      expect(message).toContain('A denied read does not establish guest or filesystem health');
+      expect(message).toContain(
+        'Defer access changes and live probes during backups or a guest incident',
+      );
+      expect(message.startsWith('Using last known disk stats.')).toBe(reason.startsWith('prev-'));
+      expect(message).not.toMatch(/Administrator|VM\.GuestAgent\.(Exec|FileWrite)|curl|qm agent/);
+    },
+  );
+
   it.each(guestDiskDeferrals)(
     'explains %s with and without retained disk evidence',
     (reason, message) => {
@@ -19,6 +38,21 @@ describe('workloadGuestPresentation', () => {
       );
       expect(message).not.toContain('may not be installed');
       expect(message).not.toContain('may need to be restarted');
+    },
+  );
+
+  it.each(['agent-not-running', 'agent-disabled', 'future-private-error', undefined])(
+    'keeps %s out of installation, activation and guessed OS advice',
+    (reason) => {
+      for (const current of [reason, `prev-${reason ?? 'unknown'}`]) {
+        const text = getWorkloadGuestDiskStatusMessage(current);
+        expect(text).not.toMatch(
+          /Install and start|Enable it in VM Options|may not be installed|qemu-guest-agent/,
+        );
+        expect(text).toMatch(/backup/);
+        expect(text).toMatch(/guest incident/);
+        expect(text).not.toContain('future-private-error');
+      }
     },
   );
 
@@ -99,7 +133,7 @@ describe('workloadGuestPresentation', () => {
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
     expect(getWorkloadGuestDiskStatusMessage()).toBe(
-      'Disk stats unavailable. Guest agent may not be installed.',
+      'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
     );
     expect(getWorkloadGuestDiskStatusMessage('prev-no-filesystems')).toBe(
       'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',

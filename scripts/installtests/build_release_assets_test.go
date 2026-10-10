@@ -3,6 +3,7 @@ package installtests
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,8 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
+	"gopkg.in/yaml.v3"
 )
 
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
@@ -3783,6 +3786,106 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+// Documentation drift is deterministic and cheap to reject. It must not wait
+// behind dependency installation or fan out into builds that cannot land.
+func TestCIDocsMirrorPreflight(t *testing.T) {
+	type step struct {
+		Name            string `yaml:"name"`
+		Uses            string `yaml:"uses"`
+		Run             string `yaml:"run"`
+		If              string `yaml:"if"`
+		ContinueOnError bool   `yaml:"continue-on-error"`
+		Directory       string `yaml:"working-directory"`
+	}
+	type job struct {
+		Steps []step `yaml:"steps"`
+	}
+	for _, site := range []struct{ workflow, job string }{
+		{"build-and-test.yml", "changes"},
+		{"test-e2e.yml", "tier-selection"},
+		{"test-e2e.yml", "offline-org-provisioning"},
+		{"test-e2e.yml", "agent-registration"},
+	} {
+		t.Run(site.workflow+"/"+site.job, func(t *testing.T) {
+			content, err := os.ReadFile(repoFile(".github", "workflows", site.workflow))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var workflow struct {
+				Jobs map[string]job `yaml:"jobs"`
+			}
+			if err := yaml.Unmarshal(content, &workflow); err != nil {
+				t.Fatal(err)
+			}
+			steps := workflow.Jobs[site.job].Steps
+			if len(steps) < 2 || !strings.HasPrefix(steps[0].Uses, "actions/checkout@") {
+				t.Fatal("preflight must follow source checkout")
+			}
+			guard := steps[1]
+			if guard.Run != "python3 scripts/check_docs_mirror.py" || guard.If != "" ||
+				guard.ContinueOnError || guard.Directory != "" || guard.Uses != "" {
+				t.Fatal("whole-tree mirror check must be an unconditional blocking step immediately after checkout")
+			}
+			checker, err := os.ReadFile(repoFile("scripts", "check_docs_mirror.py"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, fixture := range []struct {
+				name, source, mirror, diagnostic string
+				wantExit                         int
+			}{
+				{"synced", "# Safe guidance\n", "# Safe guidance\n", "passed (1 shipped docs)", 0},
+				{"stale-shipped-guide", "# Safe guidance\nDo not repeat a guest probe.\n", "# Safe guidance\n", "docs/GUIDE.md and frontend-modern/public/docs/GUIDE.md differ", 1},
+				{"missing-source", "", "# Orphan guide\n", "shipped copy has no repo source docs/GUIDE.md", 1},
+			} {
+				t.Run(fixture.name, func(t *testing.T) {
+					root := t.TempDir()
+					write := func(path string, data []byte) {
+						t.Helper()
+						full := filepath.Join(root, path)
+						if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(full, data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					write("scripts/check_docs_mirror.py", checker)
+					write("frontend-modern/public/docs/GUIDE.md", []byte(fixture.mirror))
+					if fixture.source != "" {
+						write("docs/GUIDE.md", []byte(fixture.source))
+					}
+					// Run the workflow's actual command and a harmless stand-in for
+					// the next dependency step under GitHub's fail-fast shell mode.
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", guard.Run+"\nprintf started > dependency-work")
+					cmd.Dir = root
+					output, err := cmd.CombinedOutput()
+					exit := 0
+					if err != nil {
+						failure, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						exit = failure.ExitCode()
+					}
+					if exit != fixture.wantExit || !strings.Contains(string(output), fixture.diagnostic) {
+						t.Fatalf("exit=%d, want=%d, output=%s", exit, fixture.wantExit, output)
+					}
+					_, markerErr := os.Stat(filepath.Join(root, "dependency-work"))
+					if fixture.wantExit == 0 && markerErr != nil {
+						t.Fatal("synced documentation must allow later dependency work")
+					}
+					if fixture.wantExit != 0 && !os.IsNotExist(markerErr) {
+						t.Fatal("failed preflight must stop before dependency work")
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestProviderPairDockerProofRunsBeforeFreezeAndOnExactCandidate(t *testing.T) {
 	const testName = "TestIntegrationProviderPairNetworkIsolation"
 	const helperImage = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
@@ -3920,6 +4023,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"name: Backend tests (${{ matrix.shard }})",
 		"shard: [rest-0, rest-1]",
 		"grep -v '/internal/api$'",
+		"python3 .github/scripts/select-go-package-shard.py",
+		`.github/scripts/go-package-test-seconds.txt 2 "$index")`,
+		"set -euo pipefail",
 		"go test -race -timeout 50m $pkgs",
 	} {
 		if !strings.Contains(backend, required) {
@@ -3944,7 +4050,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		"needs: changes",
+		"needs: [changes, test-compile]",
 		"fail-fast: false",
 		// The list comes from the commit under test, so a new test cannot be
 		// missed, and contiguous slices of go test's own order put it in
@@ -3965,6 +4071,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"set -euo pipefail",
 		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
             | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		`printf '%s\n' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"`,
+		`package=$(go list ./internal/api)`,
+		`"$timings/api-${API_SHARD_INDEX}.selected" "$package"`,
 		"if: always() && needs.changes.outputs.code == 'true'",
 		"name: internal-api-test-seconds-${{ matrix.index }}",
 		"path: ${{ runner.temp }}/internal-api-test-seconds/",
@@ -3982,8 +4091,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	if strings.Contains(shards, "sort") {
 		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
 	}
-	if strings.Contains(shards, "\n    if:") {
-		t.Fatal("internal/api shards must expand for every change so the verdict never sees skipped shards")
+	if !strings.Contains(shards, "if: ${{ !cancelled() && needs.changes.result == 'success' }}") ||
+		strings.Contains(shards, "\n    if: needs.changes.outputs.code") {
+		t.Fatal("internal/api shards must expand for documentation-only changes and compilation failures")
 	}
 
 	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
@@ -4014,16 +4124,28 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	t.Helper()
 	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
-	record := func(events string) (string, string, error) {
+	record := func(events string, selected []string) (string, string, map[string]any, error) {
 		out := filepath.Join(t.TempDir(), "seconds.txt")
-		cmd := exec.Command("python3", recorder, out)
+		selection := out + ".selected"
+		if err := os.WriteFile(selection, []byte(strings.Join(selected, "\n")+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("python3", recorder, out, selection, "example/internal/api")
 		cmd.Stdin = strings.NewReader(events)
 		printed, err := cmd.Output()
 		written, readErr := os.ReadFile(out)
 		if readErr != nil {
 			t.Fatalf("recorder wrote no seconds file: %v", readErr)
 		}
-		return string(printed), string(written), err
+		indexBytes, readErr := os.ReadFile(out + ".failures.json")
+		if readErr != nil {
+			t.Fatalf("recorder wrote no failure identity index: %v", readErr)
+		}
+		var index map[string]any
+		if err := json.Unmarshal(indexBytes, &index); err != nil {
+			t.Fatalf("failure index is not JSON: %v", err)
+		}
+		return string(printed), string(written), index, err
 	}
 	const pkg = `"Package":"example/internal/api"`
 	passing := strings.Join([]string{
@@ -4033,7 +4155,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
 		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
 	}, "\n") + "\n"
-	printed, written, err := record(passing)
+	printed, written, index, err := record(passing, []string{"TestQuiet"})
 	if err != nil {
 		t.Fatalf("recorder must pass a passing run: %v", err)
 	}
@@ -4044,6 +4166,11 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		t.Fatalf("recorder seconds file = %q", written)
 	}
 
+	if index["package_terminal_action"] != "pass" ||
+		index["failed_top_level_tests"].(map[string]any)["observed_count"] != float64(0) {
+		t.Fatalf("passing failure identity index = %v", index)
+	}
+
 	failing := strings.Join([]string{
 		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
@@ -4052,7 +4179,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
 	}, "\n") + "\n"
-	printed, written, err = record(failing)
+	printed, written, index, err = record(failing, []string{"TestBroken", "TestHung"})
 	if err == nil {
 		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
 	}
@@ -4063,6 +4190,31 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	}
 	if written != "TestBroken 0.75\n" {
 		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
+	for field, name := range map[string]string{
+		"failed_top_level_tests":     "TestBroken",
+		"unfinished_top_level_tests": "TestHung",
+	} {
+		observation := index[field].(map[string]any)
+		names := observation["names"].([]any)
+		if len(names) != 1 || names[0] != name || observation["omitted_count"] != float64(0) {
+			t.Fatalf("failure index %s = %v", field, observation)
+		}
+	}
+	if index["package_terminal_action"] != nil {
+		t.Fatalf("unfinished stream must not manufacture package completion: %v", index)
+	}
+	// A successful producer alone is not coverage. Require the observed
+	// package completion and every source-selected test, not only emitted names.
+	for _, events := range []string{"", `{"Action":"pass",` + pkg + `}`, passing} {
+		_, _, index, err = record(events, []string{"TestQuiet", "TestMissing"})
+		if err == nil {
+			t.Fatal("recorder accepted missing selected tests or package completion")
+		}
+		missing := index["missing_selected_tests"].(map[string]any)
+		if missing["observed_count"].(float64) < 1 {
+			t.Fatalf("recorder did not retain missing coverage: %v", index)
+		}
 	}
 }
 
@@ -4200,7 +4352,8 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	}
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
-		`AUDIT_ARGS=("$@")`,
+		`AUDIT_ARGS=(audit --json "$@")`,
+		`AUDIT_ARGS+=(--omit=dev)`,
 		`if type(value) is int and value >= 0:`,
 		`has_findings = isinstance(findings, dict) and bool(findings)`,
 		`if has_findings or any(count > 0 for count in counts.values()):`,
@@ -4894,5 +5047,334 @@ func TestInstallMCPFreeBSDSHA256Fallback(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install-mcp.sh lost FreeBSD sha256 fallback %q", want)
 		}
+	}
+}
+
+// Exercise the actual workflow shell, not a second implementation of its
+// classifier. The stub supplies only Git's read results; Bash, grep, pipefail
+// and the downstream audit runner remain real.
+func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				ID  string `yaml:"id"`
+				Run string `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(workflowBytes, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	script := ""
+	for _, step := range workflow.Jobs["changes"].Steps {
+		if step.ID == "filter" {
+			script = step.Run
+		}
+	}
+	if script == "" {
+		t.Fatal("actual change-classification shell is missing")
+	}
+	var largeDocs strings.Builder
+	for i := 0; i < 4000; i++ {
+		largeDocs.WriteString("docs/receipts/" + strconv.Itoa(i) + "-" + strings.Repeat("x", 80) + ".md\n")
+	}
+	docs := largeDocs.String()
+	if len(docs) < 256*1024 {
+		t.Fatal("large fixture must exceed the pipe buffer")
+	}
+	cases := []struct {
+		name, files, event, base string
+		missingBase              bool
+		diffStatus               int
+		code, dependencies       string
+		goCompile                bool
+		audit                    bool
+		auditStatus              int
+	}{
+		{name: "docs_only", files: "docs/FAQ.md\nREADME.md\n", code: "false", dependencies: "false"},
+		{name: "unrelated_code", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "manifest", files: "frontend-modern/package.json\n", code: "true", dependencies: "true"},
+		{name: "lock", files: "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "audit_runner", files: "scripts/npm-audit-retry.sh\n", code: "true", dependencies: "true"},
+		{name: "large_manifest_first", files: "frontend-modern/package.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_first", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_runner_first", files: "scripts/npm-audit-retry.sh\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_last", files: docs + "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "large_docs_only", files: docs, code: "false", dependencies: "false"},
+		{name: "large_unrelated_code", goCompile: true, files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\n", code: "true", dependencies: "false"},
+		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
+		{name: "zero_push_base", goCompile: true, base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
+		{name: "missing_base", goCompile: true, missingBase: true, code: "true", dependencies: "true"},
+		{name: "manual_dispatch", goCompile: true, event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
+		{name: "failed_diff", diffStatus: 42},
+		{name: "large_changed_graph_critical_blocks", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true", audit: true, auditStatus: 1},
+		{name: "unchanged_graph_critical_warns", goCompile: true, files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			directory := t.TempDir()
+			bin := filepath.Join(directory, "bin")
+			if err := os.Mkdir(bin, 0700); err != nil {
+				t.Fatal(err)
+			}
+			files := filepath.Join(directory, "changed")
+			output := filepath.Join(directory, "outputs")
+			if err := os.WriteFile(files, []byte(tc.files), 0600); err != nil {
+				t.Fatal(err)
+			}
+			git := "#!/bin/sh\ncase \"$1\" in\ncat-file) test \"$BASE_MISSING\" != true ;;\ndiff) cat \"$CHANGED_FIXTURE\"; exit \"$DIFF_STATUS\" ;;\n*) exit 97 ;;\nesac\n"
+			if err := os.WriteFile(filepath.Join(bin, "git"), []byte(git), 0700); err != nil {
+				t.Fatal(err)
+			}
+			event := tc.event
+			if event == "" {
+				event = "push"
+			}
+			base := tc.base
+			if base == "" {
+				base = strings.Repeat("a", 40)
+			}
+			if base == "empty" {
+				base = ""
+			}
+			run := strings.NewReplacer(
+				"${{ github.event_name }}", event,
+				"${{ github.event.pull_request.base.sha }}", base,
+				"${{ github.event.before }}", base,
+				"${{ github.sha }}", strings.Repeat("b", 40),
+			).Replace(script)
+			if strings.Contains(run, "${{") {
+				t.Fatal("unresolved workflow expression")
+			}
+			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
+				"CHANGED_FIXTURE="+files, "GITHUB_OUTPUT="+output,
+				"BASE_MISSING="+strconv.FormatBool(tc.missingBase), "DIFF_STATUS="+strconv.Itoa(tc.diffStatus))
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", run)
+			// Actions runs this shell from the checkout root, including its
+			// repo-relative compilation helper. Keep that real execution context.
+			cmd.Dir = repoFile()
+			cmd.Env = env
+			result, commandErr := cmd.CombinedOutput()
+			if tc.diffStatus != 0 {
+				if commandErr == nil {
+					t.Fatal("failed Git diff must fail classification")
+				}
+				if _, err := os.Stat(output); !os.IsNotExist(err) {
+					t.Fatal("failed diff published a passing classification")
+				}
+				return
+			}
+			if commandErr != nil {
+				t.Fatalf("classification failed: %v (%d output bytes)", commandErr, len(result))
+			}
+			valuesBytes, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			values := map[string]string{}
+			for _, line := range strings.Split(strings.TrimSpace(string(valuesBytes)), "\n") {
+				key, value, ok := strings.Cut(line, "=")
+				if !ok {
+					t.Fatalf("invalid output: %q", line)
+				}
+				if _, exists := values[key]; exists {
+					t.Fatalf("duplicate output: %q", key)
+				}
+				values[key] = value
+			}
+			if values["code"] != tc.code || values["frontend_deps"] != tc.dependencies || values["go_compile"] != strconv.FormatBool(tc.goCompile) {
+				t.Errorf("actual classification = %v; want code=%s frontend_deps=%s go_compile=%t (%d changed bytes)", values, tc.code, tc.dependencies, tc.goCompile, len(tc.files))
+			}
+			if !tc.audit {
+				return
+			}
+			// A real finding, supplied offline, must fail the changed graph
+			// and warn only for an unchanged graph. No npm service is queried.
+			finding := `{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":1,"total":1}},"vulnerabilities":{"seroval":{"name":"seroval","severity":"critical"}}}`
+			npm := filepath.Join(bin, "npm")
+			if err := os.WriteFile(npm, []byte("#!/bin/sh\nprintf '%s\\n' '"+finding+"'\nexit 1\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			audit := exec.CommandContext(ctx, "bash", repoFile("scripts", "npm-audit-retry.sh"), "all")
+			audit.Env = append(env, "NPM_AUDIT_CMD="+npm, "NPM_AUDIT_REQUIRE_RESULT="+values["frontend_deps"], "NPM_AUDIT_ATTEMPTS=1", "NPM_AUDIT_RETRY_DELAY=0")
+			auditResult, auditErr := audit.CombinedOutput()
+			auditStatus := 0
+			if auditErr != nil {
+				exit, ok := auditErr.(*exec.ExitError)
+				if !ok {
+					t.Fatal(auditErr)
+				}
+				auditStatus = exit.ExitCode()
+			}
+			if auditStatus != tc.auditStatus {
+				t.Errorf("downstream critical-audit status=%d; want %d: %s", auditStatus, tc.auditStatus, auditResult)
+			}
+			if !strings.Contains(string(auditResult), `"severity": "critical"`) {
+				t.Fatalf("the observed finding disappeared: %s", auditResult)
+			}
+		})
+	}
+}
+
+// Run through the native Bash, including macOS's Bash 3.2. An empty optional
+// argument list must still invoke npm once, preserve its finding and obey the
+// existing strict/inherited verdict split. Quoting and production scope must
+// survive combining the formerly empty arrays into one nonempty argv vector.
+func TestNpmAuditNativeScopeArgumentsPreserveFindings(t *testing.T) {
+	const finding = `{"metadata":{"vulnerabilities":{"critical":1,"total":1}},"vulnerabilities":{"fixture":{"name":"fixture","severity":"critical"}}}`
+	for _, scope := range []string{"all", "production"} {
+		for _, extra := range [][]string{nil, {"--package-lock-only", "--fixture=two words", ""}} {
+			for _, require := range []string{"true", "false"} {
+				t.Run(scope+"/args="+strconv.Itoa(len(extra))+"/strict="+require, func(t *testing.T) {
+					directory := t.TempDir()
+					argvPath := filepath.Join(directory, "argv")
+					npmPath := filepath.Join(directory, "npm")
+					stub := "#!/bin/sh\nprintf '%s\\0' \"$@\" >> \"$AUDIT_ARGV\"\nprintf '%s\\n' '" + finding + "'\nexit 1\n"
+					if err := os.WriteFile(npmPath, []byte(stub), 0700); err != nil {
+						t.Fatal(err)
+					}
+					args := append([]string{repoFile("scripts", "npm-audit-retry.sh"), scope}, extra...)
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", args...)
+					cmd.Env = append(os.Environ(), "AUDIT_ARGV="+argvPath, "NPM_AUDIT_CMD="+npmPath,
+						"NPM_AUDIT_REQUIRE_RESULT="+require, "NPM_AUDIT_ATTEMPTS=1",
+						"NPM_AUDIT_RETRY_DELAY=0", "NPM_AUDIT_ATTEMPT_TIMEOUT=5", "NPM_AUDIT_MAX_SECONDS=10")
+					output, err := cmd.CombinedOutput()
+					status := 0
+					if err != nil {
+						exit, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						status = exit.ExitCode()
+					}
+					wantStatus, annotation := 1, "::error::"
+					if require == "false" {
+						wantStatus, annotation = 0, "::warning::"
+					}
+					if status != wantStatus || !strings.Contains(string(output), annotation) ||
+						!strings.Contains(string(output), `"severity": "critical"`) ||
+						strings.Contains(string(output), "advisory endpoint did not return") {
+						t.Fatalf("native audit lost its finding/verdict: exit=%d want=%d\n%s", status, wantStatus, output)
+					}
+					recorded, err := os.ReadFile(argvPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := append([]string{"audit", "--json"}, extra...)
+					if scope == "production" {
+						want = append(want, "--omit=dev")
+					}
+					if string(recorded) != strings.Join(want, "\x00")+"\x00" {
+						t.Fatalf("npm must run once with exact arguments: got %q want %q", recorded, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
+	runner, err := os.ReadFile(repoFile("scripts", "npm-audit-retry.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := regexp.MustCompile(`(?m)^trap '.*' EXIT$`).FindString(string(runner))
+	if hook == "" {
+		t.Fatal("audit report cleanup hook is missing")
+	}
+	for _, tc := range []struct {
+		name, hook, childSetup string
+		status                 int
+	}{
+		{"actual_parent_owned_hook", hook, "", 0},
+		{"actual_hook_before_subshell_counter_initialization", hook, "BASH_SUBSHELL=0\n", 0},
+		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, "", 23},
+		{"legacy_counter_guard_rejected_before_initialization", `trap 'if [ "$BASH_SUBSHELL" -eq 0 ]; then rm -f "${report_file}"; fi' EXIT`, "BASH_SUBSHELL=0\n", 23},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "report")
+			// Install the exact source hook in the child explicitly to model
+			// the early-signal window, without timing a background process.
+			// It must retain the report there, and still remove it at parent exit.
+			script := "report_file=\"$REPORT_FIXTURE\"\nprintf retained >\"$report_file\"\n" + tc.hook +
+				"\n(\n" + tc.hook + "\n" + tc.childSetup + ")\ntest -f \"$report_file\" || exit 23\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "REPORT_FIXTURE="+path)
+			output, err := cmd.CombinedOutput()
+			status := 0
+			if err != nil {
+				exit, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				status = exit.ExitCode()
+			}
+			if status != tc.status {
+				t.Fatalf("child cleanup verdict=%d want=%d: %s", status, tc.status, output)
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("invoking shell did not clean up its report: %v", err)
+			}
+		})
+	}
+}
+
+func TestCITestCompilationPreservesChecks(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(workflowBytes)
+	for _, required := range []string{
+		"name: Compile backend race tests (no execution)",
+		"run: bash scripts/compile-go-tests.sh",
+		"name: Backend tests (${{ matrix.shard }})",
+		"name: Backend tests (api)",
+		"shard: [rest-0, rest-1]",
+		"index: [0, 1, 2, 3, 4]",
+		"go test -race -timeout 50m",
+		"name: Require frontend dependency audit",
+		"NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("compile admission removed independent CI requirement: %s", required)
+		}
+	}
+	if strings.Count(workflow, "name: Require compiled backend tests") != 2 {
+		t.Fatal("both required backend matrices must report compilation failures")
+	}
+	for _, path := range []string{
+		repoFile("scripts", "compile-go-tests.sh"),
+		repoFile("scripts", "tests", "test_go_test_compilation.py"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestDockerModuleDownloadKeepsPinnedGraphAndBoundedRecovery(t *testing.T) {
+	assertFileContainsAll(t, repoFile("Dockerfile"),
+		"COPY go.mod go.sum ./\nCOPY scripts/go-mod-download.sh /usr/local/bin/pulse-go-mod-download",
+		"--mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod",
+		"sh /usr/local/bin/pulse-go-mod-download",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "go-mod-download.sh"),
+		"timeout -k 5 180 go mod download", "[ \"$attempt\" -eq 3 ]", "INTERNAL_ERROR; received from peer",
+		"exit !(seen && !unknown)",
+	)
+	// The automatic script-smoke discovery must execute the behavioural proof,
+	// not leave Docker's new recovery path guarded only by text assertions.
+	if _, err := os.Stat(repoFile("scripts", "tests", "test_go_mod_download.py")); err != nil {
+		t.Fatalf("missing actual-shell module-download proof: %v", err)
 	}
 }

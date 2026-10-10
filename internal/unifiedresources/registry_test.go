@@ -13,6 +13,78 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
+// The snapshot entry point shares the registry's journal ownership, without
+// mutating either the snapshot or the alert's recorded metadata.
+func TestProxmoxDiskAlertSnapshotOwnershipMatchesRegistry(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.resources = map[string]*Resource{
+		"disk-a": {ID: "disk-a", Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{Serial: "unknown", WWN: "naa.5000c500a1b2c3d4", DevPath: "/dev/sdz"}},
+		"disk-b": {ID: "disk-b", Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{Serial: "unknown", WWN: "0x5000c500000000b2", DevPath: "/dev/sda"}},
+	}
+	var snapshot []Resource
+	for _, resource := range rr.resources {
+		snapshot = append(snapshot, *resource)
+	}
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	for _, tc := range []struct{ name, serial, wwn, want string }{
+		{"moved hardware without PVE facet", "unknown", "wwn-0x5000c500a1b2c3d4", "disk-a"},
+		{"placeholder is not hardware", "unknown", "", ""},
+		{"second hardware", "unknown", "5000c500000000b2", "disk-b"},
+		{"derived absent hardware", "NEW00001", "", MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "NEW00001")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := map[string]any{MetadataDiskSerial: tc.serial, MetadataDiskWWN: tc.wwn}
+			before, _ := json.Marshal(snapshot)
+			if got := ProxmoxPhysicalDiskAlertOwner(ref, metadata, snapshot); got != tc.want || got != rr.proxmoxDiskAlertOwner(ref, metadata) {
+				t.Fatalf("snapshot owner = %q, registry = %q, want %q", got, rr.proxmoxDiskAlertOwner(ref, metadata), tc.want)
+			}
+			after, _ := json.Marshal(snapshot)
+			if string(before) != string(after) || metadata[MetadataDiskSerial] != tc.serial || metadata[MetadataDiskWWN] != tc.wwn {
+				t.Fatal("ownership read mutated snapshot or recorded identity")
+			}
+		})
+	}
+}
+
+func TestProxmoxGuestReadAdmissionReplacesPreviousFacet(t *testing.T) {
+	rr := NewRegistry(nil)
+	vm := models.VM{ID: "pve:node:105", Instance: "pve", Node: "node", VMID: 105, Type: "qemu", Status: "running", Name: "guest", LastSeen: time.Now(), Disk: models.Disk{Total: 100, Used: 30, Usage: 30}}
+	for _, tc := range []struct {
+		status, reason string
+		expected       bool
+	}{
+		{"available", "", true},
+		{"deferred", "prev-agent-cooldown", true},
+		{"available", "", true},
+		{"not-running", "agent-not-running", false},
+		{"disabled", "agent-disabled", false},
+	} {
+		vm.GuestAgentStatus, vm.DiskStatusReason, vm.GuestAgentExpected = tc.status, tc.reason, tc.expected
+		rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+		views := rr.VMs()
+		if len(views) != 1 || views[0].DiskStatusReason() != tc.reason {
+			t.Fatalf("current disk admission missing from typed view: %q", tc.reason)
+		}
+		resource, ok := rr.Get(views[0].ID())
+		if !ok || resource.Proxmox == nil || resource.Proxmox.GuestAgentStatus != tc.status || resource.Proxmox.GuestAgentExpected != tc.expected {
+			t.Fatalf("current guest admission missing from resource: %+v", resource)
+		}
+		// A detached read and JSON retain the current state, including a cleared
+		// reason/false expectation. Non-guest partial facets cannot erase it.
+		encoded, err := json.Marshal(resource)
+		var served Resource
+		if err != nil || json.Unmarshal(encoded, &served) != nil || served.Proxmox.DiskStatusReason != tc.reason || served.Proxmox.GuestAgentStatus != tc.status || served.Proxmox.GuestAgentExpected != tc.expected {
+			t.Fatal("read JSON changed guest admission")
+		}
+		partial := mergeProxmoxData(resource.Proxmox, &ProxmoxData{NodeName: "node"})
+		if partial.DiskStatusReason != tc.reason || partial.GuestAgentStatus != tc.status || partial.GuestAgentExpected != tc.expected {
+			t.Fatal("partial non-guest facet erased guest-owned admission")
+		}
+	}
+}
+
 func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
 	rr := NewRegistry(nil)
 	// A clean, empty registry already has a valid empty cache. Holding another

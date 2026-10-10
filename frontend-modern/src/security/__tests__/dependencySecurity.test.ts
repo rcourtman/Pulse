@@ -72,7 +72,31 @@ const nanoidIsPatched = (version: string): boolean => {
 const dompurifyRangeIsPatched = (range: string): boolean =>
   /^\^3\.\d+\.\d+$/.test(range) && atLeast(range.slice(1), [3, 4, 13]);
 
+// Prettier remains an exact, stable 3.x declaration. Do not turn one reviewed
+// patch into a permanent freeze, or accept a broad range/unreviewed major.
+const prettierPinIsReviewed = (version: string): boolean =>
+  /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
+
 describe('frontend dependency security floors', () => {
+  it.each<[string, [number, number, number]]>([
+    // GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp: both Seroval fixes
+    // are required, including the TypedArray fix after the first 1.6.x patch.
+    ['seroval', [1, 6, 3]],
+    // GHSA-rj75-hqrm-r3gf: typography's exact 6.0.10 needs a 7.x override.
+    ['postcss-selector-parser', [7, 1, 6]],
+    // GHSA-68fv-2mgg-jv7q: all PostCSS/source-map consumers need the fix.
+    ['source-map-js', [1, 2, 2]],
+  ])('keeps every %s copy above the October deserialization and parsing floors', (name, floor) => {
+    expect(manifest.overrides[name]).toBe(`^${floor.join('.')}`);
+    const versions = lockedVersions(name);
+    expect(versions, `${name} must be locked`).not.toHaveLength(0);
+    for (const version of versions) {
+      expect(version).not.toContain('-');
+      expect(parseVersion(version)[0], `${name} must stay on the reviewed major`).toBe(floor[0]);
+      expect(atLeast(version, floor), `${name} ${version} is vulnerable`).toBe(true);
+    }
+  });
+
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
     // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
     expect(manifest.devDependencies.vitest).toBe('^4.1.11');
@@ -184,17 +208,18 @@ describe('frontend dependency security floors', () => {
   it('keeps the reviewed npm-minor-patch floors', () => {
     // Dependabot npm-minor-patch group, reviewed 2026-09-21 and 2026-09-23.
     // Each floor is the lowest version this review accepted, so a later
-    // downgrade is rejected. The 2026-09-23 refresh raises @types/node to
-    // 26.6.2 in frontend-modern and tests/integration.
+    // downgrade is rejected. The 2026-10-05 refresh raises @types/node in
+    // frontend-modern only; tests/integration is unchanged.
     const floors: Array<[string, [number, number, number]]> = [
       // GHSA-p98j-92pf-mc4p (IN_PLACE afterSanitize hook XSS) affects 3.4.13-3.4.15.
       ['dompurify', [3, 4, 16]],
       ['highlight.js', [11, 12, 0]],
       ['solid-js', [1, 9, 15]],
-      ['@types/node', [26, 6, 2]],
-      ['typescript-eslint', [8, 70, 0]],
-      ['@typescript-eslint/eslint-plugin', [8, 70, 0]],
-      ['@typescript-eslint/parser', [8, 70, 0]],
+      ['@types/node', [26, 6, 3]],
+      ['lucide-solid', [0, 577, 0]],
+      ['typescript-eslint', [8, 71, 0]],
+      ['@typescript-eslint/eslint-plugin', [8, 71, 0]],
+      ['@typescript-eslint/parser', [8, 71, 0]],
       ['eslint-plugin-solid', [0, 18, 0]],
       ['postcss', [8, 5, 28]],
       ['vite-plugin-solid', [2, 11, 14]],
@@ -210,9 +235,57 @@ describe('frontend dependency security floors', () => {
         );
       }
     }
-    expect(manifest.devDependencies.prettier).toBe('3.9.8');
+    expect(prettierPinIsReviewed(manifest.devDependencies.prettier)).toBe(true);
     const prettier = lockedVersions('prettier');
     expect(prettier).toHaveLength(1);
-    expect(atLeast(prettier[0], [3, 9, 8])).toBe(true);
+    expect(prettier[0]).toBe(manifest.devDependencies.prettier);
+  });
+
+  it.each(['3.9.9', '3.9.10', '3.10.0'])('accepts a reviewed exact Prettier pin %s', (version) => {
+    expect(prettierPinIsReviewed(version)).toBe(true);
+  });
+
+  it.each(['3.9.8', '^3.9.9', '~3.9.9', '*', '>=3.9.9', '4.0.0', '3.9.9-beta.1', '3.09.9'])(
+    'rejects an unsafe or unreviewed Prettier declaration %s',
+    (version) => {
+      expect(prettierPinIsReviewed(version)).toBe(false);
+    },
+  );
+
+  it('keeps every typescript-eslint helper on the same reviewed release as its wrapper', () => {
+    const wrapper = lockedVersions('typescript-eslint');
+    expect(wrapper).toHaveLength(1);
+    for (const name of [
+      'typescript-eslint',
+      '@typescript-eslint/parser',
+      '@typescript-eslint/eslint-plugin',
+    ]) {
+      const range = manifest.devDependencies[name];
+      expect(/^\^8\.\d+\.\d+$/.test(range), `unexpected ${name} range ${range}`).toBe(true);
+      expect(atLeast(range.slice(1), [8, 71, 0])).toBe(true);
+    }
+    for (const name of [
+      'typescript-eslint',
+      '@typescript-eslint/eslint-plugin',
+      '@typescript-eslint/parser',
+      '@typescript-eslint/project-service',
+      '@typescript-eslint/scope-manager',
+      '@typescript-eslint/tsconfig-utils',
+      '@typescript-eslint/type-utils',
+      '@typescript-eslint/types',
+      '@typescript-eslint/typescript-estree',
+      '@typescript-eslint/utils',
+      '@typescript-eslint/visitor-keys',
+    ]) {
+      const versions = lockedVersions(name);
+      expect(versions, `${name} must be locked`).not.toHaveLength(0);
+      for (const version of versions) {
+        expect(version).not.toContain('-');
+        expect(atLeast(version, [8, 71, 0]), `${name} ${version} is below the reviewed floor`).toBe(
+          true,
+        );
+        expect(version, `${name} must match the wrapper`).toBe(wrapper[0]);
+      }
+    }
   });
 });

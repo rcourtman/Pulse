@@ -5925,6 +5925,71 @@ func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
 	if len(after) != len(before) {
 		t.Fatalf("mock view wrote %d change rows into the durable store", len(after)-len(before))
 	}
+
+	// Reconcile the mock link proposal with the current latest-decision
+	// rule: a fresh monitor must restore the link, and unlink/relink must
+	// invalidate the seed cache without a fixture tick. Mock seeds retain
+	// their own default thresholds, not the live adapter's configured ones.
+	restarted := &Monitor{
+		state:         models.NewState(),
+		config:        &config.Config{PVEPollingInterval: 2 * time.Minute},
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		alertManager:  alerts.NewManager(),
+	}
+	t.Cleanup(restarted.alertManager.Stop)
+	adapter := restarted.resourceStore.(*unifiedresources.MonitorAdapter)
+	assertMockLink := func(wantLinked bool) time.Time {
+		t.Helper()
+		frontend := restarted.BuildBroadcastFrontendState()
+		var vmFound, agentFound, vmHasAgent bool
+		for _, resource := range frontend.Resources {
+			if resource.ID == vmID {
+				vmFound, vmHasAgent = true, len(resource.Agent) > 0
+			}
+			if resource.ID == agentID {
+				agentFound = true
+			}
+		}
+		if !vmFound || vmHasAgent != wantLinked || agentFound == wantLinked {
+			t.Fatalf("mock link=%t: vm=%t vmAgent=%t standaloneAgent=%t", wantLinked, vmFound, vmHasAgent, agentFound)
+		}
+		seed, freshness, thresholds := restarted.UnifiedResourceSnapshotWithStaleThresholds()
+		if len(thresholds) != 0 {
+			t.Fatalf("mock seed borrowed live thresholds: %v", thresholds)
+		}
+		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 4*time.Minute {
+			t.Fatalf("live adapter threshold = %v, want configured four minutes", got)
+		}
+		rest := unifiedresources.NewRegistryWithStaleThresholds(store, thresholds)
+		rest.IngestResources(seed)
+		_, hasStandaloneAgent := rest.Get(agentID)
+		if hasStandaloneAgent == wantLinked {
+			t.Fatalf("REST seed link=%t: standalone agent=%t", wantLinked, hasStandaloneAgent)
+		}
+		if got := mock.FixtureDataVersion(); got != version {
+			t.Fatalf("fixture version moved from %d to %d during operator lifecycle", version, got)
+		}
+		return freshness
+	}
+	restartFreshness := assertMockLink(true)
+	if err := store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: vmID, ResourceB: agentID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	// Reads deliberately reuse a generation younger than two seconds.
+	// Apply the owning ingest/rebuild boundary instead of waiting for that
+	// throttle or claiming a recorded decision changes a previous listing.
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	unlinkFreshness := assertMockLink(false)
+	if !unlinkFreshness.After(restartFreshness) {
+		t.Fatal("unlink must advance the mock seed's freshness")
+	}
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: agentID, ResourceB: vmID, PrimaryID: vmID}); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	restarted.updateResourceStore(restarted.currentStateWithScope())
+	if relinkFreshness := assertMockLink(true); !relinkFreshness.After(unlinkFreshness) {
+		t.Fatal("relink must advance the mock seed's freshness")
+	}
 }
 
 // TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
@@ -7201,6 +7266,118 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 }
 
+func TestAgentLXCPartialInventoryPreservesSuccessAndInvalidatesOmissions(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a", LinkedAgentID: "agent-a"}})
+	m := &Monitor{state: state}
+	now := time.Date(2026, 10, 5, 16, 0, 0, 0, time.UTC)
+	row := func(vmid int) agentshost.ProxmoxLXCContainer {
+		return agentshost.ProxmoxLXCContainer{VMID: vmid, Name: "web", Disks: []agentshost.Disk{{Type: "rootfs", Device: "local:disk", Mountpoint: "/", TotalBytes: 4096, UsedBytes: 1024, FreeBytes: 3072}}}
+	}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete", Containers: []agentshost.ProxmoxLXCContainer{row(100), row(102)}}, now, 30)
+	foreignKey := agentLXCFilesystemCacheKey("pve-b", "node-a", 102)
+	m.proxmoxLXCFilesystemsCache[foreignKey] = agentLXCFilesystemCacheEntry{agentID: "agent-b", name: "foreign", expiresAt: now.Add(time.Hour)}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "partial", Containers: []agentshost.ProxmoxLXCContainer{row(100)}, OmittedVMIDs: []int{102}}, now.Add(time.Minute), 30)
+	if _, ok := m.proxmoxLXCFilesystemsCache[agentLXCFilesystemCacheKey("pve-a", "node-a", 102)]; ok {
+		t.Fatal("omitted guest kept a usable prior agent reading")
+	}
+	if _, ok := m.proxmoxLXCFilesystemsCache[foreignKey]; !ok {
+		t.Fatal("foreign instance cache was invalidated")
+	}
+	guest := models.Container{VMID: 100, Name: "web", Status: "running"}
+	m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, now.Add(time.Minute))
+	if len(guest.Disks) != 1 || guest.Disks[0].Used != 1024 {
+		t.Fatalf("successful partial guest=%+v", guest)
+	}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete"}, now.Add(2*time.Minute), 30)
+	if _, ok := m.proxmoxLXCFilesystemsCache[agentLXCFilesystemCacheKey("pve-a", "node-a", 100)]; ok {
+		t.Fatal("complete empty collection retained a removed/stopped guest reading")
+	}
+	if _, ok := m.proxmoxLXCFilesystemsCache[foreignKey]; !ok {
+		t.Fatal("complete empty collection cleared a foreign instance")
+	}
+}
+
+func TestAgentLXCMalformedPartialInventoryCannotRenewOrInvalidate(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a", LinkedAgentID: "agent-a"}})
+	m := &Monitor{state: state}
+	now := time.Now()
+	key := agentLXCFilesystemCacheKey("pve-a", "node-a", 100)
+	original := agentLXCFilesystemCacheEntry{agentID: "agent-a", name: "web", expiresAt: now.Add(time.Minute)}
+	m.proxmoxLXCFilesystemsCache = map[string]agentLXCFilesystemCacheEntry{key: original}
+	m.applyAgentLXCFilesystems("node-id", "agent-a", &agentshost.ProxmoxLXCInventory{Status: "complete", OmittedVMIDs: []int{100}}, now, 30)
+	got := m.proxmoxLXCFilesystemsCache[key]
+	if !got.expiresAt.Equal(original.expiresAt) || got.name != "web" {
+		t.Fatal("malformed completeness changed cache")
+	}
+}
+
+func TestAgentLXCPartialWireReportReachesLinkedGuestWithoutStaleOmission(t *testing.T) {
+	m := newTestMonitor(t)
+	m.state.UpdateNodes([]models.Node{{ID: "node-id", Name: "node-a", Instance: "pve-a"}})
+	row := func(vmid int) agentshost.ProxmoxLXCContainer {
+		return agentshost.ProxmoxLXCContainer{VMID: vmid, Name: "web", Disks: []agentshost.Disk{{
+			Type: "rootfs", Device: "local:disk", Mountpoint: "/", TotalBytes: 4096, UsedBytes: 1024, FreeBytes: 3072,
+		}}}
+	}
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-a", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "agent-a", MachineID: "agent-a", Hostname: "node-a", Platform: "linux"},
+		ProxmoxLXC: &agentshost.ProxmoxLXCInventory{
+			Status: agentshost.ProxmoxLXCCollectionComplete, Containers: []agentshost.ProxmoxLXCContainer{row(100), row(102)},
+		},
+	}
+	applyWire := func(sequence uint64) models.Host {
+		t.Helper()
+		report.Timestamp = time.Now().UTC()
+		report.SequenceID = agentshost.FormatReportSequenceID("partial-wire-test", sequence)
+		encoded, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded agentshost.Report
+		if err := json.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		host, err := m.ApplyHostReport(decoded, &config.APITokenRecord{ID: "partial-wire-token"})
+		if err != nil || host.LinkedNodeID != "node-id" {
+			t.Fatalf("wire report did not reach linked node: host=%+v err=%v", host, err)
+		}
+		return host
+	}
+	applyWire(1)
+	report.ProxmoxLXC.Status = agentshost.ProxmoxLXCCollectionPartial
+	report.ProxmoxLXC.Containers = []agentshost.ProxmoxLXCContainer{row(100)}
+	report.ProxmoxLXC.OmittedVMIDs = []int{102}
+	report.Agent.Modules = []agentshost.ModuleStatus{{Name: agentshost.ModuleNameTypedPrivilegeHelper, Enabled: true, State: "degraded", LastError: "proxmox.lxc_filesystems: helper Proxmox LXC filesystem inventory is incomplete"}}
+	host := applyWire(2)
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "degraded" {
+		t.Fatalf("wire report lost partial helper health: %+v", host.AgentModules)
+	}
+	for _, vmid := range []int{100, 102} {
+		guest := models.Container{VMID: vmid, Name: "web", Status: "running"}
+		m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, time.Now())
+		if vmid == 100 && (len(guest.Disks) != 1 || guest.Disks[0].Used != 1024) {
+			t.Fatalf("successful wire reading was lost: %+v", guest.Disks)
+		}
+		if vmid == 102 && len(guest.Disks) != 0 {
+			t.Fatalf("omitted wire guest kept a prior reading: %+v", guest.Disks)
+		}
+	}
+	report.ProxmoxLXC = &agentshost.ProxmoxLXCInventory{Status: agentshost.ProxmoxLXCCollectionComplete}
+	report.Agent.Modules[0].State, report.Agent.Modules[0].LastError = "running", ""
+	host = applyWire(3)
+	if len(host.AgentModules) != 1 || host.AgentModules[0].State != "running" || host.AgentModules[0].LastError != "" {
+		t.Fatalf("wire recovery did not clear partial helper health: %+v", host.AgentModules)
+	}
+	guest := models.Container{VMID: 100, Name: "web", Status: "running"}
+	m.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &guest, time.Now())
+	if len(guest.Disks) != 0 {
+		t.Fatal("complete empty wire report retained a stopped guest reading")
+	}
+}
+
 // presentationFixtureStore keeps the fixture registry: the broadcast's read
 // refresh would otherwise rebuild it from the empty snapshot.
 type presentationFixtureStore struct {
@@ -7529,6 +7706,7 @@ func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
 				VMID:             101,
 				RuntimeStatus:    "running",
 				DiskStatusReason: "agent-not-running",
+				DiskObservation:  models.GuestDiskObservation{Source: "guest-agent", ObservedAt: now.Add(-time.Minute)},
 			},
 			// The linked agent's addresses count as recent guest evidence.
 			Identity: unifiedresources.ResourceIdentity{IPAddresses: []string{"10.0.0.5"}},
@@ -7551,5 +7729,62 @@ func TestPreviousVMFromViewKeepsLinkedAgentDiskOutOfProxmoxCarry(t *testing.T) {
 	}
 	if usage, reason := carry(unifiedresources.SourceProxmox); usage != 40 || reason != "prev-agent-not-running" {
 		t.Fatalf("Proxmox's own guest disk not carried: usage=%v reason=%q", usage, reason)
+	}
+}
+
+// Endpoint hints are deliberately absent: an operator-saved FQDN endpoint
+// does not establish the agent's guest hostname. Test that attribution keeps
+// full provider/agent names distinct while preserving short-name compatibility.
+func TestFindLinkedProxmoxEntityPreservesDistinctGuestFQDNs(t *testing.T) {
+	for _, kind := range []string{"node", "vm", "container"} {
+		t.Run(kind, func(t *testing.T) {
+			m := &Monitor{state: models.NewState()}
+			setNames := func(names ...string) {
+				nodes, vms, containers := []models.Node{}, []models.VM{}, []models.Container{}
+				for i, name := range names {
+					id, instance := "home", "Home"
+					if i > 0 {
+						id, instance = "remote", "Remote"
+					}
+					switch kind {
+					case "node":
+						nodes = append(nodes, models.Node{ID: id, Name: name, Instance: instance})
+					case "vm":
+						vms = append(vms, models.VM{ID: id, Name: name, Instance: instance, VMID: 100})
+					case "container":
+						containers = append(containers, models.Container{ID: id, Name: name, Instance: instance, VMID: 100})
+					}
+				}
+				m.state.UpdateNodes(nodes)
+				m.state.UpdateVMs(vms)
+				m.state.UpdateContainers(containers)
+			}
+			check := func(hostname, want string) {
+				t.Helper()
+				node, vm, container := m.findLinkedProxmoxEntity(hostname)
+				got := map[string]string{"node": node, "vm": vm, "container": container}
+				for k, id := range got {
+					expected := ""
+					if k == kind {
+						expected = want
+					}
+					if id != expected {
+						t.Errorf("hostname %q: %s=%q, want %q", hostname, k, id, expected)
+					}
+				}
+			}
+			setNames("docker.home.example")
+			check("docker.home.example", "home")
+			check("  DOCKER.HOME.EXAMPLE.  ", "home")
+			check("docker.remote.example", "") // A sole unrelated FQDN is not identity.
+			check("docker", "home")
+			setNames("docker.home.example", "docker.remote.example")
+			check("docker.home.example", "home")
+			check("docker.remote.example", "remote")
+			check("docker", "") // Bare name still cannot choose between estates.
+			check("docker.third.example", "")
+			setNames("docker")
+			check("docker.home.example", "home") // Legacy short provider name remains usable.
+		})
 	}
 }

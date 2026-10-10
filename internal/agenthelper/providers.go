@@ -20,6 +20,12 @@ type ProxmoxProvider interface {
 	LXCFilesystems(context.Context) (json.RawMessage, error)
 }
 
+// ProxmoxProviderV2 explicitly distinguishes successful partial collection
+// from a complete inventory. V1 remains complete-only for older collectors.
+type ProxmoxProviderV2 interface {
+	LXCFilesystemsV2(context.Context) (json.RawMessage, error)
+}
+
 // ContainerProvider owns a complete, bounded inventory of the helper's fixed
 // local Docker and Podman endpoints. The protocol supplies no socket, URL,
 // daemon method, or query fields.

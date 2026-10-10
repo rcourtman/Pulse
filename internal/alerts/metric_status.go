@@ -20,6 +20,7 @@ type metricStatusInput struct {
 	window               metricWindowObservation
 	incident             reducer.Incident
 	observedAt           time.Time
+	lastBreachAt         time.Time
 }
 
 // metricStatusUnit is the unit of an evaluated metric value. CPU and memory
@@ -52,6 +53,7 @@ func buildMetricAlertStatus(input metricStatusInput) *models.MetricAlertStatus {
 		Trigger:              input.trigger,
 		Recovery:             recovery,
 		RecoveryDelaySeconds: input.recoveryDelaySeconds,
+		LastBreachAt:         input.lastBreachAt,
 	}
 	if input.window.WindowSeconds > 0 {
 		raw := input.window.CurrentValue

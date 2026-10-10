@@ -195,10 +195,19 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 		Timeout:   timeout,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// SSRF admission is not permission to forward private alert bodies,
+			// custom authentication headers or signatures to a different receiver.
+			if len(via) == 0 || via[0] == nil || !sameNotificationOrigin(via[0].URL, req.URL) {
+				return FailWithClass(NotificationFailureConfiguration, errNotificationRedirectOrigin)
+			}
+			// Origin refusal takes precedence even when the redirect budget is
+			// exhausted: a foreign Location must not enter diagnostics or become
+			// an unknown/retryable error instead of a local configuration failure.
 			if len(via) >= WebhookMaxRedirects {
 				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
-			// Re-validate strictly on redirect
+			// Re-validate strictly on an admitted redirect, including DNS/IP
+			// changes. Foreign origins are rejected before resolution or logging.
 			return n.validateWebhookURL(req.URL.String(), diagnosticURL)
 		},
 	}
@@ -273,9 +282,11 @@ type NotificationManager struct {
 }
 
 type webhookHTTPResult struct {
-	statusCode int
-	headers    http.Header
-	body       string
+	statusCode           int
+	headers              http.Header
+	responseBytes        int64
+	responseLimitReached bool
+	responseIncomplete   bool
 }
 
 type webhookRequestOptions struct {
@@ -2199,6 +2210,7 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 	if subject == "" && textBody == "" {
 		return fmt.Errorf("failed to build resolved email content")
 	}
+	subject = resolvedEmailSubject(alertList)
 
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
@@ -3147,25 +3159,8 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 	defer resp.Body.Close()
 
-	// Read response with size limit
-	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	var respBody bytes.Buffer
-	if _, err := respBody.ReadFrom(limitedReader); err != nil {
-		log.Warn().
-			Err(err).
-			Str("webhook", webhook.Name).
-			Str("service", "ntfy").
-			Msg("failed to read resolved ntfy webhook response body")
-		// A rejected recovery has the same authoritative HTTP verdict as a
-		// firing delivery, even if its diagnostic body is interrupted. Keep
-		// permanent refusals out of the connectivity retry path.
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: failed to read ntfy webhook response: %w", resp.StatusCode, err)
-		}
-		return fmt.Errorf("failed to read ntfy webhook response: %w", err)
-	}
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	result, err := readWebhookResponse(resp)
+	if err == nil {
 		log.Info().
 			Str("webhook", webhook.Name).
 			Str("service", "ntfy").
@@ -3177,12 +3172,15 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 
 	log.Warn().
+		Err(err).
 		Str("webhook", webhook.Name).
 		Str("service", "ntfy").
 		Int("status", resp.StatusCode).
-		Str("response", respBody.String()).
-		Msg("resolved ntfy webhook returned non-success status")
-	return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
+		Int64("responseBytes", result.responseBytes).
+		Bool("responseLimitReached", result.responseLimitReached).
+		Bool("responseIncomplete", result.responseIncomplete).
+		Msg("resolved ntfy webhook response did not complete successfully")
+	return fmt.Errorf("ntfy %w", err)
 }
 
 // checkWebhookRateLimit checks if a webhook can be sent based on rate limits
@@ -3321,46 +3319,25 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	}
 	defer resp.Body.Close()
 
-	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	var respBody bytes.Buffer
-	bytesRead, err := respBody.ReadFrom(limitedReader)
-	if err != nil {
-		result := &webhookHTTPResult{statusCode: resp.StatusCode, headers: resp.Header.Clone()}
-		// Headers already establish a rejection even when its diagnostic body
-		// is interrupted. Preserve that verdict for transport and queue retries,
-		// rather than turning a terminal HTTP failure into a connectivity retry.
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: failed to read webhook response: %w", resp.StatusCode, err)
-		}
-		return result, fmt.Errorf("failed to read webhook response: %w", err)
-	}
-	if bytesRead >= WebhookMaxResponseSize {
+	result, err := readWebhookResponse(resp)
+	if result.responseLimitReached {
 		log.Warn().
 			Str("webhook", webhook.Name).
-			Int64("bytesRead", bytesRead).
+			Int64("responseBytes", result.responseBytes).
 			Int("maxSize", WebhookMaxResponseSize).
-			Msg("webhook response exceeded size limit, truncated")
-	}
-
-	result := &webhookHTTPResult{
-		statusCode: resp.StatusCode,
-		headers:    resp.Header.Clone(),
-		body:       respBody.String(),
+			Msg("webhook response read limit reached; body withheld")
 	}
 
 	if opts.responseLogging || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Int("status", resp.StatusCode).
-			Str("response", result.body).
+			Int64("responseBytes", result.responseBytes).
+			Bool("responseLimitReached", result.responseLimitReached).
+			Bool("responseIncomplete", result.responseIncomplete).
 			Msg("webhook response")
 	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: %s", resp.StatusCode, result.body)
-	}
-
-	return result, nil
+	return result, err
 }
 
 func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData []byte, alertType string, eventID string) error {
@@ -3409,12 +3386,12 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Int("payloadSize", len(jsonData)).
 			Msg("webhook notification sent successfully")
 
-		// Log response body only in debug mode for successful requests
-		if len(result.body) > 0 {
+		if result.responseBytes > 0 {
 			log.Debug().
 				Str("webhook", webhook.Name).
-				Str("response", result.body).
-				Msg("webhook response body")
+				Int64("responseBytes", result.responseBytes).
+				Bool("responseLimitReached", result.responseLimitReached).
+				Msg("webhook response body withheld")
 		}
 		return nil
 	} else {
@@ -3423,9 +3400,8 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("service", webhook.Service).
 			Str("type", alertType).
 			Int("status", result.statusCode).
-			Str("response", result.body).
 			Msg("webhook returned non-success status")
-		return FailfWithClass(ClassFromHTTPStatus(result.statusCode), "webhook returned HTTP %d: %s", result.statusCode, result.body)
+		return FailfWithClass(ClassFromHTTPStatus(result.statusCode), "webhook returned HTTP %d (response body withheld)", result.statusCode)
 	}
 }
 

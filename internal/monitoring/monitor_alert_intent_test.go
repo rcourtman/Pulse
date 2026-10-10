@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -278,6 +279,15 @@ func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
 		Temperature: &models.Temperature{Available: true, CPUPackage: 85},
 	}
 	m.alertManager.CheckNode(node)
+	var breachedAt time.Time
+	for _, alert := range m.alertManager.GetActiveAlerts() {
+		if alert.Type == "temperature" {
+			breachedAt = alert.LastSeen
+		}
+	}
+	if breachedAt.IsZero() {
+		t.Fatal("breaching temperature did not open the alert")
+	}
 	node.Temperature = &models.Temperature{Available: true, CPUPackage: 78}
 	m.alertManager.CheckNode(node)
 
@@ -302,6 +312,44 @@ func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
 	}
 	if status.Phase != models.MetricAlertPhaseLatched || status.Value != 78 || status.Recovery != 75 {
 		t.Fatalf("live status = %+v, want latched at 78 clearing at 75", status)
+	}
+	// The concrete /api/state and websocket projection has no LastSeen. The
+	// live status must date the held breach without advancing it to this poll.
+	data, err := json.Marshal(m.state.ToFrontend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		ActiveAlerts []struct {
+			Type         string     `json:"type"`
+			LastSeen     *time.Time `json:"lastSeen"`
+			MetricStatus *struct {
+				LastBreachAt time.Time `json:"lastBreachAt"`
+				ObservedAt   time.Time `json:"observedAt"`
+			} `json:"metricStatus"`
+		} `json:"activeAlerts"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, alert := range wire.ActiveAlerts {
+		if alert.Type != "temperature" {
+			continue
+		}
+		found = true
+		if alert.LastSeen != nil {
+			t.Fatal("projection added poll-varying legacy LastSeen")
+		}
+		if alert.MetricStatus == nil || !alert.MetricStatus.LastBreachAt.Equal(breachedAt) {
+			t.Fatalf("projected breach time = %+v, want %v", alert.MetricStatus, breachedAt)
+		}
+		if !alert.MetricStatus.ObservedAt.After(breachedAt) {
+			t.Fatal("hold did not carry a newer independent observation")
+		}
+	}
+	if !found {
+		t.Fatal("frontend projection lost the held temperature alert")
 	}
 }
 

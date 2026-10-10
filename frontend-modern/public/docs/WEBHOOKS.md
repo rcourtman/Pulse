@@ -8,6 +8,13 @@ Pulse includes built-in templates for popular services and a generic JSON templa
 2. Click **Add Webhook**.
 3. Click the current service label (Generic by default) to open the service picker, choose the destination type, and paste the URL.
 
+A successful **Test** is not proof of queued alert delivery. For missing alerts
+or rejected requests, follow the [notification troubleshooting guide](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+before retrying retained failures. In particular, a destination edit does not
+replace the settings saved in an old queued delivery; a retry can still use its
+original URL and credentials. For built-in Telegram's "message text is empty"
+error despite a successful Test, see the [static-header check](TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty).
+
 ## 📝 Service URLs
 
 | Service | URL Format |
@@ -41,6 +48,8 @@ For generic webhooks, use Go templates to format the JSON payload.
 **Convenience fields:**
 - `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
 - `{{.StartTime}}`, `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
+- `{{.NotRecovered}}` (a resolved batch includes a known non-recovery close;
+  inspect each member's `.Resolution` for its reason and successor)
 
 **Template helpers:** `title`, `upper`, `lower`, `printf`, `urlquery`/`urlencode`, `urlpath`/`pathescape`, `jsonString`
 
@@ -56,17 +65,28 @@ For generic webhooks, use Go templates to format the JSON payload.
 **Example Payload:**
 ```json
 {
-  "text": "Alert: {{.Level}} - {{.Message}}",
+  "text": "Alert: {{.Level | jsonString}} - {{.Message | jsonString}}",
   "value": {{.Value}}
 }
 ```
+
+Keep `jsonString` inside the JSON string's quotes. Leave numeric `.Value`
+unquoted. A simple test message can work without escaping while a real alert
+containing quotes, backslashes or newlines produces invalid or altered JSON.
+
+This minimal payload is a text summary, not a structured record of every
+group member or its firing/recovery identity. Use the [full PSA payload](#sample-psa-payloads)
+when a receiver needs those fields; do not use the summary alone to deduplicate
+incidents or close tickets.
 
 ## 📦 Delivery Contract
 
 These fields and behaviors are stable; ticket-routing integrations can rely on them.
 
 **Events.** `{{.Event}}` is `"alert"` or `"resolved"` — there is no separate
-"info" event class. Recovery delivery depends on **Notify on resolve** and a
+"info" event class. A resolved event closes an alert occurrence, not necessarily
+a recovered condition; see [non-recovery closes](#resolved-does-not-always-mean-recovered).
+Resolved delivery depends on **Notify on resolve** and a
 successful firing-delivery receipt for that occurrence and destination. Do not
 assume that every configured webhook receives both events.
 
@@ -82,9 +102,70 @@ severity and other delivery policies still apply.
 
 **Tenant identity.** In multi-tenant organizations and MSP client runtimes, `{{.TenantID}}` and `{{.TenantName}}` identify which tenant fired the alert. Client runtimes get identity from the `PULSE_TENANT_ID` / `PULSE_TENANT_NAME` environment; shared-process organizations stamp the org ID and display name automatically.
 
-**Resource tag routing.** Email and each alert webhook can be limited to resources with selected tags in **Alerts → Notifications**. An empty filter receives every alert. With multiple tags, choose **Match all tags** or **Match any tag**. Matching ignores case. Proxmox tags are matched as shown; Docker container and service labels are exposed as `key:value` tags (or `key` when the label value is empty). Recovery notifications follow the destinations that received the firing alert, even if a resource's tags change before recovery.
+**Destination routing.** Email and each alert webhook apply minimum severity
+and resource tags together in **Alerts → Notifications**. An empty tag filter
+removes only the tag restriction, not minimum severity or other delivery
+policies. **Warnings and critical alerts** includes critical alerts; it is not
+a warning-only channel. Multiple destinations can match the same firing alert,
+and groups are filtered member by member. See the
+[severity and tag routing guide](CONFIGURATION.md#destination-severity-and-tag-routing)
+for exact all/any matching and Docker label syntax. Recovery remains qualified
+by a successful firing-delivery receipt for the same occurrence and destination,
+even if tags or minimum severity change before recovery; other recovery controls
+and holds still apply.
 
-**Retries.** Failed deliveries retry with exponential backoff. The persistent notification queue makes up to 3 delivery attempts per notification; webhooks configured with transport-level retry add up to 3 more HTTP retries per attempt (1s doubling to a 30s cap, honoring `Retry-After` on HTTP 429). A receiver may therefore see the same logical event more than once.
+**Retries and retained failures.**
+
+Normal queued firing and recovery webhooks have a budget of **up to three
+queue delivery attempts, including the initial attempt**. This is a ceiling,
+not a promise to retry every failure or a guarantee of delivery. The normal
+queued webhook sender has no extra transport retry loop; do not assume three
+extra HTTP retries or a provider's `Retry-After` wait on this path.
+
+| Observed failure | Automatic queue behaviour |
+| --- | --- |
+| Authentication, configuration or rejected request (most HTTP 4xx, including 400, 401 and 403) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. |
+| HTTP 408, 421, 423, 425 or 429; HTTP 5xx; connectivity or unknown failure | Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure. |
+| TLS failure | Can retry within the saved budget, but retrying does not repair certificate trust, expiry or hostname errors. Do not disable verification. |
+
+A terminal failure means **no further automatic retry**, not that the delivery
+was successful or its history was deleted. In **Alerts → Notifications**, use
+**Recent delivery activity** to check the destination, timestamp, failure class
+and HTTP status. A pending or held delivery is not a terminal failure; quiet
+hours and other delivery policies can postpone it. There is no fixed delivery
+deadline promised by the attempt count.
+
+Alert-webhook response text is deliberately withheld from delivery errors,
+logs and Test summaries because receivers can echo credentials or alert content.
+Withholding is not a delivery verdict: retain the HTTP status and failure class.
+For read failures, bounded byte counts and safe use of existing receiver records,
+follow the [withheld-response guidance](TROUBLESHOOTING.md#webhook-response-body-is-withheld).
+Do not enable Debug or replay a request to obtain the hidden text.
+
+Delivery activity masks recognised URL credentials, not all private information.
+Older records and other error sources can retain provider text or private
+infrastructure details; they are not retroactively scrubbed. Keep full errors
+and screenshots private; follow the [delivery evidence precautions](TROUBLESHOOTING.md#recover-retained-delivery-failures)
+before sharing a manually redacted excerpt. A `REDACTED` marker is not proof
+that the remaining text is safe to post.
+
+Before choosing **Retry retained deliveries**, follow
+[retained-failure recovery](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+It acts on all retained terminal failures, not just one webhook, and keeps their
+original destination settings. A successful **Test** uses current settings and
+does not validate or resend those saved deliveries. Do not repeat tests or
+batch retries to diagnose rate limiting. A receiver can see a duplicate if an
+earlier request was accepted but Pulse did not receive its response; preserve
+[receiver deduplication](#receiver-correlation-and-deduplication).
+
+Global **Notifications paused** cancels pending alert deliveries and clears
+buffered groups; turning delivery back on does not replay those cancelled
+items. This differs from scheduled quiet-hours holds. Disabling or removing a
+destination can block queued work, but **does not recall a request already in
+flight**, revoke a provider credential or delete the receiver's copy. Follow
+the [pause and cancellation limits](TROUBLESHOOTING.md#pause-and-cancellation-limits)
+before treating a paused banner or cancelled row as containment. Alert delivery
+controls do not stop the separate [audit forwarding route](#-audit-webhooks-prolegacy-procloud).
 
 **Correlation header.** Alert webhooks carry `X-Pulse-Event-ID` in the form
 `<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). Retries retain it,
@@ -164,6 +245,29 @@ Content-Type: application/json
 }
 ```
 
+### Resolved does not always mean recovered
+
+When a linked Pulse agent takes over a node metric, the node's open alert can
+close with reason `moved_to_agent` even while its last reading is above the
+threshold. The event is still `resolved` so integrations can close the old
+occurrence, but **this is not a recovery**. Record it as moved, not healthy;
+check the successor agent's current reading and alert policy separately.
+Do not assume that the successor has already fired an equivalent alert.
+
+The [full PSA template](#sample-psa-payloads) below includes each member's
+`resolutionReason`, `successorResourceId` and `successorName`. For a member
+without a resolution, these strings are empty: the sender treats that close
+as an ordinary recovery, not proof that every metric or workload is healthy.
+On a firing event they are not recovery evidence at all.
+
+Use the reason on **each member**, not just the primary alert or the batch's
+`notRecovered` flag. A group can contain both moved alerts and ordinary
+recoveries. The flag identifies known non-recovery closes, but `false` is not
+an independent health verdict. Retain an unknown non-empty reason or missing
+fields from an older/custom payload for reconciliation; do not silently map
+them to healthy. An absent successor identity does not justify guessing from
+a display name. Keep the original occurrence and any successor separate.
+
 ### Receiver correlation and deduplication
 
 Keep ticket correlation separate from suppressing repeated processing:
@@ -179,6 +283,10 @@ Keep ticket correlation separate from suppressing repeated processing:
   identify its observed occurrence; a later start with the same ID must be
   processed as a new occurrence. Firing and recovery use the same occurrence
   record, so an old delayed recovery must not close a newer incident.
+- For a `resolved` event, inspect each member's [resolution reason](#resolved-does-not-always-mean-recovered).
+  Close a moved occurrence as moved, not recovered, and keep unknown or
+  incomplete outcomes for reconciliation. Do not mark an entire mixed group
+  healthy from its event name or primary summary.
 - Within that record, handle `event` **and severity**. A warning becoming
   critical is an update, not a duplicate warning. Decide explicitly whether
   reminders update the existing ticket; do not create another ticket for each
@@ -198,7 +306,8 @@ Keep ticket correlation separate from suppressing repeated processing:
   this legacy header.
 
 Validate in an authorised test environment with firing, retry, warning-to-critical,
-recovery, recurrence of the same condition and a changed multi-alert group.
+recovery, recurrence of the same condition, a changed multi-alert group and
+a mixed moved/recovered close.
 Check actual tickets and receiver restart behaviour before enabling automatic
 actions. Do not cause a production outage or notification storm for this test.
 
@@ -210,14 +319,89 @@ actions. Do not cause a production outage or notification storm for this test.
 
 ## 🧾 Audit Webhooks (Pro/legacy Pro+/Cloud)
 
-Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
+Audit webhooks forward recorded security events, such as logins and settings
+changes, to an authorised receiver. They are separate from **Alerts →
+Notifications**: alert templates, signing secrets, retry policies and delivery
+activity do not configure or describe this sender.
+
+Delivery requires the `audit_logging` capability and a supporting runtime. An
+active licence on the public Community runtime does not enable these hooks;
+if the panel says **Pulse Pro runtime required**, follow **Download Pulse Pro**
+for that deployment. Do not buy another licence or reset data to clear the gate.
 
 ### Setup
-1. Go to **Settings → Security → Audit Webhooks**.
-2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
+1. Sign in as an administrator and open **Settings → Security → Audit Webhooks**
+   in the intended organisation. Configuration is organisation-scoped.
+2. Add a receiver you control, using HTTPS with valid certificate trust, for
+   example `https://audit.example.com/ingest/pulse`. This is a placeholder, not
+   a destination to send real events to. Audit delivery blocks loopback,
+   private/reserved IPs, internal hostnames and public names resolving to those
+   addresses. The alert-webhook private-network setting does not relax this
+   audit restriction. Do not bypass it by changing DNS, TLS verification or
+   network isolation; a private-only SIEM needs a separately secured, authorised
+   ingress design, not the `.local` URL previously shown here.
+3. Saving the URL is configuration acceptance, not a delivery test. Check the
+   receiver against an already-recorded event during normal operation. Do not
+   create failed logins, change roles or trigger an alert just to test delivery.
+
+The API configuration route is `/api/admin/webhooks/audit`; it requires
+administrator access and the same licence capability, with `settings:read`
+for GET and `settings:write` for updates. Its write body is a **complete URL
+list**, not an append operation. Prefer the signed-in UI; do not copy bearer
+tokens or session cookies into commands, URLs or reports.
+
+### Delivery and missing events
+
+Audit forwarding is **best effort**, not guaranteed delivery of every event.
+Its in-memory queue holds at most 1,000 events and drops new events when full.
+A restart does not replay that queue from stored history. Each destination gets
+up to four attempts (the initial request plus three retries), with waits of
+1, 5 and 30 seconds and a 30-second request timeout. These bounds are not a
+total delivery deadline. Only an HTTP 2xx response counts as send success; it
+does not prove the receiver verified or durably stored the event.
+
+Three workers can deliver concurrently, so receivers must tolerate duplicates
+and out-of-order arrival. After the attempts are exhausted there is **no audit
+dead-letter queue or automatic history replay**. Alert **Recent delivery
+activity**, **Dismiss** and **Retry** do not recover audit deliveries. Removing
+an endpoint changes future routing; it is not a guaranteed cancellation of a
+request already in flight.
+
+For a missing event, reconcile the intended organisation's retained audit
+history, a bounded local sender error and the receiver's own record. Absence at
+the receiver is not proof that the action was never recorded. A history query
+error is not an empty history. Use [private, filtered audit reads and exports](AUDIT_LOGGING.md#viewing-audit-events)
+when authorised, not a broad export or a production replay. Preserve keys and
+history; do not restart or clear data to make the discrepancy disappear.
 
 ### Security
-Audit webhooks are dispatched asynchronously. The payload includes a `signature` field which can be verified using the per-instance HMAC key stored (encrypted) at `.audit-signing.key` in the Pulse data directory. There is no `PULSE_AUDIT_SIGNING_KEY` override.
+The POST envelope contains `event` (`audit.` plus the event type), `timestamp`
+and `data` (the recorded event). Its event ID is `data.id`, also sent as
+`X-Pulse-Event-ID`; keep receiver deduplication scoped to the originating
+instance/organisation. Event IDs and headers alone do not authenticate a sender.
+
+When signing was available at capture, the signature is **`data.signature`**,
+not a top-level payload field. It authenticates the signer's canonical event
+fields, **not the raw POST body**; the alert webhook `X-Pulse-Signature`
+timestamp/body verifier above is not an audit verifier. Events captured without
+signing can omit this field. Retain unsigned, failed or unknown verification
+outcomes rather than treating them as authenticated events or as proof of
+tampering. A valid signature does not establish complete history, freshness or
+freedom from replay. Use the [stored-event verification guidance](AUDIT_LOGGING.md#tamper-detection)
+and the signature format supported by the originating version before a receiver
+acts on an event.
+
+The default encrypted key is at **`audit/.audit-signing.key`** relative to the
+instance or organisation data directory, alongside the audit store, and needs
+its matching `.encryption.key`. A runtime can use a different audit directory
+or a managed signing key; follow [its actual storage configuration](AUDIT_LOGGING.md#storage),
+not a guessed root path. Do not copy an encrypted key into a raw-body HMAC
+recipe, disclose keys or reset them to fix delivery. There is no
+`PULSE_AUDIT_SIGNING_KEY` override.
+
+Audit events can contain users, IPs, paths and private details; endpoint URLs
+and sender errors can contain ingest secrets. Keep raw payloads, full URLs,
+headers and logs private. Share only a locally reviewed, redacted excerpt.
 
 ## 🏢 Provider-hosted MSP webhooks
 
@@ -258,8 +442,9 @@ There are two integration models. The push model is usually the right fit when t
 inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware
 that opens service tickets). Shape the JSON with a [custom template](#-custom-templates)
 to match the receiving system's schema. The bridge can open or update a ticket
-on `alert` and resolve that occurrence on `resolved`, subject to the [delivery
-conditions above](#-delivery-contract). Add authentication as a custom header
+on `alert` and close that occurrence on `resolved`, subject to the [delivery
+conditions above](#-delivery-contract) and its [resolution reason](#resolved-does-not-always-mean-recovered).
+Do not label a moved close as recovery. Add authentication as a custom header
 in the settings form; keep its value private.
 
 Configure it from the UI (**Alerts → Notifications → Add Webhook**) per org, or programmatically with an org-bound admin token:
@@ -289,13 +474,22 @@ member-aware template below; do not use the short example as an exactly-once key
 
 ### Sample PSA payloads
 
+Use this extended template only with a Pulse version that exposes
+`NotRecovered` and member `Resolution`; **v6.5.0 does not have these fields**.
+Consult the help bundled with your installed version before replacing a
+working template. If rendering reports a missing field, leave failed deliveries
+retained rather than retrying the batch or removing the reason fields and
+treating every close as recovery. A newer guide on the website does not establish
+that its supporting software has been released.
+
 A fuller template for normal queued firing and recovery notifications includes
-tenant context and every member's occurrence, severity and condition. The
+tenant context and every member's occurrence, severity, condition and close reason. The
 primary fields remain convenient summary context, **not the whole batch**:
 
 ```json
 {
   "event": "{{.Event | jsonString}}",
+  "notRecovered": {{.NotRecovered}},
   "alertId": "{{.ID | jsonString}}",
   "messageKey": "{{.MessageKey | jsonString}}",
   "severity": "{{.Level | jsonString}}",
@@ -319,7 +513,10 @@ primary fields remain convenient summary context, **not the whole batch**:
       "alertType": "{{.Type | jsonString}}",
       "resourceId": "{{.ResourceID | jsonString}}",
       "resource": "{{.ResourceName | jsonString}}",
-      "summary": "{{.Message | jsonString}}"
+      "summary": "{{.Message | jsonString}}",
+      "resolutionReason": "{{with .Resolution}}{{.Reason | jsonString}}{{end}}",
+      "successorResourceId": "{{with .Resolution}}{{.SuccessorResourceID | jsonString}}{{end}}",
+      "successorName": "{{with .Resolution}}{{.SuccessorName | jsonString}}{{end}}"
     }{{$comma = ","}}{{end}}{{end}}
   ]
 }
@@ -351,7 +548,12 @@ informational levels too; a two-priority mapping does not cover every condition.
 
 The **resolved** event retains the original member `alertId` and `startedAt`,
 letting the bridge close that occurrence's ticket rather than a later incident
-with the same ID. Its primary summary is:
+with the same ID. For an **ordinary recovery** (empty member `resolutionReason`),
+its primary summary is shown below. A moved close instead carries
+`resolutionReason: "moved_to_agent"` and successor context in the member array;
+it must not produce the healthy ticket outcome shown here. Member `summary`
+retains the original alert message, so use the structured reason rather than
+parsing that text for recovery.
 
 ```json
 {

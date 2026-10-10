@@ -2575,11 +2575,11 @@ func patrolVisitGuestMetrics(snap patrolRuntimeState, guestType string, visit pa
 			continue
 		}
 		count++
-		if !visit([]string{guest.id, guest.name}, map[string]float64{
-			"cpu":    guest.cpu,
-			"memory": guest.mem,
-			"disk":   guest.disk,
-		}) {
+		metrics := map[string]float64{"cpu": guest.cpu, "disk": guest.disk}
+		if guest.memory.pressureKnown {
+			metrics["memory"] = guest.mem
+		}
+		if !visit([]string{guest.id, guest.name}, metrics) {
 			return true
 		}
 	}

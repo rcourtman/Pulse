@@ -10,19 +10,48 @@ function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function declarationLines(body) {
+  let fence = null;
+  return stripHTMLComments(body).split(/\r?\n/).map((text) => {
+    const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    let delimiter = false;
+    const inCode = fence !== null;
+    if (fence) {
+      if (marker && marker[1][0] === fence.character &&
+          marker[1].length >= fence.length && !marker[2].trim()) {
+        fence = null;
+        delimiter = true;
+      }
+    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      delimiter = true;
+    }
+    // Pasted examples and logs are evidence, not issue-form structure. Keep
+    // their text as a value under a real field, but never scan it for fields.
+    return { text, delimiter, declaration: !inCode && !delimiter &&
+      !/^(?: {4}|\t)/.test(text) };
+  });
+}
+
+function firstFieldValue(lines) {
+  const value = lines.find((line) => !line.delimiter && line.text.trim());
+  return value ? value.text.trim() : "";
+}
+
 function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
-  const boundary = followingHeadings.length
-    ? followingHeadings.map(escapeRegExp).join("|")
-    : "[^\\n]+";
-  const pattern = new RegExp(
-    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s*(?:${boundary})\\s*$|$)`,
-    "im"
-  );
-  const match = body.match(pattern);
-  if (!match) return null;
-  const value = match[1].trim();
-  return value || null;
+  const lines = declarationLines(body);
+  const pattern = new RegExp(`^#+[ \\t]*${escapeRegExp(heading)}[ \\t]*$`, "i");
+  const start = lines.findIndex((line) => line.declaration && pattern.test(line.text));
+  if (start === -1) return null;
+  const boundary = new RegExp(`^#+[ \\t]*(?:${followingHeadings.length
+    ? followingHeadings.map(escapeRegExp).join("|") : "[^\\n]+"})[ \\t]*$`, "i");
+  let end = start + 1;
+  while (end < lines.length && !(lines[end].declaration && boundary.test(lines[end].text))) {
+    end += 1;
+  }
+  // An empty declared field differs from a legacy report with no field.
+  return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
 function stripHTMLComments(value) {
@@ -67,47 +96,44 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function normalizeLegacyVersionValue(value) {
+  const visible = String(value).trim().replace(/^[`*_]+/, "");
+  // Keep an explicitly shared server/agent version (as in #1788), without
+  // mining a sentence such as "unknown; agent version 6.5.0" for a number.
+  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+    ? normalizeVersion(visible) : null;
+}
+
 function extractPulseVersion(title, body) {
   if (body) {
-    const lines = body.split(/\r?\n/);
+    const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
-      /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line)
+      line.declaration && /^#{1,6}[ \t]+Pulse[ \t]+version[ \t]*$/i.test(line.text)
     );
     if (versionHeading !== -1) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      const value = [];
-      for (let i = versionHeading + 1; i < lines.length; i += 1) {
-        if (/^#{1,6}[ \t]+/.test(lines[i])) break;
-        value.push(lines[i]);
-      }
-      return normalizeVersion(stripHTMLComments(value.join("\n")));
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)));
     }
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i] || "";
-      if (/pulse\s*(\||-)?\s*version/i.test(line)) {
-        const inlineVersion = normalizeVersion(line);
-        if (inlineVersion) return inlineVersion;
+      if (!lines[i].declaration) continue;
+      const line = lines[i].text.replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*][ \t]+)/, "").trim();
+      const field = line.match(
+        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+      );
+      if (!field) continue;
 
-        for (let j = i + 1; j < Math.min(i + 6, lines.length); j += 1) {
-          const nearby = (lines[j] || "").trim();
-          if (!nearby) continue;
-          const nearbyVersion = normalizeVersion(nearby);
-          if (nearbyVersion) return nearbyVersion;
-        }
-      }
+      // Legacy inline/standalone fields have the same authority as the form.
+      // Unknown or incomplete must not borrow an agent/platform version or
+      // an upgrade's starting version from the title.
+      const inlineValue = field[1].trim();
+      if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
+      // A declared value may itself be fenced; that does not turn headings
+      // elsewhere in a fenced log into declarations.
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)));
     }
-
-    const headingMatch = body.match(
-      /#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i
-    );
-    if (headingMatch) return normalizeVersion(headingMatch[1]);
-
-    const legacyMatch = body.match(
-      /pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i
-    );
-    if (legacyMatch) return normalizeVersion(legacyMatch[1]);
   }
 
   return normalizeVersion(title);
@@ -117,7 +143,8 @@ function classifyV6FeedbackType(body) {
   const feedbackType = extractSectionValue(body, "Feedback type");
   if (!feedbackType) return null;
 
-  const normalized = feedbackType.toLowerCase();
+  // This is a single-choice field, not the later examples pasted beneath it.
+  const normalized = firstFieldValue(declarationLines(feedbackType)).toLowerCase();
   if (
     normalized.includes("bug") ||
     normalized.includes("regression") ||
@@ -174,19 +201,6 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
-async function getLatestStableVersion(github, context, core) {
-  try {
-    const latest = await github.rest.repos.getLatestRelease({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-    });
-    return normalizeVersion(latest.data.tag_name || latest.data.name || "");
-  } catch (error) {
-    core.warning(`Could not determine latest release: ${error.message}`);
-    return null;
-  }
-}
-
 function buildTriageState(issue, core, latestVersion) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
@@ -200,7 +214,7 @@ function buildTriageState(issue, core, latestVersion) {
 
   const reportedVersion = extractPulseVersion(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
-  core.info(`Latest stable release: ${latestVersion || "unknown"}`);
+  if (latestVersion) core.info(`Latest stable release: ${latestVersion}`);
 
   return {
     labelNames,
@@ -249,21 +263,38 @@ async function applyLabelDelta(github, context, issue, before, after) {
 }
 
 async function syncLabels({ github, context, core }) {
-  const issue = context.payload.issue;
-  const latestVersion = await getLatestStableVersion(github, context, core);
+  const eventIssue = context.payload.issue;
+  // Jobs can start after another edit, comment or Community disposition.
+  // Read the report and its labels together; never fall back to stale event
+  // metadata when this read fails.
+  const { data: issue } = await github.rest.issues.get({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: eventIssue.number,
+  });
+  if (!issue || issue.number !== eventIssue.number) {
+    throw new Error("Current issue identity did not match the triage event");
+  }
+  if (issue.state !== "open" || issue.pull_request) {
+    core.info("Report is no longer an open issue. Skipping label sync.");
+    return;
+  }
   const {
     labelNames,
     nextLabels,
     reportedVersion,
     hasAdditionalActionableTopics,
     isBugLike,
-  } = buildTriageState(issue, core, latestVersion);
+  } = buildTriageState(issue, core, null);
 
   // A form declaration creates a review task only when it is new. A later
   // empty field cannot prove that comment topics were dispositioned, and an
-  // unrelated edit must not restore a label Community deliberately cleared.
+  // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
-  const newlyDeclared = hasAdditionalActionableTopics === true && (
+  const eventIsCurrent = typeof issue.updated_at === "string" &&
+    issue.body === eventIssue.body &&
+    issue.updated_at === eventIssue.updated_at;
+  const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
       classifyAdditionalActionableTopics(previousBody) !== true)

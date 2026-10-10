@@ -2,7 +2,10 @@ import type { Alert } from '@/types/api';
 import type { AIChatContext } from '@/stores/aiChat';
 import { DEFAULT_LOCALE, t, type SupportedLocale } from '@/i18n';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
-import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
+import {
+  getMetricAlertLastBreachAt,
+  getMetricAlertPresentation,
+} from '@/features/alerts/metricAlertPresentation';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { isMetricAlertType } from '@/utils/alerts';
 import { isPulseSystemAlert } from '@/utils/alertScope';
@@ -179,7 +182,9 @@ function metricStatusContextLines(alert: Alert): Array<string | undefined> {
   const status = isMetricAlertType(alert.type) ? alert.metricStatus : undefined;
   if (!status) return [];
   const delay = status.recoveryDelaySeconds ?? 0;
+  const lastBreachAt = getMetricAlertLastBreachAt(alert);
   return [
+    formatContextLine('Last Breach At', lastBreachAt),
     formatContextLine('Alert Phase', METRIC_PHASE_CONTEXT[status.phase] ?? status.phase),
     formatContextLine(
       'Clears At',

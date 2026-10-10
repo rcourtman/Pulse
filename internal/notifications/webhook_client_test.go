@@ -84,8 +84,8 @@ func TestSecureWebhookClientBlocksUnsafeRedirect(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from unsafe redirect, got nil")
 	}
-	if !strings.Contains(err.Error(), "private IP") {
-		t.Errorf("expected private IP validation error, got: %v", err)
+	if !strings.Contains(err.Error(), "configured origin") {
+		t.Errorf("expected origin rejection before redirect validation, got: %v", err)
 	}
 }
 
@@ -120,40 +120,33 @@ func TestSecureWebhookClientBlocksPrivateNetworkRedirect(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error from redirect to %s, got nil", privateURL)
 			}
-			if !strings.Contains(err.Error(), "private IP") {
-				t.Errorf("expected private IP validation error for %s, got: %v", privateURL, err)
+			if !strings.Contains(err.Error(), "configured origin") {
+				t.Errorf("expected origin rejection before resolving %s, got: %v", privateURL, err)
 			}
 		})
 	}
 }
 
 // TestSecureWebhookClientAllowsValidRedirects verifies that valid redirects
-// to safe URLs are followed successfully.
+// within the configured origin are followed successfully.
 func TestSecureWebhookClientAllowsValidRedirects(t *testing.T) {
-	// Create a chain of servers for redirect testing
-	// Final server returns 200 OK
-	finalServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/first":
+			http.Redirect(w, r, "/middle", http.StatusFound)
+		case "/middle":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		default:
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success"))
+		}
 	}))
-	defer finalServer.Close()
-
-	// Middle server redirects to final
-	middleServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, finalServer.URL, http.StatusFound)
-	}))
-	defer middleServer.Close()
-
-	// First server redirects to middle
-	firstServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, middleServer.URL, http.StatusFound)
-	}))
-	defer firstServer.Close()
+	defer server.Close()
 
 	nm := createTestNotificationManager(t)
 
 	client := nm.createSecureWebhookClient(WebhookTimeout)
-	resp, err := client.Get(firstServer.URL)
+	resp, err := client.Get(server.URL + "/first")
 
 	if err != nil {
 		t.Fatalf("expected successful redirect chain, got error: %v", err)
@@ -181,8 +174,8 @@ func TestSecureWebhookClientBlocksLinkLocalRedirect(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from redirect to link-local/metadata address, got nil")
 	}
-	if !strings.Contains(err.Error(), "link-local") {
-		t.Errorf("expected link-local validation error, got: %v", err)
+	if !strings.Contains(err.Error(), "configured origin") {
+		t.Errorf("expected origin rejection before metadata access, got: %v", err)
 	}
 }
 

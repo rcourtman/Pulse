@@ -178,7 +178,8 @@ func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID stri
 	// override or per-type fill threshold still holds. A disabled filesystem
 	// resolves with no threshold, as CheckHost clears it.
 	if alert != nil && alert.Type == "disk" && isHostFilesystemResourceID(resourceID) {
-		thresholds.Disk, _ = m.hostDiskUsageThresholdNoLock(strings.TrimSpace(resourceID), metadataStringValue(alert.Metadata, "device"), thresholds.Disk)
+		override, exists := m.hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
+		thresholds.Disk, _ = m.hostDiskUsageThresholdNoLock(strings.TrimSpace(resourceID), metadataStringValue(alert.Metadata, "device"), thresholds.Disk, exists && override.Disk != nil)
 	}
 	return thresholds
 }
@@ -191,14 +192,14 @@ func isHostFilesystemResourceID(resourceID string) bool {
 }
 
 // hostDiskUsageThresholdNoLock resolves the usage threshold one agent
-// filesystem is judged by: the filesystem's own override, then the fill
-// threshold for its hardware type while the host's disk alerting is on, then
-// the host's disk threshold. disabled reports an override that switches the
+// filesystem is judged by: the filesystem's own override, then an explicit
+// host or inherited disk override, then the fill threshold for its hardware
+// type while the host's disk alerting is on, then the host's disk threshold. disabled reports an override that switches the
 // filesystem's alerts off, and then the threshold is nil. CheckHost and
 // config-save reevaluation both resolve through it. An override or per-type
 // threshold is returned as an owned copy, so normalizing it never writes into
 // the live config. Callers must hold m.mu.
-func (m *Manager) hostDiskUsageThresholdNoLock(diskResourceID, device string, hostDisk *HysteresisThreshold) (threshold *HysteresisThreshold, disabled bool) {
+func (m *Manager) hostDiskUsageThresholdNoLock(diskResourceID, device string, hostDisk *HysteresisThreshold, hostDiskOverridden bool) (threshold *HysteresisThreshold, disabled bool) {
 	if override, ok := m.config.Overrides[diskResourceID]; ok {
 		if override.Disabled {
 			return nil, true
@@ -207,7 +208,7 @@ func (m *Manager) hostDiskUsageThresholdNoLock(diskResourceID, device string, ho
 			return ensureHysteresisThreshold(cloneThreshold(override.Disk)), false
 		}
 	}
-	if hostDisk != nil && hostDisk.Trigger > 0 {
+	if !hostDiskOverridden && hostDisk != nil && hostDisk.Trigger > 0 {
 		if hwType := inferDiskHardwareType(device); hwType != "" {
 			if byType, ok := m.config.DiskFillByType[hwType]; ok {
 				return &byType, false
@@ -304,6 +305,9 @@ func (m *Manager) CheckHost(host models.Host) {
 	// Fresh telemetry marks the host as online and clears offline tracking.
 	m.HandleHostOnline(host)
 
+	// Apply the link outcome in report order, including disabled exits.
+	reportSeq := m.beginHostAgentReport(host.ID)
+
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
 	disableAllAgents, _ := m.alertPolicyTypeSwitchesNoLock("agent")
@@ -311,20 +315,22 @@ func (m *Manager) CheckHost(host models.Host) {
 	// An explicit disk temperature override (host or inherited linked-resource)
 	// beats the per-type defaults in DiskTempByType.
 	diskTempOverridden := false
-	if override, exists := m.hostThresholdOverrideNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID); exists && override.DiskTemperature != nil {
-		diskTempOverridden = true
+	diskOverridden := false
+	if override, exists := m.hostThresholdOverrideNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID); exists {
+		diskTempOverridden = override.DiskTemperature != nil
+		diskOverridden = override.Disk != nil
 	}
 	m.mu.RUnlock()
 
 	// While this agent evaluates nothing, its linked node keeps its own usage
 	// alerts; the link is registered below once the evaluated metrics are known.
 	if !alertsEnabled {
-		m.unregisterHostAgentNodeLink(host.ID)
+		m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID}, reportSeq)
 		return
 	}
 
 	if disableAllAgents {
-		m.unregisterHostAgentNodeLink(host.ID)
+		m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID}, reportSeq)
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
@@ -335,7 +341,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.Disabled {
-		m.unregisterHostAgentNodeLink(host.ID)
+		m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID}, reportSeq)
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
@@ -375,6 +381,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 	m.syncHostCustomSensorAlerts(host, nodeName, instanceName, baseMetadata)
 
+	cpuEvaluated := false
 	if thresholds.CPU != nil {
 		cpuMetadata := cloneMetadata(baseMetadata)
 		cpuMetadata["metric"] = "cpu"
@@ -390,13 +397,14 @@ func (m *Manager) CheckHost(host models.Host) {
 				Str("host", resourceName).
 				Msg("Skipping invalid canonical host CPU metric spec")
 		} else {
-			m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+			cpuEvaluated = m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.CPUUsage, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
 		}
 	} else {
-		m.clearHostMetricAlerts(host.ID, "cpu")
+		m.releaseHostUsageMetric(resourceID, resourceName, nodeName, instanceName, unifiedresources.ResourceTypeAgent, "agent", "cpu")
 	}
 
-	if thresholds.Memory != nil && host.Memory.HasKnownUsage() {
+	memoryEvaluated := false
+	if thresholds.Memory != nil {
 		memMetadata := cloneMetadata(baseMetadata)
 		memMetadata["metric"] = "memory"
 		memMetadata["memoryUsagePercent"] = host.Memory.Usage
@@ -412,11 +420,13 @@ func (m *Manager) CheckHost(host models.Host) {
 				Str("resourceID", resourceID).
 				Str("host", resourceName).
 				Msg("Skipping invalid canonical host memory metric spec")
+		} else if !host.Memory.HasKnownUsage() && !spec.Disabled {
+			m.interruptMetricRun(spec)
 		} else {
-			m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
+			memoryEvaluated = m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
 		}
 	} else if thresholds.Memory == nil {
-		m.clearHostMetricAlerts(host.ID, "memory")
+		m.releaseHostUsageMetric(resourceID, resourceName, nodeName, instanceName, unifiedresources.ResourceTypeAgent, "agent", "memory")
 	}
 
 	if thresholds.DiskTemperature != nil && thresholds.DiskTemperature.Trigger > 0 {
@@ -479,10 +489,19 @@ func (m *Manager) CheckHost(host models.Host) {
 					Str("host", resourceName).
 					Str("device", disk.Device).
 					Msg("Skipping invalid canonical host disk temperature metric spec")
+				m.interruptHostDiskTemperatureRun(tempResourceID)
 				continue
 			}
 
 			m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
+			m.rememberHostDiskTemperaturePending(host, models.HostDiskSMART{Type: disk.DiskType}, tempResourceID)
+		}
+		// A present disk without any collected source interrupts pending timing.
+		// Another usable source for the same device keeps its run continuous.
+		for tempResourceID := range seenDiskTemps {
+			if _, observed := judgedDiskTemps[tempResourceID]; !observed {
+				m.interruptHostDiskTemperatureRun(tempResourceID)
+			}
 		}
 		// An excluded disk's alert from before the exclusion resolves now,
 		// whatever the SMART list holds, unless another listed disk shares it.
@@ -496,6 +515,8 @@ func (m *Manager) CheckHost(host models.Host) {
 			// A disk missing from consecutive non-empty reports was removed,
 			// replaced or renamed, so no later reading will resolve its alert.
 			m.cleanupHostDiskTemperatureAlerts(host.ID, seenDiskTemps)
+		} else {
+			m.interruptHostDiskTemperatureRunsExcept(host.ID, seenDiskTemps)
 		}
 	} else {
 		// Disk temperature alerting is off for this host, so no later reading
@@ -511,17 +532,21 @@ func (m *Manager) CheckHost(host models.Host) {
 		summaryDiskResourceID, _ = hostDiskResourceID(host, summary)
 	}
 	evaluatesSummaryDisk := false
-	if len(host.Sensors.SMART) > 0 {
-		for _, disk := range host.Sensors.SMART {
-			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
-			if host.LinkedNodeID == "" {
-				seenDisks[diskResourceID] = struct{}{}
+	summaryDiskLive := false
+	if host.LinkedNodeID != "" {
+		// Preserve node ownership even when this report carries no SMART list.
+		m.clearHostSMARTDiskAlerts(host.ID)
+	} else {
+		var seenSMARTDisks map[string]struct{}
+		if len(host.Sensors.SMART) > 0 {
+			seenSMARTDisks = make(map[string]struct{}, len(host.Sensors.SMART))
+			for _, disk := range host.Sensors.SMART {
+				diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
+				seenSMARTDisks[diskResourceID] = struct{}{}
 				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, thresholds)
-				continue
 			}
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-health", nil)
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-wearout", nil)
 		}
+		m.cleanupHostSMARTDiskAlerts(host.ID, seenSMARTDisks, thresholds)
 	}
 
 	for _, disk := range host.Disks {
@@ -529,19 +554,19 @@ func (m *Manager) CheckHost(host models.Host) {
 		seenDisks[diskResourceID] = struct{}{}
 
 		m.mu.RLock()
-		effectiveDiskThreshold, diskDisabled := m.hostDiskUsageThresholdNoLock(diskResourceID, disk.Device, thresholds.Disk)
+		effectiveDiskThreshold, diskDisabled := m.hostDiskUsageThresholdNoLock(diskResourceID, disk.Device, thresholds.Disk, diskOverridden)
 		m.mu.RUnlock()
 		if diskDisabled {
-			m.clearAlert(canonicalMetricStateID(diskResourceID, "disk"))
+			m.releaseHostUsageMetric(diskResourceID, diskName, nodeName, instanceName, unifiedresources.ResourceType("agent-disk"), "agent-disk", "disk")
 			continue
 		}
 
 		// Skip if no threshold configured (nil)
 		// We DO NOT skip if Trigger <= 0 because we need to call checkMetric to clear any existing alerts.
 		if effectiveDiskThreshold == nil {
+			m.releaseHostUsageMetric(diskResourceID, diskName, nodeName, instanceName, unifiedresources.ResourceType("agent-disk"), "agent-disk", "disk")
 			continue
 		}
-		evaluatesSummaryDisk = evaluatesSummaryDisk || (diskResourceID == summaryDiskResourceID && effectiveDiskThreshold.Trigger > 0)
 
 		diskMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
 		diskMetadata["metric"] = "disk"
@@ -565,7 +590,11 @@ func (m *Manager) CheckHost(host models.Host) {
 			continue
 		}
 
-		m.checkMetricWithCanonicalSpec(spec, diskName, nodeName, instanceName, "agent-disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		evaluated := m.checkMetricWithCanonicalSpec(spec, diskName, nodeName, instanceName, "agent-disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		if diskResourceID == summaryDiskResourceID {
+			summaryDiskLive = liveHysteresisThreshold(effectiveDiskThreshold)
+			evaluatesSummaryDisk = evaluated
+		}
 	}
 
 	// Clear all disk alerts if host-level disk alerting is completely disabled and no disk-specific overrides
@@ -589,19 +618,23 @@ func (m *Manager) CheckHost(host models.Host) {
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
 
-	// The linked node releases exactly the usage metrics this agent is set up
-	// to evaluate and keeps the rest, so deduplication never leaves the machine
-	// unmonitored. Ownership follows configuration, not one report's data: a
-	// missing memory reading keeps the agent's alert open rather than handing
-	// memory back to the node for a cycle.
-	m.registerHostAgentNodeLink(hostAgentNodeLink{
-		agentID:   host.ID,
-		agentName: resourceName,
-		nodeID:    host.LinkedNodeID,
-		cpu:       thresholds.CPU != nil && thresholds.CPU.Trigger > 0,
-		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0,
-		disk:      evaluatesSummaryDisk,
-	})
+	// The linked node releases the usage metrics this agent covers and keeps
+	// the rest, so deduplication never leaves the machine unmonitored. A metric
+	// is covered while the current config lets the agent evaluate it and the
+	// agent either evaluated it this report or still holds an alert or run for
+	// it: a missing reading or a warming evaluation window then keeps the
+	// agent's alert as the single source instead of opening a node duplicate,
+	// while an agent with no usable evidence and nothing open hands the metric
+	// to the node.
+	m.applyHostAgentNodeLink(hostAgentNodeLink{
+		agentID:               host.ID,
+		agentName:             resourceName,
+		nodeID:                host.LinkedNodeID,
+		cpu:                   liveHysteresisThreshold(thresholds.CPU) && (cpuEvaluated || m.hostAgentMetricOpen(resourceID, "cpu")),
+		memory:                liveHysteresisThreshold(thresholds.Memory) && (memoryEvaluated || m.hostAgentMetricOpen(resourceID, "memory")),
+		disk:                  summaryDiskLive && (evaluatesSummaryDisk || m.hostAgentMetricOpen(summaryDiskResourceID, "disk")),
+		summaryDiskResourceID: summaryDiskResourceID,
+	}, reportSeq)
 
 	if host.Unraid != nil {
 		m.syncHostUnraidStorageAlert(host, nodeName, instanceName, resourceName, baseMetadata)
@@ -752,6 +785,10 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 	if host.ID == "" {
 		return
 	}
+
+	// Expiry interrupts timing, not the separate connectivity confirmation.
+	m.interruptHostDiskTemperatureRuns(host.ID)
+	m.resetHostSMARTDiskAbsences(host.ID)
 
 	if host.Unraid != nil {
 		unraid := *host.Unraid
@@ -991,7 +1028,7 @@ func (m *Manager) clearHostMetricAlerts(hostID string, metrics ...string) {
 	}
 	for _, resourceID := range resourceIDs {
 		for _, metric := range metrics {
-			m.clearAlert(canonicalMetricStateID(resourceID, metric))
+			m.releaseHostUsageMetric(resourceID, "", "", "", unifiedresources.ResourceTypeAgent, "agent", metric)
 		}
 	}
 }
@@ -1008,6 +1045,7 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.resetHostSMARTDiskAbsencesNoLock(hostID)
 
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
@@ -1159,6 +1197,12 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 	// Absent resources map to the storage keys of their active alerts; a
 	// resource with only a pending run maps to none.
 	absent := make(map[string][]string)
+	intentChanged := false
+	defer func() {
+		if intentChanged {
+			m.saveActiveAlertsAsync("disk temperature inventory gap")
+		}
+	}()
 	for storageKey, alert := range m.activeAlerts {
 		// Only CheckHost raises alerts under this prefix. Matching on it
 		// alone also catches alerts raised before the type became
@@ -1171,7 +1215,7 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 		absent[alert.ResourceID] = append(absent[alert.ResourceID], storageKey)
 	}
-	for _, resourceID := range m.core.PendingResourceIDs() {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
 		if !strings.HasPrefix(resourceID, resourcePrefix) {
 			continue
 		}
@@ -1197,6 +1241,9 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 	}
 	for resourceID, storageKeys := range absent {
 		if seen != nil {
+			// One omission breaks sustained/recovery evidence; only confirmed
+			// departure resolves a firing alert.
+			intentChanged = m.interruptHostDiskTemperatureRunNoLock(resourceID) || intentChanged
 			m.hostDiskTempAbsences[resourceID]++
 			if m.hostDiskTempAbsences[resourceID] < hostDiskTemperatureAbsenceConfirmations {
 				continue
@@ -1204,7 +1251,7 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 		delete(m.hostDiskTempAbsences, resourceID)
 		// A departed disk never sends the reading that would close its run.
-		m.core.DropPendingForResource(resourceID)
+		intentChanged = m.interruptHostDiskTemperatureRunNoLock(resourceID) || intentChanged
 		for _, storageKey := range storageKeys {
 			m.clearAlertNoLock(storageKey)
 		}
@@ -1442,6 +1489,10 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		if !matches {
 			continue
 		}
+		// SMART health and wear follow their own inventory, not filesystems.
+		if isHostSMARTRiskAlertType(alert.Type) {
+			continue
+		}
 		if _, exists := seen[alert.ResourceID]; exists {
 			continue
 		}
@@ -1450,25 +1501,15 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 }
 
 func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, thresholds ThresholdConfig) {
-	smartThresholds := storagehealth.SMARTThresholds{
-		HealthFailure:        intValue(thresholds.SMARTHealthFailure) > 0,
-		ReallocatedSectors:   int64Value(thresholds.SMARTReallocated),
-		PendingSectors:       int64Value(thresholds.SMARTPending),
-		OfflineUncorrectable: int64Value(thresholds.SMARTUncorrectable),
-		MediaErrors:          int64Value(thresholds.SMARTMediaErrors),
-		LifeWarning:          intValue(thresholds.SMARTLifeWarning),
-		LifeCritical:         intValue(thresholds.SMARTLifeCritical),
-		AvailableSpareWarn:   intValue(thresholds.SMARTSpareWarning),
-		AvailableSpareCrit:   intValue(thresholds.SMARTSpareCritical),
-	}
+	smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
 	assessment := storagehealth.AssessHostSMARTDiskWithThresholds(disk, smartThresholds)
-	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, int64Value(thresholds.SMARTCRCErrorDelta))...)
+	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, crcMinimumDelta)...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
 	}
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
 	}
 }

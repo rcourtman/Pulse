@@ -416,7 +416,34 @@ func (c *Client) queueStateTooLargeLocked(
 	return payloadBytes, true, nil
 }
 
+type preparedStateDelta struct {
+	data []byte
+	err  error
+}
+
+func prepareStateDelta(previous, current *clientStateSnapshot) preparedStateDelta {
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		return preparedStateDelta{err: err}
+	}
+	if len(delta) == 0 {
+		return preparedStateDelta{}
+	}
+	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
+	return preparedStateDelta{data: data, err: err}
+}
+
+// This map belongs to one serial dispatch, never the Hub or a tenant cache.
+// Pointer identity identifies an actually accepted immutable snapshot, not a
+// hash or resource ID. A reconnect/re-hydration gets its own baseline.
+type stateDeltaDispatch map[*clientStateSnapshot]preparedStateDelta
+
 func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool, error) {
+	return c.queueStateDeltaForDispatch(current, nil)
+}
+
+func (c *Client) queueStateDeltaForDispatch(current *clientStateSnapshot, dispatch stateDeltaDispatch) (int, bool, bool, error) {
+
 	if current == nil {
 		return 0, false, false, fmt.Errorf("current state snapshot is nil")
 	}
@@ -438,18 +465,21 @@ func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool,
 		return 0, false, false, nil
 	}
 
-	delta, err := buildClientStateDelta(c.stateSnapshot, current)
-	if err != nil {
-		return 0, true, false, err
+	prepared, found := dispatch[c.stateSnapshot]
+	if !found {
+		prepared = prepareStateDelta(c.stateSnapshot, current)
+		if dispatch != nil {
+			dispatch[c.stateSnapshot] = prepared
+		}
 	}
-	if len(delta) == 0 {
+	if prepared.err != nil {
+		return 0, true, false, prepared.err
+	}
+	if len(prepared.data) == 0 {
 		c.stateSnapshot = current
 		return 0, false, true, nil
 	}
-	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
-	if err != nil {
-		return 0, true, false, err
-	}
+	data := prepared.data
 	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
 		dataLen, sent, markerErr := c.queueStateTooLargeLocked("rawData", current, len(data), limit)
 		return dataLen, true, sent, markerErr
@@ -1322,8 +1352,9 @@ func (h *Hub) dispatchCurrentStateSnapshot(state interface{}, orgID string) {
 	}
 	h.mu.RUnlock()
 
+	dispatch := make(stateDeltaDispatch)
 	for _, client := range clients {
-		dataLen, attempted, sent, queueErr := client.queueStateDelta(snapshot)
+		dataLen, attempted, sent, queueErr := client.queueStateDeltaForDispatch(snapshot, dispatch)
 		if queueErr != nil {
 			log.Error().Err(queueErr).Str("client", client.id).Str("org_id", client.orgID).Msg("Failed to marshal WebSocket state delta")
 			continue

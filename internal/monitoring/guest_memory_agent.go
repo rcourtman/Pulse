@@ -43,7 +43,12 @@ func guestMemoryCacheKey(instanceName, node string, vmid int) string {
 // refresh; the cleanup age bounds last-known evidence during coordination.
 // Neither a poll timestamp nor a previous-snapshot trust label renews that age.
 func (m *Monitor) deferredVMGuestMemory(instanceName, node string, vmid int, total uint64, previous *GuestMemorySnapshot, now time.Time) (models.Memory, bool) {
-	if previous == nil || previous.GuestType != "qemu" || previous.Status != "running" || previous.Instance != instanceName || previous.Node != node || previous.VMID != vmid || !previous.Memory.HasKnownUsage() || uint64(previous.Memory.Total) != total {
+	if previous == nil || previous.GuestType != "qemu" || previous.Status != "running" || previous.Instance != instanceName || previous.Node != node || previous.VMID != vmid || !previous.Memory.HasKnownUsage() || previous.Memory.Total <= 0 {
+		return models.Memory{}, false
+	}
+	// The last guest sample can be smaller than its configured maximum. Keep
+	// the tuple intact, but still reject retention across a capacity change.
+	if guestMemoryConfiguredCapacity(previous) != total {
 		return models.Memory{}, false
 	}
 	switch CanonicalMemorySource(previous.MemorySource) {
@@ -60,7 +65,8 @@ func (m *Monitor) deferredVMGuestMemory(instanceName, node string, vmid int, tot
 	if entry.info.Source != "meminfo-available" && entry.info.Source != "meminfo-derived" {
 		return models.Memory{}, false
 	}
-	if entry.info.EffectiveAvailable > total || previous.Memory.Used != int64(total-entry.info.EffectiveAvailable) {
+	sampleTotal := uint64(previous.Memory.Total)
+	if (entry.info.Total > 0 && entry.info.Total != sampleTotal) || entry.info.EffectiveAvailable > sampleTotal || previous.Memory.Used != int64(sampleTotal-entry.info.EffectiveAvailable) {
 		return models.Memory{}, false
 	}
 	expected := models.Memory{Free: int64(entry.info.EffectiveAvailable)}
@@ -83,6 +89,13 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 
 	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
 	now := time.Now()
+	if m.guestWindowsMeminfoUnsupported(instanceName, node, vmid, now) {
+		// /proc/meminfo is Linux-specific. Do not knowingly queue a Windows
+		// file-read that can pause the shared QGA channel on an uncertain reply.
+		// This is neither a failed observation nor a coordination deferral;
+		// independent status/balloon/linked-agent memory remains usable.
+		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent Linux meminfo unavailable for Windows")
+	}
 
 	m.rrdCacheMu.RLock()
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
@@ -153,6 +166,24 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		fetchedAt: now,
 	}
 	return info, nil
+}
+
+func guestOSIsWindows(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return name == "mswindows" || name == "windows" || name == "microsoft windows" ||
+		strings.HasPrefix(name, "windows ") || strings.HasPrefix(name, "microsoft windows ")
+}
+
+func (m *Monitor) guestWindowsMeminfoUnsupported(instanceName, node string, vmid int, now time.Time) bool {
+	key := guestMetadataCacheKey(instanceName, node, vmid)
+	m.guestMetadataMu.RLock()
+	entry := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	// Use the existing ten-minute guest evidence age, not the metadata cache's
+	// last useful network/version receipt. Missing/future origins and copied
+	// display strings cannot establish the current guest's OS.
+	return entry.windowsGuest && !entry.osInfoObservedAt.IsZero() && !entry.osInfoObservedAt.After(now) &&
+		now.Sub(entry.osInfoObservedAt) < vmAgentMemCleanupMaxAge
 }
 
 func (m *Monitor) vmAgentMemNegativeCacheTTL(instanceName, node string, vmid int) time.Duration {

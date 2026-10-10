@@ -44,11 +44,19 @@ one-off read, you can instead open the path in your signed-in administrator
 browser without extracting its cookie. There is no shared example password
 to configure or substitute into these commands.
 
-Read the current settings first (curl 7.76 or later, on the Pulse host):
+Define the [API guide's `pulse_api` helper](API.md#api-token-recommended)
+in the same Bash session before using these examples (curl 7.76 or later).
+It is local example code, not an installed Pulse command. Each call sends one
+request, prints only the HTTP status and saves the response to a new owner-only
+file, preserving earlier responses. It uses a five-second connection limit and
+a twenty-second whole-request limit, ignores local curl defaults and does not
+follow redirects or retry.
+
+These are separate operations, not a script to run from top to bottom. Read
+the current settings first, then inspect the reported private response file:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/ai/patrol/autonomy
+pulse_api GET /api/ai/patrol/autonomy
 ```
 
 The next command **changes Patrol mode**, not just connection health. Use it
@@ -56,20 +64,25 @@ only when you intend to enable investigation and queue fixes for approval on
 a plan with that capability. The API retains `autonomy_level` for compatibility:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request PUT --header 'Content-Type: application/json' --data-binary @- \
-  http://127.0.0.1:7655/api/ai/patrol/autonomy <<'JSON'
+pulse_api PUT /api/ai/patrol/autonomy <<'JSON'
 {"autonomy_level":"approval","investigation_budget":15,"investigation_timeout_sec":600}
 JSON
 ```
 
-For remote use, substitute your Pulse **HTTPS** URL and keep certificate
-verification enabled. Do not add `--insecure`, verbose/trace output or redirect
-following; keep `--disable` first to ignore local curl defaults. A nonzero exit,
-401 or 403 is a failed check, not evidence that a change was saved. Stop and
-resolve authentication, permissions or the reported error before proceeding;
-after an uncertain write, read the saved settings before retrying. Keep
-tokens, cookies and unredacted responses out of reports.
+The helper's loopback origin is for requests made on the Pulse host. For remote
+use, change the origin and protocol restriction **in the helper** as the API
+guide describes, using your Pulse **HTTPS** URL with certificate verification
+enabled. Do not add `--insecure`, verbose/trace output or redirect following.
+
+Inspect settings and error bodies privately; share only a relevant redacted
+error, never the response file, token or cookie. A nonzero exit, including HTTP
+401, 402 or 403, is not evidence that a change was saved. A partial response
+is not a complete settings result, and HTTP success is not proof of the
+effective mode or completed investigation. After an uncertain write, read the
+saved settings before retrying: a timeout or lost response can occur **after
+a change was applied**. If that read is unavailable, stop rather than repeat
+the write. Check the saved and effective Patrol mode on the Patrol page;
+licence and policy enforcement still apply.
 
 ### License Requirements
 
@@ -82,47 +95,55 @@ Without the `ai_autofix` capability, the effective Patrol mode is clamped to `mo
 
 ## Assistant Control Levels
 
-Control levels govern what the interactive Pulse Assistant can do during chat sessions.
+Control levels govern interactive Assistant queries and action planning, not
+Patrol's autonomy or permission to execute infrastructure work.
 
-| Level | Key | Query | Execute Commands | Plan |
-|-------|-----|:-----:|:----------------:|------|
+| Mode | Key | Query | Plan infrastructure actions | Availability |
+|------|-----|:-----:|:---------------------------:|--------------|
 | **Read-only** | `read_only` | Yes | No | Community |
-| **Controlled** | `controlled` | Yes | With approval | Community |
-| **Autonomous** | `autonomous` | Yes | Yes | Pro / legacy Pro+ / Cloud |
+| **Ask first** | `controlled` | Yes | For operator review in **Actions** | Community |
 
-- **Read-only** (default): The assistant can query metrics, storage, and resource status but cannot execute any control actions.
-- **Controlled**: The assistant can propose commands but pauses for your explicit approval before execution. Each command shows a detailed approval card in the chat UI.
-- **Autonomous**: The assistant executes commands without prompting. Requires a Pro, legacy Pro+, or Cloud license.
+Assistant chat does not execute the plans it saves. A legacy saved `autonomous`
+preference displays as **Ask first** and keeps its stored value and existing
+entitlement checks for older clients. It does not bypass approval. An unrelated
+settings save does not rewrite that preference. Unknown values fail closed to
+read-only. Patrol mode and Autopilot acknowledgements remain separate.
+
+**Protected guests (legacy)** retains older VMIDs or names. This list does not
+exclude saved action plans. Review each plan’s target and approval policy in
+**Actions** instead of treating this list as an execution safeguard.
 
 ### Configuration
 
-**UI:** Settings → Pulse Intelligence → Assistant → Chat command mode
+**UI:** Settings → Pulse Intelligence → Assistant → Chat action mode
 
-**API:** This intentionally changes chat command access. Use the same private
+**API:** This intentionally changes Assistant action planning access. Use the same private
 administrator header file with `settings:write`; the token must also have
 permission to change settings. Prefer the UI for one-off changes, and verify
-the saved **Chat command mode** there afterwards. Do not use a write as an
+the saved **Chat action mode** there afterwards. Do not use a write as an
 authentication test.
 
+Use the same `pulse_api` helper defined above, with its private response file
+and request limits. Supporting PUT in the helper grants no additional access.
+If the response is lost, check the saved **Chat action mode** in the UI before
+deciding whether another change is needed; do not repeat the write blindly.
+
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --request PUT --header 'Content-Type: application/json' --data-binary @- \
-  http://127.0.0.1:7655/api/settings/ai/update <<'JSON'
+pulse_api PUT /api/settings/ai/update <<'JSON'
 {"control_level":"controlled"}
 JSON
 ```
 
-### Approval Flow (Controlled Mode)
+### Reviewing plans (Ask first)
 
-When control level is `controlled`, write operations follow this flow:
-
-1. The assistant proposes a command (e.g., `qm start 100`).
-2. An `APPROVAL_REQUIRED` response is emitted with an `approval_id`.
-3. The UI displays an approval card showing the exact command.
-4. You click **Approve** or **Deny**.
-5. On approval, the command executes and the assistant verifies the result.
-
-Approvals expire after 5 minutes if not acted upon.
+1. Assistant requests a typed action for an explicitly identified resource with
+   the advertised capability.
+2. Pulse saves the canonical plan in **Actions** without requesting execution.
+3. Review the target, operation, approval policy and expiry in **Actions**.
+4. Use the existing authorised approval and run controls; Chat action mode grants
+   no additional access or automatic approval.
+5. Read the recorded execution and independent verification outcome before
+   concluding that the operation worked. Do not repeat an uncertain operation.
 
 ---
 

@@ -340,26 +340,49 @@ is_stable_release_tag() {
     [[ "$tag" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]
 }
 
-latest_stable_release_tag_from_json() {
+is_pulse_release_tag() {
+    local tag="${1:-}"
+    tag="${tag#v}"
+
+    [[ "$tag" =~ ^[0-9]+[.][0-9]+[.][0-9]+(-(beta|rc)[.][0-9]+)?$ ]]
+}
+
+latest_pulse_release_tag_from_json() {
     local releases_json="${1:-}"
+    local channel="${2:-stable}"
     local latest_release=""
 
-    if [[ -z "$releases_json" ]]; then
+    if [[ -z "$releases_json" ]] || [[ "$channel" != stable && "$channel" != rc ]]; then
         return 1
     fi
 
-    if command -v jq >/dev/null 2>&1; then
-        latest_release=$(printf '%s' "$releases_json" | jq -r '[.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$")))][0].tag_name // empty' 2>/dev/null || true)
-    else
-        latest_release=$(printf '%s' "$releases_json" | grep -oE '"tag_name":[[:space:]]*"v?[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-    fi
+    # Tag-shaped text is not release metadata: regex extraction loses draft
+    # and prerelease ownership. Without a parser, use only the caller's checked
+    # public redirect (or an explicitly pinned version), never a guessed list.
+    command -v jq >/dev/null 2>&1 || return 1
+    latest_release=$(printf '%s' "$releases_json" | jq -er -s --arg channel "$channel" '
+        if length != 1 or (.[0] | type) != "array" then
+            error("Expected one release array")
+        else .[0] end
+        | [.[] | select(type == "object")
+            | select(.draft == false and (.prerelease | type) == "boolean")
+            | select(.tag_name | type == "string")
+            | select(.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+(-(beta|rc)\\.[0-9]+)?\\z"))
+            | select($channel == "rc" or (.prerelease == false
+                and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+\\z"))))]
+        | .[0].tag_name // empty
+    ' 2>/dev/null) || return 1
 
-    if is_stable_release_tag "$latest_release"; then
+    if is_pulse_release_tag "$latest_release"; then
         printf '%s\n' "$latest_release"
         return 0
     fi
 
     return 1
+}
+
+latest_stable_release_tag_from_json() {
+    latest_pulse_release_tag_from_json "${1:-}" stable
 }
 
 read_configured_update_channel() {
@@ -590,6 +613,143 @@ safe_systemctl() {
     }
 }
 
+# A failed/timed-out is-active query is not evidence that replacement is safe.
+# Require an explicit stopped state, and read it back after a successful stop.
+# Do not restart after an uncertain stop: the operator must reconcile that state.
+stop_pulse_for_replacement() {
+    local service_name="$1"
+    local state=""
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+        print_error "Could not read Pulse service state ($service_name); refusing binary replacement"
+        return 1
+    fi
+    case "$state" in
+        inactive) return 0 ;;
+        active) PULSE_WAS_ACTIVE="true" ;;
+        failed) ;; # A failed unit can retain processes; stop it without claiming prior liveness.
+        *)
+            print_error "Pulse service state is not settled ($service_name); refusing binary replacement"
+            return 1
+            ;;
+    esac
+
+    print_info "Stopping existing Pulse service ($service_name)..."
+    if ! safe_systemctl stop "$service_name"; then
+        print_error "Could not stop Pulse ($service_name); refusing binary replacement. Check service state before retrying."
+        return 1
+    fi
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+        print_error "Could not confirm Pulse stopped ($service_name); refusing binary replacement"
+        return 1
+    fi
+    case "$state" in
+        inactive) return 0 ;;
+        *)
+            print_error "Pulse has not reached a stopped state ($service_name); refusing binary replacement"
+            return 1
+            ;;
+    esac
+}
+
+# Removal is destructive: neither an is-active error nor a successful stop
+# proves the process is gone. Timers and in-flight updaters must be quiescent
+# too, before deleting their executable or the server's persistent files.
+confirm_pulse_unit_removable() {
+    local unit="$1"
+    local load_state="" active_state="" unit_file_state=""
+    if ! load_state=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! active_state=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot confirm service state ($unit); refusing removal. Files are preserved; reconcile service state before retrying."
+        return 1
+    fi
+    if [[ "$active_state" != "inactive" ]]; then
+        print_error "Unit is not confirmed inactive ($unit); refusing removal. Files are preserved; reconcile service state before retrying."
+        return 1
+    fi
+    [[ "$load_state" == "not-found" ]] && return 0
+    case "$load_state" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); refusing removal"; return 1 ;;
+    esac
+    if ! unit_file_state=$(timeout -k 1 5 systemctl show "$unit" --property=UnitFileState --value 2>/dev/null); then
+        print_error "Cannot confirm unit disabled ($unit); refusing removal"
+        return 1
+    fi
+    case "$unit_file_state" in
+        disabled|static|indirect|masked|masked-runtime) return 0 ;;
+        *) print_error "Unit is not confirmed disabled ($unit); refusing removal"; return 1 ;;
+    esac
+}
+
+stop_pulse_unit_for_removal() {
+    local unit="$1"
+    local load_state="" active_state=""
+    if ! load_state=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! active_state=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot inspect unit ($unit); refusing removal"
+        return 1
+    fi
+    if [[ "$load_state" == "not-found" && "$active_state" == "inactive" ]]; then
+        return 0
+    fi
+    case "$load_state" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); refusing removal"; return 1 ;;
+    esac
+    case "$active_state" in
+        inactive) ;;
+        active|failed)
+            if ! timeout -k 1 5 systemctl stop "$unit"; then
+                print_error "Cannot stop unit ($unit); refusing removal. Reconcile service state before retrying."
+                return 1
+            fi
+            ;;
+        *) print_error "Unsettled unit state ($unit); refusing removal"; return 1 ;;
+    esac
+    if ! timeout -k 1 5 systemctl disable "$unit"; then
+        print_error "Cannot disable unit ($unit); refusing removal"
+        return 1
+    fi
+    confirm_pulse_unit_removable "$unit"
+}
+
+quiesce_pulse_for_removal() {
+    local service_name="$1" unit=""
+    local units=("$UPDATE_TIMER_UNIT" "$UPDATE_SERVICE_UNIT" "${service_name%.service}.service")
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        units+=(pulse.service pulse-backend.service)
+    fi
+    # A full uninstall also removes the local legacy footprint. Refuse before
+    # any server deletion if that footprint cannot be safely quiesced.
+    if local_sensor_proxy_present; then
+        units+=(pulse-sensor-proxy-selfheal.timer pulse-sensor-cleanup.path
+            pulse-sensor-proxy-selfheal.service pulse-sensor-cleanup.service pulse-sensor-proxy.service)
+    fi
+    for unit in "${units[@]}"; do
+        stop_pulse_unit_for_removal "$unit" || return 1
+    done
+    # Reconcile all targets again, not just the last one stopped. An earlier
+    # unit that reactivated/re-enabled during this sequence blocks deletion.
+    for unit in "${units[@]}"; do
+        confirm_pulse_unit_removable "$unit" || return 1
+    done
+}
+
+# Called only after a confirmed stop and a failed atomic rename. The previous
+# executable is still in place. An uncertain stop never reaches this recovery,
+# and an intentionally inactive/failed service must not be started for the user.
+recover_pulse_after_failed_replacement() {
+    local service_name="$1"
+    [[ "$PULSE_WAS_ACTIVE" == "true" ]] || return 0
+    if safe_systemctl start "$service_name" && wait_for_service_active "$service_name" 20; then
+        PULSE_WAS_ACTIVE="false"
+        print_info "Previous Pulse binary is running again; the update failed"
+    else
+        print_error "The update failed and the previous Pulse service could not be confirmed running. Check systemctl status $service_name before retrying."
+        return 1
+    fi
+}
+
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
     if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
@@ -612,7 +772,15 @@ detect_service_name() {
 }
 
 update_timer_exists() {
-    command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${UPDATE_TIMER_UNIT}$"
+    command -v systemctl >/dev/null 2>&1 || return 1
+    local unit_files=""
+    # Rows also contain enablement/preset columns. Match the exact first field,
+    # not the whole row or a regex, and keep long custom unit names untruncated.
+    # A failed inventory must not admit even plausible partial stdout.
+    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$UPDATE_TIMER_UNIT" 2>/dev/null); then
+        return 1
+    fi
+    awk -v unit="$UPDATE_TIMER_UNIT" '$1 == unit { found = 1 } END { exit !found }' <<< "$unit_files"
 }
 
 update_timer_enabled() {
@@ -881,53 +1049,36 @@ repo_web_url() {
 
 resolve_latest_release_tag_for_channel() {
     local channel="${1:-stable}"
-
-    if [[ "$channel" != "rc" ]]; then
-        local releases_json=""
-        local stable_release=""
-
-        if command -v timeout >/dev/null 2>&1; then
-            releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-        else
-            releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-        fi
-
-        stable_release=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
-        if [[ -n "$stable_release" ]]; then
-            printf '%s\n' "$stable_release"
-            return 0
-        fi
-
-        stable_release=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if is_stable_release_tag "$stable_release"; then
-            printf '%s\n' "$stable_release"
-            return 0
-        fi
-
-        return 1
-    fi
-
     local releases_json=""
-    if command -v timeout >/dev/null 2>&1; then
-        releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    else
-        releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    fi
+    local release=""
 
-    local rc_release=""
-    if [[ -n "$releases_json" ]]; then
-        if command -v jq >/dev/null 2>&1; then
-            rc_release=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
-        else
-            rc_release=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+    [[ "$channel" == stable || "$channel" == rc ]] || return 1
+    if command -v timeout >/dev/null 2>&1; then
+        if ! releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+            releases_json=""
+        fi
+    else
+        if ! releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+            releases_json=""
         fi
     fi
 
-    if [[ -z "$rc_release" || "$rc_release" == "null" ]]; then
-        return 1
+    release=$(latest_pulse_release_tag_from_json "$releases_json" "$channel" 2>/dev/null || true)
+    if [[ -n "$release" ]]; then
+        printf '%s\n' "$release"
+        return 0
     fi
 
-    printf '%s\n' "$rc_release"
+    release=$(get_latest_release_from_redirect 2>/dev/null || true)
+    if [[ "$channel" == rc ]] && is_pulse_release_tag "$release"; then
+        printf '%s\n' "$release"
+        return 0
+    elif [[ "$channel" == stable ]] && is_stable_release_tag "$release"; then
+        printf '%s\n' "$release"
+        return 0
+    fi
+
+    return 1
 }
 
 repo_release_docs_ref() {
@@ -1125,6 +1276,14 @@ cleanup_stale_sensor_proxy_mounts() {
 }
 
 create_lxc_container() {
+    # Only files created by this invocation belong to its EXIT cleanup. Local
+    # --archive inputs and a caller-supplied installer must remain untouched.
+    local container_script_temp_dir=""
+    local container_archive_source=""
+    local container_archive_dest=""
+    local container_archive_temp=false
+    local archive_requested=false
+    trap 'cleanup_container_install_inputs "${container_script_temp_dir:-}" "${container_archive_source:-}" "${container_archive_temp:-false}"' EXIT
     CURRENT_INSTALL_CTID=""
     CONTAINER_CREATED_FOR_CLEANUP=false
     trap handle_install_interrupt INT TERM
@@ -1892,11 +2051,6 @@ create_lxc_container() {
         cleanup_on_error
     fi
 
-    local container_archive_source=""
-    local container_archive_dest=""
-    local container_archive_temp=false
-    local archive_requested=false
-
     if [[ -n "$ARCHIVE_OVERRIDE" ]]; then
         archive_requested=true
         container_archive_source="$ARCHIVE_OVERRIDE"
@@ -1914,57 +2068,11 @@ create_lxc_container() {
     print_info "Installing Pulse..."
     
     # When piped through curl, $0 is "bash" not the script. Download fresh copy.
-    local script_source="/tmp/pulse_install_$$.sh"
+    local script_source="$0"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
-        # We're being piped, download the script with retry logic
-        local download_url=""
-        if ! download_url=$(resolve_install_script_download_url); then
-            print_error "Failed to determine installer download URL for the selected release channel"
+        if ! download_container_installer script_source container_script_temp_dir; then
             cleanup_on_error
         fi
-        local download_success=false
-        local download_error=""
-        local max_retries=3
-        
-        for attempt in $(seq 1 $max_retries); do
-            if [[ $attempt -gt 1 ]]; then
-                print_info "Retrying download (attempt $attempt/$max_retries)..."
-                sleep 2
-            fi
-            
-            local curl_stderr="/tmp/curl_error_$$.txt"
-            if command -v timeout >/dev/null 2>&1; then
-                if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
-                    download_success=true
-                    rm -f "$curl_stderr"
-                    break
-                fi
-            else
-                if curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$script_source" 2>"$curl_stderr"; then
-                    download_success=true
-                    rm -f "$curl_stderr"
-                    break
-                fi
-            fi
-            download_error=$(cat "$curl_stderr" 2>/dev/null || echo "unknown error")
-            rm -f "$curl_stderr"
-        done
-        
-        if [[ "$download_success" != "true" ]]; then
-            print_error "Failed to download install script after $max_retries attempts"
-            print_error "URL: $download_url"
-            if [[ -n "$download_error" ]]; then
-                print_error "Error: $download_error"
-            fi
-            print_info ""
-            print_info "Workaround: Download the script manually and run it locally:"
-            print_info "  curl -fsSL $download_url -o install.sh"
-            print_info "  bash install.sh"
-            cleanup_on_error
-        fi
-    else
-        # We have a local script file
-        script_source="$0"
     fi
     
     # Copy this script to container and run it
@@ -1973,16 +2081,15 @@ create_lxc_container() {
         cleanup_on_error
     fi
     
-    # Clean up temp file if we created one
-    if [[ "$script_source" == "/tmp/pulse_install_"* ]]; then
-        rm -f "$script_source"
-    fi
+    cleanup_container_install_inputs "$container_script_temp_dir" "" false
+    container_script_temp_dir=""
 
     if [[ -n "$container_archive_source" ]]; then
         print_info "Copying Pulse release archive to container..."
         if ! pct push $CTID "$container_archive_source" "$container_archive_dest" >/dev/null 2>&1; then
             if [[ "$container_archive_temp" == "true" ]]; then
-                rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+                cleanup_temp_archive_path "$container_archive_source"
+                container_archive_temp=false
             fi
             if [[ "$archive_requested" == "true" ]]; then
                 print_error "Failed to copy Pulse release archive to container"
@@ -1998,14 +2105,16 @@ create_lxc_container() {
             if [[ -f "${container_archive_source}.sshsig" ]]; then
                 if ! pct push $CTID "${container_archive_source}.sshsig" "${container_archive_dest}.sshsig" >/dev/null 2>&1; then
                     if [[ "$container_archive_temp" == "true" ]]; then
-                        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+                        cleanup_temp_archive_path "$container_archive_source"
+                        container_archive_temp=false
                     fi
                     print_error "Failed to copy Pulse release archive signature to container"
                     cleanup_on_error
                 fi
             else
                 if [[ "$container_archive_temp" == "true" ]]; then
-                    rm -f "$container_archive_source"
+                    cleanup_temp_archive_path "$container_archive_source"
+                    container_archive_temp=false
                 fi
                 print_error "Pulse release archive signature missing alongside ${container_archive_source}"
                 cleanup_on_error
@@ -2014,7 +2123,8 @@ create_lxc_container() {
     fi
 
     if [[ "$container_archive_temp" == "true" ]]; then
-        rm -f "$container_archive_source" "${container_archive_source}.sshsig"
+        cleanup_temp_archive_path "$container_archive_source"
+        container_archive_temp=false
     fi
     
     # Run installation with visible progress
@@ -2654,6 +2764,17 @@ compare_versions() {
     elif [[ -n "$suffix_v1" ]] && [[ -z "$suffix_v2" ]]; then
         return 2  # v1 (rc) < v2 (stable)
     elif [[ -n "$suffix_v1" ]] && [[ -n "$suffix_v2" ]]; then
+        # Published preview revisions are numeric: rc.10 follows rc.9, not
+        # vice versa. Keep the existing lexical fallback for other suffixes.
+        if [[ "$suffix_v1" =~ ^(beta|rc)[.][0-9]+$ && "$suffix_v2" =~ ^(beta|rc)[.][0-9]+$ && "${suffix_v1%.*}" == "${suffix_v2%.*}" ]]; then
+            local revision_v1="${suffix_v1##*.}" revision_v2="${suffix_v2##*.}"
+            if (( 10#$revision_v1 > 10#$revision_v2 )); then
+                return 1
+            elif (( 10#$revision_v1 < 10#$revision_v2 )); then
+                return 2
+            fi
+            return 0
+        fi
         # Both have suffixes, compare them lexicographically
         if [[ "$suffix_v1" > "$suffix_v2" ]]; then
             return 1
@@ -3118,11 +3239,86 @@ validate_pulse_binary_architecture() {
 
 create_temp_archive_path() {
     local prefix="$1"
-    local temp_base=""
+    local temp_dir=""
 
-    temp_base=$(mktemp "${prefix}-XXXXXX") || return 1
-    rm -f "$temp_base"
-    printf '%s.tar.gz\n' "$temp_base"
+    # Reserving then unlinking a mktemp file does not reserve the .tar.gz or
+    # sidecar name. Keep both downloads inside one owner-only directory.
+    temp_dir=$(mktemp -d "${prefix}-XXXXXX") || return 1
+    printf '%s/%s.tar.gz\n' "$temp_dir" "${prefix##*/}"
+}
+
+cleanup_temp_archive_path() {
+    local archive_path="$1"
+    [[ -n "$archive_path" ]] || return 0
+    rm -f -- "$archive_path" "${archive_path}.sshsig"
+    # Delete only the two owned leaves and an empty parent, never a tree.
+    rmdir -- "$(dirname "$archive_path")" 2>/dev/null || true
+}
+
+cleanup_container_install_inputs() {
+    local script_dir="${1:-}" archive_path="${2:-}" archive_owned="${3:-false}"
+    if [[ -n "$script_dir" ]]; then
+        rm -f -- "$script_dir/install.sh" "$script_dir/install.sh.sshsig" "$script_dir/curl-error"
+        rmdir -- "$script_dir" 2>/dev/null || true
+    fi
+    if [[ "$archive_owned" == true ]]; then
+        cleanup_temp_archive_path "$archive_path"
+    fi
+}
+
+download_container_installer() {
+    local source_output="$1" directory_output="$2"
+    local download_url="" staging_dir="" staged_installer="" staged_signature=""
+    local download_success=false download_error="" attempt
+    local max_retries=3
+
+    if ! download_url=$(resolve_install_script_download_url); then
+        print_error "Failed to determine installer download URL for the selected release channel"
+        return 1
+    fi
+    if ! require_release_signature_verifier; then
+        print_error "Cannot verify the signed container installer"
+        return 1
+    fi
+    if ! staging_dir=$(mktemp -d /tmp/pulse-lxc-installer-XXXXXX); then
+        print_error "Could not prepare private container installer staging"
+        return 1
+    fi
+    # Return the owned directory before transport so the caller's EXIT trap
+    # can clean an interrupted download too. No path is returned for execution
+    # until both the complete transfer and the pinned signature are admitted.
+    printf -v "$directory_output" '%s' "$staging_dir"
+    staged_installer="$staging_dir/install.sh"
+    staged_signature="$staging_dir/install.sh.sshsig"
+    for attempt in $(seq 1 "$max_retries"); do
+        if [[ "$attempt" -gt 1 ]]; then
+            print_info "Retrying download (attempt $attempt/$max_retries)..."
+            sleep 2
+        fi
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+                download_success=true
+                break
+            fi
+        elif curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+            download_success=true
+            break
+        fi
+        download_error=$(cat "$staging_dir/curl-error" 2>/dev/null || true)
+    done
+    if [[ "$download_success" != true ]]; then
+        print_error "Failed to download install script after $max_retries attempts"
+        [[ -z "$download_error" ]] || print_error "Error: $download_error"
+        return 1
+    fi
+    if ! curl -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
+        print_error "Failed to download container installer signature; refusing to copy or run the installer"
+        return 1
+    fi
+    if ! verify_release_signature "$staged_installer" "$staged_signature" "downloaded container installer"; then
+        return 1
+    fi
+    printf -v "$source_output" '%s' "$staged_installer"
 }
 
 resolve_target_release() {
@@ -3161,40 +3357,12 @@ resolve_target_release() {
         fi
     fi
 
-    local releases_json=""
-    if command -v timeout >/dev/null 2>&1; then
-        releases_json=$(timeout 15 curl -s --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    else
-        releases_json=$(curl -s --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    fi
-
-    if [[ -n "$releases_json" ]]; then
-        if [[ "$UPDATE_CHANNEL" == "rc" ]]; then
-            # Prerelease channel: get latest release (including prereleases, but skip drafts)
-            if command -v jq >/dev/null 2>&1; then
-                LATEST_RELEASE=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
-            else
-                LATEST_RELEASE=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-            fi
-        else
-            LATEST_RELEASE=$(latest_stable_release_tag_from_json "$releases_json" 2>/dev/null || true)
-        fi
-    fi
+    # Installer-script URLs and server archives must select the same release.
+    LATEST_RELEASE=$(resolve_latest_release_tag_for_channel "$UPDATE_CHANNEL" 2>/dev/null || true)
 
     if [[ -z "$LATEST_RELEASE" ]]; then
-        print_info "GitHub API unavailable, trying alternative method..."
-        local redirect_version=""
-        redirect_version=$(get_latest_release_from_redirect 2>/dev/null || true)
-        if [[ "$UPDATE_CHANNEL" == "rc" && -n "$redirect_version" ]]; then
-            LATEST_RELEASE="$redirect_version"
-        elif is_stable_release_tag "$redirect_version"; then
-            LATEST_RELEASE="$redirect_version"
-        fi
-    fi
-
-    if [[ -z "$LATEST_RELEASE" ]]; then
-        print_error "Could not determine the latest Pulse release from GitHub"
-        print_info "GitHub may be unreachable or rate limiting. Retry later, or pin the release explicitly:"
+        print_error "Could not determine a published Pulse server release for the $UPDATE_CHANNEL channel"
+        print_info "Check GitHub connectivity and that jq is installed, or pin the release explicitly:"
         print_info "  bash install.sh --version vX.Y.Z"
         exit 1
     fi
@@ -3288,7 +3456,9 @@ install_pulse_archive() {
     local expected_release="${2:-}"
     local signature_path="${archive_path}.sshsig"
     local temp_extract=""
-    local temp_extract2=""
+    local binary_stage=""
+    local version_output=""
+    local service_name=""
     local installed_version=""
     local pulse_binary_path=""
     local target_arch=""
@@ -3318,7 +3488,10 @@ install_pulse_archive() {
         expected_release=$(infer_release_from_archive_name "$archive_path" 2>/dev/null || true)
     fi
 
-    temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX)
+    if ! temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX); then
+        print_error "Could not prepare archive extraction; Pulse has not been stopped"
+        return 1
+    fi
     # --no-same-owner: do not honor uid/gid stored in the archive (extract as root, owned by root)
     # --no-overwrite-dir: refuse to replace existing directory metadata with archive entries
     if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract"; then
@@ -3346,33 +3519,52 @@ install_pulse_archive() {
         return 1
     fi
 
-    mkdir -p "$INSTALL_DIR/bin"
-
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-    fi
-
-    if ! cp "$pulse_binary_path" "$INSTALL_DIR/bin/pulse"; then
-        print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+    # Prepare the final executable on the destination filesystem while the old
+    # service keeps running. Copy/permissions/version failures must not create
+    # an outage, and rename must never expose a partially copied live binary.
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+        print_error "Could not stage the Pulse binary; Pulse has not been stopped"
         rm -rf "$temp_extract"
         return 1
     fi
-
-    if [[ ! -f "$INSTALL_DIR/bin/pulse" ]]; then
-        print_error "Binary installation failed - file not found after copy"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-        rm -rf "$temp_extract"
+    if ! cp "$pulse_binary_path" "$binary_stage/pulse" || ! chmod 755 "$binary_stage/pulse" || ! chown pulse:pulse "$binary_stage/pulse"; then
+        print_error "Could not prepare the Pulse binary; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
         return 1
     fi
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null); then
+        print_error "Staged Pulse binary could not report its version; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+    installed_version=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
+    if [[ -z "$installed_version" || ( -n "$expected_release" && "$installed_version" != "$expected_release" ) ]]; then
+        print_error "Staged Pulse version ${installed_version:-unknown} does not match ${expected_release:-a release version}; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+
+    service_name=$(detect_service_name)
+    PULSE_WAS_ACTIVE="false"
+    if ! stop_pulse_for_replacement "$service_name"; then
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+
+    # Both paths are on the same filesystem. If rename fails the old binary is
+    # untouched; do not move it aside, delete it or re-extract an admitted file.
+    if ! mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"; then
+        print_error "Failed to replace Pulse; the previous binary is unchanged"
+        rm -rf "$binary_stage" "$temp_extract"
+        recover_pulse_after_failed_replacement "$service_name"
+        return 1
+    fi
+    rm -rf "$binary_stage"
 
     install_additional_agent_binaries "$expected_release" "$temp_extract"
     deploy_agent_scripts "$temp_extract"
-
-    chmod +x "$INSTALL_DIR/bin/pulse"
     chown -R pulse:pulse "$INSTALL_DIR"
 
-    rm -f "$INSTALL_DIR/bin/pulse.old"
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
@@ -3380,43 +3572,7 @@ install_pulse_archive() {
         cp "$temp_extract/VERSION" "$INSTALL_DIR/VERSION"
         chown pulse:pulse "$INSTALL_DIR/VERSION"
     fi
-
-    installed_version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-    if [[ -n "$expected_release" && "$installed_version" != "$expected_release" ]]; then
-        print_warn "Version verification issue: Expected $expected_release but binary reports $installed_version"
-        print_info "This can happen if the binary wasn't properly replaced. Trying to fix..."
-
-        rm -f "$INSTALL_DIR/bin/pulse"
-        temp_extract2=$(mktemp -d /tmp/pulse-extract2-XXXXXX)
-        if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract2"; then
-            print_warn "Failed to re-extract archive for version verification retry"
-        else
-            pulse_binary_path=$(find_pulse_binary_in_dir "$temp_extract2" 2>/dev/null || true)
-            if [[ -n "$pulse_binary_path" ]]; then
-                cp -f "$pulse_binary_path" "$INSTALL_DIR/bin/pulse"
-            fi
-
-            install_additional_agent_binaries "$expected_release" "$temp_extract2"
-            deploy_agent_scripts "$temp_extract2"
-
-            chmod +x "$INSTALL_DIR/bin/pulse"
-            chown -R pulse:pulse "$INSTALL_DIR"
-        fi
-        rm -rf "$temp_extract2"
-
-        installed_version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-        if [[ "$installed_version" == "$expected_release" ]]; then
-            print_success "Version issue resolved - now running $installed_version"
-        else
-            print_warn "Version mismatch persists. You may need to restart the service or reboot."
-        fi
-    elif [[ -n "$expected_release" ]]; then
-        print_success "Version verified: $installed_version"
-    elif [[ "$installed_version" != "unknown" ]]; then
-        print_success "Version installed: $installed_version"
-    else
-        print_warn "Installed Pulse version could not be verified"
-    fi
+    print_success "Version verified: $installed_version"
 
     restore_selinux_contexts
     rm -rf "$temp_extract"
@@ -3446,8 +3602,6 @@ download_pulse() {
         local pulse_arch=""
         local archive_from_temp=false
         local inferred_release=""
-
-        rm -f "$BUILD_FROM_SOURCE_MARKER"
 
         if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
@@ -3497,33 +3651,31 @@ download_pulse() {
             }
             archive_from_temp=true
             if ! download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"; then
-                rm -f "$archive_path"
+                cleanup_temp_archive_path "$archive_path"
                 exit 1
             fi
             expected_release="$LATEST_RELEASE"
         fi
 
         if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"; then
-            exit 1
-        fi
-
-        # Detect and stop existing service after the archive is available but before replacing the binary.
-        EXISTING_SERVICE=$(detect_service_name)
-        if timeout 5 systemctl is-active --quiet "$EXISTING_SERVICE" 2>/dev/null; then
-            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-            safe_systemctl stop "$EXISTING_SERVICE" || true
-            sleep 2
-        fi
-
-        if ! install_pulse_archive "$archive_path" "$expected_release"; then
-            if [[ "$archive_from_temp" == "true" ]]; then
-                rm -f "$archive_path" "${archive_path}.sshsig"
+            if [[ "$archive_from_temp" == true ]]; then
+                cleanup_temp_archive_path "$archive_path"
             fi
             exit 1
         fi
 
+        # Archive admission and destination staging own the confirmed stop:
+        # local signature/content/architecture/version failures leave Pulse up.
+        if ! install_pulse_archive "$archive_path" "$expected_release"; then
+            if [[ "$archive_from_temp" == "true" ]]; then
+                cleanup_temp_archive_path "$archive_path"
+            fi
+            exit 1
+        fi
+
+        rm -f "$BUILD_FROM_SOURCE_MARKER"
         if [[ "$archive_from_temp" == "true" ]]; then
-            rm -f "$archive_path" "${archive_path}.sshsig"
+            cleanup_temp_archive_path "$archive_path"
         fi
     fi  # End of SKIP_DOWNLOAD check
 }
@@ -3550,7 +3702,7 @@ prefetch_pulse_archive_for_container() {
         return 1
     }
     if ! download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"; then
-        rm -f "$archive_path"
+        cleanup_temp_archive_path "$archive_path"
         return 1
     fi
 
@@ -3698,6 +3850,9 @@ build_from_source() {
     local arch=""
     local go_arch=""
     local service_name=""
+    local binary_stage=""
+    local version_output=""
+    local source_revision=""
 
     print_info "Building Pulse from source (branch: $branch)..."
 
@@ -3814,27 +3969,52 @@ build_from_source() {
         return 1
     fi
 
-    service_name=$(detect_service_name)
-    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        print_info "Stopping existing Pulse service ($service_name)..."
-        safe_systemctl stop "$service_name" || true
-        sleep 2
-    fi
-
-    mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
-
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-    fi
-
-    if ! cp pulse "$INSTALL_DIR/bin/pulse"; then
-        print_error "Failed to copy built Pulse binary"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+    # A successful build command alone does not admit its executable. Prepare
+    # it on the destination filesystem before stopping the running service,
+    # just as for signed archives. Source versions may be development builds.
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+        print_error "Could not stage the built Pulse binary; Pulse has not been stopped"
         cd "$original_dir" >/dev/null 2>&1 || true
         rm -rf "$temp_build"
         return 1
     fi
-    chmod +x "$INSTALL_DIR/bin/pulse"
+    if ! cp pulse "$binary_stage/pulse" || ! chmod 755 "$binary_stage/pulse" || ! chown pulse:pulse "$binary_stage/pulse"; then
+        print_error "Could not prepare the built Pulse binary; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
+        print_error "Built Pulse binary could not report its version; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+    if ! source_revision=$(git rev-parse --short HEAD) || [[ -z "$source_revision" ]]; then
+        print_error "Could not identify the source build; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+
+    service_name=$(detect_service_name)
+    PULSE_WAS_ACTIVE="false"
+    if ! stop_pulse_for_replacement "$service_name"; then
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+
+    if ! mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"; then
+        print_error "Failed to replace built Pulse; the previous binary is unchanged"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        recover_pulse_after_failed_replacement "$service_name"
+        return 1
+    fi
+    rm -rf "$binary_stage"
+
+    mkdir -p "$INSTALL_DIR/scripts"
 
     for script_name in install-container-agent.sh install-docker.sh install.sh install.ps1; do
         if [[ -f "scripts/$script_name" ]]; then
@@ -3845,12 +4025,11 @@ build_from_source() {
 
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
-    echo "$branch-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
+    echo "$branch-$source_revision" > "$INSTALL_DIR/VERSION"
     echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
 
     chown -R pulse:pulse "$INSTALL_DIR" 2>/dev/null || true
     chown pulse:pulse "$BUILD_FROM_SOURCE_MARKER" 2>/dev/null || true
-    rm -f "$INSTALL_DIR/bin/pulse.old"
 
     cd "$original_dir" >/dev/null 2>&1 || true
     rm -rf "$temp_build"
@@ -3981,7 +4160,7 @@ auto_selector_allowed=true
 if [[ \${#helper_args[@]} -gt 0 ]]; then
     for helper_arg in "\${helper_args[@]}"; do
         case "\$helper_arg" in
-            -h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)
+            -h|--help|--uninstall|--version|--rc|--pre|--prerelease|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)
                 auto_selector_allowed=false
                 break
                 ;;
@@ -3994,10 +4173,34 @@ if [[ "\$auto_selector_allowed" == "true" ]]; then
         if [[ -n "\$branch" ]]; then
             extra_args+=(--source "\$branch")
         fi
-    elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
-        configured_channel=\$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "\${CONFIG_DIR}/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+    elif [[ -e "\${CONFIG_DIR}/system.json" || -L "\${CONFIG_DIR}/system.json" ]]; then
+        # Never infer a release channel from nested, quoted or partial JSON.
+        # Missing/null channels retain the stable default; malformed or unknown
+        # preferences stop before download. An explicit selector above wins.
+        if [[ ! -f "\${CONFIG_DIR}/system.json" ]] || ! command -v jq >/dev/null 2>&1; then
+            echo "Cannot read the saved update channel; a regular system.json and jq are required. Select --stable or --rc explicitly, or restore the configuration." >&2
+            exit 1
+        fi
+        if ! configured_channel=\$(jq -er -s '
+            if length != 1 or (.[0] | type) != "object" then
+                error("expected one configuration object")
+            else .[0] end
+            | .updateChannel
+            | if . == null then "stable" else . end
+            | if type != "string" then error("invalid update channel") else . end
+            | gsub("^\\\\s+|\\\\s+\$"; "") | ascii_downcase
+            | if . == "" then "stable" else . end
+            | if . == "stable" or . == "rc" then . else error("unknown update channel") end
+        ' "\${CONFIG_DIR}/system.json" 2>/dev/null); then
+            echo "Cannot parse the saved update channel; no installer downloaded. Select --stable or --rc explicitly, or restore the configuration." >&2
+            exit 1
+        fi
         if [[ "\$configured_channel" == "rc" ]]; then
             extra_args+=(--rc)
+        else
+            # Bind the parsed default too: the installer has its own saved
+            # preference reader, which must not re-interpret the same file.
+            extra_args+=(--stable)
         fi
     fi
 fi
@@ -4264,6 +4467,54 @@ migrate_auto_update_assets_outside_sandbox() {
     return 0
 }
 
+# A runtime mask may live in /run while we write /etc, and a persistent mask
+# may live outside a configured destination. Checking only those destination
+# symlinks can therefore override an effective operator stop. Inspect both
+# exact unit names before even staging assets, including sandbox repair/setup.
+auto_update_units_refreshable() {
+    local timer_path="$1" service_path="$2" asset=""
+    for asset in "$timer_path" "$service_path"; do
+        if [[ -L "$asset" && "$asset" -ef /dev/null ]]; then
+            print_info "Auto-update unit is deliberately masked ($asset); preserving the existing helper and units."
+            return 1
+        fi
+    done
+
+    local timer_unit service_unit unit_files=""
+    timer_unit="$(basename "$timer_path")"
+    service_unit="$(basename "$service_path")"
+    if ! command -v systemctl >/dev/null 2>&1 ||
+       ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$timer_unit" "$service_unit" 2>/dev/null); then
+        print_warn "Cannot confirm auto-update unit masks; preserving the existing helper and units."
+        return 1
+    fi
+
+    local unit="" state="" remainder="" seen_timer=false seen_service=false
+    while read -r unit state remainder; do
+        [[ -n "$unit" ]] || continue
+        if [[ "$unit" == "$timer_unit" && "$seen_timer" == false ]]; then
+            seen_timer=true
+        elif [[ "$unit" == "$service_unit" && "$seen_service" == false ]]; then
+            seen_service=true
+        else
+            print_warn "Unexpected auto-update unit inventory; preserving the existing helper and units."
+            return 1
+        fi
+        case "$state" in
+            masked|masked-runtime)
+                print_info "Auto-update unit is deliberately $state ($unit); preserving the existing helper and units."
+                return 1 ;;
+            enabled|enabled-runtime|disabled|static|indirect|linked|linked-runtime|alias|generated|transient) ;;
+            *)
+                print_warn "Cannot confirm auto-update unit state ($unit); preserving the existing helper and units."
+                return 1 ;;
+        esac
+    done <<< "$unit_files"
+    # A successful empty inventory is valid for first-time setup; failed or
+    # malformed stdout above is never treated as absence or consent.
+    return 0
+}
+
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -4277,6 +4528,7 @@ install_auto_update_assets() {
     local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
     local update_timer_unit
     update_timer_unit="$(basename "$update_timer_path")"
+    auto_update_units_refreshable "$update_timer_path" "$update_service_path" || return 1
     local auto_update_bin_dir update_unit_dir update_timer_dir
     auto_update_bin_dir="$(dirname "$auto_update_dest")"
     update_unit_dir="$(dirname "$update_service_path")"
@@ -4486,7 +4738,7 @@ setup_auto_updates() {
     fi
 
     if ! install_auto_update_assets; then
-        print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once the issue above is resolved."
+        print_warn "Continuing without automatic updates. Review the reported unit state or asset error before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
     fi
@@ -4539,7 +4791,7 @@ refresh_auto_updates() {
     print_info "Refreshing the installed auto-update helper..."
     if ! install_auto_update_assets; then
         print_warn "Could not refresh the auto-update helper; the previously installed one may be stale."
-        print_warn "Re-run install.sh with --enable-auto-updates to repair it."
+        print_warn "Review the reported unit state or asset error before retrying; enabling updates is not a mask repair."
     fi
     return 0
 }
@@ -4648,10 +4900,7 @@ wait_for_service_active() {
 # guarantee it comes back up afterward (#1323).
 stop_pulse_for_update() {
     PULSE_WAS_ACTIVE="false"
-    if timeout 5 systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        PULSE_WAS_ACTIVE="true"
-    fi
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    stop_pulse_for_replacement "$SERVICE_NAME"
 }
 
 # After an update, if Pulse was running beforehand, make sure it is running again:
@@ -4912,7 +5161,6 @@ main() {
             fi
             
             backup_existing
-            stop_pulse_for_update
             create_user
             download_pulse
             # A half-removed installation (binary present, /etc/pulse or the
@@ -4936,19 +5184,13 @@ main() {
             return 0
         fi
         
-        # Get both stable and RC versions
-        # Try GitHub API first, but have a fallback - with timeout protection
+        # Use the same complete, server-only metadata admission as downloads.
+        # A chart tag or a draft must never become an existing-install action.
         local STABLE_VERSION=""
         STABLE_VERSION=$(resolve_latest_release_tag_for_channel stable 2>/dev/null || true)
-        
-        # For RC, we need the API, so if it fails just use empty
         local RC_VERSION=""
-        if command -v timeout >/dev/null 2>&1; then
-            RC_VERSION=$(timeout 10 curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        else
-            RC_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://api.github.com/repos/$GITHUB_REPO/releases 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        fi
-        
+        RC_VERSION=$(resolve_latest_release_tag_for_channel rc 2>/dev/null || true)
+
         # Determine default update channel
         UPDATE_CHANNEL="stable"
         
@@ -4967,12 +5209,15 @@ main() {
         
         # Show update options based on available versions
         local menu_option=1
+        local stable_choice="" rc_choice=""
         if [[ -n "$STABLE_VERSION" ]] && [[ "$STABLE_VERSION" != "$CURRENT_VERSION" ]]; then
+            stable_choice=$menu_option
             echo "${menu_option}) Update to $STABLE_VERSION (stable)"
             ((menu_option++))
         fi
         
         if [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]] && [[ "$RC_VERSION" != "$CURRENT_VERSION" ]]; then
+            rc_choice=$menu_option
             echo "${menu_option}) Update to $RC_VERSION (prerelease preview)"
             ((menu_option++))
         fi
@@ -4986,27 +5231,59 @@ main() {
         
         # Try to read user choice interactively
         # safe_read handles both normal and piped input (via /dev/tty)
+        local automatic_choice=false
+        local requested_channel="$UPDATE_CHANNEL"
         if [[ "$IN_DOCKER" == "true" ]]; then
             # In Docker, always auto-select
             print_info "Docker environment detected. Auto-selecting update option."
-            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
-                choice=2  # RC version
-            else
-                choice=1  # Stable version
-            fi
+            automatic_choice=true
         elif safe_read "Select option [1-${max_option}]: " choice; then
             # Successfully read user choice (either from stdin or /dev/tty)
             : # Do nothing, choice was set
         else
             # safe_read failed - truly non-interactive
             print_info "Non-interactive mode detected. Auto-selecting update option."
-            if [[ "$UPDATE_CHANNEL" == "rc" ]] && [[ -n "$RC_VERSION" ]] && [[ "$RC_VERSION" != "$STABLE_VERSION" ]]; then
-                choice=2  # RC version
-            else
-                choice=1  # Stable version
-            fi
+            automatic_choice=true
         fi
         
+        if [[ "$automatic_choice" == true ]]; then
+            # Rows disappear when a release is unavailable or already installed.
+            # Fixed option numbers could then select preview, reinstall or REMOVE.
+            # Only a newer release in the requested channel is an automatic action.
+            local automatic_release="$STABLE_VERSION"
+            choice="$stable_choice"
+            if [[ "$requested_channel" == rc ]]; then
+                automatic_release="$RC_VERSION"
+                if [[ "$RC_VERSION" == "$STABLE_VERSION" ]]; then
+                    choice="$stable_choice"
+                else
+                    choice="$rc_choice"
+                fi
+            fi
+            if [[ -z "$automatic_release" ]]; then
+                print_error "Cannot determine a published Pulse server release for the $requested_channel channel. Existing installation is unchanged; check connectivity and jq, or deliberately choose an exact version with --version."
+                return 1
+            fi
+            if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != unknown ]]; then
+                local automatic_compare=0
+                compare_versions "$automatic_release" "$CURRENT_VERSION" || automatic_compare=$?
+                case "$automatic_compare" in
+                    0)
+                        print_info "$CURRENT_VERSION is already the selected $requested_channel release. Existing installation is unchanged."
+                        return 0
+                        ;;
+                    2)
+                        print_error "Selected release $automatic_release is older than $CURRENT_VERSION; refusing to downgrade automatically. Existing installation is unchanged; use --version only for a deliberate rollback."
+                        return 1
+                        ;;
+                esac
+            fi
+            if [[ -z "$choice" ]]; then
+                print_error "No update option matches the selected release. Existing installation is unchanged."
+                return 1
+            fi
+        fi
+
         # Debug: Check if choice was read correctly
         if [[ -z "$choice" ]]; then
             print_error "No option selected. Exiting."
@@ -5058,6 +5335,12 @@ main() {
             action="cancel"
         fi
         
+        # Preview can legitimately select the newest stable release. Do not
+        # silently turn that requested preview channel into a stable preference.
+        if [[ "$automatic_choice" == true && "$action" == update ]]; then
+            UPDATE_CHANNEL="$requested_channel"
+        fi
+
         # Debug: Show what action was determined
         # print_info "DEBUG: Action determined: ${action:-'none'}"
         
@@ -5084,7 +5367,6 @@ main() {
                 fi
                 
                 backup_existing
-                stop_pulse_for_update
                 create_user
                 download_pulse
                 # Same repair as the --version path: a half-removed
@@ -5109,10 +5391,14 @@ main() {
                 exit 0
                 ;;
             reinstall)
+                if ! is_pulse_release_tag "$CURRENT_VERSION"; then
+                    print_error "Cannot reinstall an unknown current server version. Existing installation is unchanged; deliberately choose an exact version with --version."
+                    return 1
+                fi
+                LATEST_RELEASE="$CURRENT_VERSION"
                 offer_existing_auto_updates
 
                 backup_existing
-                stop_pulse_for_update
                 create_user
                 download_pulse
                 setup_directories
@@ -5133,9 +5419,10 @@ main() {
                 exit 0
                 ;;
             remove)
-                # Stop and disable service
-                systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-                systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+                if ! quiesce_pulse_for_removal "$SERVICE_NAME"; then
+                    print_error "Pulse removal is incomplete; no files have been removed. Previously stopped units are not automatically restarted."
+                    return 1
+                fi
                 
                 # Remove service files
                 rm -f "/etc/systemd/system/$SERVICE_NAME.service"
@@ -5294,7 +5581,10 @@ remove_local_sensor_proxy_managed_keys() {
     fi
     chmod --reference="$auth_file" "$tmp_file" 2>/dev/null || chmod 600 "$tmp_file" 2>/dev/null || true
     chown --reference="$auth_file" "$tmp_file" 2>/dev/null || true
-    mv "$tmp_file" "$auth_file"
+    if ! mv "$tmp_file" "$auth_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
     echo "Removed legacy pulse-sensor-proxy SSH key entries from $auth_file"
 }
 
@@ -5310,24 +5600,23 @@ cleanup_local_sensor_proxy() {
         pulse-sensor-proxy-selfheal.service \
         pulse-sensor-cleanup.path \
         pulse-sensor-cleanup.service; do
-        systemctl stop "$unit" >/dev/null 2>&1 || true
-        systemctl disable "$unit" >/dev/null 2>&1 || true
+        stop_pulse_unit_for_removal "$unit" || return 1
     done
 
-    rm -f "$SENSOR_PROXY_BINARY_PATH"
-    rm -f /usr/local/bin/pulse-sensor-cleanup.sh
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service"
-    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path"
-    rm -rf "$SENSOR_PROXY_RUNTIME_DIR"
-    rm -rf "$SENSOR_PROXY_INSTALL_ROOT"
-    rm -rf "$SENSOR_PROXY_WORK_DIR"
-    rm -rf "$SENSOR_PROXY_CONFIG_DIR"
-    rm -rf "$SENSOR_PROXY_LOG_DIR"
+    rm -f "$SENSOR_PROXY_BINARY_PATH" || return 1
+    rm -f /usr/local/bin/pulse-sensor-cleanup.sh || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service" || return 1
+    rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path" || return 1
+    rm -rf "$SENSOR_PROXY_RUNTIME_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_INSTALL_ROOT" || return 1
+    rm -rf "$SENSOR_PROXY_WORK_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_CONFIG_DIR" || return 1
+    rm -rf "$SENSOR_PROXY_LOG_DIR" || return 1
 
-    remove_local_sensor_proxy_managed_keys
+    remove_local_sensor_proxy_managed_keys || return 1
 
     if id -u "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1; then
         userdel --remove "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || userdel "$SENSOR_PROXY_SERVICE_USER" >/dev/null 2>&1 || true
@@ -5342,6 +5631,7 @@ cleanup_local_sensor_proxy() {
     echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
 }
 
+
 # Uninstall function
 uninstall_pulse() {
     check_root
@@ -5353,23 +5643,11 @@ uninstall_pulse() {
     local service_name
     service_name=$(detect_service_name)
     
-    # Stop and disable service
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        echo "Stopping $service_name..."
-        systemctl stop "$service_name"
+    if ! quiesce_pulse_for_removal "$service_name"; then
+        print_error "Pulse removal is incomplete; no files have been removed. Previously stopped units are not automatically restarted."
+        return 1
     fi
-    
-    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
-        echo "Disabling $service_name..."
-        systemctl disable "$service_name"
-    fi
-    
-    # Stop and disable auto-update timer if it exists
-    if update_timer_enabled; then
-        echo "Disabling auto-update timer..."
-        systemctl disable --now "$UPDATE_TIMER_UNIT"
-    fi
-    
+
     # Remove files
     echo "Removing Pulse files..."
     rm -rf "$INSTALL_DIR"
@@ -5395,7 +5673,7 @@ uninstall_pulse() {
 
     # Remove any leftover legacy pulse-sensor-proxy footprint on this host so a
     # full uninstall on a v5-upgraded Proxmox host leaves nothing behind.
-    cleanup_local_sensor_proxy
+    cleanup_local_sensor_proxy || return 1
 
     # Reload systemd
     systemctl daemon-reload
@@ -5405,34 +5683,171 @@ uninstall_pulse() {
     exit 0
 }
 
-# Reset function
+# Reset retains the install and unit files. Observe every possible writer before
+# mutation; only timers lose enablement temporarily. Never replay an interrupted
+# updater, or restart services after an uncertain stop/deletion.
+read_pulse_reset_unit_state() {
+    local unit="$1"
+    PULSE_RESET_LOAD="" PULSE_RESET_ACTIVE="" PULSE_RESET_ENABLED=""
+    if ! PULSE_RESET_LOAD=$(timeout -k 1 5 systemctl show "$unit" --property=LoadState --value 2>/dev/null) ||
+       ! PULSE_RESET_ACTIVE=$(timeout -k 1 5 systemctl show "$unit" --property=ActiveState --value 2>/dev/null); then
+        print_error "Cannot observe unit ($unit); reset incomplete. No automatic recovery will be attempted; reconcile service state before retrying."
+        return 1
+    fi
+    if [[ "$PULSE_RESET_LOAD" == "not-found" && "$PULSE_RESET_ACTIVE" == "inactive" ]]; then
+        return 0
+    fi
+    case "$PULSE_RESET_LOAD" in
+        loaded|masked) ;;
+        *) print_error "Unknown unit load state ($unit); reset incomplete"; return 1 ;;
+    esac
+    case "$PULSE_RESET_ACTIVE" in
+        active|inactive|failed) ;;
+        *) print_error "Unsettled unit state ($unit); reset incomplete"; return 1 ;;
+    esac
+    if ! PULSE_RESET_ENABLED=$(timeout -k 1 5 systemctl show "$unit" --property=UnitFileState --value 2>/dev/null); then
+        print_error "Cannot observe unit enablement ($unit); reset incomplete"
+        return 1
+    fi
+    case "$PULSE_RESET_ENABLED" in
+        enabled|enabled-runtime|disabled|static|indirect|masked|masked-runtime|linked|linked-runtime) ;;
+        *) print_error "Unknown unit enablement ($unit); reset incomplete"; return 1 ;;
+    esac
+}
+
+confirm_pulse_reset_unit_stopped() {
+    local unit="$1" expected_load="$2" expected_enabled="$3"
+    read_pulse_reset_unit_state "$unit" || return 1
+    if [[ "$PULSE_RESET_ACTIVE" != "inactive" || "$PULSE_RESET_LOAD" != "$expected_load" || "$PULSE_RESET_ENABLED" != "$expected_enabled" ]]; then
+        print_error "Unit quiescence changed or is unconfirmed ($unit); reset incomplete. Files are preserved; no services will be restarted. Reconcile service state before retrying."
+        return 1
+    fi
+}
+
+# Reset function: the caller's existing --reset intent is unchanged.
 reset_pulse() {
     check_root
     print_header
     echo -e "\033[0;33mResetting Pulse configuration...\033[0m"
     echo
-    
-    # Detect service name
-    local service_name
+
+    local service_name unit i prior_enabled
     service_name=$(detect_service_name)
-    
-    # Stop service
-    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        echo "Stopping $service_name..."
-        systemctl stop "$service_name"
+    service_name="${service_name%.service}.service"
+    local units=("$UPDATE_TIMER_UNIT") roles=(timer)
+    # Historical default aliases share the same configuration. Custom instances
+    # must not stop, enable or restart another installation's units.
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" && "$UPDATE_TIMER_UNIT" != "pulse-backend-update.timer" ]]; then
+        units+=(pulse-backend-update.timer); roles+=(timer)
     fi
-    
-    # Remove config but keep binary
+    units+=("$UPDATE_SERVICE_UNIT"); roles+=(updater)
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" && "$UPDATE_SERVICE_UNIT" != "pulse-backend-update.service" ]]; then
+        units+=(pulse-backend-update.service); roles+=(updater)
+    fi
+    units+=("$service_name"); roles+=(server)
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        if [[ "$service_name" != "pulse.service" ]]; then units+=(pulse.service); roles+=(server); fi
+        if [[ "$service_name" != "pulse-backend.service" ]]; then units+=(pulse-backend.service); roles+=(server); fi
+    fi
+    local loads=() active_states=() enabled_states=() stopped_enabled_states=()
+    # A failed observation anywhere must precede every stop and deletion.
+    for unit in "${units[@]}"; do
+        read_pulse_reset_unit_state "$unit" || return 1
+        if [[ "$unit" == "$service_name" && "$PULSE_RESET_LOAD" == "not-found" ]]; then
+            print_error "Pulse service is missing ($unit); refusing configuration reset"
+            return 1
+        fi
+        loads+=("$PULSE_RESET_LOAD")
+        active_states+=("$PULSE_RESET_ACTIVE")
+        enabled_states+=("$PULSE_RESET_ENABLED")
+        stopped_enabled_states+=("$PULSE_RESET_ENABLED")
+    done
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        if [[ "${active_states[$i]}" != "inactive" ]]; then
+            if ! timeout -k 1 5 systemctl stop "$unit"; then
+                print_error "Cannot stop unit ($unit); reset incomplete. Configuration is preserved; no services will be restarted. Reconcile service state before retrying."
+                return 1
+            fi
+        fi
+        prior_enabled="${enabled_states[$i]}"
+        if [[ "${roles[$i]}" == timer ]]; then
+            case "$prior_enabled" in
+                enabled)
+                    if ! timeout -k 1 5 systemctl disable "$unit"; then
+                        print_error "Cannot disable timer ($unit); reset incomplete; configuration is preserved"
+                        return 1
+                    fi
+                    stopped_enabled_states[$i]=disabled
+                    ;;
+                enabled-runtime)
+                    if ! timeout -k 1 5 systemctl disable --runtime "$unit"; then
+                        print_error "Cannot disable runtime timer ($unit); reset incomplete; configuration is preserved"
+                        return 1
+                    fi
+                    stopped_enabled_states[$i]=disabled
+                    ;;
+            esac
+        fi
+        confirm_pulse_reset_unit_stopped "$unit" "${loads[$i]}" "${stopped_enabled_states[$i]}" || return 1
+    done
+    # Recheck ALL writers immediately before deletion, including an earlier timer
+    # that reactivated or an updater that appeared while the server was stopping.
+    for i in "${!units[@]}"; do
+        confirm_pulse_reset_unit_stopped "${units[$i]}" "${loads[$i]}" "${stopped_enabled_states[$i]}" || return 1
+    done
+
     echo "Removing configuration and data..."
-    rm -rf "$CONFIG_DIR"/*
-    
-    # Restart service
-    echo "Starting $service_name with fresh configuration..."
-    systemctl start "$service_name"
-    
+    if ! rm -rf -- "$CONFIG_DIR"/*; then
+        print_error "Configuration deletion failed; reset incomplete. Services and timers remain stopped; inspect retained data before recovery."
+        return 1
+    fi
+
+    # Restore only previously active servers. A prior inactive/failed service is
+    # not consent to start it. Interrupted updater jobs are deliberately not replayed.
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        [[ "${roles[$i]}" == server ]] || continue
+        if [[ "${active_states[$i]}" == "active" ]]; then
+            if ! timeout -k 1 5 systemctl start "$unit"; then
+                print_error "Cannot restart prior-active Pulse ($unit); reset incomplete. Timers remain stopped; reconcile service state before recovery."
+                return 1
+            fi
+            read_pulse_reset_unit_state "$unit" || return 1
+            if [[ "$PULSE_RESET_ACTIVE" != "active" || "$PULSE_RESET_LOAD" != "${loads[$i]}" || "$PULSE_RESET_ENABLED" != "${enabled_states[$i]}" ]]; then
+                print_error "Prior-active Pulse restoration is unconfirmed ($unit); reset incomplete. Timers remain stopped."
+                return 1
+            fi
+        fi
+    done
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        [[ "${roles[$i]}" == timer ]] || continue
+        case "${enabled_states[$i]}" in
+            enabled) timeout -k 1 5 systemctl enable "$unit" || { print_error "Timer enablement restoration failed ($unit); reset incomplete"; return 1; } ;;
+            enabled-runtime) timeout -k 1 5 systemctl enable --runtime "$unit" || { print_error "Runtime timer enablement restoration failed ($unit); reset incomplete"; return 1; } ;;
+        esac
+        confirm_pulse_reset_unit_stopped "$unit" "${loads[$i]}" "${enabled_states[$i]}" || return 1
+        if [[ "${active_states[$i]}" == "active" ]]; then
+            timeout -k 1 5 systemctl start "$unit" || { print_error "Timer restart failed ($unit); reset incomplete"; return 1; }
+        fi
+    done
+    # Completion requires actual readback, not successful start/enable commands.
+    for i in "${!units[@]}"; do
+        unit="${units[$i]}"
+        read_pulse_reset_unit_state "$unit" || return 1
+        local expected_active="${active_states[$i]}"
+        [[ "${roles[$i]}" != updater && "$expected_active" != "failed" ]] || expected_active=inactive
+        if [[ "$PULSE_RESET_ACTIVE" != "$expected_active" || "$PULSE_RESET_LOAD" != "${loads[$i]}" || "$PULSE_RESET_ENABLED" != "${enabled_states[$i]}" ]]; then
+            print_error "Final unit restoration is unconfirmed ($unit); reset incomplete. Reconcile service state before recovery."
+            return 1
+        fi
+        if [[ "${roles[$i]}" == updater && "${active_states[$i]}" == "active" ]]; then
+            print_info "Interrupted updater ($unit) remains stopped and was not replayed."
+        fi
+    done
     echo
-    echo -e "\033[0;32m✓ Pulse has been reset to fresh configuration\033[0m"
-    echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):$(current_frontend_port)"
+    echo -e "\033[0;32m✓ Pulse configuration has been reset; prior-active server and timer states are restored\033[0m"
     exit 0
 }
 

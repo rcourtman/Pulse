@@ -40,7 +40,17 @@ if name == 'systemctl':
     assert args == ['show', 'pulse', '--property=FragmentPath', '--property=DropInPaths']
     print('FragmentPath=/etc/systemd/system/pulse.service\nDropInPaths=/etc/systemd/system/pulse.service.d/local.conf')
 elif name == 'docker':
-    if args == ['inspect', 'pulse', '--format', '{{.Config.Image}} {{.Image}}']:
+    if args == ['ps', '-a', '--format', '{{.Names}}']:
+        print('example-app\nexample-app_pulse_backup_123')
+    elif args == ['inspect', '--type', 'container', '--format',
+                  'State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}',
+                  'example-app']:
+        if os.environ.get('INSPECT_EXIT'):
+            print('No such container: example-app', file=sys.stderr)
+            sys.exit(int(os.environ['INSPECT_EXIT']))
+        print('State=' + os.environ['CONTAINER_STATE'] +
+              ' ImageRef=private.example/app:latest ImageID=sha256:current Started=2026-10-06T12:00:00Z')
+    elif args == ['inspect', 'pulse', '--format', '{{.Config.Image}} {{.Image}}']:
         print('private.example/pulse:old sha256:previous')
     elif args == ['compose', 'pull', 'pulse']:
         sys.exit(int(os.environ.get('PULL_EXIT', '0')))
@@ -54,6 +64,66 @@ else:
 
 
 class UpdateRecoveryDocsTest(unittest.TestCase):
+    def assert_host_update_entry(self, text):
+        # The entry point must hand off to the ownership-checked procedure,
+        # not execute whichever program happens to be called /bin/update.
+        self.assertIn("](INSTALL.md#-updates)", text)
+        self.assertNotRegex(text, r"```(?:bash|sh|shell)\b")
+        self.assertNotRegex(text, r"\bsudo\s+/bin/update\b")
+
+    def test_manual_host_entries_do_not_execute_an_unidentified_helper(self):
+        lxc = section("AUTO_UPDATE", "ProxmoxVE LXC (Manual)", "###")
+        systemd = section("AUTO_UPDATE", "Systemd Service (Manual)", "###")
+        for entry in (lxc, systemd):
+            self.assert_host_update_entry(entry)
+            with self.assertRaises(AssertionError):
+                self.assert_host_update_entry(entry + "\n```bash\nsudo /bin/update\n```\n")
+        self.assertIn("inside the existing Pulse LXC", lxc)
+        self.assertIn("not on the Proxmox host", lxc)
+        self.assertIn("community-scripts installation", lxc)
+        self.assertIn("helper whose owner is unknown", systemd)
+        self.assertIn("default installation paths", systemd)
+
+    def test_chart_selection_help_preserves_evidence_and_exact_installer_trust(self):
+        text = " ".join(section("AUTO_UPDATE", "A helper selects a Helm-chart release", "###").split())
+        for phrase in (
+            "`vX.Y.Z`", "`helm-chart-*`", "not the Linux server archive",
+            "does not establish", "latest-release pointer is wrong",
+            "preserve the selected tag and error", "GitHub personal access token",
+            "bypass signatures", "unknown helper may ignore `--version`",
+            "download its installer before", "running version and service health",
+            "configuration, keys and history", "Do not recreate the LXC",
+            "exact `PULSE_VERSION`", "installed service and paths",
+            "Private Pro installations must retain their private runtime",
+            "not confirmation", "INSTALL.md#-updates", "#update-failed",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("```", text, "No alternate unverified download or repair recipe")
+
+        # The linked public installer recipe downloads both files from the
+        # selected release, not a moving /latest asset URL. Its executable
+        # download/signature failure controls live in test_signed_installer_docs.
+        recipes = [block for block in re.findall(r"```bash\n(.*?)```", guide("INSTALL"), re.S)
+                   if "ssh-keygen -Y verify" in block]
+        self.assertEqual(len(recipes), 2)
+        for recipe in recipes:
+            self.assertIn('/releases/download/${PULSE_VERSION}/install.sh"', recipe)
+            self.assertIn('/releases/download/${PULSE_VERSION}/install.sh.sshsig"', recipe)
+            self.assertNotIn("/latest/", recipe)
+
+    def test_install_update_link_keeps_helper_ownership_and_existing_paths(self):
+        text = " ".join(section("INSTALL", "Manual Update", "####").split())
+        for phrase in (
+            "helper is absent or its owner is unknown", "stop before executing it",
+            "existing service and data/config paths", "default paths over a custom deployment",
+            "private Pro runtime with a public build", "inside the existing Pulse LXC",
+            "AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release",
+            "unknown or download-failing helper", "Do not recreate the LXC",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     def exercise(self, recipe, **settings):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -64,6 +134,7 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             calls_path = root / "calls.jsonl"
             env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}",
                        CALLS=str(calls_path), SERVICE_STATE="active",
+                       CONTAINER_STATE="running",
                        SYNTHETIC_CREDENTIAL="never-print-this-private-value")
             env.update(settings)
             result = subprocess.run(["bash", "-c", recipe], env=env,
@@ -185,6 +256,95 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         short = section("AUTO_UPDATE", "Docker", "###")
         self.assertIn("DOCKER.md#-updates", short)
         self.assertNotIn("docker pull", short)
+
+    def workload_check_recipes(self):
+        return re.findall(r"```bash\n(.*?)```", section(
+            "DOCKER", "Check a failed or pending workload update", "###"), re.S)
+
+    def test_workload_discovery_and_inspection_are_scoped_read_only(self):
+        recipes = self.workload_check_recipes()
+        self.assertEqual(len(recipes), 2)
+        result, calls = self.exercise(recipes[0])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [{"name": "docker", "args": ["ps", "-a", "--format", "{{.Names}}"]}])
+        self.assertIn("example-app_pulse_backup_123", result.stdout)
+        recipe = recipes[1].replace("container='affected-container'", "container='example-app'")
+        for state in ("running", "exited", "restarting"):
+            with self.subTest(state=state):
+                result, calls = self.exercise(recipe, CONTAINER_STATE=state)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [{"name": "docker", "args": [
+                    "inspect", "--type", "container", "--format",
+                    "State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}",
+                    "example-app",
+                ]}])
+                self.assertIn(f"State={state}", result.stdout)
+                self.assertIn("ImageID=sha256:current", result.stdout)
+                self.assertNotIn("Environment", result.stdout)
+
+    def test_missing_workload_preserves_the_error_without_recovery_mutation(self):
+        recipe = self.workload_check_recipes()[1].replace(
+            "container='affected-container'", "container='example-app'")
+        result, calls = self.exercise(recipe, INSPECT_EXIT="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("No such container", result.stderr)
+
+    def test_workload_identity_and_pending_receipt_help_preserve_uncertainty(self):
+        text = " ".join(section("DOCKER", "Check a failed or pending workload update", "###").split())
+        for phrase in ("on the host running the affected container", "same Docker context",
+                       "do not change socket permissions", "not `pulse` unless Pulse itself was the target",
+                       "tag such as `latest` can stay unchanged", "not a registry manifest digest",
+                       "cannot establish whether the image changed", "not proof of an image update",
+                       "Do not start, rename, delete or update anything", "not proof that its application or data is healthy",
+                       "does not send another container update", "not the full inspection"):
+            self.assertIn(phrase, text)
+        ui = (ROOT / "frontend-modern/src/features/actions/ActionReviewDialog.tsx").read_text()
+        badge = (ROOT / "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts").read_text()
+        self.assertIn("Review action", badge)
+        self.assertIn("Check for receipt", ui)
+        self.assertIn("refreshReceipt()", ui)
+
+    def test_update_failure_entry_reuses_bounded_readers_before_any_recovery(self):
+        text = " ".join(section("AUTO_UPDATE", "Update failed", "###").split())
+        for phrase in ("**Pulse server**", "UNIFIED_AGENT.md#auto-update",
+                       "DOCKER.md#check-a-failed-or-pending-workload-update",
+                       "target version, attempt time, last displayed step",
+                       "**Update History**", "running version", "monitoring freshness",
+                       "TROUBLESHOOTING.md#inspect-notification-logs",
+                       "deadline as well as time and record limits",
+                       "Do not rerun an update, restart or reinstall",
+                       "server journal alone may not contain the installer failure",
+                       "not proof that no change occurred",
+                       "Do not delete configuration backups, keys or history",
+                       "do not disable TLS verification",
+                       "public Community runtime", "out of public reports"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"journalctl\b|docker logs\b|```")
+
+    def test_restart_failure_entry_distinguishes_updater_and_requires_matched_backup(self):
+        text = " ".join(section("AUTO_UPDATE", "Service won't restart after update", "###").split())
+        for phrase in ("`pulse-update.service` is not proof that `pulse` is stopped",
+                       "read-only service discovery", "[Manual Rollback](#manual-rollback)",
+                       "actual service name", "Pulse server's container name",
+                       "not proof that the UI, saved connections and history are healthy",
+                       "preserve the failed state", "backup's version and complete scope",
+                       "stopped-service recovery procedure", "absent or partial backup",
+                       "not to overwrite live data", "Do not restore a guessed snapshot"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"journalctl\b|systemctl status\b|docker logs\b|```")
+
+    def test_docker_log_entry_reaches_the_same_deadline_bounded_server_reader(self):
+        text = section("DOCKER", "🛠️ Troubleshooting").split("- **Logs**\n", 1)[1].split(
+            "- **Shell Access**", 1)[0]
+        text = " ".join(text.split())
+        for phrase in ("TROUBLESHOOTING.md#inspect-notification-logs",
+                       "host running the Pulse server", "actual container name",
+                       "both output streams", "deadline, time window and record limit",
+                       "failed read is not an empty log", "Review the excerpt privately",
+                       "Do not follow logs indefinitely or repeat a failed update"):
+            self.assertIn(phrase, text)
+        self.assertNotRegex(text, r"docker logs\b|```")
 
 
 if __name__ == "__main__":

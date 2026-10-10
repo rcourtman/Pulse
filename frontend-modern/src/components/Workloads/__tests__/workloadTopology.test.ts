@@ -61,7 +61,7 @@ const makeNode = (id: string, instance: string, name: string): Node => ({
 
 describe('workloadTopology', () => {
   describe('buildNodeByInstance and buildGuestParentNodeMap', () => {
-    it('maps nodes by id and legacy instance-name key without overriding first legacy key', () => {
+    it('maps unique native IDs without aliasing duplicate instance/node tuples', () => {
       const nodeA = makeNode('cluster-a-node-a', 'cluster-a', 'node-a');
       const nodeAAlt = makeNode('custom-node-id', 'cluster-a', 'node-a');
       const nodeB = makeNode('cluster-b-node-b', 'cluster-b', 'node-b');
@@ -116,9 +116,9 @@ describe('workloadTopology', () => {
   });
 
   describe('workload identity helpers', () => {
-    it('builds node scope as instance-node with trimming', () => {
+    it('builds an encoded instance/node scope with trimming', () => {
       const guest = makeGuest(1, { instance: ' cluster-a ', node: ' node-a ' });
-      expect(workloadNodeScopeId(guest)).toBe('cluster-a-node-a');
+      expect(workloadNodeScopeId(guest)).toBe('node|cluster-a|node-a');
     });
 
     it('returns first non-empty kubernetes context candidate', () => {

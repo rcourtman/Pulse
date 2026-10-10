@@ -87,6 +87,10 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	key := schedulerKey(InstanceTypePVE, instanceName)
 
 	m.mu.Lock()
+	if poll := m.pveReplicationPolls[instanceName]; poll != nil {
+		poll.cancel()
+		delete(m.pveReplicationPolls, instanceName)
+	}
 	delete(m.pveClients, instanceName)
 	delete(m.lastClusterCheck, instanceName)
 	delete(m.lastPhysicalDiskPoll, instanceName)

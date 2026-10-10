@@ -5,10 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -413,6 +416,161 @@ func requirePrivilegeHelperModuleStatus(t *testing.T, statuses []agentshost.Modu
 	return agentshost.ModuleStatus{}
 }
 
+func TestCollectProxmoxPartialInventoryKeepsRowsAndDegradedHealth(t *testing.T) {
+	helper := &fakePrivilegedTelemetry{proxmox: &agentshost.ProxmoxLXCInventory{
+		Status: agentshost.ProxmoxLXCCollectionPartial, Containers: []agentshost.ProxmoxLXCContainer{{VMID: 100, Name: "web"}}, OmittedVMIDs: []int{102},
+	}}
+	status := NewPrivilegeHelperStatus()
+	status.Record(privilegeHelperOperationSMART, errors.New("unrelated failure"))
+	agent := &Agent{privilegedTelemetry: helper, privilegeHelperHealth: status, logger: zerolog.Nop()}
+	got := agent.collectProxmoxLXCFilesystemsForReport(t.Context())
+	if got == nil || len(got.Containers) != 1 || len(got.OmittedVMIDs) != 1 {
+		t.Fatal("partial inventory was discarded")
+	}
+	module := status.ModuleStatus()
+	if module.State != "degraded" || !strings.Contains(module.LastError, "inventory is incomplete") {
+		t.Fatalf("module = %+v", module)
+	}
+	helper.proxmox = &agentshost.ProxmoxLXCInventory{Status: agentshost.ProxmoxLXCCollectionComplete}
+	if agent.collectProxmoxLXCFilesystemsForReport(t.Context()) == nil {
+		t.Fatal("complete recovery omitted")
+	}
+	module = status.ModuleStatus()
+	if module.State != "degraded" || strings.Contains(module.LastError, "proxmox.lxc_filesystems") || !strings.Contains(module.LastError, privilegeHelperOperationSMART) {
+		t.Fatalf("recovery cleared wrong health: %+v", module)
+	}
+}
+
+func TestProxmoxHelperVersionCompatibilityIsNarrow(t *testing.T) {
+	tests := []struct {
+		name      string
+		code      string
+		status    string
+		omitted   []int
+		wantErr   bool
+		wantCalls int
+	}{
+		{"v2 partial", "", "partial", []int{102}, false, 1},
+		{"older helper", agenthelper.ErrorUnsupportedOperation, "", nil, false, 2},
+		{"provider failure", agenthelper.ErrorProviderUnavailable, "", nil, true, 1},
+		{"peer denial", agenthelper.ErrorUnauthorizedPeer, "", nil, true, 1},
+		{"missing v2 completeness", "", "", nil, true, 1},
+		{"invalid v2 completeness", "", "complete", []int{102}, true, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := make(chan int, 3)
+			client, err := agenthelper.NewClient(agenthelper.ClientConfig{
+				SocketPath: filepath.Join(t.TempDir(), "helper.sock"), MaxDeadline: privilegeHelperOperationDeadline,
+				DialContext: func(context.Context, string, string) (net.Conn, error) {
+					clientConn, serverConn := net.Pipe()
+					go func() {
+						defer serverConn.Close()
+						var header [4]byte
+						if _, err := io.ReadFull(serverConn, header[:]); err != nil {
+							return
+						}
+						b := make([]byte, binary.BigEndian.Uint32(header[:]))
+						if _, err := io.ReadFull(serverConn, b); err != nil {
+							return
+						}
+						var req agenthelper.Request
+						if json.Unmarshal(b, &req) != nil {
+							return
+						}
+						calls <- req.OperationVersion
+						inventory := &agentshost.ProxmoxLXCInventory{Status: tt.status, Containers: []agentshost.ProxmoxLXCContainer{{VMID: 100, Name: "web"}}, OmittedVMIDs: tt.omitted}
+						raw, _ := json.Marshal(struct {
+							Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`
+						}{inventory})
+						response := agenthelper.Response{ProtocolVersion: 1, RequestID: req.RequestID, Operation: req.Operation, OperationVersion: req.OperationVersion, Success: true, Result: raw}
+						if tt.code != "" && req.OperationVersion == 2 {
+							response.Success = false
+							response.Result = nil
+							response.Error = &agenthelper.ResponseError{Code: tt.code}
+						}
+						b, _ = json.Marshal(response)
+						frame := make([]byte, 4+len(b))
+						binary.BigEndian.PutUint32(frame[:4], uint32(len(b)))
+						copy(frame[4:], b)
+						serverConn.Write(frame)
+					}()
+					return clientConn, nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			inventory, err := (&privilegeHelperTelemetry{client: client}).ProxmoxLXCFilesystems(t.Context())
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("inventory=%+v, error=%v", inventory, err)
+			}
+			if len(calls) != tt.wantCalls {
+				t.Fatalf("calls=%d, want %d", len(calls), tt.wantCalls)
+			}
+			for n := 0; n < tt.wantCalls; n++ {
+				version := <-calls
+				if version != 2-n {
+					t.Fatalf("call %d version=%d", n, version)
+				}
+			}
+		})
+	}
+}
+
+func TestCollectProxmoxInvalidListCannotBecomeCompleteEmpty(t *testing.T) {
+	header := "VMID Status Lock Name\n"
+	boundary := header
+	for n := 0; n < proxmoxLXCMaxContainers; n++ {
+		boundary += fmt.Sprintf("%d running - web\n", 100+n)
+	}
+	if rows, err := parseProxmoxLXCRunningContainers(boundary); err != nil || len(rows) != proxmoxLXCMaxContainers {
+		t.Fatalf("exact running-container boundary rejected: rows=%d err=%v", len(rows), err)
+	}
+	tests := []struct {
+		name, output string
+		valid        bool
+	}{
+		{"header only", header, true},
+		{"all stopped", header + "100 stopped - web\n", true},
+		{"empty output", "", false},
+		{"unrecognised output", "pmxcfs unavailable\n", false},
+		{"headerless rows", "100 running - web\n", false},
+		{"malformed header", "VMID Status\n", false},
+		{"invalid running identity", header + "99 running - web\n", false},
+		{"invalid state", header + "100 unknown - web\n", false},
+		{"duplicate identity", header + "100 running - web\n100 stopped - web\n", false},
+		{"over running limit", boundary + "228 running - web\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries := 0
+			collector := &mockCollector{
+				goos:       "linux",
+				lookPathFn: func(string) (string, error) { return "/usr/sbin/pct", nil },
+				commandCombinedOutputLimitedFn: func(_ context.Context, _ int, _ string, args ...string) (string, error) {
+					queries++
+					if strings.Join(args, " ") != "list" {
+						t.Fatal("invalid or empty list must not start per-container queries")
+					}
+					return tt.output, nil
+				},
+			}
+			result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+			if queries != 1 || !result.Applicable {
+				t.Fatalf("collection did not use the one bounded list operation: %+v queries=%d", result, queries)
+			}
+			if tt.valid {
+				if result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || len(result.Inventory.Containers) != 0 {
+					t.Fatalf("valid empty list=%+v", result)
+				}
+			} else if !result.Degraded || result.Inventory != nil {
+				t.Fatalf("invalid list appeared complete: %+v", result)
+			}
+		})
+	}
+}
+
 // The typed helper runs with PrivateNetwork=true, where pct and lxc-info cannot
 // reach pmxcfs or the LXC monitor: their abstract Unix sockets belong to the
 // host network namespace (#2511). This drives the collector the helper's
@@ -451,5 +609,189 @@ func TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets(t *testing.T) {
 	}
 	if len(got[0].Disks) != 2 || got[0].Disks[1].Mountpoint != "/srv/data" || got[0].Disks[1].UsedBytes != 290816 {
 		t.Fatalf("126 disks = %+v, want rootfs and the mp0 mount with its own usage", got[0].Disks)
+	}
+}
+
+func TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		running  int
+		tail     string
+		complete bool
+	}{
+		{"below limit", proxmoxLXCMaxContainers - 1, "", true},
+		{"exact limit", proxmoxLXCMaxContainers, "", true},
+		{"exact limit plus stopped", proxmoxLXCMaxContainers, "stopped", true},
+		{"over limit", proxmoxLXCMaxContainers + 1, "", false},
+		{"unknown after limit", proxmoxLXCMaxContainers, "unknown", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			for n := 0; n < tc.running; n++ {
+				vmid, pid := 100+n, 1000+n
+				h.config(vmid, fmt.Sprintf("hostname: ct%d\nrootfs: local:vm-%d-disk-0,size=1G\n", vmid, vmid))
+				h.cgroup(strconv.Itoa(vmid)+"/ns", pid)
+				h.proc(pid, fmt.Sprintf("%d\t1", pid), fmt.Sprintf("/lxc/%d/ns", vmid))
+				h.observations[pid] = map[string]lxcObservation{"/": lxcUsage(4096, 1024, 3072)}
+			}
+			if tc.tail != "" {
+				vmid := 100 + tc.running
+				h.config(vmid, "hostname: tail\nrootfs: local:tail,size=1G\n")
+				if tc.tail == "unknown" {
+					h.cgroup(strconv.Itoa(vmid) + "/ns") // exists, but has no established init
+				}
+			}
+			collector, commands := h.collector(t)
+			agent := &Agent{logger: zerolog.Nop(), collector: collector}
+			rows, ok := agent.discoverRunningProxmoxLXCContainers(t.Context())
+			if ok != tc.complete || (ok && len(rows) != tc.running) || (!ok && rows != nil) || *commands != 0 {
+				t.Fatalf("socket-free discovery: complete=%v rows=%d commands=%d", ok, len(rows), *commands)
+			}
+			result := agent.collectProxmoxLXCFilesystemsResult(t.Context())
+			if tc.complete {
+				if !result.Applicable || result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || len(result.Inventory.Containers) != tc.running || *commands != 0 {
+					t.Fatalf("complete boundary inventory=%+v commands=%d", result, *commands)
+				}
+				if last := result.Inventory.Containers[tc.running-1]; last.VMID != 99+tc.running || len(last.Disks) != 1 || last.Disks[0].UsedBytes != 1024 {
+					t.Fatalf("boundary guest reading lost: %+v", last)
+				}
+			} else if !result.Applicable || !result.Degraded || result.Inventory != nil || *commands != 1 {
+				t.Fatalf("unestablished node appeared complete instead of one failed pct fallback: %+v commands=%d", result, *commands)
+			}
+		})
+	}
+}
+
+// A wide delegated cgroup tree must not prevent the helper from inspecting
+// the exact init it already prioritises. All observations here are synthetic;
+// the collector's real identity/prober contract and PrivateNetwork stay intact.
+func TestHelperProxmoxLXCInitSearchPrioritizesBoundedReads(t *testing.T) {
+	for _, wideHost := range []bool{false, true} {
+		name := "wide_payload"
+		if wideHost {
+			name = "wide_host_and_payload"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			h.config(126, "hostname: busy-host\nrootfs: local:vm-126-disk-0,size=1G\n")
+			h.cgroup("126/ns/init.scope", 4000)
+			h.proc(4000, "4000\t1", "/lxc/126/ns/init.scope")
+			for n := 0; n < 4*proxmoxLXCMaxCgroupDirs; n++ {
+				h.cgroup(fmt.Sprintf("126/ns/workload%03d", n))
+				if wideHost {
+					h.cgroup(fmt.Sprintf("126/auxiliary%03d", n))
+				}
+			}
+			h.observations[4000] = map[string]lxcObservation{"/": lxcUsage(4096, 1024, 3072)}
+			collector, commands := h.collector(t)
+			readFile := collector.readFileFn
+			var examined []string
+			collector.readFileFn = func(name string) ([]byte, error) {
+				if strings.HasPrefix(name, proxmoxLXCCgroupRoot+"/") && strings.HasSuffix(name, "/cgroup.procs") {
+					examined = append(examined, name)
+				}
+				return readFile(name)
+			}
+			result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+			if !result.Applicable || result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || result.Inventory.ValidateCollection() != nil || *commands != 0 {
+				t.Fatalf("wide-tree helper collection = %+v; command attempts=%d", result, *commands)
+			}
+			rows := result.Inventory.Containers
+			if len(rows) != 1 || rows[0].VMID != 126 || rows[0].Name != "busy-host" || len(rows[0].Disks) != 1 || rows[0].Disks[0].UsedBytes != 1024 {
+				t.Fatalf("wide-tree source/name/capacity lost: %+v", rows)
+			}
+			want := []string{
+				path.Join(proxmoxLXCCgroupRoot, "126/cgroup.procs"),
+				path.Join(proxmoxLXCCgroupRoot, "126/ns/cgroup.procs"),
+				path.Join(proxmoxLXCCgroupRoot, "126/ns/init.scope/cgroup.procs"),
+			}
+			if fmt.Sprint(examined) != fmt.Sprint(want) {
+				t.Fatalf("examined cgroups=%v, want only %v", examined, want)
+			}
+			t.Logf("%d payload siblings: complete measured inventory, three cgroup process reads, no pct/lxc-info", 4*proxmoxLXCMaxCgroupDirs)
+		})
+	}
+}
+
+func TestProxmoxLXCInitSearchKeepsBoundsAndIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		depth int
+		state proxmoxLXCInitState
+	}{
+		{"last_permitted_directory", proxmoxLXCMaxCgroupDirs, proxmoxLXCRunning},
+		{"beyond_directory_budget", proxmoxLXCMaxCgroupDirs + 1, proxmoxLXCUnknown},
+		{"foreign_vm", 3, proxmoxLXCUnknown},
+		{"nested_namespace", 3, proxmoxLXCUnknown},
+		{"unreadable_preferred", 3, proxmoxLXCUnknown},
+		{"cancelled_before_init", 3, proxmoxLXCUnknown},
+		{"wide_tree_without_init", 2, proxmoxLXCUnknown},
+		{"last_permitted_pid", 3, proxmoxLXCRunning},
+		{"beyond_pid_budget", 3, proxmoxLXCUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			rel := "126"
+			for n := 1; n < tc.depth; n++ {
+				rel += "/step"
+			}
+			h.cgroup(rel, 4000)
+			h.proc(4000, "4000\t1", "/lxc/"+rel)
+			switch tc.name {
+			case "foreign_vm":
+				h.proc(4000, "4000\t1", "/lxc/127/ns")
+			case "nested_namespace":
+				h.proc(4000, "4000\t2\t1", "/lxc/"+rel)
+			case "unreadable_preferred":
+				delete(h.files, path.Join(proxmoxLXCCgroupRoot, rel, "cgroup.procs"))
+			case "wide_tree_without_init":
+				h.proc(4000, "4000\t2", "/lxc/"+rel)
+				for n := 0; n < 4*proxmoxLXCMaxCgroupDirs; n++ {
+					h.cgroup(fmt.Sprintf("126/workload%03d", n))
+				}
+			case "last_permitted_pid", "beyond_pid_budget":
+				count := proxmoxLXCMaxCgroupPIDs
+				if tc.name == "beyond_pid_budget" {
+					count++
+				}
+				pids := make([]int, count)
+				for n := range pids {
+					pids[n] = 10000 + n // absent /proc entries cannot establish init
+				}
+				pids[count-1] = 4000
+				h.cgroup(rel, pids...)
+			}
+			collector, commands := h.collector(t)
+			readFile := collector.readFileFn
+			directories, processes := 0, 0
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			collector.readFileFn = func(name string) ([]byte, error) {
+				if strings.HasPrefix(name, proxmoxLXCCgroupRoot+"/") && strings.HasSuffix(name, "/cgroup.procs") {
+					directories++
+					if tc.name == "cancelled_before_init" && directories == 2 {
+						cancel()
+					}
+				}
+				if strings.HasPrefix(name, "/proc/") && strings.HasSuffix(name, "/status") {
+					processes++
+				}
+				return readFile(name)
+			}
+			pid, state := (&Agent{logger: zerolog.Nop(), collector: collector}).proxmoxLXCInitPID(ctx, collector, 126)
+			if state != tc.state || (state == proxmoxLXCRunning && pid != 4000) || (state != proxmoxLXCRunning && pid != 0) || *commands != 0 {
+				t.Fatalf("pid/state=%d/%d want state=%d; commands=%d", pid, state, tc.state, *commands)
+			}
+			if directories > proxmoxLXCMaxCgroupDirs || processes > proxmoxLXCMaxCgroupPIDs {
+				t.Fatalf("search exceeded bounds: dirs=%d pids=%d", directories, processes)
+			}
+			if (tc.name == "last_permitted_directory" || tc.name == "beyond_directory_budget" || tc.name == "wide_tree_without_init") && directories != proxmoxLXCMaxCgroupDirs {
+				t.Fatalf("directory budget exercised only %d reads", directories)
+			}
+			if (tc.name == "last_permitted_pid" || tc.name == "beyond_pid_budget") && processes != proxmoxLXCMaxCgroupPIDs {
+				t.Fatalf("PID budget exercised only %d reads", processes)
+			}
+			t.Logf("cgroup process reads=%d; checked processes=%d; state=%d", directories, processes, state)
+		})
 	}
 }

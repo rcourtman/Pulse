@@ -1171,6 +1171,7 @@ func TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports(t *testing.T) {
 // device.
 func TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts(t *testing.T) {
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
 	m := &Monitor{alertManager: manager}
 	const instance, node = "pve1", "node1"
 	alertID := func(devPath string) string {

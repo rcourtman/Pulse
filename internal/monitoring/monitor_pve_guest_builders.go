@@ -3,12 +3,14 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -31,8 +33,10 @@ type vmBuildState struct {
 	diskUsage               float64
 	diskFromAgent           bool
 	diskStatusReason        string
+	diskObservation         models.GuestDiskObservation
 	guestAgentStatus        string
 	guestAgentExpected      bool
+	guestAgentEvidence      models.GuestAgentEvidence
 	individualDisks         []models.Disk
 	ipAddresses             []string
 	networkInterfaces       []models.GuestNetworkInterface
@@ -66,60 +70,15 @@ func (m *Monitor) applyVMStatusDetails(
 	res.Lock = status.Lock
 	state.detailedStatus = status
 	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
-	state.memTotal, state.memUsed, state.memorySource = m.resolveGuestStatusMemory(
-		ctx,
-		client,
-		instanceName,
-		res.Name,
-		res.Node,
-		res.VMID,
-		guestID,
-		status,
-		vmIDToHostAgent,
-		state.memTotal,
-		state.memorySource,
-		&state.guestRaw,
-	)
-
-	mergeVMRuntimeCounters(state, status)
-
-	// Gather guest metadata from the agent when available
-	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
-	if len(guestIPs) > 0 {
-		state.ipAddresses = guestIPs
+	if status.Lock == "" && status.Agent.IsAvailable() {
+		now := time.Now()
+		renewGuestAgentEvidence(&state.guestAgentEvidence, observedAtOr(status.ObservedAt, now), now)
 	}
-	if len(guestIfaces) > 0 {
-		state.networkInterfaces = guestIfaces
-	}
-	if guestOSName != "" {
-		state.osName = guestOSName
-	}
-	if guestOSVersion != "" {
-		state.osVersion = guestOSVersion
-	}
-	if guestAgentVersion != "" {
-		state.agentVersion = guestAgentVersion
-	}
-
-	// Always try to get filesystem info if agent is enabled
-	// Prefer guest agent data over cluster/resources data for accuracy
+	// Filesystem usage is cross-platform. Read it before optional Linux memory
+	// and metadata commands can start a shared uncertainty pause. Every command
+	// still verifies the same operation lock and is admitted only once.
 	if status.Agent.IsAvailable() {
-		var fsDisks []models.Disk
-		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
-			ctx,
-			instanceName,
-			res,
-			client,
-			state.diskTotal,
-			state.diskUsed,
-			state.diskUsage,
-		)
-		if len(fsDisks) > 0 {
-			state.individualDisks = fsDisks
-		}
-		if guestAgentDiskDeferred(state.diskStatusReason) {
-			state.guestAgentStatus = "deferred"
-		}
+		m.applyVMGuestAgentFSInfo(ctx, instanceName, res, client, state)
 	} else {
 		// Agent disabled - show allocated disk size
 		if state.diskTotal > 0 {
@@ -139,6 +98,65 @@ func (m *Monitor) applyVMStatusDetails(
 			Msg("VM guest agent is not currently queryable")
 	}
 
+	var memoryDeferred bool
+	state.memTotal, state.memUsed, state.memorySource, memoryDeferred = m.resolveGuestStatusMemory(
+		ctx,
+		client,
+		instanceName,
+		res.Name,
+		res.Node,
+		res.VMID,
+		guestID,
+		status,
+		vmIDToHostAgent,
+		state.memTotal,
+		state.memorySource,
+		&state.guestRaw,
+	)
+
+	if memoryDeferred {
+		state.guestAgentStatus = "deferred"
+	}
+
+	mergeVMRuntimeCounters(state, status)
+
+	// Gather guest metadata from the agent when available
+	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
+	if metadataDeferred {
+		state.guestAgentStatus = "deferred"
+	}
+	if len(guestIPs) > 0 {
+		state.ipAddresses = guestIPs
+	}
+	if len(guestIfaces) > 0 {
+		state.networkInterfaces = guestIfaces
+	}
+	if guestOSName != "" {
+		state.osName = guestOSName
+	}
+	if guestOSVersion != "" {
+		state.osVersion = guestOSVersion
+	}
+	if guestAgentVersion != "" {
+		state.agentVersion = guestAgentVersion
+	}
+}
+
+func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface, state *vmBuildState) {
+	var fsDisks []models.Disk
+	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
+		ctx, instanceName, res, client, state.diskTotal, state.diskUsed, state.diskUsage,
+	)
+	if len(fsDisks) > 0 {
+		state.individualDisks = fsDisks
+	}
+	if state.diskFromAgent {
+		state.diskObservation.ObservedAt = time.Now()
+		renewGuestAgentEvidence(&state.guestAgentEvidence, state.diskObservation.ObservedAt, state.diskObservation.ObservedAt)
+	}
+	if guestAgentDiskDeferred(state.diskStatusReason) {
+		state.guestAgentStatus = "deferred"
+	}
 }
 
 func mergeVMRuntimeCounters(state *vmBuildState, status *proxmox.VMStatus) {
@@ -219,6 +237,8 @@ func (m *Monitor) buildVMFromClusterResource(
 		m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, prePollTime)
 
 	state := vmBuildState{
+		guestAgentEvidence:      retainGuestAgentEvidence(prevVM, prePollTime),
+		diskObservation:         models.GuestDiskObservation{Source: "guest-agent"},
 		memTotal:                res.MaxMem,
 		memUsed:                 res.Mem,
 		memorySource:            "cluster-resources",
@@ -284,7 +304,8 @@ func (m *Monitor) buildVMFromClusterResource(
 		guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||
 			m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)
 		if guestAgentAvailable && res.Lock == "" && state.detailedStatus == nil {
-			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(
+			m.applyVMGuestAgentFSInfo(ctx, instanceName, res, client, &state)
+			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(
 				ctx,
 				client,
 				instanceName,
@@ -294,6 +315,9 @@ func (m *Monitor) buildVMFromClusterResource(
 				nil,
 				true,
 			)
+			if metadataDeferred {
+				state.guestAgentStatus = "deferred"
+			}
 			if len(guestIPs) > 0 {
 				state.ipAddresses = guestIPs
 			}
@@ -310,24 +334,11 @@ func (m *Monitor) buildVMFromClusterResource(
 				state.agentVersion = guestAgentVersion
 			}
 
-			var fsDisks []models.Disk
-			state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
-				ctx,
-				instanceName,
-				res,
-				client,
-				state.diskTotal,
-				state.diskUsed,
-				state.diskUsage,
-			)
-			if len(fsDisks) > 0 {
-				state.individualDisks = fsDisks
-			}
-			if guestAgentDiskDeferred(state.diskStatusReason) {
-				state.guestAgentStatus = "deferred"
-			}
 			state.guestAgentExpected = true
-			if state.guestAgentStatus != "deferred" && (len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent) {
+			// Cached strings are display continuity, not a new successful read.
+			metadataAt := m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID)
+			metadataObserved := !metadataAt.Before(prePollTime) && !metadataAt.After(time.Now())
+			if state.guestAgentStatus != "deferred" && (state.diskFromAgent || metadataObserved) {
 				state.guestAgentStatus = "available"
 			}
 		}
@@ -360,6 +371,7 @@ func (m *Monitor) buildVMFromClusterResource(
 			state.diskStatusReason,
 		)
 		if preferred {
+			state.diskObservation = models.GuestDiskObservation{Source: "agent", ObservedAt: vmIDToHostAgent[guestID].LastSeen}
 			log.Debug().
 				Str("instance", instanceName).
 				Str("vm", res.Name).
@@ -371,6 +383,12 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	sampleTime := time.Now()
+	if res.Status == "running" {
+		renewGuestAgentEvidence(&state.guestAgentEvidence, m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID), sampleTime)
+	} else {
+		// A stopped guest supplies no current fallback eligibility evidence.
+		state.guestAgentEvidence = models.GuestAgentEvidence{Explicit: true}
+	}
 	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason = stabilizeGuestLowTrustDisk(
 		prevVM,
 		res.Status,
@@ -383,6 +401,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		state.diskFromAgent,
 		sampleTime,
 	)
+	if strings.HasPrefix(state.diskStatusReason, "prev-") {
+		state.diskObservation.ObservedAt = guestDiskObservationTime(prevVM)
+	}
 
 	if res.Status != "running" {
 		state.memorySource = "powered-off"
@@ -391,6 +412,15 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	var snapshotNotes []string
+	if prevSnapshot != nil && (prevSnapshot.Raw.StatusMaxMem > 0 || prevSnapshot.Raw.ListingMaxMem > 0) {
+		currentCapacity := state.guestRaw.StatusMaxMem
+		if currentCapacity == 0 {
+			currentCapacity = state.guestRaw.ListingMaxMem
+		}
+		if guestMemoryConfiguredCapacity(prevSnapshot) != currentCapacity {
+			prevSnapshot = nil // A resize cannot retain the earlier guest tuple.
+		}
+	}
 	state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(
 		prevSnapshot,
 		res.Status,
@@ -408,6 +438,11 @@ func (m *Monitor) buildVMFromClusterResource(
 			state.agentVersion,
 		),
 	)
+	if state.memorySource == "previous-snapshot" && prevSnapshot != nil {
+		// Retention keeps the original guest denominator as well as its usage.
+		// The selector has already checked capacity continuity and source age.
+		state.memTotal = uint64(prevSnapshot.Memory.Total)
+	}
 	memFree := uint64(0)
 	if state.memTotal >= state.memUsed {
 		memFree = state.memTotal - state.memUsed
@@ -458,6 +493,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		trulyFree = state.guestRaw.GuestAgentMemFree
 	}
 	splitReclaimableMemory(&memory, trulyFree)
+	if state.memorySource == "previous-snapshot" && prevSnapshot != nil && prevSnapshot.Memory.Observation.State != "" {
+		memory = prevSnapshot.Memory
+	}
 	if state.detailedStatus != nil && state.detailedStatus.Balloon > 0 {
 		memory.Balloon = int64(state.detailedStatus.Balloon)
 	}
@@ -498,9 +536,11 @@ func (m *Monitor) buildVMFromClusterResource(
 		},
 		Disks:              state.individualDisks,
 		DiskStatusReason:   state.diskStatusReason,
+		DiskObservation:    state.diskObservation,
 		GuestAgentStatus:   state.guestAgentStatus,
 		Lock:               res.Lock,
 		GuestAgentExpected: state.guestAgentExpected,
+		GuestAgentEvidence: state.guestAgentEvidence,
 		IPAddresses:        state.ipAddresses,
 		OSName:             state.osName,
 		OSVersion:          state.osVersion,
@@ -579,6 +619,7 @@ type vmFSInfoSummary struct {
 	individualDisks []models.Disk
 	skippedFS       []string
 	includedFS      []string
+	invalidBytes    bool
 }
 
 func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool) {
@@ -599,70 +640,48 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 		if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
 			return nil, reason, false
 		}
-		// Log more helpful error messages based on the error type
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("To verify: ssh into VM and run 'systemctl status qemu-guest-agent' or 'ps aux | grep qemu-ga'")
-		} else if strings.Contains(errMsg, "timeout") {
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Guest agent timeout - agent may be installed but not responding")
-		} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-			// Permission error - user/token lacks required permissions
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("VM disk monitoring permission denied. Check permissions:")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit privilege (Pulse setup adds this via PulseMonitor role)")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Proxmox 8: Ensure token/user has VM.Monitor privilege (Pulse setup adds this via PulseMonitor role)")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• All versions: Sys.Audit is recommended for Ceph metrics and applied when available")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Re-run Pulse setup script if node was added before v4.7")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Verify guest agent is installed and running inside the VM")
-		} else {
-			log.Debug().
-				Err(err).
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Failed to get filesystem info from guest agent")
-		}
+		reason := classifyGuestAgentDiskStatusError(err)
+		logVMFilesystemUnavailable(ctx, instanceName, res, reason)
 		return nil, classifyGuestAgentDiskStatusError(err), false
 	}
 	if len(fsInfo) == 0 {
-		log.Info().
-			Str("instance", instanceName).
-			Str("vm", res.Name).
-			Int("vmid", res.VMID).
-			Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems")
+		logVMFilesystemUnavailable(ctx, instanceName, res, "no-filesystems")
 		return nil, "no-filesystems", false
 	}
 	return fsInfo, "", true
+}
+
+// Keep ordinary process logging when no context logger is installed. Tests and
+// callers with an explicit logger can own their output without global mutation.
+func guestFilesystemLogger(ctx context.Context) *zerolog.Logger {
+	logger := log.Ctx(ctx)
+	if logger.GetLevel() == zerolog.Disabled {
+		return &log.Logger
+	}
+	return logger
+}
+
+// Missing optional readings do not establish a need to activate/restart QGA,
+// change backup policy, or reconfigure a shared Proxmox role. Keep this guidance
+// independent of provider error text and the guest's operating system.
+func logVMFilesystemUnavailable(ctx context.Context, instanceName string, res proxmox.ClusterResource, reason string) {
+	message := "Guest filesystem query failed; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	switch reason {
+	case "agent-not-running":
+		message = "Proxmox reports the guest agent is not running; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	case "permission-denied":
+		message = "Guest filesystem query was not authorised; check the existing credential's access to this VM. Do not broaden shared roles or change guest-agent and backup settings to diagnose missing readings."
+	case "agent-timeout":
+		message = "Guest filesystem query did not complete; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	case "no-filesystems":
+		message = "Guest agent returned no filesystem readings; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	}
+	guestFilesystemLogger(ctx).Info().
+		Str("instance", instanceName).
+		Str("vm", res.Name).
+		Int("vmid", res.VMID).
+		Str("reason", reason).
+		Msg(message)
 }
 
 func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterResource, fsInfo []proxmox.VMFileSystem) vmFSInfoSummary {
@@ -683,6 +702,14 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 		Msg("Processing filesystems from guest agent")
 
 	for _, fs := range fsInfo {
+		// Other PVEClientInterface implementations can supply records without
+		// the wire decoder. Never subtract/cast contradictory or unrepresentable
+		// counters into the signed disk model, even in an individual mount row.
+		if fs.UsedBytes > fs.TotalBytes || fs.TotalBytes > math.MaxInt64 {
+			summary.invalidBytes = true
+			summary.skippedFS = append(summary.skippedFS, fs.Mountpoint+"(invalid-byte-counts)")
+			continue
+		}
 		// Skip special filesystems and mounts
 		shouldSkip, reasons := fsfilters.ShouldSkipFilesystem(fs.Type, fs.Mountpoint, fs.TotalBytes, fs.UsedBytes)
 		if shouldSkip {
@@ -715,8 +742,15 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 			// In both cases, only count the device's capacity once.
 			fsTypeLower := strings.ToLower(fs.Type)
 			countThisFS := true
-			if fs.Disk != "" {
-				// Same device at multiple mount paths → count once
+			if volumeKey := windowsVMFilesystemCapacityKey(fs); volumeKey != "" {
+				// QGA's disk.dev is the backing physical drive on Windows,
+				// not the volume. Equal-sized partitions must remain separate.
+				// A GUID can still identify one volume mounted at several paths.
+				dedupeKey := fmt.Sprintf("windows:%s:%d", volumeKey, fs.TotalBytes)
+				countThisFS = !seenFilesystems[dedupeKey]
+				seenFilesystems[dedupeKey] = true
+			} else if fs.Disk != "" {
+				// Same non-Windows device at multiple mount paths → count once
 				dedupeKey := fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
 				if seenFilesystems[dedupeKey] {
 					countThisFS = false
@@ -754,6 +788,11 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 			}
 
 			if countThisFS {
+				if fs.TotalBytes > math.MaxInt64-summary.totalBytes {
+					// A partial aggregate would look like complete guest usage.
+					// Leave it unavailable rather than wrap or silently drop a disk.
+					return vmFSInfoSummary{invalidBytes: true}
+				}
 				summary.totalBytes += fs.TotalBytes
 				summary.usedBytes += fs.UsedBytes
 			}
@@ -892,7 +931,8 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true, ""
 	}
 
-	// Only special filesystems found - show allocated disk size instead
+	// No usable aggregate - show allocated disk size instead. Invalid counters
+	// are a reading failure, not evidence that every filesystem is special.
 	if diskTotal > 0 {
 		diskUsage = -1 // Show as allocated size
 	}
@@ -900,8 +940,12 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Str("instance", instanceName).
 		Str("vm", res.Name).
 		Int("filesystems_found", len(fsInfo)).
-		Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+		Bool("invalid_byte_counts", summary.invalidBytes).
+		Msg("Guest agent provided filesystem info but no usable disk aggregate was available")
 
+	if summary.invalidBytes {
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "agent-error"
+	}
 	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only"
 }
 

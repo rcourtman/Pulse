@@ -2152,7 +2152,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health, action. Use action with action_id to read the canonical persisted plan, decision state and independently verified execution outcome. Inventory and incident history can lag execution and cannot establish whether an action was approved or run. For app-container get, filesystems reports observed capacity at each mountpoint, not container quotas. An observation error has no usage payload. Mounts describe configuration. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health, action. Use action with action_id to read the canonical persisted plan, decision state and independently verified execution outcome. Inventory and incident history can lag execution and cannot establish whether an action was approved or run. For app-container get, filesystems reports observed capacity at each mountpoint, not container quotas. An observation error has no usage payload. Mounts describe configuration. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation. Guest memory evidence describes the selected reading: null is unavailable, zero can be measured, and cache-inclusive or retained percentages do not prove guest pressure or recovery. Use its original observed_at, not the resource timestamp.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -2959,6 +2959,7 @@ type queryGuestView interface {
 	CPUPercent() float64
 	CPUs() int
 	MemoryPercent() float64
+	MemoryEvidence(time.Time) unifiedresources.GuestMemoryEvidence
 	MemoryUsed() int64
 	MemoryTotal() int64
 	Tags() []string
@@ -3080,8 +3081,6 @@ func guestViewGetResult[V queryGuestView](e *PulseToolExecutor, guests []V, kind
 		if fmt.Sprintf("%d", g.VMID()) != resourceID && g.Name() != resourceID && g.ID() != resourceID {
 			continue
 		}
-		used := g.MemoryUsed()
-		total := g.MemoryTotal()
 		response := EmptyResourceResponse()
 		response.GovernedResourceMetadata = governance.Resolve(g.Name(), g.ID(), fmt.Sprintf("%d", g.VMID()))
 		response.Type = kind
@@ -3093,11 +3092,7 @@ func guestViewGetResult[V queryGuestView](e *PulseToolExecutor, guests []V, kind
 			Percent: g.CPUPercent(),
 			Cores:   g.CPUs(),
 		}
-		response.Memory = ResourceMemory{
-			Percent: g.MemoryPercent(),
-			UsedGB:  float64(used) / (1024 * 1024 * 1024),
-			TotalGB: float64(total) / (1024 * 1024 * 1024),
-		}
+		response.Memory = guestViewMemory(g, time.Now())
 		response.Tags = g.Tags()
 		if !g.LastBackup().IsZero() {
 			t := g.LastBackup()
@@ -3126,6 +3121,38 @@ func guestViewGetResult[V queryGuestView](e *PulseToolExecutor, guests []V, kind
 		return NewJSONResult(response.NormalizeCollections()), true
 	}
 	return CallToolResult{}, false
+}
+
+func guestMemoryFields(e unifiedresources.GuestMemoryEvidence, percent float64) (*float64, *unifiedresources.GuestMemoryEvidence) {
+	var value *float64
+	if e.Available {
+		value = &percent
+	}
+	if e.State == "" { // unchanged other-platform reading
+		return value, nil
+	}
+	return value, &e
+}
+
+func guestViewMemory(g queryGuestView, now time.Time) ResourceMemory {
+	percent, evidence := guestMemoryFields(g.MemoryEvidence(now), g.MemoryPercent())
+	memory := ResourceMemory{Percent: percent, TotalGB: float64(g.MemoryTotal()) / (1024 * 1024 * 1024), Evidence: evidence}
+	if percent != nil && g.MemoryTotal() > 0 {
+		usedGB := float64(g.MemoryUsed()) / (1024 * 1024 * 1024)
+		memory.UsedGB = &usedGB
+	}
+	return memory
+}
+
+func canonicalGuestMemory(resource unifiedresources.Resource, now time.Time) ResourceMemory {
+	m := resourceMetric(resource, "memory")
+	percent, evidence := guestMemoryFields(unifiedresources.GuestMemoryEvidenceForResource(&resource, now), metricPercent(m))
+	memory := ResourceMemory{Percent: percent, TotalGB: metricTotalGB(m), Evidence: evidence}
+	if percent != nil && m != nil && m.Used != nil {
+		usedGB := metricUsedGB(m)
+		memory.UsedGB = &usedGB
+	}
+	return memory
 }
 
 func canonicalGuestTarget(resource unifiedresources.Resource) string {
@@ -3275,11 +3302,7 @@ func canonicalGuestResponse(kind string, resource unifiedresources.Resource, gov
 	response.CPU = ResourceCPU{
 		Percent: metricPercent(resourceMetric(resource, "cpu")),
 	}
-	response.Memory = ResourceMemory{
-		Percent: metricPercent(resourceMetric(resource, "memory")),
-		UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
-		TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
-	}
+	response.Memory = canonicalGuestMemory(resource, time.Now())
 	if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
 		response.Disk = &ResourceDisk{
 			Percent: metricPercent(diskMetric),
@@ -3331,11 +3354,7 @@ func canonicalAgentResponse(resource unifiedresources.Resource, governance *gove
 	response.CPU = ResourceCPU{
 		Percent: metricPercent(resourceMetric(resource, "cpu")),
 	}
-	response.Memory = ResourceMemory{
-		Percent: metricPercent(resourceMetric(resource, "memory")),
-		UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
-		TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
-	}
+	response.Memory = resourceMemoryValues(metricPercent(resourceMetric(resource, "memory")), metricUsedGB(resourceMetric(resource, "memory")), metricTotalGB(resourceMetric(resource, "memory")))
 	if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
 		response.Disk = &ResourceDisk{
 			Percent: metricPercent(diskMetric),
@@ -3861,6 +3880,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				count++
 				continue
 			}
+			memoryPercent, memoryEvidence := guestMemoryFields(vm.MemoryEvidence(time.Now()), vm.MemoryPercent())
 			response.VMs = append(response.VMs, VMSummary{
 				GovernedResourceMetadata: governance.Resolve(vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())),
 				VMID:                     vm.VMID(),
@@ -3868,7 +3888,8 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Status:                   string(vm.Status()),
 				Node:                     vm.Node(),
 				CPU:                      vm.CPUPercent(),
-				Memory:                   vm.MemoryPercent(),
+				Memory:                   memoryPercent,
+				MemoryEvidence:           memoryEvidence,
 			})
 			count++
 		}
@@ -3892,6 +3913,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				count++
 				continue
 			}
+			memoryPercent, memoryEvidence := guestMemoryFields(ct.MemoryEvidence(time.Now()), ct.MemoryPercent())
 			response.Containers = append(response.Containers, ContainerSummary{
 				GovernedResourceMetadata: governance.Resolve(ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())),
 				VMID:                     ct.VMID(),
@@ -3899,7 +3921,8 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Status:                   string(ct.Status()),
 				Node:                     ct.Node(),
 				CPU:                      ct.CPUPercent(),
-				Memory:                   ct.MemoryPercent(),
+				Memory:                   memoryPercent,
+				MemoryEvidence:           memoryEvidence,
 			})
 			count++
 		}
@@ -4400,13 +4423,15 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		}
 		nodeTopology.VMCount++
 		if options.MaxVMsPerNode <= 0 || len(nodeTopology.VMs) < options.MaxVMsPerNode {
+			memoryPercent, memoryEvidence := guestMemoryFields(vm.MemoryEvidence(time.Now()), vm.MemoryPercent())
 			nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
 				GovernedResourceMetadata: governance.Resolve(vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())),
 				VMID:                     vm.VMID(),
 				Name:                     vm.Name(),
 				Status:                   status,
 				CPU:                      vm.CPUPercent(),
-				Memory:                   vm.MemoryPercent(),
+				Memory:                   memoryPercent,
+				MemoryEvidence:           memoryEvidence,
 				Tags:                     vm.Tags(),
 			})
 		}
@@ -4426,13 +4451,15 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		}
 		nodeTopology.ContainerCount++
 		if options.MaxContainersPerNode <= 0 || len(nodeTopology.Containers) < options.MaxContainersPerNode {
+			memoryPercent, memoryEvidence := guestMemoryFields(ct.MemoryEvidence(time.Now()), ct.MemoryPercent())
 			nodeTopology.Containers = append(nodeTopology.Containers, TopologyContainer{
 				GovernedResourceMetadata: governance.Resolve(ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())),
 				VMID:                     ct.VMID(),
 				Name:                     ct.Name(),
 				Status:                   status,
 				CPU:                      ct.CPUPercent(),
-				Memory:                   ct.MemoryPercent(),
+				Memory:                   memoryPercent,
+				MemoryEvidence:           memoryEvidence,
 				Tags:                     ct.Tags(),
 			})
 		}
@@ -4947,11 +4974,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.Host = hostName
 			response.OS = strings.TrimSpace(host.OS())
 			response.CPU = ResourceCPU{Percent: host.CPUPercent(), Cores: host.CPUs()}
-			response.Memory = ResourceMemory{
-				Percent: host.MemoryPercent(),
-				UsedGB:  float64(host.MemoryUsed()) / (1024 * 1024 * 1024),
-				TotalGB: float64(host.MemoryTotal()) / (1024 * 1024 * 1024),
-			}
+			response.Memory = resourceMemoryValues(host.MemoryPercent(), float64(host.MemoryUsed())/(1024*1024*1024), float64(host.MemoryTotal())/(1024*1024*1024))
 			response.Tags = host.Tags()
 			e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
 				Kind:          "docker-host",
@@ -5022,11 +5045,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.CPU = ResourceCPU{
 				Percent: metricPercent(resourceMetric(resource, "cpu")),
 			}
-			response.Memory = ResourceMemory{
-				Percent: metricPercent(resourceMetric(resource, "memory")),
-				UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
-				TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
-			}
+			response.Memory = resourceMemoryValues(metricPercent(resourceMetric(resource, "memory")), metricUsedGB(resourceMetric(resource, "memory")), metricTotalGB(resourceMetric(resource, "memory")))
 			if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
 				response.Disk = &ResourceDisk{
 					Percent: metricPercent(diskMetric),
@@ -5141,11 +5160,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),
 			}
-			response.Memory = ResourceMemory{
-				Percent: container.MemoryPercent(),
-				UsedGB:  float64(container.MemoryUsed()) / (1024 * 1024 * 1024),
-				TotalGB: float64(container.MemoryTotal()) / (1024 * 1024 * 1024),
-			}
+			response.Memory = resourceMemoryValues(container.MemoryPercent(), float64(container.MemoryUsed())/(1024*1024*1024), float64(container.MemoryTotal())/(1024*1024*1024))
 			response.RestartCount = container.RestartCount()
 			response.Labels = container.Labels()
 
@@ -5254,44 +5269,34 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 		return NewTextResult("Guest configuration not available."), nil
 	}
 
-	var (
-		guestType string
-		vmID      int
-		name      string
-		node      string
-		instance  string
-	)
-	var err error
 	rs, err := e.readStateForControl()
 	if err != nil {
 		return NewTextResult("State information not available."), nil
 	}
-	governance := newGovernedQueryMetadataResolver(rs)
-	guestType, vmID, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
+	target, err := resolveGuestFromReadState(rs, resourceType, resourceID)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
-
 	// Normalize semantic type to provider-level type for guest config lookup.
 	// GetGuestConfig expects "container" or "vm", not "system-container".
-	configType := guestType
+	configType := target.kind
 	if configType == "system-container" {
 		configType = "container"
 	}
-	rawConfig, err := e.guestConfigProvider.GetGuestConfig(configType, instance, node, vmID)
+	rawConfig, err := e.guestConfigProvider.GetGuestConfig(configType, target.instance, target.node, target.vmid)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
 
 	response := EmptyGuestConfigResponse()
-	response.GovernedResourceMetadata = governance.Resolve(name, fmt.Sprintf("%d", vmID))
-	response.GuestType = guestType
-	response.VMID = vmID
-	response.Name = name
-	response.Node = node
-	response.Instance = instance
+	response.GovernedResourceMetadata = target.metadata
+	response.GuestType = target.kind
+	response.VMID = target.vmid
+	response.Name = target.name
+	response.Node = target.node
+	response.Instance = target.instance
 
-	switch guestType {
+	switch target.kind {
 	case "system-container":
 		hostname, osType, onboot, rootfs, mounts := parseContainerConfig(rawConfig)
 		response.Hostname = hostname
@@ -5305,7 +5310,7 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 		response.Onboot = onboot
 		response.Disks = disks
 	default:
-		return NewErrorResult(fmt.Errorf("unsupported guest type: %s", guestType)), nil
+		return NewErrorResult(fmt.Errorf("unsupported guest type: %s", target.kind)), nil
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
@@ -5428,31 +5433,68 @@ func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context,
 	return NewJSONResult(response.NormalizeCollections()), nil
 }
 
-func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmID int, name, node, instance string, err error) {
+type guestConfigTarget struct {
+	id, kind, name, node, instance string
+	vmid                           int
+	metadata                       GovernedResourceMetadata
+}
+
+func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestConfigTarget, error) {
 	resourceType = canonicalQueryResourceType(resourceType)
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType == "" || resourceID == "" {
-		return "", 0, "", "", "", fmt.Errorf("resource_type and resource_id are required")
+		return guestConfigTarget{}, fmt.Errorf("resource_type and resource_id are required")
 	}
 
+	// A canonical ID wins over another guest's coincidentally matching name.
+	// Names and bare VMIDs remain convenient only when they identify one guest.
+	var exact, aliases []guestConfigTarget
+	type metadataView interface {
+		GovernanceMetadata() (*unifiedresources.ResourcePolicy, string)
+	}
+	add := func(target guestConfigTarget, view metadataView) {
+		if target.id != resourceID && strconv.Itoa(target.vmid) != resourceID && target.name != resourceID {
+			return
+		}
+		policy, summary := view.GovernanceMetadata()
+		target.metadata = GovernedResourceMetadata{Policy: policy, AISafeSummary: summary}
+		if target.id == resourceID {
+			exact = append(exact, target)
+		} else {
+			aliases = append(aliases, target)
+		}
+	}
 	switch resourceType {
 	case "system-container":
 		for _, ct := range rs.Containers() {
-			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
-				return "system-container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
+			if ct != nil {
+				add(guestConfigTarget{id: ct.ID(), kind: resourceType, name: ct.Name(), node: ct.Node(), instance: ct.Instance(), vmid: ct.VMID()}, ct)
 			}
 		}
-		return "", 0, "", "", "", fmt.Errorf("system-container not found: %s", resourceID)
 	case "vm":
 		for _, vm := range rs.VMs() {
-			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
-				return "vm", vm.VMID(), vm.Name(), vm.Node(), vm.Instance(), nil
+			if vm != nil {
+				add(guestConfigTarget{id: vm.ID(), kind: resourceType, name: vm.Name(), node: vm.Node(), instance: vm.Instance(), vmid: vm.VMID()}, vm)
 			}
 		}
-		return "", 0, "", "", "", fmt.Errorf("vm not found: %s", resourceID)
 	default:
-		return "", 0, "", "", "", fmt.Errorf("invalid resource_type: %s. Use vm or system-container", resourceType)
+		return guestConfigTarget{}, fmt.Errorf("invalid resource_type: %s. Use vm or system-container", resourceType)
 	}
+	matches := aliases
+	if len(exact) > 0 {
+		matches = exact
+	}
+	if len(matches) == 0 {
+		return guestConfigTarget{}, fmt.Errorf("%s not found: %s", resourceType, resourceID)
+	}
+	if len(matches) > 1 {
+		return guestConfigTarget{}, fmt.Errorf("%s reference is ambiguous: %s; use the canonical resource ID", resourceType, resourceID)
+	}
+	target := matches[0]
+	if target.vmid <= 0 || target.node == "" || target.instance == "" {
+		return guestConfigTarget{}, fmt.Errorf("guest placement is unavailable; refresh the resource inventory")
+	}
+	return target, nil
 }
 
 func parseContainerConfig(config map[string]interface{}) (hostname, osType string, onboot *bool, rootfs string, mounts []GuestMountConfig) {

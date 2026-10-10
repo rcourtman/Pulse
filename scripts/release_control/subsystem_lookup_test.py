@@ -3725,16 +3725,13 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L1")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "deployment-script-runtime",
+            "unattended-update-runtime",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
-                "scripts/installtests/install_docker_sh_test.go",
-                "scripts/installtests/install_ps1_test.go",
-                "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/pulse_auto_update_consent_test.go",
                 "scripts/installtests/pulse_auto_update_test.go",
-                "scripts/installtests/root_install_sh_test.go",
             ],
         )
 
@@ -4265,6 +4262,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/monitor_pbs_coverage_test.go",
                 "internal/monitoring/monitor_pmg_test.go",
                 "internal/monitoring/monitor_polling_test.go",
+                "internal/monitoring/truenas_disk_history_scope_test.go",
                 "internal/monitoring/truenas_poller_test.go",
             ],
         )

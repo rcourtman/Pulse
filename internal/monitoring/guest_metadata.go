@@ -44,6 +44,8 @@ type guestMetadataCacheEntry struct {
 	osVersion          string
 	agentVersion       string
 	fetchedAt          time.Time // Last accepted useful metadata, not the last attempt.
+	windowsGuest       bool      // An actual OS reply, not retained display identity.
+	osInfoObservedAt   time.Time // Network/version refreshes cannot renew OS evidence.
 	osInfoFailureCount int       // Track consecutive OS info failures
 	osInfoSkip         bool      // Skip OS info calls after repeated failures (refs #692)
 }
@@ -87,7 +89,18 @@ func (m *Monitor) hasRecentGuestMetadataEvidence(instanceName, nodeName string, 
 	if !ok || entry.fetchedAt.IsZero() || !guestMetadataCacheHasUsefulData(entry) {
 		return false
 	}
-	return now.Sub(entry.fetchedAt) < guestMetadataCacheEntryTTL(entry)
+	return !entry.fetchedAt.After(now) && now.Sub(entry.fetchedAt) < guestMetadataCacheEntryTTL(entry)
+}
+
+func (m *Monitor) guestMetadataEvidenceTime(instanceName, nodeName string, vmid int) time.Time {
+	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
+	m.guestMetadataMu.RLock()
+	entry := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if !guestMetadataCacheHasUsefulData(entry) {
+		return time.Time{}
+	}
+	return entry.fetchedAt
 }
 
 func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
@@ -97,6 +110,11 @@ func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
 	m.guestMetadataLimiterMu.Lock()
 	defer m.guestMetadataLimiterMu.Unlock()
 
+	// A time-based hold limits retry rate, but is not completion evidence.
+	// Keep ownership until the fetch returns, even if its hold has expired.
+	if m.guestMetadataInFlight[key] {
+		return false
+	}
 	if next, ok := m.guestMetadataLimiter[key]; ok && now.Before(next) {
 		return false
 	}
@@ -104,8 +122,21 @@ func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
 	if hold <= 0 {
 		hold = defaultGuestMetadataHold
 	}
+	if m.guestMetadataLimiter == nil {
+		m.guestMetadataLimiter = make(map[string]time.Time)
+	}
+	if m.guestMetadataInFlight == nil {
+		m.guestMetadataInFlight = make(map[string]bool)
+	}
 	m.guestMetadataLimiter[key] = now.Add(hold)
+	m.guestMetadataInFlight[key] = true
 	return true
+}
+
+func (m *Monitor) releaseGuestMetadataFetch(key string) {
+	m.guestMetadataLimiterMu.Lock()
+	delete(m.guestMetadataInFlight, key)
+	m.guestMetadataLimiterMu.Unlock()
 }
 
 func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
@@ -117,8 +148,12 @@ func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
 		interval = config.DefaultGuestMetadataMinRefresh
 	}
 	jitter := m.guestMetadataRefreshJitter
-	if jitter > 0 && m.rng != nil {
-		interval += time.Duration(m.rng.Int63n(int64(jitter)))
+	if jitter > 0 {
+		m.rngMu.Lock()
+		if m.rng != nil {
+			interval += time.Duration(m.rng.Int63n(int64(jitter)))
+		}
+		m.rngMu.Unlock()
 	}
 	m.guestMetadataLimiterMu.Lock()
 	m.guestMetadataLimiter[key] = now.Add(interval)
@@ -222,7 +257,9 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 	return nil, lastErr
 }
 
-func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string) {
+// The final result reports command deferral separately from retained metadata.
+// A previously successful filesystem must not conceal a later shared pause.
+func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string, bool) {
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
 	now := time.Now()
 
@@ -232,34 +269,34 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 
 	if vmStatus != nil && vmStatus.Lock != "" {
 		// Deliberately retained identity, not a newly fetched observation.
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.IsAvailable()) || allowWithoutStatus)
 	if !agentAvailable {
 		if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
-			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 		}
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", "", ""
+		return nil, nil, "", "", "", false
 	}
 
 	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	needsFetch := !ok || now.Sub(cached.fetchedAt) >= guestMetadataCacheEntryTTL(cached)
 	if !needsFetch {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	reserved := m.tryReserveGuestMetadataFetch(key, now)
-	if !reserved && ok {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	// An empty cache does not grant permission to bypass another fetch or the
+	// backoff from an early deferral. Return only existing identity, if any.
+	if !reserved {
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
-	if !reserved && !ok {
-		reserved = true
-	}
+	defer m.releaseGuestMetadataFetch(key)
 
 	// Start with cached values as fallback in case new calls fail
 	ipAddresses := cloneStringSlice(cached.ipAddresses)
@@ -272,7 +309,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	if reserved {
 		if !m.acquireGuestMetadataSlot(ctx) {
 			m.deferGuestMetadataRetry(key, time.Now())
-			return ipAddresses, networkIfaces, osName, osVersion, agentVersion
+			return ipAddresses, networkIfaces, osName, osVersion, agentVersion, false
 		}
 		defer m.releaseGuestMetadataSlot()
 	}
@@ -283,7 +320,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	})
 	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
 		m.deferGuestMetadataRetry(key, time.Now())
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 	}
 	if err != nil {
 		log.Debug().
@@ -318,6 +355,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	// Skip OS info calls if we've seen repeated failures (refs #692 - OpenBSD qemu-ga issue)
 	osInfoFailureCount := cached.osInfoFailureCount
 	osInfoSkip := cached.osInfoSkip
+	windowsGuest, osInfoObservedAt := cached.windowsGuest, cached.osInfoObservedAt
 
 	if !osInfoSkip {
 		agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
@@ -325,7 +363,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		})
 		if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
 			m.deferGuestMetadataRetry(key, time.Now())
-			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 		}
 		if err != nil {
 			if isGuestAgentOSInfoUnsupportedError(err) {
@@ -359,15 +397,23 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			}
 		} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
 			extractedOSName, extractedOSVersion := extractGuestOSInfo(agentInfo)
+			windowsGuest, osInfoObservedAt = false, time.Time{}
 			if extractedOSName != "" || extractedOSVersion != "" {
 				osName, osVersion = extractedOSName, extractedOSVersion
 				metadataObserved = true
+				windowsGuest = guestOSIsWindows(extractedOSName)
+				osInfoObservedAt = time.Now()
 			}
 			osInfoFailureCount = 0 // Reset on success
 			osInfoSkip = false
-		} else if cached.osName == "" && cached.osVersion == "" {
-			osName = ""
-			osVersion = ""
+		} else {
+			// A complete empty reply is not a new observation of retained OS
+			// strings. Keep those strings for display, not meminfo admission.
+			windowsGuest, osInfoObservedAt = false, time.Time{}
+			if cached.osName == "" && cached.osVersion == "" {
+				osName = ""
+				osVersion = ""
+			}
 		}
 	} else {
 		// Skipping OS info call due to repeated failures
@@ -383,8 +429,21 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		return client.GetVMAgentVersion(ctx, nodeName, vmid)
 	})
 	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		// A later shared pause does not undo a completed OS-info outcome.
+		// Retain its safety suppression without publishing partial metadata or
+		// renewing the age of last-known guest-agent evidence.
+		m.guestMetadataMu.Lock()
+		if m.guestMetadataCache == nil {
+			m.guestMetadataCache = make(map[string]guestMetadataCacheEntry)
+		}
+		entry := m.guestMetadataCache[key]
+		entry.osInfoFailureCount = osInfoFailureCount
+		entry.osInfoSkip = osInfoSkip
+		entry.windowsGuest, entry.osInfoObservedAt = windowsGuest, osInfoObservedAt
+		m.guestMetadataCache[key] = entry
+		m.guestMetadataMu.Unlock()
 		m.deferGuestMetadataRetry(key, time.Now())
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 	}
 	if err != nil {
 		log.Debug().
@@ -414,6 +473,8 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		osVersion:          osVersion,
 		agentVersion:       agentVersion,
 		fetchedAt:          fetchedAt,
+		windowsGuest:       windowsGuest,
+		osInfoObservedAt:   osInfoObservedAt,
 		osInfoFailureCount: osInfoFailureCount,
 		osInfoSkip:         osInfoSkip,
 	}
@@ -432,7 +493,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		}
 	}
 
-	return ipAddresses, networkIfaces, osName, osVersion, agentVersion
+	return ipAddresses, networkIfaces, osName, osVersion, agentVersion, false
 }
 
 func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
@@ -450,6 +511,12 @@ func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid in
 		delete(m.guestMetadataCache, key)
 	}
 	m.guestMetadataMu.Unlock()
+	// Deliberate invalidation when the agent is unavailable starts a new
+	// metadata lifecycle. Do not carry its obsolete refresh/backoff deadline
+	// into a later available poll, or discard an outstanding fetch's ownership.
+	m.guestMetadataLimiterMu.Lock()
+	delete(m.guestMetadataLimiter, key)
+	m.guestMetadataLimiterMu.Unlock()
 }
 
 func cloneStringSlice(src []string) []string {
@@ -510,7 +577,7 @@ func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, 
 		}
 
 		if len(addresses) > 1 {
-			sort.Strings(addresses)
+			sortGuestAddresses(addresses)
 		}
 
 		rxBytes := parseInterfaceStat(iface.Statistics, "rx-bytes")
@@ -540,17 +607,13 @@ func processGuestNetworkInterfaces(raw []proxmox.VMNetworkInterface) ([]string, 
 		})
 	}
 
-	if len(ipAddresses) > 1 {
-		sort.Strings(ipAddresses)
-	}
-
 	if len(guestIfaces) > 1 {
 		sort.SliceStable(guestIfaces, func(i, j int) bool {
 			return guestIfaces[i].Name < guestIfaces[j].Name
 		})
 	}
 
-	return ipAddresses, guestIfaces
+	return guestIPAddressesByInterface(ipAddresses, guestIfaces), guestIfaces
 }
 
 func parseInterfaceStat(stats interface{}, key string) int64 {

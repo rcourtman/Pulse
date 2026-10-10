@@ -52,6 +52,32 @@ def valid_receipt() -> dict:
     }
 
 
+def fixture_git_env() -> dict[str, str]:
+    env = strip_local_git_env(os.environ.copy())
+    # Runner configuration must not start background writers in a repository
+    # whose lifetime ends as soon as a test's synchronous commands finish.
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_CONFIG_SYSTEM"] = os.devnull
+    return env
+
+
+def disable_fixture_git_background_tasks(repo_root: Path, env: dict[str, str]) -> None:
+    # Store these locally: the guard itself invokes bare git, not our helper.
+    # Keep TemporaryDirectory cleanup strict rather than hiding a live writer.
+    for key, value in (
+        ("gc.auto", "0"),
+        ("maintenance.auto", "false"),
+        ("core.fsmonitor", "false"),
+    ):
+        subprocess.run(
+            ["git", "config", "--local", key, value],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            env=env,
+        )
+
+
 class BrowserVerificationGuardTest(unittest.TestCase):
     def test_pre_commit_formats_frontend_before_validating_receipt_hashes(self) -> None:
         hook = (REPO_ROOT / ".husky" / "pre-commit").read_text(encoding="utf-8")
@@ -190,7 +216,7 @@ class FormattingOnlyExemptionTest(unittest.TestCase):
         source = repo_root / CHANGED_PATH
         source.parent.mkdir(parents=True)
         source.write_text(old, encoding="utf-8")
-        env = strip_local_git_env(os.environ.copy())
+        env = fixture_git_env()
 
         def git(*args: str) -> None:
             subprocess.run(
@@ -198,6 +224,7 @@ class FormattingOnlyExemptionTest(unittest.TestCase):
             )
 
         git("init")
+        disable_fixture_git_background_tasks(repo_root, env)
         git("add", CHANGED_PATH)
         git("-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-m", "seed")
         source.write_text(new, encoding="utf-8")
@@ -207,7 +234,7 @@ class FormattingOnlyExemptionTest(unittest.TestCase):
     def resolve(self, repo_root: Path) -> set[str]:
         # Under the pre-commit hook, GIT_DIR and GIT_INDEX_FILE are exported
         # and would point this temp repo's plumbing at the real repository.
-        with patch.dict("os.environ", strip_local_git_env(os.environ.copy()), clear=True):
+        with patch.dict("os.environ", fixture_git_env(), clear=True):
             with patch("browser_verification_guard.REPO_ROOT", repo_root):
                 return formatting_only_paths([CHANGED_PATH], commit=None, repo_root=repo_root)
 
@@ -251,9 +278,10 @@ class GuardRepoTestCase(unittest.TestCase):
         self.repo_root = Path(self.tmpdir.name)
         # Under the pre-commit hook, GIT_DIR and GIT_INDEX_FILE are exported
         # and would point this temp repo's plumbing at the real repository.
-        self.env = strip_local_git_env(os.environ.copy())
+        self.env = fixture_git_env()
         self.env["PULSE_PRETTIER_BIN"] = str(self.repo_root / "missing-prettier")
         self.git("init", "--quiet", "--initial-branch=main")
+        disable_fixture_git_background_tasks(self.repo_root, self.env)
         self.write(CHANGED_PATH, "export const a = 0;\n")
         self.write(OTHER_PATH, "export const b = 0;\n")
         self.base = self.commit("seed")
@@ -618,6 +646,68 @@ class IntegrationRangeTest(GuardRepoTestCase):
         self.assertIn(CHANGED_PATH, stderr)
         self.assertNotIn(OTHER_PATH, stderr)
 
+    def test_stale_stylesheet_reports_verified_source_and_final_digest(self) -> None:
+        path = "frontend-modern/src/index.css"
+        old = ".alert-history { min-width: 20rem; }\n"
+        final = old + ".form-select { background-position: right 0.5rem center; }\n"
+        verified = self.verified_change(path, old, "verified alert stylesheet")
+        (receipt,) = self.receipts_in_tree()
+        self.write(path, final)
+        self.commit("compose select styling without a new browser pass")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"{path} final content {hashlib.sha256(final.encode()).hexdigest()}", stderr)
+        self.assertIn(f"different verified content {hashlib.sha256(old.encode()).hexdigest()}", stderr)
+        self.assertIn(f"{verified}:{receipt} (parent {self.base})", stderr)
+        self.assertIn("Changing a receipt's hash or parent is not a browser pass", stderr)
+        # A real follow-up receipt, not editing the stale one, covers the
+        # composed bytes while preserving the original reviewed source.
+        self.write_receipt([path])
+        self.commit("record browser proof of final composed stylesheet")
+        self.assertEqual(self.run_range(), (0, ""))
+        self.git("merge-base", "--is-ancestor", verified, "HEAD")
+
+    def test_missing_receipt_is_distinct_from_a_valid_receipt_for_different_bytes(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.commit("unverified frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"{CHANGED_PATH}: no valid in-range receipt names this path", stderr)
+        self.assertNotIn("different verified content", stderr)
+
+    def test_invalid_receipt_never_contributes_a_verified_source_hint(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH], base="b" * 40)
+        self.commit("invalid parent binding")
+        self.write(CHANGED_PATH, "export const a = 2;\n")
+        self.commit("later frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn("base_sha must match", stderr)
+        self.assertIn("no valid in-range receipt names this path", stderr)
+        self.assertNotIn("different verified content", stderr)
+
+    def test_verified_source_hints_are_bounded_without_limiting_coverage(self) -> None:
+        for version in range(1, 5):
+            self.verified_change(CHANGED_PATH, f"export const a = {version};\n", f"pass {version}")
+        # The fourth pass is admitted even though a blocked diagnostic would
+        # display at most three earlier sources.
+        self.assertEqual(self.run_range(), (0, ""))
+        self.write(CHANGED_PATH, "export const a = 5;\n")
+        self.commit("unverified later frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertEqual(stderr.count("different verified content"), 3)
+        self.assertIn("1 further valid receipt(s) omitted from hints", stderr)
+
     def test_merge_resolution_receipt_is_not_evidence(self) -> None:
         # A conflict resolution that changes source and rewrites the receipt
         # inside the merge commit has no browser run behind it.
@@ -822,6 +912,66 @@ class PruneTest(GuardRepoTestCase):
             self.git("merge", "--quiet", "--no-ff", second, "-m", f"merge {second}")
             self.assertEqual(self.run_range(base=before_second)[0], 0, (first, second))
             self.assertEqual(len(self.receipts_in_tree()), 1)
+
+
+    def test_pruning_merges_do_not_start_background_git_maintenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            trace = Path(tmpdir) / "git-trace.jsonl"
+            self.env["GIT_TRACE2_EVENT"] = str(trace)
+            self.test_pruning_never_conflicts_with_an_open_frontend_change()
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+
+        children = [event["argv"] for event in events if event.get("event") == "child_start"]
+        self.assertTrue(events, "exercise real Git, including both merge orders")
+        self.assertFalse(
+            [argv for argv in children if "maintenance" in argv or "gc" in argv],
+            children,
+        )
+
+
+class FixtureGitIsolationTest(unittest.TestCase):
+    def test_both_fixture_builders_ignore_host_config_and_disable_background_writers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            host_config = Path(tmpdir) / "host.gitconfig"
+            host_config.write_text(
+                "[gc]\n\tauto = 1\n[maintenance]\n\tauto = true\n"
+                "[core]\n\tfsmonitor = true\n[fixture]\n\thost = leaked\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {
+                "GIT_CONFIG_GLOBAL": str(host_config),
+                "GIT_CONFIG_SYSTEM": str(host_config),
+                "GIT_DIR": str(Path(tmpdir) / "wrong-repository"),
+                "GIT_INDEX_FILE": str(Path(tmpdir) / "wrong-index"),
+            }):
+                fixture = GuardRepoTestCase()
+                try:
+                    fixture.setUp()
+                    formatting_root = Path(tmpdir) / "formatting"
+                    formatting_root.mkdir()
+                    FormattingOnlyExemptionTest().build_repo(
+                        str(formatting_root), "const x = 1;\n", "const x = 2;\n"
+                    )
+                    for root in (fixture.repo_root, formatting_root):
+                        for key, expected in (
+                            ("gc.auto", "0"),
+                            ("maintenance.auto", "false"),
+                            ("core.fsmonitor", "false"),
+                        ):
+                            with self.subTest(root=root.name, key=key):
+                                result = subprocess.run(
+                                    ["git", "config", "--get", key], cwd=root,
+                                    env=fixture.env, capture_output=True, text=True, check=True,
+                                )
+                                self.assertEqual(result.stdout.strip(), expected)
+                        missing = subprocess.run(
+                            ["git", "config", "--get", "fixture.host"], cwd=root,
+                            env=fixture.env, capture_output=True, text=True,
+                        )
+                        self.assertEqual(missing.returncode, 1)
+                        self.assertEqual(missing.stdout, "")
+                finally:
+                    self.assertTrue(fixture.doCleanups(), "temporary Git cleanup must succeed")
 
 
 if __name__ == "__main__":

@@ -52,6 +52,12 @@ volumes:
 
 Run with: `docker compose up -d`
 
+**Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
+Agent requests. For an affected installation, follow the
+[planned server pause and checked restoration](VM_DISK_MONITORING.md#pause-a-docker-or-compose-server-for-a-planned-backup),
+not container recreation or guest-agent probes. Monitoring and alerts are
+unavailable while Pulse is stopped; an OK backup alone does not prove recovery.
+
 Leave authentication overrides unset for a new install and complete
 [bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
 shared example password to the Compose file. If automation must skip setup,
@@ -293,6 +299,52 @@ or volumes to clear a warning. Recover through the application's and deployment
 manager's procedures using a verified matching data backup where required;
 returning to the old image alone does not undo a data migration.
 
+### Check a failed or pending workload update
+
+A failed banner or missing receipt does not tell you whether the update ran.
+Use your normal Docker administration shell **on the host running the affected
+container**, not a shell inside Pulse or on an unrelated Proxmox host. Use the
+same Docker context as that workload; do not change socket permissions or enable
+agent commands just to inspect it.
+
+List container names, including stopped containers, without dumping their
+configuration:
+
+```bash
+docker ps -a --format '{{.Names}}'
+```
+
+Replace `affected-container` with the original workload name (not `pulse` unless
+Pulse itself was the target), then read only its state and image identity:
+
+```bash
+container='affected-container'
+docker inspect --type container --format 'State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}' "$container"
+```
+
+`State` says whether the container is running, stopped or restarting. `ImageRef`
+is its configured image reference; a tag such as `latest` can stay unchanged
+after an update. `ImageID` identifies the actual local image used by this
+container: compare it with your privately recorded pre-update image or the
+intended image in your deployment manager. It is not a registry manifest digest,
+so do not compare it directly with Pulse's latest-registry digest. `Started` is
+only a start time, not proof of an image update or application readiness. If the
+old identity was not recorded, these readings alone cannot establish whether
+the image changed.
+
+If inspection fails or the original name is missing, retain that error and the
+name listing locally; the workload may have been renamed during the attempt.
+Do not start, rename, delete or update anything to make the check succeed.
+Check the application's ordinary UI or health endpoint separately; a running
+container is not proof that its application or data is healthy.
+
+In Pulse, reopen that container's **Review action** and use **Check for receipt**
+when available. This re-reads the existing action; it does not send another
+container update. If the receipt is still missing, leave the update alone until
+the actual workload state and recovery path are reconciled. For help, share only
+the relevant state, receipt status and a redacted error, not the full inspection,
+other container names, environments or registry credentials.
+
 ### Requirements
 
 - **Unified agent** running on the Docker host with Docker monitoring enabled
@@ -377,9 +429,12 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
   not just a restart. SSO accounts and temporary lockouts have separate paths.
 
 - **Logs**
-  ```bash
-  docker logs -f pulse
-  ```
+  Use the [bounded Docker log reader](TROUBLESHOOTING.md#inspect-notification-logs)
+  on the host running the Pulse server, with its actual container name. It reads
+  both output streams with a deadline, time window and record limit; a failed
+  read is not an empty log. Review the excerpt privately and share only the
+  relevant redacted error, not credentials, private host details or the full log.
+  Do not follow logs indefinitely or repeat a failed update to collect evidence.
 
 - **Shell Access**
   ```bash

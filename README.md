@@ -111,10 +111,15 @@ The GitHub installer installs the Pulse server. Install and upgrade agents
 ### Do you need an agent?
 
 Often not. Proxmox VE, PBS, and PMG are monitored through the Proxmox API
-with a read-only token, so nothing runs on the host and the generated setup
+with a read-only token, so no Pulse host agent is required. The generated setup
 script creates a privilege-separated monitoring user. Install the unified
 agent only where you want data the platform API cannot provide, such as host
 SMART health, temperatures, Docker hosts, or standalone machines.
+
+**API-only does not mean guest-agent-free.** VM filesystem and memory requests through QEMU Guest Agent can share the channel used by freeze-enabled backups.
+Read-only permissions do not prove backup safety. Do not add permissions, enable or restart an agent, or send manual guest-agent probes during a backup, freeze or thaw.
+Use the existing [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety). Stopping Pulse also stops its monitoring and alerts.
+An OK backup task does not prove successful thaw.
 
 The agent is operator-controlled by design. Command execution is off by
 default, the local listener binds to localhost, and generated systemd units

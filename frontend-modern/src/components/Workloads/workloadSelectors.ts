@@ -4,7 +4,12 @@ import {
   type IODistributionStats,
   type WorkloadIOEmphasis,
 } from './guestRowModel';
-import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
+import {
+  parseFilter,
+  parseFilterStack,
+  evaluateFilterStack,
+  splitSearchExclusions,
+} from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
@@ -16,10 +21,14 @@ import {
   workloadMatchesViewMode,
 } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getCurrentWorkloadMemoryUsage } from '@/utils/memoryObservation';
 import {
   getKubernetesContextKey,
   getWorkloadHostHintCandidates,
   workloadHostScopeId,
+  workloadNodeScopeId,
+  resolveWorkloadHostScope,
 } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
@@ -167,7 +176,8 @@ export const filterWorkloads = ({
 
   const nodeScope = selectedNode;
   if (nodeScope && viewMode !== 'pod') {
-    guests = guests.filter((g) => workloadHostScopeId(g) === nodeScope);
+    const resolvedScope = resolveWorkloadHostScope(allGuests, nodeScope);
+    guests = resolvedScope ? guests.filter((g) => workloadHostScopeId(g) === resolvedScope) : [];
   }
 
   const hostHint = (selectedHostHint || '').trim().toLowerCase();
@@ -240,7 +250,12 @@ export const filterWorkloads = ({
     const exclusions: string[] = [];
 
     searchParts.forEach((part) => {
-      if (part.includes('>') || part.includes('<') || part.includes(':')) {
+      if (
+        part.includes('>') ||
+        part.includes('<') ||
+        part.includes(':') ||
+        parseFilter(part).type === 'metric'
+      ) {
         filters.push(part);
       } else {
         const split = splitSearchExclusions(part);
@@ -273,7 +288,16 @@ export const filterWorkloads = ({
 
 export const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
   const disk = guest?.disk;
-  if (!disk) return null;
+  // The row may retain a clearly labelled last-known number. It must not
+  // compete with current readings when sorting capacity, in either direction.
+  if (
+    !disk ||
+    guest.telemetryAvailability?.disk === false ||
+    getWorkloadGuestDiskRead(guest, resolveWorkloadType(guest) === 'vm').state !== 'current' ||
+    (typeof disk.usage === 'number' && disk.usage < 0)
+  ) {
+    return null;
+  }
 
   const clamp = (value: number) => Math.min(100, Math.max(0, value));
 
@@ -316,6 +340,12 @@ export const createWorkloadSortComparator = (
     numeric: true,
     sensitivity: 'base',
   });
+  const memorySortValue = (guest: WorkloadGuest): number | null => {
+    const usage = getCurrentWorkloadMemoryUsage(guest);
+    if (usage === null) return null;
+    const value = options.memoryValue ? options.memoryValue(guest) : usage;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  };
 
   return (a: WorkloadGuest, b: WorkloadGuest): number => {
     let aVal: SortValue = null;
@@ -328,8 +358,8 @@ export const createWorkloadSortComparator = (
       aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
       bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
-      aVal = options.memoryValue ? (options.memoryValue(a) ?? 0) : a.memory?.usage || 0;
-      bVal = options.memoryValue ? (options.memoryValue(b) ?? 0) : b.memory?.usage || 0;
+      aVal = memorySortValue(a);
+      bVal = memorySortValue(b);
     } else if (sortKey === 'disk') {
       aVal = getDiskUsagePercent(a);
       bVal = getDiskUsagePercent(b);
@@ -371,7 +401,11 @@ export const createWorkloadSortComparator = (
 export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type === 'vm' || type === 'system-container') {
-    return `${guest.instance}-${guest.node}`;
+    const scope = workloadNodeScopeId(guest);
+    return guest.platformScopes?.includes('vmware-vsphere') &&
+      !guest.platformScopes.includes('proxmox-pve')
+      ? `vsphere|${scope}`
+      : scope;
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
   return `${type}:${context}`;
@@ -408,6 +442,8 @@ export const getWorkloadGroupLabel = (
     const nodeName = (first.node || '').trim();
     if (nodeName && cluster) return { type: cluster, name: nodeName };
     if (nodeName) return { type: '', name: nodeName };
+    const instance = (first.instance || '').trim();
+    if (instance) return { type: '', name: instance };
   }
   return { type: '', name: context };
 };
