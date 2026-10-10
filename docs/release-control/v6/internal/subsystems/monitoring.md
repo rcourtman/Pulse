@@ -6847,6 +6847,17 @@ retains its four-minute Proxmox threshold.
 
 ### Incomplete guest filesystem responses do not establish recovery
 
+Filesystem record identity/filter fields (`name`, `type`, `mountpoint`, `disk`)
+use the same exact canonical key rule as byte counters. Case-variant keys must
+not exploit JSON's case-insensitive matching to overwrite a mount/device or
+make a real volume appear special and silently removed. They reject that row
+as incomplete regardless of field order or whether the canonical key is also
+present. Exact JSON-escaped canonical keys and unrelated additive fields remain
+compatible. `TestVMFilesystemMetadataRejectsNoncanonicalFields` and
+`TestVMFilesystemMetadataPreservesCanonicalCompatibility` pin that boundary;
+the connected completeness fixtures cover direct/cluster clients and both
+collectors through held/expired evidence and genuine ordinary recovery.
+
 `GetVMFSInfo` preserves valid peer rows from a malformed array but returns an
 error with them, through both single and cluster clients. The surviving rows
 cannot establish total guest capacity, usage, or removal of a rejected volume.
