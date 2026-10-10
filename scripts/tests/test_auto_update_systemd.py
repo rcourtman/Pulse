@@ -244,7 +244,8 @@ statefile = root / "manager-state"
 active = statefile.read_text().strip() if statefile.exists() and load != "not-found" else "inactive"
 values = dict(LoadState=load, ActiveState=active, UnitFileState="masked" if load == "masked" else "disabled", MainPID="123" if active == "active" else "0")
 if args[0] == "show":
- properties = next(a.split("=", 1)[1] for a in args if a.startswith("--property=")).split(",")
+ properties = [p for a in args if a.startswith("--property=") for p in a.split("=", 1)[1].split(",")]
+ if not properties or len(properties) != len(set(properties)) or any(p not in values for p in properties): sys.exit(97)
  for p in properties: print(values[p] if "--value" in args else p+"="+values[p])
 elif args[0] in ("start", "stop"):
  if args[0] == "start" and load != "loaded": sys.exit(1)
