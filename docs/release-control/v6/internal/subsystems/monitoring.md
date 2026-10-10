@@ -3875,6 +3875,18 @@ one request per caller. The `GetNodeName` tests in
 recovery, cache, and race proof; monitoring coverage also proves a token poll
 never requests `/nodes`.
 
+The captured name only helps connected-system grouping if it survives the trip
+back out of the unified read state: `PBSData.NodeName` holds it on the PBS
+resource, `PBSInstanceView.NodeName()` exposes it, and
+`pbsInstanceFromReadStateView` copies it onto the `models.PBSInstance` that
+`Monitor.PBSInstancesSnapshot()` returns and `/api/connections` reads. A
+conversion that drops it leaves the PBS connection without its reported alias
+and the host agent on that machine as a separate row, with no error anywhere.
+`TestMonitorPBSInstancesSnapshotCarriesReportedNodeName` pins the snapshot
+carrying the name, and
+`TestConnectionsLedger_GroupsHostAgentWithPBSByReportedNodeName` in
+`internal/api` pins it from the unified PBS resource to the grouped system.
+
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 
 `models.Host.IntegrationSource` mirrors the unified fabric's
