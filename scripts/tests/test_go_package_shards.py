@@ -50,7 +50,7 @@ class PackageShardsTest(unittest.TestCase):
                     self.assertEqual(set(assigned.values()), set(range(count)))
                     self.assertEqual(assigned, selector.assign(list(reversed(packages)), weights, Decimal(1), count))
 
-    def test_cli_keeps_source_order_and_new_unmeasured_packages(self):
+    def test_cli_starts_heavy_packages_first_without_losing_unmeasured_packages(self):
         packages = ["example/new", "example/z", "example/a", "example/b", "example/renamed"]
         weights = "# stale names are not coverage\nDEFAULT_WEIGHT 2.5\nexample/deleted 100\nexample/z 20\n"
         selected = []
@@ -59,9 +59,26 @@ class PackageShardsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             names = result.stdout.splitlines()
             self.assertTrue(names)
-            self.assertEqual(names, [p for p in packages if p in names])
+            self.assertEqual(names, sorted(names, key=lambda p: (-20 if p == "example/z" else -2.5, p)))
             selected.extend(names)
         self.assertCountEqual(selected, packages)
+
+    def test_cli_order_is_deterministic_when_source_listing_order_changes(self):
+        packages = ["example/z", "example/new", "example/a", "example/b", "example/c"]
+        weights = "DEFAULT_WEIGHT 2\nexample/z 20\nexample/c 10\n"
+        for index in range(2):
+            result = self.cli("\n".join(packages) + "\n", weights, index=index)
+            reversed_result = self.cli("\n".join(reversed(packages)) + "\n", weights, index=index)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(reversed_result.returncode, 0, reversed_result.stderr)
+            self.assertEqual(result.stdout, reversed_result.stdout)
+
+    def test_slow_binary_is_not_scheduled_after_a_small_package_tail(self):
+        packages = [f"example/a{i:02}" for i in range(12)] + ["example/z-slow"]
+        weights = "DEFAULT_WEIGHT 1\nexample/z-slow 100\n"
+        result = self.cli("\n".join(packages) + "\n", weights, count=1)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["example/z-slow"] + packages[:-1])
 
     def test_equal_weights_and_decimal_ties_are_stable(self):
         packages = ["example/d", "example/c", "example/b", "example/a"]

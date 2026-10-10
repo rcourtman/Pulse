@@ -544,6 +544,19 @@ func (p *PatrolService) evaluateObjectiveObserver(runtime *patrolObserverRuntime
 			if observedAt.IsZero() {
 				observedAt = resource.UpdatedAt
 			}
+			if probe.metric == "memory_percent" && (resource.Type == unifiedresources.ResourceTypeVM || resource.Type == unifiedresources.ResourceTypeSystemContainer) {
+				// The row can be refreshed by a different source. Only the selected
+				// guest memory sample owns its freshness and pressure semantics.
+				memory := unifiedresources.GuestMemoryEvidenceForResource(&resource, now)
+				if !memory.PressureKnown {
+					failing = append(failing, resourceID)
+					evidenceDetails = append(evidenceDetails, resourceID+"=guest_memory_pressure_unknown")
+					continue
+				}
+				if memory.State != "" {
+					observedAt = memory.ObservedAt
+				}
+			}
 			if observedAt.IsZero() || now.Sub(observedAt) > maxAge {
 				failing = append(failing, resourceID)
 				evidenceDetails = append(evidenceDetails, resourceID+"=metric_stale")

@@ -257,5 +257,81 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
                             r"|--follow|--token|cmdline|environ|smaps")
 
 
+class GuestMemoryInterpretationDocsTest(unittest.TestCase):
+    HEADING = "#### Guest memory is high but available memory is plentiful\n"
+    ANCHOR = "#guest-memory-is-high-but-available-memory-is-plentiful"
+
+    def guidance(self):
+        text = DOC.read_text(encoding="utf-8")
+        self.assertEqual(text.count(self.HEADING), 1)
+        return " ".join(text.split(self.HEADING, 1)[1].split("\n#### ", 1)[0].split())
+
+    def test_guest_and_process_entry_points_are_separate_and_mirrored(self):
+        for name in ("TROUBLESHOOTING.md", "FAQ.md", "CONFIGURATION.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+        for name in ("FAQ.md", "CONFIGURATION.md"):
+            self.assertIn("TROUBLESHOOTING.md" + self.ANCHOR,
+                          (ROOT / "docs" / name).read_text())
+        self.assertIn(self.ANCHOR, section())
+        self.assertIn("Pulse server process", section())
+        self.assertIn("not a monitored guest", section())
+
+    def test_comparisons_keep_guest_kernel_units_and_cache_semantics(self):
+        guide = self.guidance()
+        for distinction in (
+            "same guest, kernel and time", "node's available memory is not the VM's",
+            "single application's RSS is not total guest usage",
+            "Do not sum process RSS", "not all cache is immediately reclaimable",
+        ):
+            self.assertIn(distinction, guide)
+        self.assertIn("a guarantee of every allocation succeeding", guide)
+        self.assertIn("**20 GiB total** and **15.2 GiB available**", guide)
+        self.assertIn("(20 - 15.2) / 20 × 100 = 24%", guide)
+        self.assertIn("not a nominal configured limit", guide)
+        self.assertIn("do not mix GB with GiB or kernel `kB` (1,024 bytes)", guide)
+        self.assertIn("Do not subtract all `buff/cache`", guide)
+        self.assertIn("substitute `free` for `available`", guide)
+        # Existing collectors use named kernel fields, not free-table columns.
+        parser = (ROOT / "pkg/proxmox/client.go").read_text()
+        self.assertIn('"MemAvailable"', parser)
+
+    def test_missing_or_retained_evidence_and_controls_are_not_recovery(self):
+        guide = self.guidance()
+        for distinction in (
+            "Missing is not zero", "prior low value", "not current recovery",
+            "source and original observation time", "Unknown source, time or counters",
+            "not a correction to apply blindly", "Patrol finding has cleared",
+            "does not prove that the API-only path recovered",
+            "does not hide the reading, dismiss a separate Patrol finding or establish recovery",
+            "Do not disable all monitoring or change thresholds",
+        ):
+            self.assertIn(distinction, guide)
+        patrol = (ROOT / "internal/ai/patrol_guest_memory.go").read_text()
+        evidence = (ROOT / "internal/unifiedresources/guest_memory.go").read_text()
+        # Patrol delegates interpretation and display to the shared selected-
+        # sample formatter. Keep the guide bound to that implementation, not
+        # the former location of its warning strings.
+        self.assertIn("unifiedresources.QualifyGuestMemory(", patrol)
+        self.assertIn("unifiedresources.GuestMemoryEvidence{", patrol)
+        self.assertIn("}).Format(r.percent)", patrol)
+        self.assertIn('"guest pressure unknown"', evidence)
+        self.assertIn('"N/A (guest memory unavailable; not evidence of recovery)"', evidence)
+
+    def test_guidance_uses_existing_evidence_without_new_guest_reads(self):
+        guide = self.guidance()
+        for boundary in (
+            "existing observations", "existing screenshots", "original sequence",
+            "Do not publish raw API responses", "full `/proc` output",
+            "do not run Diagnostics, guest-agent probes or another Patrol run",
+            "install an agent, restart the guest, drop caches or change memory limits",
+            "If the guest is frozen or unresponsive, stop these comparisons",
+            "VM_DISK_MONITORING.md#backup-safety",
+        ):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("```", guide, "interpret evidence already collected, not a new command")
+        self.assertIn("CONFIGURATION.md#metric-thresholds-off-and-inheritance", guide)
+
+
 if __name__ == "__main__":
     unittest.main()

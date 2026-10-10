@@ -2,7 +2,6 @@ package ai
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -36,71 +35,24 @@ func patrolGuestMemoryEvidenceSection(snap patrolRuntimeState, scopedSet map[str
 // it visible as evidence, but do not use it (or a retained/undated reading) to
 // manufacture a pressure flag, forecast, anomaly or verified recovery.
 type patrolGuestMemoryReading struct {
-	percent       float64
-	available     bool
-	pressureKnown bool
-	state         string
-	source        string
-	observedAt    time.Time
+	percent         float64
+	available       bool
+	pressureKnown   bool
+	state           string
+	source          string
+	observedAt      time.Time
+	mayIncludeCache bool
 }
 
 func readPatrolGuestMemory(percent float64, observation models.MemoryObservation, available, proxmoxGuest bool) patrolGuestMemoryReading {
-	r := patrolGuestMemoryReading{percent: percent, available: available && !math.IsNaN(percent) && !math.IsInf(percent, 0) && percent >= 0 && percent <= 100}
-	if !r.available || observation.State == "unavailable" {
-		r.available = false
-		r.state = "unavailable"
-		return r
-	}
-	// Other platforms need not implement Proxmox's memory evidence contract.
-	// Preserve their existing readings, including a selected measured zero.
-	if !proxmoxGuest && observation == (models.MemoryObservation{}) {
-		r.pressureKnown = true
-		return r
-	}
-	r.state = "unknown"
-	if observation.ObservedAt.After(time.Unix(0, 0)) && !observation.ObservedAt.After(time.Now()) {
-		r.observedAt = observation.ObservedAt
-	}
-	if observation.State == "last-known" {
-		r.state = "last-known"
-	} else if observation.State == "current" && !r.observedAt.IsZero() {
-		r.state = "current"
-	}
-	// Only known source names are put in the seed. A future/unknown source is
-	// not an assertion of either cache awareness or current guest pressure.
-	switch observation.Source {
-	case "available-field", "derived-free-buffers-cached", "guest-agent-meminfo", "guest-agent-meminfo-derived", "agent":
-		r.source = observation.Source
-		r.pressureKnown = r.state == "current"
-	case "status-mem", "status-freemem", "cluster-resources", "derived-total-minus-used", "previous-snapshot":
-		r.source = observation.Source
-	}
-	return r
+	e := unifiedresources.QualifyGuestMemory(percent, observation, available, proxmoxGuest, time.Now())
+	return patrolGuestMemoryReading{percent: percent, available: e.Available, pressureKnown: e.PressureKnown,
+		state: e.State, source: e.Source, observedAt: e.ObservedAt, mayIncludeCache: e.MayIncludeCache}
 }
 
 func (r patrolGuestMemoryReading) display() string {
-	if !r.available {
-		return "N/A (guest memory unavailable; not evidence of recovery)"
-	}
-	if r.state == "" {
-		return fmt.Sprintf("%.0f%%", r.percent)
-	}
-	source := r.source
-	if source == "" {
-		source = "unknown"
-	}
-	observed := "time unknown"
-	if !r.observedAt.IsZero() {
-		observed = "observed " + r.observedAt.UTC().Format(time.RFC3339)
-	}
-	qualification := "cache-aware guest usage"
-	if !r.pressureKnown {
-		qualification = "guest pressure unknown"
-		if r.source == "status-mem" || r.source == "status-freemem" || r.source == "cluster-resources" || r.source == "derived-total-minus-used" {
-			qualification += "; may include reclaimable cache"
-		}
-	}
-	return fmt.Sprintf("%.0f%% (%s; source %s; %s; %s)", r.percent, r.state, source, observed, qualification)
+	return (unifiedresources.GuestMemoryEvidence{Available: r.available, PressureKnown: r.pressureKnown,
+		State: r.state, Source: r.source, ObservedAt: r.observedAt, MayIncludeCache: r.mayIncludeCache}).Format(r.percent)
 }
 
 func patrolGuestMemoryGaps(rows []patrolGuestInventoryRow) string {

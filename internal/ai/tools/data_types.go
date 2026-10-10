@@ -278,23 +278,25 @@ type NodeSummary struct {
 // VMSummary is a summarized VM for list responses
 type VMSummary struct {
 	GovernedResourceMetadata
-	VMID   int     `json:"vmid"`
-	Name   string  `json:"name"`
-	Status string  `json:"status"`
-	Node   string  `json:"node"`
-	CPU    float64 `json:"cpu_percent,omitempty"`
-	Memory float64 `json:"memory_percent,omitempty"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	Node           string                                `json:"node"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 // ContainerSummary is a summarized LXC container for list responses
 type ContainerSummary struct {
 	GovernedResourceMetadata
-	VMID   int     `json:"vmid"`
-	Name   string  `json:"name"`
-	Status string  `json:"status"`
-	Node   string  `json:"node"`
-	CPU    float64 `json:"cpu_percent,omitempty"`
-	Memory float64 `json:"memory_percent,omitempty"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	Node           string                                `json:"node"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
 }
 
 // DockerHostSummary is a summarized Docker host for list responses
@@ -485,13 +487,14 @@ func (t ProxmoxNodeTopology) NormalizeCollections() ProxmoxNodeTopology {
 // TopologyVM represents a VM in the topology
 type TopologyVM struct {
 	GovernedResourceMetadata
-	VMID   int      `json:"vmid"`
-	Name   string   `json:"name"`
-	Status string   `json:"status"`
-	CPU    float64  `json:"cpu_percent,omitempty"`
-	Memory float64  `json:"memory_percent,omitempty"`
-	OS     string   `json:"os,omitempty"`
-	Tags   []string `json:"tags"`
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
+	OS             string                                `json:"os,omitempty"`
+	Tags           []string                              `json:"tags"`
 }
 
 func (t TopologyVM) NormalizeCollections() TopologyVM {
@@ -504,14 +507,15 @@ func (t TopologyVM) NormalizeCollections() TopologyVM {
 // TopologyContainer represents a system container in the topology
 type TopologyContainer struct {
 	GovernedResourceMetadata
-	VMID      int      `json:"vmid"`
-	Name      string   `json:"name"`
-	Status    string   `json:"status"`
-	CPU       float64  `json:"cpu_percent,omitempty"`
-	Memory    float64  `json:"memory_percent,omitempty"`
-	OS        string   `json:"os,omitempty"`
-	Tags      []string `json:"tags"`
-	HasDocker bool     `json:"has_docker,omitempty"` // True if Docker is installed inside this container
+	VMID           int                                   `json:"vmid"`
+	Name           string                                `json:"name"`
+	Status         string                                `json:"status"`
+	CPU            float64                               `json:"cpu_percent,omitempty"`
+	Memory         *float64                              `json:"memory_percent"`
+	MemoryEvidence *unifiedresources.GuestMemoryEvidence `json:"memory_evidence,omitempty"`
+	OS             string                                `json:"os,omitempty"`
+	Tags           []string                              `json:"tags"`
+	HasDocker      bool                                  `json:"has_docker,omitempty"` // True if Docker is installed inside this container
 }
 
 func (t TopologyContainer) NormalizeCollections() TopologyContainer {
@@ -689,7 +693,7 @@ type ResourceResponse struct {
 }
 
 func EmptyResourceResponse() ResourceResponse {
-	return ResourceResponse{}.NormalizeCollections()
+	return ResourceResponse{Memory: resourceMemoryValues(0, 0, 0)}.NormalizeCollections()
 }
 
 func (r ResourceResponse) NormalizeCollections() ResourceResponse {
@@ -850,9 +854,15 @@ type ResourceCPU struct {
 
 // ResourceMemory describes memory usage
 type ResourceMemory struct {
-	Percent float64 `json:"percent"`
-	UsedGB  float64 `json:"used_gb"`
-	TotalGB float64 `json:"total_gb"`
+	Percent  *float64                              `json:"percent"`
+	UsedGB   *float64                              `json:"used_gb"`
+	TotalGB  float64                               `json:"total_gb"`
+	Evidence *unifiedresources.GuestMemoryEvidence `json:"evidence,omitempty"`
+}
+
+// resourceMemoryValues preserves the numeric contract for non-guest responses.
+func resourceMemoryValues(percent, usedGB, totalGB float64) ResourceMemory {
+	return ResourceMemory{Percent: &percent, UsedGB: &usedGB, TotalGB: totalGB}
 }
 
 // ResourceDisk describes disk usage
@@ -960,13 +970,14 @@ type FindingCounts struct {
 
 // MetricsResponse is returned by pulse_get_metrics
 type MetricsResponse struct {
-	ResourceID    string                            `json:"resource_id,omitempty"`
-	Period        string                            `json:"period"`
-	Points        []MetricPoint                     `json:"points"`
-	Summary       map[string]ResourceMetricsSummary `json:"summary"`
-	Pagination    *PaginationInfo                   `json:"pagination,omitempty"`
-	Downsampled   bool                              `json:"downsampled,omitempty"`
-	OriginalCount int                               `json:"original_count,omitempty"`
+	ResourceID           string                            `json:"resource_id,omitempty"`
+	Period               string                            `json:"period"`
+	Points               []MetricPoint                     `json:"points"`
+	Summary              map[string]ResourceMetricsSummary `json:"summary"`
+	Pagination           *PaginationInfo                   `json:"pagination,omitempty"`
+	Downsampled          bool                              `json:"downsampled,omitempty"`
+	OriginalCount        int                               `json:"original_count,omitempty"`
+	MemoryInterpretation string                            `json:"memory_interpretation,omitempty"`
 }
 
 func EmptyMetricsResponse() MetricsResponse {

@@ -25,6 +25,34 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Guest memory remains qualified through tools and local observers
+
+The existing guest get/list/topology tools and Assistant inventory context carry
+selected memory evidence with the percentage. Unavailable/invalid memory is
+null, not zero usage; a measured zero stays numeric. Evidence retains source,
+state and original observation time, including unknown pressure and possible
+reclaimable cache. Condensed query facts retain the same qualification rather
+than saving a bare percentage. `TestGuestMemoryQueryEvidence` and
+`TestAssistantGuestMemoryContextAndFacts` check the real tool/context/fact paths.
+
+The existing local memory observer uses that same interpretation for VM/system
+containers. Unknown pressure wakes it with an explicit evidence gap, not a
+numeric breach or a healthy predicate. A known selected guest sample is bounded
+by its own observation age; refreshing the resource through another source does
+not renew it. Other-platform legacy readings and other metric observers retain
+their existing semantics. `TestPatrolObserverGuestMemoryOrigin` checks unknown,
+retained, undated, future, invalid and stale origins alongside genuine low/zero/
+high pressure and the age boundary. This changes no objective ABI, threshold,
+collection lease, observer authority or guest-command admission.
+
+Performance-tool guest memory history remains numeric, but explicitly lacks
+per-sample source/pressure qualification. A live current reading cannot reattribute
+past samples or prove that past high usage was pressure/a leak.
+`TestGuestMemoryHistoryDoesNotBorrowLiveOrigin` checks unchanged numeric history,
+its truthful limitation and non-guest compatibility. No History writer/schema
+or existing stored finding is changed. These controls do not establish #2762's
+running source, episode cause, native recovery or a containing release.
+
 ### Patrol guest memory is qualified evidence, not an unlabelled percentage
 
 Patrol consumes the selected guest memory metric's original observation,

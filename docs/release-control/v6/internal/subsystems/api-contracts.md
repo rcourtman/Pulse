@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### AI guest memory projections preserve uncertainty
+
+Existing AI get/list/topology responses carry selected guest memory evidence:
+availability, pressure qualification, source, state and original observation time.
+A missing/invalid guest percentage is JSON null rather than zero; a measured zero
+is explicitly numeric, including in list/topology and Assistant inventory. Get
+usage bytes are null when unavailable. Non-guest response numbers remain unchanged.
+The added evidence is a read-only projection, not a new route, command, feature,
+collector or diagnostic authority. `TestGuestMemoryQueryEvidence` exercises actual
+tool serialization and `TestAssistantGuestMemoryContextAndFacts` preserves it
+through Assistant condensation. Performance responses add a guest-history source
+limitation without relabelling past samples or changing their numbers; their
+actual tool controls are in `TestGuestMemoryHistoryDoesNotBorrowLiveOrigin`.
+
 ### Optional held-alert breach date consumer
 
 `MetricAlertStatus.lastBreachAt?: string` mirrors the existing backend ISO
