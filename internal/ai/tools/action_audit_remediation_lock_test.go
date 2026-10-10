@@ -378,3 +378,28 @@ func TestExecuteNativeActionWithAuditAllowsHumanApprovedDispatchOnUnknownLockSta
 		t.Fatalf("expected successful ExecutionResult, got %#v", result)
 	}
 }
+
+// A succession moves the operator's row to the successor ID when a rebuild
+// applies it, before the registry generation listing the successor is
+// published; the dispatch a model asks for in between still names the old ID.
+// The lock the operator set on it must still refuse.
+func TestRemediationLockGateFollowsASuccessionOffTheIDItNames(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{CanonicalID: "agent-before-key", NeverAutoRemediate: true}); err != nil {
+		t.Fatalf("lock the agent: %v", err)
+	}
+	if err := store.ApplyCanonicalIDSuccessions([]unifiedresources.CanonicalIDSuccession{{OldCanonicalID: "agent-before-key", NewCanonicalID: "agent-keyed"}}); err != nil {
+		t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: store})
+
+	for _, humanApproved := range []bool{false, true} {
+		err := executor.checkRemediationLockForDispatch("action-1", "agent-before-key", "restart", humanApproved)
+		if !errors.Is(err, unifiedresources.ErrResourceRemediationLocked) {
+			t.Fatalf("humanApproved=%v: error = %v, want ErrResourceRemediationLocked", humanApproved, err)
+		}
+	}
+	if err := executor.checkRemediationLockForDispatch("action-2", "agent-unrelated", "restart", false); err != nil {
+		t.Fatalf("an ID no succession names was refused: %v", err)
+	}
+}
