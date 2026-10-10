@@ -9040,6 +9040,9 @@ func TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit(t *testing.T) {
 			isRow("other machine gone: the alert reference's row (the original, over the later write)", state, found, retired)
 			state, found = row(scoped)
 			isRow("other machine gone: the row written on the scoped ID", state, found, restored)
+			if _, found := row(copies["pve3"].ID); found {
+				t.Errorf("other machine gone: the pve3 copy's ID %s holds a row though none was set on it", copies["pve3"].ID)
+			}
 
 			// A row already on a scoped ID applies again whenever a copy with the
 			// same serial and machine scope is scoped again.
@@ -9054,6 +9057,9 @@ func TestPhysicalDiskOperatorStateIsNotCarriedAcrossASerialSplit(t *testing.T) {
 			isRow("second split: the alert reference's row", state, found, restored)
 			state, found = row(unscoped)
 			isRow("second split: the unscoped ID's row", state, found, retired)
+			if _, found := row(copies["pve3"].ID); found {
+				t.Errorf("second split: the pve3 copy %s holds a row though none was set on it", copies["pve3"].ID)
+			}
 		})
 	}
 }
