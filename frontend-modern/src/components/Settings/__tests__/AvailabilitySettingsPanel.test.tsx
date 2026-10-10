@@ -268,3 +268,61 @@ describe('AvailabilitySettingsPanel', () => {
     );
   });
 });
+
+it('ages loaded availability counts, copy and colour without another target read', async () => {
+  const start = Date.parse('2026-10-10T12:00:00Z');
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+  const availability = {
+    targetId: 'clock-check',
+    name: 'Clock check',
+    protocol: 'tcp',
+    address: 'clock.example.test',
+    enabled: true,
+    available: true,
+    lastChecked: new Date(start).toISOString(),
+    pollIntervalSeconds: 30,
+    evidence: { validUntil: new Date(start + 10_000).toISOString() },
+  };
+  resourceMocks.resources = [
+    {
+      id: 'clock-check',
+      type: 'network-endpoint',
+      platformType: 'availability',
+      sources: ['availability'],
+      name: 'Clock check',
+      lastSeen: start,
+      status: 'online',
+      availability,
+    },
+  ];
+  vi.mocked(AvailabilityTargetsAPI.list)
+    .mockClear()
+    .mockResolvedValue([
+      {
+        id: 'clock-check',
+        name: 'Clock check',
+        address: 'clock.example.test',
+        protocol: 'tcp',
+        enabled: true,
+        status: availability,
+      },
+    ]);
+  try {
+    const { container } = render(() => <AvailabilitySettingsPanel />);
+    expect(await screen.findByText('1 enabled · 1 total')).toBeInTheDocument();
+    expect(container.querySelector('span.bg-emerald-100')).not.toBeNull();
+    expect(screen.getByText('Online')).toBeInTheDocument();
+    vi.advanceTimersByTime(30_000);
+    expect(screen.getByText('1 needs attention · 1 enabled')).toBeInTheDocument();
+    expect(container.querySelector('span.bg-amber-100')).not.toBeNull();
+    expect(screen.getByText('Stale')).toHaveAttribute(
+      'title',
+      'The last check is stale; it does not establish current availability.',
+    );
+    expect(screen.queryByText('Online')).not.toBeInTheDocument();
+    expect(AvailabilityTargetsAPI.list).toHaveBeenCalledOnce();
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
+});

@@ -2404,3 +2404,31 @@ describe('fast merge path for metrics-only delta patches', () => {
     expect(ops.every((op) => op.key !== 'platformData' || op.leaf !== undefined)).toBe(true);
   });
 });
+
+it('replaces recovered availability without replacing independent metrics', () => {
+  const old = createNodeResource({
+    sources: ['proxmox-pve', 'availability'],
+    availability: {
+      targetId: 'check',
+      enabled: true,
+      available: false,
+      lastError: 'HTTP 503',
+      consecutiveFailures: 3,
+    },
+  });
+  const [previous] = mergeCanonicalResourceSnapshot([old], []);
+  const incoming = {
+    ...old,
+    cpu: { current: 44 },
+    availability: { targetId: 'check', enabled: true, available: true, latencyMillis: 4 },
+    platformData: {
+      sources: ['proxmox-pve', 'availability'],
+      availability: { targetId: 'check', enabled: true, available: true, latencyMillis: 4 },
+    },
+  } as Resource;
+  const [merged] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+  expect(merged.availability).toEqual(incoming.availability);
+  expect(merged.cpu).toEqual({ current: 44 });
+  expect(merged.memory).toEqual(previous.memory);
+  expect(merged.disk).toEqual(previous.disk);
+});

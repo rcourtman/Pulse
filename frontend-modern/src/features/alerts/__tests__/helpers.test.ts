@@ -499,3 +499,35 @@ describe('held breach date consumers', () => {
     expect(getMetricAlertPresentation(alert, NOW)?.lastBreach).toContain('20 mins ago');
   });
 });
+
+describe('clock subscription for attention copy', () => {
+  it('does not read the clock for a non-metric alert', () => {
+    const now = vi.fn(() => 0);
+    expect(getAlertAttentionCopy({ type: 'offline', message: 'Offline', value: 0 }, now)).toEqual({
+      message: 'Offline',
+    });
+    expect(now).not.toHaveBeenCalled();
+  });
+  it('reads the supplied clock for a held live status instead of the wall clock', () => {
+    const observedAt = '2026-10-10T12:00:00Z';
+    const now = vi.fn(() => Date.parse(observedAt) + 11 * 60_000);
+    const copy = getAlertAttentionCopy(
+      {
+        type: 'temperature',
+        message: 'Old breach',
+        value: 80,
+        metricStatus: {
+          phase: 'latched',
+          value: 76,
+          unit: '°C',
+          observedAt,
+          trigger: 80,
+          recovery: 75,
+        },
+      },
+      now,
+    );
+    expect(copy.message).toBe('Last reading: Temperature 76°C, 11 mins ago');
+    expect(now).toHaveBeenCalledOnce();
+  });
+});
