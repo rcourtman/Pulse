@@ -5391,112 +5391,167 @@ exit 0
 }
 
 func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
-	tmpDir := t.TempDir()
-	curlPath := filepath.Join(tmpDir, "curl")
-	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
-	logPath := filepath.Join(tmpDir, "curl.log")
-	systemctlPath := filepath.Join(tmpDir, "systemctl")
-	installDir := filepath.Join(tmpDir, "install")
-
-	if err := os.MkdirAll(filepath.Join(installDir, "bin"), 0755); err != nil {
-		t.Fatalf("mkdir install bin: %v", err)
+	// Load the complete helper, not an extracted perform_update with a stale
+	// hand-written dependency list. Its real state/version gates must precede
+	// the URL check. Transport, signature verification and the manager remain
+	// confined doubles; this is not native or published-installer acceptance.
+	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(installDir, "bin", "pulse"), []byte("old"), 0755); err != nil {
-		t.Fatalf("write fake pulse binary: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v1.0.0\n"), 0644); err != nil {
-		t.Fatalf("write VERSION: %v", err)
-	}
-
-	curlStub := `#!/usr/bin/env bash
-set -e
-printf '%s\n' "$*" >> "` + logPath + `"
+	for _, tc := range []struct {
+		name, state, observation string
+		admitted                 bool
+	}{
+		{"active", "active", "complete", true},
+		{"inactive", "inactive", "complete", true},
+		{"failed-read-with-output", "active", "error", false},
+		{"partial-read", "active", "partial", false},
+		{"duplicate-read", "active", "duplicate", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			installDir := filepath.Join(tmpDir, "install")
+			for _, dir := range []string{"tools", "tmp", "config", "install/bin"} {
+				if err := os.MkdirAll(filepath.Join(tmpDir, dir), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			old := "#!/bin/sh\necho 'Pulse v1.0.0'\n"
+			binary := filepath.Join(installDir, "bin", "pulse")
+			if err := os.WriteFile(binary, []byte(old), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(installDir, "VERSION"), []byte("v1.0.0\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			writeTool := func(name, script string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(tmpDir, "tools", name), []byte(script), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writeTool("systemctl", `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE_DIR/manager.log"
+[[ "$*" == "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" ]] || exit 97
+printf 'LoadState=loaded\n'
+[[ "$OBSERVATION" == partial ]] || printf 'ActiveState=%s\n' "$PRIOR_STATE"
+[[ "$OBSERVATION" != duplicate ]] || printf 'ActiveState=inactive\n'
+[[ "$OBSERVATION" != error ]] || exit 42
+`)
+			writeTool("ssh-keygen", "#!/bin/sh\nexit 0\n")
+			writeTool("curl", `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE_DIR/curl.log"
 out=""
 url=""
 while [[ $# -gt 0 ]]; do
-	case "$1" in
-		-o)
-			out="$2"
-			shift 2
-			;;
-		-fsSL)
-			shift
-			;;
-		*)
-			url="$1"
-			shift
-			;;
-	esac
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        -fsSL) shift ;;
+        *) [[ -z "$url" ]] || exit 95; url="$1"; shift ;;
+    esac
 done
 case "$url" in
-	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
-		printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
-		;;
-	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig")
-		printf 'signed-payload\n' > "$out"
-		;;
+    "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
+        cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+set -eu
+[[ "$*" == "--version v9.9.9" ]]
+[[ "$PULSE_SERVICE_NAME" == pulse-url-fixture ]]
+[[ "$PULSE_INSTALL_DIR" == "$FIXTURE_DIR/install" ]]
+[[ "$PULSE_CONFIG_DIR" == "$FIXTURE_DIR/config" ]]
+printf '#!/bin/sh\necho '\''Pulse v9.9.9'\''\n' > "$PULSE_INSTALL_DIR/bin/pulse"
+printf 'v9.9.9\n' > "$PULSE_INSTALL_DIR/VERSION"
+printf 'installed\n' >> "$FIXTURE_DIR/installer.log"
+INSTALLER
+        ;;
+    "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig")
+        printf 'signed-payload\n' > "$out" ;;
+    *) exit 96 ;;
 esac
+`)
+			script := `source "$AUTO_UPDATER"
+log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+# Relocate only the helper's temporary files, keeping creation/mode/cleanup real.
+mktemp() {
+    local -a args=("$@")
+    local last=$((${#args[@]} - 1))
+    if [[ "${args[last]}" == /tmp/pulse-* ]]; then
+        args[last]="$FIXTURE_DIR/tmp/${args[last]##*/}"
+    fi
+    command mktemp "${args[@]}"
+}
+if perform_update v9.9.9; then
+    echo UPDATE_ACCEPTED
+else
+    echo UPDATE_REFUSED
+    exit 1
+fi
+[[ -z "$(trap -p RETURN)" ]]
 `
-	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
-		t.Fatalf("write curl stub: %v", err)
-	}
-	if err := os.WriteFile(sshKeygenPath, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
-		t.Fatalf("write ssh-keygen stub: %v", err)
-	}
-
-	// This URL-selection fixture still runs the real bounded service readers.
-	// Supply a complete active observation, not an empty successful systemctl
-	// response that the fail-closed recovery contract must reject.
-	systemctlStub := `#!/usr/bin/env bash
-set -e
-[[ "$*" == "show pulse --no-pager --property=LoadState --property=ActiveState" ]] || exit 1
-printf 'LoadState=loaded\nActiveState=active\n'
-`
-	if err := os.WriteFile(systemctlPath, []byte(systemctlStub), 0755); err != nil {
-		t.Fatalf("write systemctl stub: %v", err)
-	}
-
-	script := `
-		PATH="` + tmpDir + `:$PATH"
-		GITHUB_REPO="rcourtman/Pulse"
-		INSTALL_DIR="` + installDir + `"
-		log() { :; }
-		detect_service_name() { echo pulse; }
-		get_current_version() { echo v9.9.9; }
-		INSTALL_SIGNATURE_IDENTITY="pulse-installer"
-		INSTALL_SIGNATURE_NAMESPACE="pulse-install"
-		PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
-` + extractAutoUpdateFunction(t, "release_signature_key_available") + `
-` + extractAutoUpdateFunction(t, "require_release_signature_verifier") + `
-` + extractAutoUpdateFunction(t, "verify_release_signature") + `
-` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
-` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
-` + extractAutoUpdateFunction(t, "read_update_service_state") + `
-` + extractAutoUpdateFunction(t, "start_update_service_if_stopped") + `
-` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
-` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
-` + extractAutoUpdateFunction(t, "perform_update") + `
-		perform_update v9.9.9
-	`
-
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
-	if err != nil {
-		t.Fatalf("bash: %v\n%s", err, out)
-	}
-
-	logContent, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read curl log: %v", err)
-	}
-	got := string(logContent)
-	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh") {
-		t.Fatalf("perform_update did not use versioned installer url:\n%s", got)
-	}
-	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig") {
-		t.Fatalf("perform_update did not use versioned installer signature url:\n%s", got)
-	}
-	if strings.Contains(got, "releases/latest/download/install.sh") {
-		t.Fatalf("perform_update still used latest installer url:\n%s", got)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", script)
+			cmd.Env = append(os.Environ(), "AUTO_UPDATER="+updater, "FIXTURE_DIR="+tmpDir,
+				"PATH="+filepath.Join(tmpDir, "tools")+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"GITHUB_REPO=rcourtman/Pulse", "PULSE_SERVICE_NAME=pulse-url-fixture",
+				"PULSE_INSTALL_DIR="+installDir, "PULSE_CONFIG_DIR="+filepath.Join(tmpDir, "config"),
+				"PRIOR_STATE="+tc.state, "OBSERVATION="+tc.observation)
+			out, runErr := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("fixture exceeded deadline: %v\n%s", ctx.Err(), out)
+			}
+			if (runErr == nil) != tc.admitted {
+				t.Fatalf("admitted=%v, bash: %v\n%s", tc.admitted, runErr, out)
+			}
+			manager, err := os.ReadFile(filepath.Join(tmpDir, "manager.log"))
+			if err != nil || len(manager) == 0 {
+				t.Fatalf("real helper did not observe the selected unit: %v\n%s", err, manager)
+			}
+			for _, call := range strings.Split(strings.TrimSpace(string(manager)), "\n") {
+				if call != "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" {
+					t.Fatalf("unexpected manager mutation or query: %s\n%s", call, out)
+				}
+			}
+			temporary, err := os.ReadDir(filepath.Join(tmpDir, "tmp"))
+			if err != nil || len(temporary) != 0 {
+				t.Fatalf("unexpected retained temporary/backup files: %v, %v\n%s", temporary, err, out)
+			}
+			if !tc.admitted {
+				for _, name := range []string{"curl.log", "installer.log"} {
+					if _, err := os.Stat(filepath.Join(tmpDir, name)); !os.IsNotExist(err) {
+						t.Fatalf("unknown state reached %s: %v\n%s", name, err, out)
+					}
+				}
+				got, err := os.ReadFile(binary)
+				if err != nil || string(got) != old || !strings.Contains(string(out), "UPDATE_REFUSED") {
+					t.Fatalf("refusal did not preserve the original installation: %v\n%s\n%s", err, got, out)
+				}
+				version, err := os.ReadFile(filepath.Join(installDir, "VERSION"))
+				if err != nil || string(version) != "v1.0.0\n" {
+					t.Fatalf("refusal changed version metadata: %v\n%s", err, version)
+				}
+				return
+			}
+			logContent, err := os.ReadFile(filepath.Join(tmpDir, "curl.log"))
+			want := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh -o "
+			wantSignature := "-fsSL https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig -o "
+			requests := strings.Split(strings.TrimSpace(string(logContent)), "\n")
+			if err != nil || len(requests) != 2 || !strings.HasPrefix(requests[0], want) ||
+				!strings.HasPrefix(requests[1], wantSignature) {
+				t.Fatalf("expected only the two exact versioned requests: %v\n%s", err, logContent)
+			}
+			installed, err := os.ReadFile(filepath.Join(tmpDir, "installer.log"))
+			if err != nil || string(installed) != "installed\n" || !strings.Contains(string(out), "UPDATE_ACCEPTED") {
+				t.Fatalf("targeted installer did not execute exactly once and complete verification: %v\n%s\n%s", err, installed, out)
+			}
+			got, err := os.ReadFile(binary)
+			if err != nil || string(got) != "#!/bin/sh\necho 'Pulse v9.9.9'\n" {
+				t.Fatalf("installer did not replace the executable identity: %v\n%s", err, got)
+			}
+		})
 	}
 }
 
