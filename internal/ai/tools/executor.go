@@ -656,10 +656,9 @@ type PulseToolExecutor struct {
 	protectedGuests []string
 
 	// Current execution context
-	targetType   string
-	targetID     string
-	isAutonomous bool
-	orgID        string
+	targetType string
+	targetID   string
+	orgID      string
 	// hasExecuteAuthority is request-local transport authority. Control
 	// settings describe operator policy; they never grant a chat-only token
 	// permission to execute infrastructure mutations.
@@ -669,9 +668,7 @@ type PulseToolExecutor struct {
 	// restriction for non-interactive read-only workloads (e.g. Patrol
 	// investigations): every infrastructure-mutating invocation is
 	// blocked by the registry before its handler runs, regardless of
-	// control level or autonomy. Core-owned and never serialized; it is
-	// deliberately separate from isAutonomous, which only suppresses
-	// interactive questions and grants no mutation authority.
+	// control level. Core-owned and never serialized.
 	denyInfrastructureMutations bool
 	// pulseStateAllowlist restricts pulse-state mutations to the named
 	// tools. Nil and an empty map both deny all.
@@ -837,7 +834,6 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		protectedGuests:             append([]string(nil), e.protectedGuests...),
 		targetType:                  e.targetType,
 		targetID:                    e.targetID,
-		isAutonomous:                e.isAutonomous,
 		orgID:                       e.orgID,
 		hasExecuteAuthority:         e.hasExecuteAuthority,
 		executeAuthorityBound:       e.executeAuthorityBound,
@@ -902,16 +898,9 @@ func (e *PulseToolExecutor) hasCanonicalReadState() bool {
 }
 
 // SetContext sets the current execution context
-func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous bool) {
+func (e *PulseToolExecutor) SetContext(targetType, targetID string) {
 	e.targetType = targetType
 	e.targetID = targetID
-	e.isAutonomous = autonomous
-}
-
-// SetAutonomousMode updates only the execution mode, preserving any
-// session-scoped target context already attached to this executor clone.
-func (e *PulseToolExecutor) SetAutonomousMode(enabled bool) {
-	e.isAutonomous = enabled
 }
 
 // SetOrgID sets the org scope used when creating approval records.
@@ -1062,15 +1051,13 @@ func (e *PulseToolExecutor) SetTypedActionPlanner(planner TypedActionPlanner) {
 	e.typedActionPlanner = planner
 }
 
-// SetOnActionCompleted installs a fire-and-forget callback that runs
-// after every terminal-state action audit is persisted (Completed or
-// Failed, including refused-before-dispatch failures with stable
-// `plan_drift:` / `resource_remediation_locked:` error prefixes).
-// Pass nil to disable. Used by the API layer to bridge action
-// completion into the agent SSE stream without coupling the tools
-// package to the api package. The callback runs on its own
-// goroutine; consumers must not assume immediate or in-order
-// delivery relative to subsequent dispatches.
+// SetOnActionCompleted installs the executor-side seam the API layer
+// attaches the agent SSE bridge to. Nothing in the tools package
+// dispatches the callback any more: the Assistant plans typed actions
+// into Pulse Actions instead of executing them, and the dispatcher
+// that used to fire it was removed with the retired execution lanes.
+// action.completed events come from API-owned execution. Pass nil to
+// disable.
 func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord)) {
 	if e == nil {
 		return

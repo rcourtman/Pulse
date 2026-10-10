@@ -322,7 +322,6 @@ func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *t
 		// Boundary-only compatibility conversions and retired command-shaped
 		// audit history remain readable but are not canonical action producers.
 		"../api/router_routes_ai_relay.go": true,
-		"../ai/tools/action_audit.go":      true,
 		// Graph-owned mock records are immutable presentation fixtures. They do
 		// not admit, approve, or dispatch executable actions.
 		"../mock/action_fixtures.go": true,
@@ -2575,13 +2574,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_read_test.go"),
 			requiredSnippets: []string{
 				`TestPulseToolExecutor_ExecuteReadRejectsLegacyAppContainerArg`,
-				`app_container is no longer supported; use app-container`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_file_test.go"),
-			requiredSnippets: []string{
-				`Legacy AppContainer Rejected`,
 				`app_container is no longer supported; use app-container`,
 			},
 		},

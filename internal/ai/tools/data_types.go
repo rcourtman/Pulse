@@ -1360,18 +1360,6 @@ type DockerCheckUpdatesResponse struct {
 	Command   DockerCommandStatus `json:"command"`
 }
 
-// DockerUpdateContainerResponse is returned by pulse_update_docker_container
-type DockerUpdateContainerResponse struct {
-	Success       bool                   `json:"success"`
-	TargetID      string                 `json:"target_id"`
-	ContainerID   string                 `json:"container_id"`
-	ContainerName string                 `json:"container_name"`
-	CommandID     string                 `json:"command_id"`
-	Message       string                 `json:"message"`
-	Command       DockerCommandStatus    `json:"command"`
-	Verification  map[string]interface{} `json:"verification,omitempty"`
-}
-
 // ========== Kubernetes Types ==========
 
 // KubernetesClustersResponse is returned by pulse_get_kubernetes_clusters

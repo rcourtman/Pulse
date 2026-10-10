@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -457,28 +456,6 @@ func TestDockerUpdateTools(t *testing.T) {
 	}
 	if checkResp.CommandID != "cmd1" || checkResp.TargetID != "host1" {
 		t.Fatalf("unexpected check response: %+v", checkResp)
-	}
-
-	executor.controlLevel = ControlLevelAutonomous
-	result, _ = executor.executeUpdateDockerContainer(context.Background(), map[string]interface{}{
-		"host":      "Docker One",
-		"container": "c1",
-	})
-	var updateResp DockerUpdateContainerResponse
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &updateResp); err != nil {
-		t.Fatalf("decode update response: %v", err)
-	}
-	if updates.lastUpdateName != "nginx" || updateResp.CommandID != "cmd2" {
-		t.Fatalf("unexpected update response: %+v", updateResp)
-	}
-
-	updates.enabled = false
-	result, _ = executor.executeUpdateDockerContainer(context.Background(), map[string]interface{}{
-		"host":      "Docker One",
-		"container": "c1",
-	})
-	if !strings.Contains(result.Content[0].Text, "updates are disabled") {
-		t.Fatalf("unexpected disabled response: %s", result.Content[0].Text)
 	}
 }
 

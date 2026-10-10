@@ -5880,24 +5880,18 @@ TargetName)` via the same rule the store uses internally — agents
 match the result against canonical resource ids elsewhere in Pulse
 without depending on a `Plan` being populated.
 
-`PulseToolExecutor` exposes `SetOnActionCompleted(cb)` as the
-parallel seam for action-audit terminal states. Every dispatch
-that reaches `ActionStateCompleted` or `ActionStateFailed` —
-including refused-before-dispatch refusals routed through the
-plan-drift and operator-lock guards in `executeCommandWithAudit`,
-the per-execution result lane shared by `executeCommandWithAudit`
-and `executeNativeActionWithAudit`, and the recovery branch when
-state-machine normalization fails — calls
-`publishActionCompleted(record)`, which dispatches the callback on
-its own goroutine after the audit record has already been
-persisted. The callback is installed once per chat-service per
-org through `wireAIChatDependenciesForService` against
-`chatService.GetExecutor()`, so multi-tenant chat-service rebuilds
-re-wire the bridge without coupling the tools package to the api
-package. API-owned execution installs `ResourceHandlers` on the
-same `PublishActionCompletedRecord` projector so direct
+`PulseToolExecutor` still exposes `SetOnActionCompleted(cb)` as an
+executor-side seam for action-audit terminal states, and the callback is
+installed once per chat-service per org through
+`wireAIChatDependenciesForService` against `chatService.GetExecutor()`, but
+nothing in the tools package dispatches it: `publishActionCompleted` and the
+`executeCommandWithAudit` / `executeNativeActionWithAudit` lanes that called
+it were removed with the unreachable Assistant mutation handlers
+(`pulse_control` only plans typed actions into Pulse Actions).
+API-owned execution installs `ResourceHandlers` on the
+`PublishActionCompletedRecord` projector so direct
 `/api/actions/{id}/execute` completions and stale-plan refusals
-emit the identical payload shape. `action.completed` payloads preserve the canonical
+emit the `action.completed` payload. `action.completed` payloads preserve the canonical
 refusal-token prefixes (`plan_drift:`, `action_plan_expired:`,
 `action_dry_run_only:`, `resource_remediation_locked:`) on
 `errorMessage` verbatim so agents branch on the stable code

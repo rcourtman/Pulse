@@ -890,7 +890,6 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	if baseExecutor != nil {
 		effectiveExecutor = baseExecutor.Clone()
 		effectiveExecutor.SetControlLevel(effectiveControlLevel)
-		effectiveExecutor.SetAutonomousMode(autonomousMode)
 		effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 		effectiveExecutor.SetExecuteAuthority(req.HasExecuteAuthority)
 		effectiveExecutor.SetResolvedContext(resolvedCtx)
@@ -3108,7 +3107,6 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	autonomousMode := s.isAutonomousModeEnabled()
 	effectiveExecutor := executor.Clone()
 	effectiveExecutor.SetControlLevel(effectiveControlLevel)
-	effectiveExecutor.SetAutonomousMode(autonomousMode)
 	effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
 	effectiveExecutor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
 	availableTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
@@ -3705,9 +3703,6 @@ func (s *Service) SetAutonomousMode(enabled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.autonomousMode = enabled
-	if s.executor != nil {
-		s.executor.SetContext("", "", enabled)
-	}
 	if s.agenticLoop != nil {
 		s.agenticLoop.SetAutonomousMode(enabled)
 	}

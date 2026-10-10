@@ -2149,13 +2149,13 @@ and search matches through `addCanonicalGuestSearchMatches` /
 disk summaries flow through `appendGuestDiskSummaries` in
 `internal/ai/tools/tools_storage.go`. A new guest family extends those
 helpers (their view-constraint interfaces name the read-state methods they
-need) rather than re-rolling a parallel loop. The same shape applies to
-mutating tool pipelines: file append/write share `executeFileMutation`
-driven by `fileMutationSpec` (`internal/ai/tools/tools_file.go`), and
-namespaced kubectl actions share `executeKubernetesResourceAction` driven by
-`kubernetesResourceAction` (`internal/ai/tools/tools_kubernetes.go`) — new
-file or kubectl actions add a spec, keeping approval-command text stable,
-instead of duplicating the approval/audit pipeline. OpenAI-compatible message
+need) rather than re-rolling a parallel loop. The Assistant tool layer holds
+no mutating tool pipeline to extend: `pulse_control` only plans typed resource
+actions into Pulse Actions through `executeControlResource`
+(`internal/ai/tools/tools_control.go`), and the shell, guest, Docker,
+Kubernetes and file-mutation handlers that once carried their own approval and
+audit steps were removed because nothing in production called them.
+OpenAI-compatible message
 conversion for both non-streaming and streaming turns is shared through
 `convertMessagesToOpenAI` (`internal/ai/providers/openai.go`), Anthropic message
 conversion for both non-streaming and streaming turns is shared by the API-key
@@ -4411,9 +4411,9 @@ resolve canonical/source IDs and unique aliases before collection, reject
    presenting stale read-only summaries. Frontend approval cards must surface backend
    approval risk/description without hiding a pending approval when skip or
    deny fails. Action-producing tools must also persist the unified
-   `ActionPlan.Preflight` dry-run boundary through
-   `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
-   as chat-only text.
+   `ActionPlan.Preflight` dry-run boundary through the canonical planner
+   (`internal/actionplanner/planner.go`) rather than leaving dry-run
+   availability as chat-only text.
    The `pulse_discovery` tool response must carry each discovered fact's
    provenance — the `source` that produced it and its `confidence` — alongside
    the fact's category/key/value, so the model can attribute and weight what it
@@ -4573,65 +4573,20 @@ resolve canonical/source IDs and unique aliases before collection, reject
     and to leave `impact` empty rather than fabricate one when the
     consequence is genuinely unknown; the runtime must not synthesize a
     default in that case.
-    The action broker enforces a plan-hash drift check at the execute
-    boundary: when an approval ID resolves to a stored plan with a
-    PlanHash, the freshly-recomputed approval-equivalent hash from the
-    actual payload (using `approvalPlanHash`, the same function used at
-    approval-creation time) must match. Mismatch returns
-    `ErrActionPlanDrift` and refuses dispatch; the contract is "the
-    operator approved exactly this (command, target, reason)
-    combination" and a different one cannot run under the stale
-    approval. When `approvedHash` is empty (older approval records, or
-    contract paths that did not author one), validation is skipped to
-    preserve existing behavior. The check is currently wired in
-    `executeCommandWithAudit` for shell-command actions; the native-
-    action path uses a different hash function (`actionPlanHashForParams`)
-    so a coherent canonical-hash refactor must precede adding the same
-    check there.
-    The broker runs a class-derived read-after-write verification check
-    immediately after a successful dispatch. `VerificationCommandForCommand`
-    in `internal/ai/tools/tools_control.go` returns the executable check
-    keyed on the same command class as the preflight authoring (e.g.
-    `systemctl is-active <unit>` after a service-restart). The check
-    runs through the same agent path as the dispatch and the outcome is
-    persisted on `ExecutionResult.Verification` so the audit history
-    shows not only what the action did but whether the read-back
-    confirmed the intended state. Container-class verification is
-    deferred to pulse_docker's existing tool-level runtime inspect
-    check (`docker inspect` or `podman inspect`, according to the
-    resolved container runtime); classes without a derivable verification command leave
-    `Verification` nil rather than fabricating a verified=true entry.
-    The approval preflight presented to operators authors per-command-class
-    safety and verification context on top of the default broker-level
-    posture. `classifyApprovalCommand` and
-    `approvalCommandClassPreflightAdditions` in
-    `internal/ai/tools/tools_control.go` bucket common Pulse remediation
-    actions (service-restart, service-stop, service-start, service-reload,
-    container-restart, container-stop, k8s-rollout-restart, plus the
-    Proxmox VM lifecycle classes proxmox-vm-reboot, proxmox-vm-stop,
-    proxmox-vm-start, proxmox-vm-shutdown and the matching pct-driven
-    proxmox-ct-\* container lifecycle classes) and return hand-authored
-    operational copy: what the command actually touches, how Pulse will
-    read back success. The additions append onto the default
-    safety/verification arrays rather than replacing them, so the
-    broker's structural posture (org scope, hash match, single-use
-    approval) remains visible alongside the class-specific copy.
-    Unknown command classes must return empty additions rather than
-    fabricated padding — operators see only the default content, not
-    invented assertions about what an unrecognized command will do.
-    The Proxmox classes intentionally do not derive a broker-level
-    `VerificationCommandForCommand` check because pulse_control's
-    `verifyGuestAction` already runs `qm status` / `pct status` at the
-    tool layer; adding a parallel broker dispatch would double-run the
-    same read-after-write check.
-    Drift refusal must also persist a Failed audit record with the
-    Request, Plan, and Approvals snapshots intact and a Result whose
-    ErrorMessage is prefixed `plan_drift:` so the audit trail shows
-    every drift attempt that was caught. Operators reviewing the action
-    audit history must be able to see drift refusals as first-class
-    audit rows, not only in WARN-level logs; the `plan_drift:` prefix
-    is a stable token for audit-UI filters and alert rules to
-    distinguish drift from generic execution failures.
+    The Assistant tool layer carries no action broker. Its former
+    shell-command, guest, Docker, Kubernetes and file-mutation handlers,
+    the `executeCommandWithAudit` and `executeNativeActionWithAudit`
+    execution lanes, and the approval-record, preflight and plan-hash helpers
+    behind them (`createApprovalRecord`, `approvalPreflight`,
+    `classifyApprovalCommand`, `VerificationCommandForCommand`,
+    `approvalPlanHash`) were removed because nothing in production called
+    them: `pulse_control` only plans a typed resource action through
+    `executeControlResource`, and plan freshness
+    (`unifiedresources.ErrActionPlanDrift`) and the operator remediation lock
+    are enforced by `internal/actionlifecycle`. Class-derived read-after-write
+    verification, per-class preflight copy and the `plan_drift:` audit prefix
+    therefore have no tool-layer implementation; a change that needs one
+    belongs in the lifecycle, not back in `internal/ai/tools`.
     `FindingsStore.GetTrustSummary` returns a snapshot of how currently
     tracked findings have resolved (tracked, currently-active, resolved,
     auto-resolved, fix-verified, fix-failed, dismissed-as-noise,
@@ -5798,19 +5753,15 @@ approvals (the common shape on the approval hot path) still carry
 a canonical resource id agents can match against the rest of
 Pulse.
 
-`PulseToolExecutor` exposes `SetOnActionCompleted(cb)` as the
-parallel seam for action-audit terminal states. The action-audit
-hot path in `internal/ai/tools/action_audit.go` routes every
-terminal-state record (Completed, runtime-Failed, plan-drift
-refusal, operator-lock refusal, recovery-branch fail) through a
-single helper `publishActionCompleted(record)` which guards on
-nil callback, defensively filters non-terminal states, and fires
-the callback on its own goroutine after the audit record has
-been persisted. Refused-before-dispatch failures preserve the
-canonical `plan_drift:` and `resource_remediation_locked:`
-error-token prefixes on `record.Result.ErrorMessage` so the agent
-SSE stream's `action.completed` payload carries them verbatim —
-agents branch on the prefix rather than parsing human text.
+`PulseToolExecutor` still exposes `SetOnActionCompleted(cb)` as the
+parallel seam for action-audit terminal states, and the API layer installs
+the agent SSE bridge on it, but no production path dispatches the callback:
+its only dispatcher, `publishActionCompleted` in
+`internal/ai/tools/action_audit.go`, was reachable solely from the retired
+`executeCommandWithAudit` and `executeNativeActionWithAudit` lanes and was
+removed with them. The `action.completed` agent event is therefore published
+only by API-owned execution (`ResourceHandlers` through
+`PublishActionCompletedRecord`), not by the Assistant executor.
 
 The investigation runtime now hands the orchestrator a Finding
 pre-enriched with operator-set state and operational memory.
@@ -5890,28 +5841,15 @@ both are evaluated by the canonical operator-state model. Descendant-scope
 inheritance is alert-intent behavior and does not weaken exact-resource
 action-remediation locks or invent inherited action authority.
 
-The action broker consults the same `resource_operator_state` table
-on every dispatch — both the agent-command path
-(`executeCommandWithAudit`) and the native provider path
-(`executeNativeActionWithAudit`) in
-`internal/ai/tools/action_audit.go` run the shared
-`checkRemediationLockForDispatch` gate — and refuses with
-`unifiedresources.ErrResourceRemediationLocked` when the operator
-has set `NeverAutoRemediate=true` on the target resource. Refusal
-persists a Failed audit record whose `ErrorMessage` is prefixed
-`resource_remediation_locked:` so the audit timeline shows every
-refused dispatch, paralleling the `plan_drift:` shape from the drift
-guard. Operator state outranks per-action approval — the broker
-refuses even when the approval ID resolves and the plan hash matches.
-When the lock state cannot be determined (no audit store wired, or
-the operator-state lookup errors), dispatches that do not carry an
-approved human decision fail CLOSED with
-`ErrRemediationLockStateUnknown` and a Failed audit record prefixed
-`remediation_lock_state_unknown:` — the broker must not assume an
-unreadable lock is unset while Patrol or Assistant run autonomously.
-Dispatches backed by an approved human decision keep the historical
-fail-open posture on unknown lock state (the operator explicitly
-signed off on the exact plan), with the degraded lookup logged. The `IntentionallyOffline` branch is the indefinite
+Operator state outranks per-action approval on the Pulse Actions path:
+`validateExecutionPolicy` in `internal/actionlifecycle/service.go` reads the
+same `resource_operator_state` table at the dispatch decision point, refuses
+with `unifiedresources.ErrResourceRemediationLocked` when the operator has set
+`NeverAutoRemediate=true` on the target resource, and fails closed when the
+audit store is unavailable. The Assistant tool layer no longer consults the
+table itself: the tool-layer broker that did so (`checkRemediationLockForDispatch`
+inside the retired execution lanes) and its `ErrRemediationLockStateUnknown`
+were removed with the unreachable handlers. The `IntentionallyOffline` branch is the indefinite
 counterpart — same auto-dismiss but with
 `operator_state_cause: intentionally_offline` and no
 `maintenance_end_at` field because the suppression has no scheduled
@@ -6254,8 +6192,8 @@ then highest operational risk, then oldest request time, with approval ID as
 the final tie-break so map iteration cannot decide which governed action looks
 most urgent.
 That same approval boundary also owns approved command execution. When
-`internal/api/ai_handlers.go`, `internal/ai/service.go`, or
-`internal/ai/tools/action_audit.go` consume a governed approval record, the
+`internal/api/ai_handlers.go` or `internal/ai/service.go` consume a governed
+approval record, the
 runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands

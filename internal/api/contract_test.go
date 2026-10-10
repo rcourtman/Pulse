@@ -18992,12 +18992,10 @@ func TestContract_UpdateFunnelTelemetryStaysContentFree(t *testing.T) {
 	}
 }
 
-// TestContract_ExecutorPostCompletionCallback pins the seam the SSE
-// bridge depends on. The executor must expose SetOnActionCompleted
-// and the action_audit hot path must dispatch the callback for every
-// terminal-state record (success, runtime fail, plan-drift refusal,
-// remediation-lock refusal). Removing or in-lining the callback
-// breaks the bridge silently.
+// TestContract_ExecutorPostCompletionCallback pins the executor-side
+// seam the API layer attaches the agent SSE bridge to. The Assistant
+// executor no longer dispatches action audits itself (typed actions
+// plan through Pulse Actions), so this pins only that the seam exists.
 func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	executor, err := os.ReadFile("../ai/tools/executor.go")
 	if err != nil {
@@ -19006,29 +19004,6 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	executorSrc := string(executor)
 	if !strings.Contains(executorSrc, "func (e *PulseToolExecutor) SetOnActionCompleted(cb func(unifiedresources.ActionAuditRecord))") {
 		t.Error("executor must expose SetOnActionCompleted so the API layer can bridge action completion into the agent SSE stream")
-	}
-
-	audit, err := os.ReadFile("../ai/tools/action_audit.go")
-	if err != nil {
-		t.Fatalf("read action_audit.go: %v", err)
-	}
-	auditSrc := string(audit)
-	if !strings.Contains(auditSrc, "func (e *PulseToolExecutor) publishActionCompleted(record unifiedresources.ActionAuditRecord)") {
-		t.Error("action_audit.go must define publishActionCompleted helper so terminal-state writers route through one bridge point")
-	}
-	if !strings.Contains(auditSrc, "go cb(record)") {
-		t.Error("post-completion callback must run on its own goroutine to keep the dispatch hot path off any consumer's slowness")
-	}
-	// Pin the terminal persistence sites and the shared completion publisher.
-	terminalSites := []string{
-		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, "plan drift refused")`,
-		`e.actionAuditStore.RecordActionExecutionResult(completed, event)`,
-		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, remediationLockLifecycleMessage(refusal))`,
-	}
-	for _, site := range terminalSites {
-		if !strings.Contains(auditSrc, site) {
-			t.Errorf("action_audit.go must call publishActionCompleted at every terminal-state site; missing block:\n%s", site)
-		}
 	}
 }
 
@@ -21833,7 +21808,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`Name:        agentcapabilities.PulseControlToolName`,
 		`Name:        agentcapabilities.PulseDiscoveryToolName`,
 		`Name:        agentcapabilities.PulseDockerToolName`,
-		`Name: agentcapabilities.PulseFileEditToolName`,
 		`Name:        agentcapabilities.PulseKubernetesToolName`,
 		`Name: agentcapabilities.PulseKnowledgeToolName`,
 		`Name: agentcapabilities.PulseMetricsToolName`,

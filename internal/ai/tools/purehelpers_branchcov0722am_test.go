@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,45 +18,6 @@ import (
 // asserts the concrete return value. approvalAuditActor is defined in
 // action_audit.go as approval.RequesterPulseAssistant ("pulse_assistant"); the
 // default-arm cases assert that literal so a constant change would surface here.
-
-// TestBranchcov0722R2DockerRuntimeCommand covers every branch arm of
-// dockerRuntimeCommand: the nil-host guard, both recognised switch cases
-// ("podman", "docker"), the surrounding-whitespace + mixed-case normalisation
-// path (TrimSpace + ToLower), an unrecognised runtime falling through to the
-// default, and an empty runtime falling through to the default. Every arm is
-// asserted against the exact command string it returns.
-func TestBranchcov0722R2DockerRuntimeCommand(t *testing.T) {
-	tests := []struct {
-		name string
-		host *models.DockerHost
-		want string
-	}{
-		// --- nil-host guard: default command returned. ---
-		{name: "nil_host_returns_docker", host: nil, want: "docker"},
-
-		// --- recognised switch arms (exact, already-canonical input). ---
-		{name: "podman_runtime_returns_podman", host: &models.DockerHost{Runtime: "podman"}, want: "podman"},
-		{name: "docker_runtime_returns_docker", host: &models.DockerHost{Runtime: "docker"}, want: "docker"},
-
-		// --- normalisation: TrimSpace + ToLower route mixed input to a case. ---
-		{name: "podman_with_whitespace_and_mixed_case", host: &models.DockerHost{Runtime: "  PoDmAn  "}, want: "podman"},
-		{name: "docker_with_whitespace_and_upper_case", host: &models.DockerHost{Runtime: "\tDOCKER\n"}, want: "docker"},
-
-		// --- default arm: unrecognised runtime falls through to "docker". ---
-		{name: "unrecognised_runtime_falls_through", host: &models.DockerHost{Runtime: "containerd"}, want: "docker"},
-
-		// --- default arm: empty runtime falls through to "docker". ---
-		{name: "empty_runtime_falls_through", host: &models.DockerHost{Runtime: ""}, want: "docker"},
-		{name: "whitespace_only_runtime_falls_through", host: &models.DockerHost{Runtime: "   "}, want: "docker"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := dockerRuntimeCommand(tc.host)
-			assert.Equal(t, tc.want, got, "dockerRuntimeCommand mismatch")
-		})
-	}
-}
 
 // TestBranchcov0722R2ApprovalDecisionActor covers every branch arm of
 // approvalDecisionActor. The function implements a three-step precedence chain:
