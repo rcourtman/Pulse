@@ -112,6 +112,7 @@ type Router struct {
 	monitorResourceAdapter          *unifiedresources.MonitorAdapter
 	monitorResourceAdapters         map[string]*unifiedresources.MonitorAdapter
 	monitorAdapterMu                sync.Mutex
+	monitorSupplementalMu           sync.Mutex // guards monitorSupplementalRecords: the mock-mode switch hook writes it while a tenant initializer reads it
 	monitorSupplementalRecords      map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider
 	reportingHandlers               *ReportingHandlers
 	configProfileHandler            *ConfigProfileHandler
@@ -1882,10 +1883,9 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		return
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
-		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(adapter)
-	}
+	// The store and every supplemental provider are wired by one call at the
+	// end, so the monitor publishes the estate once instead of after each.
+	adapter := r.monitorAdapterForMonitor(m)
 
 	// Tenant monitors must inherit the persisted instance-wide notification
 	// settings. System settings are stored globally, so without this a tenant
@@ -1910,44 +1910,58 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		}
 	}
 
-	if len(r.monitorSupplementalRecords) == 0 {
+	r.monitorSupplementalMu.Lock()
+	providers := make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider, len(r.monitorSupplementalRecords))
+	for source, provider := range r.monitorSupplementalRecords {
+		providers[source] = provider
+	}
+	r.monitorSupplementalMu.Unlock()
+
+	if adapter != nil {
+		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
+		m.SetResourceStoreAndProviders(adapter, providers)
 		return
 	}
-
-	keys := make([]string, 0, len(r.monitorSupplementalRecords))
-	for source := range r.monitorSupplementalRecords {
-		keys = append(keys, string(source))
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		source := unifiedresources.DataSource(key)
-		provider := r.monitorSupplementalRecords[source]
-		m.SetSupplementalRecordsProvider(source, provider)
-	}
+	m.SetSupplementalRecordsProviders(providers)
 }
 
 func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.DataSource, provider monitoring.MonitorSupplementalRecordsProvider) {
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{source: provider})
+}
+
+// setMonitorSupplementalRecordsProviders records the providers for monitors
+// created later and installs them on the running one, which publishes the
+// estate once however many sources changed.
+func (r *Router) setMonitorSupplementalRecordsProviders(providers map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider) {
 	if r == nil {
 		return
 	}
 
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
+	normalizedProviders := make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider, len(providers))
+	r.monitorSupplementalMu.Lock()
+	for source, provider := range providers {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if normalized == "" {
+			continue
+		}
+		normalizedProviders[normalized] = provider
+
+		if r.monitorSupplementalRecords == nil {
+			r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
+		}
+		if provider == nil {
+			delete(r.monitorSupplementalRecords, normalized)
+		} else {
+			r.monitorSupplementalRecords[normalized] = provider
+		}
+	}
+	r.monitorSupplementalMu.Unlock()
+	if len(normalizedProviders) == 0 {
 		return
 	}
 
-	if r.monitorSupplementalRecords == nil {
-		r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
-	}
-	if provider == nil {
-		delete(r.monitorSupplementalRecords, normalized)
-	} else {
-		r.monitorSupplementalRecords[normalized] = provider
-	}
-
 	if r.monitor != nil {
-		r.monitor.SetSupplementalRecordsProvider(normalized, provider)
+		r.monitor.SetSupplementalRecordsProviders(normalizedProviders)
 	}
 	if r.mtMonitor != nil {
 		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
@@ -1970,8 +1984,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
 		}
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
+		r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: trueNASAdapter,
+			unifiedresources.SourceVMware:  vmwareAdapter,
+		})
 		return
 	}
 
@@ -1982,8 +1998,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
 	}
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: r.trueNASPoller,
+		unifiedresources.SourceVMware:  r.vmwarePoller,
+	})
 }
 
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.

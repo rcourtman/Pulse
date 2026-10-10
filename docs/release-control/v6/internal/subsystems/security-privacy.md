@@ -3168,3 +3168,15 @@ that node's row in the same monitor. This only withholds or substitutes values
 the caller could already read; the new `NodeView` and `DockerHostView`
 `SourceStatus` accessors expose no field beyond the delivery state the registry
 already records on the resource.
+
+### Instance-wide notification settings reach the monitor before its first publication
+
+`Router.configureMonitorDependencies` applies the persisted instance-wide
+notification settings (the webhook private-CIDR allowlist and the public URL)
+to a tenant or default monitor, and then wires the monitor's resource store and
+providers. The store wiring used to come first, so the alert pass it published
+could raise a webhook notification judged by the deny-all-private default
+before the saved allowlist was applied; the settings now precede the one
+publication. The allowlist, its validation and the SSRF checks are unchanged,
+and no authentication, authorization, token or tenant-isolation path is
+touched.

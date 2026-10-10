@@ -7,11 +7,16 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
 func TestRuntimeInventorySourcesProjectsOnlyBlockingWorkloadCoverage(t *testing.T) {
@@ -312,5 +317,129 @@ func TestRuntimeInventorySourcesHandlerRejectsNonGET(t *testing.T) {
 	handler.HandleRuntimeInventorySources(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// countingSupplementalRecords counts how often the monitor reads it: one read
+// per provider for every store pass.
+type countingSupplementalRecords struct {
+	reads atomic.Int32
+}
+
+func (c *countingSupplementalRecords) SupplementalRecords(*monitoring.Monitor, string) []unifiedresources.IngestRecord {
+	c.reads.Add(1)
+	return nil
+}
+
+func newWiringTestMonitor(t *testing.T) *monitoring.Monitor {
+	t.Helper()
+	monitor, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+	return monitor
+}
+
+// Wiring a monitor attaches its store and every supplemental provider. Each
+// separate wiring step published the whole estate, so a router with two
+// platform providers ran three full store passes (and the first two read an
+// incomplete provider set) before the listener opened.
+func TestConfigureMonitorDependenciesPublishesTheEstateOnce(t *testing.T) {
+	trueNAS := &countingSupplementalRecords{}
+	vmware := &countingSupplementalRecords{}
+	router := &Router{
+		monitorResourceAdapter:  unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		monitorResourceAdapters: make(map[string]*unifiedresources.MonitorAdapter),
+		monitorSupplementalRecords: map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: trueNAS,
+			unifiedresources.SourceVMware:  vmware,
+		},
+	}
+
+	monitor := newWiringTestMonitor(t)
+	router.configureMonitorDependencies(monitor)
+
+	if got := trueNAS.reads.Load(); got != 1 {
+		t.Fatalf("TrueNAS provider read %d times while wiring one monitor, want 1 store pass", got)
+	}
+	if got := vmware.reads.Load(); got != 1 {
+		t.Fatalf("VMware provider read %d times while wiring one monitor, want 1 store pass", got)
+	}
+
+	// NewRouter, SetMonitor, SetMultiTenantMonitor and every provider change
+	// wire the same monitor again; none of it has anything new to publish.
+	router.configureMonitorDependencies(monitor)
+	router.configureMonitorDependencies(monitor)
+	if trueNAS.reads.Load() != 1 || vmware.reads.Load() != 1 {
+		t.Fatalf("re-wiring the same monitor read the providers %d and %d times in all, want one store pass", trueNAS.reads.Load(), vmware.reads.Load())
+	}
+}
+
+// passCountingStore counts the registry rebuilds a monitor publishes into it.
+type passCountingStore struct {
+	*unifiedresources.MonitorAdapter
+	passes atomic.Int32
+}
+
+func (s *passCountingStore) PopulateSnapshotAndSupplemental(snapshot models.StateSnapshot, recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord) {
+	s.passes.Add(1)
+	s.MonitorAdapter.PopulateSnapshotAndSupplemental(snapshot, recordsBySource)
+}
+
+// A mock-mode switch re-registers both platform providers; the running monitor
+// must publish once for the pair, not once per source.
+func TestSyncPlatformSupplementalProvidersPublishesOnceForBothSources(t *testing.T) {
+	previousTrueNAS := truenas.IsFeatureEnabled()
+	previousVMware := vmware.IsFeatureEnabled()
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previousTrueNAS)
+		vmware.SetFeatureEnabled(previousVMware)
+	})
+
+	monitor := newWiringTestMonitor(t)
+	store := &passCountingStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	monitor.SetResourceStore(store)
+	router := &Router{monitor: monitor}
+
+	before := store.passes.Load()
+	router.syncPlatformSupplementalProviders(true)
+	if got := store.passes.Load() - before; got != 1 {
+		t.Fatalf("switching mock mode on published %d times, want 1 for the TrueNAS and VMware pair", got)
+	}
+
+	before = store.passes.Load()
+	router.syncPlatformSupplementalProviders(false)
+	if got := store.passes.Load() - before; got != 1 {
+		t.Fatalf("switching mock mode off published %d times, want 1 for the TrueNAS and VMware pair", got)
+	}
+}
+
+// The router keeps the providers for monitors it wires later, and a nil
+// provider removes one without touching the other.
+func TestSetMonitorSupplementalRecordsProvidersKeepsTheRouterRegistry(t *testing.T) {
+	router := &Router{}
+	trueNAS := &countingSupplementalRecords{}
+	vmware := &countingSupplementalRecords{}
+	router.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+		" TrueNAS ":                   trueNAS,
+		unifiedresources.SourceVMware: vmware,
+		"   ":                         &countingSupplementalRecords{},
+	})
+	if router.monitorSupplementalRecords[unifiedresources.SourceTrueNAS] != trueNAS || router.monitorSupplementalRecords[unifiedresources.SourceVMware] != vmware {
+		t.Fatalf("the router did not keep the providers for monitors created later: %v", router.monitorSupplementalRecords)
+	}
+	if len(router.monitorSupplementalRecords) != 2 {
+		t.Fatalf("a blank source was registered: %v", router.monitorSupplementalRecords)
+	}
+
+	router.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: nil,
+	})
+	if _, kept := router.monitorSupplementalRecords[unifiedresources.SourceTrueNAS]; kept {
+		t.Fatal("a removed provider stayed registered for monitors created later")
+	}
+	if router.monitorSupplementalRecords[unifiedresources.SourceVMware] != vmware {
+		t.Fatal("removing one provider dropped the other")
 	}
 }

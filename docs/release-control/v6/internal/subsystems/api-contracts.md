@@ -12080,3 +12080,25 @@ it. The request, status codes, response shape and the meaning of an empty
 decision is added: `exclusions` still counts one link pair each.
 `TestResourceReportMergeSourceFilterDetachesChainMembers` reports a chain
 through the handler and the REST listing.
+
+### Router wiring hands the monitor its store and providers in one call
+
+`Router.configureMonitorDependencies` gives a monitor its resource store and
+every supplemental provider through `SetResourceStoreAndProviders`, which
+publishes the estate once for the set and not at all when the monitor already
+has them, and `Router.setMonitorSupplementalRecordsProviders` registers a batch
+of providers through `SetSupplementalRecordsProviders`, which publishes once for
+the batch. The mock-mode switch (`syncPlatformSupplementalProviders`) registers
+the TrueNAS and VMware providers as one pair, so the switch's call to the
+running monitor published twice before and publishes once now (the switch's
+own broadcast, and the same call for each tenant monitor, are separate). The
+router's provider registry is guarded by a mutex (`monitorSupplementalMu`): the
+mock-mode switch writes it while a tenant monitor's initializer reads it. No
+route, request, response, status code, header or payload changes; this is
+wiring between the router and the monitor, at construction and at a mock-mode
+switch.
+`TestConfigureMonitorDependenciesPublishesTheEstateOnce` counts the provider
+reads of a router wiring a monitor, and
+`TestSyncPlatformSupplementalProvidersPublishesOnceForBothSources` counts the
+publications of a mock-mode switch, in
+`internal/api/runtime_inventory_sources_test.go`.

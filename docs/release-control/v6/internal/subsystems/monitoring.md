@@ -956,6 +956,72 @@ at 2,080 resources moved from 188 to 82 ms; the pass still covers the whole
 estate, and report-driven passes run at most once per 2-second window (see
 the agent-lifecycle contract).
 
+### Store and provider wiring publishes the estate once, and only when it changed
+
+Wiring a monitor attaches its resource store and registers the supplemental
+providers that feed it (`configureMonitorDependencies` in `internal/api`), and
+the first publication after that is a full store refresh pass: populate, the
+metric syncs and the alert pass over every resource. `SetResourceStore` and each
+`SetSupplementalRecordsProvider` used to publish on their own, and the router
+wires the same monitor again whenever a provider changes (that re-applies the
+tenant monitor initializer to every existing monitor), from `NewRouter`, from
+`SetMonitor` and from `SetMultiTenantMonitor`. A default mock estate (1,776
+resources) therefore made 19 passes before the listener answered on pulse-dev
+(6 from `SetResourceStore`, 13 from the two providers' setters), where one is
+needed; with this change the same start makes one, plus a call that finds no
+store attached yet and returns at once. Pinned to one core behind four busy
+loops, a start of this change answered at 581 s while a start of the previous
+build, pinned the same way on another core at the same time, had not answered
+after 805 s; the one remaining pass took 450 s of that at a host load near 90.
+
+`Monitor.SetResourceStoreAndProviders` is the wiring step: it registers every
+provider, attaches the store and publishes once, and only if the store or any
+named provider is not the one the monitor already has
+(`TestSetResourceStoreAndProvidersPublishesOnlyWhenWiringChanged`). A value
+that cannot be compared reads as a change
+(`TestSetResourceStoreAndProvidersTreatsUncomparableProvidersAsChanged`).
+`SetSupplementalRecordsProviders` registers several providers (a nil provider
+removes one) and publishes once for the whole set; the router's mock-mode switch
+uses it for the TrueNAS and VMware pair
+(`TestSyncPlatformSupplementalProvidersPublishesOnceForBothSources`). The single
+setters keep publishing on every call. The wiring still attaches the store and
+providers on every call, so a monitor that gains an incident store later still
+gets its timeline reader; only the repeat publication is skipped, and the store
+is already kept current by the ingest boundaries. A monitor that had no store
+(or a different one, or a different provider) still backfills at wiring, so
+ReadState consumers have data as soon as the store is wired, and the listener
+opens after the same single pass it waited for before; a bare test monitor with
+no state has nothing to backfill from and gets none, as before. The comparison
+with what the monitor has runs in the same critical section as the change
+(`TestRegisterSupplementalProvidersReportsWhatChanged`), and a store pass
+collects the registered providers' records before it populates the registry, so
+one that collected the old registration could populate after the pass that
+collected the new, whichever pass it was (a wiring on another goroutine, such as
+a mock-mode switch, an accepted agent report, a poll). `updateResourceStore`
+therefore reads `Monitor.providersGeneration`, which advances whenever a
+registration changes, before it collects, and repeats the pass (up to
+`providerChangeRepeatLimit` times, re-reading which snapshot slices a provider
+owns each time) if it moved by the time the pass published. A registration
+that changes once while a pass runs therefore cannot leave the older providers'
+records in the registry
+(`TestStorePassRepeatsWhenAProviderRegistrationChangesDuringIt`); one that keeps
+changing through every repeat ends the pass with a warning and is settled by the
+publication of whoever changed it or the next refresh. This orders passes, not
+registrations: the router does not serialize its mock-mode hook against a
+tenant monitor's initializer, so an initializer that copied the provider set
+before the hook changed it can still register the older set afterwards (as
+before this change; the mutex on the router's provider map protects the map
+itself, not that ordering). The monitor holds no lock of its own across a
+publication.
+`TestConfigureMonitorDependenciesPublishesTheEstateOnce` pins that a router
+wiring a monitor with two providers makes one pass and that wiring it again
+makes none.
+
+Publication is not deferred past the listener: the first request must not see
+an empty registry, and alert restore, operator-policy attachment and the
+projection catch-up keep the ordering above (the catch-up already runs in the
+background).
+
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)

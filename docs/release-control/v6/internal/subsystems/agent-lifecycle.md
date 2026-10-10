@@ -9459,3 +9459,25 @@ pair the operator has decided about since. The agents API's unlink is
 unchanged. Registration, enrolment, install, update,
 removal, token binding and report identity are unchanged. The
 unified-resources contract records the split's rules.
+
+### Store wiring publishes once and only on change
+
+`Monitor.SetResourceStoreAndProviders` (`internal/monitoring/monitor.go`) wires a
+monitor's resource store and supplemental providers with one publication, and
+skips the publication when the monitor already has that store and those
+providers. Router wiring repeats for a monitor it has already wired (every
+provider change, `SetMonitor`, `SetMultiTenantMonitor`), and each repeat used to
+repopulate the whole registry (the monitoring contract has the measured count
+for a default mock estate). Agent reports, enrollment, command
+channels, leases and removal still refresh the store through their own
+boundaries (`refreshUnifiedResourceStoreAfterAgentReport` and
+`refreshUnifiedResourceStoreAfterAgentStateChange`); none of them is throttled
+by this. They share `updateResourceStore`, which now repeats a pass during which
+a provider registration changed, so a report refresh that collected the
+previous providers cannot leave their records in the registry after the
+wiring that replaced them. A monitor that is wired for the first time, or with a
+different store or provider, is backfilled at wiring as before (a bare test
+monitor with no state has nothing to backfill from), so ReadState consumers
+have data when the listener opens
+(`TestSetResourceStoreAndProvidersPublishesOnlyWhenWiringChanged` in
+`internal/monitoring/monitor_host_agents_test.go`).
