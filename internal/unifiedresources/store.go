@@ -477,6 +477,12 @@ func (s *SQLiteResourceStore) initSchema() error {
 		metadata_json TEXT
 	);
 
+	-- One row per one-shot data migration that must not repeat on every start.
+	CREATE TABLE IF NOT EXISTS resource_store_migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE TABLE IF NOT EXISTS canonical_id_successions (
 		old_canonical_id TEXT PRIMARY KEY,
 		new_canonical_id TEXT NOT NULL,
@@ -634,6 +640,11 @@ func (s *SQLiteResourceStore) initSchema() error {
 	}
 	if err := s.migrateResourceOperatorStateSchema(); err != nil {
 		return err
+	}
+	if err := s.migrateRemediationLockCarry(); err != nil {
+		// A repair of earlier lock losses, not part of opening the store: keep
+		// the store usable and retry on the next start.
+		log.Printf("[WARN] unified_resources: remediation lock carry migration failed; it will retry on the next start: %v", err)
 	}
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
@@ -1232,10 +1243,21 @@ func (s *SQLiteResourceStore) AddLink(link ResourceLink) error {
 	`, a, b, link.PrimaryID, link.Reason, link.CreatedBy, link.CreatedAt); err != nil {
 		return fmt.Errorf("upsert resource link %q<->%q: %w", a, b, err)
 	}
+	// The link declares both IDs one resource, and only the ID the registry
+	// keeps is ever planned or dispatched against. Which side that is depends
+	// on resource types the store cannot see (a guest outlives an agent
+	// running inside it whichever way the link points), so a lock on any
+	// member of the linked component is written to every member, in the
+	// link's own transaction.
+	carried, err := shareRemediationLockAcrossLinksSQL(tx, []string{a, b}, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("share remediation lock across resource link %q<->%q: %w", a, b, err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit resource link %q<->%q: %w", a, b, err)
 	}
 	committed = true
+	logCarriedLocks("a manual link", carried)
 	return nil
 }
 
@@ -1261,6 +1283,13 @@ func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
 			_ = tx.Rollback()
 		}
 	}()
+	// Unlinking splits one resource into the members it joined. The lock the
+	// merged resource carried stays with each of them: it was the operator's on
+	// all of them, and only the surviving ID was ever able to hold it since.
+	carried, err := shareRemediationLockAcrossLinksSQL(tx, []string{a, b}, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("share remediation lock across resource link %q<->%q before unlinking: %w", a, b, err)
+	}
 	// An exclusion replaces the pair's earlier decision, so unlinking a linked
 	// pair splits it (manual_link_decisions.go): its links in either order,
 	// and an exclusion canonical-ID succession stored in the other order,
@@ -1288,6 +1317,7 @@ func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
 		return fmt.Errorf("commit resource exclusion %q<->%q: %w", a, b, err)
 	}
 	committed = true
+	logCarriedLocks("an unlink", carried)
 	return nil
 }
 
@@ -3610,6 +3640,9 @@ func (m *MemoryStore) AddLink(link ResourceLink) error {
 		return sameManualPair(existing.ResourceA, existing.ResourceB, link.ResourceA, link.ResourceB)
 	})
 	m.links = append(m.links, link)
+	// Every member of the linked component carries the block; see
+	// SQLiteResourceStore.AddLink.
+	m.shareRemediationLockAcrossLinksLocked([]string{link.ResourceA, link.ResourceB}, time.Now().UTC())
 	return nil
 }
 
@@ -3621,6 +3654,9 @@ func (m *MemoryStore) AddExclusion(exclusion ResourceExclusion) error {
 	if exclusion.CreatedAt.IsZero() {
 		exclusion.CreatedAt = time.Now().UTC()
 	}
+	// The merged resource's lock stays with each member the unlink splits off;
+	// see SQLiteResourceStore.AddExclusion.
+	m.shareRemediationLockAcrossLinksLocked([]string{exclusion.ResourceA, exclusion.ResourceB}, time.Now().UTC())
 	// An exclusion replaces the pair's earlier decision, so unlinking a
 	// linked pair splits it (manual_link_decisions.go).
 	m.links = slices.DeleteFunc(m.links, func(link ResourceLink) bool {

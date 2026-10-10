@@ -256,6 +256,43 @@ func (s ResourceOperatorState) BlocksRemediation() bool {
 	return s.NeverAutoRemediate || s.LifecycleState == LifecycleStateRetired
 }
 
+// RemediationLockCarriedBy attributes a row whose remediation lock was written
+// by an identity change (a manual link, a canonical-ID succession) rather than
+// by an operator edit, so the operator-state header does not credit a person
+// with a lock they never set on this ID.
+const RemediationLockCarriedBy = "system:identity-change"
+
+// CarryRemediationLock returns the state a surviving resource must hold once
+// an identity change has absorbed donor, and whether that differs from the
+// survivor's current state. A remediation lock is the operator's "never touch
+// this", so it follows the resource through a manual link fold or a
+// canonical-ID succession instead of belonging to whichever ID happened to be
+// keyed first: the lock is ORed onto the survivor, never lost to an unlocked
+// row that happens to win the key.
+//
+// Only the remediation block crosses, as NeverAutoRemediate. Retirement also
+// silences alerts and Patrol attention, which is a monitoring posture rather
+// than a safety property; copying it would mute a survivor the operator still
+// watches. Every other setting the survivor holds is returned untouched, and
+// a survivor with no row gets a row carrying the block alone. The result is
+// attributed to the identity change at `at`. An already-blocking survivor is
+// returned as it was.
+func CarryRemediationLock(survivorID string, survivor ResourceOperatorState, survivorFound bool, donor ResourceOperatorState, donorFound bool, at time.Time) (ResourceOperatorState, bool) {
+	if !donorFound || !donor.BlocksRemediation() {
+		return survivor, false
+	}
+	if survivorFound && survivor.BlocksRemediation() {
+		return survivor, false
+	}
+	if !survivorFound {
+		survivor = ResourceOperatorState{CanonicalID: survivorID}
+	}
+	survivor.NeverAutoRemediate = true
+	survivor.SetAt = at.UTC()
+	survivor.SetBy = RemediationLockCarriedBy
+	return NormalizeResourceOperatorState(survivor), true
+}
+
 // IsInMaintenanceAt reports whether `now` falls within the configured
 // maintenance window. Returns false when no window is configured, when only
 // one of start/end is set (treated as no window), or when end <= start.
