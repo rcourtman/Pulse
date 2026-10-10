@@ -4604,3 +4604,20 @@ Verification: `src/utils/__tests__/metricThresholds.test.ts`,
 production table/drawer fixture `browser-tests/truenas-disk-thresholds.cjs`.
 The containing backend also resolves the disk-specific tiers for Patrol.
 Frontend checks do not establish native appliance or notification recovery.
+
+### Existing SMTP form exposes only persisted settings
+
+The Email destination editor follows the public `EmailConfig`: SMTP connection,
+credentials, From/recipients, security, rate limit, tags and minimum severity.
+Reply-to, max retries and retry delay are not offered or fabricated by the UI;
+the save path never accepted them. `UIEmailConfig` extends that public type
+with concrete normalized password/rate-limit values, and the advanced form
+explains that Pulse manages retries. Existing server retry behaviour is unchanged.
+
+`EmailProviderSelect.supported-settings.test.tsx` requires absence of all three
+ineffective controls, default/payload parity and supported edits/reloads when
+email is on or off. Existing component and destination-state tests retain
+provider, mask, routing and off-state behaviour;
+`src/utils/__tests__/alertEmailPresentation.test.ts` covers the retry explanation.
+Browser proof uses the production email panel, destination state, API and CSS
+with synthetic local endpoints. It is not native SMTP delivery or a release.

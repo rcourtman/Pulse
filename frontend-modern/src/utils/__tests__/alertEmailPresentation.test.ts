@@ -5,6 +5,7 @@ import {
   ALERT_EMAIL_PROVIDER_LABEL,
   ALERT_EMAIL_REAPPLY_DEFAULTS_LABEL,
   ALERT_EMAIL_REPLY_TO_PLACEHOLDER,
+  ALERT_EMAIL_RETRY_POLICY_HELP,
   ALERT_EMAIL_SMTP_PORT_PLACEHOLDER,
   ALERT_EMAIL_SMTP_SERVER_PLACEHOLDER,
   ALERT_EMAIL_TESTING_LABEL,
@@ -44,6 +45,12 @@ describe('alertEmailPresentation', () => {
     expect(getAlertEmailSetupInstructionsToggleLabel(false)).toBe('Show setup instructions');
     expect(getAlertEmailAdvancedToggleLabel(true)).toBe('Hide advanced options');
     expect(getAlertEmailAdvancedToggleLabel(false)).toBe('Show advanced options');
+  });
+
+  it('explains that the form does not configure email retries', () => {
+    expect(ALERT_EMAIL_RETRY_POLICY_HELP).toBe(
+      'Email retries are managed by Pulse, not by this form.',
+    );
   });
 
   it('exposes canonical test-email button labels', () => {

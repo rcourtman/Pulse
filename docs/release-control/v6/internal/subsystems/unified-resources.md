@@ -7252,13 +7252,68 @@ every merged source. The monitor rebuild and a resources API registry built from
 snapshot apply the split on their next build; the registry seeded from the
 monitor's listing follows once the monitor has rebuilt.
 
-What the split does not reach. The PVE disk poller's
-`mergeHostAgentSMARTIntoDisks` pairs the linked agent's SMART rows with
-Proxmox disks by WWN, serial or path before the registry sees them and reads
-no exclusions, so the split Proxmox row still carries the agent's SMART
-attributes and I/O, its health where it reports a failure or Proxmox none,
-and any serial, WWN, type or temperature it filled, and the agent keeps the
-disk's temperature alert while it reports (`AgentSMARTReported`). Two split
+The PVE disk poller honours the split too. `mergeHostAgentSMARTIntoDisks`
+pairs the linked agent's SMART rows with Proxmox disks by WWN, serial or path
+before the registry sees either, and asks
+`MonitorAdapter.ProxmoxDiskAgentSMARTSplit`
+(`internal/unifiedresources/physical_disk_agent_split.go`) about each pair it
+is about to make. The answer is `physicalDiskSplitLocked`'s, applied to the
+agent's disk as the registry generation holds it (as its row would key it
+when the generation does not hold it) and to the Proxmox observation by its
+slot's source-specific candidate ID, so the exclusions that keep the
+registry's rows apart keep the poller's pair apart, in the same forms: one
+naming only the agent's candidate splits nothing, a replacement in the slot
+inherits no split recorded against the disk it replaced, and a manual link
+that leaves the generation holding both observations as one disk is the
+operator's later decision, so the poller pairs them again while it stands. The
+decision reads the exclusions and that mapping, never what the pairing would
+fill into the Proxmox row, whose serial it re-keys. A split Proxmox row takes
+nothing from the agent's row: not its SMART attributes or I/O, health, serial,
+WWN, type, controller, pool or temperature, whether from the row or from the
+node's sensor lists. The node poll takes the SMART list from the linked agent
+while the agent is reporting and its report carries a usable temperature (the
+SSH collector's otherwise), and `mergeNVMeTempsIntoDisks` matches a list's rows
+to the disk by the same identity, so `dropNodeSensorTemperature` drops a
+reading taken from the agent's list, and the legacy NVMe list's guess by order,
+which names no disk, while a reading from the SSH collector's list stays. The
+rule is read from the agent's report as the disk poll sees it, so a report that
+changed since the node poll can misjudge one poll. Nor does the disk
+keep the agent's claim on its temperature alert (`AgentSMARTReported`): the
+agent's `CheckHost` alerts on the agent's own disk and the PVE disk check has
+no agent-supplied reading of the split disk to judge, so one reading never
+alerts twice, and Proxmox's own health and wearout verdicts of the disk are
+evaluated as for any disk. A refused row never makes another row match. The
+record is marked `AgentSMARTSplit`, so the poll's evidence retention
+(`preserveUnavailablePhysicalDiskEvidence`) restores nothing into it: nothing
+records which retained value Proxmox collected and which the agent filled, so
+its serial or ZFS pool is absent for a poll that cannot collect it and returns
+with the next that can, and a Proxmox serial that goes unreported for a poll
+can move the disk to a WWN- or slot-keyed ID, and its history to that key,
+until it returns. The decider is asked once per matched row, about the
+observation under its own ID, the key the registry holds it by, so the poller
+follows the registry exactly: a split recorded under another key of the same
+disk (a controller member's stand-in is keyed by its target, a Proxmox poll's
+record by device alone) names an observation the other key's rows do not
+carry, as for the registry. When the Proxmox disk query fails,
+`physicalDisksFromHostAgentSMART` stands in for the node's disks except for
+the rows the operator split from the Proxmox disk in their slot, judged under
+the stand-in's own ID. Such a disk gets no stand-in, which would be the
+agent's disk again, so while the query fails its Proxmox record is not listed
+unless every row of the node is split, when the node keeps its last records as
+any node Proxmox cannot be queried for does.
+
+What the split does not reach. The poller applies a split on the first full
+disk poll that collects the node from Proxmox and matches the agent's row
+after the registry generation holds it. Until then a Proxmox record already
+merged keeps the agent's data (the next full poll, five minutes by default,
+`PhysicalDiskPollingMinutes`): the skipped polls between mark the record split
+and drop its node-sensor temperature but leave the rest as it is, a node
+Proxmox cannot be queried for keeps its last records, and a poll in which
+the agent does not list the disk marks nothing, so retention restores the
+earlier record's temperature, I/O, controller, target, serial and pool as
+last-known evidence. The query-failure fallback judges its stand-in row by the
+row's own identity, so it does not apply a split that names identity only the
+Proxmox disk carries (an agent disk in standby reports no serial). Two split
 rows that share a serial read one serial-keyed history
 (`PhysicalDiskMetaMetricID`), and a PVE disk alert lifecycle row whose
 recorded identity matches both, with no WWN only one of them shares, stays
@@ -7287,7 +7342,13 @@ the rebuilt listing or built from the snapshot, plain and for presentation;
 then a relink of the split rows, the exclusions report-merge records on the
 relinked disk (the link's own pair and both candidates), the agent's disk in
 standby, a same-serial disk appearing on another machine, and a split
-recorded while such a disk was present that holds once it leaves.
+recorded while such a disk was present that holds once it leaves. At each of
+those steps the test also asks `ProxmoxDiskAgentSMARTSplit` what the poller
+would, and `TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` drives the poller itself
+through the same four requests for a SAS disk paired by path and an NVMe disk
+paired by serial, with an open PVE temperature alert, the health alert the
+agent's failure raised, and a failing Proxmox disk query.
 
 ### Seeded slot mapping refuses a replaced disk
 

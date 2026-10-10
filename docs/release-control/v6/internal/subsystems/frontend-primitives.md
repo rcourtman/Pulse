@@ -9109,3 +9109,14 @@ and `browser-tests/truenas-disk-thresholds.cjs` exercise desktop Chromium and
 phone WebKit, config refresh, Attention filtering and keyboard disclosure.
 The fixture imports the production store/table/drawer/CSS but uses synthetic
 HTTP and readings; it is not full-shell, appliance or published acceptance.
+
+### SMTP form defaults derive from the persisted type
+
+The existing alert email editor's `UIEmailConfig` extends the public
+`EmailConfig` with concrete normalized password/rate-limit values. It no longer
+declares or defaults Reply-to, max retries or retry delay that the save/read
+path cannot persist. The email panel removes those ineffective controls and
+explains that Pulse manages retries; supported SMTP, TLS, rate-limit, routing
+and off-state editing remain unchanged. Destination payload builders still
+discard unsupported fields from stale drafts. Component, helper, destination
+and local browser controls cover the boundary; they do not prove SMTP delivery.

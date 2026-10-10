@@ -394,7 +394,7 @@ func TestMergeHostAgentSMARTIntoDisks_EnrichesMissingIdentityAndZFSPool(t *testi
 		},
 	}
 
-	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)
 	if len(result) != 1 {
 		t.Fatalf("got %d disks, want 1", len(result))
 	}
@@ -465,7 +465,7 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingProxmoxIdentity(t *testin
 		},
 	}
 
-	got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)[0]
+	got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts, nil)[0]
 	if got.Model != "Proxmox Model" || got.Serial != "PVE-SERIAL" || got.WWN != "0x5000c500a1b2c3d4" || got.Type != "sas" {
 		t.Fatalf("existing Proxmox identity was overwritten: %+v", got)
 	}

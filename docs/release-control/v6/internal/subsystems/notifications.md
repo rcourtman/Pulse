@@ -1399,3 +1399,19 @@ source acceptance, not SMTP/Gmail delivery or an installed reporter retest.
 Literal ASCII encoded-word syntax in supplied names is itself MIME-encoded,
 so decoding the subject once preserves the name rather than interpreting it as
 another identity. The literal-encoded-word control covers both MIME builders.
+
+### SMTP editor settings follow the public configuration
+
+The existing Email notification form offers only settings accepted by its
+save/read path. Reply-to, max retries and retry delay were UI-only values:
+`buildEmailConfigPayload` and `NotificationsAPI.updateEmailConfig` omitted them,
+and the notification manager supplies its own retry policy. They are no longer
+editable or fabricated by the form defaults. `UIEmailConfig` extends the public
+`EmailConfig` rather than declaring unsupported settings separately.
+
+`EmailProviderSelect.supported-settings.test.tsx` checks their absence both
+before and after expanding the form, default/payload parity, and supported
+SMTP, rate-limit and routing preservation through edits and reloads with email
+on or off. Backend configuration, transport, retry policy, TLS, queue recovery
+and notification delivery are unchanged. Browser controls are synthetic, not
+native SMTP acceptance or a containing release.

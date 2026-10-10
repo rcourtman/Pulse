@@ -873,16 +873,81 @@ See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys
 
 ## Uninstall
 
-Download and inspect the agent installer using the HTTPS preparation above
-before running this on the agent host. Uninstallation needs no new token:
+Uninstall is a **destructive removal**, not a repair for missing readings,
+authentication errors or duplicate agents. It interrupts agent monitoring and
+can remove the saved identity, connection/runtime credentials and local agent
+logs, as well as binaries, services, helper/runner state and platform boot
+entries. Keep any needed evidence with the [bounded private log reader](#collect-agent-logs-safely)
+before removal; never put credential files or full service configuration in a
+report. Arrange independent monitoring where needed.
+
+### Remove the whole agent
+
+Use the installer from the **same trusted Pulse instance** on the affected
+agent host. Download and inspect it using the preparation above; do not use
+GitHub's top-level `install.sh`, which removes the Pulse server instead.
+Uninstallation needs no new token: it uses saved connection and credential
+state where available. Do not reinstall or re-enrol to supply missing state.
+
+For Unix, the installer requires root. On a sudo host, run the privately
+prepared script by its existing path (the example assumes it was prepared in
+your current account):
 
 ```bash
-bash "$HOME/.config/pulse/agent-install.sh" --uninstall
+sudo bash "$HOME/.config/pulse/agent-install.sh" --uninstall
 ```
 
-This removes:
-- The agent binary
-- The systemd/launchd service
+On an appliance without sudo, use its authorised administrative shell and the
+actual inspected script path. An explicit `--state-dir` authorises removal of
+that directory; do not add it with a guessed path to force cleanup.
+
+On Linux systemd, full removal also tears down the separately installed action
+runner and typed helper. If only remediation should stop, use the runner-only
+path below instead. Unix removal with a known Pulse URL and an existing
+collector credential requires authenticated server confirmation before local
+collector teardown. Missing connection state can leave only local removal;
+it is not proof that Pulse removed the record or revoked every credential.
+
+For Windows, use the [privately prepared PowerShell installer](#windows-powershell-run-as-administrator)
+in an Administrator session, not the Unix script. Use the same prepared
+session, or set `$installerFile` to the already inspected private script path:
+
+```powershell
+& $installerFile -Uninstall $true
+```
+
+Windows removes the service first and attempts server unregistration before
+local binary/state cleanup. A failed server notification can still be followed
+by local removal; its completion message does not prove server-side revocation.
+
+### Remove only the separate Linux action runner
+
+For an opted-in Linux systemd runner, use the same inspected Unix installer:
+
+```bash
+sudo bash "$HOME/.config/pulse/agent-install.sh" --uninstall-action-runner
+```
+
+This standalone option leaves the collector installed and running. Do not
+combine it with `--uninstall`, `--update` or `--enable-action-runner`. It stops
+and disables the runner before revoking its separate credential. If revocation
+cannot be confirmed, removal fails and retains the runner's local recovery
+material; **stopped is not revoked**. Do not delete that material or bypass TLS
+to turn the failure into a success. This option is not a replacement for
+removing legacy collector command authority; see [Agent Security](AGENT_SECURITY.md).
+
+### Check the actual result
+
+Keep the exit status and relevant redacted error. A failure can leave a partial
+result: full Unix removal can have removed the collector's server record before
+a later runner-revocation failure, and Windows may have removed the service
+before cleanup fails. Inspect the affected host's service manager and the
+same-instance **Settings → Infrastructure** record before deciding on another
+action. Do not infer complete removal from a disappearing row or installer
+message, or assume that all saved state was erased. Retained-state warnings can
+reflect intentional path protections; do not force removal with `rm -rf`, widen
+authority or blindly repeat the operation. Keep remaining credential and
+identity material private for safe recovery.
 
 ## Migration Notes
 

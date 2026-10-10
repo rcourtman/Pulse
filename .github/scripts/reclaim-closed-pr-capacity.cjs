@@ -1,6 +1,9 @@
 'use strict';
 
-const ACTIVE_STATUSES = ['queued', 'in_progress'];
+// Concurrency and environment admission can hold a run before it reaches the
+// runner queue. A closed PR no longer needs those runs either; otherwise they
+// can start obsolete work after this one-shot close-event cleanup has finished.
+const ACTIVE_STATUSES = ['queued', 'in_progress', 'requested', 'waiting', 'pending'];
 
 function belongsToClosedPullRequest(run, pullRequestNumber, headRepository, headBranch) {
   return (

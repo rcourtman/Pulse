@@ -59,8 +59,15 @@ func TestVMFilesystemIncompleteAlternateClientCannotPublishRemainder(t *testing.
 // Exercise both collectors, canonical previous state, served JSON, History and
 // genuine filesystem alerts. No guest freeze, command bypass or native probe.
 func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
-	for _, path := range []string{"cluster", "node"} {
-		t.Run(path, func(t *testing.T) {
+	for _, tc := range []struct{ name, collector, badRow string }{
+		{"cluster", "cluster", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
+		{"node", "node", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
+		{"cluster-case-mount", "cluster", `{"mountpoint":"/data","MOUNTPOINT":"/proc","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
+		{"node-case-mount", "node", `{"mountpoint":"/data","MOUNTPOINT":"/proc","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
+		{"cluster-case-type", "cluster", `{"mountpoint":"/data","type":"ext4","TYPE":"tmpfs","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
+		{"node-case-type", "node", `{"mountpoint":"/data","type":"ext4","TYPE":"tmpfs","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			var phase, fsCalls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -74,7 +81,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 					rows := `{"mountpoint":"/","type":"ext4","disk":[{"dev":"/dev/vda1"}],"total-bytes":1000,"used-bytes":980},{"mountpoint":"/data","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`
 					switch phase.Load() {
 					case 1:
-						rows = `{"mountpoint":"/","type":"ext4","disk":[{"dev":"/dev/vda1"}],"total-bytes":1000,"used-bytes":0},{"mountpoint":"/data","type":"ext4","total-bytes":9000}`
+						rows = `{"mountpoint":"/","type":"ext4","disk":[{"dev":"/dev/vda1"}],"total-bytes":1000,"used-bytes":0},` + tc.badRow
 					case 2:
 						rows = `{"mountpoint":"/","type":"ext4","disk":[{"dev":"/dev/vda1"}],"total-bytes":1000,"used-bytes":0}`
 					}
@@ -112,7 +119,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 				t.Helper()
 				previous := m.previousGuestContextForInstance("partial-filesystems").vmsByID[id]
 				var vm models.VM
-				if path == "node" {
+				if tc.collector == "node" {
 					vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "partial-filesystems", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
 					if len(vms) != 1 {
 						t.Fatal("node collector lost guest")

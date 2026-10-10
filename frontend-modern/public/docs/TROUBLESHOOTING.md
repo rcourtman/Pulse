@@ -1237,6 +1237,35 @@ not limited to the lines visible in the panel. Keep the archive private and
 share only relevant, manually reviewed, redacted excerpts. See the
 [log-control and export limits](CONFIGURATION.md#log-levels).
 
+### If you already posted private information
+
+Treat a publicly posted credential as exposed, even if you later edit or delete
+the post. Do not paste it again to identify it or test whether it still works.
+
+- **Revoke access at its source.** Use a trusted administrator session to revoke
+  the affected credential with its issuer. Manage Pulse API tokens in
+  **Settings → API Access**; Proxmox/PBS tokens and notification-provider secrets
+  need revocation at their respective providers. Removing a Pulse connection or
+  stopping an agent is not credential revocation. A session cookie needs the
+  authentication system's session-revocation procedure; clearing local browser
+  cookies is not server-side revocation. Check the issuer's confirmation, not
+  just a dismissed dialog. Revocation can interrupt monitoring or notifications;
+  arrange independent coverage and configure legitimate consumers privately
+  with a replacement carrying no wider permissions.
+- **Remove the public copy too.** Edit the affected text and remove the attached
+  file or screenshot. Editing the text alone does not remove an attachment.
+  Ask GitHub for help with content you cannot remove yourself, but do not wait
+  for removal before revoking access. Copies, notification emails and attachment
+  links may survive; deleting a post is not proof that the information is erased.
+- **Keep the remaining evidence private.** Preserve the original locally, not
+  in another public upload. Public follow-up needs only the time, affected
+  version, type of exposed information and relevant redacted symptoms. For
+  sensitive security details, use the [private disclosure route](../SECURITY.md),
+  not another issue or discussion. Do not send the credential itself or upload
+  an unreviewed replacement bundle. If only private identifying details were
+  exposed, seek GitHub's help with removal of copies you cannot remove yourself;
+  that alone is not a reason to rotate unrelated credentials.
+
 ### Inspect Notification Logs
 
 For notification failures, prefer **Recent delivery activity** in **Alerts →
