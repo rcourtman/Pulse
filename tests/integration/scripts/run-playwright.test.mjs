@@ -23,7 +23,8 @@ fs.appendFileSync(path.join(root, 'calls.jsonl'), JSON.stringify({ phase,
   state: process.env.PULSE_E2E_RUNTIME_STATE_PATH,
   lockPath: process.env.HOT_DEV_VERIFY_LOCK_FILE,
   lock: fs.existsSync(process.env.HOT_DEV_VERIFY_LOCK_FILE)
-    ? fs.readFileSync(process.env.HOT_DEV_VERIFY_LOCK_FILE, 'utf8') : null,
+    ? (fs.statSync(process.env.HOT_DEV_VERIFY_LOCK_FILE).isFile()
+      ? fs.readFileSync(process.env.HOT_DEV_VERIFY_LOCK_FILE, 'utf8') : 'not-a-file') : null,
   args: process.argv.slice(2),
 }) + '\\n');
 `;
