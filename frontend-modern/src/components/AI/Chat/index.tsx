@@ -67,7 +67,6 @@ import {
 } from '@/stores/aiRuntimeState';
 import { logger } from '@/utils/logger';
 import {
-  AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL,
   AI_CHAT_COLLAPSE_TITLE,
   AI_CHAT_CLOSE_LABEL,
   AI_CHAT_COMMAND_HELP_BUTTON_LABEL,
@@ -114,7 +113,6 @@ import {
   AI_CHAT_SESSION_SEARCH_LOADING_STATE,
   AI_CHAT_SESSION_SEARCH_PLACEHOLDER,
   AI_CHAT_SESSION_SEARCH_TITLE,
-  AI_CHAT_SWITCH_TO_APPROVAL_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL,
   AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL,
@@ -243,7 +241,7 @@ const AI_CHAT_SESSION_SEARCH_LIMIT = 30;
 const STRUCTURED_PATROL_CONTEXT_TARGETS = new Set(['patrol-configuration', 'patrol-run']);
 const STRUCTURED_RESOURCE_CONTEXT_HANDOFF_KINDS = new Set(['resource_context']);
 const AI_CHAT_CYCLE_RECENT_MODEL_LABEL = 'Cycle recent Assistant model';
-const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled', 'autonomous'];
+const AI_CHAT_CONTROL_LEVEL_ORDER: AIControlLevel[] = ['read_only', 'controlled'];
 const AI_CHAT_COMPACT_SESSION_LABEL = 'Compact session';
 const AI_CHAT_COMPACT_SESSION_EMPTY_MESSAGE = 'No Assistant session to compact';
 const AI_CHAT_COMPACT_SESSION_LOADING_MESSAGE =
@@ -741,12 +739,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     });
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
+  const [controlMenuPlacement, setControlMenuPlacement] = createSignal({ left: 0, width: 240 });
   const [controlSaving, setControlSaving] = createSignal(false);
   const [transcriptCopyFallback, setTranscriptCopyFallback] =
     createSignal<TranscriptCopyFallback | null>(null);
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
-  const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
   const [workflowPrompts, setWorkflowPrompts] = createSignal<AgentWorkflowPrompt[]>([]);
   const [renderingWorkflowStarterId, setRenderingWorkflowStarterId] = createSignal('');
   const wsStore = getGlobalWebSocketStore();
@@ -1498,6 +1496,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const openControlMenuAndFocusSelection = () => {
     if (controlSaving()) return;
+    // A wrapped toolbar can put the trigger at either edge. Keep the whole
+    // review-only menu inside the composer, not clipped by the chat panel.
+    const trigger = controlModeButtonRef?.getBoundingClientRect();
+    const composer = controlModeButtonRef
+      ?.closest('[data-assistant-control-toolbar]')
+      ?.getBoundingClientRect();
+    const leftEdge = Math.max(16, composer?.left ?? 16);
+    const rightEdge = Math.min(window.innerWidth - 16, composer?.right || window.innerWidth - 16);
+    const width = Math.min(240, Math.max(0, rightEdge - leftEdge));
+    const left = Math.max(leftEdge, Math.min(trigger?.left ?? leftEdge, rightEdge - width));
+    setControlMenuPlacement({ left: left - (trigger?.left ?? leftEdge), width });
     setShowControlMenu(true);
     focusCurrentControlModeOption();
   };
@@ -2352,7 +2361,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setDiscoveryEnabled(settings?.discovery_enabled ?? false);
   });
 
-  const updateControlLevel = async (nextLevel: 'read_only' | 'controlled' | 'autonomous') => {
+  const updateControlLevel = async (nextLevel: AIControlLevel) => {
     if (controlSaving() || nextLevel === controlLevel()) {
       setShowControlMenu(false);
       return;
@@ -2364,7 +2373,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const resolved = normalizeAIControlLevel(updated.control_level || nextLevel);
       syncAIRuntimeSettings(updated);
       setControlLevel(resolved);
-      if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       notificationStore.success(
         `Assistant chat action mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
         2000,
@@ -2596,17 +2604,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   const contextBriefing = createMemo(() => aiChatStore.context.briefing);
   const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
-  const controlPresentation = createMemo(() =>
-    getAIChatControlLevelPresentation(
-      hasScopedApprovalHandoff() && controlLevel() === 'autonomous' ? 'controlled' : controlLevel(),
-    ),
-  );
-  const autonomousWarningVisible = createMemo(
-    () =>
-      controlLevel() === 'autonomous' &&
-      !autonomousBannerDismissed() &&
-      !hasScopedApprovalHandoff(),
-  );
+  const controlPresentation = createMemo(() => getAIChatControlLevelPresentation(controlLevel()));
   const contextBriefingTitle = createMemo(() => {
     const briefing = contextBriefing();
     if (!briefing) return '';
@@ -2948,10 +2946,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
         closeSlashCommandAutocomplete({ clearTransientDraft: true });
       }
     };
+    const closeControlMenuOnResize = () => setShowControlMenu(false);
+    window.addEventListener('resize', closeControlMenuOnResize);
     document.addEventListener('click', handleClickOutside);
     onCleanup(() => {
       stashComposerDraftForRemount();
       document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('resize', closeControlMenuOnResize);
       aiChatStore.registerInput?.(null);
       clearInterruptArm();
       if (queuedFollowUpCommandTargetTimeout) {
@@ -5023,13 +5024,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Input */}
           <div class="border-t border-border bg-surface px-4 py-3">
-            <Show
-              when={
-                currentStatus() ||
-                autonomousWarningVisible() ||
-                activityDockQueuedFollowUpCount() > 0
-              }
-            >
+            <Show when={currentStatus() || activityDockQueuedFollowUpCount() > 0}>
               <div
                 class="mb-2 overflow-hidden rounded-md border border-border bg-surface-alt text-base-content shadow-xs"
                 data-testid="assistant-activity-dock"
@@ -5101,48 +5096,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </ActionIconButton>
                   </div>
                 </Show>
-                <Show when={autonomousWarningVisible()}>
-                  <div
-                    class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-200 ${
-                      currentStatus() ? 'border-t border-border/70' : ''
-                    }`}
-                    role="status"
-                    aria-label="Assistant chat actions warning"
-                    aria-live="polite"
-                  >
-                    <span
-                      class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 dark:bg-red-300"
-                      aria-hidden="true"
-                    />
-                    <span class="min-w-0 flex-1 font-medium leading-4 sm:truncate">
-                      Chat-only actions are allowed.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => updateControlLevel('controlled')}
-                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
-                      aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
-                    >
-                      Switch to Ask first
-                    </button>
-                    <ActionIconButton
-                      onClick={() => setAutonomousBannerDismissed(true)}
-                      tone="danger"
-                      size="xs"
-                      title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                      label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                    >
-                      <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </ActionIconButton>
-                  </div>
-                </Show>
                 <Show when={activityDockQueuedFollowUpCount() > 0}>
                   <div
-                    class={`px-2.5 py-1.5 ${
-                      currentStatus() || autonomousWarningVisible()
-                        ? 'border-t border-border/70'
-                        : ''
-                    }`}
+                    class={`px-2.5 py-1.5 ${currentStatus() ? 'border-t border-border/70' : ''}`}
                     role="status"
                     aria-label="Queued follow-up messages"
                   >
@@ -5435,6 +5391,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <div
                 class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1"
                 data-testid="assistant-composer-route-controls"
+                data-assistant-control-toolbar
               >
                 <ModelSelector
                   models={aiRuntimeModels()}
@@ -5550,7 +5507,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <Show when={showControlMenu()}>
                     <div
-                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      class="absolute bottom-full z-50 mb-2 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
+                      style={{
+                        left: `${controlMenuPlacement().left}px`,
+                        width: `${controlMenuPlacement().width}px`,
+                      }}
                       role="menu"
                       aria-label={AI_CHAT_CONTROL_MODE_MENU_LABEL}
                     >
@@ -5591,24 +5552,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         </div>
                         <div class="text-[11px] text-muted">
                           {getAIChatControlLevelPresentation('controlled').description}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        ref={(button) => {
-                          controlModeOptionRefs.set('autonomous', button);
-                        }}
-                        role="menuitemradio"
-                        aria-checked={controlLevel() === 'autonomous'}
-                        class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
-                        onKeyDown={(event) => handleControlModeOptionKeyDown(event, 'autonomous')}
-                        onClick={() => updateControlLevel('autonomous')}
-                      >
-                        <div class="font-medium text-base-content">
-                          {getAIChatControlLevelPresentation('autonomous').label}
-                        </div>
-                        <div class="text-[11px] text-muted">
-                          {getAIChatControlLevelPresentation('autonomous').description}
                         </div>
                       </button>
                     </div>

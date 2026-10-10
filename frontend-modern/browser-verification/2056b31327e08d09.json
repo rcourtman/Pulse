@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "1927020ba221f76e28224ad521bc1a1dd14fff58",
+  "result": "passed",
+  "verified_at": "2026-10-09T23:40:18Z",
+  "changed_paths": [
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/aiControlLevelPresentation.ts": "362d5610b78512ea76a85c524d775bf853af1c8fb36c45b9bd7bcaca6e899761"
+  },
+  "routes": [
+    "Existing AIAssistantSettings and AIChat in local /browser-tests/assistant-control-compatibility.html fixture",
+    "/settings/ai/assistant",
+    "/docs/AI#control-levels",
+    "/docs/AI_AUTONOMY#assistant-control-levels"
+  ],
+  "states": [
+    "Saved autonomous/suggest/controlled/read_only/unknown: truthful two-mode projection",
+    "Protected guest and Patrol policy preservation on unrelated save",
+    "Scoped alert attachment with explicit approval boundary",
+    "503 settings save failure retains displayed mode",
+    "Desktop light and WebKit phone dark/narrow light",
+    "Existing Docs with locally scrollable wide table"
+  ],
+  "interactions": [
+    "48 assertion groups cover the five saved-config states, unrelated save preservation, keyboard menu, scoped alert approval, failed save, explicit mode change and actual Docs",
+    "19 inspected screenshots include corrected Read-only copy at all three viewports; same-byte captures have explicit prior inspection bindings",
+    "The 320px guide table remains locally scrollable to its final column"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "notes": "Necessary copy-style punctuation correction and synthetic plan test alignment after failed source checks. Only this frontend file changed from the parent; no mode, saved preference, scope, approval, entitlement or execution delta. No model/native action or deployment/release claim."
+}

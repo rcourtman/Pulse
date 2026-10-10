@@ -21,6 +21,21 @@
 
 ## Purpose
 
+A legacy client echoing the projected `controlled` mode into an unrelated AI
+settings PUT must retain a stored `autonomous` preference and its existing
+legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
+uses actual encrypted GET/PUT persistence with and without the entitlement,
+then checks explicit read-only opt-out and later opt-in remain possible.
+
+### Assistant planning mode grants no recovery execution
+
+The AI settings control projection describes read/query or plans for review in
+Actions. It does not authorise a backup, restore, replay or data change; action
+approval/run and independent verification remain separate. Stored legacy
+preferences, recovery-point access, the legacy protected-guests value and
+Patrol policy are preserved. The latter guest list is not a canonical saved-
+plan exclusion or a recovery execution safeguard. The handler change adds no recovery endpoint or execution route.
+
 ### Retained guest identity cannot renew QGA eligibility
 
 The shared VM's internal `GuestAgentEvidence` bounds eligibility when a fresh

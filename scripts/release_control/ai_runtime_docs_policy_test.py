@@ -323,5 +323,19 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Patrol Autonomy Level", control_doc)
 
 
+    def test_existing_help_matches_planning_boundary(self):
+        for name in ("AI.md", "AI_AUTONOMY.md"):
+            with self.subTest(name=name):
+                text = read_repo_text("docs/" + name)
+                self.assertEqual(text, read_repo_text("frontend-modern/public/docs/" + name))
+                start = text.index("## Assistant Control Levels" if name == "AI_AUTONOMY.md" else "### Control Levels")
+                end = text.index("\n---", start)
+                section = " ".join(text[start:end].split())
+                for retained in ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Protected guests (legacy)", "does not exclude saved action plans"):
+                    self.assertIn(retained, section)
+                for retired in ("executes commands without prompting", "AI executes actions without prompting", "APPROVAL_REQUIRED", "Approve** to execute"):
+                    self.assertNotIn(retired, section)
+
+
 if __name__ == "__main__":
     unittest.main()

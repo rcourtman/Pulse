@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "6488742416d991435646ea5272fe6d510c808de8",
+  "result": "passed",
+  "verified_at": "2026-10-10T00:37:41Z",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/index.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "a351601dfcd240ca8438b414523e2437513fd32aac16874dde24540af52cc8d2"
+  },
+  "routes": [
+    "Existing Settings/Chat/Docs in local /browser-tests/assistant-control-compatibility.html fixture",
+    "/settings/ai/assistant",
+    "/docs/AI#control-levels",
+    "/docs/AI_AUTONOMY#assistant-control-levels"
+  ],
+  "states": [
+    "Five raw saved modes without preference/policy rewrites",
+    "Legacy protected list value and accessible no-plan-exclusion limitation",
+    "Read-only and Ask first, saved-error preservation, explicit opt-out",
+    "Scoped alert identity and false-autonomy/approval context",
+    "Chromium desktop light and WebKit 390px dark/320px light"
+  ],
+  "interactions": [
+    "51 assertion groups, including actual containing toolbar/viewport popup bounds and resize-close/reopen",
+    "19 inspected captures, three fresh mode-menu captures and sixteen byte-identical prior inspections",
+    "Actual Docs links, planning/approval/legacy limits and local table scroll"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "notes": "Correct the existing clamp anchor: the input form is a sibling of the route controls, not their ancestor. Native form click behaviour is unchanged. Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0. Browser/server closed. Synthetic transport, no inference/action/native or release claim."
+}

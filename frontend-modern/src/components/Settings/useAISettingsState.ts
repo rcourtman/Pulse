@@ -1204,7 +1204,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (form.requestTimeoutSeconds !== (settings()?.request_timeout_seconds ?? 300)) {
         payload.request_timeout_seconds = form.requestTimeoutSeconds;
       }
-      if (form.controlLevel !== (settings()?.control_level || 'read_only')) {
+      if (form.controlLevel !== normalizeAIControlLevel(settings()?.control_level)) {
         payload.control_level = form.controlLevel;
       }
 

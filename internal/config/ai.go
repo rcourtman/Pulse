@@ -1005,6 +1005,26 @@ func (c *AIConfig) GetEffectiveControlLevel(autonomousAllowed bool) string {
 	return EffectiveControlLevelForEntitlement(c.GetControlLevel(), autonomousAllowed)
 }
 
+// AssistantControlLevel projects an interactive Assistant setting to the two
+// supported behaviours: read/query or canonical action planning. A legacy
+// autonomous preference never grants approval or execution authority here.
+// Keep the shared vocabulary and stored value intact: legacy command admission
+// uses IsAutonomous to REQUIRE approval, and Patrol has its own policy.
+func AssistantControlLevel(level string) string {
+	switch agentcapabilities.NormalizeControlLevel(level) {
+	case agentcapabilities.ControlLevelControlled, agentcapabilities.ControlLevelAutonomous:
+		return ControlLevelControlled
+	default:
+		return ControlLevelReadOnly
+	}
+}
+
+// GetAssistantControlLevel returns the truthful interactive level after the
+// existing entitlement check, without migrating or persisting any preference.
+func (c *AIConfig) GetAssistantControlLevel(autonomousAllowed bool) string {
+	return AssistantControlLevel(c.GetEffectiveControlLevel(autonomousAllowed))
+}
+
 // IsControlEnabled returns true if AI has any control capability beyond read-only
 func (c *AIConfig) IsControlEnabled() bool {
 	return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))
