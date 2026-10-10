@@ -2351,9 +2351,24 @@ func TestRootInstallScriptUpdateFlowsRepairHalfRemovedInstall(t *testing.T) {
 		t.Fatalf("read root install.sh: %v", err)
 	}
 
-	wired := regexp.MustCompile(`(?m)^\s*download_pulse\n(?:\s*#[^\n]*\n)*\s*setup_directories\n\s*setup_update_command\n\s*ensure_systemd_service_installed$`)
+	// Discovery can now refuse a unit repair even when the caller disables
+	// implicit errexit. Keep the original directory/helper/unit ordering and
+	// require that explicit refusal propagation in both update flows.
+	wired := regexp.MustCompile(`(?m)^\s*download_pulse\n(?:\s*#[^\n]*\n)*\s*setup_directories\n\s*setup_update_command\n\s*ensure_systemd_service_installed \|\| return 1$`)
 	if got := len(wired.FindAll(content, -1)); got != 2 {
 		t.Fatalf("expected both update flows (--version and menu update) to run setup_directories and ensure_systemd_service_installed after download_pulse, found %d", got)
+	}
+	for _, step := range []string{"setup_directories", "setup_update_command", "ensure_systemd_service_installed || return 1"} {
+		t.Run("missing "+step, func(t *testing.T) {
+			withoutStep := strings.ReplaceAll(string(content), step, ":")
+			if got := len(wired.FindAllString(withoutStep, -1)); got != 0 {
+				t.Fatalf("update-flow guard accepted missing %q in %d flows", step, got)
+			}
+		})
+	}
+	withoutRefusal := strings.ReplaceAll(string(content), "ensure_systemd_service_installed || return 1", "ensure_systemd_service_installed")
+	if got := len(wired.FindAllString(withoutRefusal, -1)); got != 0 {
+		t.Fatalf("update-flow guard accepted %d unit repairs without refusal propagation", got)
 	}
 }
 
