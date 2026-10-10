@@ -15,6 +15,7 @@ function fixture({ state = 'closed', openForHead = [], runs = {}, cancelError, r
   const messages = [];
   const lifecycleReads = [];
   const headReads = [];
+  const runLists = [];
   const github = {
     paginate: async (method, input) => method(input),
     rest: {
@@ -29,7 +30,10 @@ function fixture({ state = 'closed', openForHead = [], runs = {}, cancelError, r
         },
       },
       actions: {
-        listWorkflowRunsForRepo: async ({ status }) => runs[status] || [],
+        listWorkflowRunsForRepo: async ({ status }) => {
+          runLists.push(status);
+          return runs[status] || [];
+        },
         cancelWorkflowRun: async ({ run_id: runId }) => {
           cancellationAttempts.push(runId);
           if (cancelError) throw cancelError;
@@ -65,7 +69,7 @@ function fixture({ state = 'closed', openForHead = [], runs = {}, cancelError, r
     warning: (message) => messages.push(message),
     setFailed: (message) => messages.push(message),
   };
-  return { github, context, core, cancelled, cancellationAttempts, readbacks, messages, lifecycleReads, headReads };
+  return { github, context, core, cancelled, cancellationAttempts, readbacks, messages, lifecycleReads, headReads, runLists };
 }
 
 function requestError(status) {
@@ -109,7 +113,72 @@ test('cancels only unfinished runs for the exact closed head', async () => {
 
   assert.deepEqual(subject.cancelled, [10]);
   assert.match(subject.messages.at(-1), /Requested cancellation for 1 of 1 unfinished run/);
-  assert.deepEqual(ACTIVE_STATUSES, ['queued', 'in_progress']);
+  assert.deepEqual(ACTIVE_STATUSES, ['queued', 'in_progress', 'requested', 'waiting', 'pending']);
+  assert.deepEqual(subject.runLists, ACTIVE_STATUSES);
+});
+
+for (const status of ['requested', 'waiting', 'pending']) {
+  test(`awaiting: reclaims an exclusively associated ${status} run`, async () => {
+    const subject = fixture({ runs: { [status]: [{ ...matchingRun(), status }] } });
+    await cancelClosedPullRequestRuns(subject);
+    assert.deepEqual(subject.cancelled, [10]);
+    assert.deepEqual(subject.readbacks, [10]);
+    assert.deepEqual(subject.lifecycleReads, [1858, 1858]);
+    assert.deepEqual(subject.headReads, ['rcourtman:topic/old', 'rcourtman:topic/old']);
+    assert.match(subject.messages.at(-1), /Requested cancellation for 1 of 1/);
+  });
+
+  test(`transition: admits queued to ${status} only after fresh identity checks`, async () => {
+    const subject = fixture({
+      runs: { queued: [{ ...matchingRun(), status: 'queued' }] },
+      observedRun: { ...matchingRun(), status },
+    });
+    await cancelClosedPullRequestRuns(subject);
+    assert.deepEqual(subject.cancelled, [10]);
+    assert.deepEqual(subject.readbacks, [10]);
+    assert.deepEqual(subject.lifecycleReads, [1858, 1858]);
+    assert.deepEqual(subject.headReads, ['rcourtman:topic/old', 'rcourtman:topic/old']);
+  });
+
+  test(`awaiting: ${status} does not admit unrelated, unbound or terminal work`, async () => {
+    const run = { ...matchingRun(), status };
+    const subject = fixture({ runs: { [status]: [
+      { ...run, id: 11, pull_requests: [] },
+      { ...run, id: 12, pull_requests: [{ number: 1858 }, { number: 1900 }] },
+      { ...run, id: 13, head_repository: { full_name: 'other/Pulse' } },
+      { ...run, id: 14, event: 'push' },
+      { ...run, id: 15, status: 'completed' },
+      { ...run, id: 16, status: 'unknown' },
+    ] } });
+    await cancelClosedPullRequestRuns(subject);
+    assert.deepEqual(subject.cancellationAttempts, []);
+    assert.deepEqual(subject.readbacks, []);
+  });
+
+  test(`awaiting: a refused ${status} inventory read stops without another query`, async () => {
+    const error = requestError(403);
+    const subject = fixture();
+    const original = subject.github.rest.actions.listWorkflowRunsForRepo;
+    subject.github.rest.actions.listWorkflowRunsForRepo = async (input) => {
+      if (input.status === status) throw error;
+      return original(input);
+    };
+    await assert.rejects(cancelClosedPullRequestRuns(subject), caught => caught === error);
+    assert.deepEqual(subject.runLists, ACTIVE_STATUSES.slice(0, ACTIVE_STATUSES.indexOf(status)));
+    assert.deepEqual(subject.cancellationAttempts, []);
+    assert.deepEqual(subject.readbacks, []);
+  });
+}
+
+test('awaiting: one run moving between discovery states is cancelled only once', async () => {
+  const subject = fixture({ runs: {
+    queued: [{ ...matchingRun(), status: 'queued' }],
+    pending: [{ ...matchingRun(), status: 'pending' }],
+  } });
+  await cancelClosedPullRequestRuns(subject);
+  assert.deepEqual(subject.cancelled, [10]);
+  assert.deepEqual(subject.readbacks, [10]);
+  assert.match(subject.messages.at(-1), /Requested cancellation for 1 of 1/);
 });
 
 test('does nothing when the pull request reopened', async () => {
