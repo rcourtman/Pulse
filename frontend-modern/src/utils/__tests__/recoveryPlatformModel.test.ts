@@ -74,7 +74,6 @@ describe('recoveryPlatformModel', () => {
             subjectRef: { type: 'truenas-dataset', name: 'tank/apps' },
           },
         ],
-        meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
       }),
     ).toEqual({
       data: [
@@ -88,7 +87,6 @@ describe('recoveryPlatformModel', () => {
           itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
         },
       ],
-      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
   });
 

@@ -154,7 +154,7 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 		}
 	}
 
-	cloned := NewRegistry(registry.store)
+	cloned := newRegistryFrom(registry)
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
 	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
@@ -487,8 +487,15 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return
 	}
 
-	rebuilt := NewRegistry(registry.store)
+	rebuilt := newRegistryFrom(registry)
 	staleThresholds := a.currentStaleThresholds()
+	// Operator links apply once the snapshot and every record source are in,
+	// so a chain is judged over the whole estate rather than folded as its
+	// members' sources arrive: a fold cannot be undone when a later source
+	// brings a member that outranks the earlier choice. Availability checks
+	// still come after the links, so a check linked to a folded resource
+	// projects onto its primary.
+	rebuilt.deferManualLinks = true
 	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
 	sources := make([]DataSource, 0, len(recordsBySource))
 	for source := range recordsBySource {
@@ -504,12 +511,16 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return string(sources[i]) < string(sources[j])
 	})
 	for _, source := range sources {
+		if source == SourceAvailability {
+			rebuilt.applyDeferredManualLinks(staleThresholds)
+		}
 		records := recordsBySource[source]
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
 		}
 		rebuilt.IngestRecordsWithStaleThresholds(source, records, staleThresholds)
 	}
+	rebuilt.applyDeferredManualLinks(staleThresholds)
 	// IngestSnapshot runs its stale pass before the record sources above are
 	// ingested, so record-sourced resources would otherwise keep their
 	// ingest-time "online" stamp regardless of how old their data is.

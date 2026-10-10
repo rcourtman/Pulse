@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeRealtimeResource,
   mergeCanonicalResource,
-  mergeCanonicalResourceSnapshot,
   nodeFromResource,
   pbsInstanceFromResource,
   pmgInstanceFromResource,
@@ -194,81 +193,6 @@ describe('getCanonicalPlatformId (via nodeFromResource.instance)', () => {
     // → falls through to preferredHostLabel (hostname resolver / displayName / id)
     expect(node?.instance).not.toBe('');
     expect(node?.instance).toBe(node?.name);
-  });
-});
-
-// ===================================================================
-// normalizeResourceIdentityToken + getHostResourceMergeKey — reached
-// through coalesceRealtimeResourceSnapshot (via mergeCanonicalResourceSnapshot)
-// ===================================================================
-
-describe('normalizeResourceIdentityToken + getHostResourceMergeKey (via mergeCanonicalResourceSnapshot)', () => {
-  it('lowercases and trims canonical hostname to form the agent merge key', () => {
-    const merged = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'a',
-          type: 'agent',
-          name: 'Host',
-          displayName: 'Host',
-          platformId: 'host',
-          platformType: 'agent',
-          sourceType: 'agent',
-          sources: ['agent', 'proxmox'],
-          status: 'online',
-          lastSeen: 100,
-          canonicalIdentity: { hostname: 'HOST.LOCAL', platformId: 'host' },
-        } as Resource,
-        {
-          id: 'b',
-          type: 'agent',
-          name: 'Host',
-          displayName: 'Host',
-          platformId: 'host',
-          platformType: 'proxmox-pve',
-          sourceType: 'api',
-          sources: ['proxmox'],
-          status: 'online',
-          lastSeen: 200,
-          canonicalIdentity: { hostname: 'host.local', platformId: 'host' },
-        } as Resource,
-      ],
-      [],
-    );
-    // Both normalize to 'host.local' → same merge key → coalesced into one
-    expect(merged).toHaveLength(1);
-  });
-
-  it('returns undefined merge key when all identity candidates are empty, keeping resources separate', () => {
-    const resources = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'empty-1',
-          type: 'agent',
-          name: '',
-          displayName: '',
-          platformId: '',
-          platformType: 'agent',
-          sourceType: 'agent',
-          status: 'online',
-          lastSeen: 100,
-        } as Resource,
-        {
-          id: 'empty-2',
-          type: 'agent',
-          name: '',
-          displayName: '',
-          platformId: '',
-          platformType: 'agent',
-          sourceType: 'agent',
-          status: 'online',
-          lastSeen: 200,
-        } as Resource,
-      ],
-      [],
-    );
-    // No host key derivable → both stay separate
-    expect(resources).toHaveLength(2);
   });
 });
 
@@ -1129,7 +1053,7 @@ describe('mergePlatformData (via mergeCanonicalResource)', () => {
         platformType: 'agent',
         sourceType: 'agent',
         platformData: {
-          sources: ['agent'],
+          sources: ['agent', 'proxmox'],
           storage: { platform: 'zfs' },
           sourceStatus: { agent: { healthy: true } },
         },
@@ -1139,7 +1063,7 @@ describe('mergePlatformData (via mergeCanonicalResource)', () => {
         platformType: 'agent',
         sourceType: 'agent',
         platformData: {
-          sources: ['agent'],
+          sources: ['agent', 'proxmox'],
           storage: { topology: 'pool' },
           sourceStatus: { proxmox: { healthy: false } },
         },
@@ -1164,89 +1088,6 @@ describe('mergeCanonicalResource (no existing)', () => {
     );
     expect(result.platformType).toBe('proxmox-pve');
     expect(pd(result).sources).toEqual(['proxmox', 'agent']);
-  });
-});
-
-// ===================================================================
-// shouldMergeRealtimeHostResources + preferHostResourcePrimary +
-// withMergedSnapshotSources — reached through mergeCanonicalResourceSnapshot
-// ===================================================================
-
-describe('shouldMergeRealtimeHostResources + preferHostResourcePrimary (via mergeCanonicalResourceSnapshot)', () => {
-  it('does not merge two docker-sourced agents because union lacks "agent" source', () => {
-    const resources = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'docker-a',
-          type: 'agent',
-          name: 'same-host',
-          displayName: 'same-host',
-          platformId: 'same-host',
-          platformType: 'docker',
-          sourceType: 'api',
-          sources: ['docker'],
-          status: 'online',
-          lastSeen: 100,
-          canonicalIdentity: { hostname: 'same-host', platformId: 'same-host' },
-        } as Resource,
-        {
-          id: 'docker-b',
-          type: 'agent',
-          name: 'same-host',
-          displayName: 'same-host',
-          platformId: 'same-host',
-          platformType: 'docker',
-          sourceType: 'api',
-          sources: ['docker'],
-          status: 'online',
-          lastSeen: 200,
-          canonicalIdentity: { hostname: 'same-host', platformId: 'same-host' },
-        } as Resource,
-      ],
-      [],
-    );
-    // shouldMergeRealtimeHostResources: union has 'docker' (runtime) but not 'agent' → false
-    expect(resources).toHaveLength(2);
-  });
-
-  it('uses lastSeen as tiebreaker when both merged agents have agent sources', () => {
-    const merged = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'older',
-          type: 'agent',
-          name: 'tie-host',
-          displayName: 'tie-host',
-          platformId: 'tie-host',
-          platformType: 'proxmox-pve',
-          sourceType: 'hybrid',
-          sources: ['agent', 'proxmox'],
-          status: 'online',
-          lastSeen: 1000,
-          canonicalIdentity: { hostname: 'tie-host', platformId: 'tie-host' },
-          proxmox: { nodeName: 'tie-host' } as unknown as Resource['proxmox'],
-        } as Resource,
-        {
-          id: 'newer',
-          type: 'agent',
-          name: 'tie-host',
-          displayName: 'tie-host',
-          platformId: 'tie-host',
-          platformType: 'proxmox-pve',
-          sourceType: 'hybrid',
-          sources: ['agent', 'proxmox'],
-          status: 'online',
-          lastSeen: 2000,
-          canonicalIdentity: { hostname: 'tie-host', platformId: 'tie-host' },
-          proxmox: { nodeName: 'tie-host' } as unknown as Resource['proxmox'],
-        } as Resource,
-      ],
-      [],
-    );
-    // Both have agent + runtime → merge. Both have agent sources → lastSeen tiebreaker.
-    // 'newer' (lastSeen 2000) >= 'older' (1000) → primary = newer
-    expect(merged).toHaveLength(1);
-    expect(merged[0].id).toBe('newer');
   });
 });
 

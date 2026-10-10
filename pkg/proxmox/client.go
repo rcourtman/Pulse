@@ -1706,12 +1706,21 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 	if !valid {
 		return fmt.Errorf("guest filesystem record is ambiguous or malformed")
 	}
+	recognized := false
 	for name := range fields {
-		for _, canonical := range []string{"total-bytes", "total-bytes-privileged", "used-bytes"} {
-			if name != canonical && strings.EqualFold(name, canonical) {
-				return fmt.Errorf("guest filesystem byte count has a noncanonical field name")
+		// encoding/json also matches case-insensitive struct fields. Identity
+		// and filter metadata must not overwrite an earlier canonical field or
+		// turn a rejected volume into a special mount that silently disappears.
+		for _, canonical := range []string{"name", "type", "mountpoint", "total-bytes", "total-bytes-privileged", "used-bytes", "disk"} {
+			if name == canonical {
+				recognized = true
+			} else if strings.EqualFold(name, canonical) {
+				return fmt.Errorf("guest filesystem record has a noncanonical field name")
 			}
 		}
+	}
+	if !recognized {
+		return fmt.Errorf("guest filesystem record has no recognized fields")
 	}
 	type rawVMFileSystem struct {
 		Name                 string          `json:"name"`
@@ -2023,7 +2032,9 @@ func coerceString(value interface{}) string {
 	}
 }
 
-// GetVMFSInfo returns filesystem information from QEMU guest agent
+// GetVMFSInfo returns filesystem information from QEMU guest agent. If any
+// record is malformed, valid peers are returned with an error: they cannot
+// establish complete guest capacity or removal of the rejected filesystem.
 func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid))
 	if err != nil {
@@ -2045,8 +2056,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		Str("response", string(bodyBytes)).
 		Msg("Raw response from guest agent get-fsinfo")
 
-	// Decode array payloads entry-by-entry so one malformed filesystem record
-	// does not wipe valid guest-agent disk data for the whole VM.
+	// Decode entry-by-entry to retain valid peers, but never mistake that
+	// remainder for a complete inventory after dropping a malformed record.
 	var arrayResult struct {
 		Data struct {
 			Result []json.RawMessage `json:"result"`
@@ -2054,9 +2065,11 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
 		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
+		invalidEntries := 0
 		for idx, rawFS := range arrayResult.Data.Result {
 			var fs VMFileSystem
 			if err := json.Unmarshal(rawFS, &fs); err != nil {
+				invalidEntries++
 				log.Warn().
 					Err(err).
 					Str("node", node).
@@ -2068,6 +2081,9 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 			filesystems = append(filesystems, fs)
 		}
 		postProcessVMFilesystems(node, vmid, filesystems)
+		if invalidEntries > 0 {
+			return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
+		}
 		return filesystems, nil
 	}
 

@@ -218,8 +218,7 @@ func enableMockMode(config MockConfig, fromInit bool) {
 	dataMu.Lock()
 	mockConfig = config
 	mockGraph = buildFixtureGraph(config, now)
-	fixtureRevision.Add(1)
-	fixtureDataVersion.Add(1)
+	advanceFixtureStructure()
 	metricCohort.Store(0)
 	enabled.Store(true)
 	dataMu.Unlock()
@@ -255,8 +254,7 @@ func disableMockMode() {
 
 	dataMu.Lock()
 	mockGraph = emptyFixtureGraph()
-	fixtureRevision.Add(1)
-	fixtureDataVersion.Add(1)
+	advanceFixtureStructure()
 	dataMu.Unlock()
 
 	log.Info().Msg("mock mode disabled")
@@ -332,6 +330,33 @@ func updateMetrics(cfg MockConfig) {
 // unchanged.
 func FixtureDataVersion() uint64 {
 	return fixtureDataVersion.Load()
+}
+
+// FixtureStructureRevision returns a token that advances only when the mock
+// estate itself changes (mock mode enabled or disabled, or a configuration
+// that rebuilds the graph), never on a metric tick. Which resources exist,
+// their identities and their source mappings are fixed between two reads of
+// the same revision, so a lookup that depends only on those, such as a
+// resource's metrics target, may be served from a view built at any data
+// version of that revision.
+//
+// A cache that tags a snapshot with the revision must read the revision
+// BEFORE the data version it memoizes the snapshot under. The two counters
+// advance under dataMu, data version first (advanceFixtureStructure), so a
+// reader that sees a new revision is guaranteed the new data version after
+// it and cannot be handed the previous estate's memoized snapshot under the
+// new revision; the other interleaving only tags a newer snapshot with an
+// older revision, which costs one rebuild.
+func FixtureStructureRevision() uint64 {
+	return fixtureRevision.Load()
+}
+
+// advanceFixtureStructure records a structural change of the fixture graph.
+// Callers hold dataMu for writing. The data version moves before the
+// structure revision; see FixtureStructureRevision for the ordering contract.
+func advanceFixtureStructure() {
+	fixtureDataVersion.Add(1)
+	fixtureRevision.Add(1)
 }
 
 // GetConfig returns the current mock configuration.
@@ -539,8 +564,7 @@ func SetMockConfig(cfg MockConfig) {
 	setMockUpdateInterval(normalized.UpdateInterval)
 	if configChanged && enabled.Load() {
 		mockGraph = buildFixtureGraph(normalized, time.Now())
-		fixtureRevision.Add(1)
-		fixtureDataVersion.Add(1)
+		advanceFixtureStructure()
 	}
 	dataMu.Unlock()
 

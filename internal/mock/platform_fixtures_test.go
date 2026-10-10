@@ -4,8 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"math"
+	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1016,4 +1023,281 @@ func TestFixtureGraphMetricCohortProducesSparseUnifiedResourceChanges(t *testing
 	if changed == 0 || changed >= len(after)/2 {
 		t.Fatalf("expected sparse unified resource churn, changed=%d total=%d", changed, len(after))
 	}
+}
+
+func fixtureMetricsTargets(t *testing.T) map[string]unifiedresources.MetricsTarget {
+	t.Helper()
+	resources, _ := UnifiedResourceSnapshot()
+	if len(resources) == 0 {
+		t.Fatal("expected mock resources")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	_, targets := registry.ListWithMetricsTargets()
+	if len(targets) == 0 {
+		t.Fatal("expected the mock estate to resolve metrics targets")
+	}
+	return targets
+}
+
+func fixtureResourceIDs(t *testing.T) []string {
+	t.Helper()
+	resources, _ := UnifiedResourceSnapshot()
+	ids := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		ids = append(ids, resource.ID)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// smallMockEstateForTest replaces the ambient estate with a fixed small one,
+// so a test neither depends on the process's PULSE_MOCK_* settings (a node
+// count at the supported maximum clamps back when raised) nor pays for a
+// 929-guest snapshot per assertion. The ambient configuration returns when
+// the test ends.
+func smallMockEstateForTest(t *testing.T, nodes int) MockConfig {
+	t.Helper()
+	previous := GetConfig()
+	t.Cleanup(func() { SetMockConfig(previous) })
+	small := previous
+	small.NodeCount = nodes
+	SetMockConfig(small)
+	return small
+}
+
+// Callers cache a resource's metrics target for as long as the structure
+// revision holds (see Monitor.MetricsTargetForResource), so a metric tick must
+// leave the revision, the resource set and every target exactly as they were.
+// Checked after every tick of two full cohort rotations, not only at the end,
+// so a change that a later tick reverts is still caught.
+func TestMetricTicksNeverChangeTheFixtureStructure(t *testing.T) {
+	withMockEnabledForTest(t)
+	stopUpdateLoop()
+	t.Cleanup(func() {
+		if IsMockEnabled() {
+			startUpdateLoop()
+		}
+	})
+	smallMockEstateForTest(t, 6)
+	stopUpdateLoop()
+
+	revision := FixtureStructureRevision()
+	ids := fixtureResourceIDs(t)
+	targets := fixtureMetricsTargets(t)
+	version := FixtureDataVersion()
+
+	for tick := 1; tick <= mockMetricCohortCount*2+1; tick++ {
+		updateMetrics(GetConfig())
+
+		if got := FixtureDataVersion(); got <= version {
+			t.Fatalf("tick %d did not advance the data version (%d)", tick, got)
+		} else {
+			version = got
+		}
+		if got := FixtureStructureRevision(); got != revision {
+			t.Fatalf("tick %d moved the fixture structure revision from %d to %d", tick, revision, got)
+		}
+		if got := fixtureResourceIDs(t); !slices.Equal(got, ids) {
+			t.Fatalf("tick %d changed the resource set: %d resources before, %d after", tick, len(ids), len(got))
+		}
+		if got := fixtureMetricsTargets(t); !reflect.DeepEqual(got, targets) {
+			t.Fatalf("tick %d changed the resolved metrics targets", tick)
+		}
+	}
+}
+
+func TestFixtureStructureRevisionAdvancesOnStructuralChange(t *testing.T) {
+	withMockEnabledForTest(t)
+	stopUpdateLoop()
+	t.Cleanup(func() {
+		if IsMockEnabled() {
+			startUpdateLoop()
+		}
+	})
+	small := smallMockEstateForTest(t, 3)
+	stopUpdateLoop()
+
+	revision := FixtureStructureRevision()
+	grown := small
+	grown.NodeCount = 4
+	SetMockConfig(grown)
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("reconfiguring the estate left the structure revision at %d (was %d)", got, revision)
+	}
+
+	revision = FixtureStructureRevision()
+	if err := SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("disabling mock mode left the structure revision at %d (was %d)", got, revision)
+	}
+	revision = FixtureStructureRevision()
+	if err := SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	if got := FixtureStructureRevision(); got <= revision {
+		t.Fatalf("enabling mock mode left the structure revision at %d (was %d)", got, revision)
+	}
+}
+
+// A cache fill reads the structure revision before the data version, and the
+// fixture advances its data version before its revision, so a reader that
+// sees a new revision is guaranteed the new data version after it and is
+// never handed the previous estate's memoized snapshot under the new
+// revision. The interleaving cannot be forced from outside, so the order of
+// the two writes and of the two reads is pinned on the syntax tree: inside
+// the named functions only, so comments, local names and the position of the
+// functions in their package do not matter.
+func TestFixtureStructureRevisionOrderingContract(t *testing.T) {
+	mockDecls := parsePackageFuncs(t, ".")
+	advance := packageFunc(mockDecls["advanceFixtureStructure"])
+	if advance == nil {
+		t.Fatal("the mock package lost advanceFixtureStructure")
+	}
+	version := synchronousCallOffsets(advance, "fixtureDataVersion", "Add")
+	revision := synchronousCallOffsets(advance, "fixtureRevision", "Add")
+	if len(version) != 1 || len(revision) != 1 || version[0] > revision[0] {
+		t.Fatal("advanceFixtureStructure must advance the data version once, before the structure revision once, as plain statements")
+	}
+	if got := countCalls(advance, "fixtureRevision", "Add") + countCalls(advance, "fixtureDataVersion", "Add"); got != 2 {
+		t.Fatalf("advanceFixtureStructure must not defer or spawn its counter writes; found %d writes in all", got)
+	}
+
+	// Every declaration counts for the bypass scan, including methods and the
+	// build-tagged duplicates of a function.
+	for name, decls := range mockDecls {
+		if name == "advanceFixtureStructure" {
+			continue
+		}
+		for _, decl := range decls {
+			if got := countCalls(decl, "fixtureRevision", "Add"); got != 0 {
+				t.Fatalf("%s advances the structure revision directly; it must go through advanceFixtureStructure", name)
+			}
+		}
+	}
+	for _, name := range []string{"enableMockMode", "disableMockMode", "SetMockConfig"} {
+		decl := packageFunc(mockDecls[name])
+		if decl == nil {
+			t.Fatalf("the mock package lost %s", name)
+		}
+		if got := len(synchronousIdentCallOffsets(decl, "advanceFixtureStructure")); got != 1 {
+			t.Fatalf("%s must advance the fixture structure through advanceFixtureStructure exactly once, as a plain statement; found %d", name, got)
+		}
+	}
+
+	view := packageFunc(parsePackageFuncs(t, "../monitoring")["currentUnifiedStateView"])
+	if view == nil {
+		t.Fatal("the monitoring package lost currentUnifiedStateView")
+	}
+	structureRead := synchronousCallOffsets(view, "mock", "FixtureStructureRevision")
+	versionRead := synchronousCallOffsets(view, "mock", "FixtureDataVersion")
+	if len(structureRead) != 1 || len(versionRead) != 1 || structureRead[0] > versionRead[0] {
+		t.Fatal("currentUnifiedStateView must read the structure revision once, before it reads the data version")
+	}
+}
+
+// parsePackageFuncs returns every non-test function and method declaration of
+// the package in dir, keyed by name. Names repeat across build-tagged files
+// and between functions and methods, so each key holds all of them.
+func parsePackageFuncs(t *testing.T, dir string) map[string][]*ast.FuncDecl {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	funcs := make(map[string][]*ast.FuncDecl)
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				funcs[fn.Name.Name] = append(funcs[fn.Name.Name], fn)
+			}
+		}
+	}
+	return funcs
+}
+
+// packageFunc returns the declaration when it is the only one of its name in
+// the package (function or method), and nil otherwise.
+func packageFunc(decls []*ast.FuncDecl) *ast.FuncDecl {
+	if len(decls) != 1 {
+		return nil
+	}
+	return decls[0]
+}
+
+// walkSynchronous visits the nodes of fn that run in the function's own
+// control flow: it does not descend into function literals, deferred calls or
+// goroutine starts, whose source position says nothing about when they run.
+func walkSynchronous(fn *ast.FuncDecl, visit func(ast.Node)) {
+	ast.Inspect(fn, func(node ast.Node) bool {
+		switch node.(type) {
+		case *ast.FuncLit, *ast.DeferStmt, *ast.GoStmt:
+			return false
+		}
+		visit(node)
+		return true
+	})
+}
+
+func isSelectorCall(node ast.Node, receiver, method string) bool {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != method {
+		return false
+	}
+	ident, ok := selector.X.(*ast.Ident)
+	return ok && ident.Name == receiver
+}
+
+// synchronousCallOffsets lists the positions of receiver.method calls that run
+// in fn's own control flow, in source order.
+func synchronousCallOffsets(fn *ast.FuncDecl, receiver, method string) []token.Pos {
+	var offsets []token.Pos
+	walkSynchronous(fn, func(node ast.Node) {
+		if isSelectorCall(node, receiver, method) {
+			offsets = append(offsets, node.Pos())
+		}
+	})
+	return offsets
+}
+
+// synchronousIdentCallOffsets lists the positions of calls to the package-level
+// function name that run in fn's own control flow.
+func synchronousIdentCallOffsets(fn *ast.FuncDecl, name string) []token.Pos {
+	var offsets []token.Pos
+	walkSynchronous(fn, func(node ast.Node) {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == name {
+				offsets = append(offsets, call.Pos())
+			}
+		}
+	})
+	return offsets
+}
+
+// countCalls counts every receiver.method call anywhere in fn, including
+// deferred calls, goroutines and function literals.
+func countCalls(fn *ast.FuncDecl, receiver, method string) int {
+	count := 0
+	ast.Inspect(fn, func(node ast.Node) bool {
+		if isSelectorCall(node, receiver, method) {
+			count++
+		}
+		return true
+	})
+	return count
 }

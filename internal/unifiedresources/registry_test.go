@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -8031,4 +8032,1164 @@ func proxmoxNodeSensorSetupOutdated(t *testing.T, resources []Resource, nodeName
 		t.Fatalf("node %q has no explicit sensor setup verdict", nodeName)
 	}
 	return *found.Proxmox.SensorSetupOutdated
+}
+
+// An operator's remediation lock is a safety property of the thing they
+// locked, not of one canonical ID. Linking a locked resource into another
+// folds it out of the registry, and the surviving resource is the only ID the
+// planner and the dispatch gate ever read, so the lock has to be readable
+// there. Lock state is judged the way the gates judge it: the stored row of
+// the ID the registry lists.
+func TestResourceRegistry_ManualLinkFoldKeepsRemediationLock(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		guestID = "vm-cluster-a-node-1-501"
+		agentID = "agent-inside-vm-501"
+	)
+	ingest := func(rr *ResourceRegistry) {
+		rr.IngestResources([]Resource{
+			{
+				ID: guestID, Type: ResourceTypeVM, Name: "vm-501", Status: StatusOnline, LastSeen: now,
+				Sources:      []DataSource{SourceProxmox},
+				SourceStatus: map[DataSource]SourceStatus{SourceProxmox: {Status: "online", LastSeen: now}},
+				Proxmox:      &ProxmoxData{SourceID: "cluster-a-node-1-501", VMID: 501},
+			},
+			{
+				ID: agentID, Type: ResourceTypeAgent, Name: "vm-501", Status: StatusOnline, LastSeen: now,
+				Sources:      []DataSource{SourceAgent},
+				SourceStatus: map[DataSource]SourceStatus{SourceAgent: {Status: "online", LastSeen: now}},
+				Agent:        &AgentData{AgentID: agentID},
+			},
+		})
+	}
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locks := map[string]ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: LifecycleStateRetired},
+	}
+	for storeName, newStore := range stores {
+		for lockName, lock := range locks {
+			for _, tc := range []struct {
+				name   string
+				locked string
+				// primary is the side the link names as its primary. The registry
+				// keeps a guest over an agent running inside it whichever way the
+				// link points, so a lock on the guest-folded agent has to survive
+				// a link that names the agent the primary and a link that names the
+				// guest.
+				primary string
+			}{
+				{name: "locked agent folded into the guest, agent named primary", locked: agentID, primary: agentID},
+				{name: "locked agent folded into the guest, guest named primary", locked: agentID, primary: guestID},
+				{name: "control: locked guest absorbing the agent", locked: guestID, primary: agentID},
+			} {
+				t.Run(storeName+"/"+lockName+"/"+tc.name, func(t *testing.T) {
+					store := newStore(t)
+					state := lock
+					state.CanonicalID = tc.locked
+					state.SetAt = now.Add(-time.Hour)
+					state.SetBy = "operator"
+					if err := store.SetResourceOperatorState(state); err != nil {
+						t.Fatalf("lock %s: %v", tc.locked, err)
+					}
+					if err := store.AddLink(ResourceLink{ResourceA: guestID, ResourceB: agentID, PrimaryID: tc.primary}); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+
+					rr := NewRegistry(store)
+					ingest(rr)
+					survivors := rr.List()
+					if len(survivors) != 1 {
+						t.Fatalf("link did not fold the pair into one resource: %d resources", len(survivors))
+					}
+					survivor := survivors[0].ID
+
+					got, found, err := store.GetResourceOperatorState(survivor)
+					if err != nil {
+						t.Fatalf("read operator state of survivor %s: %v", survivor, err)
+					}
+					if !found || !got.BlocksRemediation() {
+						t.Fatalf("surviving resource %s lost the lock on %s: found=%v state=%+v", survivor, tc.locked, found, got)
+					}
+					if got.SuppressesAllAttention() != (lockName == "retired" && tc.locked == survivor) {
+						t.Fatalf("lock on %s changed the survivor's alert attention: %+v", tc.locked, got)
+					}
+				})
+			}
+		}
+	}
+}
+
+// Carrying the lock must not rewrite anything else the survivor's operator
+// said: its note, priority and monitoring posture stay as they were.
+func TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	const (
+		keeperID = "vm-cluster-a-node-1-502"
+		foldedID = "agent-inside-vm-502"
+	)
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:    keeperID,
+		MonitoringMode: MonitoringModeExpectedOffline,
+		Criticality:    CriticalityHigh,
+		Note:           "database host",
+		SetAt:          now.Add(-time.Hour),
+		SetBy:          "alice",
+	}); err != nil {
+		t.Fatalf("seed survivor state: %v", err)
+	}
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID: foldedID, NeverAutoRemediate: true, SetAt: now.Add(-2 * time.Hour), SetBy: "bob",
+	}); err != nil {
+		t.Fatalf("seed folded state: %v", err)
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: keeperID, ResourceB: foldedID, PrimaryID: keeperID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	got, found, err := store.GetResourceOperatorState(keeperID)
+	if err != nil || !found {
+		t.Fatalf("survivor state missing: found=%v err=%v", found, err)
+	}
+	if !got.NeverAutoRemediate {
+		t.Fatalf("survivor did not take the folded resource's lock: %+v", got)
+	}
+	if got.MonitoringMode != MonitoringModeExpectedOffline || got.Criticality != CriticalityHigh || got.Note != "database host" || got.LifecycleState != LifecycleStateActive {
+		t.Fatalf("carrying the lock rewrote the survivor's own settings: %+v", got)
+	}
+	if got.SetBy != RemediationLockCarriedBy {
+		t.Fatalf("carried lock is attributed to %q, not to the identity change", got.SetBy)
+	}
+
+	// Unlinking splits the pair again; the lock was the operator's on both, so
+	// neither side loses it.
+	if err := store.AddExclusion(ResourceExclusion{ResourceA: keeperID, ResourceB: foldedID}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	for _, id := range []string{keeperID, foldedID} {
+		if state, found, err := store.GetResourceOperatorState(id); err != nil || !found || !state.NeverAutoRemediate {
+			t.Fatalf("unlinking dropped the lock on %s: found=%v err=%v state=%+v", id, found, err, state)
+		}
+	}
+}
+
+// Links recorded before locks travelled with them already folded a locked
+// resource out from under its lock, and a succession that landed on an existing
+// successor row left its predecessor's lock behind. Opening a store that has
+// not yet run the carry restores those once; an operator who then lifts the
+// survivor's lock is not overruled by the dormant row on every later start.
+func TestSQLiteStoreRestoresLocksEarlierIdentityChangesDropped(t *testing.T) {
+	dir := t.TempDir()
+	const (
+		lockedID     = "agent-legacy-locked"
+		survivorID   = "vm-legacy-survivor"
+		chainEndID   = "vm-legacy-chain-end"
+		unlinkedA    = "agent-legacy-unlinked-locked"
+		unlinkedB    = "vm-legacy-unlinked-open"
+		oldEraID     = "agent-legacy-old-era"
+		newEraID     = "agent-legacy-new-era"
+		linkedAt     = "2026-09-01T10:00:00Z"
+		unlinkedAt   = "2026-09-02T10:00:00Z"
+		operator     = "operator"
+		legacyReason = "recorded before locks travelled"
+	)
+	open := func() *SQLiteResourceStore {
+		t.Helper()
+		store, err := NewSQLiteResourceStore(dir, "default")
+		if err != nil {
+			t.Fatalf("NewSQLiteResourceStore: %v", err)
+		}
+		return store
+	}
+	now := time.Now().UTC()
+
+	store := open()
+	for _, id := range []string{lockedID, unlinkedA, oldEraID} {
+		if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: id, NeverAutoRemediate: true, SetAt: now.Add(-48 * time.Hour), SetBy: operator}); err != nil {
+			t.Fatalf("lock %s: %v", id, err)
+		}
+	}
+	// A successor row written before the succession was declared, as the
+	// succession that shadowed the predecessor's lock found it.
+	if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: newEraID, Note: "set under the new ID", SetAt: now.Add(-24 * time.Hour), SetBy: operator}); err != nil {
+		t.Fatalf("seed successor: %v", err)
+	}
+	// Rows exactly as a store that did not carry locks wrote them: a live link,
+	// a chain extension of it, one a later unlink superseded (its exclusion is
+	// newer), and a succession already recorded with the predecessor's row left
+	// behind.
+	for _, row := range []struct{ a, b, primary, at string }{
+		{lockedID, survivorID, survivorID, linkedAt},
+		{survivorID, chainEndID, chainEndID, linkedAt},
+		{unlinkedA, unlinkedB, unlinkedB, linkedAt},
+	} {
+		if _, err := store.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			row.a, row.b, row.primary, legacyReason, operator, row.at); err != nil {
+			t.Fatalf("seed legacy link: %v", err)
+		}
+	}
+	if _, err := store.db.Exec(`INSERT INTO resource_exclusions (resource_a, resource_b, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?)`,
+		unlinkedA, unlinkedB, "unlinked", operator, unlinkedAt); err != nil {
+		t.Fatalf("seed legacy exclusion: %v", err)
+	}
+	if _, err := store.db.Exec(`INSERT INTO canonical_id_successions (old_canonical_id, new_canonical_id) VALUES (?, ?)`, oldEraID, newEraID); err != nil {
+		t.Fatalf("seed recorded succession: %v", err)
+	}
+	// This store has never run the carry.
+	if _, err := store.db.Exec(`DELETE FROM resource_store_migrations`); err != nil {
+		t.Fatalf("forget the carry marker: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	store = open()
+	for _, id := range []string{survivorID, chainEndID, newEraID} {
+		got, found, err := store.GetResourceOperatorState(id)
+		if err != nil || !found || !got.BlocksRemediation() {
+			t.Fatalf("%s did not get the lock an earlier identity change dropped: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+	if got, _, _ := store.GetResourceOperatorState(newEraID); got.Note != "set under the new ID" {
+		t.Fatalf("restoring the successor's lock rewrote its own settings: %+v", got)
+	}
+	if other, found, err := store.GetResourceOperatorState(unlinkedB); err != nil || found {
+		t.Fatalf("a pair the operator unlinked was carried: found=%v err=%v state=%+v", found, err, other)
+	}
+
+	for _, id := range []string{survivorID, newEraID} {
+		if err := store.ClearResourceOperatorState(id); err != nil {
+			t.Fatalf("operator clears %s: %v", id, err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	store = open()
+	defer store.Close()
+	for _, id := range []string{survivorID, newEraID} {
+		if got, found, err := store.GetResourceOperatorState(id); err != nil || found {
+			t.Fatalf("a restart re-locked %s, which the operator cleared: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+}
+
+// The registry keeps one member of a link and acts only on that ID, so a lock
+// has to be on every member of the linked component, not just the two IDs of
+// the newest link, and it has to stay on each member the unlink splits off.
+func TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	now := time.Now().UTC()
+	for name, newStore := range stores {
+		t.Run(name+"/chain", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "host-a", ResourceB: "host-b", PrimaryID: "host-a"}); err != nil {
+				t.Fatalf("link a-b: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "host-c", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock c: %v", err)
+			}
+			if err := store.AddLink(ResourceLink{ResourceA: "host-b", ResourceB: "host-c", PrimaryID: "host-c"}); err != nil {
+				t.Fatalf("link b-c: %v", err)
+			}
+			for _, id := range []string{"host-a", "host-b", "host-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s is outside the lock of its linked component", id)
+				}
+			}
+		})
+		t.Run(name+"/lock set on the survivor after the link, then unlinked", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "vm-1", ResourceB: "agent-1", PrimaryID: "vm-1"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "vm-1", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("operator locks the merged resource: %v", err)
+			}
+			if locked(t, store, "agent-1") {
+				t.Fatalf("the lock reached the folded member before any identity change")
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-1", ResourceB: "agent-1"}); err != nil {
+				t.Fatalf("unlink: %v", err)
+			}
+			for _, id := range []string{"vm-1", "agent-1"} {
+				if !locked(t, store, id) {
+					t.Fatalf("unlinking left %s without the merged resource's lock", id)
+				}
+			}
+		})
+		t.Run(name+"/lock on one end of a chain, unlinking the other end", func(t *testing.T) {
+			store := newStore(t)
+			for _, link := range []ResourceLink{
+				{ResourceA: "chain-a", ResourceB: "chain-b", PrimaryID: "chain-a"},
+				{ResourceA: "chain-b", ResourceB: "chain-c", PrimaryID: "chain-b"},
+			} {
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("link %s-%s: %v", link.ResourceA, link.ResourceB, err)
+				}
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "chain-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("operator locks the merged resource: %v", err)
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "chain-b", ResourceB: "chain-c"}); err != nil {
+				t.Fatalf("unlink b-c: %v", err)
+			}
+			for _, id := range []string{"chain-a", "chain-b", "chain-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s left the chain without the lock the whole chain carried", id)
+				}
+			}
+		})
+		t.Run(name+"/unlinking a pair that was never linked carries nothing", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "vm-2", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "vm-2", ResourceB: "agent-2"}); err != nil {
+				t.Fatalf("exclude: %v", err)
+			}
+			if locked(t, store, "agent-2") {
+				t.Fatalf("an exclusion between unlinked resources locked one of them")
+			}
+		})
+	}
+}
+
+// Recorded successions can chain, and an intermediate row may have moved on to
+// its own successor, so the upgrade carry follows the chain instead of
+// stepping one succession at a time; a lock it restores then spreads over the
+// links of the ID it lands on.
+func TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains(t *testing.T) {
+	dir := t.TempDir()
+	open := func() *SQLiteResourceStore {
+		t.Helper()
+		store, err := NewSQLiteResourceStore(dir, "default")
+		if err != nil {
+			t.Fatalf("NewSQLiteResourceStore: %v", err)
+		}
+		return store
+	}
+	now := time.Now().UTC()
+	store := open()
+	defer func() { _ = store.Close() }()
+
+	// a1 -> b1 -> c1: b1's settings row moved to c1, so b1 has no row and the
+	// shadowed lock on a1 has to reach c1 across the gap.
+	// a2 -> b2 -> c2, recorded in the opposite order from the chain: both
+	// intermediate rows still exist.
+	// a3 -> b3 with a live link b3 - c3: the restored lock must reach c3.
+	seed := func(id string, state ResourceOperatorState) {
+		t.Helper()
+		state.CanonicalID, state.SetAt = id, now.Add(-72*time.Hour)
+		if err := store.SetResourceOperatorState(state); err != nil {
+			t.Fatalf("seed %s: %v", id, err)
+		}
+	}
+	seed("chain-a1", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-c1", ResourceOperatorState{Note: "moved here from b1"})
+	seed("chain-a2", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-b2", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-c2", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-a3", ResourceOperatorState{LifecycleState: LifecycleStateRetired})
+	seed("chain-b3", ResourceOperatorState{Note: "unlocked"})
+	// a4 -> b4 and c4 -> d4 with a live link b4 - c4: the lock restored onto b4
+	// spreads over the link to c4, and from c4 on to d4, which the first pass
+	// over the successions had already passed.
+	seed("chain-a4", ResourceOperatorState{NeverAutoRemediate: true})
+	seed("chain-b4", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-c4", ResourceOperatorState{Note: "unlocked"})
+	seed("chain-d4", ResourceOperatorState{Note: "unlocked"})
+	for _, succession := range [][2]string{
+		{"chain-b2", "chain-c2"}, {"chain-a2", "chain-b2"},
+		{"chain-a1", "chain-b1"}, {"chain-b1", "chain-c1"},
+		{"chain-a3", "chain-b3"},
+		{"chain-a4", "chain-b4"}, {"chain-c4", "chain-d4"},
+	} {
+		if _, err := store.db.Exec(`INSERT INTO canonical_id_successions (old_canonical_id, new_canonical_id) VALUES (?, ?)`, succession[0], succession[1]); err != nil {
+			t.Fatalf("record succession %v: %v", succession, err)
+		}
+	}
+	for _, link := range [][2]string{{"chain-b3", "chain-c3"}, {"chain-b4", "chain-c4"}} {
+		if _, err := store.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			link[0], link[1], link[0], "linked before locks travelled", "operator", "2026-09-01T10:00:00Z"); err != nil {
+			t.Fatalf("seed link: %v", err)
+		}
+	}
+	if _, err := store.db.Exec(`DELETE FROM resource_store_migrations`); err != nil {
+		t.Fatalf("forget the carry marker: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	store = open()
+	for _, id := range []string{"chain-c1", "chain-b2", "chain-c2", "chain-b3", "chain-c3", "chain-b4", "chain-c4", "chain-d4"} {
+		got, found, err := store.GetResourceOperatorState(id)
+		if err != nil || !found || !got.BlocksRemediation() {
+			t.Fatalf("%s did not get the lock its succession chain dropped: found=%v err=%v state=%+v", id, found, err, got)
+		}
+	}
+	if got, _, _ := store.GetResourceOperatorState("chain-c1"); got.Note != "moved here from b1" {
+		t.Fatalf("restoring the lock rewrote the successor's own settings: %+v", got)
+	}
+}
+
+// A succession batch is applied in the order it is declared, and each group of
+// linked IDs it saved follows only the re-keys applied after it. A batch
+// declared against its direction, and one that returns an ID to its start, both
+// leave the lock on the IDs that survive and give no row to an ID re-keyed away.
+func TestSuccessionBatchOrderKeepsLinkedRemediationLock(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	now := time.Now().UTC()
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	for name, newStore := range stores {
+		t.Run(name+"/declared against its direction", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "rev-a", ResourceB: "rev-b", PrimaryID: "rev-b"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "rev-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "rev-b", NewCanonicalID: "rev-c"},
+				{OldCanonicalID: "rev-a", NewCanonicalID: "rev-b"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"rev-b", "rev-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock when the batch was declared against its direction", id)
+				}
+			}
+		})
+		t.Run(name+"/returns an ID to its start", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "loop-a", ResourceB: "loop-x", PrimaryID: "loop-x"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "loop-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "loop-a", NewCanonicalID: "loop-b"},
+				{OldCanonicalID: "loop-b", NewCanonicalID: "loop-a"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"loop-a", "loop-x"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock across a batch that returned to its start", id)
+				}
+			}
+			if state, found, err := store.GetResourceOperatorState("loop-b"); err != nil || found {
+				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
+			}
+		})
+	}
+}
+
+// chainLinkEstate arrives the way the monitor ingests it: two agents, a
+// Proxmox VM and its storage in the snapshot, then two TrueNAS pools and a
+// TrueNAS VM, then a vSphere VM and a vSphere datastore, each record source
+// in its own pass.
+type chainLinkEstate struct {
+	snapshot models.StateSnapshot
+	records  map[DataSource][]IngestRecord
+	// saved is an unlinked host that only saved-host continuity lists.
+	saved models.Host
+	ids   map[string]string
+}
+
+func newChainLinkEstate(t *testing.T) chainLinkEstate {
+	t.Helper()
+	now := time.Now().UTC()
+	pool := func(name string) IngestRecord {
+		return IngestRecord{
+			SourceID: "system:tn-1:pool:" + name,
+			Resource: Resource{
+				Type: ResourceTypeStorage, Name: name, Status: StatusOnline, LastSeen: now,
+				Storage: &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+			},
+		}
+	}
+	estate := chainLinkEstate{
+		snapshot: models.StateSnapshot{
+			LastUpdate: now,
+			VMs: []models.VM{
+				{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:111", VMID: 111, Name: "app-r", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:112", VMID: 112, Name: "app-u", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:113", VMID: 113, Name: "app-x", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+				{ID: "lab:pve1:114", VMID: 114, Name: "app-y", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+			},
+			Storage: []models.Storage{{
+				ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available",
+				Total: 1000, Used: 400, Free: 600, Usage: 40, Enabled: true, Active: true, LastSeen: now,
+			}},
+			Hosts: []models.Host{
+				{ID: "host-app", Hostname: "app-agent", MachineID: "0123456789abcdef", Status: "online", LastSeen: now},
+				{ID: "host-ops", Hostname: "ops-agent", MachineID: "fedcba9876543210", Status: "online", LastSeen: now},
+			},
+		},
+		records: map[DataSource][]IngestRecord{
+			SourceTrueNAS: {
+				pool("tank"), pool("vault"),
+				{
+					SourceID: "system:tn-1:vm:nas-vm",
+					Resource: Resource{Type: ResourceTypeVM, Name: "nas-vm", Status: StatusOnline, LastSeen: now},
+				},
+			},
+			SourceVMware: {
+				{
+					SourceID: "vc-1:vm:vm-42",
+					Resource: Resource{
+						Type: ResourceTypeVM, Technology: "vmware", Name: "app-guest", Status: StatusOnline, LastSeen: now,
+						VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+					},
+					Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+				},
+				{
+					SourceID: "vc-1:datastore:datastore-7",
+					Resource: Resource{
+						Type: ResourceTypeStorage, Technology: "vmware", Name: "ds-7", Status: StatusOnline, LastSeen: now,
+						VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "datastore-7", EntityType: "datastore"},
+					},
+				},
+			},
+		},
+		saved: models.Host{ID: "host-saved", Hostname: "saved-agent", MachineID: "00112233445566aa", Status: "offline", LastSeen: now.Add(-time.Hour)},
+		ids:   map[string]string{},
+	}
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	roles := map[string]string{
+		"app-agent": "agent", "ops-agent": "ops-agent", "web": "pve-vm", "local-zfs": "pve-storage",
+		"tank": "tank", "vault": "vault", "nas-vm": "nas-vm", "app-guest": "vsphere-vm", "ds-7": "datastore",
+		"app-r": "vm-r", "app-u": "vm-u", "app-x": "vm-x", "app-y": "vm-y",
+	}
+	for _, resource := range unlinked.GetAll() {
+		if role, ok := roles[resource.Name]; ok {
+			estate.ids[role] = resource.ID
+		}
+	}
+	if len(estate.ids) != len(roles) || len(unlinked.GetAll()) != len(roles) {
+		t.Fatalf("unlinked estate = %+v, want one row per role %v", unlinked.GetAll(), roles)
+	}
+	return estate
+}
+
+// linkOrders lists every order of n links.
+func linkOrders(n int) [][]int {
+	if n == 0 {
+		return [][]int{{}}
+	}
+	var orders [][]int
+	for _, rest := range linkOrders(n - 1) {
+		for i := 0; i <= len(rest); i++ {
+			order := append(append(append([]int{}, rest[:i]...), n-1), rest[i:]...)
+			orders = append(orders, order)
+		}
+	}
+	return orders
+}
+
+// Links that share a member name one identity, so a chain folds into one row
+// chosen by precedence, never by the order the store lists the links in or
+// the order its members' sources arrive. Each estate is rebuilt in every link
+// order and checked after each of two rebuilds (identity pins persist on the
+// first), after a live refresh of every record source, in the read state that overlays a saved host, and in
+// a registry seeded from that read state, as the resources API seeds when the
+// listing already carries every source: each view lists the same row,
+// resolves every member to it and records every link's pair, with the same
+// fold records in every order, refreshes included. Applied one link at a
+// time, a link naming a member an earlier link had folded away found nothing,
+// so one order folded the chain and another left a member standing.
+func TestManualLinkChainsFoldTheSameWayInAnyLinkOrder(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	link := func(a, b, primary string, minute int) ResourceLink {
+		return ResourceLink{
+			ResourceA: estate.ids[a], ResourceB: estate.ids[b], PrimaryID: estate.ids[primary],
+			CreatedAt: created.Add(time.Duration(minute) * time.Minute),
+		}
+	}
+	// The cycle case below needs its two tie-broken VMs in canonical-ID order.
+	vmB, vmC := "vm-x", "vm-y"
+	if estate.ids[vmC] > estate.ids[vmB] {
+		vmB, vmC = vmC, vmB
+	}
+	for _, tc := range []struct {
+		name     string
+		links    []ResourceLink
+		root     string
+		rootType ResourceType
+	}{
+		{
+			// The agent linked from its own page still folds into its guest, and
+			// the guest's own link takes both into the storage it names, all in
+			// the snapshot pass.
+			name:     "agent primary over its guest, guest into storage",
+			links:    []ResourceLink{link("agent", "pve-vm", "agent", 0), link("pve-vm", "pve-storage", "pve-storage", 1)},
+			root:     "pve-storage",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// The same chain with record-sourced storage: the rebuild judges
+			// links once every source is in.
+			name:     "agent primary over its guest, guest into record-sourced storage",
+			links:    []ResourceLink{link("agent", "pve-vm", "agent", 0), link("pve-vm", "tank", "tank", 1)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// Both links name a primary over the agent, and the guest outranks
+			// the storage, though the pools' source sorts before the VM's.
+			name:     "guest outranks storage as competing primary",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("agent", "vsphere-vm", "vsphere-vm", 1)},
+			root:     "vsphere-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name:     "competing storage primaries keep the earliest link's",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("pve-vm", "vault", "vault", 1), link("agent", "pve-vm", "agent", 2)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			name:     "competing storage primaries follow creation time, not names",
+			links:    []ResourceLink{link("agent", "tank", "tank", 2), link("pve-vm", "vault", "vault", 1), link("agent", "pve-vm", "agent", 0)},
+			root:     "vault",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// Every candidate is an agent, so the guest takes its place.
+			name:     "an agent never holds a guest",
+			links:    []ResourceLink{link("pve-vm", "tank", "tank", 0), link("tank", "ops-agent", "ops-agent", 1)},
+			root:     "pve-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name:     "a cycle folds into its best member",
+			links:    []ResourceLink{link("agent", "tank", "tank", 0), link("tank", "vault", "vault", 1), link("vault", "agent", "agent", 2)},
+			root:     "tank",
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// A cycle across the snapshot and two record sources. Folding as the
+			// sources arrived put the TrueNAS VM inside the Proxmox storage
+			// before the vSphere VM's link closed the cycle, so the storage or
+			// the vSphere VM survived; the rebuild judges the whole cycle and
+			// keeps the guest whose link is oldest.
+			name: "a cycle across record sources keeps its best guest",
+			links: []ResourceLink{
+				link("nas-vm", "pve-storage", "pve-storage", 1),
+				link("pve-storage", "vsphere-vm", "vsphere-vm", 2),
+				link("vsphere-vm", "nas-vm", "nas-vm", 0),
+			},
+			root:     "nas-vm",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// The pool folds in through one VM's link while a second VM's link
+			// to it closes a cycle. A TrueNAS refresh recreates the pool's row
+			// (its source maps to a VM); it folds back through the link that
+			// took it in, not the cycle's closing link, so no record turns.
+			name: "a recreated cycle member folds back through its own link",
+			links: []ResourceLink{
+				link(vmB, "vm-r", "vm-r", 0),
+				link("vm-u", "vm-r", "vm-r", 1),
+				link(vmC, "vm-u", "vm-u", 2),
+				link(vmC, "tank", "tank", 3),
+				link("tank", vmB, vmB, 4),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// Two interior members of the chain are recreated by one refresh.
+			// Each folds back along its record; reaching the second through
+			// the VM the first holds would turn that VM's record round and
+			// leave its ID without a row.
+			name: "two recreated interior members fold back along their records",
+			links: []ResourceLink{
+				link("vm-u", "vault", "vault", 0),
+				link("vault", "tank", "tank", 1),
+				link("tank", "vm-r", "vm-r", 2),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			name: "two recreated interior members with a closing link",
+			links: []ResourceLink{
+				link("vm-u", "vault", "vault", 0),
+				link("vault", "tank", "tank", 1),
+				link("tank", "vm-r", "vm-r", 2),
+				link("vm-u", "vm-r", "vm-r", 3),
+			},
+			root:     "vm-r",
+			rootType: ResourceTypeVM,
+		},
+		{
+			// A TrueNAS refresh recreates the VM's row, since its source maps to
+			// a row of another type; the row folds back through the same pair.
+			name:     "a member a refresh recreates folds back into its root",
+			links:    []ResourceLink{link("nas-vm", "pve-storage", "pve-storage", 0)},
+			root:     "pve-storage",
+			rootType: ResourceTypeStorage,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rootID := estate.ids[tc.root]
+			var reference []ManualLinkFold
+			check := func(order []int, view string, rr *ResourceRegistry) {
+				t.Helper()
+				root, ok := rr.Get(rootID)
+				if !ok || root.Type != tc.rootType {
+					t.Fatalf("order %v, %s: root %s = %+v (listed=%v), want a listed %s", order, view, rootID, root, ok, tc.rootType)
+				}
+				pairs := make(map[string]bool, len(tc.links))
+				for _, l := range tc.links {
+					pairs[exclusionKey(l.ResourceA, l.ResourceB)] = true
+					for _, member := range []string{l.ResourceA, l.ResourceB} {
+						if _, listed := rr.Get(member); listed && member != rootID {
+							t.Fatalf("order %v, %s: member %s still listed beside %s", order, view, member, rootID)
+						}
+						if got, ok := rr.ResolveReferenceID(member); !ok || got != rootID {
+							t.Fatalf("order %v, %s: %s resolved to %q (%v), want %s", order, view, member, got, ok, rootID)
+						}
+					}
+				}
+				folds := rr.ManualLinkFolds(rootID)
+				slices.SortFunc(folds, func(a, b ManualLinkFold) int {
+					return strings.Compare(a.HolderID+"|"+a.FoldedID, b.HolderID+"|"+b.FoldedID)
+				})
+				for _, fold := range folds {
+					delete(pairs, exclusionKey(fold.HolderID, fold.FoldedID))
+				}
+				if len(folds) != len(tc.links) || len(pairs) != 0 {
+					t.Fatalf("order %v, %s: folds %+v, want one per link pair %+v", order, view, folds, tc.links)
+				}
+				if reference == nil {
+					reference = folds
+				} else if !reflect.DeepEqual(folds, reference) {
+					t.Fatalf("order %v, %s: folds %+v, want %+v as in the first order", order, view, folds, reference)
+				}
+			}
+			for _, order := range linkOrders(len(tc.links)) {
+				store := NewMemoryStore()
+				for _, i := range order {
+					if err := store.AddLink(tc.links[i]); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+				}
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+				check(order, "first rebuild", adapter.currentRegistry())
+				adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+				check(order, "second rebuild", adapter.currentRegistry())
+				readState := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(estate.saved)}).(*MonitorAdapter)
+				check(order, "read state", readState.registry)
+				seeded := NewRegistry(store)
+				seeded.IngestResources(readState.GetAll())
+				check(order, "resources API", seeded)
+				for _, source := range []DataSource{SourceTrueNAS, SourceVMware} {
+					adapter.PopulateSupplementalRecords(source, estate.records[source])
+					check(order, "refresh of "+string(source), adapter.currentRegistry())
+				}
+			}
+		})
+	}
+}
+
+// A live refresh can bring a member the last rebuild had not seen, and it
+// cannot undo the folds the rebuild made. The TrueNAS VM is linked into the
+// Proxmox storage, and the storage into a vSphere host that only the refresh
+// reports. The host is the chain's only candidate, but an agent never holds a
+// guest, so the storage that already holds the VM keeps the chain; the next
+// rebuild judges the whole chain and keeps the VM itself.
+func TestManualLinkChainRefreshNeverLeavesAnAgentHoldingAGuest(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	now := time.Now().UTC()
+	host := IngestRecord{
+		SourceID: "vc-1:host:host-9",
+		Resource: Resource{
+			Type: ResourceTypeAgent, Technology: "vmware", Name: "esx-9", Status: StatusOnline, LastSeen: now,
+			VMware: &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "host-9", EntityType: "host"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"esx-9"}},
+	}
+	withHost := make(map[DataSource][]IngestRecord, len(estate.records))
+	for source, records := range estate.records {
+		withHost[source] = records
+	}
+	withHost[SourceVMware] = append(slices.Clone(estate.records[SourceVMware]), host)
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(estate.snapshot, withHost)
+	var hostID string
+	for _, resource := range probe.GetAll() {
+		if resource.Name == "esx-9" {
+			hostID = resource.ID
+		}
+	}
+	if hostID == "" {
+		t.Fatalf("probe estate %+v has no vSphere host", probe.GetAll())
+	}
+	vmID, storageID := estate.ids["nas-vm"], estate.ids["pve-storage"]
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: vmID, ResourceB: storageID, PrimaryID: storageID, CreatedAt: created},
+		{ResourceA: storageID, ResourceB: hostID, PrimaryID: hostID, CreatedAt: created.Add(time.Minute)},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+	assertChainRoot(t, "rebuild without the host", adapter.currentRegistry(), storageID, ResourceTypeStorage, vmID, storageID)
+	adapter.PopulateSupplementalRecords(SourceVMware, withHost[SourceVMware])
+	assertChainRoot(t, "refresh bringing the host", adapter.currentRegistry(), storageID, ResourceTypeStorage, vmID, storageID, hostID)
+	adapter.PopulateSnapshotAndSupplemental(estate.snapshot, withHost)
+	assertChainRoot(t, "rebuild with the host", adapter.currentRegistry(), vmID, ResourceTypeVM, vmID, storageID, hostID)
+}
+
+func assertChainRoot(t *testing.T, step string, rr *ResourceRegistry, rootID string, rootType ResourceType, members ...string) {
+	t.Helper()
+	root, ok := rr.Get(rootID)
+	if !ok || root.Type != rootType {
+		t.Fatalf("%s: root %s = %+v (listed=%v), want a listed %s", step, rootID, root, ok, rootType)
+	}
+	for _, member := range members {
+		if _, listed := rr.Get(member); listed && member != rootID {
+			t.Fatalf("%s: member %s still listed beside %s", step, member, rootID)
+		}
+		if got, ok := rr.ResolveReferenceID(member); !ok || got != rootID {
+			t.Fatalf("%s: %s resolved to %q (%v), want %s", step, member, got, ok, rootID)
+		}
+	}
+}
+
+// A relink of a Proxmox node and its agent names the node's own ID, which the
+// inferred join consumed before any link applies. The join records that fold
+// before the links resolve their members, so a second link naming the node
+// joins the chain whichever link the store lists first: applied in store
+// order, a link naming the node ahead of the relink found no node and was
+// skipped for good. The folded node keeps the agent shape it had, so a guest
+// linked to it still outranks storage as the chain's root.
+func TestManualLinkToAJoinedNodeFoldsTheSameWayInAnyLinkOrder(t *testing.T) {
+	now := time.Now().UTC()
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now, LinkedAgentID: "host-pve1"}
+	host := models.Host{
+		ID: "host-pve1", Hostname: "pve1", MachineID: "0123456789abcdef", Status: "online", LastSeen: now, LinkedNodeID: node.ID,
+		NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", MAC: "aa:bb:cc:dd:ee:01", Addresses: []string{"10.0.0.5/24"}}},
+	}
+	pool := IngestRecord{
+		SourceID: "system:tn-1:pool:tank",
+		Resource: Resource{
+			Type: ResourceTypeStorage, Name: "tank", Status: StatusOnline, LastSeen: now,
+			Storage: &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+		},
+	}
+	snapshot := models.StateSnapshot{
+		LastUpdate: now, Nodes: []models.Node{node}, Hosts: []models.Host{host},
+		VMs: []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+	}
+	records := map[DataSource][]IngestRecord{SourceTrueNAS: {pool}}
+
+	alone := NewRegistry(nil)
+	alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{node}})
+	nodeID := hostRowsByFacet(t, alone.List()).node
+	probe := NewMonitorAdapter(NewRegistry(nil))
+	probe.PopulateSnapshotAndSupplemental(snapshot, records)
+	joinedID := hostRowsByFacet(t, probe.GetAll()).joined
+	var poolID, vmID string
+	for _, resource := range probe.GetAll() {
+		switch resource.Type {
+		case ResourceTypeStorage:
+			poolID = resource.ID
+		case ResourceTypeVM:
+			vmID = resource.ID
+		}
+	}
+	if nodeID == "" || joinedID == "" || poolID == "" || vmID == "" || nodeID == joinedID {
+		t.Fatalf("fixture joined node %q and agent into %q beside pool %q and VM %q", nodeID, joinedID, poolID, vmID)
+	}
+
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	relink := ResourceLink{ResourceA: joinedID, ResourceB: nodeID, PrimaryID: joinedID, CreatedAt: created}
+	for _, tc := range []struct {
+		name     string
+		links    []ResourceLink
+		root     string
+		rootType ResourceType
+	}{
+		{
+			name:     "a pool linked to the node",
+			links:    []ResourceLink{relink, {ResourceA: nodeID, ResourceB: poolID, PrimaryID: poolID, CreatedAt: created.Add(time.Minute)}},
+			root:     poolID,
+			rootType: ResourceTypeStorage,
+		},
+		{
+			// The node is an agent-type row whichever way it was folded, so a
+			// guest linked to it folds the chain, not the pool.
+			name: "a guest and a pool linked to the node",
+			links: []ResourceLink{
+				relink,
+				{ResourceA: nodeID, ResourceB: vmID, PrimaryID: nodeID, CreatedAt: created.Add(time.Minute)},
+				{ResourceA: nodeID, ResourceB: poolID, PrimaryID: poolID, CreatedAt: created.Add(2 * time.Minute)},
+			},
+			root:     vmID,
+			rootType: ResourceTypeVM,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var reference []ManualLinkFold
+			for _, order := range linkOrders(len(tc.links)) {
+				store := NewMemoryStore()
+				for _, i := range order {
+					if err := store.AddLink(tc.links[i]); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+				}
+				adapter := NewMonitorAdapter(NewRegistry(store))
+				adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+				seeded := NewRegistry(store)
+				seeded.IngestResources(adapter.GetAll())
+				for _, view := range []struct {
+					name string
+					rr   *ResourceRegistry
+				}{{"monitor", adapter.currentRegistry()}, {"resources API", seeded}} {
+					assertChainRoot(t, fmt.Sprintf("order %v, %s", order, view.name), view.rr, tc.root, tc.rootType, joinedID, nodeID, poolID)
+					folds := view.rr.ManualLinkFolds(tc.root)
+					slices.SortFunc(folds, func(a, b ManualLinkFold) int {
+						return strings.Compare(a.HolderID+"|"+a.FoldedID, b.HolderID+"|"+b.FoldedID)
+					})
+					if reference == nil {
+						reference = folds
+					} else if !reflect.DeepEqual(folds, reference) {
+						t.Fatalf("order %v, %s: folds %+v, want %+v as in the first order", order, view.name, folds, reference)
+					}
+				}
+			}
+		})
+	}
+}
+
+// A registry seeded from a listing keeps the folds that listing's links made,
+// whatever the store holds now: the links changed after the monitor published
+// it. A record that recreates a folded member then folds it under the new
+// links, and every ID the listing's fold records fold in keeps answering to
+// the row that survives. Turning a record the surviving row carries to match
+// the new link would leave the ID it folded in without a row, and so would
+// hanging the folded row's records from the linking member when the surviving
+// row's own ID lies between that member and the folded row.
+func TestManualLinkChangedAfterSeedingKeepsFoldedIDsResolving(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	vmR, vmT, pool, otherPool := estate.ids["vm-r"], estate.ids["vm-u"], estate.ids["tank"], estate.ids["vault"]
+	chain := []ResourceLink{
+		{ResourceA: vmT, ResourceB: pool, PrimaryID: pool},
+		{ResourceA: pool, ResourceB: vmR, PrimaryID: vmR},
+	}
+	// The VM, the pool and the second pool linked in a cycle, rooted at the VM.
+	cycle := []ResourceLink{
+		{ResourceA: pool, ResourceB: vmR, PrimaryID: vmR},
+		{ResourceA: otherPool, ResourceB: vmR, PrimaryID: vmR},
+		{ResourceA: pool, ResourceB: otherPool, PrimaryID: otherPool},
+	}
+
+	for _, tc := range []struct {
+		name      string
+		published []ResourceLink
+		changed   []ResourceLink
+		// root and rootType name the row left after the replay.
+		root     string
+		rootType ResourceType
+		members  []string
+	}{
+		{
+			// The pool now folds into the VM inside the published root.
+			name:      "the pool folds into a member of the root",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: pool, ResourceB: vmT, PrimaryID: vmT}},
+			root:      vmR,
+			rootType:  ResourceTypeVM,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// Only the link to the pool's folded VM stays, so the recreated pool
+			// is the chain's root and the published root folds into it through
+			// that VM, a member its records reach only through the pool.
+			name:      "the recreated pool becomes the root through a member",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: vmT, ResourceB: pool, PrimaryID: pool}},
+			root:      pool,
+			rootType:  ResourceTypeStorage,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// Only the link between the pool and the published root stays, with
+			// the pool primary: the root folds into the recreated pool through
+			// the very ID the pool's records fold it under.
+			name:      "the recreated pool becomes the root over the published root",
+			published: chain,
+			changed:   []ResourceLink{{ResourceA: pool, ResourceB: vmR, PrimaryID: pool}},
+			root:      pool,
+			rootType:  ResourceTypeStorage,
+			members:   []string{vmR, vmT, pool},
+		},
+		{
+			// The published records form a cycle, and the links now root it at a
+			// recreated pool. Every record that named the pool as folded turns
+			// away from it, so the new root is never a folded ID.
+			name:      "a recreated pool roots a cycle of records",
+			published: cycle,
+			changed: []ResourceLink{
+				{ResourceA: vmR, ResourceB: pool, PrimaryID: pool},
+				{ResourceA: otherPool, ResourceB: pool, PrimaryID: pool},
+				{ResourceA: vmR, ResourceB: otherPool, PrimaryID: otherPool},
+			},
+			root:     pool,
+			rootType: ResourceTypeStorage,
+			members:  []string{vmR, pool, otherPool},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			published := NewMemoryStore()
+			for i, link := range tc.published {
+				link.CreatedAt = created.Add(time.Duration(i) * time.Minute)
+				if err := published.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+			adapter := NewMonitorAdapter(NewRegistry(published))
+			adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+			assertChainRoot(t, "published", adapter.currentRegistry(), vmR, ResourceTypeVM, tc.members...)
+
+			changed := NewMemoryStore()
+			for i, link := range tc.changed {
+				link.CreatedAt = created.Add(time.Duration(10+i) * time.Minute)
+				if err := changed.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+			seeded := NewRegistry(changed)
+			seeded.IngestResources(adapter.GetAll())
+			assertChainRoot(t, "seeded", seeded, vmR, ResourceTypeVM, tc.members...)
+			seeded.IngestRecords(SourceTrueNAS, estate.records[SourceTrueNAS])
+			assertChainRoot(t, "seeded then replayed", seeded, tc.root, tc.rootType, tc.members...)
+			// Each side keeps what it is on its own through the turned and the
+			// carried records, which report-merge selects links by, and the
+			// surviving row is never recorded as a folded ID, which report-merge
+			// infers its root from when the row is re-keyed.
+			own := map[string][]DataSource{vmR: {SourceProxmox}, vmT: {SourceProxmox}, pool: {SourceTrueNAS}, otherPool: {SourceTrueNAS}}
+			for _, fold := range seeded.ManualLinkFolds(tc.root) {
+				if !reflect.DeepEqual(fold.HolderOwn, own[fold.HolderID]) || !reflect.DeepEqual(fold.FoldedOwn, own[fold.FoldedID]) {
+					t.Fatalf("fold %+v: own sources not %v for holder and %v for folded", fold, own[fold.HolderID], own[fold.FoldedID])
+				}
+				if fold.FoldedID == tc.root {
+					t.Fatalf("fold %+v records the surviving row %s as folded", fold, tc.root)
+				}
+			}
+		})
+	}
+}
+
+// A cycle of links is recorded link by link, so a report-merge naming one
+// member's source cuts every link that member holds: the pair set the chain
+// pass records is what ReportedManualLinkFolds selects from, and the link that
+// closes the cycle is in it with its sides' own sources. A fold recorded for
+// only the links that folded rows in left the reported member joined through
+// the link that closed the cycle.
+func TestManualLinkChainCycleLinksAreAllCutByAReportedMember(t *testing.T) {
+	estate := newChainLinkEstate(t)
+	created := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	nasVM, storage, guest := estate.ids["nas-vm"], estate.ids["pve-storage"], estate.ids["vsphere-vm"]
+	links := []ResourceLink{
+		{ResourceA: nasVM, ResourceB: storage, PrimaryID: storage, CreatedAt: created.Add(time.Minute)},
+		{ResourceA: storage, ResourceB: guest, PrimaryID: guest, CreatedAt: created.Add(2 * time.Minute)},
+		{ResourceA: guest, ResourceB: nasVM, PrimaryID: nasVM, CreatedAt: created},
+	}
+	for _, order := range linkOrders(len(links)) {
+		store := NewMemoryStore()
+		for _, i := range order {
+			if err := store.AddLink(links[i]); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+		}
+		adapter := NewMonitorAdapter(NewRegistry(store))
+		adapter.PopulateSnapshotAndSupplemental(estate.snapshot, estate.records)
+		seeded := NewRegistry(store)
+		seeded.IngestResources(adapter.GetAll())
+		for name, rr := range map[string]*ResourceRegistry{"monitor": adapter.currentRegistry(), "resources API": seeded} {
+			folds := rr.ManualLinkFolds(nasVM)
+			cut := ReportedManualLinkFolds(nasVM, folds, func(sources ...DataSource) bool {
+				return slices.Contains(sources, SourceVMware)
+			})
+			pairs := make(map[string]bool, len(cut))
+			for _, fold := range cut {
+				pairs[exclusionKey(fold.HolderID, fold.FoldedID)] = true
+			}
+			for _, link := range links {
+				if link.ResourceA != guest && link.ResourceB != guest {
+					continue
+				}
+				if !pairs[exclusionKey(link.ResourceA, link.ResourceB)] {
+					t.Fatalf("order %v, %s: reporting vmware leaves the link %s - %s joined; cut %+v of %+v", order, name, link.ResourceA, link.ResourceB, cut, folds)
+				}
+			}
+			if len(cut) != 2 {
+				t.Fatalf("order %v, %s: reporting vmware cuts %d links, want the two the vSphere VM holds: %+v", order, name, len(cut), cut)
+			}
+		}
+	}
 }

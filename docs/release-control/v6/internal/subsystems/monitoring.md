@@ -1519,7 +1519,9 @@ merged from an already-linked agent. Known automatic associations may be
 re-evaluated and cleared; provenance-bearing host updates remove obsolete
 reverse links without clearing another agent's link. Unmarked legacy forward
 links are retained during report ingestion, and unmarked one-way reverse links
-must survive host updates because SMART fallback also consumes them. Legacy
+must survive host updates because SMART fallback also consumes them, except
+that a link the operator split in the resource store (unlink or report-merge
+in the resources API) is cleared on both sides whatever its provenance. Legacy
 provider reconciliation otherwise keeps its existing behaviour. This deliberately
 does not claim to repair every persisted v6.4.1 association or resolve #1930.
 
@@ -1741,9 +1743,11 @@ guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy
 guest-agent evidence may become `expected-unreachable`.
 Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
-the stale threshold is derived from the configured polling interval with a
-minimum floor, so API-facing resource status must not degrade merely because a
-healthy source is between normal poll cycles.
+the stale threshold is derived from the cadence the monitor actually polls at
+(the configured polling interval, or the adaptive scheduler's maximum interval
+when adaptive polling is enabled) with a minimum floor, so API-facing resource
+status must not degrade merely because a healthy source is between normal poll
+cycles.
 Each unified view carries the thresholds its listed registry generation was
 judged by, read with the listing from the same generation: the resource
 store's configured ones, or none (the defaults) for a view built from mock
@@ -2025,9 +2029,11 @@ VMID)`: it survives node migration, separates QEMU from LXC, and prevents
 duplicate configured cluster identities from sharing a concurrent baseline.
 Idle and partial samples still refresh tracker liveness.
 Proxmox row liveness uses the same cadence-derived threshold as source
-freshness (`max(2 * configured poll interval, 60s)`). Node offline grace and
-guest preservation must not expire between healthy 60- or 90-second polls, and
-must not use a separate fixed 60-second timer.
+freshness (`max(2 * poll cadence, 60s)`, the cadence being the configured poll
+interval or, under adaptive polling, the scheduler's maximum interval). Node
+offline grace and guest preservation must not expire between healthy 60- or
+90-second polls, or between adaptive polls, and must not use a separate fixed
+60-second timer.
 Tenant monitor enumeration is monitoring-owned runtime topology, not a
 reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not
@@ -2432,6 +2438,48 @@ merge, so on a mock estate every hot disk on an online node alerts.
 `internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
 the collected reading, agent ownership and exclusion.
 
+A disk the operator split from the agent's disk (report-merge on the merged
+disk) is not paired with the agent's row. `mergeHostAgentSMARTIntoDisks` asks
+the resource store, through `diskAgentSplitStore`
+(`unifiedresources.MonitorAdapter.ProxmoxDiskAgentSMARTSplit`), once per disk
+it matches a row to, on the full poll and on the skipped polls between, and a
+split disk takes nothing from the row: no attributes, I/O, health, identity,
+type or temperature, and no `AgentSMARTReported`. It takes no agent-supplied
+node-sensor temperature either: the node poll takes the node's SMART list from
+the linked agent when the agent's report carries a usable temperature
+(`mergeTemperatureData`; `hostSuppliesNodeSMARTTemperatures` mirrors that
+rule), and its legacy NVMe list is matched by order, so
+`dropNodeSensorTemperature` removes a reading `mergeNVMeTempsIntoDisks` took
+from either, leaving the PVE disk check no such reading to judge beside the
+agent's own alert, while a reading from the SSH collector's list stays (the
+rule needs the agent still reporting). The
+split disk is still evaluated by `checkPhysicalDiskAlerts` whenever its node
+is polled. It is marked
+`AgentSMARTSplit` (internal poll evidence, never serialized), so the poll's
+retention of unavailable evidence restores nothing into it. The decider is
+asked about the observation under its own ID, as the registry holds it. The
+Proxmox-query-failure fallback omits the rows the operator split from the disk
+in their slot, so while the query fails that disk's Proxmox record is not
+listed (a node every row of which is split keeps its last records, and is not
+evaluated by `checkPhysicalDiskAlerts`, as any unqueried node). A store that holds no
+decisions, or none for the pair, leaves the merge as it was. The decision
+comes from the registry generation the monitor last built, so a split applies
+from the first full disk poll that collects the node from Proxmox and matches
+the agent's row after the rebuild that loaded it; the skipped polls before then
+mark the record and drop its node-sensor temperature but leave what an earlier
+poll merged into it.
+`TestMergeHostAgentSMARTIntoDisksLeavesDisksTheOperatorSplitAlone`,
+`TestHostAgentSMARTFallbackSkipsRowsTheOperatorSplit`,
+`TestFailedDiskQueryListsOnlyTheRowsTheOperatorDidNotSplit`,
+`TestMergeHostAgentSMARTIntoDisksKeepsSSHNodeSensorReadingOfSplitDisk`,
+`TestDropNodeSensorTemperatureRemovesOnlyAgentSuppliedReadings`,
+`TestMergeNVMeTempsLabelsReadingsWithTheNodeSensorSources`,
+`TestHostSuppliesNodeSMARTTemperaturesFollowsUsableReadings` and
+`TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the merge, the
+fallback and the poller end to end, and `TestProxmoxDiskAlertsRunOnMergedDiskState`
+in `canonical_guardrails_test.go` pins the signature and call.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection
@@ -2762,14 +2810,40 @@ service-history reads plus denial/recovery without fabricated samples.
    overrides. Under fixed-cadence scheduling, `Monitor.resourceStaleThresholds`
    reads those overrides through the same clamped setting readers as the
    scheduler, so a saved interval moves the monitor's resource freshness and
-   polling together. An adaptive scheduler selects its own intervals and
-   ignores those overrides, so freshness there keeps deriving from the
-   configured per-platform intervals. A PVE interval save reloads every
-   monitor from saved config instead. `ResourceStaleThresholdsForConfig` stays
-   the config-only derivation for callers without a live monitor, such as
-   adapter construction. Regression coverage:
+   polling together. A PVE interval save reloads every monitor from saved
+   config instead. `ResourceStaleThresholdsForConfig` stays the config-only
+   derivation for callers without a live monitor, such as adapter
+   construction. Regression coverage:
    `TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides` in
    `internal/monitoring/canonical_guardrails_test.go`.
+   An adaptive scheduler (`ADAPTIVE_POLLING_ENABLED` or `system.json`; off by
+   default, no UI) selects its own intervals and never reads the per-platform
+   intervals or those overrides. A healthy instance's staleness score is near
+   zero after each success, so its cadence stretches toward the scheduler's
+   maximum interval (5 minutes by default; a healthy instance polls a few
+   minutes apart). Selected intervals never exceed it; a poll can still run
+   later than its slot while workers are busy; the factor of two gives
+   headroom for that. Under adaptive scheduling
+   `Monitor.resourcePollIntervals` therefore derives PVE, PBS and PMG
+   freshness from `AdaptiveScheduler.MaxInterval()`, and
+   `ResourceStaleThresholdsForConfig` derives it from the
+   `AdaptivePolling*Interval` bounds normalized by `normalizedSchedulerConfig`,
+   the normalization the scheduler itself applies. Deriving it from the
+   per-platform intervals (1 minute for PBS and PMG, 10 seconds for PVE) left
+   healthy rows stale for much of every cycle. The Proxmox threshold is also
+   the window the node grace helpers (`determineNodeIDAndStatus`,
+   `preserveOrExpireNodes`) hold a node online after it was last seen online,
+   and the node temperature carry window derives from the same cadence with
+   its five-minute floor. With the defaults that hold is 10 minutes, observed
+   at the next poll after it lapses: a longer detection delay than fixed
+   polling, which is the price of polling a healthy fleet every few minutes.
+   A valid `/cluster/status` membership report that a member is offline is
+   authoritative (`reconcilePVENodeInventory`) and still applies immediately.
+   Regression coverage:
+   `TestMonitorResourceFreshnessFollowsAdaptiveCadence`,
+   `TestResourceStaleThresholdsForConfigFollowAdaptiveBounds` and
+   `TestAdaptiveNodeOfflineGraceSpansTheAdaptiveCycle` in
+   `internal/monitoring/adaptive_resource_freshness_test.go`.
    Periodic out-of-scheduler platform pollers (TrueNAS, VMware) share their
    lifecycle and config-resolution scaffold through
    `internal/monitoring/platform_poller_shared.go`: `startPollerLoop` owns
@@ -3312,7 +3386,19 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
     `internal/unifiedresources/monitor_adapter_read_state_test.go` and
     `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
-    `internal/monitoring/issue1913_host_continuity_test.go`.
+    `internal/monitoring/issue1913_host_continuity_test.go`. The rebuild
+    holds the operator-link pass back until the snapshot and every record
+    source except availability are ingested, then folds each chain of links
+    once over the assembled estate and ingests availability after
+    (`deferManualLinks`, `applyDeferredManualLinks`; unified-resources
+    contract, "Links apply as chains"): a pass after each source folded
+    members as their sources arrived, and a later source's member could not
+    outrank one already folded, so the surviving identity depended on which
+    source reported it. The live supplemental refresh and the read-state
+    overlay still run a pass per call over the rows they find. Regression
+    coverage:
+    `TestMonitorRebuildJudgesLinkChainsOverTheAssembledEstate` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
@@ -3530,6 +3616,73 @@ and `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
 `TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph` in
 `internal/monitoring/canonical_guardrails_test.go` pins the call.
 
+### Mock-mode metrics-target lookups ride the fixture structure revision
+
+`Monitor.MetricsTargetForResource` is the lookup behind every windowed alert
+metric: an alert pass resolves a target once per resource and metric
+(`metricWindowPoints`). In mock mode it answers from the `metricsTargets` the
+cached mock view captured when it was built (`mockMetricsTarget` in
+`internal/monitoring/metrics_target_resolution.go`), and that view serves
+lookups for as long as `mock.FixtureStructureRevision` and the operator link
+list it was built with are unchanged. A metric tick advances
+`mock.FixtureDataVersion` but moves neither the revision nor any input of a
+target (`BuildMetricsTarget` reads a resource's type, its source mappings and
+the technology, Docker container ID and disk identity of its facets, with the
+resource's own `MetricsTarget` as fallback), so a warm cache no longer sends
+the next lookup off to build an estate. Mock mode being toggled, the estate
+being reconfigured or a link change rebuilds the view on the next lookup; as
+before, two lookups that miss together can each build one, and a cold or
+invalidated cache builds even for an ID the estate does not list. Once the
+view is current an unknown ID resolves to nothing and falls to the raw
+resource store. The view stays keyed on the data version for every other
+consumer (broadcast, `/api/state`, `GetUnifiedReadStateOrSnapshot`), which
+still rebuild it on a data-version miss.
+
+The revision is read before the data version when a view is cached, and the
+fixture advances its data version before its revision
+(`advanceFixtureStructure` in `internal/mock/integration.go`). A reader that
+sees a new revision therefore also sees the new data version and cannot cache
+the previous estate's memoized snapshot under it. The interleaving cannot be
+forced from outside, so `TestFixtureStructureRevisionOrderingContract` pins the
+order of the writes and of the reads in source.
+
+Keyed on the data version, a lookup after a tick built the view (about 0.5 s
+of CPU for the default 1,776-resource estate on an idle core), and a build
+slower than the 2-second tick published an already-stale view, so the next
+lookup built again. Startup runs the first alert pass before the listener
+opens, so on a starved host it never finished: on 2026-10-08 the startup
+watchdog's dump on pulse-dev parked the main goroutine in
+`evaluateMetricWindow` -> `MetricsTargetForResource` -> `currentUnifiedStateView`
+and `/api/health` timed out. The same binary pinned to one core behind four
+busy loops missed the view cache on 675 of 929 requests at a 16-second average
+build and had not served by 606 s; with this change it served at 148 s (13 s
+on the core alone). This was not a regression: builds from 1a094646d7 and
+d2ac0c5112 stall identically under equal contention and both start in 14 to
+16 seconds at normal load. The remaining time on a starved host is the other
+consumers of the shared view, which rebuild it whenever they find it stale (on
+the starved run, 42 view requests in a start of 194 s were all misses, from the
+Docker-alert prune, the connection snapshots and the host-agent evaluation),
+and the monitor's repeated full resource-store passes at startup. Loops that
+still reach the data-version view once per item are unchanged: the mock storage
+chart history (`resolveMockStorageTotal` per uncached pool), the demo patrol's
+finding adds (`patrolResourceOperatorStateProvider`) and, with
+`PULSE_MOCK_KEEP_REAL_POLLING`, the per-node polling lookups
+(`linkedHostForNode`, `getHostAgentTemperatureForNode`).
+
+`TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks` and
+`TestMockMetricsTargetForUnknownIDDoesNotRebuildTheViewAfterFixtureTicks` fail on
+the data-version key; `TestMockMetricsTargetFollowsAStructuralFixtureChange`,
+`TestMockMetricsTargetFollowsAnOperatorLink`,
+`TestMockMetricsTargetRebuildsWhenTheLinkListMoves` and
+`TestMockMetricsTargetMatchesTheRegistryResolution` pin that the reused view is
+replaced when the structure or the links change and answers as the registry
+does. All six are in `internal/monitoring/monitor_host_agents_test.go`, with
+their helpers in `internal/monitoring/metrics_target_resolution_test.go`.
+`TestMetricTicksNeverChangeTheFixtureStructure` in
+`internal/mock/platform_fixtures_test.go` pins the assumption itself: after each
+tick of two cohort rotations the revision, the resource set and every
+resolved target are unchanged.
+
 ### Saved quiet-hours policy before queue activation
 
 `Monitor.New` binds `alerts.Manager.QuietHoursNotificationPolicy` to the
@@ -3609,6 +3762,30 @@ preserve an already-queued pending slot instead of stamping it due-now, and
 tighten it only when a freshly shortened interval justifies an earlier run.
 Without this, a sixty-second availability target polls at the ten-second
 tick cadence whenever adaptive polling is off, which is the default.
+
+### Base poll cadence is read through the monitor, not its config copy
+
+`Monitor.BasePollInterval` (`internal/monitoring/monitor_runtime_settings.go`)
+is the exported reader for the clamped base cadence the monitor polls PVE,
+PBS and PMG at. For the built-in poll providers it returns the same values as
+the scheduler's `baseIntervalForInstanceType`, including PBS and PMG runtime
+polling overrides, but skips the poll-provider lookup, so it never takes
+`m.mu`. A replacement provider's own `BaseInterval`, a provider's fixed
+instance interval, and a task already queued at its previous interval can
+differ from it until the next planning pass. A monitor without config reports
+zero where the scheduler falls back to ten seconds.
+Non-default tenant monitors poll against a detached config copy (#1619), so a
+saved PBS or PMG interval reaches them only as one of those overrides, and
+`GetConfig` keeps the old value until that monitor is rebuilt (a restart, or a
+full reload such as a PVE interval save). Code outside the monitor that
+judges poll freshness, starting with the connections list, must read the cadence
+through `BasePollInterval`, not from the config. It reports the same base under
+adaptive scheduling, where it is only a floor: the adaptive scheduler plans
+each instance's interval independently of the per-platform intervals, and
+`PlannedPollInterval` reports that plan. The fixed-cadence branch of
+`Monitor.resourcePollIntervals` reads the same accessor. Regression coverage:
+`TestMonitorBasePollIntervalReportsSchedulerBaseCadence` in
+`internal/monitoring/canonical_guardrails_test.go`.
 
 ### Host report admission does not wedge on stale removal blocks
 
@@ -3697,6 +3874,18 @@ one request per caller. The `GetNodeName` tests in
 `pkg/pbs/client_http_test.go` are the focused authentication-boundary, retry,
 recovery, cache, and race proof; monitoring coverage also proves a token poll
 never requests `/nodes`.
+
+The captured name only helps connected-system grouping if it survives the trip
+back out of the unified read state: `PBSData.NodeName` holds it on the PBS
+resource, `PBSInstanceView.NodeName()` exposes it, and
+`pbsInstanceFromReadStateView` copies it onto the `models.PBSInstance` that
+`Monitor.PBSInstancesSnapshot()` returns and `/api/connections` reads. A
+conversion that drops it leaves the PBS connection without its reported alias
+and the host agent on that machine as a separate row, with no error anywhere.
+`TestMonitorPBSInstancesSnapshotCarriesReportedNodeName` pins the snapshot
+carrying the name, and
+`TestConnectionsLedger_GroupsHostAgentWithPBSByReportedNodeName` in
+`internal/api` pins it from the unified PBS resource to the grouped system.
 
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 
@@ -4979,7 +5168,8 @@ reading with that report time. Past the lease the lookup falls back to the
 cluster sensor cache, which keeps its own recency check. When every source
 returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
 a previous reading, with its original `LastUpdate`, only inside the carry window
-(twice the PVE polling interval, never under five minutes); an older reading is
+(twice the PVE polling cadence, which under adaptive polling is the
+scheduler's maximum interval, never under five minutes); an older reading is
 dropped rather than re-presented as current. A carried reading also keeps a
 lapsed host agent's lease. Agent readings are stamped with the agent's report
 time, so `carriedTemperatureOutlivesAgentLease` drops a carried reading stamped
@@ -6753,3 +6943,80 @@ generation younger than two seconds. The decision takes effect in the next
 loaded generation, not retroactively in the listing already served. The
 fixture seed keeps default thresholds while the configured live adapter
 retains its four-minute Proxmox threshold.
+
+### Incomplete guest filesystem responses do not establish recovery
+
+Filesystem record identity/filter fields (`name`, `type`, `mountpoint`, `disk`)
+use the same exact canonical key rule as byte counters. Case-variant keys must
+not exploit JSON's case-insensitive matching to overwrite a mount/device or
+make a real volume appear special and silently removed. They reject that row
+as incomplete regardless of field order or whether the canonical key is also
+present. Exact JSON-escaped canonical keys and unrelated additive fields remain
+compatible. `TestVMFilesystemMetadataRejectsNoncanonicalFields` and
+`TestVMFilesystemMetadataPreservesCanonicalCompatibility` pin that boundary;
+the connected completeness fixtures cover direct/cluster clients and both
+collectors through held/expired evidence and genuine ordinary recovery.
+
+`GetVMFSInfo` preserves valid peer rows from a malformed array but returns an
+error with them, through both single and cluster clients. The surviving rows
+cannot establish total guest capacity, usage, or removal of a rejected volume.
+A completed response with invalid counters is not a command-completion failure:
+serial admission, same-target lock checks and single-attempt guest requests
+remain unchanged, and there is no failover/replay or new cooldown. Alternate
+clients' contradictory or out-of-range counters enforce the same completeness
+boundary before publishing a current aggregate.
+
+Monitoring retains only the prior complete disk tuple, mount inventory and
+original observation time within the existing age bound; otherwise disk usage
+is unavailable. Partial responses do not create disk History, resolve genuine
+filesystem alerts, or remove unknown volumes. Independent current CPU/memory
+continues. A later complete ordinary inventory can still remove a volume and
+publish an explicitly measured zero, append History and recover alerts.
+
+`pkg/proxmox/guest_filesystem_completeness_test.go` and
+`internal/monitoring/guest_filesystem_completeness_test.go` cover valid peers plus
+malformed records, both client/collector paths, canonical and served state,
+original age/expiry, History, breach continuity and complete removal/recovery.
+These are synthetic source controls, not native thaw, the cause of #2619/#2439,
+or installed/released acceptance.
+
+### Node and agent links honour operator splits
+
+An operator's split of a Proxmox node and its pulse-agent (resources API
+unlink or report-merge) split the registry's rows but left the monitor's
+own link (`Node.LinkedAgentID`, `Host.LinkedNodeID`) standing. What reads
+that link kept treating the two machines as one: the physical disk poll
+took the agent's SMART inventory as the node's disk fallback and applied the
+agent's `--disk-exclude` patterns to the node's disks, `linkedHostForNode`
+fed the node's disk sources, guests inherited the agent for discovery and
+commands, deployment reported the node as already running an agent, service
+discovery routed through it, and alert correlation tied the node to it.
+`models.State` now holds such a link back on both sides through a
+`models.NodeAgentSplitDecider` that `Monitor.SetResourceStore` installs from
+the resource store's adapter. `resetStateLocked` installs it again when mock
+mode replaces the state. Every link write applies it: `UpdateNodesForInstance`
+before the merge key reads a node's link and again after the manual-intent
+reconcile, `UpsertHost`, `LinkNodeToHostAgent`, and report ingest before it
+applies the agent's LXC filesystems. A report that finds an agent's link
+split, or ends its split manual intent, clears that agent's cached container
+filesystem readings. A cached reading is also not shown for a node the
+operator split from the agent that cached it
+(`enrichContainerWithAgentLXCFilesystems`), whether or not a report cleared
+it. A report uses the link `UpsertHost` kept when a split lands between
+the report's own check and the state's store. The split's rules and its one record,
+the resource store, are in the unified-resources contract. A registry
+rebuild that cannot read the store's decisions carries the replaced
+generation's, so the decider keeps reporting a split through a store outage
+and the state does not link the pair again until the store has been read.
+`Monitor.LinkHostAgent` first removes an older split of that pair from the
+store, and records it again if the intent fails to persist, without replacing
+a decision the operator recorded in between. A split recorded
+after a manual link ends that manual intent on the agent's next report that
+finds the split confirmed in the store. The alert manager's node coverage
+for the agent changes on that agent's next checked report or offline
+transition. Mock mode's fixture graph keeps its own links. Polling cadence,
+link inference and the broadcast payload are unchanged. `TestOperatorSplitStopsMonitoringTreatingNodeAndAgentAsLinked`
+checks each of those readers after a report-merge, against a control
+exclusion that splits nothing, and `TestManualNodeLinkReplacesAnOperatorSplit`
+covers the agents API's link after a split, a split after it, and a
+resources API relink.

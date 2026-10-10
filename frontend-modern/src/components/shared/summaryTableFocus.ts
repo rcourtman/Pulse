@@ -7,11 +7,7 @@ import {
   type Accessor,
 } from 'solid-js';
 import { findInlineDetailElement, revealInlineDetailInViewport } from './contextualFocus';
-import {
-  resolveSummaryActiveSeriesId,
-  resolveSummaryGroupScope,
-  type SummarySeriesGroupScope,
-} from './summaryCardInteraction';
+import { resolveSummaryActiveSeriesId } from './summaryCardInteraction';
 
 const normalizeSeriesId = (value: string | null | undefined): string => value?.trim() || '';
 
@@ -36,42 +32,8 @@ const SUMMARY_CLEAR_IGNORE_SELECTOR = [
   '[data-inline-detail-for]',
 ].join(', ');
 
-const isElementVisibleWithinViewport = (element: HTMLElement): boolean => {
-  const rect = element.getBoundingClientRect();
-  if (rect.height <= 0 || rect.width <= 0) {
-    return false;
-  }
-  if (typeof window === 'undefined') {
-    return true;
-  }
-
-  if (rect.bottom <= 0 || rect.top >= window.innerHeight) {
-    return false;
-  }
-
-  let current: HTMLElement | null = element.parentElement;
-  while (current) {
-    const style = getComputedStyle(current);
-    const clipsVertically =
-      (style.overflowY === 'auto' ||
-        style.overflowY === 'scroll' ||
-        style.overflowY === 'hidden') &&
-      current.scrollHeight > current.clientHeight;
-    if (clipsVertically) {
-      const containerRect = current.getBoundingClientRect();
-      if (rect.bottom <= containerRect.top || rect.top >= containerRect.bottom) {
-        return false;
-      }
-    }
-    current = current.parentElement;
-  }
-
-  return true;
-};
-
 export interface UseSummaryTableFocusBridgeOptions {
   focusedSeriesId?: Accessor<string | null | undefined>;
-  focusedGroupId?: Accessor<string | null | undefined>;
   clearPinnedScope?: () => void;
   onEscapeClear?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
@@ -81,7 +43,6 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
   const [tableRoot, setTableRoot] = createSignal<HTMLElement | null>(null);
   const [clearSurfaceRoot, setClearSurfaceRoot] = createSignal<HTMLElement | null>(null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
-  const focusedGroupId = options.focusedGroupId ?? (() => null);
 
   const focusedRow = (): HTMLElement | null => {
     const root = tableRoot();
@@ -94,17 +55,6 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     );
   };
 
-  const focusedGroupRow = (): HTMLElement | null => {
-    const root = tableRoot();
-    const focusedId = normalizeSeriesId(focusedGroupId());
-    if (!root || !focusedId) {
-      return null;
-    }
-    return root.querySelector<HTMLElement>(
-      `[data-summary-group-id="${escapeAttributeSelectorValue(focusedId)}"]`,
-    );
-  };
-
   createEffect(() => {
     const root = clearSurfaceRoot() ?? tableRoot();
     const lookupRoot = tableRoot();
@@ -113,7 +63,7 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     }
 
     const handleRootClick = (event: MouseEvent) => {
-      if (!normalizeSeriesId(focusedSeriesId()) && !normalizeSeriesId(focusedGroupId())) {
+      if (!normalizeSeriesId(focusedSeriesId())) {
         return;
       }
       const target = event.target;
@@ -275,42 +225,6 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     untrack(() => revealFocusedSeries(root, focusedId));
   });
 
-  createEffect(() => {
-    const focusedId = normalizeSeriesId(focusedGroupId());
-    const root = tableRoot();
-    if (!focusedId || !root || typeof window === 'undefined') {
-      return;
-    }
-
-    let rafId: number | undefined;
-    let remainingFrames = 12;
-
-    const attemptReveal = () => {
-      const row = focusedGroupRow();
-      if (!row) {
-        if (remainingFrames <= 0) {
-          return;
-        }
-        remainingFrames -= 1;
-        rafId = window.requestAnimationFrame(attemptReveal);
-        return;
-      }
-      if (
-        !isElementVisibleWithinViewport(row) &&
-        typeof (row as HTMLElement).scrollIntoView === 'function'
-      ) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    };
-
-    rafId = window.requestAnimationFrame(attemptReveal);
-    onCleanup(() => {
-      if (rafId !== undefined) {
-        window.cancelAnimationFrame(rafId);
-      }
-    });
-  });
-
   return {
     setClearSurfaceRootRef: (element: HTMLElement | undefined) =>
       setClearSurfaceRoot(element ?? null),
@@ -321,9 +235,6 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
 export interface UseSummaryPageInteractionStateOptions {
   hoveredSeriesId?: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
-  focusedGroupId?: Accessor<string | null | undefined>;
-  hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
-  focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   clearPinnedScope?: () => void;
   onEscapeClear?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
@@ -332,35 +243,22 @@ export interface UseSummaryPageInteractionStateOptions {
 export function useSummaryPageInteractionState(options: UseSummaryPageInteractionStateOptions) {
   const hoveredSeriesId = options.hoveredSeriesId ?? (() => null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
-  const focusedGroupId = options.focusedGroupId ?? (() => null);
-  const hoveredGroupScope = options.hoveredGroupScope ?? (() => null);
-  const focusedGroupScope = options.focusedGroupScope ?? (() => null);
-
-  const activeGroupScope = createMemo<SummarySeriesGroupScope | null>(() =>
-    resolveSummaryGroupScope({
-      hoveredGroupScope: hoveredGroupScope(),
-      focusedGroupScope: focusedGroupScope(),
-    }),
-  );
 
   const activeSeriesId = createMemo<string | null>(() =>
     resolveSummaryActiveSeriesId({
       hoveredSeriesId: hoveredSeriesId(),
       focusedSeriesId: focusedSeriesId(),
-      groupScope: activeGroupScope(),
     }),
   );
 
   const tableFocus = useSummaryTableFocusBridge({
     clearPinnedScope: options.clearPinnedScope,
     focusedSeriesId,
-    focusedGroupId,
     onEscapeClear: options.onEscapeClear,
     revealActiveSeries: options.revealActiveSeries,
   });
 
   return {
-    activeGroupScope,
     activeSeriesId,
     setClearSurfaceRootRef: tableFocus.setClearSurfaceRootRef,
     setTableRootRef: tableFocus.setTableRootRef,

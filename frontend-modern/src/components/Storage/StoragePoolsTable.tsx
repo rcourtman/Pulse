@@ -31,9 +31,7 @@ import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
-import { buildStorageSummaryGroupScope } from './storageSummaryGroups';
+import { buildStorageSummaryGroupId } from './storageSummaryGroups';
 import { useStoragePoolsTableWindowing } from './useStoragePoolsTableWindowing';
 
 type StoragePoolsTableProps = {
@@ -51,12 +49,6 @@ type StoragePoolsTableProps = {
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
-  activeSummaryGroupScope?: SummarySeriesGroupScope | null;
-  hoveredSummaryGroupScope?: SummarySeriesGroupScope | null;
-  focusedSummaryGroupScope?: SummarySeriesGroupScope | null;
-  focusedSummaryGroupId?: string | null;
-  onGroupFocusChange?: (scope: SummarySeriesGroupScope | null) => void;
-  onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
   highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
 };
@@ -155,21 +147,12 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
               <For each={tableWindow.visibleItems()}>
                 {(item) => {
                   if (item.kind === 'group') {
-                    const groupSummaryScope = buildStorageSummaryGroupScope(
-                      item.group,
-                      props.groupBy,
-                    );
                     return (
                       <StorageGroupRow
                         group={item.group}
-                        groupBy={props.groupBy}
+                        summaryGroupId={buildStorageSummaryGroupId(props.groupBy, item.group.key)}
                         expanded={item.group.expanded}
                         onToggle={() => props.toggleGroup(item.group.key)}
-                        summaryGroupScope={groupSummaryScope}
-                        summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
-                        summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
-                        onFocusChange={props.onGroupFocusChange}
-                        onHoverChange={props.onGroupHoverChange}
                       />
                     );
                   }
@@ -185,11 +168,6 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                       summarySeriesId={metricResourceId}
                       expanded={rowModel().expanded}
                       summaryHighlighted={props.highlightedSummarySeriesId === metricResourceId}
-                      summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
-                        seriesId: metricResourceId,
-                        hoveredGroupScope: props.hoveredSummaryGroupScope,
-                        focusedGroupScope: props.focusedSummaryGroupScope,
-                      })}
                       onToggleExpand={() => model.togglePool(record.id)}
                       onHoverChange={props.onHoverChange}
                       rowClass={rowModel().rowClass}

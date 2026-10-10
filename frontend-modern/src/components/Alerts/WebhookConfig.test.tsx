@@ -110,8 +110,8 @@ describe('WebhookConfig', () => {
   let onTestMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 
   beforeEach(() => {
-    onAddMock = vi.fn();
-    onUpdateMock = vi.fn();
+    onAddMock = vi.fn().mockResolvedValue(true);
+    onUpdateMock = vi.fn().mockResolvedValue(true);
     onDeleteMock = vi.fn();
     onTestMock = vi.fn();
     getWebhookTemplatesMock.mockReset();
@@ -630,7 +630,7 @@ describe('WebhookConfig', () => {
     expect(onAddMock).not.toHaveBeenCalled();
   });
 
-  it('resets form and closes panel after adding a webhook', () => {
+  it('resets form and closes panel after adding a webhook', async () => {
     render(() => (
       <WebhookConfig
         webhooks={[]}
@@ -651,8 +651,8 @@ describe('WebhookConfig', () => {
 
     fireEvent.click(screen.getByText('Add Webhook'));
 
-    // Form should close, "+ Add Webhook" should reappear
-    expect(screen.getByText('+ Add Webhook')).toBeInTheDocument();
+    // Form closes only after the owner acknowledges the save.
+    await waitFor(() => expect(screen.getByText('+ Add Webhook')).toBeInTheDocument());
     expect(screen.queryByText('Service Type')).not.toBeInTheDocument();
   });
 

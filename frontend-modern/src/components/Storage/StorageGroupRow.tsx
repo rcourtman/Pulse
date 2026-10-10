@@ -1,8 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
-import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
+import type { StorageGroupedRecords } from './useStorageModel';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import {
   buildStorageGroupRowPresentation,
@@ -21,34 +19,22 @@ import {
 
 interface StorageGroupRowProps {
   group: StorageGroupedRecords;
-  groupBy: StorageGroupKey;
+  summaryGroupId: string | null;
   expanded: boolean;
   onToggle: () => void;
-  summaryGroupScope: SummarySeriesGroupScope | null;
-  summaryActive: boolean;
-  summaryFocused: boolean;
-  onFocusChange?: (scope: SummarySeriesGroupScope | null) => void;
-  onHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
 }
 
+// A group header is a disclosure row: clicking anywhere on it opens or closes
+// the group, exactly like its chevron. data-summary-group-id keeps that click
+// from clearing an open pool elsewhere in the table.
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   const row = () => buildStorageGroupRowPresentation(props.group);
-  const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
-    onPreview: () => props.onHoverChange?.(props.summaryGroupScope),
-    onPreviewClear: () => props.onHoverChange?.(null),
-  });
 
   return (
     <tr
       class={STORAGE_GROUP_ROW_CLASS}
-      data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
-      data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
-      data-summary-row-active={props.summaryActive ? 'true' : 'false'}
-      onClick={() => {
-        props.onToggle();
-        props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope);
-      }}
-      {...interactiveRowHandlers}
+      data-summary-group-id={props.summaryGroupId ?? undefined}
+      onClick={() => props.onToggle()}
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
         <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>
@@ -58,7 +44,6 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             expanded={props.expanded}
             hideWhenRowTappableOnMobile
             onAction={props.onToggle}
-            onPreviewClear={() => props.onHoverChange?.(null)}
             class="inline-flex items-center justify-center"
           />
 

@@ -390,7 +390,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
 					strings.EqualFold(candidate.WWN, updated[i].WWN)
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Str("wwn", updated[i].WWN).
@@ -405,7 +405,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				return diskinventory.IsUsableHardwareID(candidate.Serial) &&
 					strings.EqualFold(candidate.Serial, updated[i].Serial)
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Str("serial", updated[i].Serial).
@@ -421,7 +421,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				normalizedTempDev := normalizeSMARTDeviceIdentifier(candidate.Device)
 				return normalizedTempDev != "" && normalizedTempDev == normalizedDevPath
 			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
-				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, proxmoxNodeSMARTTemperatureSource)
 				log.Debug().
 					Str("disk", updated[i].DevPath).
 					Int("temp", temp.Temperature).
@@ -458,7 +458,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				continue
 			}
 
-			setPhysicalDiskTemperature(&updated[diskIdx], int(math.Round(tempVal)), "proxmox_node_nvme")
+			setPhysicalDiskTemperature(&updated[diskIdx], int(math.Round(tempVal)), proxmoxNodeNVMeTemperatureSource)
 			log.Debug().
 				Str("disk", updated[diskIdx].DevPath).
 				Int("temp", updated[diskIdx].Temperature).
@@ -486,6 +486,55 @@ func uniqueDiskTemperatureMatch(temperatures []models.DiskTemp, predicate func(m
 	return &temperatures[matchIndex]
 }
 
+// Collection sources of a disk temperature mergeNVMeTempsIntoDisks took from
+// the node's sensor lists.
+const (
+	proxmoxNodeSMARTTemperatureSource = "proxmox_node_smart"
+	proxmoxNodeNVMeTemperatureSource  = "proxmox_node_nvme"
+)
+
+// hostSuppliesNodeSMARTTemperatures reports whether the node's SMART sensor
+// list is this host's report: the node poll takes the linked agent's list when
+// it carries a usable temperature and the SSH collector's otherwise
+// (mergeTemperatureData in host_agent_temps.go). An agent whose lease lapsed
+// supplies nothing, so callers also require it to be reporting.
+func hostSuppliesNodeSMARTTemperatures(host models.Host) bool {
+	for _, row := range host.Sensors.SMART {
+		if row.Temperature > 0 && !row.Standby {
+			return true
+		}
+	}
+	return false
+}
+
+// dropNodeSensorTemperature removes a reading mergeNVMeTempsIntoDisks took
+// from the node's sensor lists, for a disk the operator split from the
+// linked agent's. The SMART list carries rows of the agent's disks when the
+// agent supplies it (smartFromAgent), so a reading from it is the agent's row
+// of the disk this one was split from; an SSH-supplied list is the node's own
+// and stays. The legacy NVMe list names no disk, only an order, so its guess
+// is dropped either way. A reading from another source, which Proxmox itself
+// never supplies, is not touched.
+func dropNodeSensorTemperature(disk *models.PhysicalDisk, smartFromAgent bool) {
+	if disk.Collection == nil {
+		return
+	}
+	switch disk.Collection.Temperature.Source {
+	case proxmoxNodeSMARTTemperatureSource:
+		if !smartFromAgent {
+			return
+		}
+	case proxmoxNodeNVMeTemperatureSource:
+	default:
+		return
+	}
+	disk.Temperature = 0
+	// The copy shares its collection with the caller's slice.
+	collection := diskinventory.CloneStatus(disk.Collection)
+	collection.Temperature = diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")
+	disk.Collection = collection
+}
+
 func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, source string) {
 	if disk == nil || temperature <= 0 {
 		return
@@ -497,10 +546,34 @@ func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, sour
 	disk.Collection.Temperature = diskinventory.Available(source)
 }
 
+// diskAgentSplitStore is implemented by resource stores that hold the
+// operator's merge exclusions (unifiedresources.MonitorAdapter). It reports
+// whether the operator split a Proxmox disk from the disk a linked host
+// agent reports in one SMART row.
+type diskAgentSplitStore interface {
+	ProxmoxDiskAgentSMARTSplit(disk models.PhysicalDisk, host models.Host, smart models.HostDiskSMART) bool
+}
+
+// proxmoxDiskAgentSplits returns the resource store's split decisions, or nil
+// when the store holds none.
+func (m *Monitor) proxmoxDiskAgentSplits() diskAgentSplitStore {
+	if m == nil {
+		return nil
+	}
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	splits, _ := store.(diskAgentSplitStore)
+	return splits
+}
+
 // mergeHostAgentSMARTIntoDisks merges SMART temperature data from linked host agents
 // into physical disks for Proxmox nodes. This allows disk temps collected by the
-// pulse-agent running on a PVE node to populate the Physical Disks view.
-func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {
+// pulse-agent running on a PVE node to populate the Physical Disks view. A disk
+// the operator split from the agent's disk its matching row describes (splits)
+// takes nothing from that row, nor the node-sensor reading that stands in for
+// it, and is marked AgentSMARTSplit instead.
+func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host, splits diskAgentSplitStore) []models.PhysicalDisk {
 	if len(disks) == 0 || len(nodes) == 0 || len(hosts) == 0 {
 		return disks
 	}
@@ -513,6 +586,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
+	hostByNodeName := make(map[string]*models.Host)
 	reportingNodeNames := make(map[string]bool)
 	for _, node := range nodes {
 		if node.LinkedAgentID == "" {
@@ -523,6 +597,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
+		hostByNodeName[node.Name] = host
 		// Only an agent still reporting owns its disks' temperature alerts;
 		// a silent one's retained rows still enrich the disk.
 		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
@@ -612,6 +687,16 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		}
 
 		if matched == nil {
+			continue
+		}
+		// The operator split this disk from the agent's (report-merge on the
+		// merged disk), so the row describes another disk: its readings,
+		// identity and temperature alert stay the agent's, and the PVE disk
+		// check judges what Proxmox reported. The refusal never pairs another
+		// row, as in the registry's linked disk join.
+		if host := hostByNodeName[updated[i].Node]; splits != nil && splits.ProxmoxDiskAgentSMARTSplit(updated[i], *host, *matched) {
+			updated[i].AgentSMARTSplit = true
+			dropNodeSensorTemperature(&updated[i], reportingNodeNames[updated[i].Node] && hostSuppliesNodeSMARTTemperatures(*host))
 			continue
 		}
 		// The linked agent reports this disk, so while it keeps reporting its
@@ -1216,6 +1301,7 @@ type Monitor struct {
 	mockUnifiedViewMu          sync.Mutex
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
+	mockUnifiedViewStructure   uint64 // fixture structure revision the published view was built at
 	mockUnifiedViewLinks       []unifiedresources.ResourceLink
 	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
@@ -3895,6 +3981,7 @@ func pbsInstanceFromReadStateView(view *unifiedresources.PBSInstanceView) models
 		ID:               firstNonEmptyString(view.InstanceID(), view.ID()),
 		Name:             view.Name(),
 		Host:             view.HostURL(),
+		NodeName:         view.NodeName(),
 		GuestURL:         view.GuestURL(),
 		Status:           string(view.Status()),
 		Version:          view.Version(),
@@ -4829,6 +4916,33 @@ func (m *Monitor) resetStateLocked() {
 		StartTime: m.startTime,
 		Version:   "2.0.0-go",
 	}
+	m.installNodeAgentSplitDeciderLocked()
+}
+
+// installNodeAgentSplitDeciderLocked makes the state hold back node<->agent
+// links the operator split in the resource store, so the monitor's own link
+// agrees with the registry's rows. Callers hold m.mu.
+func (m *Monitor) installNodeAgentSplitDeciderLocked() {
+	if m.state == nil {
+		return
+	}
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.state.SetNodeAgentSplitDecider(decider)
+}
+
+// nodeAgentSplitFilter reports, for a polled node, whether a read-state host
+// is an agent the operator split from it. Nil when no resource store holds
+// operator decisions.
+func (m *Monitor) nodeAgentSplitFilter(node models.Node) func(*unifiedresources.HostView) bool {
+	m.mu.RLock()
+	decider, _ := m.resourceStore.(models.NodeAgentSplitDecider)
+	m.mu.RUnlock()
+	if decider == nil {
+		return nil
+	}
+	return func(host *unifiedresources.HostView) bool {
+		return decider.ProxmoxNodeAgentSplit(node, hostFromReadStateView(host))
+	}
 }
 
 // GetStartTime returns the monitor start time
@@ -4905,6 +5019,7 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
 	m.resourceStore = store
 	incidentStore := m.incidentStore
+	m.installNodeAgentSplitDeciderLocked()
 	m.mu.Unlock()
 	m.installOperatorIntentResolver(store)
 	log.Info().Msg("resource store set for polling optimization")
@@ -5049,10 +5164,20 @@ func (m *Monitor) MetricsTargetForResource(resourceID string) *unifiedresources.
 		return nil
 	}
 
-	if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
-		if resolver, ok := view.(MetricsTargetResourceStore); ok {
-			if target := resolver.MetricsTargetForResource(resourceID); target != nil {
-				return target
+	// Mock mode resolves from the cached view's captured targets and never
+	// asks the view again: this runs once per resource and windowed metric in
+	// every alert pass, and the fixture's data version moves on every tick
+	// (see mockMetricsTarget).
+	target, fromMockView := m.mockMetricsTarget(resourceID)
+	if target != nil {
+		return target
+	}
+	if !fromMockView {
+		if view := m.GetUnifiedReadStateOrSnapshot(); view != nil {
+			if resolver, ok := view.(MetricsTargetResourceStore); ok {
+				if target := resolver.MetricsTargetForResource(resourceID); target != nil {
+					return target
+				}
 			}
 		}
 	}
@@ -5210,7 +5335,12 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 		// Read the version and links before the snapshot so a tick or
 		// rebuild landing in between caches newer data under an older
 		// token (harmless rebuild next call) rather than ever serving stale
-		// data under a newer one.
+		// data under a newer one. The structure revision goes first: the
+		// fixture advances its data version before its revision, so a
+		// reader that sees a new revision also reads the new version and
+		// never memoizes the previous estate under it
+		// (mock.FixtureStructureRevision).
+		structure := mock.FixtureStructureRevision()
 		version := mock.FixtureDataVersion()
 		links := m.resourceStoreManualLinks()
 		m.mockUnifiedViewMu.Lock()
@@ -5255,6 +5385,7 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 			m.mockUnifiedView = view
 			m.mockUnifiedViewFixtureAt = fixtureFreshness
 			m.mockUnifiedViewVersion = version
+			m.mockUnifiedViewStructure = structure
 			m.mockUnifiedViewLinks = links
 			m.mockUnifiedViewValid = true
 			m.mockUnifiedViewMu.Unlock()

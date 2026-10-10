@@ -2268,7 +2268,7 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor.go",
 			snippets: []string{
-				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {",
+				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host, splits diskAgentSplitStore) []models.PhysicalDisk {",
 				"deriveWearoutFromSMARTAttributes(matched.Attributes)",
 				"storagehealth.RemainingLifeFromPercentageUsed(*attrs.PercentageUsed)",
 				"shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health)",
@@ -2278,7 +2278,7 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 		{
 			file: "monitor_pve.go",
 			snippets: []string{
-				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)",
+				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts, splits)",
 				"m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])",
 				"m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
 				"func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {",
@@ -2888,6 +2888,83 @@ func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
 	}
 }
 
+// Consumers outside the monitor, such as the connections list, judge poll
+// freshness by Monitor.BasePollInterval. It must report the base cadence the
+// scheduler polls each platform at, including runtime polling overrides on a
+// detached tenant config copy (#1619), and must not take m.mu, which the
+// scheduler's poll-provider lookup takes.
+func TestMonitorBasePollIntervalReportsSchedulerBaseCadence(t *testing.T) {
+	newTenantMonitor := func(override time.Duration) *Monitor {
+		base := &config.Config{
+			PVEPollingInterval: 30 * time.Second,
+			PBSPollingInterval: time.Minute,
+			PMGPollingInterval: time.Minute,
+		}
+		monitor := &Monitor{config: base.DeepCopy()}
+		monitor.SetPBSPollingInterval(override)
+		monitor.SetPMGPollingInterval(override)
+		return monitor
+	}
+
+	t.Run("runtime overrides on a detached copy, clamped like the scheduler", func(t *testing.T) {
+		for override, want := range map[time.Duration]time.Duration{
+			5 * time.Second:  10 * time.Second,
+			90 * time.Second: 90 * time.Second,
+			5 * time.Minute:  5 * time.Minute,
+			2 * time.Hour:    time.Hour,
+		} {
+			monitor := newTenantMonitor(override)
+			for _, instanceType := range []InstanceType{InstanceTypePBS, InstanceTypePMG} {
+				if got := monitor.BasePollInterval(instanceType); got != want {
+					t.Errorf("%s base interval = %v for override %v, want %v", instanceType, got, override, want)
+				}
+			}
+			for _, instanceType := range []InstanceType{InstanceTypePVE, InstanceTypePBS, InstanceTypePMG} {
+				if got, scheduled := monitor.BasePollInterval(instanceType), monitor.baseIntervalForInstanceType(instanceType); got != scheduled {
+					t.Errorf("%s base interval = %v for override %v, want the scheduler's %v", instanceType, got, override, scheduled)
+				}
+			}
+		}
+	})
+
+	t.Run("adaptive scheduling keeps the same base", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.scheduler = NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil)
+		if got := monitor.BasePollInterval(InstanceTypePBS); got != 5*time.Minute {
+			t.Fatalf("PBS base interval = %v under adaptive scheduling, want the saved %v", got, 5*time.Minute)
+		}
+	})
+
+	t.Run("does not take the monitor lock", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.mu.Lock()
+		defer monitor.mu.Unlock()
+		done := make(chan time.Duration, 1)
+		go func() { done <- monitor.BasePollInterval(InstanceTypePBS) }()
+		select {
+		case got := <-done:
+			if got != 5*time.Minute {
+				t.Fatalf("PBS base interval = %v, want %v", got, 5*time.Minute)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("BasePollInterval blocked while m.mu was held")
+		}
+	})
+
+	t.Run("unknown cadence reads zero", func(t *testing.T) {
+		var nilMonitor *Monitor
+		for name, got := range map[string]time.Duration{
+			"nil monitor":       nilMonitor.BasePollInterval(InstanceTypePBS),
+			"monitor no config": (&Monitor{}).BasePollInterval(InstanceTypePVE),
+			"availability":      newTenantMonitor(time.Minute).BasePollInterval(InstanceTypeAvailability),
+		} {
+			if got != 0 {
+				t.Errorf("%s base interval = %v, want 0", name, got)
+			}
+		}
+	})
+}
+
 // Non-default tenant monitors poll against a detached config copy (#1619), so
 // a saved PBS or PMG interval reaches them only as a runtime override. The
 // freshness thresholds the monitor publishes must follow the cadence its
@@ -3001,22 +3078,26 @@ func TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides(t *testing.
 	})
 
 	// The adaptive scheduler picks intervals from its own bounds and never
-	// reads the per-platform overrides, so a save must not move freshness
-	// there; following adaptive cadence is a separate derivation.
+	// reads the per-platform intervals or overrides, so a save must not move
+	// freshness there: it follows the scheduler's maximum interval, which the
+	// 5-minute per-platform interval below would not give (10 minutes).
+	// TestMonitorResourceFreshnessFollowsAdaptiveCadence covers the cadence
+	// itself.
 	t.Run("adaptive scheduling ignores per-platform overrides", func(t *testing.T) {
 		base := &config.Config{PBSPollingInterval: 5 * time.Minute, PMGPollingInterval: 5 * time.Minute}
 		monitor := &Monitor{
 			config:    base.DeepCopy(),
-			scheduler: NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil),
+			scheduler: NewAdaptiveScheduler(SchedulerConfig{MaxInterval: 15 * time.Minute}, nil, nil, nil),
 		}
+		const want = 30 * time.Minute
 		before := monitor.resourceStaleThresholds()
 		monitor.SetPBSPollingInterval(time.Minute)
 		monitor.SetPMGPollingInterval(time.Minute)
 		after := monitor.resourceStaleThresholds()
-		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG} {
-			if before[source] != 10*time.Minute || after[source] != before[source] {
-				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v throughout",
-					source, before[source], after[source], 10*time.Minute)
+		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG, unifiedresources.SourceProxmox} {
+			if before[source] != want || after[source] != want {
+				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v from its 15m maximum throughout",
+					source, before[source], after[source], want)
 			}
 		}
 	})

@@ -1,5 +1,5 @@
 import { batch, createRoot, createSignal } from 'solid-js';
-import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
+import { createStore, reconcile, unwrap, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProxmoxPageModel } from '@/features/proxmox/proxmoxPageModel';
 import { getDockerContainerLifecycleDisabledReason } from '@/features/docker/dockerContainerLifecycleActions';
@@ -289,18 +289,18 @@ describe('useUnifiedResources', () => {
     );
 
     expect(
-      resolveIncrementalResourcePatchIndices(current, next, new Set(['resource-900']), false),
+      resolveIncrementalResourcePatchIndices(current, next, new Set(['resource-900'])),
     ).toEqual([900]);
 
-    const hostRefresh = resolveIncrementalResourcePatchIndices(
-      current,
-      next,
-      new Set(['resource-900']),
-      true,
-    );
-    expect(hostRefresh).toHaveLength(51);
-    expect(hostRefresh?.slice(0, 50)).toEqual(Array.from({ length: 50 }, (_, index) => index));
-    expect(hostRefresh?.at(-1)).toBe(900);
+    // Each server row is one display row, so a changed agent patches only
+    // itself rather than the whole agent subset.
+    expect(
+      resolveIncrementalResourcePatchIndices(
+        current,
+        next,
+        new Set(['resource-7', 'resource-900']),
+      ),
+    ).toEqual([7, 900]);
   });
 
   it('falls back to a full keyed reconcile when realtime membership or order changes', () => {
@@ -312,11 +312,10 @@ describe('useUnifiedResources', () => {
         [first, second],
         [second, first],
         new Set(['first', 'second']),
-        false,
       ),
     ).toBeNull();
     expect(
-      resolveIncrementalResourcePatchIndices([first], [first, second], new Set(['second']), false),
+      resolveIncrementalResourcePatchIndices([first], [first, second], new Set(['second'])),
     ).toBeNull();
   });
 
@@ -354,6 +353,216 @@ describe('useUnifiedResources', () => {
     await waitForValue(() => result!.resources()[0]?.cpu?.current, 88);
     expect(result!.resourceSnapshotChange().changedIds).toEqual(new Set(['vm-1']));
     expect(apiFetchMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('keeps an operator-split host pair as two rows and an unchanged agent peer by identity', async () => {
+    // Broadcast shape: a joined host's platformData is the flattened Proxmox
+    // facts; the split agent row arrives agent-only under the
+    // joined row's id and the node arrives as a new row.
+    const proxmoxFacet = { nodeName: 'pve1', instance: 'pve1', clusterName: 'homelab' };
+    const joined = createWsResource({
+      id: 'agent-machine-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      sources: ['agent', 'proxmox'],
+      clusterId: 'cluster:homelab',
+      cpu: { current: 15 },
+      proxmox: proxmoxFacet,
+      platformData: { instance: 'pve1', pveVersion: '9.1.9', clusterName: 'homelab' },
+    } as Partial<Resource>);
+    const peer = createWsResource({
+      id: 'agent-peer',
+      name: 'peer',
+      displayName: 'peer',
+      sources: ['agent'],
+      cpu: { current: 20 },
+    } as Partial<Resource>);
+    setWsState('resources', [joined, peer]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()).toHaveLength(2);
+    const peerBefore = result!.resources().find((resource) => resource.id === 'agent-peer');
+
+    const splitAgent = createWsResource({
+      id: 'agent-machine-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      sources: ['agent'],
+      cpu: { current: 15 },
+      platformData: { platform: 'linux', osName: 'Debian GNU/Linux' },
+    } as Partial<Resource>);
+    const splitNode = createWsResource({
+      id: 'agent-node-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+      clusterId: 'cluster:homelab',
+      proxmox: proxmoxFacet,
+      platformData: { instance: 'pve1', pveVersion: '9.1.9', clusterName: 'homelab' },
+    } as Partial<Resource>);
+    batch(() => {
+      setWsState('resources', [splitAgent, peer, splitNode]);
+      setWsResourceChange({
+        version: 2,
+        changedIds: new Set(['agent-machine-pve1', 'agent-node-pve1']),
+      });
+      setWsState('lastUpdate', 1738843202000);
+    });
+
+    await waitForResourceCount(() => result!.resources().length, 3);
+    const agentRow = result!.resources().find((resource) => resource.id === 'agent-machine-pve1');
+    const nodeRow = result!.resources().find((resource) => resource.id === 'agent-node-pve1');
+    expect(agentRow?.sources).toEqual(['agent']);
+    expect(agentRow?.proxmox).toBeUndefined();
+    expect(agentRow?.clusterId).toBeUndefined();
+    expect((agentRow?.platformData as Record<string, unknown>).pveVersion).toBeUndefined();
+    expect(nodeRow?.sources).toEqual(['proxmox']);
+    expect(nodeRow?.proxmox).toMatchObject({ nodeName: 'pve1' });
+    expect(result!.resources().find((resource) => resource.id === 'agent-peer')).toBe(peerBefore);
+
+    // A tick on the split agent alone patches that row; the node and the
+    // unchanged agent peer stay as they were.
+    batch(() => {
+      setWsState('resources', 0, 'cpu', 'current', 42);
+      setWsResourceChange({ version: 3, changedIds: new Set(['agent-machine-pve1']) });
+      setWsState('lastUpdate', 1738843203000);
+    });
+
+    await waitForValue(
+      () =>
+        result!.resources().find((resource) => resource.id === 'agent-machine-pve1')?.cpu?.current,
+      42,
+    );
+    expect(result!.resources()).toHaveLength(3);
+    expect(result!.resources().find((resource) => resource.id === 'agent-peer')).toBe(peerBefore);
+    expect(
+      result!.resources().find((resource) => resource.id === 'agent-node-pve1')?.sources,
+    ).toEqual(['proxmox']);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('drops REST enrichment of a departed source when the store reconciles a split in place', async () => {
+    // The websocket store reconciles a split into its own rows in place. Cache
+    // rows built by the hook's first full merge must not share nested arrays
+    // with those rows, or the in-place edit flips the cached row's sources
+    // while its REST-only enrichment (source status, platform scopes) stays,
+    // and no later merge sees a source leave.
+    const proxmoxFacet = { nodeName: 'pve1', instance: 'pve1', clusterName: 'homelab' };
+    const joined = createWsResource({
+      id: 'agent-machine-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      sources: ['agent', 'proxmox'],
+      proxmox: proxmoxFacet,
+    } as Partial<Resource>);
+    setWsState('resources', reconcile([joined], { key: 'id' }));
+    setWsResourceChange({ version: 1, changedIds: null });
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...v2Resource,
+          id: 'agent-machine-pve1',
+          name: 'pve1',
+          sources: ['agent', 'proxmox'],
+          platformScopes: ['agent', 'proxmox-pve'],
+          sourceStatus: {
+            agent: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+            proxmox: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' },
+          },
+          proxmox: proxmoxFacet,
+        },
+      ]),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent',
+        cacheKey: 'standalone-workspace',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    // Rows the hook's full merge built share no nested array with the store's
+    // rows, which the store reconciles in place.
+    const storeRow = (unwrap((wsStoreMock.state as TestWsState).resources) as Resource[]).find(
+      (resource) => resource.id === 'agent-machine-pve1',
+    );
+    const hookRow = unwrap(result!.resources()).find(
+      (resource) => resource.id === 'agent-machine-pve1',
+    );
+    expect(hookRow?.sources).toEqual(['agent', 'proxmox']);
+    expect(hookRow?.sources).not.toBe(storeRow?.sources);
+    expect(hookRow?.platformData).not.toBe(storeRow?.platformData);
+    await result!.refetch();
+    const enriched = result!.resources().find((resource) => resource.id === 'agent-machine-pve1');
+    expect(enriched?.sourceStatus).toHaveProperty('proxmox');
+    expect(enriched?.platformScopes).toContain('proxmox-pve');
+
+    // The server splits the pair: the agent keeps the id, the node is a new row.
+    const splitAgent = createWsResource({
+      id: 'agent-machine-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      sources: ['agent'],
+    } as Partial<Resource>);
+    const splitNode = createWsResource({
+      id: 'agent-node-pve1',
+      name: 'pve1',
+      displayName: 'pve1',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      sources: ['proxmox'],
+      proxmox: proxmoxFacet,
+    } as Partial<Resource>);
+    batch(() => {
+      setWsState('resources', reconcile([splitAgent, splitNode], { key: 'id' }));
+      setWsResourceChange({
+        version: 2,
+        changedIds: new Set(['agent-machine-pve1', 'agent-node-pve1']),
+      });
+      setWsState('lastUpdate', 1738843202000);
+    });
+
+    await waitForResourceCount(() => result!.resources().length, 2);
+    const agentRow = result!.resources().find((resource) => resource.id === 'agent-machine-pve1');
+    expect(agentRow?.sources).toEqual(['agent']);
+    expect(Object.keys(agentRow?.sourceStatus ?? {})).not.toContain('proxmox');
+    expect(
+      Object.keys(
+        ((agentRow?.platformData as Record<string, unknown> | undefined)?.sourceStatus ??
+          {}) as Record<string, unknown>,
+      ),
+    ).not.toContain('proxmox');
+    expect(agentRow?.platformData?.sources).toEqual(['agent']);
+    expect(agentRow?.platformScopes ?? []).not.toContain('proxmox-pve');
+    expect(
+      ((agentRow?.platformData as Record<string, unknown> | undefined)?.platformScopes ??
+        []) as string[],
+    ).not.toContain('proxmox-pve');
     dispose();
   });
 

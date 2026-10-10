@@ -331,7 +331,7 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
                 start = text.index("## Assistant Control Levels" if name == "AI_AUTONOMY.md" else "### Control Levels")
                 end = text.index("\n---", start)
                 section = " ".join(text[start:end].split())
-                for retained in ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Protected guests (legacy)", "does not exclude saved action plans"):
+                for retained in ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Never auto-remediate", "has been removed"):
                     self.assertIn(retained, section)
                 for retired in ("executes commands without prompting", "AI executes actions without prompting", "APPROVAL_REQUIRED", "Approve** to execute"):
                     self.assertNotIn(retired, section)

@@ -273,6 +273,39 @@ describe('AISettings model loading error states', () => {
     );
   });
 
+  it('points Assistant protection at the per-guest lock and never sends a protected guests list', async () => {
+    // An older backend may still echo the retired list; it must not surface or round-trip.
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      control_level: 'controlled',
+      protected_guests: ['101', 'prod-db'],
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      ...payload,
+    }));
+
+    renderComponent('assistant');
+
+    const hint = await screen.findByTestId('ai-never-auto-remediate-hint');
+    expect(hint).toHaveTextContent('Never auto-remediate');
+    expect(screen.queryByLabelText(/Protected guests/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('101, prod-db')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Chat action mode'), { target: { value: 'read_only' } });
+    expect(screen.queryByTestId('ai-never-auto-remediate-hint')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledTimes(1);
+    });
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+  });
+
   it('keeps Provider & Models focused on provider setup and runtime cost controls', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
@@ -920,7 +953,6 @@ describe('Assistant saved-control compatibility', () => {
       const saved = {
         ...baseSettings(),
         control_level: level,
-        protected_guests: ['vm-101'],
         patrol_autonomy_level: 'full',
       };
       getSettingsMock.mockResolvedValue(saved);
@@ -941,26 +973,8 @@ describe('Assistant saved-control compatibility', () => {
     },
   );
 
-  it('explains the legacy protected list does not exclude canonical action plans', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      control_level: 'autonomous',
-      protected_guests: ['101', 'prod-db'],
-    });
-    renderComponent('assistant');
-    const legacy = await screen.findByLabelText('Protected guests (legacy)');
-    await waitFor(() => expect(legacy).toHaveValue('101, prod-db'));
-    expect(legacy).toHaveAccessibleDescription(
-      'Retained legacy VMIDs or names. This list does not exclude saved action plans. Review each plan’s target and approval policy in Actions.',
-    );
-    expect(screen.queryByText(/excluded from Assistant action planning/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
-    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
-    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
-  });
-
   it('explicitly opts out of legacy action planning without changing Patrol', async () => {
-    const saved = { ...baseSettings(), control_level: 'autonomous', protected_guests: ['vm-101'] };
+    const saved = { ...baseSettings(), control_level: 'autonomous' };
     getSettingsMock.mockResolvedValue(saved);
     updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
       ...saved,

@@ -691,7 +691,10 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 	// 1. btrfs/zfs mount multiple subvolumes from a shared pool
 	// 2. Kubernetes bind-mounts volumes at both pod and plugin paths
 	// In both cases, only count the device's capacity once.
-	seenFilesystems := make(map[string]bool)
+	// Mounts are sampled separately, so aliases of one volume can disagree on
+	// usage. Count its capacity once and retain the highest observed usage;
+	// taking the first mount makes the aggregate depend on response order.
+	seenFilesystems := make(map[string]uint64)
 
 	// Log all filesystems received for debugging
 	log.Debug().
@@ -742,17 +745,18 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 			// In both cases, only count the device's capacity once.
 			fsTypeLower := strings.ToLower(fs.Type)
 			countThisFS := true
+			var dedupeKey string
 			if volumeKey := windowsVMFilesystemCapacityKey(fs); volumeKey != "" {
 				// QGA's disk.dev is the backing physical drive on Windows,
 				// not the volume. Equal-sized partitions must remain separate.
 				// A GUID can still identify one volume mounted at several paths.
-				dedupeKey := fmt.Sprintf("windows:%s:%d", volumeKey, fs.TotalBytes)
-				countThisFS = !seenFilesystems[dedupeKey]
-				seenFilesystems[dedupeKey] = true
+				dedupeKey = fmt.Sprintf("windows:%s:%d", volumeKey, fs.TotalBytes)
+				_, seen := seenFilesystems[dedupeKey]
+				countThisFS = !seen
 			} else if fs.Disk != "" {
 				// Same non-Windows device at multiple mount paths → count once
-				dedupeKey := fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
-				if seenFilesystems[dedupeKey] {
+				dedupeKey = fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
+				if _, seen := seenFilesystems[dedupeKey]; seen {
 					countThisFS = false
 					log.Debug().
 						Str("instance", instanceName).
@@ -764,14 +768,12 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 						Uint64("total", fs.TotalBytes).
 						Str("dedupe_key", dedupeKey).
 						Msg("Skipping duplicate device mount in total calculation")
-				} else {
-					seenFilesystems[dedupeKey] = true
 				}
 			} else if fsTypeLower == "btrfs" || fsTypeLower == "zfs" ||
 				strings.HasPrefix(fsTypeLower, "zfs") {
 				// No device info — fall back to type+size dedup for COW filesystems
-				dedupeKey := fmt.Sprintf("%s::%d", fsTypeLower, fs.TotalBytes)
-				if seenFilesystems[dedupeKey] {
+				dedupeKey = fmt.Sprintf("%s::%d", fsTypeLower, fs.TotalBytes)
+				if _, seen := seenFilesystems[dedupeKey]; seen {
 					countThisFS = false
 					log.Debug().
 						Str("instance", instanceName).
@@ -782,8 +784,18 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 						Uint64("total", fs.TotalBytes).
 						Str("dedupe_key", dedupeKey).
 						Msg("Skipping duplicate btrfs/zfs subvolume in total calculation")
-				} else {
-					seenFilesystems[dedupeKey] = true
+				}
+			}
+
+			if dedupeKey != "" {
+				previousUsed := seenFilesystems[dedupeKey]
+				if !countThisFS && fs.UsedBytes > previousUsed {
+					// Each used count is bounded by its already-counted total,
+					// so this delta cannot exceed the signed aggregate limit.
+					summary.usedBytes += fs.UsedBytes - previousUsed
+				}
+				if countThisFS || fs.UsedBytes > previousUsed {
+					seenFilesystems[dedupeKey] = fs.UsedBytes
 				}
 			}
 
@@ -890,8 +902,10 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 	summary := m.summarizeVMFSInfo(instanceName, res, fsInfo)
 
-	// If we got valid data from guest agent, use it
-	if summary.totalBytes > 0 {
+	// Valid peer rows are not complete guest usage if any reading was rejected.
+	// The wire client reports that distinction as an error; alternate clients
+	// can supply invalid counters directly, so enforce it at this boundary too.
+	if summary.totalBytes > 0 && !summary.invalidBytes {
 		// Sanity check: if the reported disk is way larger than allocated disk,
 		// we might be getting host disk info somehow
 		allocatedDiskGB := float64(res.MaxDisk) / 1073741824

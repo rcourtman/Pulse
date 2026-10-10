@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import {
   resolveSummaryActiveSeriesId,
-  resolveSummaryGroupMemberInteractionState,
   resolveSummaryScopeState,
-  type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 
 describe('summaryCardInteraction', () => {
@@ -38,38 +36,13 @@ describe('summaryCardInteraction', () => {
     ).toBe('alpha');
   });
 
-  it('keeps group scope separate from active entity focus', () => {
-    const groupScope: SummarySeriesGroupScope = {
-      id: 'cluster-a',
-      label: 'Cluster A (2 workloads)',
-      seriesIds: ['alpha', 'beta'],
-    };
-
-    expect(
-      resolveSummaryActiveSeriesId({
-        hoveredSeriesId: 'gamma',
-        focusedSeriesId: 'alpha',
-        groupScope,
-      }),
-    ).toBe('alpha');
-  });
-
-  it('resolves preview and pinned scope state through one shared precedence helper', () => {
-    const groupScope: SummarySeriesGroupScope = {
-      id: 'cluster-a',
-      label: 'Cluster A (2 workloads)',
-      seriesIds: ['alpha', 'beta'],
-    };
-
+  it('resolves preview, pinned and page scope state through one shared precedence helper', () => {
     expect(
       resolveSummaryScopeState({
         hoveredSeriesId: 'beta',
         focusedSeriesId: 'alpha',
-        hoveredGroupScope: groupScope,
-        focusedGroupScope: groupScope,
       }),
     ).toEqual({
-      groupScope,
       kind: 'entity',
       seriesId: 'beta',
       source: 'preview',
@@ -77,63 +50,20 @@ describe('summaryCardInteraction', () => {
 
     expect(
       resolveSummaryScopeState({
-        focusedGroupScope: groupScope,
+        hoveredSeriesId: '  ',
+        focusedSeriesId: ' alpha ',
       }),
     ).toEqual({
-      groupScope,
-      kind: 'group',
-      seriesId: null,
+      kind: 'entity',
+      seriesId: 'alpha',
       source: 'pinned',
     });
 
-    expect(
-      resolveSummaryScopeState({
-        hoveredSeriesId: 'gamma',
-        focusedGroupScope: groupScope,
-      }),
-    ).toEqual({
-      groupScope,
-      kind: 'group',
+    expect(resolveSummaryScopeState({})).toEqual({
+      kind: 'page',
       seriesId: null,
-      source: 'pinned',
+      source: 'page',
     });
-  });
-
-  it('resolves group-member emphasis from hovered and pinned group scope', () => {
-    const hoveredGroupScope: SummarySeriesGroupScope = {
-      id: 'cluster-a',
-      label: 'Cluster A (2 workloads)',
-      seriesIds: ['alpha', 'beta'],
-    };
-    const focusedGroupScope: SummarySeriesGroupScope = {
-      id: 'cluster-b',
-      label: 'Cluster B (2 workloads)',
-      seriesIds: ['gamma', 'delta'],
-    };
-
-    expect(
-      resolveSummaryGroupMemberInteractionState({
-        seriesId: 'alpha',
-        hoveredGroupScope,
-        focusedGroupScope,
-      }),
-    ).toBe('preview');
-
-    expect(
-      resolveSummaryGroupMemberInteractionState({
-        seriesId: 'gamma',
-        hoveredGroupScope,
-        focusedGroupScope,
-      }),
-    ).toBe('pinned');
-
-    expect(
-      resolveSummaryGroupMemberInteractionState({
-        seriesId: 'omega',
-        hoveredGroupScope,
-        focusedGroupScope,
-      }),
-    ).toBe('default');
   });
 
   it('preserves the nearest scrollable ancestor when contextual focus changes locally', () => {

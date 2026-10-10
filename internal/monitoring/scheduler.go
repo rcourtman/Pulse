@@ -110,8 +110,11 @@ type AdaptiveScheduler struct {
 	lastPlan map[string]ScheduledTask
 }
 
-// NewAdaptiveScheduler constructs a scheduler with safe defaults.
-func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interval IntervalSelector, enqueuer TaskEnqueuer) *AdaptiveScheduler {
+// normalizedSchedulerConfig fills unset or inconsistent bounds with the
+// defaults, as the scheduler does for the config it is given. Anything that
+// derives from the intervals a scheduler will select reads this, so it agrees
+// with the running scheduler on a partial or invalid configuration.
+func normalizedSchedulerConfig(cfg SchedulerConfig) SchedulerConfig {
 	if cfg.BaseInterval <= 0 {
 		cfg.BaseInterval = DefaultSchedulerConfig().BaseInterval
 	}
@@ -121,6 +124,12 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 	if cfg.MaxInterval <= 0 || cfg.MaxInterval < cfg.MinInterval {
 		cfg.MaxInterval = DefaultSchedulerConfig().MaxInterval
 	}
+	return cfg
+}
+
+// NewAdaptiveScheduler constructs a scheduler with safe defaults.
+func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interval IntervalSelector, enqueuer TaskEnqueuer) *AdaptiveScheduler {
+	cfg = normalizedSchedulerConfig(cfg)
 	if staleness == nil {
 		staleness = noopStalenessSource{}
 	}
@@ -286,6 +295,17 @@ func (s *AdaptiveScheduler) DispatchDue(ctx context.Context, now time.Time, task
 		}
 	}
 	return due
+}
+
+// MaxInterval is the longest interval the scheduler selects for an instance
+// without a fixed interval. A healthy instance's staleness score is near zero
+// right after each successful poll, so its cadence stretches toward this
+// bound; freshness judged by anything shorter flags healthy instances stale.
+func (s *AdaptiveScheduler) MaxInterval() time.Duration {
+	if s == nil {
+		return 0
+	}
+	return s.cfg.MaxInterval
 }
 
 // LastScheduled returns the last recorded task for the given instance, if any.

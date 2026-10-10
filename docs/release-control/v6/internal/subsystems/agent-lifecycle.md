@@ -25,9 +25,10 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 
 AI settings responses project legacy Assistant levels to planning for review;
 this grants no agent command, enrolment, identity or transport authority.
-The retained legacy Protected guests list does not exclude canonical saved
-plans. Authenticated execute authority and the action approval policy remain
-separate from that configuration list.
+There is no Protected guests list: the retired setting never excluded canonical
+saved plans. A resource's Never auto-remediate lock, authenticated execute
+authority and the action approval policy are separate authorities, and none of
+them is configured from the AI settings projection.
 Existing agent report/command and shared capability vocabularies remain
 unchanged, including their separate approval and entitlement enforcement.
 
@@ -400,6 +401,20 @@ wire contract and Agent authority are unchanged;
 `internal/monitoring/physical_disk_roundtrip_test.go` and
 `TestPhysicalDiskAgentSMARTReportedStaysInternal` in
 `internal/models/deepcopy_test.go` pin the marker.
+A PVE disk the operator split from the Agent's disk (report-merge on the merged
+disk) is paired with no SMART row of the linked Agent and, from the first full
+disk poll that matches the Agent's row, shows none of the Agent's temperature,
+including the node sensor reading the node poll took from that Agent's report
+while it is reporting, so the Agent's `CheckHost` owns the temperature alert of
+the Agent's own disk only and the PVE disk check has no Agent-supplied reading
+of the Proxmox disk to alert on beside it: the split disk is marked `AgentSMARTSplit` (internal poll
+evidence on `models.PhysicalDisk`, never serialized) instead of
+`AgentSMARTReported`. Report admission, the SMART wire contract and Agent
+authority are unchanged: the Agent still reports the row, and the split only
+decides whose disk it is on the server;
+`TestOperatorSplitKeepsAgentSMARTOffTheProxmoxDisk` in
+`internal/monitoring/physical_disk_roundtrip_test.go` and
+`TestPhysicalDiskAgentSMARTReportedStaysInternal` pin it.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
@@ -4278,7 +4293,11 @@ That host identity includes the hostname the PBS node reports about itself
 so an IP-or-alias-configured PBS connection still reconciles with the agent's
 reported hostname. The reported node name is identity evidence only: it never
 enrolls the machine, extends heartbeats, or substitutes for agent-source
-identity in lifecycle decisions.
+identity in lifecycle decisions. The agent only reconciles through that name if
+it survives to the ledger: `Monitor.PBSInstancesSnapshot()` carries
+`PBSInstance.NodeName` back out of the unified PBS view, and
+`TestMonitorPBSInstancesSnapshotCarriesReportedNodeName` in
+`internal/monitoring/monitor_host_agents_test.go` pins that.
 
 ### Docker and Podman report sizes share one exact-byte contract
 
@@ -8914,7 +8933,9 @@ reassociation even when a subsequent report matches. An explicit link can select
 a replacement ID.
 
 Only known automatic associations are re-evaluated destructively against provider
-names and network evidence. Obsolete reverse links are removed with host updates.
+names and network evidence, and an operator's split of the node and the agent in
+the resource store (resources API unlink or report-merge) clears the link in
+state whatever its provenance. Obsolete reverse links are removed with host updates.
 An unmarked persisted link is not assumed automatic: report ingestion retains it,
 so this is deliberately **not** a blanket repair of existing v6.4.1 associations.
 Legacy provider reconciliation otherwise retains its previous behaviour.
@@ -9237,6 +9258,15 @@ registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
 
+### Connection freshness cadence only
+
+`internal/api/connections_alerts.go` changed only so PVE, PBS and PMG
+connection rows scale their stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`, which honours runtime polling overrides) rather
+than by a non-default org's detached config copy. Agent connection rows keep
+their own heartbeat cutoff. Agent registration, enrolment, install, update,
+removal and report identity are unchanged.
+
 ### Host snapshots report a linked agent's own heartbeat
 
 `internal/monitoring/monitor.go` changed only so a host produced from the read
@@ -9346,9 +9376,19 @@ identity and continuity are unchanged.
 `internal/api/resourceapi/resources.go` changed only so report-merge on a
 resource an operator linked an agent into (a VM, a node or a Docker host)
 replaces that link, splitting the agent back out as unlink does. Agent
+registration, enrolment, install, update, removal and report identity are
+unchanged. An agent's own node link honours the split too, and a manual
+link's persisted intent can end with it ("Agent node links honour operator
+splits" below).
+
+A report-merge that names sources now picks links by the member that carries
+the source instead of by the sources a link's folded side took in with it
+(`internal/api/resourceapi/resources.go`, `ReportedManualLinkFolds`). An agent
+that holds a Docker host and sits in a VM leaves the VM only when the agent's
+own source is named, and a report naming only Docker leaves the agent in the
+VM. A report naming every source or none still splits every link. Agent
 registration, enrolment, install, update, removal, report identity and
-continuity are unchanged, and an agent's own declared node link still
-ignores exclusions.
+continuity are unchanged.
 
 ### Windows installer acceptance engine and absence (8 October 2026)
 
@@ -9385,3 +9425,41 @@ for report-merge. No synthetic telemetry, identity key, enrollment or service
 link is added. `TestOperatorSplitOverridesProxmoxNodeAgentLink` checks that
 the monitor and its re-ingested API seed retain the fold across all split
 shapes, then survive pin persistence and a repeated split.
+
+### Mock-mode metrics-target lookups ride the fixture structure revision
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+records the fixture structure revision it was built at and
+`MetricsTargetForResource` resolves mock-mode targets from that view while the
+revision and link list hold (monitoring contract, "Mock-mode metrics-target
+lookups ride the fixture structure revision"). Agent registration, enrolment,
+install, update, removal, report identity and continuity are unchanged, and
+real-mode resolution still goes through the live registry.
+
+### Agent node links honour operator splits
+
+Report ingest (`monitor_agents.go`) no longer links an agent to a node the
+operator split it from in the resource store (resources API unlink or
+report-merge). The agent's `LinkedNodeID` stays off that node (empty, or
+another node the report infers for it), so its LXC filesystems and node alert
+correlation stay off that node, and when the report finds the link split, or
+ends a split manual intent, the container filesystem readings the agent
+already cached for the node's containers are cleared. A cached reading is
+also not shown for a node the operator split from the agent that cached it,
+whether or not a report cleared it. A report uses the link the state stored, so a split the state
+sees between the report's own check and its store does not reach the
+node, the container readings, the agent's alert coverage or its persisted
+continuity. A split recorded
+after the agents API's manual link ends that manual intent: the agent's next
+report that finds the split confirmed in the resource store records its
+link source as automatic in host continuity, so the node is no longer
+reserved for the agent. Until then a report keeps the manual intent's node
+in host continuity. `Monitor.LinkHostAgent` (`/api/agents/agent/link`)
+removes from the resource store the exclusions that split the pair before it
+records manual intent, because the link is the operator's newer decision and
+both the registry and monitoring read the split from the store. If the
+intent fails to persist, the exclusions are recorded again, except for a
+pair the operator has decided about since. The agents API's unlink is
+unchanged. Registration, enrolment, install, update,
+removal, token binding and report identity are unchanged. The
+unified-resources contract records the split's rules.

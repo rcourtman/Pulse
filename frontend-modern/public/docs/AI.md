@@ -487,9 +487,11 @@ Older saved `autonomous` preferences display as **Ask first**, not as permission
 to execute without approval. The stored preference and its existing entitlement
 checks are preserved for older clients.
 
-**Protected guests (legacy)** retains older VMIDs or names. This list does not
-exclude saved action plans. Review each plan’s target and approval policy in
-**Actions** instead of treating this list as an execution safeguard.
+To keep Assistant away from a specific guest, lock it: open the guest, choose
+**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
+Pulse then refuses typed actions that target that resource, including
+approved ones. Older versions also showed a **Protected guests** list here. It
+never excluded a guest from action plans, so it has been removed.
 
 ### Reviewing an Assistant action plan
 

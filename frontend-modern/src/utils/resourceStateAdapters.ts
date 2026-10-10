@@ -75,12 +75,6 @@ const getCanonicalPlatformId = (resource: Resource): string | undefined => {
     : undefined;
 };
 
-const normalizeResourceIdentityToken = (value: string | undefined): string | undefined => {
-  if (!value) return undefined;
-  const normalized = value.trim().toLowerCase();
-  return normalized.length > 0 ? normalized : undefined;
-};
-
 export const resourcePlatformData = (resource: Resource): Record<string, unknown> | undefined =>
   asRecord(resource.platformData);
 
@@ -167,6 +161,21 @@ const mergeAgentFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | 
   return next;
 };
 
+// Source status is per-source evidence the realtime payload never carries, so
+// it survives merges as REST enrichment. Entries of sources the merged row no
+// longer lists are stale: they would keep a split-off provider claiming the row.
+const pruneSourceStatus = (
+  value: unknown,
+  sources: string[] | undefined,
+): JsonRecord | undefined => {
+  const status = asRecord(value);
+  if (!status || !sources || sources.length === 0) return status;
+  const entries = Object.entries(status);
+  const kept = entries.filter(([source]) => sourceListHas(sources, source));
+  if (kept.length === entries.length) return status;
+  return kept.length > 0 ? Object.fromEntries(kept) : undefined;
+};
+
 const mergePlatformData = (
   incomingValue: Resource['platformData'],
   existingValue: Resource['platformData'],
@@ -229,12 +238,14 @@ const mergePlatformData = (
     }
   }
 
-  const sourceStatus = mergeRecord(
-    asRecord(incoming.sourceStatus),
-    asRecord(existing.sourceStatus),
+  const sourceStatus = pruneSourceStatus(
+    mergeRecord(asRecord(incoming.sourceStatus), asRecord(existing.sourceStatus)),
+    sources,
   );
   if (sourceStatus) {
     merged.sourceStatus = sourceStatus;
+  } else {
+    delete merged.sourceStatus;
   }
 
   if (sources) {
@@ -568,261 +579,6 @@ const getCanonicalSourceList = (
     : deriveLegacySourceList(resource, platformData);
 };
 
-const sourceListContainsRuntimePlatform = (sources: string[] | undefined): boolean =>
-  sourceListHas(sources, 'proxmox-pve', 'docker', 'kubernetes', 'vmware-vsphere', 'truenas');
-
-const getRealtimeAgentFacet = (resource: Resource): JsonRecord | undefined =>
-  asRecord(resource.agent) ?? asRecord(asRecord(resource.platformData)?.agent);
-
-const getRealtimeProxmoxFacet = (resource: Resource): JsonRecord | undefined =>
-  asRecord(resource.proxmox) ?? asRecord(asRecord(resource.platformData)?.proxmox);
-
-const getRealtimeHostIdentity = (resource: Resource): JsonRecord | undefined =>
-  asRecord(resource.identity);
-
-const getRealtimeHostnameCandidates = (resource: Resource): Array<string | undefined> => {
-  const platform = asRecord(resource.platformData);
-  const identity = getRealtimeHostIdentity(resource);
-  const identityHostnames = readStringArray(identity?.hostnames) ?? [];
-  return [
-    resource.canonicalIdentity?.platformId,
-    resource.canonicalIdentity?.hostname,
-    resource.platformId,
-    ...identityHostnames,
-    asString(identity?.hostname),
-    asString(getRealtimeAgentFacet(resource)?.hostname),
-    asString(getRealtimeProxmoxFacet(resource)?.nodeName),
-    asString(asRecord(platform?.agent)?.hostname),
-    asString(asRecord(platform?.proxmox)?.nodeName),
-    getPreferredResourceHostname(resource),
-    getPreferredInfrastructureDisplayName(resource),
-    resource.displayName,
-    resource.name,
-  ];
-};
-
-const getHostResourceMergeKey = (resource: Resource): string | undefined => {
-  if (resource.type !== 'agent') return undefined;
-  const hostKey = getRealtimeHostnameCandidates(resource)
-    .map(normalizeResourceIdentityToken)
-    .find(Boolean);
-  return hostKey ? `agent:${hostKey}` : undefined;
-};
-
-const realtimeIdentityValuesEqual = (left: unknown, right: unknown): boolean => {
-  const leftValue = asString(left)?.toLowerCase();
-  const rightValue = asString(right)?.toLowerCase();
-  return Boolean(leftValue && rightValue && leftValue === rightValue);
-};
-
-const realtimeIdentityValuesConflict = (left: unknown, right: unknown): boolean => {
-  const leftValue = asString(left)?.toLowerCase();
-  const rightValue = asString(right)?.toLowerCase();
-  return Boolean(leftValue && rightValue && leftValue !== rightValue);
-};
-
-const extractRealtimeEndpointHostname = (value: unknown): string | undefined => {
-  const raw = asString(value);
-  if (!raw) return undefined;
-  try {
-    const parsed = asString(new URL(raw).hostname)?.toLowerCase();
-    if (parsed) return parsed;
-  } catch {
-    // Fall through to the host[:port][/path] compatibility form below.
-  }
-  return asString(raw.split('/', 1)[0]?.split(':', 1)[0])?.toLowerCase();
-};
-
-// Two hand-added standalone Proxmox sites can legitimately expose the same
-// native short node name. Instance, immutable node identity, and endpoint are
-// provider-scope evidence; the browser must preserve the server's split when
-// those scopes differ (#1753).
-const realtimeProxmoxNodeScopesDistinct = (
-  left: JsonRecord | undefined,
-  right: JsonRecord | undefined,
-): boolean => {
-  if (!left || !right || !asString(left.nodeName) || !asString(right.nodeName)) return false;
-  if (!realtimeIdentityValuesConflict(left.instance, right.instance)) return false;
-  if (realtimeIdentityValuesEqual(left.nodeIdentity, right.nodeIdentity)) return false;
-  if (
-    realtimeIdentityValuesEqual(
-      extractRealtimeEndpointHostname(left.host),
-      extractRealtimeEndpointHostname(right.host),
-    )
-  ) {
-    return false;
-  }
-  return true;
-};
-
-const getRealtimeMachineIds = (resource: Resource): string[] => {
-  const identity = getRealtimeHostIdentity(resource);
-  const agent = getRealtimeAgentFacet(resource);
-  return [asString(identity?.machineId), asString(agent?.machineId)].filter(
-    (value): value is string => Boolean(value),
-  );
-};
-
-const realtimeMachineIdsOverlap = (left: string[], right: string[]): boolean =>
-  left.some((leftId) => right.some((rightId) => leftId.toLowerCase() === rightId.toLowerCase()));
-
-const realtimeHostIdentitiesDistinct = (left: Resource, right: Resource): boolean => {
-  const leftMachineIds = getRealtimeMachineIds(left);
-  const rightMachineIds = getRealtimeMachineIds(right);
-  if (
-    leftMachineIds.length > 0 &&
-    rightMachineIds.length > 0 &&
-    !realtimeMachineIdsOverlap(leftMachineIds, rightMachineIds)
-  ) {
-    return true;
-  }
-
-  if (
-    realtimeIdentityValuesConflict(
-      getRealtimeHostIdentity(left)?.dmiUuid,
-      getRealtimeHostIdentity(right)?.dmiUuid,
-    )
-  ) {
-    return true;
-  }
-
-  const leftProxmox = getRealtimeProxmoxFacet(left);
-  const rightProxmox = getRealtimeProxmoxFacet(right);
-  if (realtimeIdentityValuesConflict(leftProxmox?.clusterName, rightProxmox?.clusterName)) {
-    return true;
-  }
-  return realtimeProxmoxNodeScopesDistinct(leftProxmox, rightProxmox);
-};
-
-const getAmbiguousRealtimeProxmoxHostKeys = (resources: Resource[]): Set<string> => {
-  const facetsByHostKey = new Map<string, JsonRecord[]>();
-  const ambiguous = new Set<string>();
-  for (const resource of resources) {
-    const facet = getRealtimeProxmoxFacet(resource);
-    const hostKey = getHostResourceMergeKey(resource);
-    if (!facet || !asString(facet.nodeName) || !hostKey || ambiguous.has(hostKey)) continue;
-    const existingFacets = facetsByHostKey.get(hostKey) ?? [];
-    if (existingFacets.some((existing) => realtimeProxmoxNodeScopesDistinct(existing, facet))) {
-      ambiguous.add(hostKey);
-    }
-    existingFacets.push(facet);
-    facetsByHostKey.set(hostKey, existingFacets);
-  }
-  return ambiguous;
-};
-
-const realtimeGuardedMergeAllowed = (left: Resource, right: Resource): boolean => {
-  const leftProxmox = getRealtimeProxmoxFacet(left);
-  const rightProxmox = getRealtimeProxmoxFacet(right);
-  const leftIsNode = Boolean(asString(leftProxmox?.nodeName));
-  const rightIsNode = Boolean(asString(rightProxmox?.nodeName));
-  if (leftIsNode === rightIsNode) return true;
-
-  const node = leftIsNode ? left : right;
-  const agent = leftIsNode ? right : left;
-  const nodeProxmox = getRealtimeProxmoxFacet(node);
-  const nodePlatform = asRecord(node.platformData);
-  const linkedAgentId =
-    asString(nodeProxmox?.linkedAgentId) ??
-    asString(nodePlatform?.linkedAgentId) ??
-    asString(getRealtimeAgentFacet(node)?.agentId);
-  return realtimeIdentityValuesEqual(linkedAgentId, getRealtimeAgentFacet(agent)?.agentId);
-};
-
-const shouldMergeRealtimeHostResources = (incoming: Resource, existing: Resource): boolean => {
-  if (incoming.type !== 'agent' || existing.type !== 'agent') return false;
-  const incomingSources = getCanonicalSourceList(incoming, incoming.platformData);
-  const existingSources = getCanonicalSourceList(existing, existing.platformData);
-  const unionSources = mergeStringArrays(incomingSources, existingSources);
-  return sourceListHas(unionSources, 'agent') && sourceListContainsRuntimePlatform(unionSources);
-};
-
-const preferHostResourcePrimary = (candidate: Resource, other: Resource): boolean => {
-  const candidateSources = getCanonicalSourceList(candidate, candidate.platformData);
-  const otherSources = getCanonicalSourceList(other, other.platformData);
-  if (sourceListHas(candidateSources, 'agent') && !sourceListHas(otherSources, 'agent')) {
-    return true;
-  }
-  if (!sourceListHas(candidateSources, 'agent') && sourceListHas(otherSources, 'agent')) {
-    return false;
-  }
-  return candidate.lastSeen >= other.lastSeen;
-};
-
-const withMergedSnapshotSources = (resource: Resource, sources: string[] | undefined): Resource => {
-  if (!sources || sources.length === 0) return resource;
-  const platform = asRecord(resource.platformData);
-  return canonicalizeRealtimeResource({
-    ...resource,
-    sources,
-    platformData: {
-      ...(platform ?? {}),
-      sources,
-    },
-  });
-};
-
-const mergeRealtimeHostResources = (incoming: Resource, existing: Resource): Resource => {
-  const unionSources = mergeStringArrays(
-    getCanonicalSourceList(incoming, incoming.platformData),
-    getCanonicalSourceList(existing, existing.platformData),
-  );
-  const primary = preferHostResourcePrimary(incoming, existing) ? incoming : existing;
-  const secondary = primary === incoming ? existing : incoming;
-  return canonicalizeRealtimeResource(
-    mergeCanonicalResource(
-      withMergedSnapshotSources(primary, unionSources),
-      withMergedSnapshotSources(secondary, unionSources),
-    ),
-  );
-};
-
-const coalesceCanonicalRealtimeResourceSnapshot = (resources: Resource[]): Resource[] => {
-  const coalesced: Resource[] = [];
-  const indexesByHostKey = new Map<string, number[]>();
-  const ambiguousProxmoxHostKeys = getAmbiguousRealtimeProxmoxHostKeys(resources);
-
-  for (const resource of resources) {
-    const hostKey = getHostResourceMergeKey(resource);
-    if (!hostKey) {
-      coalesced.push(resource);
-      continue;
-    }
-
-    let merged = false;
-    for (const existingIndex of indexesByHostKey.get(hostKey) ?? []) {
-      const existing = coalesced[existingIndex];
-      if (realtimeHostIdentitiesDistinct(resource, existing)) continue;
-      if (
-        ambiguousProxmoxHostKeys.has(hostKey) &&
-        !realtimeGuardedMergeAllowed(resource, existing)
-      ) {
-        continue;
-      }
-      if (!shouldMergeRealtimeHostResources(resource, existing)) continue;
-      coalesced[existingIndex] = mergeRealtimeHostResources(resource, existing);
-      merged = true;
-      break;
-    }
-
-    if (!merged) {
-      const indexes = indexesByHostKey.get(hostKey) ?? [];
-      indexes.push(coalesced.length);
-      indexesByHostKey.set(hostKey, indexes);
-      coalesced.push(resource);
-    }
-  }
-
-  return coalesced;
-};
-
-const coalesceRealtimeResourceSnapshot = (resources: Resource[]): Resource[] =>
-  coalesceCanonicalRealtimeResourceSnapshot(
-    resources.map((resource) =>
-      canonicalizeRealtimeResource(resource, { synthesizePlatformScopes: false }),
-    ),
-  );
-
 const hasAvailabilityFacet = (
   resource: Resource,
   platformData?: Resource['platformData'],
@@ -928,13 +684,160 @@ const hasWithdrawnProxmoxMemory = (incoming: Resource): boolean =>
   incoming.memory == null &&
   asBoolean(asRecord(asRecord(incoming.proxmox)?.memory)?.usageUnavailable) === true;
 
+// The source list a row carries itself: top-level on realtime rows, in
+// platformData on REST rows. Never one inferred from the facets present.
+const getOwnSourceList = (resource: Resource): string[] | undefined =>
+  getExplicitResourceSources(resource) ?? readStringArray(asRecord(resource.platformData)?.sources);
+
+// Every source a display row claims through a list it carries itself: the
+// top-level `sources` of a realtime row and the `platformData.sources` of a REST
+// row. A row whose two lists disagree (an enrichment from another generation
+// landed on it, or a shared array changed under it) claims both compositions.
+const getClaimedSources = (resource: Resource): string[] | undefined =>
+  mergeStringArrays(
+    getExplicitResourceSources(resource),
+    readStringArray(asRecord(resource.platformData)?.sources),
+  );
+
+// Sources the previous display row of an id listed that the incoming realtime
+// row no longer does: a split took a provider away, or a module or check
+// stopped reporting. Only the realtime row's own top-level list is evidence;
+// one inferred from the facets a thin row happens to carry is not.
+const getDepartedSources = (incoming: Resource, existing: Resource): string[] => {
+  const incomingSources = getExplicitResourceSources(incoming);
+  const existingSources = getClaimedSources(existing);
+  if (!incomingSources || !existingSources) return [];
+  return existingSources.filter((source) => !sourceListHas(incomingSources, source));
+};
+
+// Facets a platform scope can rest on besides a source of that name; the
+// server derives scopes from sources, from facets, and from a Docker host
+// running inside a Proxmox container (platform_scopes.go).
+const SCOPE_FACET_KEYS: Record<string, string> = {
+  'proxmox-pve': 'proxmox',
+  'proxmox-pbs': 'pbs',
+  'proxmox-pmg': 'pmg',
+  docker: 'docker',
+  kubernetes: 'kubernetes',
+  'vmware-vsphere': 'vmware',
+  truenas: 'truenas',
+  agent: 'agent',
+};
+
+const PROXMOX_LXC_DOCKER_HOST_PREFIX = 'proxmox-lxc-docker:';
+
+// Whether the incoming row still holds evidence for a platform scope that a
+// departed source also names: a surviving source of that platform, a Docker
+// host running in a Proxmox container (the server places it on the Proxmox
+// scope by its host ID whatever sources the row lists, platform_scopes.go), or,
+// on a row that is not a host, a facet of that platform (an agent-reported disk
+// under a Proxmox node carries a Proxmox ownership facet and lists only the
+// agent). A host row's facets are no evidence: canonicalization synthesizes
+// them from flattened platform data (a node's kernel version reads as an agent
+// facet), and the snapshot wrappers canonicalize before this runs.
+const scopeStillSupported = (scope: string, incoming: Resource): boolean => {
+  if (sourceListHas(getExplicitResourceSources(incoming), scope)) return true;
+  const record = getResourceRecord(incoming);
+  const platform = normalizeSourceToken(scope);
+  const hostSourceId = asString(asRecord(record.docker)?.hostSourceId);
+  if (platform === 'proxmox-pve' && hostSourceId?.startsWith(PROXMOX_LXC_DOCKER_HOST_PREFIX)) {
+    return true;
+  }
+  const facetKey = SCOPE_FACET_KEYS[platform];
+  return incoming.type !== 'agent' && Boolean(facetKey && asRecord(record[facetKey]));
+};
+
+// Discovery readiness names the discovery target it was read for: `targetId`
+// is the target's reporter (`agentId`) and `resourceId` its resource. It stays
+// with the row unless the rebuilt row has a target and a coordinate the
+// readiness names differs from the same coordinate of that target. A rebuilt
+// row without a target (realtime carries one only for agent and Docker host
+// rows; the rest is REST enrichment) cannot be judged, so the readiness stays
+// unless the agent left.
+const keepDiscoveryReadiness = (
+  readiness: Resource['discoveryReadiness'],
+  replacement: Resource,
+  agentLeft: boolean,
+): Resource['discoveryReadiness'] => {
+  if (!readiness) return undefined;
+  const target = replacement.discoveryTarget;
+  if (!target) return agentLeft ? undefined : readiness;
+  if (readiness.targetId && readiness.targetId !== target.agentId) return undefined;
+  if (readiness.resourceId && readiness.resourceId !== target.resourceId) return undefined;
+  return readiness;
+};
+
+// A row whose sources shrank describes a different composition, and the
+// per-id merge would keep what the previous row carried for the departed
+// source wherever the incoming row omits it: flattened provider facts in
+// platformData (from which the provider facet is rebuilt), cluster, identity
+// fields, canonical aliases, metrics. The row is rebuilt from the incoming one.
+// The REST-only enrichments the realtime payload never carries are kept where
+// the departed sources did not own them: platform scopes, minus the departed
+// sources' own that no surviving source, Docker LXC host or non-host facet supports, source status
+// of the sources that remain, discovery readiness unless its target coordinates now differ
+// from the row's, and action readiness unless the agent left. Everything else
+// REST adds returns with the next REST refresh.
+const replaceRecomposedResource = (
+  incoming: Resource,
+  existingCanonical: Resource,
+  departedSources: string[],
+): Resource => {
+  const replacement = canonicalizeRealtimeResource(incoming);
+  const keptScopes =
+    readExplicitPlatformScopes(incoming) === undefined
+      ? existingCanonical.platformScopes?.filter(
+          (scope) => !sourceListHas(departedSources, scope) || scopeStillSupported(scope, incoming),
+        )
+      : undefined;
+  const survivingSources = getOwnSourceList(replacement);
+  const keepStatus = (own: unknown, previous: unknown): JsonRecord | undefined =>
+    pruneSourceStatus(mergeRecord(asRecord(own), asRecord(previous)), survivingSources);
+  const sourceStatus = keepStatus(
+    (replacement as unknown as JsonRecord).sourceStatus,
+    existingCanonical.sourceStatus,
+  );
+  const platformData = asRecord(replacement.platformData);
+  const platformStatus = keepStatus(
+    platformData?.sourceStatus,
+    asRecord(existingCanonical.platformData)?.sourceStatus,
+  );
+  const agentLeft = sourceListHas(departedSources, 'agent');
+  const rebuilt: Resource = {
+    ...replacement,
+    platformScopes:
+      keptScopes && keptScopes.length > 0
+        ? normalizeSourcePlatformScopes(keptScopes, replacement.platformType)
+        : replacement.platformScopes,
+    discoveryReadiness:
+      replacement.discoveryReadiness ??
+      keepDiscoveryReadiness(existingCanonical.discoveryReadiness, replacement, agentLeft),
+    actionReadiness:
+      replacement.actionReadiness ?? (agentLeft ? undefined : existingCanonical.actionReadiness),
+  };
+  if (sourceStatus) {
+    rebuilt.sourceStatus = sourceStatus as Resource['sourceStatus'];
+  } else {
+    delete rebuilt.sourceStatus;
+  }
+  if (platformData) {
+    const { sourceStatus: _inherited, ...rest } = platformData;
+    rebuilt.platformData = platformStatus ? { ...rest, sourceStatus: platformStatus } : rest;
+  }
+  return rebuilt;
+};
+
 export const mergeCanonicalResource = (incoming: Resource, existing?: Resource): Resource => {
   if (!existing) {
     return canonicalizeRealtimeResource(incoming);
   }
   const existingCanonical = canonicalizeRealtimeResource(existing);
+  const departedSources = getDepartedSources(incoming, existing);
+  if (departedSources.length > 0) {
+    return replaceRecomposedResource(incoming, existingCanonical, departedSources);
+  }
   const incomingSources = getCanonicalSourceList(incoming, incoming.platformData);
-  return {
+  const merged: Resource = {
     ...existingCanonical,
     ...incoming,
     ...(hasWithdrawnProxmoxMemory(incoming) ? { memory: undefined } : {}),
@@ -1031,8 +934,27 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
         ? incoming.labels
         : existingCanonical.labels,
   };
+  // Only a list a row carries itself prunes: one inferred from the facets a
+  // thin row happens to carry is no evidence that a source left.
+  const status = pruneSourceStatus(
+    merged.sourceStatus,
+    getOwnSourceList(incoming) ?? getOwnSourceList(existingCanonical),
+  );
+  if (status) {
+    merged.sourceStatus = status as Resource['sourceStatus'];
+  } else if (merged.sourceStatus !== undefined) {
+    delete merged.sourceStatus;
+  }
+  return merged;
 };
 
+// Every realtime snapshot (the websocket payload, its deltas, and the
+// `/api/state` recovery) carries the server's presentation rows: the server
+// already coalesced host views, honouring operator splits and provider scope
+// the browser cannot see. Each incoming row is therefore one display row; the
+// browser only canonicalizes it and merges it with the previous row of its id.
+// Re-joining same-hostname host rows here undid server splits (#1753, and a
+// node and agent the operator split apart).
 export const mergeCanonicalResourceSnapshot = (
   incoming: Resource[],
   existing: Resource[],
@@ -1040,10 +962,12 @@ export const mergeCanonicalResourceSnapshot = (
   if (incoming.length === 0) {
     return [];
   }
-  const coalescedIncoming = coalesceRealtimeResourceSnapshot(incoming);
   const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
-  return coalescedIncoming.map((resource) =>
-    mergeCanonicalResource(resource, existingById.get(resource.id)),
+  return incoming.map((resource) =>
+    mergeCanonicalResource(
+      canonicalizeRealtimeResource(resource, { synthesizePlatformScopes: false }),
+      existingById.get(resource.id),
+    ),
   );
 };
 
@@ -1108,8 +1032,9 @@ export const getFastResourceMergePatchKeys = (
   existing: Resource | undefined,
 ): readonly string[] | null => {
   if (!changedKeys || !existing) return null;
-  // Agent rows can join host-coalescing groups; their merged output is not a
-  // per-row function of the patch.
+  // Agent rows keep the full merge. The exclusion dates from browser host
+  // coalescing, which made an agent's output depend on its group; equivalence
+  // with the full path has not been proven for agent rows since.
   if (existing.type === 'agent') return null;
   const keys = changedKeys.get(id);
   if (!keys || keys.length === 0) return null;
@@ -1253,13 +1178,14 @@ export const buildFastResourceStorePatchOps = (
 };
 
 // Incremental counterpart to mergeCanonicalResourceSnapshot. Server delta
-// application preserves the raw object identity of untouched resources, so
-// only changed rows and the small host-coalescing set need to be cloned and
-// canonicalized. Non-host resources outside the delta retain their exact display
-// objects, preventing an estate-wide reactive invalidation on every metrics
-// tick while keeping the full-snapshot compatibility semantics intact. Rows
-// whose per-key change shape passes getFastResourceMergePatchKeys skip the
-// clone+canonicalize+merge entirely and patch the previous display row.
+// application preserves the raw object identity of untouched resources, and
+// each server row is one display row (the server coalesces host views), so
+// only changed and newly added rows need to be cloned and canonicalized.
+// Resources outside the delta retain their exact display objects, preventing
+// an estate-wide reactive invalidation on every metrics tick while producing
+// the same rows as the full-snapshot path. Rows whose per-key change shape
+// passes getFastResourceMergePatchKeys skip the clone+canonicalize+merge
+// entirely and patch the previous display row.
 export const mergeCanonicalResourceDeltaSnapshot = (
   incoming: Resource[],
   existing: Resource[],
@@ -1271,76 +1197,28 @@ export const mergeCanonicalResourceDeltaSnapshot = (
   }
 
   const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
-
-  // Host coalescing only ever folds agent-type resources together, so an
-  // agent's merged output can change only when a member of its host-merge
-  // group is in the delta. Groups without a flagged member reuse the cached
-  // output instead of re-cloning and re-merging every agent on every tick.
-  // A changed id that is absent from `incoming` is either a true removal or a
-  // partner id that a previous coalesce folded away; both can dissolve or
-  // alter a group without flagging its surviving member, so such ticks
-  // conservatively refresh every agent group (the pre-optimization behavior).
-  const hostKeys = incoming.map((resource) => getHostResourceMergeKey(resource));
-  const incomingIds = new Set(incoming.map((resource) => resource.id));
-  let refreshAllHostGroups = false;
-  changedIds.forEach((id) => {
-    if (!incomingIds.has(id)) refreshAllHostGroups = true;
-  });
-  const dirtyHostKeys = new Set<string>();
-  const cachedHostKeys = new Set<string>();
-  incoming.forEach((resource, index) => {
-    const hostKey = hostKeys[index];
-    if (!hostKey) return;
-    if (refreshAllHostGroups || changedIds.has(resource.id)) dirtyHostKeys.add(hostKey);
-    if (existingById.has(resource.id)) cachedHostKeys.add(hostKey);
-  });
-
-  const SKIP = Symbol('skip');
-  // Fast-path outputs are already fully merged display rows; they must bypass
-  // the final mergeCanonicalResource pass.
-  const fastMergedRows = new Set<Resource>();
-  const prepared = incoming
-    .map((resource, index) => {
-      const hostKey = hostKeys[index];
-      const existingResource = existingById.get(resource.id);
-      if (hostKey) {
-        if (!dirtyHostKeys.has(hostKey) && cachedHostKeys.has(hostKey)) {
-          // Clean group: cached outputs pass through untouched. Members whose
-          // ids were coalesced away are already represented by that output.
-          return existingResource ?? SKIP;
-        }
-        return canonicalizeRealtimeResource(structuredClone(resource), {
-          synthesizePlatformScopes: false,
-        });
-      }
-      const mustRefresh = changedIds.has(resource.id) || existingResource === undefined;
-      if (!mustRefresh) {
-        return existingResource;
-      }
-      if (existingResource !== undefined) {
-        const fastKeys = getFastResourceMergePatchKeys(changedKeys, resource.id, existingResource);
-        if (fastKeys) {
-          const fastRow = applyFastResourceMergePatch(resource, existingResource, fastKeys);
-          fastMergedRows.add(fastRow);
-          return fastRow;
-        }
-      }
-      return canonicalizeRealtimeResource(structuredClone(resource), {
-        synthesizePlatformScopes: false,
-      });
-    })
-    .filter((resource): resource is Resource => resource !== SKIP);
-
-  const coalesced = coalesceCanonicalRealtimeResourceSnapshot(prepared);
-  return coalesced.map((resource) => {
+  return incoming.map((resource) => {
     const existingResource = existingById.get(resource.id);
-    if (resource === existingResource) {
+    if (existingResource === undefined) {
+      return mergeCanonicalResource(
+        canonicalizeRealtimeResource(structuredClone(resource), {
+          synthesizePlatformScopes: false,
+        }),
+      );
+    }
+    if (!changedIds.has(resource.id)) {
       return existingResource;
     }
-    if (fastMergedRows.has(resource)) {
-      return resource;
+    const fastKeys = getFastResourceMergePatchKeys(changedKeys, resource.id, existingResource);
+    if (fastKeys) {
+      return applyFastResourceMergePatch(resource, existingResource, fastKeys);
     }
-    return mergeCanonicalResource(resource, existingResource);
+    return mergeCanonicalResource(
+      canonicalizeRealtimeResource(structuredClone(resource), {
+        synthesizePlatformScopes: false,
+      }),
+      existingResource,
+    );
   });
 };
 

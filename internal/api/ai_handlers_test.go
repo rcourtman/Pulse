@@ -511,21 +511,20 @@ func TestAISettingsHandler_UpdateSettingsRefreshesAssistantToolVisibilityForCont
 	require.Equal(t, http.StatusOK, controlRec.Code, controlRec.Body.String())
 	require.Equal(t, 1, controlRefreshes, "control level changes must refresh Assistant tool visibility")
 
-	protectedBody, err := json.Marshal(AISettingsUpdateRequest{
-		ProtectedGuests: []string{"vm-101"},
-	})
-	require.NoError(t, err)
-	protectedReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(protectedBody))
-	protectedRec := httptest.NewRecorder()
-	handler.HandleUpdateAISettings(protectedRec, protectedReq)
+	// The retired Protected guests field is tolerated from older clients and
+	// scripts, but it is not a setting any more: it changes nothing and does not
+	// refresh Assistant tool visibility.
+	staleReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{"protected_guests":["vm-101"]}`))
+	staleRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(staleRec, staleReq)
 
-	require.Equal(t, http.StatusOK, protectedRec.Code, protectedRec.Body.String())
-	require.Equal(t, 2, controlRefreshes, "protected guest changes must refresh Assistant tool visibility")
+	require.Equal(t, http.StatusOK, staleRec.Code, staleRec.Body.String())
+	require.Equal(t, 1, controlRefreshes, "the retired protected_guests field must not refresh Assistant tool visibility")
+	require.NotContains(t, staleRec.Body.String(), "protected_guests")
 
 	persisted, err := persistence.LoadAIConfig()
 	require.NoError(t, err)
 	require.Equal(t, config.ControlLevelControlled, persisted.GetControlLevel())
-	require.Equal(t, []string{"vm-101"}, persisted.GetProtectedGuests())
 }
 
 func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
@@ -758,8 +757,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[]`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[]`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -804,8 +802,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -835,8 +832,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
-			!strings.Contains(responseBody, `"configured_providers":[`) ||
-			!strings.Contains(responseBody, `"protected_guests":[]`) {
+			!strings.Contains(responseBody, `"configured_providers":[`) {
 			t.Fatalf("expected AI settings response collections in JSON body, got %s", responseBody)
 		}
 	}
@@ -1116,8 +1112,8 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 	if !strings.Contains(string(payload), `"configured_providers":[]`) {
 		t.Fatalf("expected empty AI settings response to retain configured_providers, got %s", payload)
 	}
-	if !strings.Contains(string(payload), `"protected_guests":[]`) {
-		t.Fatalf("expected empty AI settings response to retain protected_guests, got %s", payload)
+	if strings.Contains(string(payload), "protected_guests") {
+		t.Fatalf("AI settings response must not carry the retired protected_guests field, got %s", payload)
 	}
 }
 
@@ -3831,7 +3827,6 @@ func TestAssistantSettingsProjectionAndUnrelatedSave(t *testing.T) {
 				persistence := config.NewConfigPersistence(tmp)
 				cfg := config.NewDefaultAIConfig()
 				cfg.ControlLevel = level
-				cfg.ProtectedGuests = []string{"vm-101"}
 				cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
 				cfg.PatrolActionEmergencyStop = true
 				cfg.PatrolAutoFix = true
@@ -3862,7 +3857,6 @@ func TestAssistantSettingsProjectionAndUnrelatedSave(t *testing.T) {
 						wantStored = config.ControlLevelControlled
 					}
 					require.Equal(t, wantStored, persisted.ControlLevel, "unrelated save must preserve preference")
-					require.Equal(t, []string{"vm-101"}, persisted.ProtectedGuests)
 					require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
 					require.True(t, persisted.PatrolActionEmergencyStop)
 					require.True(t, persisted.PatrolAutoFix)
@@ -3880,7 +3874,6 @@ func TestAssistantLegacyClientUpdateKeepsEntitlementAndPreference(t *testing.T) 
 			persistence := config.NewConfigPersistence(tmp)
 			cfg := config.NewDefaultAIConfig()
 			cfg.ControlLevel = config.ControlLevelReadOnly
-			cfg.ProtectedGuests = []string{"vm-101"}
 			cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
 			require.NoError(t, persistence.SaveAIConfig(*cfg))
 			handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
@@ -3902,7 +3895,6 @@ func TestAssistantLegacyClientUpdateKeepsEntitlementAndPreference(t *testing.T) 
 				want = config.ControlLevelAutonomous
 			}
 			require.Equal(t, want, persisted.ControlLevel)
-			require.Equal(t, []string{"vm-101"}, persisted.ProtectedGuests)
 			require.Equal(t, config.PatrolAutonomyMonitor, persisted.PatrolAutonomyLevel)
 		})
 	}
@@ -3915,7 +3907,6 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 			persistence := config.NewConfigPersistence(tmp)
 			cfg := config.NewDefaultAIConfig()
 			cfg.ControlLevel = config.ControlLevelAutonomous
-			cfg.ProtectedGuests = []string{"vm-101"}
 			cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
 			cfg.PatrolActionEmergencyStop = true
 			require.NoError(t, persistence.SaveAIConfig(*cfg))
@@ -3937,7 +3928,6 @@ func TestAssistantProjectedModeEchoPreservesLegacyPolicy(t *testing.T) {
 			require.Equal(t, config.ControlLevelAutonomous, persisted.ControlLevel, "a mode echo must not change legacy command admission")
 			require.Equal(t, licensed, handler.defaultAIService.IsAutonomous(), "legacy entitlement/approval selection is unchanged")
 			require.Equal(t, 120, persisted.RequestTimeoutSeconds)
-			require.Equal(t, []string{"vm-101"}, persisted.ProtectedGuests)
 			require.Equal(t, config.PatrolAutonomyFull, persisted.PatrolAutonomyLevel)
 			require.True(t, persisted.PatrolActionEmergencyStop)
 			// Explicit opt-out and a later opt-in remain real mode changes.

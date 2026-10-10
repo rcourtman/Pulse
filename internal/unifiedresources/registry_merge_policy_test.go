@@ -1958,9 +1958,17 @@ func TestManualLinkFoldsNameEachLinkPairAlongAChain(t *testing.T) {
 
 	// The agent linked from its own side still folds into the guest it runs
 	// in, and the fold names the link's pair either way.
+	// Each side also records what it is on its own: the agent's fold into the VM
+	// lists the Docker host's source too, but the agent is only the agent.
 	want := []ManualLinkFold{
-		{HolderID: agentID, FoldedID: dockerID, Sources: []DataSource{SourceDocker}},
-		{HolderID: vmID, FoldedID: agentID, Sources: []DataSource{SourceAgent, SourceDocker}},
+		{
+			HolderID: agentID, FoldedID: dockerID, Sources: []DataSource{SourceDocker},
+			HolderOwn: []DataSource{SourceAgent}, FoldedOwn: []DataSource{SourceDocker},
+		},
+		{
+			HolderID: vmID, FoldedID: agentID, Sources: []DataSource{SourceAgent, SourceDocker},
+			HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceAgent},
+		},
 	}
 	if got := adapter.currentRegistry().ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
 		t.Fatalf("monitor folds = %+v, want %+v", got, want)
@@ -2023,7 +2031,10 @@ func TestManualLinkFoldsRecordEachPairOnceAcrossRecordIngests(t *testing.T) {
 	if listed := rr.List(); len(listed) != 1 {
 		t.Fatalf("link did not fold the TrueNAS system into the VM: %+v", listed)
 	}
-	want := []ManualLinkFold{{HolderID: vmID, FoldedID: systemID, Sources: []DataSource{SourceTrueNAS}}}
+	want := []ManualLinkFold{{
+		HolderID: vmID, FoldedID: systemID, Sources: []DataSource{SourceTrueNAS},
+		HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceTrueNAS},
+	}}
 	if got := rr.ManualLinkFolds(vmID); !reflect.DeepEqual(got, want) {
 		t.Fatalf("folds after repeated record ingests = %+v, want %+v", got, want)
 	}
@@ -2037,9 +2048,181 @@ func TestManualLinkFoldRepeatedPairKeepsEarlierSources(t *testing.T) {
 	holder := &Resource{ID: "vm-1"}
 	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker}}, "agent-1")
 	recordManualLinkFold(holder, "vm-1", &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent}}, "agent-1")
-	want := []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker}}}
+	want := []ManualLinkFold{{
+		HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent, SourceDocker},
+		FoldedOwn: []DataSource{SourceAgent, SourceDocker},
+	}}
 	if !reflect.DeepEqual(holder.linkFolds, want) {
 		t.Fatalf("folds = %+v, want %+v", holder.linkFolds, want)
+	}
+}
+
+// A holder that already took a member in lists that member's sources too, so
+// its own sources come from the record the first fold made, not from its row.
+func TestManualLinkFoldOwnSourcesComeFromTheFirstRecord(t *testing.T) {
+	holder := &Resource{ID: "vm-1", Sources: []DataSource{SourceProxmox}}
+	first := &Resource{ID: "agent-1", Sources: []DataSource{SourceAgent}}
+	recordManualLinkFold(holder, "vm-1", first, "agent-1")
+	holder.Sources = addSources(holder.Sources, first.Sources)
+	second := &Resource{ID: "docker-1", Sources: []DataSource{SourceDocker}}
+	recordManualLinkFold(holder, "vm-1", second, "docker-1")
+
+	if got := holder.linkFolds[1].HolderOwn; !reflect.DeepEqual(got, []DataSource{SourceProxmox}) {
+		t.Fatalf("second fold lists the holder's own sources as %v, want only %v", got, SourceProxmox)
+	}
+
+	// The VM then folds into another resource: the member it was keeps its own
+	// sources, not the ones it took in.
+	root := &Resource{ID: "node-1", Sources: []DataSource{SourceTrueNAS}}
+	recordManualLinkFold(root, "node-1", holder, "vm-1")
+	last := root.linkFolds[len(root.linkFolds)-1]
+	if last.FoldedID != "vm-1" || !reflect.DeepEqual(last.FoldedOwn, []DataSource{SourceProxmox}) {
+		t.Fatalf("fold of the holder lists its own sources as %v, want only %v", last.FoldedOwn, SourceProxmox)
+	}
+	if !reflect.DeepEqual(last.HolderOwn, []DataSource{SourceTrueNAS}) {
+		t.Fatalf("fold into the root lists its own sources as %v, want only %v", last.HolderOwn, SourceTrueNAS)
+	}
+}
+
+// ReportedManualLinkFolds picks the links a source-filtered report undoes by
+// member. The members here are the estate that exposed the fold subtree
+// rule: a TrueNAS VM V takes in a Proxmox storage S and a vSphere VM W, and
+// the operator also linked S into W, so recording every link of the chain
+// leaves three pairs with W reachable through two of them.
+func TestReportedManualLinkFoldsDetachMembersCarryingTheSource(t *testing.T) {
+	pair := func(holder, folded string, sources, holderOwn, foldedOwn []DataSource) ManualLinkFold {
+		return ManualLinkFold{HolderID: holder, FoldedID: folded, Sources: sources, HolderOwn: holderOwn, FoldedOwn: foldedOwn}
+	}
+	named := func(names ...DataSource) func(...DataSource) bool {
+		return func(sources ...DataSource) bool {
+			if len(names) == 0 {
+				return true
+			}
+			for _, source := range sources {
+				if slices.Contains(names, source) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	pairs := func(folds []ManualLinkFold) []string {
+		out := make([]string, 0, len(folds))
+		for _, fold := range folds {
+			out = append(out, fold.HolderID+">"+fold.FoldedID)
+		}
+		slices.Sort(out)
+		return out
+	}
+	truenas, proxmox, vmware := []DataSource{SourceTrueNAS}, []DataSource{SourceProxmox}, []DataSource{SourceVMware}
+	cycle := []ManualLinkFold{
+		pair("V", "S", proxmox, truenas, proxmox),
+		pair("V", "W", vmware, truenas, vmware),
+		pair("W", "S", proxmox, vmware, proxmox),
+	}
+	// A leaf below a holder below the root: V takes in A (agent), which took
+	// in D (docker), so A's fold lists both sources.
+	agent, docker := []DataSource{SourceAgent}, []DataSource{SourceDocker}
+	tree := []ManualLinkFold{
+		pair("A", "D", docker, agent, docker),
+		pair("V", "A", []DataSource{SourceAgent, SourceDocker}, proxmox, agent),
+	}
+
+	for _, tc := range []struct {
+		name  string
+		root  string
+		folds []ManualLinkFold
+		named []DataSource
+		want  []string
+	}{
+		{"cycle: member reachable two ways is cut from both", "V", cycle, []DataSource{SourceVMware}, []string{"V>W", "W>S"}},
+		{"cycle: the storage leaves, the VM keeps the other link", "V", cycle, []DataSource{SourceProxmox}, []string{"V>S", "W>S"}},
+		{"cycle: both reported members leave", "V", cycle, []DataSource{SourceVMware, SourceProxmox}, []string{"V>S", "V>W", "W>S"}},
+		{"cycle: the root's own source selects nothing", "V", cycle, []DataSource{SourceTrueNAS}, nil},
+		{"cycle: no filter undoes every link", "V", cycle, nil, []string{"V>S", "V>W", "W>S"}},
+		{"tree: a leaf's source leaves its holder's link alone", "V", tree, []DataSource{SourceDocker}, []string{"A>D"}},
+		{"tree: a holder leaves and keeps what it took in", "V", tree, []DataSource{SourceAgent}, []string{"V>A"}},
+		{"tree: both reported, both leave", "V", tree, []DataSource{SourceAgent, SourceDocker}, []string{"A>D", "V>A"}},
+		{"tree: the root's own source selects nothing", "V", tree, []DataSource{SourceProxmox}, nil},
+		{"tree: no filter undoes every link", "V", tree, nil, []string{"A>D", "V>A"}},
+		// A refold of the agent unions a source into the VM's fold of it only,
+		// so the agent's two records disagree; the member is the union.
+		{"tree: a member whose refold gained the source is reported by it", "V", []ManualLinkFold{
+			pair("A", "D", docker, agent, docker),
+			pair("V", "A", []DataSource{SourceAgent, SourceDocker}, proxmox, []DataSource{SourceAgent, SourceDocker}),
+		}, []DataSource{SourceDocker}, []string{"A>D", "V>A"}},
+		{"root re-keyed after the links folded", "V-renamed", tree, []DataSource{SourceDocker}, []string{"A>D"}},
+		{"ambiguous root falls back to the folded subtree", "elsewhere", []ManualLinkFold{
+			pair("X", "Y", docker, nil, nil), pair("P", "Q", agent, nil, nil),
+		}, []DataSource{SourceDocker}, []string{"X>Y"}},
+		{"folds recorded without own sources use the folded subtree", "V", []ManualLinkFold{
+			{HolderID: "V", FoldedID: "A", Sources: []DataSource{SourceAgent, SourceDocker}},
+			{HolderID: "A", FoldedID: "D", Sources: docker},
+		}, []DataSource{SourceDocker}, []string{"A>D", "V>A"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pairs(ReportedManualLinkFolds(tc.root, tc.folds, named(tc.named...)))
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("report of %v selected %v, want %v", tc.named, got, tc.want)
+			}
+		})
+	}
+}
+
+// Whatever links a report undoes, no member carrying a reported source may
+// stay joined to the root through the links left. The rule the registry
+// replaced selected folds whose subtree sources named the report, and left W
+// joined through S in the cycle: its control here fails the same check.
+func TestReportedManualLinkFoldsLeaveNoReportedMemberJoined(t *testing.T) {
+	truenas, proxmox, vmware := []DataSource{SourceTrueNAS}, []DataSource{SourceProxmox}, []DataSource{SourceVMware}
+	cycle := []ManualLinkFold{
+		{HolderID: "V", FoldedID: "S", Sources: proxmox, HolderOwn: truenas, FoldedOwn: proxmox},
+		{HolderID: "V", FoldedID: "W", Sources: vmware, HolderOwn: truenas, FoldedOwn: vmware},
+		{HolderID: "W", FoldedID: "S", Sources: proxmox, HolderOwn: vmware, FoldedOwn: proxmox},
+	}
+	joinedToRoot := func(folds []ManualLinkFold, left map[string]bool, member string) bool {
+		reached := map[string]bool{"V": true}
+		for changed := true; changed; {
+			changed = false
+			for _, fold := range folds {
+				if left[exclusionKey(fold.HolderID, fold.FoldedID)] {
+					continue
+				}
+				if reached[fold.HolderID] != reached[fold.FoldedID] {
+					reached[fold.HolderID], reached[fold.FoldedID] = true, true
+					changed = true
+				}
+			}
+		}
+		return reached[member]
+	}
+	undone := func(selected []ManualLinkFold) map[string]bool {
+		out := make(map[string]bool, len(selected))
+		for _, fold := range selected {
+			out[exclusionKey(fold.HolderID, fold.FoldedID)] = true
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		reported DataSource
+		member   string
+	}{{SourceVMware, "W"}, {SourceProxmox, "S"}} {
+		named := func(sources ...DataSource) bool { return slices.Contains(sources, tc.reported) }
+		got := ReportedManualLinkFolds("V", cycle, named)
+		if joinedToRoot(cycle, undone(got), tc.member) {
+			t.Errorf("after a report of %s, %s is still joined to V through %v", tc.reported, tc.member, got)
+		}
+
+		// The control: folds selected by their folded side's subtree.
+		var bySubtree []ManualLinkFold
+		for _, fold := range cycle {
+			if named(fold.Sources...) {
+				bySubtree = append(bySubtree, fold)
+			}
+		}
+		if tc.reported == SourceVMware && !joinedToRoot(cycle, undone(bySubtree), tc.member) {
+			t.Errorf("control: selecting by subtree sources detached %s, so the cycle no longer shows the defect", tc.member)
+		}
 	}
 }
 
@@ -4060,7 +4243,9 @@ func TestPhysicalDiskExclusionFallbackStaysPerMachine(t *testing.T) {
 // on every rebuild. The registry ingests agent disks first, so the agent's
 // row holds the merged ID and keeps it; the Proxmox row takes the ID it holds
 // alone, or its source-specific ID where both share a hardware identity (the
-// agent holds that ID), as findMatch's excluded branch does.
+// agent holds that ID), as findMatch's excluded branch does. The PVE disk
+// poller asks ProxmoxDiskAgentSMARTSplit before it pairs the agent's SMART
+// row with the Proxmox disk, and it answers as the exclusions split the rows.
 func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 	now := time.Now().UTC()
 	for _, shape := range []struct {
@@ -4148,6 +4333,15 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 					t.Fatalf("fixture did not join the disks under the agent's ID: merged %q, alone: agent %q, proxmox %q", merged, agentAlone, pveAlone)
 				}
 				ids := diskSplitCandidates(t, adapter.currentRegistry(), merged)
+				// The PVE disk poller asks the adapter before it pairs the
+				// agent's SMART row with the Proxmox disk on the agent's node.
+				pollerSplit := func(step string, host models.Host, smart models.HostDiskSMART, want bool) {
+					t.Helper()
+					if got := adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, smart); got != want {
+						t.Fatalf("%s: poller split = %v, want %v", step, got, want)
+					}
+				}
+				pollerSplit("before the request", host, shape.agent, false)
 				addExclusions(t, store, request.exclusions(ids))
 
 				want := linkedDiskRows{joined: merged}
@@ -4188,6 +4382,13 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 
 				check, describe := exactly(want)
 				assertViews("after the request", snapshot, check, describe)
+				pollerSplit("after the request", host, shape.agent, request.split)
+				// A generation that has not ingested the agent's disk yet judges
+				// its row by the ID and identity the row would be keyed under.
+				unseen := NewMonitorAdapter(NewRegistry(store))
+				if got := unseen.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent); got != request.split {
+					t.Fatalf("a generation without the agent's disk judged the split = %v, want %v", got, request.split)
+				}
 				if !request.split {
 					return
 				}
@@ -4200,6 +4401,11 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				}
 				check, describe = exactly(linkedDiskRows{joined: merged})
 				assertViews("after relink", snapshot, check, describe)
+				// The link is the operator's later decision, whether it
+				// replaced an exclusion (the Proxmox row held its candidate
+				// ID) or left it standing: the generation holds the
+				// observations as one disk, so the poller pairs them again.
+				pollerSplit("after relink", host, shape.agent, false)
 				relinked := adapter.currentRegistry()
 				var again [][2]string
 				for _, fold := range relinked.ManualLinkFolds(merged) {
@@ -4210,6 +4416,22 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				addExclusions(t, store, again)
 				check, describe = exactly(want)
 				assertViews("after splitting again", snapshot, check, describe)
+				pollerSplit("after splitting again", host, shape.agent, true)
+
+				// The split names the IDs of the disks it separated, not the
+				// Proxmox slot, so a replacement in the slot (different
+				// hardware on both sides) is a different disk the poller pairs.
+				replacedPVE, replacedAgent := shape.pve, shape.agent
+				replacedPVE.Serial = "REPLACEMENT-0009"
+				replacedAgent.Serial = "Z9Z9REPLACED"
+				if shape.pve.Serial == shape.agent.Serial {
+					replacedAgent.Serial = replacedPVE.Serial
+				}
+				replacedHost := host
+				replacedHost.Sensors.SMART = []models.HostDiskSMART{replacedAgent}
+				if adapter.ProxmoxDiskAgentSMARTSplit(replacedPVE, replacedHost, replacedAgent) {
+					t.Fatalf("a replacement in the slot inherited the split recorded against the disk it replaced")
+				}
 
 				// smartctl reads no serial from a disk in standby, so the
 				// agent's row takes its device-keyed ID. A Proxmox
@@ -4222,8 +4444,10 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 					assertViews("while the agent's disk is in standby", asleep, func(got linkedDiskRows) bool {
 						return apart(got) && got.proxmox == merged
 					}, "the disks apart, the Proxmox row on "+merged)
+					pollerSplit("while the agent's disk is in standby", asleep.Hosts[0], asleep.Hosts[0].Sensors.SMART[0], true)
 					check, describe = exactly(want)
 					assertViews("once the agent's disk wakes", snapshot, check, describe)
+					pollerSplit("once the agent's disk wakes", host, shape.agent, true)
 				}
 
 				// A same-serial disk on another machine re-keys the agent's
@@ -4231,6 +4455,7 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 				// the unscoped ID, still holds.
 				if shape.agent.Serial != "" {
 					assertViews("after a same-serial disk appears elsewhere", withClone, apart, "the disks apart")
+					pollerSplit("after a same-serial disk appears elsewhere", host, shape.agent, true)
 				}
 			})
 		}
@@ -4267,6 +4492,9 @@ func TestOperatorSplitSeparatesDisksJoinedInsideALinkedHost(t *testing.T) {
 						if got := linkedDiskRowsOn(t, resources); got.joined != "" || got.agent == "" || got.proxmox == "" {
 							t.Fatalf("%s rebuild %d %s: got %+v, want the disks apart", step.name, rebuild, view, got)
 						}
+					}
+					if !adapter.ProxmoxDiskAgentSMARTSplit(shape.pve, host, shape.agent) {
+						t.Fatalf("%s rebuild %d: the poller would pair the disks the rows split", step.name, rebuild)
 					}
 				}
 			}

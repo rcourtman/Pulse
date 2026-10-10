@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3659,4 +3661,871 @@ func TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity(t *testin
 	byRef := pveDiskHistoryRows(t, store, ref)
 	require.ElementsMatch(t, []string{"temperature"}, pveDiskHistoryIDs(byRef))
 	require.Equal(t, ref, OwnedAlertReference(byRef["temperature"]))
+}
+
+// TakeExclusion deletes the pair's exclusion whichever way round it was
+// recorded, returns the row it deleted, and touches nothing else.
+func TestTakeExclusionDeletesThePairEitherWayRound(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sqliteStore.Close()) })
+	for name, store := range map[string]ResourceStore{"sqlite": sqliteStore, "memory": NewMemoryStore()} {
+		t.Run(name, func(t *testing.T) {
+			now := time.Now().UTC()
+			require.NoError(t, store.AddExclusion(ResourceExclusion{ResourceA: "agent-b", ResourceB: "agent-a", CreatedAt: now}))
+			require.NoError(t, store.AddExclusion(ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-c", CreatedAt: now}))
+			taken, found, err := store.TakeExclusion("agent-a", "agent-b")
+			require.NoError(t, err)
+			require.True(t, found)
+			require.True(t, taken.CreatedAt.Equal(now), "took %v", taken.CreatedAt)
+			require.ElementsMatch(t, []string{"agent-a", "agent-b"}, []string{taken.ResourceA, taken.ResourceB})
+			_, found, err = store.TakeExclusion("agent-a", "agent-b")
+			require.NoError(t, err)
+			require.False(t, found, "a second take found a row")
+			exclusions, err := store.GetExclusions()
+			require.NoError(t, err)
+			require.Len(t, exclusions, 1)
+			require.Equal(t, [2]string{"agent-a", "agent-c"}, [2]string{exclusions[0].ResourceA, exclusions[0].ResourceB})
+		})
+	}
+}
+
+// monitorSplitFixture is a Proxmox node and the pulse-agent on the same
+// machine as monitoring sees them: a models.State holding the operator's
+// split decisions from a store-backed adapter, fed an agent report naming
+// the node and a node poll each cycle.
+type monitorSplitFixture struct {
+	t       *testing.T
+	store   ResourceStore
+	adapter *MonitorAdapter
+	state   *models.State
+	node    models.Node
+	host    models.Host
+}
+
+func newMonitorSplitFixture(t *testing.T, cluster, agentHostname, machineID string) *monitorSplitFixture {
+	return newMonitorSplitFixtureWithStore(t, cluster, agentHostname, machineID, nil)
+}
+
+func newMonitorSplitFixtureWithStore(t *testing.T, cluster, agentHostname, machineID string, wrap func(ResourceStore) ResourceStore) *monitorSplitFixture {
+	t.Helper()
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqliteStore.Close() })
+	var store ResourceStore = sqliteStore
+	if wrap != nil {
+		store = wrap(store)
+	}
+	now := time.Now().UTC()
+	f := &monitorSplitFixture{
+		t:       t,
+		store:   store,
+		adapter: NewMonitorAdapter(NewRegistry(store)),
+		state:   models.NewState(),
+		node:    models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", ClusterName: cluster, Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now},
+		host: models.Host{
+			ID:                "host-pve1",
+			Hostname:          agentHostname,
+			MachineID:         machineID,
+			Status:            "online",
+			LastSeen:          now,
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", MAC: "aa:bb:cc:dd:ee:01", Addresses: []string{"10.0.0.5/24"}}},
+		},
+	}
+	f.state.SetNodeAgentSplitDecider(f.adapter)
+	return f
+}
+
+// cycle runs one agent report and one node poll through the state, then
+// rebuilds the adapter from the state's snapshot, as a monitor poll does.
+func (f *monitorSplitFixture) cycle() models.StateSnapshot {
+	report := f.host
+	report.NodeLinkSource = "automatic"
+	report.LinkedNodeID = f.node.ID
+	f.state.UpsertHost(report)
+	f.state.UpdateNodesForInstance(f.node.Instance, []models.Node{f.node})
+	snapshot := f.state.GetSnapshot()
+	f.adapter.PopulateFromSnapshot(snapshot)
+	return snapshot
+}
+
+// links returns the node's linked agent and the agent's linked node in the
+// state.
+func (f *monitorSplitFixture) links() (nodeLinksAgent, agentLinksNode string) {
+	f.t.Helper()
+	snapshot := f.state.GetSnapshot()
+	require.Len(f.t, snapshot.Nodes, 1)
+	require.Len(f.t, snapshot.Hosts, 1)
+	return snapshot.Nodes[0].LinkedAgentID, snapshot.Hosts[0].LinkedNodeID
+}
+
+// A state that starts with links an operator split holds them back before
+// any report: links it already holds when the decisions are installed, and
+// a manual link restored from host continuity, which the reconcile writes
+// for the node once its poll arrives.
+func TestMonitorStateHoldsBackSplitLinksItStartsWith(t *testing.T) {
+	f := newMonitorSplitFixture(t, "lab", "pve1", "0123456789abcdef")
+	f.cycle()
+	joined := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, joined)
+	nodeCandidate := SourceSpecificID(ResourceTypeAgent, SourceProxmox, f.node.ID)
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: joined, ResourceB: nodeCandidate, CreatedAt: time.Now().UTC()}))
+	f.adapter.PopulateFromSnapshot(f.state.GetSnapshot())
+
+	linked := f.state.GetSnapshot()
+	installed := models.NewState()
+	manual := f.host
+	manual.NodeLinkSource, manual.LinkedNodeID = "manual", f.node.ID
+	installed.UpsertHost(manual)
+	installed.UpdateNodesForInstance(f.node.Instance, linked.Nodes)
+	require.Equal(t, f.host.ID, installed.GetSnapshot().Nodes[0].LinkedAgentID, "fixture state without decisions links the pair")
+	installed.SetNodeAgentSplitDecider(f.adapter)
+	snapshot := installed.GetSnapshot()
+	require.Empty(t, snapshot.Nodes[0].LinkedAgentID, "installing the decisions held no node link back")
+	require.Empty(t, snapshot.Hosts[0].LinkedNodeID, "installing the decisions held no agent link back")
+
+	restarted := models.NewState()
+	restarted.SetNodeAgentSplitDecider(f.adapter)
+	restarted.UpsertHost(manual)
+	restarted.UpdateNodesForInstance(f.node.Instance, []models.Node{f.node})
+	snapshot = restarted.GetSnapshot()
+	require.Empty(t, snapshot.Nodes[0].LinkedAgentID, "the reconcile linked the node to its split manual agent")
+	require.Empty(t, snapshot.Hosts[0].LinkedNodeID, "the reconcile kept the split manual agent's link")
+	require.Equal(t, "manual", snapshot.Hosts[0].NodeLinkSource, "the state rewrote the manual intent before a report")
+	require.True(t, restarted.LinkNodeToHostAgent(f.node.ID, f.host.ID))
+	require.Empty(t, restarted.GetSnapshot().Nodes[0].LinkedAgentID, "LinkNodeToHostAgent linked a split pair")
+}
+
+// RestoreExclusion records an exclusion only for a pair nothing has decided
+// since, whichever way round the earlier decision was recorded.
+func TestRestoreExclusionKeepsANewerDecision(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sqliteStore.Close()) })
+	for name, store := range map[string]ResourceStore{"sqlite": sqliteStore, "memory": NewMemoryStore()} {
+		t.Run(name, func(t *testing.T) {
+			at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			original := ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-b", Reason: "operator", CreatedBy: "richard", CreatedAt: at}
+
+			restored, err := store.RestoreExclusion(original)
+			require.NoError(t, err)
+			require.True(t, restored, "an undecided pair takes the exclusion back")
+			exclusions, err := store.GetExclusions()
+			require.NoError(t, err)
+			require.Len(t, exclusions, 1)
+			require.Equal(t, "operator", exclusions[0].Reason)
+			require.Equal(t, "richard", exclusions[0].CreatedBy)
+			require.True(t, exclusions[0].CreatedAt.Equal(at), "restore kept the original time, got %v", exclusions[0].CreatedAt)
+
+			// A newer exclusion, recorded the other way round, stays.
+			_, found, err := store.TakeExclusion("agent-a", "agent-b")
+			require.NoError(t, err)
+			require.True(t, found)
+			require.NoError(t, store.AddExclusion(ResourceExclusion{ResourceA: "agent-b", ResourceB: "agent-a", Reason: "newer", CreatedAt: time.Now().UTC()}))
+			restored, err = store.RestoreExclusion(original)
+			require.NoError(t, err)
+			require.False(t, restored, "an exclusion recorded since was replaced")
+			exclusions, err = store.GetExclusions()
+			require.NoError(t, err)
+			require.Len(t, exclusions, 1)
+			require.Equal(t, "newer", exclusions[0].Reason)
+
+			// A newer link replaces the exclusion for the pair, and a restore
+			// must not take that link away.
+			require.NoError(t, store.AddLink(ResourceLink{ResourceA: "agent-a", ResourceB: "agent-b", PrimaryID: "agent-a", CreatedAt: time.Now().UTC()}))
+			restored, err = store.RestoreExclusion(original)
+			require.NoError(t, err)
+			require.False(t, restored, "a link recorded since was replaced")
+			links, err := store.GetLinks()
+			require.NoError(t, err)
+			require.Len(t, links, 1)
+			exclusions, err = store.GetExclusions()
+			require.NoError(t, err)
+			require.Empty(t, exclusions)
+		})
+	}
+}
+
+// An older link row left beside an exclusion (older data, canonical-ID
+// succession) is superseded by it, so taking the exclusion and restoring it
+// after a failed operation brings the split back, while a link newer than the
+// exclusion still blocks the restore.
+func TestRestoreExclusionIgnoresALinkOlderThanIt(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sqliteStore.Close()) })
+	memoryStore := NewMemoryStore()
+	seedLink := map[string]func(link ResourceLink){
+		"sqlite": func(link ResourceLink) {
+			_, err := sqliteStore.db.Exec(`INSERT INTO resource_links (resource_a, resource_b, primary_id, reason, created_by, created_at)
+				VALUES (?, ?, ?, 'raw', 'test', ?)`, link.ResourceA, link.ResourceB, link.PrimaryID, link.CreatedAt)
+			require.NoError(t, err)
+		},
+		"memory": func(link ResourceLink) { memoryStore.links = append(memoryStore.links, link) },
+	}
+	for name, store := range map[string]ResourceStore{"sqlite": sqliteStore, "memory": memoryStore} {
+		t.Run(name, func(t *testing.T) {
+			now := time.Now().UTC().Truncate(time.Second)
+			exclusion := ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-b", Reason: "split", CreatedAt: now}
+
+			// The stale link is older than the exclusion that superseded it.
+			seedLink[name](ResourceLink{ResourceA: "agent-a", ResourceB: "agent-b", PrimaryID: "agent-a", CreatedAt: now.Add(-time.Hour)})
+			restored, err := store.RestoreExclusion(exclusion)
+			require.NoError(t, err)
+			require.True(t, restored, "an older link row blocked restoring the split")
+			exclusions, err := store.GetExclusions()
+			require.NoError(t, err)
+			require.Len(t, exclusions, 1)
+			links, err := store.GetLinks()
+			require.NoError(t, err)
+			require.Empty(t, links, "the restored split did not supersede the older link")
+
+			// A link newer than the exclusion blocks the restore.
+			_, found, err := store.TakeExclusion("agent-a", "agent-b")
+			require.NoError(t, err)
+			require.True(t, found)
+			seedLink[name](ResourceLink{ResourceA: "agent-b", ResourceB: "agent-a", PrimaryID: "agent-b", CreatedAt: now.Add(time.Hour)})
+			restored, err = store.RestoreExclusion(exclusion)
+			require.NoError(t, err)
+			require.False(t, restored, "a newer link was ignored")
+		})
+	}
+}
+
+// A SQLite row stored in the reversed order, as older data can be, counts as
+// the pair's decision: a restore declines it and a take finds it.
+func TestSQLiteExclusionRowsInEitherOrderAreOneDecision(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	insert := func(table, a, b string) {
+		t.Helper()
+		columns := "resource_a, resource_b, reason, created_by, created_at"
+		values := "?, ?, 'raw', 'test', ?"
+		args := []any{a, b, time.Now().UTC()}
+		if table == "resource_links" {
+			columns, values = "resource_a, resource_b, primary_id, reason, created_by, created_at", "?, ?, ?, 'raw', 'test', ?"
+			args = []any{a, b, a, time.Now().UTC()}
+		}
+		_, err := store.db.Exec(`INSERT INTO `+table+` (`+columns+`) VALUES (`+values+`)`, args...)
+		require.NoError(t, err)
+	}
+	original := ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-b", CreatedAt: time.Now().UTC()}
+
+	// The rows are stored a > b, against the normalised order.
+	insert("resource_exclusions", "agent-b", "agent-a")
+	restored, err := store.RestoreExclusion(original)
+	require.NoError(t, err)
+	require.False(t, restored, "a reversed exclusion row was not seen")
+	taken, found, err := store.TakeExclusion("agent-a", "agent-b")
+	require.NoError(t, err)
+	require.True(t, found, "a reversed exclusion row was not taken")
+	require.Equal(t, "raw", taken.Reason)
+	left, err := store.GetExclusions()
+	require.NoError(t, err)
+	require.Empty(t, left, "taking a reversed exclusion row left it behind")
+
+	insert("resource_links", "agent-b", "agent-a")
+	restored, err = store.RestoreExclusion(original)
+	require.NoError(t, err)
+	require.False(t, restored, "a reversed link row was not seen")
+}
+
+// failingRemoveStore fails the nth TakeExclusion call.
+type failingRemoveStore struct {
+	ResourceStore
+	failOn int
+	calls  int
+	// before runs once, ahead of the next take.
+	before func()
+}
+
+func (s *failingRemoveStore) TakeExclusion(resourceA, resourceB string) (ResourceExclusion, bool, error) {
+	if hook := s.before; hook != nil {
+		s.before = nil
+		hook()
+	}
+	s.calls++
+	if s.calls == s.failOn {
+		return ResourceExclusion{}, false, errors.New("remove failed")
+	}
+	return s.ResourceStore.TakeExclusion(resourceA, resourceB)
+}
+
+// Lifting a node's split from its agent restores what it removed when it
+// cannot finish, and what a caller restores later never replaces a decision
+// the operator recorded in between.
+func TestLiftedNodeAgentSplitRestoresOnlyWhatIsStillUndecided(t *testing.T) {
+	var failing *failingRemoveStore
+	f := newMonitorSplitFixtureWithStore(t, "lab", "pve1", "0123456789abcdef", func(store ResourceStore) ResourceStore {
+		failing = &failingRemoveStore{ResourceStore: store}
+		return failing
+	})
+	f.cycle()
+	f.cycle()
+	merged := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, merged)
+	var nodeCandidate, agentCandidate string
+	for _, target := range f.adapter.currentRegistry().SourceTargets(merged) {
+		switch target.Source {
+		case SourceProxmox:
+			nodeCandidate = target.CandidateID
+		case SourceAgent:
+			agentCandidate = target.CandidateID
+		}
+	}
+	require.NotEmpty(t, nodeCandidate)
+	require.NotEmpty(t, agentCandidate)
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	first := ResourceExclusion{ResourceA: merged, ResourceB: nodeCandidate, Reason: "first", CreatedAt: at}
+	second := ResourceExclusion{ResourceA: agentCandidate, ResourceB: nodeCandidate, Reason: "second", CreatedAt: at.Add(time.Second)}
+	require.NoError(t, f.store.AddExclusion(first))
+	require.NoError(t, f.store.AddExclusion(second))
+	f.cycle()
+	snapshot := f.state.GetSnapshot()
+	node, host := snapshot.Nodes[0], snapshot.Hosts[0]
+
+	reasons := func() []string {
+		exclusions, err := f.store.GetExclusions()
+		require.NoError(t, err)
+		out := make([]string, 0, len(exclusions))
+		for _, exclusion := range exclusions {
+			out = append(out, exclusion.Reason+"@"+exclusion.CreatedAt.UTC().Format(time.RFC3339))
+		}
+		sort.Strings(out)
+		return out
+	}
+	before := reasons()
+	require.Len(t, before, 2)
+
+	// The second removal fails: the first is put back, with its time.
+	failing.calls, failing.failOn = 0, 2
+	removed, err := f.adapter.LiftProxmoxNodeAgentSplit(node, host)
+	require.Error(t, err)
+	require.Empty(t, removed)
+	require.Equal(t, before, reasons(), "a failed lift changed the split")
+
+	// A lift that finishes returns what it removed.
+	failing.failOn = 0
+	removed, err = f.adapter.LiftProxmoxNodeAgentSplit(node, host)
+	require.NoError(t, err)
+	require.Len(t, removed, 2)
+	require.Empty(t, reasons())
+
+	// The operator decides one pair again before the restore: a link for the
+	// first, a new exclusion for the second.
+	require.NoError(t, f.store.AddLink(ResourceLink{ResourceA: merged, ResourceB: nodeCandidate, PrimaryID: merged, CreatedAt: time.Now().UTC()}))
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: agentCandidate, ResourceB: nodeCandidate, Reason: "newer", CreatedAt: time.Now().UTC()}))
+	require.NoError(t, f.adapter.RestoreProxmoxNodeAgentSplit(removed))
+	links, err := f.store.GetLinks()
+	require.NoError(t, err)
+	require.Len(t, links, 1, "the restore took a newer link away")
+	exclusions, err := f.store.GetExclusions()
+	require.NoError(t, err)
+	require.Len(t, exclusions, 1)
+	require.Equal(t, "newer", exclusions[0].Reason, "the restore replaced a newer exclusion")
+}
+
+// A lift returns the row it actually removed: an operator who replaces the
+// pair's exclusion between the lift's listing and its removal has that newer
+// row taken and, if the caller restores, put back, never the older one read
+// from the listing.
+func TestLiftedNodeAgentSplitReturnsTheRowItRemoved(t *testing.T) {
+	var racing *failingRemoveStore
+	f := newMonitorSplitFixtureWithStore(t, "lab", "pve1", "0123456789abcdef", func(store ResourceStore) ResourceStore {
+		racing = &failingRemoveStore{ResourceStore: store}
+		return racing
+	})
+	f.cycle()
+	f.cycle()
+	merged := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, merged)
+	nodeCandidate := SourceSpecificID(ResourceTypeAgent, SourceProxmox, f.node.ID)
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: nodeCandidate, Reason: "first", CreatedAt: time.Now().UTC().Add(-time.Minute)}))
+	f.cycle()
+	snapshot := f.state.GetSnapshot()
+
+	racing.before = func() {
+		require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: nodeCandidate, ResourceB: merged, Reason: "newer", CreatedAt: time.Now().UTC()}))
+	}
+	removed, err := f.adapter.LiftProxmoxNodeAgentSplit(snapshot.Nodes[0], snapshot.Hosts[0])
+	require.NoError(t, err)
+	require.Len(t, removed, 1)
+	require.Equal(t, "newer", removed[0].Reason, "the lift returned the row it listed, not the one it removed")
+	remaining, err := f.store.GetExclusions()
+	require.NoError(t, err)
+	require.Empty(t, remaining)
+
+	require.NoError(t, f.adapter.RestoreProxmoxNodeAgentSplit(removed))
+	remaining, err = f.store.GetExclusions()
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+	require.Equal(t, "newer", remaining[0].Reason)
+}
+
+// An agent that stops reporting its machine key after an unlink naming the
+// ID the pair merged under (its machine-derived ID) keeps that ID through
+// its pin, and stays split from the node in monitoring as in the registry.
+func TestMonitorStateKeepsASplitWhenTheAgentStopsReportingItsMachineID(t *testing.T) {
+	f := newMonitorSplitFixture(t, "", "pve1", "0123456789abcdef")
+	f.cycle()
+	f.cycle()
+	merged := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, merged)
+	nodeCandidate := SourceSpecificID(ResourceTypeAgent, SourceProxmox, f.node.ID)
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: nodeCandidate, CreatedAt: time.Now().UTC()}))
+	for i := 0; i < 3; i++ {
+		f.cycle()
+	}
+	nodeLink, agentLink := f.links()
+	require.Empty(t, nodeLink+agentLink, "split did not reach the state")
+
+	f.host.MachineID = ""
+	for cycle := 1; cycle <= 3; cycle++ {
+		f.cycle()
+		rows := hostRowsByFacet(t, f.adapter.GetAll())
+		require.Empty(t, rows.joined, "cycle %d: registry joined the pair", cycle)
+		require.Equal(t, merged, rows.agent, "cycle %d: the agent left the ID its pin holds", cycle)
+		nodeLink, agentLink := f.links()
+		require.Empty(t, nodeLink+agentLink, "cycle %d: state relinked the split pair", cycle)
+	}
+}
+
+// unreadableDecisionStore fails reads of the operator's manual decisions
+// while its flags are set, as a store that cannot be read for a moment does.
+// Writes pass through, so a test can record a decision during the outage.
+type unreadableDecisionStore struct {
+	ResourceStore
+	failLinks      atomic.Bool
+	failExclusions atomic.Bool
+}
+
+func (s *unreadableDecisionStore) failAll(fail bool) {
+	s.failLinks.Store(fail)
+	s.failExclusions.Store(fail)
+}
+
+func (s *unreadableDecisionStore) GetLinks() ([]ResourceLink, error) {
+	if s.failLinks.Load() {
+		return nil, errors.New("links unreadable")
+	}
+	return s.ResourceStore.GetLinks()
+}
+
+func (s *unreadableDecisionStore) GetExclusions() ([]ResourceExclusion, error) {
+	if s.failExclusions.Load() {
+		return nil, errors.New("exclusions unreadable")
+	}
+	return s.ResourceStore.GetExclusions()
+}
+
+// splitMonitorFixture returns a node and agent the operator split with a
+// report-merge style exclusion, the decision stored and applied by a
+// generation that read it, and the store that can then stop answering.
+func splitMonitorFixture(t *testing.T) (*monitorSplitFixture, *unreadableDecisionStore, nodeAgentRows, string) {
+	t.Helper()
+	var flaky *unreadableDecisionStore
+	f := newMonitorSplitFixtureWithStore(t, "lab", "pve1", "0123456789abcdef", func(store ResourceStore) ResourceStore {
+		flaky = &unreadableDecisionStore{ResourceStore: store}
+		return flaky
+	})
+	f.cycle()
+	f.cycle()
+	merged := hostRowsByFacet(t, f.adapter.GetAll()).joined
+	require.NotEmpty(t, merged, "fixture did not join the node and its agent")
+	nodeCandidate := SourceSpecificID(ResourceTypeAgent, SourceProxmox, f.node.ID)
+	require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: nodeCandidate, CreatedAt: time.Now().UTC()}))
+	for i := 0; i < 3; i++ {
+		f.cycle()
+	}
+	apart := hostRowsByFacet(t, f.adapter.GetAll())
+	require.Empty(t, apart.joined, "the split did not reach the registry")
+	require.NotEmpty(t, apart.node)
+	require.NotEmpty(t, apart.agent)
+	nodeLink, agentLink := f.links()
+	require.Empty(t, nodeLink+agentLink, "the split did not reach the state")
+	return f, flaky, apart, nodeCandidate
+}
+
+func (f *monitorSplitFixture) splitReadByDecider() bool {
+	f.t.Helper()
+	snapshot := f.state.GetSnapshot()
+	require.Len(f.t, snapshot.Nodes, 1)
+	for _, host := range snapshot.Hosts {
+		if host.ID == f.host.ID {
+			return f.adapter.ProxmoxNodeAgentSplit(snapshot.Nodes[0], host)
+		}
+	}
+	f.t.Fatalf("the state lost the fixture's agent %s", f.host.ID)
+	return false
+}
+
+// A rebuild whose store reads fail loads no decisions, and without the carry
+// it would publish a registry that lists a split node and agent as one
+// machine and answers the monitor's split decider "undecided", so the
+// monitor relinks the pair until the next readable rebuild.
+func TestRebuildThatCannotReadDecisionsKeepsANodeAgentSplit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(*unreadableDecisionStore)
+		// during changes what the store can still read while the other half
+		// cannot: the carry is the previous generation's decisions whole.
+		during func(t *testing.T, f *monitorSplitFixture, flaky *unreadableDecisionStore)
+	}{
+		{name: "both reads", fail: func(s *unreadableDecisionStore) { s.failAll(true) }},
+		{name: "exclusions only", fail: func(s *unreadableDecisionStore) { s.failExclusions.Store(true) }},
+		{
+			name: "links only, the exclusion lifted meanwhile",
+			fail: func(s *unreadableDecisionStore) { s.failLinks.Store(true) },
+			during: func(t *testing.T, f *monitorSplitFixture, flaky *unreadableDecisionStore) {
+				exclusions, err := flaky.ResourceStore.GetExclusions()
+				require.NoError(t, err)
+				require.NotEmpty(t, exclusions)
+				for _, exclusion := range exclusions {
+					_, found, err := f.store.TakeExclusion(exclusion.ResourceA, exclusion.ResourceB)
+					require.NoError(t, err)
+					require.True(t, found)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, flaky, apart, _ := splitMonitorFixture(t)
+			require.True(t, f.splitReadByDecider(), "a readable generation did not report the split")
+
+			if tc.during != nil {
+				tc.during(t, f, flaky)
+			}
+			tc.fail(flaky)
+			for cycle := 1; cycle <= 3; cycle++ {
+				f.cycle()
+				require.True(t, f.adapter.currentRegistry().overridesUnreadable, "cycle %d: the rebuild read the store", cycle)
+				rows := hostRowsByFacet(t, f.adapter.GetAll())
+				require.Equal(t, apart, rows, "cycle %d: the rebuild that could not read the decisions rejoined the pair", cycle)
+				require.True(t, f.splitReadByDecider(), "cycle %d: the decider lost the split", cycle)
+				nodeLink, agentLink := f.links()
+				require.Empty(t, nodeLink+agentLink, "cycle %d: the state relinked the split pair", cycle)
+			}
+		})
+	}
+}
+
+// The negative control: a generation published with no decisions, which is
+// what a rebuild without the carry published for an unreadable store, loses
+// the split in both places. The decider answers "undecided", so the state
+// relinks the pair on the next report, and the rebuild joins the rows.
+func TestGenerationWithoutDecisionsRejoinsASplitNodeAgent(t *testing.T) {
+	f, flaky, _, _ := splitMonitorFixture(t)
+	flaky.failAll(true)
+
+	bare := NewRegistry(flaky)
+	require.True(t, bare.overridesUnreadable)
+	require.Empty(t, bare.exclusions, "an unreadable store loaded decisions")
+	f.adapter.mu.Lock()
+	f.adapter.registry = bare
+	f.adapter.mu.Unlock()
+	require.False(t, f.splitReadByDecider(), "a generation holding no decisions still reported the split")
+
+	f.cycle()
+	rows := hostRowsByFacet(t, f.adapter.GetAll())
+	require.NotEmpty(t, rows.joined, "without decisions the rebuild kept the pair apart: %+v", rows)
+	nodeLink, agentLink := f.links()
+	require.NotEmpty(t, nodeLink+agentLink, "without decisions the state kept the pair unlinked")
+}
+
+// Carried decisions are good only until the store answers again: the next
+// readable rebuild loads its current decisions, one the operator recorded or
+// lifted during the outage included.
+func TestCarriedDecisionsYieldToTheNextReadableRebuild(t *testing.T) {
+	f, flaky, apart, nodeCandidate := splitMonitorFixture(t)
+	merged := hostRowsByFacet(t, f.adapter.GetAll())
+	_ = merged
+
+	flaky.failAll(true)
+	exclusions, err := f.store.(*unreadableDecisionStore).ResourceStore.GetExclusions()
+	require.NoError(t, err)
+	require.NotEmpty(t, exclusions)
+	for _, exclusion := range exclusions {
+		_, found, err := flaky.ResourceStore.TakeExclusion(exclusion.ResourceA, exclusion.ResourceB)
+		require.NoError(t, err)
+		require.True(t, found)
+	}
+	f.cycle()
+	require.Equal(t, apart, hostRowsByFacet(t, f.adapter.GetAll()), "the outage generation dropped the carried split")
+	require.True(t, f.splitReadByDecider(), "the outage generation's decider dropped the carried split")
+
+	flaky.failAll(false)
+	var rows nodeAgentRows
+	for cycle := 1; cycle <= 4; cycle++ {
+		f.cycle()
+		rows = hostRowsByFacet(t, f.adapter.GetAll())
+		require.False(t, f.adapter.currentRegistry().overridesUnreadable, "cycle %d: the store answers again", cycle)
+	}
+	require.NotEmpty(t, rows.joined, "a readable rebuild kept the carried split after the operator lifted it (node candidate %s): %+v", nodeCandidate, rows)
+	require.False(t, f.splitReadByDecider(), "the decider kept a split the store no longer holds")
+}
+
+// A manual link is carried the same way, so an outage does not unfold the
+// pair it joins, whichever read failed.
+func TestRebuildThatCannotReadDecisionsKeepsAManualLink(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(*unreadableDecisionStore)
+		// unlink changes what the store can still read while the other half
+		// cannot: the carry is the previous generation's decisions whole.
+		unlink bool
+	}{
+		{name: "both reads", fail: func(s *unreadableDecisionStore) { s.failAll(true) }},
+		{name: "links only", fail: func(s *unreadableDecisionStore) { s.failLinks.Store(true) }},
+		{name: "exclusions only, the pair unlinked meanwhile", fail: func(s *unreadableDecisionStore) { s.failExclusions.Store(true) }, unlink: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			snapshot := models.StateSnapshot{
+				Hosts: []models.Host{
+					{ID: "host-app", Hostname: "app-guest", MachineID: "machine-app", Status: "online", LastSeen: now},
+					{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas", Status: "online", LastSeen: now},
+				},
+				LastUpdate: now,
+			}
+			flaky := &unreadableDecisionStore{ResourceStore: NewMemoryStore()}
+			adapter := NewMonitorAdapter(NewRegistry(flaky))
+			adapter.PopulateFromSnapshot(snapshot)
+			listed := adapter.GetAll()
+			require.Len(t, listed, 2, "fixture hosts did not stay separate: %v", resourceIDs(listed))
+
+			require.NoError(t, flaky.AddLink(ResourceLink{ResourceA: listed[0].ID, ResourceB: listed[1].ID, PrimaryID: listed[0].ID}))
+			adapter.PopulateFromSnapshot(snapshot)
+			require.Len(t, adapter.GetAll(), 1, "a readable rebuild did not fold the linked pair")
+			require.Len(t, adapter.ManualLinks(), 1)
+
+			if tc.unlink {
+				require.NoError(t, flaky.AddExclusion(ResourceExclusion{ResourceA: listed[0].ID, ResourceB: listed[1].ID, CreatedAt: time.Now().UTC()}))
+			}
+			tc.fail(flaky)
+			adapter.PopulateFromSnapshot(snapshot)
+			require.True(t, adapter.currentRegistry().overridesUnreadable)
+			require.Len(t, adapter.GetAll(), 1, "the rebuild that could not read the decisions unfolded the pair")
+			require.Len(t, adapter.ManualLinks(), 1, "the rebuild that could not read the decisions dropped the link")
+
+			// The generation published with nothing to carry folds nothing.
+			flaky.failAll(true)
+			bare := NewRegistry(flaky)
+			bare.IngestSnapshot(snapshot)
+			require.Len(t, bare.List(), 2, "negative control: a generation holding no link still folded the pair")
+		})
+	}
+}
+
+// A carry owns its copy: the registry that took the decisions neither shares
+// a map or slice it could be written through with the generation it replaced.
+func TestCarriedDecisionsAreCopiedNotAliased(t *testing.T) {
+	store := NewMemoryStore()
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	require.NoError(t, store.AddExclusion(ResourceExclusion{ResourceA: "agent-a", ResourceB: "agent-b", CreatedAt: at}))
+	require.NoError(t, store.AddLink(ResourceLink{ResourceA: "agent-c", ResourceB: "agent-d", PrimaryID: "agent-c", CreatedAt: at}))
+	previous := NewRegistry(store)
+	require.False(t, previous.overridesUnreadable)
+	require.Len(t, previous.exclusions, 1)
+	require.Len(t, previous.links, 1)
+
+	flaky := &unreadableDecisionStore{ResourceStore: store}
+	flaky.failAll(true)
+	next := NewRegistry(flaky)
+	require.Empty(t, next.links)
+	next.carryOverridesFrom(previous)
+	require.Equal(t, previous.exclusions, next.exclusions)
+	require.Equal(t, previous.links, next.links)
+	require.Equal(t, previous.linksByID, next.linksByID)
+
+	next.exclusions["extra"] = at
+	next.links[0].PrimaryID = "agent-d"
+	require.Len(t, previous.exclusions, 1, "the carry shared the exclusions map")
+	require.Equal(t, "agent-c", previous.links[0].PrimaryID, "the carry shared the links slice")
+
+	// A registry that read the store keeps what it read, and one with no
+	// previous generation stays empty.
+	readable := NewRegistry(store)
+	readable.carryOverridesFrom(NewRegistry(nil))
+	require.Len(t, readable.exclusions, 1)
+	first := NewRegistry(flaky)
+	first.carryOverridesFrom(nil)
+	require.Empty(t, first.exclusions)
+	require.NotNil(t, first.exclusions)
+}
+
+// An operator split of a node and its agent reaches monitoring's own link:
+// once the adapter's registry generation carries the split, the state names
+// neither side on the other, and every view of the registry still keeps the
+// pair apart although no record links them any more (the node's joined-era
+// identity pin included). A relink of the rows joins them in both again,
+// and the same request after it splits them again.
+func TestMonitorStateHoldsBackAnOperatorSplitNodeAgentLink(t *testing.T) {
+	for _, link := range []struct {
+		name          string
+		cluster       string
+		agentHostname string
+		machineID     string
+	}{
+		{"unclustered", "", "pve1", "0123456789abcdef"},
+		{"clustered", "lab", "pve1", "0123456789abcdef"},
+		{"clustered-agent-fqdn", "lab", "pve1.example", "0123456789abcdef"},
+		{"clustered-machine-keyless-agent", "lab", "pve1", ""},
+	} {
+		for _, request := range []struct {
+			name       string
+			exclusions func(ids splitRequestIDs) [][2]string
+			split      func(ids splitRequestIDs) bool
+		}{
+			{"report-merge", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}, {ids.merged, ids.agentCandidate}}
+			}, splitAlways},
+			{"unlink-naming-node", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.nodeCandidate}}
+			}, splitAlways},
+			{"unlink-naming-node-row", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.nodeOwn, ids.agentOwn}}
+			}, func(ids splitRequestIDs) bool { return ids.nodeOwn != ids.agentOwn }},
+			{"unlink-naming-both-candidates", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.agentCandidate, ids.nodeCandidate}}
+			}, splitAlways},
+			{"exclusion-naming-only-the-agent", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, ids.agentCandidate}}
+			}, func(ids splitRequestIDs) bool { return ids.merged == ids.nodeOwn }},
+			{"unrelated-exclusion", func(ids splitRequestIDs) [][2]string {
+				return [][2]string{{ids.merged, "agent-00000000deadbeef"}}
+			}, func(splitRequestIDs) bool { return false }},
+		} {
+			t.Run(link.name+"/"+request.name, func(t *testing.T) {
+				f := newMonitorSplitFixture(t, link.cluster, link.agentHostname, link.machineID)
+				now := time.Now().UTC()
+				alone := NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Nodes: []models.Node{f.node}})
+				nodeAlone := hostRowsByFacet(t, alone.List()).node
+				alone = NewRegistry(nil)
+				alone.IngestSnapshot(models.StateSnapshot{LastUpdate: now, Hosts: []models.Host{f.host}})
+				agentAlone := hostRowsByFacet(t, alone.List()).agent
+
+				f.cycle()
+				merged := hostRowsByFacet(t, f.adapter.GetAll())
+				nodeLink, agentLink := f.links()
+				if merged.joined == "" || nodeLink != f.host.ID || agentLink != f.node.ID {
+					t.Fatalf("fixture did not link the node and the agent: rows %+v, node->%q agent->%q", merged, nodeLink, agentLink)
+				}
+				reportMerge := func() splitRequestIDs {
+					t.Helper()
+					ids := splitRequestIDs{merged: merged.joined, nodeOwn: nodeAlone, agentOwn: agentAlone}
+					for _, target := range f.adapter.currentRegistry().SourceTargets(merged.joined) {
+						switch target.Source {
+						case SourceProxmox:
+							ids.nodeCandidate = target.CandidateID
+						case SourceAgent:
+							ids.agentCandidate = target.CandidateID
+						}
+					}
+					if ids.nodeCandidate == "" || ids.agentCandidate == "" {
+						t.Fatalf("merged %s lists candidates %+v", merged.joined, ids)
+					}
+					return ids
+				}
+				record := func(ids splitRequestIDs) {
+					t.Helper()
+					for _, pair := range request.exclusions(ids) {
+						require.NoError(t, f.store.AddExclusion(ResourceExclusion{ResourceA: pair[0], ResourceB: pair[1], CreatedAt: time.Now().UTC()}))
+					}
+				}
+				ids := reportMerge()
+				record(ids)
+				split := request.split(ids)
+				want := nodeAgentRows{joined: merged.joined}
+				if split {
+					want = nodeAgentRows{node: nodeAlone, agent: agentAlone}
+				}
+
+				// The first cycle after a request still reads the decisions
+				// of the generation before it (the rebuild ending that cycle
+				// loads the request), so the state's links are checked from
+				// the second cycle on. Every view is checked every cycle.
+				assertCycles := func(step string, cycles int, want nodeAgentRows, linked bool) {
+					t.Helper()
+					for cycle := 1; cycle <= cycles; cycle++ {
+						snapshot := f.cycle()
+						listed := f.adapter.GetAll()
+						broadcast, ok := f.adapter.CoalesceForPresentation(listed, nil)
+						require.True(t, ok)
+						rest := NewRegistry(f.store)
+						rest.IngestResources(listed)
+						restFromSnapshot := NewRegistry(f.store)
+						restFromSnapshot.IngestSnapshot(snapshot)
+						for view, resources := range map[string][]Resource{
+							"monitor":                    listed,
+							"broadcast":                  broadcast,
+							"rest":                       rest.List(),
+							"rest presentation":          rest.ListForPresentation(),
+							"rest from snapshot":         restFromSnapshot.List(),
+							"rest presentation snapshot": restFromSnapshot.ListForPresentation(),
+						} {
+							if got := hostRowsByFacet(t, resources); got != want {
+								t.Fatalf("%s cycle %d %s: got %+v, want %+v", step, cycle, view, got, want)
+							}
+						}
+						if cycle == 1 {
+							continue
+						}
+						nodeLink, agentLink := f.links()
+						if gotLinked := nodeLink != "" || agentLink != ""; gotLinked != linked || (linked && (nodeLink != f.host.ID || agentLink != f.node.ID)) {
+							t.Fatalf("%s cycle %d: state links node->%q agent->%q, want linked=%v", step, cycle, nodeLink, agentLink, linked)
+						}
+						// A report naming the node, before any poll, keeps a
+						// split pair apart on its own.
+						if !linked {
+							report := f.host
+							report.NodeLinkSource = "automatic"
+							report.LinkedNodeID = f.node.ID
+							f.state.UpsertHost(report)
+							if nodeLink, agentLink := f.links(); nodeLink != "" || agentLink != "" {
+								t.Fatalf("%s cycle %d: a report linked node->%q agent->%q", step, cycle, nodeLink, agentLink)
+							}
+						}
+						for _, resource := range listed {
+							if resource.Proxmox != nil && resource.Agent == nil && resource.Proxmox.LinkedAgentID != "" {
+								t.Fatalf("%s cycle %d: split node row names agent %q", step, cycle, resource.Proxmox.LinkedAgentID)
+							}
+						}
+					}
+				}
+				assertCycles("after the request", 3, want, !split)
+				if !split {
+					return
+				}
+				// A registry meeting the agent first, which holds its
+				// machine-derived ID, with the node naming no agent and the
+				// joined-era pins still in the store.
+				held := f.state.GetSnapshot()
+				withoutHost := held
+				withoutHost.Hosts = nil
+				for name, snapshot := range map[string]models.StateSnapshot{"with host": held, "without host": withoutHost} {
+					agentFirst := NewRegistry(f.store)
+					agentFirst.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(f.host)})
+					agentFirst.IngestSnapshot(snapshot)
+					for view, resources := range map[string][]Resource{"list": agentFirst.List(), "presentation": agentFirst.ListForPresentation()} {
+						if got := hostRowsByFacet(t, resources); got != want {
+							t.Fatalf("agent ingested first, snapshot %s, %s: got %+v, want %+v", name, view, got, want)
+						}
+					}
+				}
+
+				require.NoError(t, f.store.AddLink(ResourceLink{ResourceA: want.agent, ResourceB: want.node, PrimaryID: want.agent, CreatedAt: time.Now().UTC()}))
+				assertCycles("after relink", 3, nodeAgentRows{joined: merged.joined}, true)
+				reordered := NewRegistry(f.store)
+				reordered.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(f.host)})
+				reordered.IngestSnapshot(f.state.GetSnapshot())
+				reordered.PersistIdentityPins()
+				assertCycles("after an agent-first rebuild persisted its pins", 2, nodeAgentRows{joined: merged.joined}, true)
+
+				record(reportMerge())
+				assertCycles("after splitting again", 3, want, false)
+			})
+		}
+	}
 }

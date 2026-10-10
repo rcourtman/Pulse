@@ -32,9 +32,9 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 The AI settings control projection describes read/query or plans for review in
 Actions. It does not authorise a backup, restore, replay or data change; action
 approval/run and independent verification remain separate. Stored legacy
-preferences, recovery-point access, the legacy protected-guests value and
-Patrol policy are preserved. The latter guest list is not a canonical saved-
-plan exclusion or a recovery execution safeguard. The handler change adds no recovery endpoint or execution route.
+preferences, recovery-point access and Patrol policy are preserved. The retired
+Protected guests list was never a canonical saved-plan exclusion or a recovery
+execution safeguard. The handler change adds no recovery endpoint or execution route.
 
 ### Retained guest identity cannot renew QGA eligibility
 
@@ -1838,6 +1838,12 @@ recovery scope, or a storage/recovery-owned secret source.
    reorder the REST-first hydration guarantee above, and a skipped store read
    must never leave a storage/recovery projection behind the shared cache's
    applied revision.
+   The shared hook's full merge also clones the connection store's rows before
+   merging them, so a cached storage/recovery row never shares a nested array
+   with a row the store reconciles in place, and the browser no longer re-joins
+   same-hostname host rows itself (each server row is one display row, as the
+   server's presentation coalesce delivers it). Neither may change which
+   canonical storage, disk, or recovery fields a merged row carries.
    The same invisibility bound covers the per-key fast merge: a changed row
    whose recorded patch keys stay within the metric fast-path allow-list may
    be merged as the previous display row with only the patched subtrees
@@ -2917,18 +2923,21 @@ canonical pre-handler authorization proof covering both transfer routes.
     page must reuse one resolved active-series ID for row emphasis in both
     views instead of leaving stale row-local IDs or storage-local hover
     branches on the page.
-    Any page, group, or entity scope that becomes pinned through storage
-    interaction must stay row-first: the pinned row or group remains the
-    visible scoped state, and explicit clearing belongs to the shared storage
-    content-card header action plus the shared `Escape` reset path rather than
-    an extra storage-local strip, search-row widget, or filter-bar badge.
+    Any pool or disk focus that becomes pinned through storage interaction
+    must stay row-first: the open row is the scoped state, and explicit
+    clearing belongs to the shared storage content-card header action plus the
+    shared `Escape` reset path rather than an extra storage-local strip,
+    search-row widget, or filter-bar badge. Collapsing the open row's group
+    hides the row without clearing that focus.
     Background whitespace clearing may remain a convenience, but storage must
     not rely on it as the only reversible control.
-    When that scope is a storage
-    pool group, member pool rows should expose shared
-    `data-summary-group-member-active="preview|pinned"` state so the grouped
-    block reads as one scoped set without adding storage-local outlines, pill
-    buttons, or heavy full-row fills.
+    Storage pool-group headers pin nothing. A header click opens or closes its
+    group, exactly like its chevron, so it neither closes an open pool in
+    another group nor writes a `summaryGroup` route param, and Storage reads
+    none. The group pin and its member-row emphasis were removed after the
+    storage summary charts the pinned scope was built to rescope were
+    retired: one click pinned a group and toggled it, so pinning an open
+    group also collapsed it and hid the rows it emphasised.
 18. Keep the storage summary history cache versioned with the chart contract.
     `frontend-modern/src/utils/storageSummaryCache.ts`, which
     `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts` reads
@@ -2954,18 +2963,18 @@ canonical pre-handler authorization proof covering both transfer routes.
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
     rather than carrying storage-local sky fill classes that drift from the
-    rest of the product or obscure inline capacity bars. Storage pool rows,
-    physical-disk rows, and storage group headers must also route pointer,
-    and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`. Pool
-    rows and physical-disk rows may keep deliberate expand/pin ownership on
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, but
-    storage group headers should pin through the row itself and must not add a
-    separate scope/pinned pill button beside the disclosure chevron. Touch
-    pool, physical-disk, and storage group rows own expansion through the whole
-    row, so they must explicitly suppress the redundant visible mobile
-    chevron. Storage group row activation performs disclosure and summary
-    focus together rather than preserving a storage-only chevron exception.
+    rest of the product or obscure inline capacity bars. Storage pool rows
+    and physical-disk rows must also route pointer and focus preview through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, and may
+    keep deliberate expand/pin ownership on
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`.
+    Storage group headers have no preview or pin: the whole row and its
+    disclosure chevron perform the same open/close, the row keeps
+    `data-summary-group-id` so the shared clear-surface click leaves an open
+    pool alone, and the header must not add a separate scope/pinned pill
+    button beside the chevron. Touch pool, physical-disk, and storage group
+    rows own expansion through the whole row, so they must explicitly
+    suppress the redundant visible mobile chevron.
     A drag that selects pool row text, such as a pool name being copied, must
     not expand the row: `StoragePoolRow` wires the shared
     `createRowTextSelectionGuard()` from
@@ -4488,9 +4497,9 @@ for pools and disks. Expanding a pool row or selecting a disk row sets the
 focused summary series ID and row hover sets the hovered one;
 `frontend-modern/src/components/Storage/useStoragePageModel.ts` must resolve
 both through the shared `useSummaryPageInteractionState` bridge in
-`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool, disk,
-and pool-group row emphasis keeps the same page/group/entity semantics as
-workloads instead of preserving a storage-local hover/focus branch. The
+`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool and disk
+row emphasis keeps the same page/entity semantics as workloads instead of
+preserving a storage-local hover/focus branch. The
 storage summary history that `useStorageSummaryCharts.ts` loads feeds only the
 pool Growth column and its sort; no storage summary card strip renders, and
 one that returns must stay page-scoped instead of collapsing to the expanded
@@ -4499,8 +4508,7 @@ That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
 auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
 hands the focused pool or disk series to the `revealActiveSeries` callback,
-which reopens a focused pool's collapsed owning group, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge. Focus
+which reopens a focused pool's collapsed owning group. Focus
 only ever names a row in the active pools or disks view, so the callback never
 switches views; the view-switching branches that served the retired jump to
 the active row are gone. Reveal runs once per deliberate focus change: the
@@ -4987,9 +4995,18 @@ that fetched the unfiltered first page had no reader once the aggregate Recovery
 page was deleted, and are gone. A surface that needs one of those filters adds
 it to the query type together with its caller, and sends a linked-resource
 filter as `itemResourceId`, never `subjectResourceId`.
+The decode of that response follows the same rule:
+`normalizeRecoveryPointsResponse` and the `RecoveryPointsResponse` and
+`RecoveryPointsTransportResponse` types in
+`frontend-modern/src/types/recovery.ts` carry the points alone. The endpoint
+still returns its pagination meta (`page`, `limit`, `total`, `totalPages`) and
+that backend contract is unchanged, but no frontend surface reads it, so a
+surface that pages the points adds the meta back to the response types together
+with its reader.
 `frontend-modern/src/api/__tests__/recoveryTransport.test.ts` pins the query
-keys and the result members at the type level and the three parameters that
-reach the wire at runtime.
+keys, the result members and the response keys at the type level, and at
+runtime the three parameters that reach the wire and that a backend response's
+meta does not survive the decode.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and
@@ -6647,6 +6664,16 @@ to it.
 Both are read-path changes to source freshness and presentation; no storage,
 retention, backup or recovery path is added or moved.
 
+### Connection freshness cadence opens no storage or recovery path
+
+`internal/api/connections_alerts.go` now scales the connections list's
+active-to-stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`), which honours saved PBS and PMG intervals that
+reach a non-default org's monitor only as runtime overrides. This is a
+read-path change to connection freshness. Backup polling, PBS backup and
+datastore collection, retention and recovery are unchanged, and nothing new
+is persisted.
+
 ### Webhook configuration never persists the API mask
 
 `internal/api/alerting/notifications.go` resolves each `***REDACTED***`
@@ -6752,3 +6779,12 @@ links' pairs, which deletes the pair's link row in the resource store as an
 unlink does. Nothing new is persisted: the record is rebuilt with each
 registry generation, and no schema, backup, retention, migration or
 recovery path is added or moved.
+
+Each fold also records its two sides' own sources (`HolderOwn`, `FoldedOwn`),
+in the same unexported in-memory field, and `ReportedManualLinkFolds` in
+`internal/unifiedresources/manual_link_folds.go` uses them so a
+source-filtered report-merge in `internal/api/resourceapi/resources.go`
+excludes the links that join a member carrying the named source to the rest
+of the merged resource. That changes which pairs the report excludes, through
+the same exclusion write as before; no schema, backup, retention, migration or recovery path is added or
+moved.

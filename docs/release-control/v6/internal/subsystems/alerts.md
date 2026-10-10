@@ -1155,6 +1155,37 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Webhook drafts survive unconfirmed persistence
+
+The existing Notifications editor awaits an explicit successful acknowledgement
+from its add/update owner before clearing a draft. The owner returns success
+only after the API responds and the returned destination replaces or joins the
+displayed inventory. A rejected or interrupted save keeps the same inputs,
+masked fields, template, mention and tag/severity policy. Fixed inline guidance
+does not claim the write was rejected: an interrupted response can follow a
+committed create, so the operator checks saved destinations in another tab
+before explicitly retrying. There is no editor-triggered automatic replay.
+
+One pending editor save locks the draft, Cancel and the conflicting local list
+controls, and subsequent Save calls do not invoke another mutation. Success
+closes the editor; failure unlocks it for correction or deliberate cancellation.
+The API, encrypted persistence/publication ordering, saved-value masking, Test
+payload parity, delivery policy, SSRF/TLS and existing shared API-client retry
+rules are unchanged. This is draft recovery, not exactly-once creation or proof
+that ordinary notifications arrive.
+
+`WebhookConfig.persistence.test.tsx` exercises the actual editor and mutation
+owner through deferred create/update responses, failure, explicit retry,
+canonical accepted response, cancellation and fixed callback-error guidance.
+The deliberate-retry control defers its response separately: clearing the old
+warning at retry start is not acknowledgement, and the draft stays locked until
+the accepted response incorporates the destination and closes the editor.
+`WebhookConfig.test.tsx` now acknowledges successful saves before expecting
+editor dismissal. The local `webhook-save-acknowledgement` browser fixture
+checks the same components with synthetic API transport, including desktop and
+phone keyboard/touch journeys and another-tab reconciliation after a lost
+response. It sends no real notification and establishes no installed outcome.
+
 ### Active Docker update pending age survives restart
 
 A positive Docker image-update report reuses the matching active occurrence's
@@ -4298,6 +4329,27 @@ Formatting-only follow-up retains this warning-level contract. The production-co
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
 
+### SMTP rate-limit preference persistence
+
+The existing SMTP editor's rate limit is included by
+`alertDestinationsModel.buildEmailConfigPayload` on every destination save.
+Unrelated email edits and switching email off must preserve the loaded limit;
+an explicitly edited limit must reach the existing Notifications API unchanged.
+Zero remains the backend's default-limit sentinel, not an omitted or unlimited
+value. Missing saved limits still use the existing UI default of 60 per minute.
+SMTP masks, TLS settings, recipients, tags and severity preferences are unchanged.
+This repairs a missing UI-to-API field, not the schema or transport policy.
+Revealing switched-off email settings permits pointer and keyboard editing without
+enabling email. The status toggle remains off and Send test email stays disabled.
+
+`emailRateLimit.persistence.test.tsx` connects the actual SMTP editor, destination
+mutation owner, payload builder and email API to synthetic wire assertions.
+The two payload-shape suites retain strict key checks including `rateLimit`.
+`browser-tests/email-rate-limit.cjs` checks save and readback on desktop and phone,
+including unrelated edits, disabled email and legacy zero. These fixtures do not
+send notifications or establish native SMTP throughput, release availability or
+the cause of an existing delivery failure.
+
 ### Pulse Mobile push destination without an upsell
 
 The Alerts destinations page renders the mobile push panel only when the
@@ -4552,3 +4604,20 @@ Verification: `src/utils/__tests__/metricThresholds.test.ts`,
 production table/drawer fixture `browser-tests/truenas-disk-thresholds.cjs`.
 The containing backend also resolves the disk-specific tiers for Patrol.
 Frontend checks do not establish native appliance or notification recovery.
+
+### Existing SMTP form exposes only persisted settings
+
+The Email destination editor follows the public `EmailConfig`: SMTP connection,
+credentials, From/recipients, security, rate limit, tags and minimum severity.
+Reply-to, max retries and retry delay are not offered or fabricated by the UI;
+the save path never accepted them. `UIEmailConfig` extends that public type
+with concrete normalized password/rate-limit values, and the advanced form
+explains that Pulse manages retries. Existing server retry behaviour is unchanged.
+
+`EmailProviderSelect.supported-settings.test.tsx` requires absence of all three
+ineffective controls, default/payload parity and supported edits/reloads when
+email is on or off. Existing component and destination-state tests retain
+provider, mask, routing and off-state behaviour;
+`src/utils/__tests__/alertEmailPresentation.test.ts` covers the retry explanation.
+Browser proof uses the production email panel, destination state, API and CSS
+with synthetic local endpoints. It is not native SMTP delivery or a release.

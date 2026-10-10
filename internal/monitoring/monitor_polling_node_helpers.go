@@ -136,9 +136,11 @@ const nodeTemperatureCarryFloor = 5 * time.Minute
 
 // nodeTemperatureCarryWindow bounds how old a carried-over node temperature may
 // be. Beyond it the reading no longer describes the node, so it stops being
-// presented as available.
+// presented as available. It follows the PVE cadence the resource freshness
+// and node offline grace use, so a node preserved inside that grace keeps a
+// reading from its last healthy poll.
 func (m *Monitor) nodeTemperatureCarryWindow() time.Duration {
-	return resourceStaleThresholdForPollInterval(effectivePVEPollingIntervalForConfig(m.config), nodeTemperatureCarryFloor)
+	return resourceStaleThresholdForPollInterval(m.resourcePollIntervals().pve, nodeTemperatureCarryFloor)
 }
 
 func (m *Monitor) collectNodeTemperatureData(

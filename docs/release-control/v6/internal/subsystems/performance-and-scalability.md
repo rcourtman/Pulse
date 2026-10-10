@@ -702,7 +702,7 @@ or a measured fleet performance improvement.
     WebSocket startup, so a delayed or blocked first stream snapshot cannot
     hide server-owned platform scopes; auth-mode branches must not fork
     additional state probes or perform the same hydration twice.
-20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and host coalescence are both a unified-resource contract and a fleet-scale reconciliation hot path.
+20. `frontend-modern/src/utils/resourceStateAdapters.ts` shared with `unified-resources`: canonical resource compatibility and realtime row merging are both a unified-resource contract and a fleet-scale reconciliation hot path.
 17. `frontend-modern/src/utils/workloads.ts` shared with `unified-resources`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
 18. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 21. `internal/mock/fixture_graph.go` shared with `monitoring`: the canonical mock fixture graph is both monitoring-owned runtime data and a protected large-estate demo transport hot path.
@@ -741,16 +741,15 @@ cluster's pods in each usage update, keyed by node name, with no per-pod scan
 of other pods or nodes.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
-canonicalizes and reconciles only changed resources plus the host-merge groups
-the delta could have altered: a group refreshes when a flagged id names one of
-its members (a flagged id absent from the incoming snapshot conservatively
-refreshes every group), and a tick that flags no member preserves the cached
-merged host row by object identity. Unchanged non-host display resources retain
-object identity.
-Same-hostname provider disambiguation must retain that locality: candidate
-rows are indexed by normalized host key, and machine, DMI, cluster, endpoint,
-and linked-agent comparisons may inspect only the matching key's bucket rather
-than rescan unrelated estate rows.
+canonicalizes and reconciles only changed and newly added resources. Each
+server row is one display row, because the server already coalesced host
+views for presentation, so unchanged display resources, host rows included,
+retain object identity and the browser runs no host-merge pass of its own.
+The hook's full merge (initial hydration and uncovered revision gaps) clones
+the connection store's rows once, because cache rows must not share nested
+arrays with rows the store reconciles in place; delta merges already clone each
+changed row that takes the full merge path, and fast-path rows clone only the
+patched subtrees.
 `frontend-modern/src/stores/websocket.ts` publishes the changed-ID set and a
 monotonic resource revision with each reconciliation. The shared
 `useUnifiedResources` owner applies that revision to the process-wide canonical
@@ -1495,7 +1494,7 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     appears; the column returns by itself when data arrives. The accessor
     reads the unfiltered guest set so narrowing the table by search or status
     never removes the column.
-18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`. In kiosk mode the shared `FilterBar` keeps that toolbar unmounted, so a wall display mounts none of the bar's search field, suggestion list, View popover or type-to-search listener; overview pages must not add their own kiosk check around it.
     Workload autocomplete must project from the same unfiltered guest inventory
     and the same search-candidate helper used by the workload predicate. The
     projection includes workload identity plus deduplicated node, Docker host,
@@ -3740,6 +3739,35 @@ resource policy attached to them. `internal/mock/generator_test.go` verifies
 nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
+
+### Alert passes resolve metrics targets without materializing the estate
+
+An alert pass makes one `Monitor.MetricsTargetForResource` call per resource
+and windowed metric, so that call has to be a lookup, not a view build. In mock
+mode it reads the targets the cached view captured and keeps reading them across
+metric ticks (see "Mock-mode metrics-target lookups ride the fixture structure
+revision" in the monitoring contract). On pulse-dev,
+`BenchmarkMockMetricsTargetResolutionAfterTick` measured a pass of 4,731
+lookups against the default estate, after a tick, at 1.8 ms and 151 KB. The
+data-version key made the first lookup after every tick build the estate, and
+made every lookup of a pass build it once a build outlasted the 2-second tick,
+which stalled startup under CPU starvation. Real mode did not show this cost in
+steady state: the store is itself the read state, and a one-off measurement
+with a temporary counter (not asserted by a test) found a full
+`updateResourceStore` pass over 1,694 resources (populate, metric syncs and
+alert sync) taking 108 ms with 121 registry resolutions that fell back to the
+full-mapping scan, because the registry's typed views are built before the
+alert loop runs. `BenchmarkLiveRegistryMetricsTargetResolution` records only
+the lookup cost of a registry whose views are unbuilt against one whose views
+are built (136 ms against 5 ms per 5,079 lookups); it controls the warming
+itself, so it cannot detect production failing to warm the views before the
+alert loop, which is what the one-off measurement above showed. Run both
+benchmarks with `-benchtime=3x`, since the registry case rebuilds its ingest
+outside the timer. `TestMockMetricsTargetLookupsDoNotRebuildTheViewAfterFixtureTicks`
+is the guard that fails on a rebuild per lookup. The remaining startup cost
+under starvation is the monitor's repeated full resource-store passes (one per
+supplemental provider registration) and the other consumers of the shared view,
+which rebuild it whenever they find it stale; neither is changed here.
 
 ### Update evidence reuses the bounded node observation
 

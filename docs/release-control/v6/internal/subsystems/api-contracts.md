@@ -34,10 +34,11 @@ through Assistant condensation. Performance responses add a guest-history source
 limitation without relabelling past samples or changing their numbers; their
 actual tool controls are in `TestGuestMemoryHistoryDoesNotBorrowLiveOrigin`.
 
-The retained `protected_guests` settings field is legacy compatibility data,
-not an exclusion filter for canonical saved action plans. Existing Assistant
-help now states that limitation and requires target/approval review in Actions.
-No field value, GET/PUT shape, scope or approval authority changes.
+The `protected_guests` settings field is retired: it was never an exclusion
+filter for canonical saved action plans. `GET /api/settings/ai` no longer
+returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
+stored value is dropped the next time the settings are written. Scope and
+approval authority do not change.
 
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
@@ -52,8 +53,7 @@ legacy `autonomous` preference presents planning for operator review, never
 unprompted execution. Existing legacy PUT validation and `ai_autofix` checks
 remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
-vocabulary, Patrol settings, protected-guest arrays and authenticated authority
-remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
+vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
 
 ### Optional held-alert breach date consumer
@@ -1761,7 +1761,11 @@ payload shape change when the portal presents compact client rows.
    contract tests rather than adding an untyped browser-only provider list.
    API responses must never echo provider secret values; settings updates may
    accept credential and clear-key fields, persist trimmed values, and return
-   only configured state.
+   only configured state. The settings projection and update request carry no
+   `protected_guests` field: the Assistant has no guest list of its own, and a
+   `protected_guests` key from an older client is ignored. Guests Pulse must
+   not act on are locked through the resource operator state
+   (`neverAutoRemediate`), which the Assistant honours at planning.
 6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
@@ -3454,7 +3458,12 @@ a new API state machine, queue contract, or verification-accounting field.
    while `/patrol#operations-loop` remains inbound compatibility only, rather
    than becoming an API payload field, Assistant prompt body, or backend
    completion state machine. The canonical anchor must resolve to the visible
-   Patrol mode selector, not to the assessment workspace; that anchor may
+   Patrol mode selector, not to the assessment workspace: arriving on
+   `#patrol-control`, with or without the starter query, or on the
+   `#operations-loop` compatibility anchor opens the Patrol header's collapsed
+   `Mode and automation` disclosure and scrolls it into view, a plain `/patrol`
+   visit leaves it collapsed, and plan-locked installs, which have no selector,
+   land on the header's inline `Patrol mode` line; that anchor may
    route a new Pro user to Patrol mode from a generic Patrol run state, but issue-backed
    progress through Assistant, governed decision, verification, and MCP parity
    must still derive from real Patrol finding, investigation, approval, action,
@@ -3953,7 +3962,9 @@ a new API state machine, queue contract, or verification-accounting field.
     closed when more than one enabled platform source matches; VMware remains
     excluded because a vCenter connection is not the ESXi host on which an
     agent would run. PBS source aliases include the hostname the PBS node
-    reports about itself (state-side `PBSInstance.NodeName`), because reported
+    reports about itself (`PBSInstance.NodeName` as returned by
+    `Monitor.PBSInstancesSnapshot()`, which converts it back out of the unified
+    PBS view), because reported
     machine identity, not configured addressing, is what reconciles an
     IP-or-alias-configured PBS connection with the host agent running on that
     machine. Composition adds agent telemetry to the source row without
@@ -5329,6 +5340,36 @@ compatibility path. A current executor whose agent supports the feasibility
 transport fails closed when the connected agent cannot answer it. Registry or
 readiness-check infrastructure failures remain
 nonterminal internal errors rather than false permanent refusals.
+
+Human `Execute` admits through the same policy admission coordinator as
+`ExecuteUnderPolicy`. It holds the admission read lock from the live-readiness
+gates, including the operator remediation lock (`NeverAutoRemediate`) and the
+Retired lifecycle state, through the committed `executing` transition, and
+releases it before the executor's `ExecuteAction` is called, so a slow
+dispatch never blocks a policy save. Executor readiness and binding calls and
+the admission hooks still run under the lock, so they can delay a save and must
+never request a policy write or re-enter `Execute`/`ExecuteUnderPolicy`. An
+operator lock saved through `WithPolicyMutation` therefore either lands before
+the readiness check and refuses the approved action with a persisted
+refused-before-dispatch failure, or queues behind the committed admission. A
+save that has been acknowledged to the operator is never followed by a new
+lifecycle admission (`Execute` or `ExecuteUnderPolicy`) for that resource.
+The committed `executing` transition is the policy linearization point for both
+paths: a lock refuses new admissions and does not recall an admitted
+dispatch. That includes an attempt that was admitted but never sent (a crash
+between admission and send), which `RecoverExecutingActions` resumes without
+re-reading the lock. Recalling known-unsent work would need an atomic,
+conditional pre-send terminalization that neither store has
+(`RecordActionExecutionRefusal` accepts only planned, pending, and approved
+rows, and `ForceFail` records inconclusive truth), so operator-facing copy must
+say that an action already admitted can still run. Proof:
+`TestExecuteAdmissionLinearizesWithOperatorLockSave*` asserts the coordinator
+excludes a policy writer between the readiness check and the admission commit
+and orders a real concurrent lock save against the admission,
+`TestExecuteAdmittedDispatchIsNotRecalledByLaterOperatorLock` pins release
+before dispatch and no recall, and
+`TestRecoverExecutingActionsDoesNotRecallQueuedAttemptAfterOperatorLock` pins
+the unsent-attempt boundary.
 
 The public Patrol investigation boundary now carries independent
 `max_turns` and `max_evidence_calls` request limits and returns `model_turns`,
@@ -9997,6 +10038,25 @@ metadata, but API freshness and `lastSeenAt` projections use the server-authored
 receipt time supplied by monitoring. API consumers must not substitute the
 agent clock for disconnect detection or apply a second, shorter generic
 Connections staleness window.
+PVE, PBS and PMG connection rows scale their active-to-stale cutoff by the
+cadence the org's monitor polls at.
+`buildAggregatorInputsWithRuntimeSources` reads `Monitor.BasePollInterval`
+(clamped like the scheduler, so an out-of-range configured interval is judged
+by the cadence actually polled) whenever a monitor is present, and falls back
+to the request config only when there is no monitor. A non-default org's request config is its monitor's
+detached copy (#1619), which a system-settings save does not update; saved PBS
+and PMG intervals reach that monitor only as runtime overrides. Reading the
+copy left Settings > Infrastructure rows stale for part of every cycle after
+an interval was raised, and slow to go stale after one was lowered.
+Adaptive polling still scales by the larger of that base and
+`PlannedPollInterval`, a conservative floor that can exceed the adaptive
+cadence. The connections list, runtime inventory sources and
+diagnostics all share this input builder. The system settings GET is not
+affected: the router serves `/api/config/system` from `SystemSettingsHandler`,
+which reads the base config and saved settings, not a tenant copy.
+`TestContract_ConnectionFreshnessFollowsSavedPollingIntervalsInTenantMonitors`
+in `internal/api/contract_test.go` drives a real settings save into a tenant
+monitor built from a detached copy and checks both directions.
 Availability target writes now use `observationLocationIds` as the canonical
 bounded set. Values are source-owned IDs (`pulse:local` or
 `agent:<agent-id>`), are normalized and deduplicated by the server, and every
@@ -12010,3 +12070,15 @@ pairs with the identity-match exclusions. `400 Resource is not merged` and
 so two linked agents, which share their only source, can be reported.
 `TestContract_ResourceReportMergeReplacesOperatorLink` pins the response
 shape and the link's removal for a VM and the agent linked into it.
+
+A request that names `sources` undoes the links that join a member carrying
+one of those sources to the rest of the merged resource, chosen by member
+(`ReportedManualLinkFolds`) rather than by the sources a link's folded side
+took in along with its own members. Naming the source of a leaf in a chain of
+links no longer also splits the leaf's holder from the resource, and where
+links form a cycle the named member is cut from every link that would rejoin
+it. The request, status codes, response shape and the meaning of an empty
+`sources` (every link) are unchanged, and no new endpoint, field or stored
+decision is added: `exclusions` still counts one link pair each.
+`TestResourceReportMergeSourceFilterDetachesChainMembers` reports a chain
+through the handler and the REST listing.

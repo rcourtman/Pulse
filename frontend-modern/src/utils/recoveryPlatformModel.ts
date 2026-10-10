@@ -5,7 +5,6 @@ import type {
   RecoveryPointsResponse,
   RecoveryPointsTransportResponse,
   RecoveryPointTransport,
-  RecoveryResponseMeta,
 } from '@/types/recovery';
 
 const toTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -59,22 +58,6 @@ export const getRecoveryPointPlatform = (
   point: RecoveryPointPlatformLike | null | undefined,
 ): string => toTrimmedString(point?.platform) || toTrimmedString(point?.provider);
 
-const normalizeRecoveryMeta = (
-  meta: RecoveryResponseMeta | null | undefined,
-): RecoveryResponseMeta => {
-  const page = typeof meta?.page === 'number' && Number.isFinite(meta.page) ? meta.page : 1;
-  const limit = typeof meta?.limit === 'number' && Number.isFinite(meta.limit) ? meta.limit : 0;
-  const total = typeof meta?.total === 'number' && Number.isFinite(meta.total) ? meta.total : 0;
-  const totalPages =
-    typeof meta?.totalPages === 'number' && Number.isFinite(meta.totalPages) ? meta.totalPages : 1;
-  return {
-    page,
-    limit,
-    total,
-    totalPages,
-  };
-};
-
 export const normalizeRecoveryPoint = (
   point: RecoveryPointTransport | RecoveryPoint,
 ): RecoveryPoint => {
@@ -102,5 +85,4 @@ export const normalizeRecoveryPointsResponse = (
   response: RecoveryPointsTransportResponse,
 ): RecoveryPointsResponse => ({
   data: Array.isArray(response?.data) ? response.data.map(normalizeRecoveryPoint) : [],
-  meta: normalizeRecoveryMeta(response?.meta),
 });

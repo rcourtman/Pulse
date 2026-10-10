@@ -73,11 +73,18 @@ interface WebhookConfigFormProps {
   testWebhookForm: () => void;
   saveWebhook: () => void;
   testing?: string | null;
+  saving: Accessor<boolean>;
+  saveError: Accessor<string | null>;
 }
 
 export function WebhookConfigForm(props: WebhookConfigFormProps) {
   return (
-    <div class="space-y-4 text-sm">
+    <fieldset
+      class="min-w-0 space-y-4 border-0 p-0 text-sm"
+      disabled={props.saving()}
+      aria-busy={props.saving()}
+    >
+      <legend class="sr-only">Webhook configuration</legend>
       <div>
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-medium text-base-content">Service Type</span>
@@ -408,6 +415,12 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         </label>
       </div>
 
+      <Show when={props.saveError()}>
+        <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+          {props.saveError()}
+        </p>
+      </Show>
+
       <div class="flex justify-end gap-2 text-xs">
         <button
           onClick={props.cancelForm}
@@ -429,12 +442,12 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         </Show>
         <button
           onClick={props.saveWebhook}
-          disabled={!props.formData().name || !props.formData().url}
+          disabled={props.saving() || !props.formData().name || !props.formData().url}
           class="min-h-11 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0"
         >
-          {getAlertWebhookSubmitLabel(Boolean(props.editingId()))}
+          {props.saving() ? 'Saving…' : getAlertWebhookSubmitLabel(Boolean(props.editingId()))}
         </button>
       </div>
-    </div>
+    </fieldset>
   );
 }
