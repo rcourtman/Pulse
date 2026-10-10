@@ -63,6 +63,7 @@ type VMMemoryRaw struct {
 	MemInfoCached          uint64 `json:"meminfoCached,omitempty"`
 	MemInfoShared          uint64 `json:"meminfoShared,omitempty"`
 	MemInfoTotalMinusUsed  uint64 `json:"meminfoTotalMinusUsed,omitempty"`
+	GuestAgentMemTotal     uint64 `json:"guestAgentMemTotal,omitempty"`
 	GuestAgentMemAvailable uint64 `json:"guestAgentMemAvailable,omitempty"`
 	GuestAgentMemFree      uint64 `json:"guestAgentMemFree,omitempty"`
 	GuestAgentMemBuffers   uint64 `json:"guestAgentMemBuffers,omitempty"`
