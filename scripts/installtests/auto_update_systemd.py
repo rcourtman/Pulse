@@ -257,8 +257,6 @@ class NativeLab:
         if state["ActiveState"] != active:
             raise RuntimeError("prior activity was not restored")
         if active == "active":
-            if digest(Path("/proc") / state["MainPID"] / "exe") != digest(binary):
-                raise RuntimeError("running executable differs from installed executable")
             deadline = time.monotonic() + 30
             while True:
                 try:
@@ -281,6 +279,15 @@ class NativeLab:
                     if time.monotonic() >= deadline:
                         raise RuntimeError("native application readiness deadline") from None
                     time.sleep(0.25)
+            # Type=simple start can return before exec. Bind the observed
+            # process after application readiness, not to that launch race.
+            state = self.state()
+            if state["ActiveState"] != "active" or state["MainPID"] == "0":
+                raise RuntimeError("served application has no active managed process")
+            if digest(Path("/proc") / state["MainPID"] / "exe") != digest(binary):
+                raise RuntimeError("running executable differs from installed executable")
+        elif state["MainPID"] != "0":
+            raise RuntimeError("inactive fixture retains a managed process")
         return state
 
     def phase(self, name, tag, expected_exit=0, active="active", fault="", retain=False, manual=False):
