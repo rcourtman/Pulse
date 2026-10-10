@@ -42,7 +42,6 @@ import {
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
 import {
-  getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureEmptyStateDetail,
   getInfrastructureEmptyStateSummary,
   getInfrastructureOnboardingProductPresentation,
@@ -205,14 +204,9 @@ const memberMethodPresentation = (
   return infrastructureSourcePresentation(member.source);
 };
 
-type SetupConfidenceActionKind = 'add' | 'agent' | 'scan';
-
 interface SetupConfidenceAction {
-  kind: SetupConfidenceActionKind;
   label: string;
-  detail: string;
-  onClick?: () => void;
-  disabled?: boolean;
+  onClick: () => void;
 }
 
 interface ConfiguredSourceGroup {
@@ -529,16 +523,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     infrastructureRows().flatMap((row) => missingAgentTargetNames(row)),
   );
   const uncoveredAgentTargetCount = createMemo(() => uncoveredAgentTargets().length);
-  // Names list keeps the descriptive 'Install agents' hint actionable: when
-  // there are 1 or 2 hosts missing an agent, surface their names directly so
-  // the user knows exactly which boxes the install applies to.
-  const uncoveredAgentTargetNamesText = createMemo(() => {
-    const names = uncoveredAgentTargets().filter(Boolean);
-    if (names.length === 0) return null;
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return null;
-  });
   // Counters read directly off the row state the user sees: a row is live
   // when its status is "Active" and needs attention when its derived
   // problem (or any member's) is non-empty. Going via signal predicates
@@ -594,25 +578,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       return `Started ${formatRelativeTimestamp(status.lastScanStartedAt) ?? 'just now'}`;
     }
     if (lastDiscoveryResultText()) return `Last scanned ${lastDiscoveryResultText()}`;
-    return props.discoveryEnabled ? 'Never scanned' : 'Not configured';
+    // Off with no result says nothing more than the Off badge beside it. A
+    // manual scan's result is not stored server-side, so after a reload "never
+    // scanned" could be false; "no result yet" is true either way.
+    return props.discoveryEnabled ? 'No scan result yet' : '';
   });
-  const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
-    if (connectedSystemCount() === 0) {
-      // Distinct from the page-header 'Add infrastructure' CTA, which is
-      // also visible in the zero-connected state; two identically named
-      // buttons on one page are ambiguous for assistive tech (and for
-      // accessible-name locators).
-      return {
-        kind: 'add',
-        label: 'Add your first system',
-        detail: 'Add a platform, host, NAS, or cluster to start monitoring.',
-        onClick: props.onAddInfrastructure,
-      };
-    }
-
+  // Follow-up action for systems that are already connected. With none
+  // connected the page-header 'Add infrastructure' button is the one way in,
+  // so this band offers nothing rather than a second button for the same job.
+  const setupConfidenceAction = createMemo<SetupConfidenceAction | undefined>(() => {
     if (uncoveredAgentTargetCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
-      const namesText = uncoveredAgentTargetNamesText();
-      const target = namesText ?? formatCount(uncoveredAgentTargetCount(), 'Proxmox host');
       // When every uncovered host sits in one cluster that can install from a
       // sibling, the summary action opens that one-step install directly.
       const uncoveredRows = infrastructureRows().filter((row) => rowNeedsAgentCoverage(row));
@@ -621,29 +596,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           ? uncoveredRows[0]
           : undefined;
       return {
-        kind: 'agent',
         label: uncoveredAgentTargetCount() === 1 ? 'Install agent' : 'Install agents',
-        detail: `Install one Pulse Agent on each uncovered Proxmox host (${target}) to add node-local telemetry such as temperatures, SMART data, and host identity.`,
         onClick: soleCluster ? () => handleInstallAgent(soleCluster) : handleInstallAgentShortcut,
       };
     }
 
-    if (props.onRunDiscovery && props.discoveryEnabled && !lastDiscoveryResultText()) {
-      return {
-        kind: 'scan',
-        label: props.discoveryScanStatus().scanning ? 'Scanning networks' : 'Scan networks',
-        detail: `Run discovery to check whether more ${discoveryScanTargetLabel} are waiting on the configured networks.`,
-        onClick: props.onRunDiscovery,
-        disabled: props.discoveryScanStatus().scanning,
-      };
-    }
-
-    const completeAction = getInfrastructureCoverageCompleteActionPresentation();
-    return {
-      kind: 'add',
-      label: completeAction.label,
-      detail: completeAction.detail,
-    };
+    return undefined;
   });
   const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -700,20 +658,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
-  const setupConfidenceActionIcon = (kind: SetupConfidenceActionKind) => (
-    <>
-      <Show when={kind === 'agent'}>
-        <Cpu class="h-4 w-4" />
-      </Show>
-      <Show when={kind === 'scan'}>
-        <RotateCw class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`} />
-      </Show>
-      <Show when={kind === 'add'}>
-        <Plus class="h-4 w-4" />
-      </Show>
-    </>
-  );
-
   const discoveryMonitorBand = () => (
     <section
       aria-label="Discover Proxmox systems"
@@ -743,7 +687,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             >
               {discoveryMonitorTitle()}
             </span>
-            <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
+            <Show when={discoveryMonitorMeta()}>
+              <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
+            </Show>
           </div>
           <p class="mt-1 max-w-4xl text-xs leading-5 text-muted">{discoveryMonitorDetail()}</p>
           <Show when={discoveryErrorSummary(props.discoveryScanStatus().errors)}>
@@ -864,31 +810,31 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 Open Agent Doctor
               </Button>
             </Show>
-            <Show when={Boolean(setupConfidenceAction().onClick)}>
-              <Button
-                type="button"
-                variant="secondary"
-                size="mdCompact"
-                onClick={() => setupConfidenceAction().onClick?.()}
-                disabled={setupConfidenceAction().disabled}
-                class="min-h-11 gap-2 lg:min-h-9"
-              >
-                {setupConfidenceActionIcon(setupConfidenceAction().kind)}
-                {setupConfidenceAction().label}
-              </Button>
+            <Show when={setupConfidenceAction()}>
+              {(action) => (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="mdCompact"
+                  onClick={() => action().onClick()}
+                  class="min-h-11 gap-2 lg:min-h-9"
+                >
+                  <Cpu class="h-4 w-4" />
+                  {action().label}
+                </Button>
+              )}
             </Show>
           </div>
         </Show>
       </div>
-
-      <Show when={connectedSystemCount() === 0}>
-        <p class="mt-2 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
-      </Show>
     </section>
   );
 
+  // Rendered inside a `.table-fixed` cell, whose global rule forces nowrap on
+  // the cell itself (and a utility class on the cell loses to it), so the
+  // wrapper resets wrapping: the prose below must wrap, not clip.
   const emptyStateContent = () => (
-    <div class="mx-auto max-w-3xl space-y-2">
+    <div class="mx-auto max-w-3xl space-y-2 whitespace-normal">
       <div class="text-sm font-semibold text-base-content">Start monitoring infrastructure</div>
       <p>{getInfrastructureEmptyStateSummary()}</p>
       <p class="text-xs leading-5 text-muted">{getInfrastructureEmptyStateDetail()}</p>

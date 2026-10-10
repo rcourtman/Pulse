@@ -160,4 +160,43 @@ describe('useInfrastructureDiscoveryRuntimeState', () => {
 
     dispose();
   });
+
+  it('does not date a never-scanned stored result as a scan that just ran', async () => {
+    // A fresh install answers GET /api/discover with `updated: 0`.
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ servers: [], errors: [], updated: 0, cached: false }),
+    });
+
+    const { dispose, state } = mountHook();
+
+    await state.loadDiscoveredNodes();
+
+    expect(state.discoveredNodes()).toEqual([]);
+    expect(state.discoveryScanStatus().scanning).toBe(false);
+    expect(state.discoveryScanStatus().lastResultAt).toBeUndefined();
+
+    dispose();
+  });
+
+  it('keeps the last real scan time when a later load carries none', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ servers: [], errors: [], timestamp: 1_700_000_000_000 }),
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ servers: [], errors: [], updated: 0 }),
+    });
+
+    const { dispose, state } = mountHook();
+
+    await state.triggerDiscoveryScan({ quiet: true });
+    expect(state.discoveryScanStatus().lastResultAt).toBe(1_700_000_000_000);
+
+    await state.loadDiscoveredNodes();
+    expect(state.discoveryScanStatus().lastResultAt).toBe(1_700_000_000_000);
+
+    dispose();
+  });
 });
