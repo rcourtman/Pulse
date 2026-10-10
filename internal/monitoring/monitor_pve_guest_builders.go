@@ -890,8 +890,10 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 	summary := m.summarizeVMFSInfo(instanceName, res, fsInfo)
 
-	// If we got valid data from guest agent, use it
-	if summary.totalBytes > 0 {
+	// Valid peer rows are not complete guest usage if any reading was rejected.
+	// The wire client reports that distinction as an error; alternate clients
+	// can supply invalid counters directly, so enforce it at this boundary too.
+	if summary.totalBytes > 0 && !summary.invalidBytes {
 		// Sanity check: if the reported disk is way larger than allocated disk,
 		// we might be getting host disk info somehow
 		allocatedDiskGB := float64(res.MaxDisk) / 1073741824
