@@ -25,6 +25,7 @@ func TestSchedulerHealth_EnhancedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error creating monitor: %v", err)
 	}
+	t.Cleanup(monitor.Stop)
 
 	instanceKey := schedulerKey(InstanceTypePVE, "pve-a")
 	monitor.pollStatusMap[instanceKey] = &pollStatus{
