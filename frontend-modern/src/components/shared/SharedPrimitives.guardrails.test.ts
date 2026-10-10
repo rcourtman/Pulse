@@ -5443,6 +5443,10 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePreviewFooter');
     expect(sharedPlatformPageSource).toContain('data-platform-table-preview-footer');
     expect(sharedPlatformPageSource).toContain('aria-expanded={props.expanded}');
+    // Kiosk is a wall display with nobody to press Show all: the shared preview
+    // shows every row there, so no table may re-cap itself or add its own check.
+    expect(sharedPlatformPageSource).toContain('!kioskMode() && hasHiddenRows()');
+    expect(proxmoxNodesTableSource).not.toContain('useKioskMode');
 
     for (const [path, source] of [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
@@ -7510,6 +7514,9 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(sharedPlatformPageSource).toContain('export function PlatformSectionTabs');
+    // Kiosk hides the rail here once, so page surfaces must not gate it themselves.
+    expect(sharedPlatformPageSource).toContain('<PlatformSectionTabRail {...props} />');
+    expect(sharedPlatformPageSource).toContain('<Show when={!kioskMode()}>');
     expect(sharedPlatformPageSource).toContain('useActiveHorizontalRailItemVisibility({');
     expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
     expect(sharedPlatformPageSource).toContain('href={tab.path}');

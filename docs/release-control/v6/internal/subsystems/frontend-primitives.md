@@ -3699,13 +3699,15 @@ default` instead of fusing provider and badge text such as
     table-header chrome outside the canonical Workloads frame.
     Large provider inventories use the shared `createPlatformTablePreview` and
     `PlatformTablePreviewFooter` boundary to keep the controlled workload table
-    in the initial reading flow: Proxmox shows eight node rows by default on
-    larger layouts and four on phone-sized layouts. The accessible, reversible
-    show-all control belongs below the bounded rows, where a shared fade,
-    remaining-row hint, and directional chevron communicate that the list
+    in the initial reading flow: Proxmox shows twelve node rows by default on
+    larger layouts and six on narrow, phone and mobile layouts. The accessible,
+    reversible show-all control belongs below the bounded rows, where a shared
+    fade, remaining-row hint, and directional chevron communicate that the list
     continues; it must not compete with topology context in the Nodes header.
     Expansion is deliberate session state and must not persist a page-burying
-    expanded default.
+    expanded default. Kiosk mode is the one exception: `createPlatformTablePreview`
+    reads the shared kiosk signal, shows every row and renders no show-all
+    control, because a wall display has nobody to press it.
     Docker / Podman, Kubernetes, TrueNAS, VMware vSphere, and Standalone Machines must continue using their shared
     `PlatformTableToolbar` counters and table headers; none may add a parallel
     estate card grid or provider-only spotlight surface.
@@ -5900,7 +5902,8 @@ Platform section tabs are registry-backed too. `PlatformSectionTabs` owns the
 workflow tab shell, hidden-single-tab behavior, active-link styling, link
 targeting, active-page aria state, and minimal active-tab visibility scrolling
 after route or viewport-size changes; platform page surfaces own only tab specs,
-the active tab choice, and aria-label copy.
+the active tab choice, and aria-label copy. The shared tabs also stay unmounted
+in kiosk mode, so a page surface must not add its own kiosk check around them.
 The visibility behavior is a shared horizontal-rail boundary:
 `horizontalRailVisibilityModel.ts` owns the bounded minimal-scroll calculation,
 and `useActiveHorizontalRailItemVisibility.ts` owns route-state, resize, and
@@ -6228,6 +6231,36 @@ The rule covers the shared bar only: a scope heading and its reset (the
 Proxmox `Guests on <node>` heading with Show all nodes), chart-driven
 selections on Proxmox Backups and Alert History, and search fields inside
 opened drawers are outside it.
+
+The rest of the kiosk chrome belongs to the shared platform primitives in
+`frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`, for the
+same reason. `PlatformSectionTabs` stays unmounted while kiosk is on, on every
+platform page and on the Proxmox Backups view rail: the URL picks the section
+and view the way it picks the platform, the maintainer's replies on #917 and
+#1102 promise a display without section navigation, Storage already hides its
+own subtabs there, and on a 400px rack LCD the rail cost 53px of height (106px
+on Backups, which carries two rails). `createPlatformTablePreview` shows every
+row in kiosk and renders no Show all control, so the Proxmox nodes table lists
+all of a 50-node estate instead of the first twelve. A wall display has nobody
+to press the button, and the primary navigation with its Alerts count is hidden
+there, so the table rows are where a node going down shows: on the mock estate
+the capped kiosk never showed the node that was offline. The expansion state is
+left alone, so leaving kiosk restores the rail and the preview as it was before
+kiosk (an expansion still resets once the rows no longer exceed the cap). A
+persisted expansion was rejected: the preview contract forbids a
+page-burying expanded default, and a display would still need one press per
+browser profile. Both rules sit in the shared primitives, so a page that adds a
+rail or a capped table must not add its own kiosk check.
+The controls the FilterBar rule leaves outside stay interactive on purpose. The
+`Guests on <node>` heading with its Show all nodes reset, and the chart
+selections on Proxmox Backups and Alert History, stay because a deliberate
+click on a row or chart, or a URL someone chose, can narrow the page and these
+are the display's way back from that narrowing, so hiding them would strand a
+touch display. Drawer search fields exist only inside a drawer someone opened
+with a click, and the Kubernetes Namespaces and Deployments and Docker Swarm
+drawers register type-to-search only while open, so `useTypeToSearch` stays
+kiosk-agnostic: with no such drawer open, a stray key on an overview reaches no
+field.
 
 FilterBar does not carry a saved-views affordance. The former
 `savedViewsKey` / `useSavedViews` / `SavedViewsMenu` trio persisted named

@@ -35,6 +35,7 @@ import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useKioskMode } from '@/hooks/useKioskMode';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -89,11 +90,27 @@ export type PlatformTabSpec<TabId extends string> = {
   path: string;
 };
 
-export function PlatformSectionTabs<TabId extends string>(props: {
+type PlatformSectionTabsProps<TabId extends string> = {
   tabs: readonly PlatformTabSpec<TabId>[];
   active: TabId;
   ariaLabel: string;
-}) {
+};
+
+// Kiosk mode is the read-only wall display: the URL picks the section the way
+// it picks the platform, so the section rail is navigation chrome there like
+// the primary navigation AppLayout already hides. The shared rail owns the
+// rule so a page that adds or moves a rail cannot drop it, and the rail
+// mounts fresh when kiosk ends so its scroll listeners bind to the new element.
+export function PlatformSectionTabs<TabId extends string>(props: PlatformSectionTabsProps<TabId>) {
+  const kioskMode = useKioskMode();
+  return (
+    <Show when={!kioskMode()}>
+      <PlatformSectionTabRail {...props} />
+    </Show>
+  );
+}
+
+function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabsProps<TabId>) {
   let tabListRef: HTMLElement | undefined;
   const [hasOverflow, setHasOverflow] = createSignal(false);
   const [canScrollLeft, setCanScrollLeft] = createSignal(false);
@@ -352,15 +369,24 @@ export function createPlatformTablePreview<Row>(options: {
   rows: Accessor<readonly Row[]>;
   limit: Accessor<number>;
 }) {
+  const kioskMode = useKioskMode();
   const [expanded, setExpanded] = createSignal(false);
   const limit = createMemo(() => Math.max(1, Math.trunc(options.limit())));
-  const canExpand = createMemo(() => options.rows().length > limit());
+  const hasHiddenRows = createMemo(() => options.rows().length > limit());
+  // A kiosk wall display has nobody to press Show all, so a capped preview
+  // there would hide every row past the cap for as long as the display runs.
+  // Kiosk shows every row and offers no toggle. The expansion state is left
+  // alone, so leaving kiosk returns the preview to the state it had before,
+  // unless the rows fell under the cap meanwhile, which resets it as usual.
+  const canExpand = createMemo(() => !kioskMode() && hasHiddenRows());
   const visibleRows = createMemo<readonly Row[]>(() =>
-    expanded() && canExpand() ? options.rows() : options.rows().slice(0, limit()),
+    kioskMode() || (expanded() && hasHiddenRows())
+      ? options.rows()
+      : options.rows().slice(0, limit()),
   );
 
   createEffect(() => {
-    if (!canExpand()) setExpanded(false);
+    if (!hasHiddenRows()) setExpanded(false);
   });
 
   return {
