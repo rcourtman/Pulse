@@ -821,8 +821,10 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    `Running`/`Patrol running` copy.
    `PatrolIntelligenceHeader.tsx` owns the `patrol-control` route target and
    the `operations-loop` compatibility anchor used by Patrol mode entry-point
-   handoffs; the page must keep those anchors on the actual always-visible
-   Patrol mode selector rather than on a separate onboarding banner or
+   handoffs; the page must keep those anchors on the header's Patrol control
+   section, which holds the Patrol on/off toggle and the `Mode and automation`
+   disclosure with the Patrol mode selector (or, for plan-locked installs, the
+   inline `Patrol mode` line), rather than on a separate onboarding banner or
    generic Patrol container. The Patrol surface must preserve the
    issue-evidence rule: Patrol mode can start from a generic Patrol run
    state, but investigation, approval, verification, and external-agent parity
