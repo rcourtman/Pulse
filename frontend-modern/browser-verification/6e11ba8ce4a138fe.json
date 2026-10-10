@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "410d84c69444ce4b59d00432b0b5510ce3016d0e",
+  "verified_at": "2026-10-10T06:30:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "f11cfb13e4ec8af1680a4eaacb13547b5b0e889e8594e981608906531f3536b1"
+  },
+  "routes": [
+    "/proxmox/overview?kiosk=1",
+    "/proxmox/overview?kiosk=0",
+    "/vmware/overview?kiosk=1",
+    "/vmware/overview?kiosk=0",
+    "/docker/overview?kiosk=1",
+    "/docker/overview?kiosk=0",
+    "/kubernetes/overview?kiosk=1",
+    "/kubernetes/overview?kiosk=0",
+    "/truenas/overview?kiosk=1",
+    "/truenas/overview?kiosk=0",
+    "/standalone/machines?kiosk=1",
+    "/standalone/machines?kiosk=0",
+    "/proxmox/storage?kiosk=1",
+    "/proxmox/storage?kiosk=0",
+    "/proxmox/backups?kiosk=1",
+    "/proxmox/backups?kiosk=0",
+    "/alerts/history?kiosk=1",
+    "/alerts/history?kiosk=0"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Embedded production bundle built from origin/main 410d84c694 plus this staged change (FilterBar.tsx sha256 matches content_sha256), cross-compiled for darwin and run as a private mock-mode stack on 127.0.0.1:7893 with ALLOW_ADMIN_BYPASS, driven in the desktop app browser pane. The change was first verified the same way on d2ac0c5112 on 2026-10-08 with the identical FilterBar.tsx; this pass repeats it after main added the Proxmox and vSphere page, WorkloadsFilter and WorkloadsSurface changes from the toolbar removal",
+    "Baseline on unmodified main (2026-10-08, DEMO_MODE mock stack, headless Chromium 1440x900): with kiosk on, filter bars rendered on /proxmox/overview, /vmware/overview, /docker/overview, /kubernetes/overview, /truenas/overview, /standalone, /proxmox/backups and /alerts/history; only the Proxmox Storage tab hid its bar",
+    "Kiosk on at 1024x768: zero .filter-bar elements and zero visible inputs on all nine routes; tables still render (Proxmox nodes and guests, vSphere 3, Docker 2, Kubernetes 6, TrueNAS 2, Machines 1, Proxmox Storage 1, Backups 2); Alert History shows its frequency card and list; no empty card or bordered shell where a bar was; no horizontal page overflow",
+    "Kiosk off at 1024x768 (control): every one of those routes renders its bar again (Proxmox workload filters, vSphere workload filters, Search containers, Search workload inventory, Search TrueNAS alerts, Search machines, Proxmox storage filters, Backups filters, Alert history filters)",
+    "Applied filter state survives kiosk: /proxmox/overview?q=minio shows Guests 3 with 6 rows with the bar hidden in kiosk, and the bar returns with minio in the search field after leaving kiosk",
+    "Phone 375x812 with kiosk on: /proxmox/overview, /docker/overview and /vmware/overview have no bar, no Filters toggle, no input and no horizontal overflow; with kiosk off the same three pages show their bar and the Filters toggle",
+    "Console: no errors"
+  ],
+  "interactions": [
+    "Pressed p, v, e with kiosk on at /proxmox/overview: URL unchanged, focus stayed on body, 58 guest rows unchanged",
+    "Pressed p, v, e with kiosk off (control): type-to-search took the keys and the URL became ?q=pve",
+    "Clicked the header Enter kiosk mode button with ?q=minio applied: bar unmounted without a reload, rows stayed narrowed",
+    "Hovered the top edge to reveal the kiosk header and clicked Exit kiosk mode: bar remounted with minio in the search field",
+    "Resized to 375x812 (mobile emulation) and back to desktop, re-checking bars, Filters toggle and overflow"
+  ]
+}

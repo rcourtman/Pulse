@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { WorkloadsFilter } from '../WorkloadsFilter';
+import { setKioskMode } from '@/utils/url';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
@@ -955,5 +956,35 @@ describe('WorkloadsFilter', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
       expect(screen.queryByTestId('column-picker')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('WorkloadsFilter in kiosk mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isMobileMock.mockReturnValue(false);
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    setKioskMode(false);
+    window.sessionStorage.removeItem('pulse_kiosk_mode');
+    cleanup();
+  });
+
+  it('keeps the Proxmox and vSphere workload toolbar off a kiosk display and restores it afterwards', () => {
+    setKioskMode(true);
+    render(() => <WorkloadsFilter {...makeProps({ ariaLabel: 'Proxmox workload filters' })} />);
+
+    expect(screen.queryByTestId('search-input')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: 'Proxmox workload filters' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+
+    setKioskMode(false);
+
+    expect(screen.getByTestId('search-input')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
   });
 });

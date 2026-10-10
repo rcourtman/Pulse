@@ -6204,6 +6204,25 @@ affordance, it should extend the FilterBar catalog model or add a new
 registry-backed shared primitive rather than reintroducing a per-page select
 row.
 
+Kiosk mode (`?kiosk=1`, the session flag read through
+`frontend-modern/src/hooks/useKioskMode.ts`) is the read-only wall display,
+and `FilterBar` owns hiding filter chrome there. While kiosk is on the shared
+bar stays unmounted, so search, inline and menu filters, View options, leading
+and trailing controls, and the search field's type-to-search listener are all
+absent on every consumer, including the Proxmox and vSphere workload
+overviews, platform tables through `PlatformTableToolbar`, Storage, Proxmox
+Backups, and Alert History. Filter state that is already applied keeps
+narrowing the rendered rows; kiosk changes what is shown, not what the URL or
+stored preferences select. Consumers must not re-implement the gate page by
+page: the Proxmox and vSphere overview toolbars lost it when they were hoisted
+out of `WorkloadsSurface`, and kept rendering on kiosk displays until the rule
+moved into the shared bar. A consumer whose surrounding chrome exists only for
+the bar, such as the Storage view subtabs, may still hide that chrome itself.
+The rule covers the shared bar only: a scope heading and its reset (the
+Proxmox `Guests on <node>` heading with Show all nodes), chart-driven
+selections on Proxmox Backups and Alert History, and search fields inside
+opened drawers are outside it.
+
 FilterBar does not carry a saved-views affordance. The former
 `savedViewsKey` / `useSavedViews` / `SavedViewsMenu` trio persisted named
 query strings to localStorage under `pulse:filterbar:saved-views:<key>`; it
