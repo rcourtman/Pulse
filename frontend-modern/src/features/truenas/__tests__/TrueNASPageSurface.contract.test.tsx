@@ -137,7 +137,6 @@ describe('TrueNASPageSurface contract', () => {
     mockSearchParams.value = {};
     mockVersionInfo.mockReturnValue(null);
     mockUseRecoveryPoints.mockReturnValue({
-      meta: () => ({ total: 0 }),
       points: () => [],
       response: { loading: false, error: null },
       refetch: vi.fn(),
