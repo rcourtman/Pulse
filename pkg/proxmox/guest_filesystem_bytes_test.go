@@ -89,7 +89,7 @@ func TestVMFilesystemBytesWireAdmissionKeepsValidPeersAndObjectPrecision(t *test
 		total, used uint64
 		wantError   bool
 	}{
-		"array-peers":      {`[{"mountpoint":"/bad","type":"ext4","total-bytes":1000},{"mountpoint":"/negative","type":"ext4","total-bytes":1000,"used-bytes":-1},{"mountpoint":"/overfull","type":"ext4","total-bytes":1000,"used-bytes":1001},{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}]`, 1000, 0, false},
+		"array-peers":      {`[{"mountpoint":"/bad","type":"ext4","total-bytes":1000},{"mountpoint":"/negative","type":"ext4","total-bytes":1000,"used-bytes":-1},{"mountpoint":"/overfull","type":"ext4","total-bytes":1000,"used-bytes":1001},{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}]`, 1000, 0, true},
 		"object-precision": {`{"mountpoint":"C:\\","type":"ntfs","total-bytes":9007199254740993,"used-bytes":9007199254740991,"disk":{"bus-type":"scsi","target":2}}`, 9007199254740993, 9007199254740991, false},
 		"object-duplicate": {`{"mountpoint":"C:\\","type":"ntfs","total-bytes":1000,"used-bytes":1001,"used-bytes":0}`, 0, 0, true},
 		"object-missing":   {`{"mountpoint":"C:\\","type":"ntfs","total-bytes":1000}`, 0, 0, true},
@@ -112,8 +112,15 @@ func TestVMFilesystemBytesWireAdmissionKeepsValidPeersAndObjectPrecision(t *test
 			c := backupTestClient(t, server.URL)
 			readings, err := c.GetVMFSInfo(context.Background(), "node", 105)
 			if tc.wantError {
-				if err == nil || len(readings) != 0 {
+				if err == nil {
 					t.Fatalf("invalid object admitted: %+v %v", readings, err)
+				}
+				if name == "array-peers" {
+					if len(readings) != 1 || readings[0].TotalBytes != tc.total || readings[0].UsedBytes != tc.used {
+						t.Fatalf("valid peers lost with incomplete inventory error: %+v %v", readings, err)
+					}
+				} else if len(readings) != 0 {
+					t.Fatalf("invalid object returned readings: %+v", readings)
 				}
 			} else {
 				if err != nil || len(readings) != 1 {
