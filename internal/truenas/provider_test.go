@@ -132,6 +132,33 @@ func (s *controllableStubFetcher) SystemMetricHistory(context.Context, time.Dura
 	return &copied, nil
 }
 
+// An operator's remediation lock is not carried across a physical disk's
+// in-place re-key in the unified registry, which is safe only while nothing can
+// dispatch to a disk: the planner plans only a capability the resource
+// advertises. This pins that premise for the records this provider produces
+// (the registry side is TestPhysicalDiskResourcesAdvertiseNoActionCapability).
+func TestProviderDiskRecordsAdvertiseNoActionCapability(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	disks := 0
+	for _, record := range NewProvider(DefaultFixtures()).Records() {
+		if record.Resource.Type != unifiedresources.ResourceTypePhysicalDisk {
+			continue
+		}
+		disks++
+		if len(record.Resource.Capabilities) != 0 {
+			t.Errorf("disk record %s advertises capabilities %+v; make the remediation lock follow a disk through its in-place re-key first", record.SourceID, record.Resource.Capabilities)
+		}
+	}
+	if disks == 0 {
+		t.Fatal("the fixture produced no disk records, so this pins nothing")
+	}
+}
+
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 	fixtures := DefaultFixtures()
 	fetcher := &FixtureFetcher{Snapshot: fixtures}

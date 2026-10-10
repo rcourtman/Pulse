@@ -145,6 +145,17 @@ type ResourceRegistry struct {
 	// resource per machine ID, so it cannot see same-serial disks on several
 	// machines. Entries are validated on read, never removed eagerly.
 	physicalDisksByHardware map[string]map[string]struct{}
+	// reporterEras collects, while an ingest pass runs, the source-specific ID
+	// each host or Docker reporter held before an identity key re-keyed its
+	// resource (noteReporterEraLocked). The pass epilogue takes them
+	// (takeReporterEras) and declares them as successions.
+	reporterEras []CanonicalIDSuccession
+	// exclusionIDs holds every ID an entry of exclusions names, derived from
+	// it on first use (exclusionNamesLocked), so noteReporterEraLocked asks one
+	// lookup per reporter instead of scanning the splits. exclusions is fixed
+	// before the first ingest, whether it was read from the store or carried
+	// from the previous generation (carryOverridesFrom).
+	exclusionIDs map[string]struct{}
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -423,7 +434,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.mu.Lock()
 	rr.agentNodeScanIndex = nil
 	rr.mu.Unlock()
-	rr.applyRecordSuccessions(guestSuccessions)
+	rr.applyRecordSuccessions(append(guestSuccessions, rr.takeReporterEras()...))
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
 	}
@@ -765,7 +776,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 			})
 		}
 	}
-	rr.applyRecordSuccessions(successions)
+	rr.applyRecordSuccessions(append(successions, rr.takeReporterEras()...))
 
 	rr.mu.Lock()
 	// Either side of an operator link can arrive as a record: a vSphere or
@@ -3084,6 +3095,9 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		identity = rr.completeIdentityFromPins(source, sourceID, resource, identity)
 	}
 	resource.Identity = identity
+	if !onlyMissing && rr.store != nil && resource.Type == ResourceTypeAgent && (source == SourceAgent || source == SourceDocker) {
+		defer func() { rr.noteReporterEraLocked(source, sourceID, identity, ingestedID) }()
+	}
 	resource.Sources = []DataSource{source}
 	sighting := resource.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(resource.LastSeen)
@@ -5686,7 +5700,7 @@ func linkedAgentIDFromResource(resource *Resource) string {
 func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity ResourceIdentity, source DataSource, sourceID string) string {
 	switch resourceType {
 	case ResourceTypeAgent:
-		if identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != "" {
+		if agentKeyedByIdentity(identity) {
 			return rr.canonicalIDFromIdentity(resourceType, identity)
 		}
 	case ResourceTypePhysicalDisk:
@@ -5703,6 +5717,62 @@ func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity Reso
 		}
 	}
 	return rr.sourceSpecificID(resourceType, source, sourceID)
+}
+
+// agentKeyedByIdentity reports whether an agent's identity carries a key
+// chooseNewID derives its canonical ID from. Without one the agent keeps its
+// source-specific ID, so gaining one is an era change of its ID.
+func agentKeyedByIdentity(identity ResourceIdentity) bool {
+	return identity.MachineID != "" || identity.DMIUUID != "" || identity.ClusterName != ""
+}
+
+// noteReporterEraLocked records that a host or Docker reporter's resource is
+// keyed by a stronger identity than its source-specific ID stands for. A
+// reporter with no machine ID, DMI UUID or cluster is keyed by (source, report
+// ID); when a later report carries a key the resource mints another ID. Such a
+// reporter never held an identity pin (a pin needs a strong key), so no pin
+// names the retired ID, but the report itself does: the source-specific ID is
+// recomputable, as a Proxmox guest's retired IDs are
+// (declareGuestSupersededEras). landedID is the resource the report landed on,
+// which pin succession also follows. A reporter owns its identity, unlike a
+// Proxmox node that borrows its linked agent's, so the key it gains is its own
+// and cannot be lent back.
+//
+// Two things keep a source-specific ID from being a retired era. An ID that
+// holds a pin was a keyed machine's: pin succession decides whether a different
+// key is the same host (successionsFor), and a different machine mints fresh.
+// An ID an operator split names is the candidate of a source kept apart from
+// another resource, and a succession would rewrite the pair into an exclusion
+// of the resource from itself the generation the other side is absent and the
+// reporter lands on that resource's ID, erasing the split. The caller holds
+// rr.mu.
+func (rr *ResourceRegistry) noteReporterEraLocked(source DataSource, sourceID string, identity ResourceIdentity, landedID string) {
+	landedID = CanonicalResourceID(landedID)
+	if landedID == "" || !agentKeyedByIdentity(identity) {
+		return
+	}
+	legacyID := rr.sourceSpecificID(ResourceTypeAgent, source, sourceID)
+	if legacyID == "" || legacyID == landedID {
+		return
+	}
+	if rr.identityPins != nil {
+		if _, pinned := rr.identityPins.byCanonicalID[legacyID]; pinned {
+			return
+		}
+	}
+	if rr.exclusionNamesLocked(legacyID) {
+		return
+	}
+	rr.reporterEras = append(rr.reporterEras, CanonicalIDSuccession{OldCanonicalID: legacyID, NewCanonicalID: landedID})
+}
+
+// takeReporterEras returns the eras the ingest pass noted and clears them.
+func (rr *ResourceRegistry) takeReporterEras() []CanonicalIDSuccession {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	eras := rr.reporterEras
+	rr.reporterEras = nil
+	return eras
 }
 
 // physicalDiskIDForMachineLocked decides which resource a new disk
@@ -6877,6 +6947,22 @@ func exclusionKey(a, b string) string {
 		a, b = b, a
 	}
 	return a + "|" + b
+}
+
+// exclusionNamesLocked reports whether any operator split names the ID on
+// either side. The caller holds rr.mu for writing: the first call derives the
+// set of named IDs.
+func (rr *ResourceRegistry) exclusionNamesLocked(id string) bool {
+	if rr.exclusionIDs == nil {
+		rr.exclusionIDs = make(map[string]struct{}, 2*len(rr.exclusions))
+		for key := range rr.exclusions {
+			a, b, _ := strings.Cut(key, "|")
+			rr.exclusionIDs[a] = struct{}{}
+			rr.exclusionIDs[b] = struct{}{}
+		}
+	}
+	_, named := rr.exclusionIDs[id]
+	return named
 }
 
 // Stable ordering helper for deterministic output.

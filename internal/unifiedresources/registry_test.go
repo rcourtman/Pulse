@@ -8463,6 +8463,418 @@ func TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains(t *testing.T) {
 	}
 }
 
+// A host agent that reports no strong key is keyed by its source-specific ID
+// and holds no identity pin (a pin needs a machine ID, a DMI UUID or a cluster
+// slot), so when it starts reporting one the pin-driven succession has no
+// predecessor to name and the operator's rows stayed on the ID the host no
+// longer has. The retired ID is recomputable from the report itself, as a
+// Proxmox guest's is, so the registry declares it. Each rebuild is a fresh
+// registry on the durable store followed by the pin persist, as the monitor
+// runs it.
+func TestReporterGainingAStrongKeyKeepsItsRemediationLock(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	locks := map[string]ResourceOperatorState{
+		"never auto-remediate": {NeverAutoRemediate: true},
+		"retired":              {LifecycleState: LifecycleStateRetired},
+	}
+	now := time.Now().UTC()
+	host := models.Host{ID: "agent-standalone-01", Hostname: "standalone-01", Status: "online", LastSeen: now}
+	dockerHost := models.DockerHost{ID: "docker-standalone-02", Hostname: "standalone-02", Status: "online", LastSeen: now}
+	// Both reporters own their identity, so both are keyed by the key they
+	// report: the host agent by /etc/machine-id, the Docker host by the engine's
+	// machine ID, or by the Swarm cluster it joins (a cluster slot).
+	swarmHost := models.DockerHost{ID: "docker-standalone-05", Hostname: "standalone-05", Status: "online", LastSeen: now}
+	reporters := map[string]struct {
+		snapshot func(key string) models.StateSnapshot
+		hostname string
+	}{
+		"host agent": {hostname: host.Hostname, snapshot: func(machineID string) models.StateSnapshot {
+			reporter := host
+			reporter.MachineID = machineID
+			return models.StateSnapshot{Hosts: []models.Host{reporter}}
+		}},
+		"docker host": {hostname: dockerHost.Hostname, snapshot: func(machineID string) models.StateSnapshot {
+			reporter := dockerHost
+			reporter.MachineID = machineID
+			return models.StateSnapshot{DockerHosts: []models.DockerHost{reporter}}
+		}},
+		"docker host joining a swarm": {hostname: swarmHost.Hostname, snapshot: func(key string) models.StateSnapshot {
+			reporter := swarmHost
+			if key != "" {
+				reporter.Swarm = &models.DockerSwarmInfo{ClusterID: "swarm-a", ClusterName: "swarm-a"}
+			}
+			return models.StateSnapshot{DockerHosts: []models.DockerHost{reporter}}
+		}},
+	}
+	rebuild := func(t *testing.T, store ResourceStore, snapshot models.StateSnapshot) string {
+		t.Helper()
+		rr := NewRegistry(store)
+		rr.IngestSnapshot(snapshot)
+		rr.PersistIdentityPins()
+		agents := rr.ListByType(ResourceTypeAgent)
+		if len(agents) != 1 {
+			t.Fatalf("rebuild listed %d agents, want the one reporter", len(agents))
+		}
+		return agents[0].ID
+	}
+	for reporterName, reporter := range reporters {
+		for storeName, newStore := range stores {
+			for lockName, lock := range locks {
+				t.Run(reporterName+"/"+storeName+"/"+lockName, func(t *testing.T) {
+					store := newStore(t)
+					keyless := rebuild(t, store, reporter.snapshot(""))
+					state := lock
+					state.CanonicalID, state.SetAt, state.SetBy = keyless, now.Add(-time.Hour), "operator"
+					state.Note = "set before the reporter had a machine ID"
+					if err := store.SetResourceOperatorState(state); err != nil {
+						t.Fatalf("lock %s: %v", keyless, err)
+					}
+
+					keyed := rebuild(t, store, reporter.snapshot("machine-"+reporter.hostname))
+					if keyed == keyless {
+						t.Fatalf("the reporter kept ID %s after gaining a machine ID; the fixture no longer changes its era", keyless)
+					}
+					got, found, err := store.GetResourceOperatorState(keyed)
+					if err != nil {
+						t.Fatalf("read operator state of %s: %v", keyed, err)
+					}
+					if !found || !got.BlocksRemediation() {
+						t.Fatalf("the reporter's new ID %s lost the lock on %s: found=%v state=%+v", keyed, keyless, found, got)
+					}
+					if got.Note != state.Note {
+						t.Fatalf("the reporter's operator row did not move with it: %+v", got)
+					}
+
+					// The operator owns the lock from here: clearing it must hold
+					// across later rebuilds, which declare the same era again.
+					if err := store.ClearResourceOperatorState(keyed); err != nil {
+						t.Fatalf("operator clears %s: %v", keyed, err)
+					}
+					if again := rebuild(t, store, reporter.snapshot("machine-"+reporter.hostname)); again != keyed {
+						t.Fatalf("a steady-state rebuild moved the reporter from %s to %s", keyed, again)
+					}
+					if restored, found, err := store.GetResourceOperatorState(keyed); err != nil || found {
+						t.Fatalf("a later rebuild restored a row the operator cleared: found=%v err=%v state=%+v", found, err, restored)
+					}
+				})
+			}
+		}
+	}
+}
+
+// The era a reporter leaves is declared only for the reporters that own their
+// identity and only when the report carries a key: a reporter that stays
+// keyless keeps its ID, saved-host continuity (which may only introduce absent
+// resources) moves no operator row, and a Proxmox node that borrows its linked
+// agent's key is not an era of the node's own source-specific ID.
+func TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	recorded := func(t *testing.T, store ResourceStore) map[string]string {
+		t.Helper()
+		switch s := store.(type) {
+		case *SQLiteResourceStore:
+			return s.successionMap()
+		case *MemoryStore:
+			return s.canonicalSuccessions
+		}
+		t.Fatalf("%T records no successions", store)
+		return nil
+	}
+	lock := func(t *testing.T, store ResourceStore, id string) {
+		t.Helper()
+		if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: id, NeverAutoRemediate: true, SetAt: time.Now().UTC(), SetBy: "operator"}); err != nil {
+			t.Fatalf("lock %s: %v", id, err)
+		}
+	}
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	now := time.Now().UTC()
+	host := func(machineID string) models.Host {
+		return models.Host{ID: "agent-standalone-03", Hostname: "standalone-03", MachineID: machineID, Status: "online", LastSeen: now}
+	}
+	hostEra := SourceSpecificID(ResourceTypeAgent, SourceAgent, "agent-standalone-03")
+
+	for storeName, newStore := range stores {
+		t.Run(storeName+"/a reporter that stays keyless declares nothing", func(t *testing.T) {
+			store := newStore(t)
+			lock(t, store, hostEra)
+			for range 2 {
+				rr := NewRegistry(store)
+				rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host("")}})
+				rr.PersistIdentityPins()
+				if ids := rr.ListByType(ResourceTypeAgent); len(ids) != 1 || ids[0].ID != hostEra {
+					t.Fatalf("a keyless host is listed as %+v, want its source-specific ID %s", ids, hostEra)
+				}
+			}
+			if got := recorded(t, store); len(got) != 0 {
+				t.Fatalf("a keyless reporter declared successions %v", got)
+			}
+			if !locked(t, store, hostEra) {
+				t.Fatalf("the keyless host lost the lock on its own ID")
+			}
+		})
+
+		// A keyless agent linked to a Proxmox node lands on the node's row. That
+		// is a merge by link, not a key the reporter gained, so its
+		// source-specific ID is not declared retired onto the node's.
+		t.Run(storeName+"/a keyless agent absorbed by a linked node declares nothing", func(t *testing.T) {
+			store := newStore(t)
+			snapshot := sharedSerialDiskSnapshot(now, true, "pve1")
+			snapshot.Hosts[0].MachineID = ""
+			linkedHostEra := SourceSpecificID(ResourceTypeAgent, SourceAgent, snapshot.Hosts[0].ID)
+			lock(t, store, linkedHostEra)
+			rr := NewRegistry(store)
+			rr.IngestSnapshot(snapshot)
+			rr.PersistIdentityPins()
+			if agents := rr.ListByType(ResourceTypeAgent); len(agents) != 1 || agents[0].ID == linkedHostEra || !containsDataSource(agents[0].Sources, SourceAgent) {
+				t.Fatalf("the keyless agent is listed as %+v, want it merged into the node's row", agents)
+			}
+			if got := recorded(t, store); len(got) != 0 {
+				t.Fatalf("a keyless agent absorbed by a node declared successions %v", got)
+			}
+			if !locked(t, store, linkedHostEra) {
+				t.Fatalf("the agent's lock moved off %s", linkedHostEra)
+			}
+		})
+
+		t.Run(storeName+"/saved-host continuity moves no operator row", func(t *testing.T) {
+			store := newStore(t)
+			lock(t, store, hostEra)
+			rr := NewRegistry(store)
+			rr.ingestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host("machine-standalone-03"))}, true, nil)
+			if len(rr.ListByType(ResourceTypeAgent)) != 1 {
+				t.Fatalf("continuity did not introduce the saved host")
+			}
+			if got := recorded(t, store); len(got) != 0 {
+				t.Fatalf("continuity hydration declared successions %v", got)
+			}
+			if !locked(t, store, hostEra) {
+				t.Fatalf("continuity hydration moved the lock off %s", hostEra)
+			}
+		})
+
+		t.Run(storeName+"/record ingest declares the era like a snapshot", func(t *testing.T) {
+			store := newStore(t)
+			lock(t, store, hostEra)
+			rr := NewRegistry(store)
+			rr.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(host("machine-standalone-03"))})
+			agents := rr.ListByType(ResourceTypeAgent)
+			if len(agents) != 1 || agents[0].ID == hostEra {
+				t.Fatalf("a keyed host record is listed as %+v, want an ID other than its source-specific %s", agents, hostEra)
+			}
+			if !locked(t, store, agents[0].ID) {
+				t.Fatalf("the record-fed reporter's new ID %s lost the lock on %s", agents[0].ID, hostEra)
+			}
+		})
+
+		// An operator split names the split source by its source-specific ID.
+		// While the other side is present the source lands on that ID and
+		// declares nothing; the generation the other side is absent it lands on
+		// the ID it was split from, and declaring its source-specific ID retired
+		// would rewrite the pair into an exclusion of the resource from itself,
+		// so the split would be gone when the other side returned. The pins
+		// decide whether pin succession also reaches the pair (the split source
+		// and its sibling both pin the shared machine key, and the store keeps
+		// one); this holds the key on the sibling, where only a reporter era
+		// could rewrite the pair.
+		t.Run(storeName+"/a split source keeps its exclusion while its sibling is absent", func(t *testing.T) {
+			store := newStore(t)
+			machineID := "machine-shared-04"
+			agentHost := models.Host{ID: "agent-shared-04", Hostname: "shared-04", MachineID: machineID, Status: "online", LastSeen: now}
+			dockerHost := models.DockerHost{ID: "docker-shared-04", Hostname: "shared-04", MachineID: machineID, Status: "online", LastSeen: now}
+			merged := MachineIdentityCanonicalID(ResourceTypeAgent, machineID)
+			candidate := SourceSpecificID(ResourceTypeAgent, SourceDocker, dockerHost.ID)
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: candidate}); err != nil {
+				t.Fatalf("split the Docker source from %s: %v", merged, err)
+			}
+			agents := func(snapshot models.StateSnapshot) int {
+				t.Helper()
+				rr := NewRegistry(store)
+				rr.IngestSnapshot(snapshot)
+				rr.PersistIdentityPins()
+				return len(rr.ListByType(ResourceTypeAgent))
+			}
+			both := models.StateSnapshot{Hosts: []models.Host{agentHost}, DockerHosts: []models.DockerHost{dockerHost}}
+			if got := agents(both); got != 2 {
+				t.Fatalf("with both reporters present the split left %d agents, want the two kept apart", got)
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+				CanonicalID: merged, ResourceType: ResourceTypeAgent, MachineID: machineID, Hostname: "shared-04",
+			}}); err != nil {
+				t.Fatalf("hold the machine key on %s: %v", merged, err)
+			}
+			if pins, err := store.ListResourceIdentityPins(); err != nil || len(pins) != 1 || pins[0].CanonicalID != merged {
+				t.Fatalf("pins after holding the key on %s = %+v (err %v), want that one", merged, pins, err)
+			}
+			if got := agents(models.StateSnapshot{DockerHosts: []models.DockerHost{dockerHost}}); got != 1 {
+				t.Fatalf("with the sibling absent %d agents were listed, want the Docker host alone", got)
+			}
+			if got := recorded(t, store); got[candidate] != "" {
+				t.Fatalf("the split source's ID was declared superseded by %s", got[candidate])
+			}
+			if got := agents(both); got != 2 {
+				t.Fatalf("the split did not survive its sibling's absence: %d agents, want the two kept apart", got)
+			}
+		})
+
+		// A rebuild that cannot read its decisions carries the previous
+		// generation's exclusions (carryOverridesFrom) instead of loading them,
+		// and the split is still the operator's: the guard reads the carried
+		// decisions, not only the ones a store read returned. The control is the
+		// same reporter on a store with no split, which does note its era.
+		t.Run(storeName+"/a rebuild that cannot read its decisions still guards the split", func(t *testing.T) {
+			dockerHost := models.DockerHost{ID: "docker-shared-06", Hostname: "shared-06", MachineID: "machine-shared-06", Status: "online", LastSeen: now}
+			merged := MachineIdentityCanonicalID(ResourceTypeAgent, dockerHost.MachineID)
+			candidate := SourceSpecificID(ResourceTypeAgent, SourceDocker, dockerHost.ID)
+			noted := func(rr *ResourceRegistry) bool {
+				t.Helper()
+				resource, identity := resourceFromDockerHost(dockerHost)
+				rr.ingest(SourceDocker, dockerHost.ID, resource, identity)
+				return slices.Contains(rr.reporterEras, CanonicalIDSuccession{OldCanonicalID: candidate, NewCanonicalID: merged})
+			}
+
+			if !noted(NewRegistry(newStore(t))) {
+				t.Fatalf("control: a reporter with no split did not note %s -> %s", candidate, merged)
+			}
+
+			flaky := &unreadableDecisionStore{ResourceStore: newStore(t)}
+			if err := flaky.AddExclusion(ResourceExclusion{ResourceA: merged, ResourceB: candidate}); err != nil {
+				t.Fatalf("split the Docker source from %s: %v", merged, err)
+			}
+			previous := NewRegistry(flaky)
+			flaky.failAll(true)
+			rebuilt := newRegistryFrom(previous)
+			if !rebuilt.overridesUnreadable || len(rebuilt.exclusions) != 1 {
+				t.Fatalf("the rebuild carried %d exclusions (unreadable=%v), want the previous generation's one", len(rebuilt.exclusions), rebuilt.overridesUnreadable)
+			}
+			if noted(rebuilt) {
+				t.Fatalf("a rebuild holding the carried split noted %s superseded", candidate)
+			}
+		})
+
+		// A pin on the source-specific ID means the ID was a keyed machine's.
+		// Pin succession decides whether another key is the same host, and a
+		// different machine mints fresh instead of taking the rows over.
+		t.Run(storeName+"/a pinned source-specific ID is another machine's", func(t *testing.T) {
+			store := newStore(t)
+			lock(t, store, hostEra)
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+				CanonicalID: hostEra, ResourceType: ResourceTypeAgent, MachineID: "machine-before-reinstall", Hostname: "standalone-03",
+			}}); err != nil {
+				t.Fatalf("pin %s: %v", hostEra, err)
+			}
+			rr := NewRegistry(store)
+			rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host("machine-after-reinstall")}})
+			rr.PersistIdentityPins()
+			agents := rr.ListByType(ResourceTypeAgent)
+			if len(agents) != 1 || agents[0].ID == hostEra {
+				t.Fatalf("a different machine under the same report ID is listed as %+v, want a fresh ID", agents)
+			}
+			if locked(t, store, agents[0].ID) {
+				t.Fatalf("the different machine %s inherited the pinned machine's lock", agents[0].ID)
+			}
+			if !locked(t, store, hostEra) || recorded(t, store)[hostEra] != "" {
+				t.Fatalf("the pinned machine's row was succeeded onto another machine")
+			}
+		})
+
+		t.Run(storeName+"/a node borrowing its agent's key is not the node's era", func(t *testing.T) {
+			store := newStore(t)
+			nodeEra := SourceSpecificID(ResourceTypeAgent, SourceProxmox, proxmoxNodeSourceID("pve", "pve1"))
+			lock(t, store, nodeEra)
+			rr := NewRegistry(store)
+			rr.IngestSnapshot(sharedSerialDiskSnapshot(now, true, "pve1"))
+			rr.PersistIdentityPins()
+			if got := recorded(t, store); got[nodeEra] != "" {
+				t.Fatalf("the Proxmox node declared its source-specific ID %s superseded by %s", nodeEra, got[nodeEra])
+			}
+			if !locked(t, store, nodeEra) {
+				t.Fatalf("the node's row moved off %s onto the agent's ID", nodeEra)
+			}
+		})
+	}
+}
+
+// A physical disk keyed by a serial that two machines report is re-keyed in
+// place to a machine-scoped ID (rekeyPhysicalDiskLocked), and that moves no
+// operator-state row: the registry keeps no durable record of a disk's IDs, so
+// the stores cannot be told which row to carry. The remediation lock is not
+// carried across that re-key because it guards nothing there: the planner
+// plans only a capability the resource advertises, and no producer gives a
+// physical disk one, so no dispatch can reach a disk's ID. This pins that
+// premise for the producers this package builds disks from (a Proxmox disk,
+// an agent's SMART disk, an Unraid array disk) and for the registry's merge of
+// a record-fed disk; the TrueNAS provider's own records are pinned beside the
+// producer (internal/truenas TestProviderDiskRecordsAdvertiseNoActionCapability).
+// A change that gives a disk a capability must first make the lock follow the
+// disk through the re-key (see the remediation-lock paragraph of the
+// unified-resources contract), or it lets Pulse act on a disk the operator
+// locked.
+func TestPhysicalDiskResourcesAdvertiseNoActionCapability(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	rr := NewRegistry(nil)
+	snapshot := sharedSerialDiskSnapshot(now, true, "pve1", "pve2")
+	snapshot.Hosts = append(snapshot.Hosts, models.Host{
+		ID: "agent-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: now,
+		Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+			{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-LOCK1", Temperature: 37},
+		}},
+	})
+	rr.IngestSnapshot(snapshot)
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive-a", "tank", "TRUENAS-LOCK1"))
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	for _, disk := range disks {
+		if len(disk.Capabilities) != 0 {
+			t.Errorf("physical disk %s (%v) advertises capabilities %+v; make the remediation lock follow a disk through its in-place re-key first", disk.ID, disk.Sources, disk.Capabilities)
+		}
+	}
+	// Each producer's disk is in the registry under its serial, so a fixture
+	// that stops producing one cannot leave the check above passing for it.
+	for _, want := range []struct {
+		serial string
+		source DataSource
+	}{
+		{sharedDiskSerial, SourceProxmox},
+		{sharedDiskSerial, SourceAgent},
+		{"UNIQUE-SERIAL-1", SourceProxmox},
+		{"UNRAID-LOCK1", SourceAgent},
+		{"TRUENAS-LOCK1", SourceTrueNAS},
+	} {
+		if !slices.ContainsFunc(disks, func(disk Resource) bool {
+			return disk.PhysicalDisk != nil && disk.PhysicalDisk.Serial == want.serial && containsDataSource(disk.Sources, want.source)
+		}) {
+			t.Errorf("no physical disk with serial %s came from %s, so the fixture no longer covers that producer: %d disks", want.serial, want.source, len(disks))
+		}
+	}
+}
+
 // A succession batch is applied in the order it is declared, and each group of
 // linked IDs it saved follows only the re-keys applied after it. A batch
 // declared against its direction, and one that returns an ID to its start, both

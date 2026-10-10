@@ -3630,11 +3630,62 @@ resolve the ID (a member absent from the current generation) stays on that ID
 until then. The store cannot see which links the registry declines to fold
 (availability-owned endpoints, a node and agent pair a newer split separated),
 so those share too, which can lock a host because a linked probe was retired.
-Re-recording an existing link shares again. Canonical ID changes that reach
-neither a link nor `ApplyCanonicalIDSuccessions` are not covered here: a
-physical disk re-keyed in place to a machine-scoped ID
-(`rekeyPhysicalDiskLocked` moves no operator state), and a host whose earlier
-ID never held an identity pin, which no pin-driven succession can name. Proof:
+Re-recording an existing link shares again.
+
+A host or Docker reporter that had no machine ID, DMI UUID or cluster slot is
+keyed by its source-specific ID (unless a link or match folds it into another
+resource) and held no identity pin (a pin needs one of those keys), so when a
+report first carries a key, its own or one its pin completes, no pin names the
+ID it leaves. The registry declares that ID itself, as it does a Proxmox guest's
+retired IDs, because the report recomputes it: `noteReporterEraLocked` notes
+the reporter's source-specific ID against the resource its report landed on,
+and the snapshot or record ingest hands the batch to `applyRecordSuccessions`
+(`takeReporterEras`), which skips an ID still observed live or folded into a
+link. Only `SourceAgent` and `SourceDocker` reporters do this, and only in an
+ingest that may write (a registry with a store, not saved-host continuity):
+they own their identity, whereas a Proxmox node borrows its linked agent's key
+and a link or split can move that borrow either way, so a borrowed key is not
+an era. Two kinds of source-specific ID are left out. One that holds an
+identity pin belongs to pin succession, which decides whether another key is
+the same host and lets a different machine mint fresh, so a keyless-era ID that
+gained a cluster-only pin on the way is carried only if that succession names
+it, which it does not for a later machine key. One an operator split names is
+the candidate of a source kept apart from another resource, and a succession
+would rewrite that pair into an exclusion of the resource from itself in a
+generation where the other side is absent, erasing the split, so the
+declaration leaves that reporter's rows alone (a pin-driven succession can
+still re-key such an ID when the split source holds the shared machine key,
+which this does not change). Reporters that gain a key declare
+their era on every rebuild and the stores re-key a predecessor once, to the
+successor it first had (the record is keyed by the predecessor), so a lock the
+operator set on the keyless ID is carried onto the keyed one (the whole row
+when the keyed ID has none). The first rebuild after an upgrade declares the
+era of every keyed reporter that passes those checks, in the batches of its
+ingest passes, and also restores a lock or row an earlier keyless-to-keyed
+change left behind, even where the operator has edited the keyed row since. An ID held under a report ID the reporter no longer sends is
+not recomputable. Like every succession, the move happens while the previous
+generation is still being served, so when the keyed ID had no row an action
+planned against the old ID in that window finds no row there, and a link the
+succession rewrites takes effect in the next generation, because a registry
+loads its links when it is built (the lock is shared across the pair at once).
+
+Canonical ID changes that reach neither a link nor `ApplyCanonicalIDSuccessions`
+carry nothing: a physical disk re-keyed in place to a machine-scoped ID
+(`rekeyPhysicalDiskLocked` moves no operator state, and the disk takes the
+unscoped ID again when the other machine's copy goes away, finding the old row
+as it was). For the lock that is a boundary, not a gap, because the planner
+plans only a capability the resource advertises and no producer gives a
+physical disk one, so no dispatch can reach a disk's ID. A producer that adds
+one must first make the lock follow the disk;
+`TestPhysicalDiskResourcesAdvertiseNoActionCapability` fails when one of the
+registry's producers does (a Proxmox disk, an agent's SMART disk, an Unraid
+array disk, a record-fed disk), and `TestProviderDiskRecordsAdvertiseNoActionCapability`
+in `internal/truenas/provider_test.go` when the TrueNAS provider's records do.
+The disk's other operator settings (retirement, maintenance, notes) are
+orphaned by the same re-key and are not carried. Proof:
+`TestReporterGainingAStrongKeyKeepsItsRemediationLock`,
+`TestReporterEraIsDeclaredOnlyForAKeyTheReporterGains`,
+`TestPhysicalDiskResourcesAdvertiseNoActionCapability`,
 `TestResourceRegistry_ManualLinkFoldKeepsRemediationLock`,
 `TestResourceRegistry_ManualLinkFoldLockLeavesSurvivorSettings`,
 `TestLinkedComponentSharesRemediationLockThroughLinksAndUnlinks`,
@@ -3642,6 +3693,7 @@ ID never held an identity pin, which no pin-driven succession can name. Proof:
 `TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains` in
 `internal/unifiedresources/registry_test.go`, and
 `TestCanonicalIDSuccessionCarriesRemediationLockOntoExistingSuccessorRow`,
+`TestCanonicalIDSuccessionRekeysAPredecessorOnce`,
 `TestCanonicalIDSuccessionLockReachesLinkedSurvivor` and
 `TestCanonicalIDSuccessionKeepsLinkedMembersTogether` in
 `internal/unifiedresources/canonical_id_succession_test.go`.
