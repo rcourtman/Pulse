@@ -6643,6 +6643,16 @@ to it.
 Both are read-path changes to source freshness and presentation; no storage,
 retention, backup or recovery path is added or moved.
 
+### Connection freshness cadence opens no storage or recovery path
+
+`internal/api/connections_alerts.go` now scales the connections list's
+active-to-stale cutoff by the monitor's base poll cadence
+(`Monitor.BasePollInterval`), which honours saved PBS and PMG intervals that
+reach a non-default org's monitor only as runtime overrides. This is a
+read-path change to connection freshness. Backup polling, PBS backup and
+datastore collection, retention and recovery are unchanged, and nothing new
+is persisted.
+
 ### Webhook configuration never persists the API mask
 
 `internal/api/alerting/notifications.go` resolves each `***REDACTED***`

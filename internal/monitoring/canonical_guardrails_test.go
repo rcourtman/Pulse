@@ -2888,6 +2888,83 @@ func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
 	}
 }
 
+// Consumers outside the monitor, such as the connections list, judge poll
+// freshness by Monitor.BasePollInterval. It must report the base cadence the
+// scheduler polls each platform at, including runtime polling overrides on a
+// detached tenant config copy (#1619), and must not take m.mu, which the
+// scheduler's poll-provider lookup takes.
+func TestMonitorBasePollIntervalReportsSchedulerBaseCadence(t *testing.T) {
+	newTenantMonitor := func(override time.Duration) *Monitor {
+		base := &config.Config{
+			PVEPollingInterval: 30 * time.Second,
+			PBSPollingInterval: time.Minute,
+			PMGPollingInterval: time.Minute,
+		}
+		monitor := &Monitor{config: base.DeepCopy()}
+		monitor.SetPBSPollingInterval(override)
+		monitor.SetPMGPollingInterval(override)
+		return monitor
+	}
+
+	t.Run("runtime overrides on a detached copy, clamped like the scheduler", func(t *testing.T) {
+		for override, want := range map[time.Duration]time.Duration{
+			5 * time.Second:  10 * time.Second,
+			90 * time.Second: 90 * time.Second,
+			5 * time.Minute:  5 * time.Minute,
+			2 * time.Hour:    time.Hour,
+		} {
+			monitor := newTenantMonitor(override)
+			for _, instanceType := range []InstanceType{InstanceTypePBS, InstanceTypePMG} {
+				if got := monitor.BasePollInterval(instanceType); got != want {
+					t.Errorf("%s base interval = %v for override %v, want %v", instanceType, got, override, want)
+				}
+			}
+			for _, instanceType := range []InstanceType{InstanceTypePVE, InstanceTypePBS, InstanceTypePMG} {
+				if got, scheduled := monitor.BasePollInterval(instanceType), monitor.baseIntervalForInstanceType(instanceType); got != scheduled {
+					t.Errorf("%s base interval = %v for override %v, want the scheduler's %v", instanceType, got, override, scheduled)
+				}
+			}
+		}
+	})
+
+	t.Run("adaptive scheduling keeps the same base", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.scheduler = NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil)
+		if got := monitor.BasePollInterval(InstanceTypePBS); got != 5*time.Minute {
+			t.Fatalf("PBS base interval = %v under adaptive scheduling, want the saved %v", got, 5*time.Minute)
+		}
+	})
+
+	t.Run("does not take the monitor lock", func(t *testing.T) {
+		monitor := newTenantMonitor(5 * time.Minute)
+		monitor.mu.Lock()
+		defer monitor.mu.Unlock()
+		done := make(chan time.Duration, 1)
+		go func() { done <- monitor.BasePollInterval(InstanceTypePBS) }()
+		select {
+		case got := <-done:
+			if got != 5*time.Minute {
+				t.Fatalf("PBS base interval = %v, want %v", got, 5*time.Minute)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("BasePollInterval blocked while m.mu was held")
+		}
+	})
+
+	t.Run("unknown cadence reads zero", func(t *testing.T) {
+		var nilMonitor *Monitor
+		for name, got := range map[string]time.Duration{
+			"nil monitor":       nilMonitor.BasePollInterval(InstanceTypePBS),
+			"monitor no config": (&Monitor{}).BasePollInterval(InstanceTypePVE),
+			"availability":      newTenantMonitor(time.Minute).BasePollInterval(InstanceTypeAvailability),
+		} {
+			if got != 0 {
+				t.Errorf("%s base interval = %v, want 0", name, got)
+			}
+		}
+	})
+}
+
 // Non-default tenant monitors poll against a detached config copy (#1619), so
 // a saved PBS or PMG interval reaches them only as a runtime override. The
 // freshness thresholds the monitor publishes must follow the cadence its

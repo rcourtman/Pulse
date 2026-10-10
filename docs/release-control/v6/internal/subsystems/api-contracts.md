@@ -9997,6 +9997,25 @@ metadata, but API freshness and `lastSeenAt` projections use the server-authored
 receipt time supplied by monitoring. API consumers must not substitute the
 agent clock for disconnect detection or apply a second, shorter generic
 Connections staleness window.
+PVE, PBS and PMG connection rows scale their active-to-stale cutoff by the
+cadence the org's monitor polls at.
+`buildAggregatorInputsWithRuntimeSources` reads `Monitor.BasePollInterval`
+(clamped like the scheduler, so an out-of-range configured interval is judged
+by the cadence actually polled) whenever a monitor is present, and falls back
+to the request config only when there is no monitor. A non-default org's request config is its monitor's
+detached copy (#1619), which a system-settings save does not update; saved PBS
+and PMG intervals reach that monitor only as runtime overrides. Reading the
+copy left Settings > Infrastructure rows stale for part of every cycle after
+an interval was raised, and slow to go stale after one was lowered.
+Adaptive polling still scales by the larger of that base and
+`PlannedPollInterval`, a conservative floor that can exceed the adaptive
+cadence. The connections list, runtime inventory sources and
+diagnostics all share this input builder. The system settings GET is not
+affected: the router serves `/api/config/system` from `SystemSettingsHandler`,
+which reads the base config and saved settings, not a tenant copy.
+`TestContract_ConnectionFreshnessFollowsSavedPollingIntervalsInTenantMonitors`
+in `internal/api/contract_test.go` drives a real settings save into a tenant
+monitor built from a detached copy and checks both directions.
 Availability target writes now use `observationLocationIds` as the canonical
 bounded set. Values are source-owned IDs (`pulse:local` or
 `agent:<agent-id>`), are normalized and deduplicated by the server, and every
