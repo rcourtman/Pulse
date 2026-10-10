@@ -31,6 +31,7 @@ import {
   normalizeDiskArray,
 } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface DockerHostDrawerOverviewProps {
   host: Resource;
@@ -80,6 +81,7 @@ const toDetailRows = (rows: DockerOverviewRow[]): DetailRow[] =>
   );
 
 export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps) {
+  const now = useRelativeTimeNow();
   const docker = () => props.host.docker;
   const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
   const summaryOnly = createMemo(
@@ -114,7 +116,10 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
           <InfoCardKeyValueRow label="Available" value={updatesAvailable()} />
           <Show when={checkedAtMillis()} keyed>
             {(timestamp) => (
-              <InfoCardKeyValueRow label="Last checked" value={formatRelativeTime(timestamp)} />
+              <InfoCardKeyValueRow
+                label="Last checked"
+                value={formatRelativeTime(timestamp, { now: now() })}
+              />
             )}
           </Show>
           <Show when={hostCommand()?.type || hostCommand()?.status}>
