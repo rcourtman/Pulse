@@ -5729,6 +5729,23 @@ helper must also prove that storage-pool and physical-disk history cover the
 suite's deepest seven-day chart window. The compose harness must seed that
 same seven-day window by default instead of forcing every parallel shard to
 build unrelated 90-day preview history.
+Core E2E must admit that same authenticated default fixture once, through
+`tests/integration/fixture-readiness.config.ts` and its dedicated spec, after
+container startup and before either test tier. An absent opt-in, incomplete
+inventory or insufficient pool/disk history fails the shard before suite work;
+it must not become repeated per-test setup failures. The policy lives in
+`tests/integration/scripts/default-mock-readiness.mjs`, consumed by the existing
+authenticated helper, with unchanged 120/180-second phase waits and history
+depth. Admission has no retry or ignored failure and a separate bounded report;
+it does not replace later fixture checks or any product/browser assertion.
+Completed stable-tier failure reports and JUnit must be uploaded before the
+observational probation pass, so a later probation cancellation cannot suppress
+those completed receipts. The job deadline, stable/probation selection and verdict
+gate stay unchanged. `scripts/tests/test-e2e-fixture-admission.sh` covers every
+required platform identity, both history scopes and depth, actual admission-spec
+error/cleanup behavior, the workflow's fail-fast command and receipt ordering.
+These controls prove fixture/gate orchestration, not the cause of a hosted
+runtime fault, provider transience or native monitoring recovery.
 Managed runtime recovery and browser bootstrap proofs therefore need to keep
 helper coverage that demonstrates browser-shell request tracking remains
 trustworthy when the same test also performs direct health or security-status

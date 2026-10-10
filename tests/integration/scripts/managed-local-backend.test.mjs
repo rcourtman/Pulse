@@ -200,8 +200,9 @@ test('shared browser readiness waits for the bounded mock history contract', asy
 
   assert.match(compose, /PULSE_MOCK_TRENDS_SEED_DURATION=\$\{PULSE_MOCK_TRENDS_SEED_DURATION:-168h\}/);
   assert.match(helpers, /"\/api\/storage-charts\?range=10080"/);
-  assert.match(helpers, /hasDeepSeries\(pool\.used\)/);
-  assert.match(helpers, /hasDeepSeries\(disk\.temperature\)/);
+  assert.match(helpers, /defaultMockInventoryReady\(await response\.json\(\)\)/);
+  assert.match(helpers, /defaultMockHistoryReady\(await response\.json\(\)\)/);
+  assert.match(helpers, /default-mock-readiness\.mjs/);
   assert.match(helpers, /default mock history should cover the seven-day Core E2E chart window/);
 });
 
