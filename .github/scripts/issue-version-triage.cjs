@@ -69,9 +69,9 @@ function normalizeVersion(value) {
 
 function normalizeLegacyVersionValue(value) {
   const visible = String(value).trim().replace(/^[`*_]+/, "");
-  // Recognise conventional version, image and release-asset values, without
+  // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+  return /^(?:v?\d+\.\d+\.\d+\b|server(?:[ \t]*\+[ \t]*pulse-agent)?[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
     ? normalizeVersion(visible) : null;
 }
 

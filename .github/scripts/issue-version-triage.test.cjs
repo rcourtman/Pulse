@@ -606,6 +606,14 @@ test("legacy version formats still classify actual version values", () => {
   }
 });
 
+test("legacy joint server-agent versions remain reporter evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  const body = "**Pulse version:** server + pulse-agent v6.3.2 (Docker, `rcourtman/pulse:v6.3.2`)\n**Host OS:** Unraid 7.3.2\n**Agent:** Unified Agent v6.3.2, x86_64";
+  assert.equal(extractPulseVersion("[Bug]: Unraid missing disks", body), "6.3.2");
+  assert.equal(extractPulseVersion("Bug", "Pulse version: server V6.5.0"), "6.5.0");
+  assert.equal(extractPulseVersion("Bug", "Pulse version: unknown; server + pulse-agent v6.3.2"), null);
+});
+
 test("legacy unknown-version sync cannot fabricate release evidence or contact", async () => {
   for (const body of [
     "Pulse version: unknown\n### Agent version\n6.5.0",
