@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8107e8db8f59fbf5ffba5b407bd7be1e14935274",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "840c424a5b8ea4c88e39f4eb3cac8e94ecf1286bf482ec73a2f8e95a56823afd"
+  },
+  "routes": [
+    "/settings/monitoring/availability (source-isolated existing-panel fixture)"
+  ],
+  "states": [
+    "Loaded reachable check with expiring evidence; final stale warning and unchanged paused target."
+  ],
+  "interactions": [
+    "Hold observed timestamps and advance the shared clock; inspect the real rendered Stale span and its exact two-sentence native title on desktop and phone.",
+    "No Test, Pause, Resume, credential mutation or operation is submitted."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "verified_at": "2026-10-10T21:34:23.726Z",
+  "browser": {
+    "client": "1.56.1",
+    "engines": [
+      "Chromium 141.0.7390.37",
+      "WebKit 26.0"
+    ]
+  },
+  "scope": "Exact-byte fresh proof of the correction already supplied at 8107e8db. No old captures were rebound. Native title text is DOM-verified; no OS tooltip-bubble/touch display, whole app or installed acceptance is claimed."
+}
