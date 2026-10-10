@@ -22,6 +22,10 @@ import (
 // particular, action examples must not acquire an automatic retry or emit a
 // private response just because a POST failed or its response was incomplete.
 func pulseAPIRecipes(doc string) (preparation, helper string, calls []string, err error) {
+	// These controls own authentication and action/audit examples. Node setup
+	// has its own private request-file preparation and copied-command controls
+	// in scripts/tests/test_node_api_docs.py; it is not an action recipe.
+	doc, _, _ = strings.Cut(doc, "## 🖥️ Nodes & Config\n")
 	for _, match := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(doc, -1) {
 		block := match[1]
 		switch {
@@ -39,6 +43,35 @@ func pulseAPIRecipes(doc string) (preparation, helper string, calls []string, er
 		err = fmt.Errorf("missing credential/helper recipe or request examples (got %d)", len(calls))
 	}
 	return
+}
+
+func TestPulseAPIRecipesKeepNodeSetupSeparateWithoutWeakeningActionControls(t *testing.T) {
+	doc, err := os.ReadFile(repoFile("docs", "API.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix, nodes, found := strings.Cut(string(doc), "## 🖥️ Nodes & Config\n")
+	if !found || !strings.Contains(nodes, `pulse_api POST /api/config/nodes < "$node_request_file"`) {
+		t.Fatal("the separately tested node request specimen is missing")
+	}
+	for _, tc := range []struct {
+		name, extra string
+		wantError   bool
+	}{
+		{"node setup does not shift action calls", "", false},
+		{"extra action request still rejected", "```bash\npulse_api GET /api/actions/unexpected\n```\n", true},
+		{"action request bypass still rejected", "```bash\ncurl http://127.0.0.1:7655/api/actions/unexpected\n```\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, calls, err := pulseAPIRecipes(prefix + tc.extra + "## 🖥️ Nodes & Config\n" + nodes)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("recipe boundary error = %v, want error %v", err, tc.wantError)
+			}
+			if !tc.wantError && (len(calls) != 8 || !strings.HasPrefix(calls[5], "pulse_api POST /api/actions/act_.../execute")) {
+				t.Fatal("node setup shifted the one-shot action controls")
+			}
+		})
+	}
 }
 
 func pulseAPIReference(t *testing.T) (string, string, []string) {
