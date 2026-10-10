@@ -137,6 +137,11 @@ signed historical release pair, full installer main, timer-service sandbox,
 authenticated browser journey, Proxmox LXC stop cause or reporter recovery.
 The existing published-release routes and field owners retain those outcomes.
 
+The native harness is owned canonical L1 runtime, even though it lives beside
+installer tests. Its explicit registry route requires either the dedicated
+Python harness regression file or its Go install-test bridge in the same
+candidate commit; an unowned or unreachable route is not proof coverage.
+
 ### Ordinary CI compiles the backend with the same checkout's real frontend
 
 The existing Frontend job retains its production bundle, size, whole-tree tests,
@@ -1505,6 +1510,7 @@ release-latency optimization.
 52. `scripts/install-mcp.sh`
 53. `scripts/install-mcp.ps1`
 55. `scripts/pulse-auto-update.sh`
+55a. `scripts/installtests/auto_update_systemd.py`
 56. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
 57. `scripts/release_control/record_rc_to_ga_rehearsal.py`
 58. `scripts/release_control/release_promotion_policy_support.py`

@@ -4557,6 +4557,7 @@
         "scripts/install-mcp.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
+        "scripts/installtests/auto_update_systemd.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
@@ -4967,8 +4968,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "scripts/tests/test_auto_update_systemd.py",
-              "scripts/installtests/pulse_auto_update_test.go"
+              "scripts/installtests/pulse_auto_update_test.go",
+              "scripts/tests/test_auto_update_systemd.py"
             ]
           },
           {

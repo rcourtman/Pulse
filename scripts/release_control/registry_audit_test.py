@@ -213,6 +213,62 @@ class RegistryAuditTest(unittest.TestCase):
                     proof_files.issubset(set(policy(subsystem_id, policy_id)["exact_files"]))
                 )
 
+    def test_native_updater_registry_owns_runtime_and_rejects_broken_proof_routes(self) -> None:
+        runtime = "scripts/installtests/auto_update_systemd.py"
+        proofs = [
+            "scripts/installtests/pulse_auto_update_test.go",
+            "scripts/tests/test_auto_update_systemd.py",
+        ]
+        registry = registry_audit.load_registry_payload()
+        rule = next(
+            item for item in registry["subsystems"]
+            if item["id"] == "deployment-installability"
+        )
+        self.assertEqual(registry_audit.owned_runtime_files(rule, {runtime}), [runtime])
+        matching = [
+            item for item in rule["verification"]["path_policies"]
+            if registry_audit.path_policy_matches(item, runtime)
+        ]
+        self.assertEqual([item["id"] for item in matching], ["current-source-unattended-systemd"])
+        self.assertEqual(matching[0]["exact_files"], proofs)
+        self.assertEqual(matching[0]["test_prefixes"], [])
+        self.assertFalse(matching[0]["allow_same_subsystem_tests"])
+
+        # Audit the real route in isolation, retaining its actual ownership and
+        # verification settings. A policy that names a harness without owning
+        # it must not count as usable coverage, even when its proof files exist.
+        scoped_rule = copy.deepcopy(rule)
+        scoped_rule["owned_prefixes"] = []
+        scoped_rule["owned_files"] = [path for path in rule["owned_files"] if path == runtime]
+        scoped_rule["verification"]["path_policies"] = copy.deepcopy(matching)
+        payload = {
+            "version": registry["version"],
+            "shared_ownerships": [],
+            "subsystems": [scoped_rule],
+        }
+        tracked = {rule["contract"], runtime, *proofs}
+        report = audit_registry_payload(payload, tracked_files=tracked, status_lane_ids={"L1"})
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["subsystems"][0]["owned_runtime_file_count"], 1)
+        self.assertEqual(report["subsystems"][0]["default_fallback_count"], 0)
+
+        for drift, diagnostic in (
+            ("missing-ownership", "does not match any owned runtime files"),
+            ("unsorted-proofs", "exact_files must be sorted lexicographically"),
+            ("missing-proof", "missing tracked file 'scripts/tests/test_auto_update_systemd.py'"),
+        ):
+            with self.subTest(drift=drift):
+                changed = copy.deepcopy(payload)
+                files = tracked.copy()
+                if drift == "missing-ownership":
+                    changed["subsystems"][0]["owned_files"] = []
+                elif drift == "unsorted-proofs":
+                    changed["subsystems"][0]["verification"]["path_policies"][0]["exact_files"].reverse()
+                else:
+                    files.remove(proofs[1])
+                rejected = audit_registry_payload(changed, tracked_files=files, status_lane_ids={"L1"})
+                self.assertIn(diagnostic, "\n".join(rejected["errors"]))
+
     def test_patrol_autopilot_registry_uses_dedicated_proof_and_rejects_drift(self) -> None:
         registry = registry_audit.load_registry_payload()
         rules = {rule["id"]: rule for rule in registry["subsystems"]}
