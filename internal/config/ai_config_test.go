@@ -1411,7 +1411,6 @@ func TestAssistantControlProjectionPreservesSavedPolicy(t *testing.T) {
 				cfg.ControlLevel = level
 				cfg.PatrolAutonomyLevel = PatrolAutonomyFull
 				cfg.PatrolActionEmergencyStop = true
-				cfg.ProtectedGuests = []string{"vm-101"}
 				before := *cfg
 				want := ControlLevelReadOnly
 				if level == ControlLevelControlled || level == ControlLevelAutonomous {

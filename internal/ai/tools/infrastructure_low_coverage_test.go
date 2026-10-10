@@ -445,7 +445,7 @@ func TestSharedToolSummaryOwnersUseCanonicalEmptyCollections(t *testing.T) {
 		raw  any
 		keys []string
 	}{
-		{name: "capabilities", raw: EmptyCapabilitiesResponse(), keys: []string{"protected_guests", "agents"}},
+		{name: "capabilities", raw: EmptyCapabilitiesResponse(), keys: []string{"agents"}},
 		{name: "agent_scope", raw: EmptyAgentScopeResponse(), keys: []string{"settings", "observed_modules"}},
 		{name: "cluster_status", raw: EmptyClusterStatusResponse(), keys: []string{"clusters"}},
 		{name: "recent_tasks", raw: EmptyRecentTasksResponse(), keys: []string{"tasks"}},

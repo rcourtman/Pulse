@@ -34,10 +34,11 @@ through Assistant condensation. Performance responses add a guest-history source
 limitation without relabelling past samples or changing their numbers; their
 actual tool controls are in `TestGuestMemoryHistoryDoesNotBorrowLiveOrigin`.
 
-The retained `protected_guests` settings field is legacy compatibility data,
-not an exclusion filter for canonical saved action plans. Existing Assistant
-help now states that limitation and requires target/approval review in Actions.
-No field value, GET/PUT shape, scope or approval authority changes.
+The `protected_guests` settings field is retired: it was never an exclusion
+filter for canonical saved action plans. `GET /api/settings/ai` no longer
+returns it, `PUT /api/settings/ai/update` ignores it from older clients, and a
+stored value is dropped the next time the settings are written. Scope and
+approval authority do not change.
 
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
@@ -52,8 +53,7 @@ legacy `autonomous` preference presents planning for operator review, never
 unprompted execution. Existing legacy PUT validation and `ai_autofix` checks
 remain; an entitled old client can retain the stored preference, an unentitled
 request is refused. Unrelated saves do not rewrite it. Shared external-agent
-vocabulary, Patrol settings, protected-guest arrays and authenticated authority
-remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
+vocabulary, Patrol settings and authenticated authority remain unchanged. `TestContract_AssistantSettingsAdvertisePlanningNotExecution`
 and the actual persistence/handler tests pin responses and compatibility.
 
 ### Optional held-alert breach date consumer
@@ -1761,7 +1761,11 @@ payload shape change when the portal presents compact client rows.
    contract tests rather than adding an untyped browser-only provider list.
    API responses must never echo provider secret values; settings updates may
    accept credential and clear-key fields, persist trimmed values, and return
-   only configured state.
+   only configured state. The settings projection and update request carry no
+   `protected_guests` field: the Assistant has no guest list of its own, and a
+   `protected_guests` key from an older client is ignored. Guests Pulse must
+   not act on are locked through the resource operator state
+   (`neverAutoRemediate`), which the Assistant honours at planning.
 6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

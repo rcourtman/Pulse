@@ -29,7 +29,6 @@ type AISettingsPayload = {
   ollama_password_set: boolean;
   configured_providers: string[];
   control_level: string;
-  protected_guests: string[];
   discovery_enabled: boolean;
 };
 
@@ -84,7 +83,6 @@ const baseAISettings = (): AISettingsPayload => ({
   ollama_password_set: false,
   configured_providers: [],
   control_level: "read_only",
-  protected_guests: [],
   discovery_enabled: false,
 });
 

@@ -2420,7 +2420,6 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{
 			"status":"warning",
@@ -2615,7 +2614,6 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"ollama_keep_alive":"",
 		"configured_providers":["openai"],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
@@ -4770,7 +4768,6 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
@@ -4841,7 +4838,6 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
@@ -4917,7 +4913,6 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
@@ -6188,7 +6183,6 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"protected_guests":[],
 		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
@@ -20084,7 +20078,7 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	settingsHandler := string(settingsHandlerSource)
 	for _, fragment := range []string{
 		`Used by Router to update Assistant tool visibility without restarting AI chat.`,
-		`Update Assistant control settings if control level or protected guests changed.`,
+		`Update Assistant control settings if the control level changed.`,
 		`This updates tool visibility without restarting AI chat.`,
 	} {
 		if !strings.Contains(settingsHandler, fragment) {
@@ -27097,8 +27091,8 @@ func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
 		if string(payload["control_level"]) != `"controlled"` {
 			t.Fatalf("interactive control_level %s", payload["control_level"])
 		}
-		if string(payload["protected_guests"]) != "[]" {
-			t.Fatalf("protected_guests must remain an explicit array: %s", payload["protected_guests"])
+		if _, ok := payload["protected_guests"]; ok {
+			t.Fatalf("the retired protected_guests field must not be projected: %s", payload["protected_guests"])
 		}
 	}
 }

@@ -349,13 +349,36 @@ func ambiguousControlTargetResult(ref, action string, candidates []unifiedresour
 	))
 }
 
+// controlLockedResult is the tool evidence for a target whose operator state
+// blocks all remediation (Never auto-remediate, or a retired lifecycle). The
+// block is the operator's explicit "Pulse must not act on this resource"
+// decision, so the model is told to report it and not to look for another way
+// to act.
+func controlLockedResult(target controlTarget, action string) CallToolResult {
+	name := target.displayName()
+	return NewToolResponseResult(NewToolBlockedError(
+		agentcapabilities.ErrCodeActionNotAllowed,
+		fmt.Sprintf("%q is not permitted on %s: an operator blocked all remediation for this resource (Never auto-remediate is on, or its lifecycle is Retired), so Pulse will not run any action on it.", action, name),
+		map[string]interface{}{
+			"resource_id":      target.canonicalID(),
+			"requested_action": action,
+			"reason_code":      agentcapabilities.AgentErrCodeResourceRemediationLocked,
+			"policy_boundary":  "An operator blocked all remediation for this resource, even with approval. Report exactly this boundary. It is cleared from the resource's Operator overrides in Pulse: turn off Never auto-remediate and, if the lifecycle is Retired, set it back to Active, then save. Do not plan the action another way or suggest workarounds.",
+		},
+	))
+}
+
 // controlPlanFailureResult turns a planning error into tool evidence the model
-// can report faithfully. A capability the resource does not advertise is a
-// real boundary and is described with the resource's current capability list;
-// anything else is passed through unchanged.
+// can report faithfully. An operator remediation block and a capability the
+// resource does not advertise are real boundaries and are described as such
+// (the latter with the resource's current capability list); anything else is
+// passed through unchanged.
 func controlPlanFailureResult(target controlTarget, action string, err error) CallToolResult {
 	if err == nil {
 		return NewErrorResult(fmt.Errorf("canonical action planning failed"))
+	}
+	if errors.Is(err, unifiedresources.ErrResourceRemediationLocked) {
+		return controlLockedResult(target, action)
 	}
 	if !errors.Is(err, actionplanner.ErrCapabilityNotFound) {
 		return NewErrorResult(err)

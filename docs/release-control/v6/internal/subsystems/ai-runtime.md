@@ -89,15 +89,16 @@ legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegac
 uses actual encrypted GET/PUT persistence with and without the entitlement,
 then checks explicit read-only opt-out and later opt-in remain possible.
 
-### Legacy protection copy is not a canonical-plan guarantee
+### Assistant protection is the per-resource lock, not a settings list
 
-The retained Protected guests list is older configuration, not a filter of
-canonical saved resource plans. Settings and both existing help pages must
-state that limitation and direct the operator to Actions target/approval review.
-The value is preserved on unrelated saves. Mounted component, accessible
-description and mirrored-help checks prevent a false exclusion promise.
-`TestService_isAutonomousModeEnabled` also covers every current saved level,
-explicit core-owned investigation enable/disable and unchanged stored values.
+Settings no longer offers a Protected guests list, because it never filtered
+canonical saved resource plans. The Assistant settings panel points the operator
+at the resource's Never auto-remediate lock, and both existing help pages say
+the same and state that the list is gone. The settings component, the
+`settingsArchitecture` source pin and the mirrored-help checks prevent a
+restored exclusion promise. `TestService_isAutonomousModeEnabled` also covers
+every current saved level, explicit core-owned investigation enable/disable and
+unchanged stored values.
 
 ### Interactive Assistant modes reflect action planning
 
@@ -8553,6 +8554,33 @@ Actions URL and `execution_requested: false`. Approval and execution are
 separate recorded steps, and the current Actions controls own their ordering.
 A prepared plan awaiting approval is not an executed write. A subsequent read,
 self-reported verification flag or successful call cannot establish recovery.
+
+`pulse_control` also declines to plan when the target's operator state blocks
+remediation (`NeverAutoRemediate`, or a retired lifecycle).
+`assistantTypedActionPlanner` (`internal/api/assistant_typed_action_planner.go`)
+reads that state through the tenant-scoped lifecycle store
+(`actionlifecycle.Service.ResourceOperatorState`, the same read Patrol's broker
+and dispatch use, not the chat executor's own audit store) and returns
+`unifiedresources.ErrResourceRemediationLocked` before `Plan`, so no plan is
+written. `controlPlanFailureResult` turns that into an `ACTION_NOT_ALLOWED` tool
+response whose details carry `reason_code: resource_remediation_locked` and a
+`policy_boundary` telling the model to report the block and that it is cleared
+from the resource's Operator overrides. This is a courtesy refusal when the
+state can be read, not the safety gate: the lifecycle's dispatch gate stays
+authoritative and refuses even a human-approved plan once the lock is stored (a
+lock saved while a human dispatch is being admitted is a known narrow race that
+the lifecycle owns), an operator state that
+cannot be read at planning is not a refusal (planning executes nothing and
+dispatch re-checks), and REST and Patrol planning still go through the
+unchanged lifecycle planner. The block applies to typed actions that target the
+exact locked resource, not its host, its descendants or read-only investigation.
+The Assistant has no guest allowlist or denylist of its own: the per-resource
+lock is the single place an operator tells Pulse not to act. The former
+`protected_guests` AI setting was saved and pushed into the tool executor but
+read only by an unreachable handler, so it never constrained `pulse_control`.
+It is removed from the AI settings projection, the tool executor and the
+Settings panel; `PUT /api/settings/ai/update` ignores the field from older
+clients, and a stored value is dropped the next time the settings are written.
 
 `pulse_query action=action` reads an exact action ID from the tenant-pinned
 canonical audit. It retains the full plan, recorded decisions, origin and

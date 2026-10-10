@@ -121,7 +121,6 @@ type AgentInfo struct {
 type CapabilitiesResponse struct {
 	ControlLevel    string       `json:"control_level"`
 	Features        FeatureFlags `json:"features"`
-	ProtectedGuests []string     `json:"protected_guests"`
 	ConnectedAgents int          `json:"connected_agents"`
 	Agents          []AgentInfo  `json:"agents"` // List of connected agents with hostnames
 	Version         string       `json:"version"`
@@ -132,9 +131,6 @@ func EmptyCapabilitiesResponse() CapabilitiesResponse {
 }
 
 func (r CapabilitiesResponse) NormalizeCollections() CapabilitiesResponse {
-	if r.ProtectedGuests == nil {
-		r.ProtectedGuests = []string{}
-	}
 	if r.Agents == nil {
 		r.Agents = []AgentInfo{}
 	}

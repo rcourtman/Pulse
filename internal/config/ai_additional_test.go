@@ -113,18 +113,7 @@ func TestAIConfig_PatrolSettings(t *testing.T) {
 	}
 }
 
-func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
-	cfg := &AIConfig{}
-	if guests := cfg.GetProtectedGuests(); len(guests) != 0 {
-		t.Fatalf("expected empty protected guests, got %v", guests)
-	}
-
-	cfg.ProtectedGuests = []string{"vm-100", "vm-200"}
-	guests := cfg.GetProtectedGuests()
-	if len(guests) != 2 || guests[0] != "vm-100" {
-		t.Fatalf("unexpected protected guests: %v", guests)
-	}
-
+func TestAIConfig_ControlAndPatrolLevelValidation(t *testing.T) {
 	if IsValidControlLevel("bad") {
 		t.Fatalf("expected invalid control level to be false")
 	}
