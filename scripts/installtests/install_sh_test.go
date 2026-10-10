@@ -5395,6 +5395,7 @@ func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
 	curlPath := filepath.Join(tmpDir, "curl")
 	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
 	logPath := filepath.Join(tmpDir, "curl.log")
+	systemctlPath := filepath.Join(tmpDir, "systemctl")
 	installDir := filepath.Join(tmpDir, "install")
 
 	if err := os.MkdirAll(filepath.Join(installDir, "bin"), 0755); err != nil {
@@ -5443,6 +5444,18 @@ esac
 		t.Fatalf("write ssh-keygen stub: %v", err)
 	}
 
+	// This URL-selection fixture still runs the real bounded service readers.
+	// Supply a complete active observation, not an empty successful systemctl
+	// response that the fail-closed recovery contract must reject.
+	systemctlStub := `#!/usr/bin/env bash
+set -e
+[[ "$*" == "show pulse --no-pager --property=LoadState --property=ActiveState" ]] || exit 1
+printf 'LoadState=loaded\nActiveState=active\n'
+`
+	if err := os.WriteFile(systemctlPath, []byte(systemctlStub), 0755); err != nil {
+		t.Fatalf("write systemctl stub: %v", err)
+	}
+
 	script := `
 		PATH="` + tmpDir + `:$PATH"
 		GITHUB_REPO="rcourtman/Pulse"
@@ -5450,7 +5463,6 @@ esac
 		log() { :; }
 		detect_service_name() { echo pulse; }
 		get_current_version() { echo v9.9.9; }
-		systemctl() { return 0; }
 		INSTALL_SIGNATURE_IDENTITY="pulse-installer"
 		INSTALL_SIGNATURE_NAMESPACE="pulse-install"
 		PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
@@ -5459,7 +5471,10 @@ esac
 ` + extractAutoUpdateFunction(t, "verify_release_signature") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
-		wait_for_service_active() { return 0; }
+` + extractAutoUpdateFunction(t, "read_update_service_state") + `
+` + extractAutoUpdateFunction(t, "start_update_service_if_stopped") + `
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 		perform_update v9.9.9
 	`
