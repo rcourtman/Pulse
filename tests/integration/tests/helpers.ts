@@ -1091,8 +1091,12 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
 export async function ensureAuthenticated(page: Page) {
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
-  if (!(await authenticateWithPrimaryAPIToken(page))) {
+  if (
+    !(await authenticateWithPrimaryAPIToken(page)) &&
+    !(await authenticateWithSharedCookieSession(page))
+  ) {
     await login(page);
+    await rememberSharedCookieSession(page);
   }
   await expect(page).toHaveURL(AUTHENTICATED_URL);
 }
@@ -1121,6 +1125,61 @@ const sharedCookieStatePath = (): string =>
     "playwright-auth",
     "shared-cookie-session.json",
   );
+
+const isAuthenticationCookie = (cookie: { name: string }): boolean =>
+  ["pulse_session", "__Host-pulse_session", "pulse_csrf"].includes(cookie.name);
+
+async function authenticateWithSharedCookieSession(page: Page): Promise<boolean> {
+  let cookies: Awaited<ReturnType<ReturnType<Page["context"]>["cookies"]>>;
+  try {
+    const state = JSON.parse(fs.readFileSync(sharedCookieStatePath(), "utf8"));
+    cookies = state.cookies.filter(isAuthenticationCookie);
+  } catch {
+    return false;
+  }
+  if (!cookies.some((cookie) => cookie.name !== "pulse_csrf")) {
+    return false;
+  }
+
+  // Probe the exact saved cookies against this backend, without a primary
+  // token that could hide expiry or revocation. Never import another test's
+  // org selection, localStorage or unrelated cookies into this page.
+  const probe = await playwrightRequest.newContext({
+    baseURL: preferredBrowserBaseURL(),
+    storageState: { cookies, origins: [] },
+  });
+  try {
+    const status = (await probe.get("/api/state")).status();
+    if (status === 401 || status === 403) {
+      return false;
+    }
+    if (status !== 200) {
+      throw new Error(`Shared cookie session probe failed: ${status}`);
+    }
+    await page.context().addCookies(cookies);
+    await page.goto("/");
+    await waitForAppShell(page);
+    await expect(page).toHaveURL(AUTHENTICATED_URL);
+    return true;
+  } finally {
+    await probe.dispose();
+  }
+}
+
+async function rememberSharedCookieSession(page: Page): Promise<void> {
+  const cookies = (await page.context().cookies(preferredBrowserBaseURL()))
+    .filter(isAuthenticationCookie);
+  if (!cookies.some((cookie) => cookie.name !== "pulse_csrf")) {
+    throw new Error("Password authentication did not issue a cookie session");
+  }
+  const sharedPath = sharedCookieStatePath();
+  fs.mkdirSync(path.dirname(sharedPath), { recursive: true });
+  const temporaryPath = `${sharedPath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify({ cookies, origins: [] }), {
+    mode: 0o600,
+  });
+  fs.renameSync(temporaryPath, sharedPath);
+}
 
 async function storageStateHasLiveSession(
   browser: Browser,
