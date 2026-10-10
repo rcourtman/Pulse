@@ -2,6 +2,9 @@ import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresent
 
 export const ALERT_CONFIG_UNSAVED_CHANGES = 'You have unsaved changes';
 export const ALERT_CONFIG_SAVE_CHANGES = 'Save Changes';
+export const ALERT_CONFIG_SAVING = 'Saving…';
+export const ALERT_CONFIG_NEWER_CHANGES_UNSAVED =
+  'Settings from this save were accepted. Your newer changes are still unsaved.';
 export const ALERT_CONFIG_RESET_DEFAULTS = 'Reset to defaults';
 export const ALERT_CONFIG_RESET_DEFAULTS_TITLE =
   'Restore quiet hours, cooldown, grouping, delivery, and escalation settings to their defaults';
@@ -107,8 +110,8 @@ export function getAlertConfigUnsavedChangesLabel() {
   return ALERT_CONFIG_UNSAVED_CHANGES;
 }
 
-export function getAlertConfigSaveChangesLabel() {
-  return ALERT_CONFIG_SAVE_CHANGES;
+export function getAlertConfigSaveChangesLabel(isSaving = false) {
+  return isSaving ? ALERT_CONFIG_SAVING : ALERT_CONFIG_SAVE_CHANGES;
 }
 
 export function getAlertConfigResetDefaultsLabel() {
@@ -195,8 +198,8 @@ export function getAlertConfigReloadFailure() {
   return ALERT_CONFIG_RELOAD_FAILURE;
 }
 
-export function getAlertConfigSaveSuccess() {
-  return ALERT_CONFIG_SAVE_SUCCESS;
+export function getAlertConfigSaveSuccess(hasNewerChanges = false) {
+  return hasNewerChanges ? ALERT_CONFIG_NEWER_CHANGES_UNSAVED : ALERT_CONFIG_SAVE_SUCCESS;
 }
 
 export function getAlertConfigSaveFailure() {

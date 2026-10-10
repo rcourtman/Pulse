@@ -70,7 +70,13 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
             <div class="flex w-full gap-2 sm:w-auto">
               <button
                 class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={state.isReloadingConfig() || !!state.destConfigLoadError()}
+                disabled={
+                  state.isReloadingConfig() ||
+                  state.isLoadingDestinations() ||
+                  state.isSavingConfig() ||
+                  !!state.destConfigLoadError()
+                }
+                aria-busy={state.isSavingConfig()}
                 onClick={async () => {
                   try {
                     await state.saveAlertConfiguration();
@@ -82,11 +88,11 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
                   }
                 }}
               >
-                {getAlertConfigSaveChangesLabel()}
+                {getAlertConfigSaveChangesLabel(state.isSavingConfig())}
               </button>
               <button
                 class="flex-1 px-4 py-2 text-sm transition-colors border border-border rounded-md text-base-content hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={state.isReloadingConfig()}
+                disabled={state.isReloadingConfig() || state.isSavingConfig()}
                 onClick={async () => {
                   await state.loadAlertConfiguration({ notify: true });
                 }}

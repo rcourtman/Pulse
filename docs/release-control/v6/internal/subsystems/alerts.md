@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### Existing settings saves retain the pending and newer drafts
+
+One save per loaded editor owns a click-time snapshot of the alert policy and
+all separately persisted destinations. Save and Discard are unavailable while
+it is pending; fields stay editable. Completion clears the dirty flag only
+when no newer edits occurred. If newer edits exist, the acknowledgement says
+that the submitted settings were accepted and the newer changes remain
+unsaved. Failed writes stop later calls, retain drafts and restore Save for a
+deliberate retry. The existing multi-endpoint save is not atomic: earlier
+acknowledged writes are not rolled back or described as undone.
+
+Entering the notifications tab does not reload an unsaved draft or an active
+save. Explicit Discard still reloads saved settings when no save is pending.
+Reload, organisation switch and unmount invalidate stale completions and stop
+unsent writes; they cannot cancel or undo an already-issued request. The newer
+context alone owns load results and pending flags. Apprise response masking
+replaces only the untouched submitted draft, not newer input.
+
+`alertSettingsSave.acknowledgement.test.tsx` exercises the real policy and
+destination owners with deferred/rejected API replies, coherent snapshots,
+newer edits, duplicate admission, tab navigation, retry, normal masking and
+organisation invalidation. `useAlertDestinationsState.test.tsx` bounds the
+same downstream snapshot; `alertConfigPresentation.test.ts` distinguishes
+pending, accepted and newer-unsaved messages. Browser proof mounts the real
+configuration surface at desktop and narrow widths with synthetic local
+endpoints. These are source controls, not ordinary notification delivery.
+
+
 ### PMG collection opt-outs are not recovery evidence
 
 Missing node queues (including an entirely disabled collector) cannot resolve
