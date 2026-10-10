@@ -3608,7 +3608,9 @@ default` instead of fusing provider and badge text such as
     platform scope locked: the Proxmox and vSphere Overview tabs embed
     `WorkloadsSurface` with `forcedPlatform` (the page owns the workloads
     state and the one `WorkloadsFilter` toolbar; the surface requires that
-    state and takes only presentation props besides it), and the Proxmox Storage tab
+    state and takes only presentation props besides it, and the state reads its
+    guests and nodes from the page's resource snapshot, with no enable flag),
+    and the Proxmox Storage tab
     embeds `StorageSurface` with `forcedSourceFilter`. Those tabs must keep
     their guests, VMs, and storage rows on those embeds rather than a
     platform-local copy. Neither surface has an `embedded` or `tableOnly`

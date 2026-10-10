@@ -221,6 +221,11 @@ describe('ProxmoxPageSurface contract', () => {
     expect(mockWorkloadsOptions).toHaveBeenCalledWith(
       expect.objectContaining({ resourceSnapshotChange }),
     );
+    // Guests and nodes reach the state only through that snapshot.
+    const options = mockWorkloadsOptions.mock.lastCall?.[0] as Record<string, unknown>;
+    for (const option of ['vms', 'containers', 'nodes', 'useWorkloads']) {
+      expect(options, option).not.toHaveProperty(option);
+    }
   });
 
   afterEach(() => {

@@ -478,11 +478,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
   const currentModel = createMemo(() => props.model?.() ?? EMPTY_PROXMOX_PAGE_MODEL);
   const overviewWidth = useObservedElementWidth();
   const workloadsState = useWorkloadsState({
-    vms: [],
-    containers: [],
-    nodes: [],
     layoutWidth: overviewWidth.width,
-    useWorkloads: true,
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotChange: props.resourceSnapshotChange,
     resourceSnapshotRefetch: props.resourceSnapshotRefetch,
