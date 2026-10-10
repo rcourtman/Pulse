@@ -45,15 +45,22 @@ export interface AlertsConfigurationSurfaceProps {
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
+  const [isSavingConfig, setIsSavingConfig] = createSignal(false);
+  let draftRevision = 0;
+  let configurationVersion = 0;
   const [suppressDirtyFlag, setSuppressDirtyFlag] = createSignal(false);
   const guardedSetHasUnsavedChanges = (value: boolean) => {
     if (value && suppressDirtyFlag()) return;
+    if (value) ++draftRevision;
     props.setHasUnsavedChanges(value);
   };
   const configurationSnapshotState = useAlertsConfigurationSnapshotState({
     setHasUnsavedChanges: guardedSetHasUnsavedChanges,
   });
-  const destinationsState = useAlertDestinationsState({ activeTab: props.activeTab });
+  const destinationsState = useAlertDestinationsState({
+    activeTab: props.activeTab,
+    canReload: () => !props.hasUnsavedChanges() && !isSavingConfig() && !isReloadingConfig(),
+  });
   const overridesState = useAlertOverridesState({
     allResources: props.allResources,
     byType: props.byType,
@@ -63,6 +70,10 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   });
 
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
+    const thisVersion = ++configurationVersion;
+    // A context change invalidates unsent writes from the old editor. It cannot
+    // cancel or undo a request that has already reached the server.
+    setIsSavingConfig(false);
     setIsReloadingConfig(true);
     setSuppressDirtyFlag(true);
     props.setHasUnsavedChanges(false);
@@ -73,6 +84,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
     try {
       const config = await AlertsAPI.getConfig();
+      if (thisVersion !== configurationVersion) return;
       configurationSnapshotState.applyConfigurationSnapshot(
         readAlertsConfigurationSnapshot(config),
       );
@@ -80,22 +92,35 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       overridesState.replaceRawOverridesConfig(config.overrides || {});
 
       await destinationsState.loadDestinations();
+      if (thisVersion !== configurationVersion) return;
 
       if (options.notify) {
         notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (error) {
+      if (thisVersion !== configurationVersion) return;
       logger.error('Failed to load alert configuration:', error);
       if (options.notify) {
         notificationStore.error(getAlertConfigReloadFailure());
       }
     } finally {
-      setIsReloadingConfig(false);
-      queueMicrotask(() => setSuppressDirtyFlag(false));
+      if (thisVersion === configurationVersion) {
+        setIsReloadingConfig(false);
+        queueMicrotask(() => {
+          if (thisVersion === configurationVersion) setSuppressDirtyFlag(false);
+        });
+      }
     }
   };
 
   const saveAlertConfiguration = async () => {
+    if (
+      isSavingConfig() ||
+      isReloadingConfig() ||
+      destinationsState.isLoadingDestinations() ||
+      destinationsState.destConfigLoadError()
+    )
+      return;
     const result = buildAlertsConfigurationPayload({
       snapshot: configurationSnapshotState.captureConfigurationSnapshot(),
       rawOverridesConfig: overridesState.rawOverridesConfig(),
@@ -107,11 +132,25 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       return;
     }
 
-    await AlertsAPI.updateConfig(result.alertConfig!);
+    const destinationsSnapshot = destinationsState.captureDestinations();
+    const savedRevision = draftRevision;
+    const savedVersion = configurationVersion;
+    const ownsSave = () => savedVersion === configurationVersion;
+    setIsSavingConfig(true);
+    try {
+      await AlertsAPI.updateConfig(result.alertConfig!);
+      if (!ownsSave()) return;
+      await destinationsState.saveDestinations(destinationsSnapshot, ownsSave);
+      if (!ownsSave()) return;
 
-    await destinationsState.saveDestinations();
-    props.setHasUnsavedChanges(false);
-    notificationStore.success(getAlertConfigSaveSuccess());
+      const hasNewerChanges = savedRevision !== draftRevision;
+      if (!hasNewerChanges) props.setHasUnsavedChanges(false);
+      notificationStore.success(getAlertConfigSaveSuccess(hasNewerChanges));
+    } catch (error) {
+      if (ownsSave()) throw error;
+    } finally {
+      if (ownsSave()) setIsSavingConfig(false);
+    }
   };
 
   onMount(() => {
@@ -120,12 +159,14 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       void loadAlertConfiguration();
     });
     onCleanup(() => {
+      ++configurationVersion;
       unsubscribeOrgSwitched();
     });
   });
 
   return {
     isReloadingConfig,
+    isSavingConfig,
     guardedSetHasUnsavedChanges,
     isLoadingDestinations: destinationsState.isLoadingDestinations,
     destConfigLoadError: destinationsState.destConfigLoadError,

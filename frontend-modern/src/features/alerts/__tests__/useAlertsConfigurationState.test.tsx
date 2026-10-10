@@ -32,6 +32,7 @@ vi.mock('../useAlertDestinationsState', () => ({
     appriseConfig: () => null,
     setAppriseConfig: vi.fn(),
     resetDestinations: vi.fn(),
+    captureDestinations: () => ({}),
     loadDestinations: (...args: unknown[]) => mockLoadDestinations(...args),
     saveDestinations: (...args: unknown[]) => mockSaveDestinations(...args),
   }),
@@ -86,7 +87,10 @@ describe('useAlertsConfigurationState', () => {
       }),
     );
 
-    await waitFor(() => expect(mockGetConfig).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(mockGetConfig).toHaveBeenCalledTimes(1);
+      expect(result.isReloadingConfig()).toBe(false);
+    });
     expect(result.containerRuntimeResources).toBe(containerRuntimeResources);
     expect(result.containerRuntimeResources()).toEqual([
       expect.objectContaining({
@@ -124,7 +128,10 @@ describe('useAlertsConfigurationState', () => {
       }),
     );
 
-    await waitFor(() => expect(mockGetConfig).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(mockGetConfig).toHaveBeenCalledTimes(1);
+      expect(result.isReloadingConfig()).toBe(false);
+    });
     await result.saveAlertConfiguration();
 
     expect(mockUpdateConfig).toHaveBeenCalledTimes(1);
