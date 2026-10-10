@@ -179,10 +179,24 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 				front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}, m.mockModeFence.begin())
 				wire, err := json.Marshal(front.Resources)
 				var served []struct {
-					Disk *models.ResourceMetricFrontend
+					Disk    *models.ResourceMetricFrontend
+					Proxmox struct{ Disks []unifiedresources.DiskInfo }
 				}
-				if err != nil || json.Unmarshal(wire, &served) != nil || len(served) != 1 || served[0].Disk == nil || served[0].Disk.Used == nil || *served[0].Disk.Used != wantUsed || served[0].Disk.Current != vm.Disk.Usage {
-					t.Fatalf("served aggregate differs: %s / %v", wire, err)
+				if err != nil || json.Unmarshal(wire, &served) != nil || len(served) != 1 || served[0].Disk == nil {
+					t.Fatalf("served guest differs: %s / %v", wire, err)
+				}
+				diskMetric := served[0].Disk
+				if diskMetric.Total == nil || *diskMetric.Total != 1000 || diskMetric.Used == nil || *diskMetric.Used != wantUsed || diskMetric.Free == nil || *diskMetric.Free != 1000-wantUsed || diskMetric.Current != vm.Disk.Usage {
+					t.Fatalf("served aggregate differs: %+v", diskMetric)
+				}
+				if len(served[0].Proxmox.Disks) != len(vm.Disks) {
+					t.Fatal("served guest lost individual mount rows")
+				}
+				for i, disk := range served[0].Proxmox.Disks {
+					observed := vm.Disks[i]
+					if disk.Total != observed.Total || disk.Used != observed.Used || disk.Free != observed.Free || disk.Usage != observed.Usage || disk.Mountpoint != observed.Mountpoint || disk.Device != observed.Device || disk.Filesystem != observed.Type {
+						t.Fatalf("served mount %d differs from its observation: %+v / %+v", i, disk, observed)
+					}
 				}
 				active := m.alertManager.GetActiveAlerts()
 				if step < 2 {
