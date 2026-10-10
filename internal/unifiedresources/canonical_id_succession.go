@@ -84,8 +84,8 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 
 	applied := make([]CanonicalIDSuccession, 0, len(pending))
 	var carried []carriedLock
-	var groups [][]string
-	rekeyed := make(map[string]string, len(pending))
+	var groups []savedGroup
+	var rekeys []rekeyedID
 	for _, succession := range pending {
 		oldID := succession.OldCanonicalID
 		newID := succession.NewCanonicalID
@@ -139,8 +139,8 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 		if _, err := tx.Exec(`DELETE FROM resource_identities WHERE canonical_id = ?`, oldID); err != nil {
 			return fmt.Errorf("delete superseded identity pin %q: %w", oldID, err)
 		}
-		groups = append(groups, groupAfterRekey(members, oldID, newID))
-		rekeyed[oldID] = newID
+		groups = append(groups, savedGroup{index: len(rekeys), members: groupAfterRekey(members, oldID, newID)})
+		rekeys = append(rekeys, rekeyedID{oldID: oldID, newID: newID})
 		applied = append(applied, succession)
 	}
 
@@ -152,7 +152,7 @@ func (s *SQLiteResourceStore) ApplyCanonicalIDSuccessions(successions []Canonica
 	// the re-key of a later predecessor into the same successor.
 	sharedAt := time.Now().UTC()
 	for _, group := range groups {
-		shared, err := shareRemediationLockAmongSQL(tx, settledGroup(group, rekeyed), sharedAt)
+		shared, err := shareRemediationLockAmongSQL(tx, settledGroup(group, rekeys), sharedAt)
 		if err != nil {
 			return fmt.Errorf("share remediation lock across linked resources %v: %w", group, err)
 		}
@@ -230,8 +230,8 @@ func (m *MemoryStore) ApplyCanonicalIDSuccessions(successions []CanonicalIDSucce
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var groups [][]string
-	rekeyed := make(map[string]string, len(successions))
+	var groups []savedGroup
+	var rekeys []rekeyedID
 	for _, succession := range successions {
 		oldID := CanonicalResourceID(succession.OldCanonicalID)
 		newID := CanonicalResourceID(succession.NewCanonicalID)
@@ -280,13 +280,13 @@ func (m *MemoryStore) ApplyCanonicalIDSuccessions(successions []CanonicalIDSucce
 			m.canonicalSuccessions = make(map[string]string)
 		}
 		m.canonicalSuccessions[oldID] = newID
-		groups = append(groups, groupAfterRekey(members, oldID, newID))
-		rekeyed[oldID] = newID
+		groups = append(groups, savedGroup{index: len(rekeys), members: groupAfterRekey(members, oldID, newID)})
+		rekeys = append(rekeys, rekeyedID{oldID: oldID, newID: newID})
 	}
 	// See the SQLite store: sharing waits for the whole batch.
 	sharedAt := time.Now().UTC()
 	for _, group := range groups {
-		m.shareRemediationLockAmongLocked(settledGroup(group, rekeyed), sharedAt)
+		m.shareRemediationLockAmongLocked(settledGroup(group, rekeys), sharedAt)
 	}
 	return nil
 }

@@ -282,28 +282,33 @@ func flattenComponents(components [][]string) []string {
 	return out
 }
 
-// resolveThroughRekeys follows id through a batch's re-keys (a -> b, then
-// b -> c) to the ID that holds it once the whole batch has applied.
-func resolveThroughRekeys(id string, rekeyed map[string]string) string {
-	for hops := 0; hops <= len(rekeyed); hops++ {
-		next, moved := rekeyed[id]
-		if !moved {
-			return id
-		}
-		id = next
-	}
-	return id
+// rekeyedID is one applied succession of a batch.
+type rekeyedID struct {
+	oldID string
+	newID string
 }
 
-// settledGroup maps a succession's saved sharing group through the batch's
-// re-keys, so a member a later succession in the batch re-keyed away is
-// replaced by its successor instead of being given a row of its own.
-func settledGroup(group []string, rekeyed map[string]string) []string {
-	resolved := make([]string, 0, len(group))
-	for _, id := range group {
-		resolved = append(resolved, resolveThroughRekeys(id, rekeyed))
+// savedGroup is the sharing group of the succession at position index in a
+// batch's application order.
+type savedGroup struct {
+	index   int
+	members []string
+}
+
+// settledGroup maps a saved group through the re-keys applied AFTER it, in
+// application order, so a member a later succession in the batch re-keyed away
+// is replaced by its successor instead of being given a row of its own. The
+// re-keys before the group's own succession are already reflected in it.
+func settledGroup(group savedGroup, rekeys []rekeyedID) []string {
+	members := append([]string(nil), group.members...)
+	for _, rekey := range rekeys[group.index+1:] {
+		for i, id := range members {
+			if id == rekey.oldID {
+				members[i] = rekey.newID
+			}
+		}
 	}
-	return flattenComponents([][]string{resolved})
+	return flattenComponents([][]string{members})
 }
 
 // groupAfterRekey is the set a succession's pre-re-key members form once the

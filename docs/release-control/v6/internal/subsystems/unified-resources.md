@@ -3599,7 +3599,8 @@ records itself done only once it has converged, does not run again after that,
 so a lock lifted afterwards stays lifted, and a failure is logged and retried
 at the next start rather than keeping the store closed. Sharing after a
 succession batch waits until every predecessor's row in the batch has moved
-and follows each member through the batch's re-keys, so a block-only row made
+and follows each group's members through the re-keys applied after it, in
+application order, so a block-only row made
 for one predecessor cannot take the place of another's whole row and an ID a
 later succession in the batch re-keyed away is not given a row. The link reads
 that settle a lock take only the columns that decide a pair and treat a time
@@ -3617,8 +3618,8 @@ the operator-state API resolves a folded ID to, and a restart, a rebuild or a
 re-declared succession does not put it back. The copies the sharing wrote on
 folded members cannot be reached through that API while the pair is linked, so
 they share again at the component's next link, unlink or succession. Unlinking
-the pair removes no carried lock from either side; once unlinked, each member
-can be edited or cleared on its own.
+the pair removes no carried lock from either side; once no other link still
+joins them, each member can be edited or cleared on its own.
 
 The sharing is bounded by when it runs, and the contract does not claim more.
 A lock written to a linked ID after the link was recorded reaches the other

@@ -8461,3 +8461,75 @@ func TestSQLiteStoreRestoresLocksAcrossRecordedSuccessionChains(t *testing.T) {
 		t.Fatalf("restoring the lock rewrote the successor's own settings: %+v", got)
 	}
 }
+
+// A succession batch is applied in the order it is declared, and each group of
+// linked IDs it saved follows only the re-keys applied after it. A batch
+// declared against its direction, and one that returns an ID to its start, both
+// leave the lock on the IDs that survive and give no row to an ID re-keyed away.
+func TestSuccessionBatchOrderKeepsLinkedRemediationLock(t *testing.T) {
+	stores := map[string]func(t *testing.T) ResourceStore{
+		"memory": func(t *testing.T) ResourceStore { return NewMemoryStore() },
+		"sqlite": func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		},
+	}
+	now := time.Now().UTC()
+	locked := func(t *testing.T, store ResourceStore, id string) bool {
+		t.Helper()
+		state, found, err := store.GetResourceOperatorState(id)
+		if err != nil {
+			t.Fatalf("read operator state of %s: %v", id, err)
+		}
+		return found && state.BlocksRemediation()
+	}
+	for name, newStore := range stores {
+		t.Run(name+"/declared against its direction", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "rev-a", ResourceB: "rev-b", PrimaryID: "rev-b"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "rev-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "rev-b", NewCanonicalID: "rev-c"},
+				{OldCanonicalID: "rev-a", NewCanonicalID: "rev-b"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"rev-b", "rev-c"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock when the batch was declared against its direction", id)
+				}
+			}
+		})
+		t.Run(name+"/returns an ID to its start", func(t *testing.T) {
+			store := newStore(t)
+			if err := store.AddLink(ResourceLink{ResourceA: "loop-a", ResourceB: "loop-x", PrimaryID: "loop-x"}); err != nil {
+				t.Fatalf("link: %v", err)
+			}
+			if err := store.SetResourceOperatorState(ResourceOperatorState{CanonicalID: "loop-a", NeverAutoRemediate: true, SetAt: now}); err != nil {
+				t.Fatalf("lock: %v", err)
+			}
+			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
+				{OldCanonicalID: "loop-a", NewCanonicalID: "loop-b"},
+				{OldCanonicalID: "loop-b", NewCanonicalID: "loop-a"},
+			}); err != nil {
+				t.Fatalf("ApplyCanonicalIDSuccessions: %v", err)
+			}
+			for _, id := range []string{"loop-a", "loop-x"} {
+				if !locked(t, store, id) {
+					t.Fatalf("%s lost the lock across a batch that returned to its start", id)
+				}
+			}
+			if state, found, err := store.GetResourceOperatorState("loop-b"); err != nil || found {
+				t.Fatalf("the re-keyed intermediate ID was given a row: found=%v err=%v state=%+v", found, err, state)
+			}
+		})
+	}
+}
