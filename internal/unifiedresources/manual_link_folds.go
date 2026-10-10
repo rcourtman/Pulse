@@ -17,6 +17,9 @@ type ManualLinkFold struct {
 	Sources   []DataSource
 	HolderOwn []DataSource
 	FoldedOwn []DataSource
+	// shapes keeps the two members' link shapes for later link passes
+	// (manual_link_chains.go); ManualLinkFolds leaves them out.
+	shapes linkFoldShapes
 }
 
 // recordManualLinkFold notes on the link's merged resource that it took in
@@ -80,7 +83,11 @@ func (rr *ResourceRegistry) ManualLinkFolds(resourceID string) []ManualLinkFold 
 	if resource == nil {
 		return nil
 	}
-	return cloneManualLinkFolds(resource.linkFolds)
+	folds := cloneManualLinkFolds(resource.linkFolds)
+	for i := range folds {
+		folds[i].shapes = linkFoldShapes{}
+	}
+	return folds
 }
 
 func cloneManualLinkFolds(in []ManualLinkFold) []ManualLinkFold {

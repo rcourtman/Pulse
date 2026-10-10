@@ -121,10 +121,16 @@ type ResourceRegistry struct {
 	linkOwnPins map[string]*ResourceIdentityPin
 	// linkHolds maps a resource that exists only through saved-host
 	// continuity, and that an operator link would otherwise fold away, to
-	// the link's primary (holdLinkedResourceLocked). Both rows stay listed
-	// with their own telemetry; references to the held row resolve to the
-	// primary. Every link pass recomputes it.
+	// the member whose row the fold would have taken it into
+	// (holdLinkedResourceLocked, holdSavedLinkMembersLocked). Both rows stay
+	// listed with their own telemetry; references to the held row resolve to
+	// that row. Every link pass recomputes it.
 	linkHolds map[string]string
+	// deferManualLinks holds the link pass back while a monitor rebuild
+	// ingests its snapshot and record sources (MonitorAdapter.replaceRegistryLocked),
+	// so applyDeferredManualLinks judges every chain once, over the
+	// assembled estate, instead of folding members as their sources arrive.
+	deferManualLinks bool
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -695,7 +701,9 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 
 	rr.mu.Lock()
 	rr.pbsBackups = clonePBSBackups(snapshot.PBSBackups)
-	rr.applyManualLinks(thresholds)
+	if !rr.deferManualLinks {
+		rr.applyManualLinks(thresholds)
+	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -770,7 +778,9 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	// and old agent payload), but the link still names their identity: the
 	// pass holds them beside the primary and resolves references to them
 	// there.
-	rr.applyManualLinks(thresholds)
+	if !rr.deferManualLinks {
+		rr.applyManualLinks(thresholds)
+	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -5032,6 +5042,27 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	return &merged
 }
 
+// applyDeferredManualLinks runs the link pass a rebuild held back while it
+// ingested the snapshot and record sources (deferManualLinks), then refreshes
+// what folding changes, as record ingest does after its own pass.
+func (rr *ResourceRegistry) applyDeferredManualLinks(thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	if !rr.deferManualLinks {
+		return
+	}
+	rr.deferManualLinks = false
+	rr.applyManualLinks(thresholds)
+	rr.refreshStorageConsumersLocked()
+	rr.refreshPBSRollupsLocked()
+	rr.refreshStoragePostureLocked()
+	rr.refreshIncidentRollupsLocked()
+	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
+	rr.refreshCanonicalIdentitiesLocked()
+	rr.invalidateViewsLocked()
+}
+
 func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Duration) {
 	if rr.linkHolds != nil {
 		rr.linkHolds = nil
@@ -5040,88 +5071,12 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 	if len(rr.links) == 0 {
 		return
 	}
-	for _, link := range rr.links {
-		// A link joins only the pair its row names. Canonical-ID succession
-		// can leave a row whose endpoint re-key collided with the successor's
-		// own row while its primary moved on to the successor; honouring that
-		// primary merged the successor through a row naming a retired ID, which
-		// an unlink or report-merge of the merged pair leaves behind.
-		primaryID := link.PrimaryID
-		if primaryID != link.ResourceA && primaryID != link.ResourceB {
-			primaryID = link.ResourceA
-		}
-		primary := rr.resources[primaryID]
-		if primary == nil {
-			primary = rr.resources[link.ResourceA]
-			primaryID = link.ResourceA
-		}
-		if primary == nil {
-			primary = rr.resources[link.ResourceB]
-			primaryID = link.ResourceB
-		}
-		if primary == nil {
-			continue
-		}
-
-		otherID := link.ResourceB
-		if otherID == primaryID {
-			otherID = link.ResourceA
-		}
-		other := rr.resources[otherID]
-		if other == nil && otherID != primaryID {
-			if source, ok := rr.joinedPairSideLocked(primary, otherID); ok {
-				// A relink of a split node and its agent names the two rows,
-				// and the declared link folds one of them into the other's
-				// ID once the relink rejoins them. Record the fold so pin
-				// succession keeps the link rather than re-keying it onto
-				// the joined ID, which would let the split decide again,
-				// and so report-merge of the joined row names this pair.
-				recordManualLinkFold(primary, primaryID, &Resource{Sources: []DataSource{source}}, otherID)
-				rr.indexLinkFoldsLocked(primary)
-			}
-		}
-		if other == nil || otherID == primaryID {
-			continue
-		}
-		// Availability checks retain their source-owned identity even when an
-		// operator links them to another resource. Correlation is represented
-		// by RelChecks plus the additive facet projection.
-		if isAvailabilityOwnedResource(*primary) || isAvailabilityOwnedResource(*other) {
-			continue
-		}
-		// A link between a Proxmox node and an agent loses to a newer split
-		// of the two read across their IDs: report-merge cannot delete a
-		// link naming the rows an earlier split left (nodeAgentSplit).
-		if rr.nodeAgentRowsSplit(rr.operatorPairDecisionsLocked(), primary, other) {
-			continue
-		}
-
-		// A manual link records operator intent to unify identities, but its
-		// direction must not change the semantic resource shape. In particular,
-		// an agent running inside a VM/LXC supplements that guest; it does not
-		// turn the guest into an agent resource with an agent metrics target.
-		if primary.Type == ResourceTypeAgent && hypervisorManagedGuest(other) {
-			primary, other = other, primary
-			primaryID, otherID = otherID, primaryID
-		}
-		if primary.continuityOnly || other.continuityOnly {
-			rr.holdLinkedResourceLocked(primaryID, otherID, other)
-			continue
-		}
-
-		rr.recordLinkOwnPin(primaryID, primary)
-		rr.recordLinkOwnPin(otherID, other)
-		// The fold records what each side is on its own, so it reads the
-		// primary before the other side's sources join its list.
-		recordManualLinkFold(primary, primaryID, other, otherID)
-		rr.mergeResourceData(primary, other, thresholds)
-		delete(rr.resources, otherID)
-		// The fold record names every ID along a chain of links, so the chain
-		// resolves to its last primary; the folded row's own index entries
-		// lapse on read now that it has left the registry.
-		rr.indexLinkFoldsLocked(primary)
-		rr.updateSourceMappings(otherID, primaryID)
-	}
+	// Links apply as chains (manual_link_chains.go): each connected set of
+	// observed members folds into one root, and saved members are held under
+	// the row their partners fold into, whatever order the links are stored in.
+	edges := rr.manualLinkEdgesLocked()
+	rr.foldLinkChainsLocked(edges, thresholds)
+	rr.holdSavedLinkMembersLocked(edges)
 }
 
 // recordLinkOwnPin captures the identity pin a manual-link side derives from
@@ -5140,29 +5095,6 @@ func (rr *ResourceRegistry) recordLinkOwnPin(id string, resource *Resource) {
 		return
 	}
 	rr.linkOwnPins[id] = nil
-}
-
-// holdLinkedResourceLocked keeps a link whose member exists only through
-// saved-host continuity out of the fold. A saved enrollment is not an
-// observation: folded into a live resource it would lend that resource its
-// offline verdict and old payload, and a live resource folded into it would
-// hide live telemetry behind it. The link still names one identity, so a
-// saved member the fold would have taken in answers to the primary,
-// as a folded one does. A live member keeps its own references even when the
-// saved member is the primary: a live row never resolves to a saved one. The
-// first link to claim a member holds it, as the first fold takes it in.
-func (rr *ResourceRegistry) holdLinkedResourceLocked(primaryID, otherID string, other *Resource) {
-	if !other.continuityOnly {
-		return
-	}
-	if _, held := rr.linkHolds[otherID]; held {
-		return
-	}
-	if rr.linkHolds == nil {
-		rr.linkHolds = make(map[string]string)
-	}
-	rr.linkHolds[otherID] = primaryID
-	rr.canonicalIdentityIndex = nil
 }
 
 // linkHoldPrimaryLocked returns the row a held link member's references

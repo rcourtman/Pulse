@@ -6921,19 +6921,142 @@ links" below).
   answer for themselves until the agent reports and the link folds them, so
   intent set on the pair under the agent's ID does not reach the live
   member's references in that window. Holds are recomputed on every link
-  pass; a hold whose primary a later link folds follows the fold, a saved
-  row held under a saved primary follows that primary's hold, and a cycle of
-  saved rows resolves each to itself. Exact reads are untouched: `Get` still
+  pass. A saved row answers to the row its link partner folds into, found
+  through the fold record when an earlier pass of the rebuild, or the
+  monitor a registry was seeded from, already folded the partner away; a
+  saved row held under a saved primary follows that primary's hold, and a
+  cycle of saved rows resolves each to itself. A saved row that several
+  links would fold answers to the best of the rows their partners fold into,
+  found after the folds (a partner a seeded listing carries inside a row the
+  links now fold away is ranked by the row it survives in), by the chain
+  precedence below with each row judged by its own identity and an observed
+  row ranked before a saved one; the first link the store lists no longer
+  decides. Exact reads are untouched: `Get` still
   returns the saved row, so the saved agent's own drawer reads its own facet
   bundle and history, while its operator-state section reads and writes the
   guest's state.
-- Holds cover a link whose two members are both listed. A saved member
-  whose partner an earlier link already folded into a third resource, such
-  as an agent linked into a VM that is itself linked into another resource,
-  is not held: the monitor's published registry folds the VM before
-  continuity adds the agent, so the agent answers for itself until it
-  reports. Live chains already depend on the order their links are stored
-  in, which this does not change.
+- Links apply as chains (`manual_link_chains.go`). Links that share a
+  member name one identity, so a link pass folds every connected set of
+  observed members into one row, whatever order the store lists the links
+  in. Applied one at a time, a link naming a member an earlier link had
+  folded away found nothing: an agent linked into a VM that a second link
+  folds into storage joined the chain in one order and stayed its own row in
+  the other, and a saved agent whose partner the published registry had
+  already folded answered for itself. Standing the row that holds a folded
+  member in for it fixed neither, because that row then outranked the
+  link's own primary (a VM folded into a pool that had taken the agent
+  first) and hid the agent-into-guest direction once the guest was folded.
+  A link member is the resource the link names, judged by its own shape
+  (agent, hypervisor-managed guest) after a link folds it too: the holding
+  row takes a guest's Proxmox payload and would read as a guest itself.
+  Fold records keep both sides' shapes, so later passes and a registry
+  seeded from a listing judge a member alike. Each link keeps its pair rule:
+  the stated primary, except that an agent named primary over a guest folds
+  into the guest. A chain's root is picked from the members no link folds,
+  or from every member when the directions form a cycle. Rows compete, each
+  by its own identity: a member an earlier pass folded stands as the row
+  holding it, since a fold is not undone. When every candidate row is an
+  agent and the chain holds a guest, the rows holding guests compete
+  instead, including a row an earlier fold put a guest into, so an agent
+  never ends up holding a guest. Among candidates a hypervisor-managed guest
+  wins, then any non-agent resource over an agent, then the primary of the
+  earliest-created link, then the lowest canonical ID. A single link keeps
+  its effective primary, and so does a chain whose directions agree, unless
+  that primary is an agent and the chain holds a guest. The node and agent
+  rules judge each link before it joins a chain: a link between a Proxmox
+  node and an agent a newer split separates is dropped, and a link whose one
+  side a joined node-and-agent row already holds records that side's fold on
+  the row before any link resolves its members, so a second link naming the
+  folded side joins the chain whichever link the store lists first; the
+  fold record keeps both sides' agent shape, so a guest linked to the
+  folded node still outranks storage.
+- The monitor's rebuild holds the link pass back until the snapshot and
+  every record source except availability are in
+  (`deferManualLinks`, `applyDeferredManualLinks`), so its chains are judged
+  over the assembled estate; the availability batch that follows runs its
+  own pass, which finds the chains already folded. A link pass after each source folded members as
+  their sources arrived, and a later source's member could then outrank a
+  member already folded: a cycle through a Proxmox storage, a TrueNAS VM
+  and a vSphere VM kept the storage or the vSphere VM, where judging the
+  whole cycle keeps the TrueNAS VM. Availability checks still follow the
+  links, so a check linked to a folded resource projects onto its primary.
+  Record ingest into an existing registry still runs a link pass per call:
+  a live supplemental refresh that brings a member the last rebuild had not
+  seen judges it against the rows the rebuild left, until the next rebuild
+  judges the whole chain. A refresh can also recreate a folded member whose
+  source maps to a holder of another type; the recreated row competes as
+  itself, as it did in the rebuild, and folds back along the fold records
+  its chain carries, so identical records leave the pair set and every
+  folded ID as they were. The resources API's snapshot-seeded fallback,
+  used only while the monitor has published no unified listing, still
+  ingests the snapshot and each supplemental source with a pass per call,
+  and so does the mock-mode fixture build (`internal/mock`): a chain whose
+  answer depends on the order its members' sources arrive in can settle
+  differently there than in the monitor's rebuild.
+- Rows fold along the chain's links, deepest first, so each fold record
+  names a stored link's pair. The links form a spanning tree from the root
+  that follows the fold records the rows already carry before any other
+  link: a row a record pass recreated folds back through a link a record
+  names in the direction it folded, and a chain with several recreated
+  members folds back along its recorded ancestry, instead of reaching one
+  through a member another row holds, which would turn that member's record
+  round and leave its ID resolving nowhere. A cycle's closing link is
+  recorded in its own direction, so it counts as a recorded link only where
+  that direction matches, and a recreated row may fold back through it; the
+  pair set and every folded ID stay as they were. Links no record names
+  join once those are exhausted, breadth first from the root. The pass then records every other link of the
+  chain on the root (the link closing a cycle, or one whose sides an earlier
+  pass already joined, recorded with the link's effective direction though
+  it folded nothing in), so a report-merge that excludes every recorded pair
+  undoes every link of the chain. The pass records each fold before it
+  merges the folded row into the holder, as the own-sources record needs. A
+  pair is recorded once and keeps the
+  direction it was first recorded in, since a seeded listing can carry
+  records from an older generation of the links, and turning one would leave
+  the ID it folded in without a row. When a row must fold into another
+  and its own records name members it took in, its records are oriented
+  away from an anchor: the surviving row's own ID when they name it (a
+  recreated row that now roots the chain, or a link changed after the
+  listing was published), else the member the link names. Each record points
+  from the side nearer the anchor to the side farther (records between two
+  members equally far keep their direction), so the folded row's own ID
+  becomes a folded ID and keeps resolving, and the anchor is never recorded
+  as folded: a record naming the surviving row as folded, such as a cycle's
+  closing link, would leave report-merge no holder that no link folded to
+  infer the root from once that row is re-keyed. Hanging the records from
+  the member when the surviving row lies between that member and the folded
+  row would leave a member with no incoming fold. Each turned record lists
+  all of the row's sources, since the row no longer knows which member
+  brought which. A row whose records reach neither, such as a physical disk re-keyed
+  after it took the member in, stays standing rather than leave its own ID
+  resolving nowhere. A turned record keeps each side's own sources with the
+  side, and a record the pass adds for a link closing a cycle carries them
+  too, so report-merge (above), which picks links by member from these
+  records, can cut a reported member from every path of the chain.
+  Availability-owned members stay
+  unmerged, and saved members never join a chain: two live rows that only a
+  saved row links stay apart until it reports.
+  `TestManualLinkChainsFoldTheSameWayInAnyLinkOrder` (`registry_test.go`)
+  rebuilds twelve chains in every link order and checks both rebuilds, a live
+  refresh of each record source, the read-state overlay and a registry
+  seeded from it: one row of the expected type, every member resolving to
+  it, every link pair recorded and the same fold records in every order. On
+  main ten of the twelve leave a member standing, pick another root or miss
+  a link pair in some order; the other two (a record-sourced storage chain
+  and one recreated member) guard what already worked.
+  `TestManualLinkChainRefreshNeverLeavesAnAgentHoldingAGuest` refreshes in
+  a vSphere host the rebuild had not seen and checks the storage holding the
+  guest keeps the chain until the next rebuild keeps the guest.
+  `TestManualLinkToAJoinedNodeFoldsTheSameWayInAnyLinkOrder` links a
+  Proxmox node's own ID, which the inferred join with its agent consumed,
+  and a pool, in both orders: the joined row's fold of the node is recorded
+  before any link resolves its members, so the pool link joins the chain
+  whichever link the store lists first.
+  `TestSavedLinkMemberHoldsFollowTheChainInAnyLinkOrder` (`resolve_test.go`)
+  holds a saved agent under the pool its VM partner folds into, and under
+  its guest over a competing pool, in both orders, in the overlay and the
+  resources API's seeded registry; on main each case answers to the wrong
+  row in one order.
 - A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
   an agent chosen as primary over a TrueNAS system still carries the
   system's facet, and the system's pools re-parent to the merged row.
