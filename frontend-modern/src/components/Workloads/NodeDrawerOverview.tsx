@@ -11,7 +11,7 @@ import {
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
-import { formatBytes, normalizeDiskArray } from '@/utils/format';
+import { formatBytes, formatRelativeTime, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
@@ -193,7 +193,10 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return clock && clock !== '0' ? clock : '';
   };
   const loadAverageLabel = () => formatLoadAverage(props.node.loadAverage);
-  const updateEvidence = () => getProxmoxUpdateEvidencePresentation(props.node);
+  const updateEvidence = () =>
+    getProxmoxUpdateEvidencePresentation(props.node, (value) =>
+      formatRelativeTime(value, { now: now() }),
+    );
 
   const platformRows = (): NodeOverviewRow[] => [
     ...(cleanText(props.node.kernelVersion)

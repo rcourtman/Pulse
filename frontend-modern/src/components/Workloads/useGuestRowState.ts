@@ -20,6 +20,7 @@ import {
 } from '@/utils/workloads';
 import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
@@ -39,6 +40,7 @@ import {
 } from './guestRowModel';
 
 export function useGuestRowState(props: GuestRowProps) {
+  const now = useRelativeTimeNow();
   const { isMobile } = useBreakpoint();
   const alertsActivation = useAlertsActivation();
 
@@ -298,15 +300,20 @@ export function useGuestRowState(props: GuestRowProps) {
     isDockerManagedAppContainer(props.guest) ? getWorkloadDockerHostId(props.guest) : '',
   );
 
-  const availabilityPresentation = createMemo(() =>
-    getAvailabilityProbePresentation({
-      type: props.guest.type as never,
-      platformType: (props.guest.platformType ?? '') as never,
-      status: props.guest.status as never,
-      availability: props.guest.availability,
-      platformData: { availability: props.guest.availability },
-    }),
-  );
+  const availabilityPresentation = createMemo(() => {
+    const availability = props.guest.availability;
+    if (!availability) return null;
+    return getAvailabilityProbePresentation(
+      {
+        type: props.guest.type as never,
+        platformType: (props.guest.platformType ?? '') as never,
+        status: props.guest.status as never,
+        availability,
+        platformData: { availability },
+      },
+      new Date(now()),
+    );
+  });
 
   return {
     appContainerRuntimeBadge,

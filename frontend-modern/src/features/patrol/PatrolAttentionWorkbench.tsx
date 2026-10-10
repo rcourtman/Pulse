@@ -646,6 +646,7 @@ function AttentionList(props: {
   onSelect: (itemId: string) => void;
   view: PatrolAttentionView;
 }) {
+  const now = useRelativeTimeNow();
   const hasQuietWork = () => {
     const items = patrolAttentionStore.items();
     return Array.isArray(items) && items.length > 0;
@@ -779,7 +780,11 @@ function AttentionList(props: {
                               </span>
                             </Show>
                             <span>
-                              Last seen {formatRelativeTime(item.lastObservedAt, { compact: true })}
+                              Last seen{' '}
+                              {formatRelativeTime(item.lastObservedAt, {
+                                compact: true,
+                                now: now(),
+                              })}
                             </span>
                           </div>
                         </div>
@@ -801,6 +806,7 @@ function AttentionList(props: {
 }
 
 function AttentionEmptyState(props: { hasQuietWork: boolean; view: PatrolAttentionView }) {
+  const now = useRelativeTimeNow();
   const summary = () => patrolAttentionStore.summary();
   const activeFilter = () => patrolAttentionStore.filter() === 'active';
   const trustworthyCalm = () =>
@@ -849,7 +855,7 @@ function AttentionEmptyState(props: { hasQuietWork: boolean; view: PatrolAttenti
               : 'The current operational evaluation has no active items.'}
             <Show when={summary()?.evaluatedAt}>
               {' Checked '}
-              {formatRelativeTime(summary()!.evaluatedAt, { compact: true })}.
+              {formatRelativeTime(summary()!.evaluatedAt, { compact: true, now: now() })}.
             </Show>
           </p>
         </Show>
@@ -886,6 +892,7 @@ function AttentionDetail(props: {
   findings?: () => UnifiedFinding[];
 }) {
   const [copiedResourceId, setCopiedResourceId] = createSignal('');
+  const now = useRelativeTimeNow();
   const detail = () => props.detail;
   const item = () => detail()?.item;
   const linkedFindings = createMemo(() => {
@@ -1028,7 +1035,8 @@ function AttentionDetail(props: {
                 <ProtectionLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
                 <span>
-                  Last seen {formatRelativeTime(loaded().item.lastObservedAt, { compact: true })}
+                  Last seen{' '}
+                  {formatRelativeTime(loaded().item.lastObservedAt, { compact: true, now: now() })}
                 </span>
               </div>
               <p class="mt-3 text-sm leading-6 text-base-content">
@@ -1259,10 +1267,16 @@ function AttentionDetail(props: {
                             <span class="font-semibold">Flapping.</span>{' '}
                             {flapping().transitionCount} open/resolved changes in the last{' '}
                             {flapping().windowHours} hours, first{' '}
-                            {formatRelativeTime(flapping().firstTransitionAt, { compact: true })}{' '}
+                            {formatRelativeTime(flapping().firstTransitionAt, {
+                              compact: true,
+                              now: now(),
+                            })}{' '}
                             and latest{' '}
-                            {formatRelativeTime(flapping().lastTransitionAt, { compact: true })}.
-                            The transitions are collapsed here so one noisy issue reads as one
+                            {formatRelativeTime(flapping().lastTransitionAt, {
+                              compact: true,
+                              now: now(),
+                            })}
+                            . The transitions are collapsed here so one noisy issue reads as one
                             issue.
                           </p>
                           <details class="mt-2 rounded-md border border-border-subtle">
