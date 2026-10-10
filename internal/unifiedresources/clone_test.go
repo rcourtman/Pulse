@@ -273,8 +273,11 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 // registry's listing can name each link's pair, and stay detached from them.
 func TestCloneResource_CarriesLinkFolds(t *testing.T) {
 	original := &Resource{
-		ID:        "vm-1",
-		linkFolds: []ManualLinkFold{{HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent}}},
+		ID: "vm-1",
+		linkFolds: []ManualLinkFold{{
+			HolderID: "vm-1", FoldedID: "agent-1", Sources: []DataSource{SourceAgent},
+			HolderOwn: []DataSource{SourceProxmox}, FoldedOwn: []DataSource{SourceAgent},
+		}},
 	}
 	cloned := cloneResource(original)
 	if len(cloned.linkFolds) != 1 || cloned.linkFolds[0].FoldedID != "agent-1" {
@@ -282,8 +285,11 @@ func TestCloneResource_CarriesLinkFolds(t *testing.T) {
 	}
 
 	cloned.linkFolds[0].Sources[0] = SourceDocker
+	cloned.linkFolds[0].HolderOwn[0] = SourceDocker
+	cloned.linkFolds[0].FoldedOwn[0] = SourceDocker
 	cloned.linkFolds[0].FoldedID = "MUTATED"
-	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" {
+	if original.linkFolds[0].Sources[0] != SourceAgent || original.linkFolds[0].FoldedID != "agent-1" ||
+		original.linkFolds[0].HolderOwn[0] != SourceProxmox || original.linkFolds[0].FoldedOwn[0] != SourceAgent {
 		t.Errorf("mutating cloned link folds affected the original: %+v", original.linkFolds)
 	}
 }
