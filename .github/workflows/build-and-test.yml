@@ -280,7 +280,8 @@ jobs:
       - name: Verify backend with real frontend embed
         run: |
           set -euo pipefail
-          printf 'REAL_EMBED_CHECKOUT=%s\n' "$(git rev-parse HEAD)"
+          checkout_sha=$(git rev-parse HEAD)
+          printf 'REAL_EMBED_CHECKOUT=%s\n' "$checkout_sha"
           test -s frontend-modern/dist/index.html
           test -d frontend-modern/dist/assets
           diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist

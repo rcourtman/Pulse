@@ -50,7 +50,7 @@ def recipe(source):
     if not run:
         raise AssertionError("real-embed shell missing")
     shell = "\n".join(line[10:] for line in run[1].splitlines()) + "\n"
-    for command in ("set -euo pipefail", "test -s frontend-modern/dist/index.html",
+    for command in ("set -euo pipefail", "checkout_sha=$(git rev-parse HEAD)", "test -s frontend-modern/dist/index.html",
                     "test -d frontend-modern/dist/assets",
                     "diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist",
                     'go build -mod=readonly -p=2 -o "$RUNNER_TEMP/pulse-real-embed" ./cmd/pulse',
@@ -76,7 +76,7 @@ elif args != ["version"] and args[0] != "vet":
 
 
 class FrontendRealEmbed(unittest.TestCase):
-    def run_recipe(self, *, mutation="", fail_phase=""):
+    def run_recipe(self, *, mutation="", fail_phase="", git_exit=0):
         shell = recipe(WORKFLOW.read_text())
         with tempfile.TemporaryDirectory(prefix="pulse-real-embed-") as directory:
             f = Path(directory)
@@ -95,10 +95,10 @@ class FrontendRealEmbed(unittest.TestCase):
             if mutation == "missing embedded file": (embed / "assets/app.js").unlink()
             for name in ("tools", "runner-temp"): (f / name).mkdir()
             (f / "tools/go").write_text(COMPILER)
-            (f / "tools/git").write_text("#!/bin/sh\n[ \"$*\" = 'rev-parse HEAD' ] || exit 97\necho 0123456789012345678901234567890123456789\n")
+            (f / "tools/git").write_text("#!/bin/sh\n[ \"$*\" = 'rev-parse HEAD' ] || exit 97\n[ \"$GIT_EXIT\" = 0 ] || exit \"$GIT_EXIT\"\necho 0123456789012345678901234567890123456789\n")
             for name in ("go", "git"): (f / "tools" / name).chmod(0o700)
             env = dict(os.environ, PATH=str(f / "tools") + os.pathsep + os.environ["PATH"],
-                       TRACE=str(f / "trace"), FAIL_PHASE=fail_phase, RUNNER_TEMP=str(f / "runner-temp"))
+                       TRACE=str(f / "trace"), FAIL_PHASE=fail_phase, GIT_EXIT=str(git_exit), RUNNER_TEMP=str(f / "runner-temp"))
             result = subprocess.run(["bash", "-c", shell], cwd=f, env=env, capture_output=True, text=True, timeout=10)
             calls = [json.loads(line) for line in (f / "trace").read_text().splitlines()] if (f / "trace").exists() else []
             output = f / "runner-temp/pulse-real-embed"
@@ -126,6 +126,13 @@ class FrontendRealEmbed(unittest.TestCase):
                 result, calls, _, _ = self.run_recipe(fail_phase=phase)
                 self.assertEqual(result.returncode, 43)
                 self.assertEqual([call[0] for call in calls], called)
+
+    def test_failed_checkout_read_is_not_a_build_grant(self):
+        result, calls, _, built = self.run_recipe(git_exit=46)
+        self.assertEqual(result.returncode, 46)
+        self.assertEqual(calls, [])
+        self.assertFalse(built)
+        self.assertNotIn("REAL_EMBED_CHECKOUT=", result.stdout)
 
     def test_missing_hidden_or_foreign_workflow_phases_are_rejected(self):
         source = WORKFLOW.read_text()
