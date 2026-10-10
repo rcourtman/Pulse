@@ -1,4 +1,4 @@
-import { WebhookConfig } from '@/components/Alerts/WebhookConfig';
+import { WebhookConfig, type WebhookConfigProps } from '@/components/Alerts/WebhookConfig';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import type { Webhook } from '@/api/notifications';
 import {
@@ -8,8 +8,8 @@ import {
 
 interface AlertWebhookDestinationsSectionProps {
   webhooks: Webhook[];
-  addWebhook: (webhook: Omit<Webhook, 'id'>) => void;
-  updateWebhook: (webhook: Webhook) => void;
+  addWebhook: WebhookConfigProps['onAdd'];
+  updateWebhook: WebhookConfigProps['onUpdate'];
   deleteWebhook: (id: string) => void;
   testWebhook: (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testingWebhook: string | null;

@@ -1155,6 +1155,34 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Webhook drafts survive unconfirmed persistence
+
+The existing Notifications editor awaits an explicit successful acknowledgement
+from its add/update owner before clearing a draft. The owner returns success
+only after the API responds and the returned destination replaces or joins the
+displayed inventory. A rejected or interrupted save keeps the same inputs,
+masked fields, template, mention and tag/severity policy. Fixed inline guidance
+does not claim the write was rejected: an interrupted response can follow a
+committed create, so the operator checks saved destinations in another tab
+before explicitly retrying. There is no editor-triggered automatic replay.
+
+One pending editor save locks the draft, Cancel and the conflicting local list
+controls, and subsequent Save calls do not invoke another mutation. Success
+closes the editor; failure unlocks it for correction or deliberate cancellation.
+The API, encrypted persistence/publication ordering, saved-value masking, Test
+payload parity, delivery policy, SSRF/TLS and existing shared API-client retry
+rules are unchanged. This is draft recovery, not exactly-once creation or proof
+that ordinary notifications arrive.
+
+`WebhookConfig.persistence.test.tsx` exercises the actual editor and mutation
+owner through deferred create/update responses, failure, explicit retry,
+canonical accepted response, cancellation and fixed callback-error guidance.
+`WebhookConfig.test.tsx` now acknowledges successful saves before expecting
+editor dismissal. The local `webhook-save-acknowledgement` browser fixture
+checks the same components with synthetic API transport, including desktop and
+phone keyboard/touch journeys and another-tab reconciliation after a lost
+response. It sends no real notification and establishes no installed outcome.
+
 ### Active Docker update pending age survives restart
 
 A positive Docker image-update report reuses the matching active occurrence's
