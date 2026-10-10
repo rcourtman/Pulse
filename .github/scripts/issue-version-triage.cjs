@@ -12,17 +12,22 @@ function escapeRegExp(value) {
 
 function extractSectionValue(body, heading, followingHeadings = []) {
   if (!body) return null;
+  // Hidden template instructions are not declarations. Strip them before
+  // locating the section as well as before interpreting its value.
+  const visibleBody = stripHTMLComments(body);
   const boundary = followingHeadings.length
     ? followingHeadings.map(escapeRegExp).join("|")
     : "[^\\n]+";
   const pattern = new RegExp(
-    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s*(?:${boundary})\\s*$|$)`,
+    // With the multiline flag, $ also matches the end of the first value
+    // line. Only the next field or the actual end of input ends a section.
+    `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s*(?:${boundary})\\s*$|(?![\\s\\S]))`,
     "im"
   );
-  const match = body.match(pattern);
+  const match = visibleBody.match(pattern);
   if (!match) return null;
-  const value = match[1].trim();
-  return value || null;
+  // An empty declared field differs from a legacy report with no field.
+  return match[1].trim();
 }
 
 function stripHTMLComments(value) {

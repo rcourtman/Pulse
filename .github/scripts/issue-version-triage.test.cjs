@@ -263,6 +263,96 @@ test("additional topic classification is explicit and fail-quiet for legacy form
   );
 });
 
+test("topic classification reads later paragraphs after an empty first line", () => {
+  for (const firstLine of ["None", "<!-- List distinct topics here. -->", "_No response_"]) {
+    const body = [
+      "### Additional actionable topics", firstLine, "",
+      "The second host also loses its Docker inventory.", "",
+      "### Pulse version", "6.5.0",
+    ].join("\n");
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+  }
+});
+
+test("topic classification stops at form fields but retains topic subheadings", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const followingField of ["Pulse version", "Additional context", "Logs, screenshots, or diagnostics", "Confirmations"]) {
+      assert.equal(classifyAdditionalActionableTopics([
+        "### Additional actionable topics", "None", "",
+        `### ${followingField}`, "An error or a second topic outside this field.",
+      ].join(newline)), false);
+    }
+    assert.equal(classifyAdditionalActionableTopics([
+      "### Additional actionable topics", "None", "",
+      "### Separate backup problem", "Backups belong to the wrong host.",
+      "### Pulse version", "6.5.0",
+    ].join(newline)), true);
+  }
+});
+
+test("hidden template fields cannot declare topics or override feedback type", () => {
+  const { classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const hidden = ["<!--", "### Additional actionable topics", "A second bug.",
+    "### Feedback type", "Bug / regression", "-->"].join("\n");
+  assert.equal(classifyAdditionalActionableTopics(hidden), null);
+  assert.equal(classifyV6FeedbackType(hidden), null);
+  assert.equal(classifyAdditionalActionableTopics(
+    `${hidden}\n### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0`
+  ), false);
+  assert.equal(classifyV6FeedbackType(
+    `${hidden}\n### Feedback type\nDocumentation issue\n\n### Pulse version\n6.5.0`
+  ), "documentation");
+  assert.equal(classifyV6FeedbackType(
+    "### Feedback type\nDocumentation issue\n\n### Describe the bug\nBug / regression"
+  ), "documentation");
+});
+
+test("a hidden hint or empty topic field is not an actionable declaration", () => {
+  for (const value of ["", "<!-- A second bug. -->", "None\n\n<!-- Another topic. -->"]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`
+    ), false);
+  }
+});
+
+test("syncLabels surfaces newly added later-line topics without resetting Community state", async () => {
+  const previousBody = "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0";
+  const body = "### Additional actionable topics\nNone\n\n" +
+    "Backup attribution is also wrong.\n\n### Pulse version\n6.5.0";
+  for (const action of ["opened", "edited", "reopened"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2800, title: "Host inventory report", body,
+      labels: [{ name: "enhancement" }, { name: "needs-retest-on-latest" }, { name: "needs-human" }] };
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action, issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels),
+      action === "reopened" ? [] : ["needs-decomposition"]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2800]);
+  }
+});
+
+test("syncLabels ignores hidden bug examples and topic hints", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2801, title: "Documentation wording",
+    body: "<!--\n### Feedback type\nBug / regression\n" +
+      "### Additional actionable topics\nAnother bug.\n-->\n" +
+      "### Feedback type\nDocumentation issue\n\n" +
+      "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0",
+    labels: [{ name: "needs-retest-on-latest" }, { name: "needs-decomposition" }] };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["documentation"]);
+  assert.deepEqual(calls.createLabel.map(call => call.name), []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
 test("every actionable issue form exposes the decomposition signal", () => {
   const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
   for (const name of [
