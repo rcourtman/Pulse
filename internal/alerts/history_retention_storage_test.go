@@ -13,7 +13,7 @@ import (
 )
 
 func retainedHistoryEntry(id string, at time.Time) HistoryEntry {
-	return HistoryEntry{
+	entry := HistoryEntry{
 		Alert: Alert{
 			ID: id, CanonicalState: id, Type: "cpu", ResourceID: "guest-1",
 			Level: AlertLevelWarning, StartTime: at, LastSeen: at,
@@ -21,6 +21,11 @@ func retainedHistoryEntry(id string, at time.Time) HistoryEntry {
 		},
 		Timestamp: at,
 	}
+	// Compaction already backfills these scalar identity fields on changed
+	// histories. Compare like-for-like evidence, not a pre-normalized fixture
+	// with an intentionally normalized result.
+	backfillCanonicalIdentity(&entry.Alert)
+	return entry
 }
 
 func TestHistoryCleanupReleasesRemovedRowStorage(t *testing.T) {
@@ -112,13 +117,20 @@ func TestHistoryRemovalReleasesRemovedRowStorage(t *testing.T) {
 
 func TestHistoryCompactionNoOpKeepsStorage(t *testing.T) {
 	hm := newTestHistoryManager(t)
-	hm.history = []HistoryEntry{retainedHistoryEntry("current", time.Now())}
+	hm.history = []HistoryEntry{
+		retainedHistoryEntry("current", time.Now()),
+		{Alert: Alert{ID: "legacy", ResourceID: "guest-2", Type: "cpu"}, Timestamp: time.Now()},
+	}
+	want := append([]HistoryEntry(nil), hm.history...)
 	before := &hm.history[0]
 	hm.cleanOldEntries()
 	hm.RemoveAlert("absent")
 	hm.deduplicateHistory()
 	if &hm.history[0] != before {
 		t.Fatal("unchanged cleanup replaced the current array")
+	}
+	if !reflect.DeepEqual(hm.history, want) {
+		t.Fatal("no-op compaction normalized or changed untouched occurrences")
 	}
 }
 
