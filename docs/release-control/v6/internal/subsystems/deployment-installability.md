@@ -2433,6 +2433,23 @@ artifact-selection behaviour.
    the deterministic dev user/hash. `tests/integration/scripts/run-playwright.mjs`
    owns the run-scoped `HOT_DEV_VERIFY_LOCK_FILE` handoff so overlapping browser
    proof cannot reuse stale first-run credentials.
+   Its npm entrypoint must attempt the existing posttest teardown once whenever
+   pretest was launched, including a nonzero setup exit or a failed test launch.
+   Failed setup skips Playwright and retains its original exit; teardown failure
+   may fail success but cannot turn an earlier failure into success. The handoff
+   stays held through teardown and is removed only if this invocation wrote it
+   and its complete contents still match. A failed lock preparation starts
+   neither setup nor teardown, and a non-hot-dev invocation never removes a
+   pre-existing verification lock. This is an ownership observation, not a new
+   exclusive lock or protection against an independent writer racing unlink.
+   `tests/integration/scripts/run-playwright.test.mjs` executes the actual
+   entrypoint with controlled pretest, Playwright and posttest child processes,
+   retaining exit precedence, identical run/state handoffs, partial-runtime
+   cleanup and foreign/replaced-lock preservation. Script smoke discovers it
+   through `scripts/tests/test-e2e-runner-cleanup.sh`. These command-level
+   controls do not establish real managed-runtime teardown, descendant reaping,
+   catchable-signal recovery, Windows execution or browser acceptance; the
+   existing owned shell supervisor and native/browser proofs remain separate.
    The managed and foreground hot-dev entrypoints must share one network-default
    contract: local dev binds frontend and backend traffic to loopback by default
    so installed LAN agents cannot accidentally treat a developer laptop as the
