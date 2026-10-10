@@ -1,10 +1,13 @@
 package monitoring
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -955,4 +958,616 @@ func TestLeavingMockModeReleasesFixtureAgentNodeLinksOnEveryRunningMonitor(t *te
 		}
 	}
 	t.Fatalf("org-b's node %s raised no memory alert: its fixture agent's node link outlived a switch made through the default monitor", linked.ID)
+}
+
+// nodeAgentSplitMonitor is a Proxmox node with a guest and the pulse-agent
+// on the same machine, monitored through a store-backed resource adapter.
+type nodeAgentSplitMonitor struct {
+	t       *testing.T
+	monitor *Monitor
+	store   unifiedresources.ResourceStore
+	adapter *unifiedresources.MonitorAdapter
+	nodes   []models.Node
+	vm      models.VM
+	report  agentshost.Report
+	host    models.Host
+}
+
+func newNodeAgentSplitMonitor(t *testing.T) *nodeAgentSplitMonitor {
+	return newNodeAgentSplitMonitorWithStore(t, nil)
+}
+
+// flakyDecisionStore fails reads of the operator's manual decisions while
+// fail is set, as a store that cannot be read for a moment does.
+type flakyDecisionStore struct {
+	unifiedresources.ResourceStore
+	fail atomic.Bool
+}
+
+func (s *flakyDecisionStore) GetLinks() ([]unifiedresources.ResourceLink, error) {
+	if s.fail.Load() {
+		return nil, errors.New("decisions unreadable")
+	}
+	return s.ResourceStore.GetLinks()
+}
+
+func (s *flakyDecisionStore) GetExclusions() ([]unifiedresources.ResourceExclusion, error) {
+	if s.fail.Load() {
+		return nil, errors.New("decisions unreadable")
+	}
+	return s.ResourceStore.GetExclusions()
+}
+
+func newNodeAgentSplitMonitorWithStore(t *testing.T, wrap func(unifiedresources.ResourceStore) unifiedresources.ResourceStore) *nodeAgentSplitMonitor {
+	t.Helper()
+	sqliteStore, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqliteStore.Close() })
+	var store unifiedresources.ResourceStore = sqliteStore
+	if wrap != nil {
+		store = wrap(store)
+	}
+	now := time.Now().UTC()
+	f := &nodeAgentSplitMonitor{
+		t:       t,
+		monitor: issue1654Monitor(),
+		store:   store,
+		adapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+		nodes: []models.Node{
+			{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://10.0.0.5:8006", Status: "online", LastSeen: now},
+			{ID: "lab-pve2", Name: "pve2", Instance: "lab", Host: "https://10.0.0.6:8006", Status: "online", LastSeen: now},
+		},
+		vm: models.VM{ID: "lab-pve1-100", VMID: 100, Name: "web", Node: "pve1", Instance: "lab", Type: "qemu", Status: "running", LastSeen: now},
+		report: agentshost.Report{
+			Agent: agentshost.AgentInfo{ID: "agent-pve1", Version: "6.2.0", IntervalSeconds: 30, DiskExclude: []string{"/dev/sdz"}},
+			Host: agentshost.HostInfo{
+				ID: "pve1-host", MachineID: "0123456789abcdef", Hostname: "pve1", Platform: "linux", ReportIP: "10.0.0.5",
+			},
+			Timestamp: now,
+		},
+	}
+	f.monitor.hostContinuityStore = config.NewHostContinuityStore(t.TempDir(), nil)
+	f.monitor.SetResourceStore(f.adapter)
+	return f
+}
+
+// cycle polls the nodes, rebuilds the adapter, takes one agent report and
+// rebuilds again, as the poll loop and report ingest interleave.
+func (f *nodeAgentSplitMonitor) cycle() {
+	f.t.Helper()
+	f.monitor.state.UpdateNodesForInstance("lab", f.nodes)
+	f.monitor.state.UpdateVMsForInstance("lab", []models.VM{f.vm})
+	f.adapter.PopulateFromSnapshot(f.monitor.state.GetSnapshot())
+	f.report.Timestamp = f.report.Timestamp.Add(time.Second)
+	host, err := f.monitor.ApplyHostReport(f.report, nil)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.host = host
+	f.adapter.PopulateFromSnapshot(f.monitor.state.GetSnapshot())
+}
+
+// recordReportMerge records what POST /api/resources/{id}/report-merge
+// records for the joined node and agent row, read from a registry rebuilt
+// from the monitor's snapshot as the resources API builds one.
+func (f *nodeAgentSplitMonitor) recordReportMerge() {
+	f.t.Helper()
+	registry := unifiedresources.NewRegistry(f.store)
+	registry.IngestSnapshot(f.monitor.state.GetSnapshot())
+	merged := ""
+	for _, resource := range registry.List() {
+		if resource.Proxmox != nil && resource.Agent != nil {
+			merged = resource.ID
+		}
+	}
+	if merged == "" {
+		f.t.Fatal("no joined node and agent row to report")
+	}
+	for _, target := range registry.SourceTargets(merged) {
+		if target.CandidateID == "" || target.CandidateID == merged {
+			continue
+		}
+		if err := f.store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: merged, ResourceB: target.CandidateID, CreatedAt: time.Now().UTC()}); err != nil {
+			f.t.Fatal(err)
+		}
+	}
+}
+
+// seedLXCFilesystems caches one container filesystem reading from the agent,
+// as an earlier report with a Proxmox LXC inventory would have.
+func (f *nodeAgentSplitMonitor) seedLXCFilesystems() {
+	f.t.Helper()
+	f.monitor.proxmoxLXCFilesystemsMu.Lock()
+	defer f.monitor.proxmoxLXCFilesystemsMu.Unlock()
+	f.monitor.proxmoxLXCFilesystemsCache = map[string]agentLXCFilesystemCacheEntry{
+		agentLXCFilesystemCacheKey("lab", "pve1", 200): {
+			agentID:   f.host.ID,
+			name:      "ct200",
+			disks:     []models.Disk{{Mountpoint: "/", Total: 10 << 30, Used: 1 << 30}},
+			expiresAt: time.Now().Add(10 * time.Minute),
+		},
+	}
+}
+
+func (f *nodeAgentSplitMonitor) lxcFilesystemEntries() int {
+	f.monitor.proxmoxLXCFilesystemsMu.RLock()
+	defer f.monitor.proxmoxLXCFilesystemsMu.RUnlock()
+	return len(f.monitor.proxmoxLXCFilesystemsCache)
+}
+
+// reportOnly takes one agent report with no poll or rebuild before it.
+func (f *nodeAgentSplitMonitor) reportOnly() models.Host {
+	f.t.Helper()
+	f.report.Timestamp = f.report.Timestamp.Add(time.Second)
+	host, err := f.monitor.ApplyHostReport(f.report, nil)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.host = host
+	return host
+}
+
+// exclusions lists the store's exclusions as "a|b", and how many name the
+// node's own source-specific ID.
+func (f *nodeAgentSplitMonitor) exclusions() (all []string, namingNode int) {
+	f.t.Helper()
+	exclusions, err := f.store.GetExclusions()
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	nodeCandidate := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAgent, unifiedresources.SourceProxmox, f.nodes[0].ID)
+	for _, exclusion := range exclusions {
+		all = append(all, exclusion.ResourceA+"|"+exclusion.ResourceB)
+		if exclusion.ResourceA == nodeCandidate || exclusion.ResourceB == nodeCandidate {
+			namingNode++
+		}
+	}
+	slices.Sort(all)
+	return all, namingNode
+}
+
+// assertLinked checks every reader of the node<->agent link: the state's
+// two sides, report ingest's result, the node's linked agent in the read
+// state (agent deployment, service discovery and the physical disk poll's
+// SMART fallback and --disk-exclude patterns read it), the node's disk
+// source host, the guest's inherited agent (guest discovery and commands)
+// and the shared-system alert correlation, and whether the registry lists
+// the pair as one row.
+func (f *nodeAgentSplitMonitor) assertLinked(step string, want bool) {
+	f.t.Helper()
+	node, agent := f.nodes[0].ID, f.host.ID
+	wantAgent, wantNode := "", ""
+	if want {
+		wantAgent, wantNode = agent, node
+	}
+	snapshot := f.monitor.state.GetSnapshot()
+	for _, n := range snapshot.Nodes {
+		if n.ID == node && n.LinkedAgentID != wantAgent {
+			f.t.Fatalf("%s: state node links agent %q, want %q", step, n.LinkedAgentID, wantAgent)
+		}
+	}
+	for _, h := range snapshot.Hosts {
+		if h.ID == agent && h.LinkedNodeID != wantNode {
+			f.t.Fatalf("%s: state agent links node %q, want %q", step, h.LinkedNodeID, wantNode)
+		}
+	}
+	if f.host.LinkedNodeID != wantNode {
+		f.t.Fatalf("%s: report ingest linked node %q, want %q", step, f.host.LinkedNodeID, wantNode)
+	}
+	readState := f.monitor.GetUnifiedReadStateOrSnapshot()
+	for _, view := range readState.Nodes() {
+		if view.SourceID() == node && view.LinkedAgentID() != wantAgent {
+			f.t.Fatalf("%s: read-state node links agent %q, want %q", step, view.LinkedAgentID(), wantAgent)
+		}
+	}
+	diskHost := f.monitor.linkedHostForNode("lab", node, f.nodes[0].Name)
+	if (diskHost != nil) != want || (diskHost != nil && diskHost.ID != agent) {
+		f.t.Fatalf("%s: node disk source host %+v, want linked=%v", step, diskHost, want)
+	}
+	joined := false
+	for _, resource := range f.adapter.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeVM && resource.Proxmox != nil && resource.Proxmox.LinkedAgentID != wantAgent {
+			f.t.Fatalf("%s: guest inherits agent %q, want %q", step, resource.Proxmox.LinkedAgentID, wantAgent)
+		}
+		if resource.Proxmox != nil && resource.Agent != nil {
+			joined = true
+		}
+	}
+	if joined != want {
+		f.t.Fatalf("%s: registry lists the pair joined=%v, want %v", step, joined, want)
+	}
+	if correlated := sharedSystemAlertCorrelationForHost(f.host, snapshot.Nodes) != nil; correlated != want {
+		f.t.Fatalf("%s: shared-system alert correlation=%v, want %v", step, correlated, want)
+	}
+}
+
+// An operator's split of a Proxmox node and its pulse-agent (report-merge
+// or unlink in the resources API) stops monitoring treating them as one
+// machine: the agent's SMART inventory, --disk-exclude patterns, guest
+// discovery target, deployment status and alert correlation no longer
+// reach the node. An exclusion that splits neither leaves all of it alone.
+func TestOperatorSplitStopsMonitoringTreatingNodeAndAgentAsLinked(t *testing.T) {
+	t.Run("unrelated exclusion keeps the link", func(t *testing.T) {
+		f := newNodeAgentSplitMonitor(t)
+		f.cycle()
+		f.cycle()
+		f.assertLinked("before", true)
+		joined := ""
+		for _, resource := range f.adapter.GetAll() {
+			if resource.Proxmox != nil && resource.Agent != nil {
+				joined = resource.ID
+			}
+		}
+		f.seedLXCFilesystems()
+		if err := f.store.AddExclusion(unifiedresources.ResourceExclusion{ResourceA: joined, ResourceB: "agent-00000000deadbeef", CreatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+		f.cycle()
+		f.cycle()
+		f.assertLinked("after an unrelated exclusion", true)
+		if got := f.lxcFilesystemEntries(); got != 1 {
+			t.Fatalf("an unrelated exclusion changed the agent's container filesystem readings to %d", got)
+		}
+	})
+
+	t.Run("report-merge splits the link", func(t *testing.T) {
+		f := newNodeAgentSplitMonitor(t)
+		f.cycle()
+		f.cycle()
+		f.assertLinked("before", true)
+		f.seedLXCFilesystems()
+		f.recordReportMerge()
+		f.cycle()
+		f.cycle()
+		f.assertLinked("after report-merge", false)
+		if got := f.lxcFilesystemEntries(); got != 0 {
+			t.Fatalf("the split left %d of the agent's container filesystem readings on the node's containers", got)
+		}
+	})
+}
+
+// The agents API's node link is the operator's newer decision about the
+// pair, so it replaces an earlier split in the resource store, which both
+// the registry and monitoring read, instead of leaving monitoring linked
+// and the registry split. A link to another node lifts nothing. A split
+// recorded after a manual link wins in turn and ends the manual intent, so
+// the node is no longer reserved for the agent, and a later relink of the
+// rows in the resources API joins them again through the link monitoring
+// infers.
+func TestManualNodeLinkReplacesAnOperatorSplit(t *testing.T) {
+	f := newNodeAgentSplitMonitor(t)
+	f.cycle()
+	f.cycle()
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after report-merge", false)
+	split, namingNode := f.exclusions()
+	if namingNode != 1 {
+		t.Fatalf("report-merge recorded %v, want one exclusion naming the node's candidate", split)
+	}
+
+	if err := f.monitor.LinkHostAgent(f.host.ID, f.nodes[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := f.exclusions(); !slices.Equal(got, split) {
+		t.Fatalf("linking the agent to another node changed the exclusions from %v to %v", split, got)
+	}
+	// The node's split goes. Report-merge's exclusion of the agent's own
+	// candidate from the machine-derived ID it merged under stays: it never
+	// split the node (nodeAgentSplit), and it is also what splitting another
+	// source off the agent records.
+	if err := f.monitor.LinkHostAgent(f.host.ID, f.nodes[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, namingNode := f.exclusions(); namingNode != 0 || len(got) != len(split)-1 {
+		t.Fatalf("manual link left exclusions %v of %v", got, split)
+	}
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after the manual link", true)
+
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after a split of the manual link", false)
+	entry, ok := f.monitor.hostContinuityStore.Get(f.host.ID)
+	if !ok || entry.NodeLinkSource != "automatic" || entry.LinkedNodeID != "" {
+		t.Fatalf("split left the manual intent persisted: %+v", entry)
+	}
+	if reserved := f.monitor.hostContinuityStore.NodeLinkReservedByOther("another-agent", f.nodes[0].ID); reserved {
+		t.Fatal("the ended manual intent still reserves the node against other agents")
+	}
+
+	var nodeRow, agentRow string
+	for _, resource := range f.adapter.GetAll() {
+		switch {
+		case resource.Proxmox != nil && resource.Agent == nil && resource.Proxmox.SourceID == f.nodes[0].ID:
+			nodeRow = resource.ID
+		case resource.Agent != nil && resource.Proxmox == nil:
+			agentRow = resource.ID
+		}
+	}
+	if err := f.store.AddLink(unifiedresources.ResourceLink{ResourceA: nodeRow, ResourceB: agentRow, PrimaryID: nodeRow, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after a resources API relink", true)
+}
+
+// A manual node link that cannot persist its intent leaves the operator's
+// split as it was: the exclusions it removed are recorded again, with their
+// original times, and the pair stays apart.
+func TestManualNodeLinkKeepsTheSplitWhenItsIntentCannotPersist(t *testing.T) {
+	f := newNodeAgentSplitMonitor(t)
+	f.cycle()
+	f.cycle()
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	before, err := f.store.GetExclusions()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	continuity := f.monitor.hostContinuityStore
+	f.monitor.hostContinuityStore = nil
+	if err := f.monitor.LinkHostAgent(f.host.ID, f.nodes[0].ID); err == nil {
+		t.Fatal("manual link without intent storage succeeded")
+	}
+	f.monitor.hostContinuityStore = continuity
+	after, err := f.store.GetExclusions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := func(exclusions []unifiedresources.ResourceExclusion) []string {
+		out := make([]string, 0, len(exclusions))
+		for _, exclusion := range exclusions {
+			out = append(out, exclusion.ResourceA+"|"+exclusion.ResourceB+"|"+exclusion.CreatedAt.UTC().Format(time.RFC3339Nano))
+		}
+		slices.Sort(out)
+		return out
+	}
+	if !slices.Equal(key(before), key(after)) {
+		t.Fatalf("failed manual link changed the split from %v to %v", key(before), key(after))
+	}
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after the failed manual link", false)
+}
+
+// A manual node link the state holds back only because the split cannot be
+// confirmed (the store is unreadable just after the link removed it) keeps
+// its persisted intent, and links once the store reads again. Only a split
+// the store confirms ends a manual intent.
+func TestManualNodeLinkSurvivesAnUnreadableSplitStore(t *testing.T) {
+	var flaky *flakyDecisionStore
+	f := newNodeAgentSplitMonitorWithStore(t, func(store unifiedresources.ResourceStore) unifiedresources.ResourceStore {
+		flaky = &flakyDecisionStore{ResourceStore: store}
+		return flaky
+	})
+	f.cycle()
+	f.cycle()
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after report-merge", false)
+	if err := f.monitor.LinkHostAgent(f.host.ID, f.nodes[0].ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// A report before the adapter rebuilds: its generation still holds the
+	// split the link removed, which the unreadable store cannot confirm gone,
+	// so the state holds the link back while the persisted intent keeps its
+	// node. (Without the persisted fallback the entry would lose the node.)
+	flaky.fail.Store(true)
+	held := f.reportOnly()
+	if held.LinkedNodeID != "" {
+		t.Fatalf("the report linked node %q although the split could not be confirmed gone", held.LinkedNodeID)
+	}
+	snapshot := f.monitor.state.GetSnapshot()
+	for _, n := range snapshot.Nodes {
+		if n.LinkedAgentID != "" {
+			t.Fatalf("state links node %s to agent %q", n.ID, n.LinkedAgentID)
+		}
+	}
+	entry, ok := f.monitor.hostContinuityStore.Get(f.host.ID)
+	if !ok || entry.NodeLinkSource != "manual" || entry.LinkedNodeID != f.nodes[0].ID {
+		t.Fatalf("a held-back manual link lost its persisted intent: %+v", entry)
+	}
+
+	// A rebuild that cannot read the decisions loads none, so the link
+	// returns for now and the intent is unchanged.
+	f.cycle()
+	entry, ok = f.monitor.hostContinuityStore.Get(f.host.ID)
+	if !ok || entry.NodeLinkSource != "manual" || entry.LinkedNodeID != f.nodes[0].ID {
+		t.Fatalf("an unreadable split store ended the manual intent: %+v", entry)
+	}
+	flaky.fail.Store(false)
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after the store reads again", true)
+	if entry, _ := f.monitor.hostContinuityStore.Get(f.host.ID); entry.NodeLinkSource != "manual" {
+		t.Fatalf("manual intent became %q", entry.NodeLinkSource)
+	}
+}
+
+// sequencedSplitDecider answers "not split" for its first calls and "split"
+// from then on, as an operator's split recorded while a report is in flight
+// does.
+type sequencedSplitDecider struct {
+	calls     atomic.Int32
+	splitFrom atomic.Int32
+}
+
+func (d *sequencedSplitDecider) ProxmoxNodeAgentSplit(models.Node, models.Host) bool {
+	return d.calls.Add(1) > d.splitFrom.Load()
+}
+
+// A split recorded after a report's own check but before the state stores
+// the agent is applied by the state; the report then neither returns, links
+// nor persists the node the state refused.
+func TestReportUsesTheLinkTheStateKeptWhenASplitLandsMidReport(t *testing.T) {
+	// The split is first seen by the state's own check of the agent's link
+	// (call 2), or only by its check of each node linked to the agent (call 3).
+	for _, seenAtCall := range []int32{1, 2} {
+		t.Run(fmt.Sprintf("seen after %d checks", seenAtCall), func(t *testing.T) {
+			testReportUsesTheLinkTheStateKept(t, seenAtCall)
+		})
+	}
+}
+
+func testReportUsesTheLinkTheStateKept(t *testing.T, splitFrom int32) {
+	f := newNodeAgentSplitMonitor(t)
+	f.cycle()
+	f.cycle()
+	f.assertLinked("before", true)
+	f.seedLXCFilesystems()
+
+	decider := &sequencedSplitDecider{}
+	decider.splitFrom.Store(1 << 30)
+	f.monitor.state.SetNodeAgentSplitDecider(decider)
+	f.monitor.state.UpdateNodesForInstance("lab", f.nodes)
+	f.monitor.state.UpsertHost(f.host)
+	// The report's own check (its first call) finds no split; the state's
+	// store of the agent (the next) does.
+	decider.calls.Store(0)
+	decider.splitFrom.Store(splitFrom)
+
+	held := f.reportOnly()
+	if held.LinkedNodeID != "" {
+		t.Fatalf("the report returned node %q that the state refused", held.LinkedNodeID)
+	}
+	snapshot := f.monitor.state.GetSnapshot()
+	for _, n := range snapshot.Nodes {
+		if n.LinkedAgentID != "" {
+			t.Fatalf("state links node %s to agent %q", n.ID, n.LinkedAgentID)
+		}
+	}
+	for _, h := range snapshot.Hosts {
+		if h.LinkedNodeID != "" {
+			t.Fatalf("state links agent %s to node %q", h.ID, h.LinkedNodeID)
+		}
+	}
+	entry, ok := f.monitor.hostContinuityStore.Get(f.host.ID)
+	if !ok || entry.LinkedNodeID != "" {
+		t.Fatalf("the report persisted node %q that the state refused: %+v", entry.LinkedNodeID, entry)
+	}
+	if got := f.lxcFilesystemEntries(); got != 0 {
+		t.Fatalf("%d container filesystem readings from the agent outlived the split", got)
+	}
+}
+
+// A confirmed split of a manual link ends the intent and clears what the
+// agent cached for the node's containers even where nothing infers another
+// node for the agent (inference has no node to substitute, so no later branch
+// would clear it).
+func TestConfirmedSplitOfAManualLinkClearsTheAgentsContainerReadings(t *testing.T) {
+	f := newNodeAgentSplitMonitor(t)
+	f.cycle()
+	f.cycle()
+	if err := f.monitor.LinkHostAgent(f.host.ID, f.nodes[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after the manual link", true)
+
+	// The agent no longer looks like the node to inference, and nothing but
+	// the manual intent ties it to the node.
+	f.report.Host.Hostname = "elsewhere"
+	f.report.Host.ReportIP = ""
+	f.seedLXCFilesystems()
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+
+	entry, ok := f.monitor.hostContinuityStore.Get(f.host.ID)
+	if !ok || entry.NodeLinkSource != "automatic" || entry.LinkedNodeID != "" {
+		t.Fatalf("a confirmed split left the manual intent: %+v", entry)
+	}
+	if got := f.lxcFilesystemEntries(); got != 0 {
+		t.Fatalf("%d container filesystem readings from the split agent outlived its manual link", got)
+	}
+}
+
+// A split agent whose name is its node's name must not hand the node its
+// sensors through the unlinked-agent hostname fallback.
+func TestSplitAgentSensorsDoNotReachTheNodeThroughItsName(t *testing.T) {
+	f := newNodeAgentSplitMonitor(t)
+	f.report.Sensors.TemperatureCelsius = map[string]float64{"cpu_package": 61}
+	f.cycle()
+	f.cycle()
+	node := f.nodes[0]
+	if temp := f.monitor.getHostAgentTemperatureForNode(node); temp == nil || temp.CPUPackage != 61 {
+		t.Fatalf("a linked agent's temperature did not reach its node: %+v", temp)
+	}
+
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after report-merge", false)
+	if temp := f.monitor.getHostAgentTemperatureForNode(node); temp != nil {
+		t.Fatalf("the split agent's temperature reached the node through its name: %+v", temp)
+	}
+
+	// A reading the agent supplied before the split must not outlive the
+	// agent's lease because the split took it out of the node's slot.
+	carried := &models.Temperature{Available: true, CPUPackage: 61, LastUpdate: f.host.LastSeen}
+	if !f.monitor.carriedTemperatureOutlivesAgentLease(node, carried, time.Now().Add(time.Hour)) {
+		t.Fatal("a split agent's carried reading would outlive the agent's lapsed lease")
+	}
+}
+
+// Container filesystem readings an agent cached are not shown for a node the
+// operator split from that agent. Seeded after the split, so no cleanup has
+// run, they are ignored; a linked pair's reading is shown.
+func TestAgentContainerReadingsAreNotShownForANodeSplitFromTheAgent(t *testing.T) {
+	f := newNodeAgentSplitMonitor(t)
+	f.cycle()
+	f.cycle()
+	f.recordReportMerge()
+	f.cycle()
+	f.cycle()
+	f.assertLinked("after report-merge", false)
+
+	// The agent's reports name no node (as when its name matches none), so
+	// nothing on the report path clears what is cached.
+	f.seedLXCFilesystems()
+	container := models.Container{VMID: 200, Name: "ct200", Status: "running"}
+	f.monitor.enrichContainerWithAgentLXCFilesystems("lab", "pve1", &container, time.Now())
+	if len(container.Disks) != 0 {
+		t.Fatalf("the split agent's readings were shown for the node's container: %+v", container.Disks)
+	}
+
+	// A node that is not in state under this connection (a proven duplicate
+	// connection folded it into another's) is not split from the agent.
+	f.monitor.proxmoxLXCFilesystemsMu.Lock()
+	f.monitor.proxmoxLXCFilesystemsCache[agentLXCFilesystemCacheKey("ghost", "pve9", 300)] = agentLXCFilesystemCacheEntry{
+		agentID:   f.host.ID,
+		name:      "ct300",
+		disks:     []models.Disk{{Mountpoint: "/", Total: 10 << 30, Used: 1 << 30}},
+		expiresAt: time.Now().Add(10 * time.Minute),
+	}
+	f.monitor.proxmoxLXCFilesystemsMu.Unlock()
+	ghost := models.Container{VMID: 300, Name: "ct300", Status: "running"}
+	f.monitor.enrichContainerWithAgentLXCFilesystems("ghost", "pve9", &ghost, time.Now())
+	if len(ghost.Disks) != 1 {
+		t.Fatalf("a reading for a node that left this connection's slot was hidden: %+v", ghost.Disks)
+	}
+
+	// The control: with the agent linked the same reading is shown.
+	linked := newNodeAgentSplitMonitor(t)
+	linked.cycle()
+	linked.cycle()
+	linked.assertLinked("control", true)
+	linked.seedLXCFilesystems()
+	control := models.Container{VMID: 200, Name: "ct200", Status: "running"}
+	linked.monitor.enrichContainerWithAgentLXCFilesystems("lab", "pve1", &control, time.Now())
+	if len(control.Disks) != 1 {
+		t.Fatalf("a linked agent's reading was not shown: %+v", control.Disks)
+	}
 }
