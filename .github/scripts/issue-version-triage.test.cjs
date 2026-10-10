@@ -391,7 +391,45 @@ for (const [name, field] of [
     assert.match(attachment, /Do not attach raw profiles, heap dumps, databases or full process command lines/);
     assert.match(attachment, /summarise only relevant counters after local review/);
   });
+
+  test(`guest memory comparisons retain optional target and sample context: ${name}`, () => {
+    const attachment = evidenceField();
+    assert.match(attachment, /For CPU, memory or disk-write reports about Pulse itself/);
+    const guest = attachment.split("For VM or LXC memory disagreements,")[1];
+    assert.ok(guest, "guest readings must not inherit Pulse process-only guidance");
+    assert.match(guest, /overview, History, alert, Patrol or another tool/);
+    assert.match(guest, /inside the affected guest or on its hypervisor node/);
+    assert.match(guest, /original times, units and memory source or sample age only if already known or displayed/);
+    assert.match(guest, /consistent private aliases.*"unknown" for missing details/);
+    assert.match(guest, /Available memory, buff\/cache and a process's RSS measure different things/);
+    assert.match(guest, /RSS alone is not total guest usage/);
+    assert.match(guest, /cache-inclusive hypervisor footprint does not establish guest pressure/);
+    assert.match(guest, /A Proxmox VM API connection may still obtain QEMU guest-agent \(QGA\) readings without a Pulse agent/);
+    assert.doesNotMatch(attachment, /required: true|render:/);
+  });
+
+  test(`guest memory context does not ask for new collection or workload changes: ${name}`, () => {
+    const guest = evidenceField().split("For VM or LXC memory disagreements,")[1];
+    assert.ok(guest, "a guest comparison needs its own collection boundary");
+    assert.match(guest, /Use existing observations only/);
+    assert.match(guest, /Do not run commands, Diagnostics or guest-agent probes, install an agent, change memory settings or workloads, or repeat a backup just to answer/);
+  });
 }
+
+test("guest memory triage preserves original evidence rather than inferring past provenance", () => {
+  const guide = fs.readFileSync(path.resolve(__dirname, "../../docs/ISSUE_TRIAGE.md"), "utf8").replace(/\s+/g, " ");
+  const guest = guide.split("For VM or LXC memory disagreements,")[1].split("For notification reports,")[0];
+  assert.match(guest, /same target and episode/);
+  assert.match(guest, /inside the affected guest or on its hypervisor node/);
+  assert.match(guest, /original times, units and selected memory source or sample age if already known/);
+  assert.match(guest, /unknown is valid, and existing reports need no refile/);
+  assert.match(guest, /RSS alone is not total guest usage/);
+  assert.match(guest, /A Proxmox VM API connection may still obtain QEMU guest-agent \(QGA\) readings without a Pulse agent/);
+  assert.match(guest, /not measured zero or verified recovery/);
+  assert.match(guest, /live memory source cannot establish the source of a historical sample/);
+  assert.match(guest, /Reconcile the full thread before asking only for a consequential remaining distinction/);
+  assert.match(guest, /Do not request commands, Diagnostics or guest-agent probes, an agent install, memory or workload changes, or another backup/);
+});
 
 test("performance report triage retains measurement boundaries without demanding unsafe evidence", () => {
   const guide = fs.readFileSync(path.resolve(__dirname, "../../docs/ISSUE_TRIAGE.md"), "utf8");
