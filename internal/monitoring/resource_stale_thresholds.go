@@ -21,7 +21,25 @@ type resourcePollIntervals struct {
 	pmg time.Duration
 }
 
+// adaptiveResourcePollIntervals are the cadences freshness is derived from when
+// an adaptive scheduler plans polling. It selects its own intervals and never
+// reads the per-platform ones; a healthy instance's staleness score is near
+// zero after every success, so its cadence stretches toward the scheduler's
+// maximum interval, which bounds it. Freshness must cover that gap, or
+// healthy Proxmox, PBS and PMG rows read stale, and Proxmox nodes lose their
+// offline grace, for much of every cycle.
+func adaptiveResourcePollIntervals(maxInterval time.Duration) resourcePollIntervals {
+	return resourcePollIntervals{pve: maxInterval, pbs: maxInterval, pmg: maxInterval}
+}
+
 func resourcePollIntervalsForConfig(cfg *config.Config) resourcePollIntervals {
+	if cfg != nil && cfg.AdaptivePollingEnabled {
+		return adaptiveResourcePollIntervals(normalizedSchedulerConfig(SchedulerConfig{
+			BaseInterval: cfg.AdaptivePollingBaseInterval,
+			MinInterval:  cfg.AdaptivePollingMinInterval,
+			MaxInterval:  cfg.AdaptivePollingMaxInterval,
+		}).MaxInterval)
+	}
 	return resourcePollIntervals{
 		pve: effectivePVEPollingIntervalForConfig(cfg),
 		pbs: effectivePlatformPollingIntervalForConfig(cfg, "pbs"),
@@ -30,10 +48,12 @@ func resourcePollIntervalsForConfig(cfg *config.Config) resourcePollIntervals {
 }
 
 // ResourceStaleThresholdsForConfig derives canonical resource freshness from
-// configured polling cadence. A source should not be considered stale until it
-// has missed at least one expected poll cycle plus the normal interval. A
-// running monitor judges by Monitor.resourceStaleThresholds instead, which
-// honours the runtime polling overrides its scheduler reads.
+// configured polling cadence: the per-platform intervals, or the adaptive
+// scheduler's maximum interval when adaptive polling is enabled. A source
+// should not be considered stale until it has missed at least one expected
+// poll cycle plus the normal interval. A running monitor judges by
+// Monitor.resourceStaleThresholds instead, which honours the runtime polling
+// overrides its scheduler reads.
 func ResourceStaleThresholdsForConfig(cfg *config.Config) map[unifiedresources.DataSource]time.Duration {
 	return resourceStaleThresholdsForConfig(cfg, mock.IsMockEnabled(), mock.SupplementalRefreshInterval)
 }
@@ -126,18 +146,19 @@ func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time
 	)
 }
 
-// resourcePollIntervals reads the per-platform base cadences, honouring the
-// runtime overrides a fixed-cadence scheduler polls at. Non-default tenant
-// monitors poll against a detached config copy (#1619), so the settings API
-// pushes saved PBS and PMG intervals into them as runtime overrides; freshness
-// derived from m.config alone would judge those sources by an interval nothing
-// polls at. A PVE interval change reloads every monitor from saved config
-// instead, so the config value is already the live one. An adaptive scheduler
-// selects its own intervals and never reads the per-platform overrides, so
-// they must not move freshness there either.
+// resourcePollIntervals reads the cadences the monitor's scheduler polls at.
+// A fixed-cadence scheduler polls each platform at its base interval,
+// honouring the runtime overrides: non-default tenant monitors poll against a
+// detached config copy (#1619), so the settings API pushes saved PBS and PMG
+// intervals into them as overrides, and freshness derived from m.config alone
+// would judge those sources by an interval nothing polls at. A PVE interval
+// change reloads every monitor from saved config instead, so the config value
+// is already the live one. An adaptive scheduler never reads the per-platform
+// intervals or their overrides, so they cannot move freshness there; it is
+// judged by the longest interval that scheduler selects.
 func (m *Monitor) resourcePollIntervals() resourcePollIntervals {
 	if m.scheduler != nil {
-		return resourcePollIntervalsForConfig(m.config)
+		return adaptiveResourcePollIntervals(m.scheduler.MaxInterval())
 	}
 	return resourcePollIntervals{
 		pve: m.BasePollInterval(InstanceTypePVE),
