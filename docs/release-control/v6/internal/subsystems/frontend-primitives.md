@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Existing alert History distinguishes failed reads from empty results
+
+The History tab renders fixed non-provider error copy in a `role="alert"`
+region and keeps its native Retry history button busy/disabled during the
+logical read. Loading is announced with `role="status"`. Frequency and severity
+totals are hidden until a read is accepted; failed reads do not render the
+ordinary empty-history claim. Same-range saved rows and live alerts can remain
+under the warning, without presenting a different range's saved rows.
+
+The connected History tab/state tests and parent-bound browser receipt cover
+deferred/synthetic failed reads, keyboard retry, accepted recovery and empty
+results, retained entries, range/context replacement and disposal. Desktop
+1280px and phone 390px layouts fit without page-level horizontal overflow;
+the phone retry control preserves the shared 44px target and the desktop
+control keeps shared compact density. No new primitive, route, feature,
+permission, notification replay or backend recovery claim is introduced.
+
 ### Existing webhook list controls expose pending acknowledgement
 
 The webhook section shares pending admission across form saves, list toggles,

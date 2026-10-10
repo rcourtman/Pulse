@@ -4313,6 +4313,30 @@ and unified alert synchronisation, including absence of duplicate parent alerts.
 
 ### Alert history clear/read ordering
 
+History read failure is not an empty result. The existing History tab announces
+an error and offers an explicit read-only retry. Pending or failed reads expose
+neither the frequency chart nor severity totals, and failure suppresses the
+ordinary empty-result claim. Same-range saved entries remain available with an
+incomplete/out-of-date warning, alongside live alerts. A snapshot loaded for
+another range is retained internally but excluded from that range's rows;
+switching range is not deletion. Search, severity and range remain URL-owned.
+
+Only the latest request may settle rows, failure or loading. An explicit retry
+admits one pending logical read; existing API transport policy is unchanged.
+Organisation replacement clears the saved snapshot and read error; retired
+reads and clears cannot change the replacement view. Disposal prevents another
+retry or a late completion from modifying view state. An already-dispatched
+clear is not cancelled, and deletion/retention, active alerts, acknowledgement
+and notification delivery are unchanged.
+
+`useAlertHistoryState.test.tsx` and `HistoryTab.loadFailure.test.tsx` exercise
+initial failure, retry, pending/accepted empty results, same-range retention,
+range isolation with live alerts, obsolete replies, context replacement and
+disposal. The parent-bound browser receipt exercises the real existing tab,
+hook, API adapter and stylesheet at desktop and phone widths with synthetic
+HTTP failures and deferred replies. These are source presentation/ownership
+controls, not installed backend recovery or destination delivery.
+
 A successful history clear invalidates reads started before its completion and
 settles their loading state, so delayed responses cannot repopulate deleted
 history rows. Failed clearing leaves the pending read valid; later range

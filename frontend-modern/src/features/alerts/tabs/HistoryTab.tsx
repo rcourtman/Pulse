@@ -1,9 +1,11 @@
-import { createSignal, onCleanup, createEffect } from 'solid-js';
+import { Show, createSignal, onCleanup, createEffect } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { Resource } from '@/types/resource';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { Button } from '@/components/shared/Button';
+import { getAlertHistoryLoadFailure } from '@/utils/alertOverviewPresentation';
 
 import { AlertHistoryAdministrationCard } from '../AlertHistoryAdministrationCard';
 import { AlertHistoryFiltersCard } from '../AlertHistoryFiltersCard';
@@ -67,7 +69,33 @@ export function HistoryTab(props: HistoryTabProps) {
 
   return (
     <div class="space-y-4">
-      <AlertHistoryFrequencyCard state={historyState} />
+      <Show when={historyState.historyLoadError()}>
+        <div
+          class="flex flex-col gap-3 rounded-md border border-border bg-surface-alt p-4 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-base-content">
+              {getAlertHistoryLoadFailure().title}
+            </p>
+            <p class="mt-1 text-sm text-muted">{getAlertHistoryLoadFailure().description}</p>
+          </div>
+          <Button
+            size="sm"
+            class="min-h-11 shrink-0 self-start"
+            disabled={historyState.loading()}
+            aria-busy={historyState.loading()}
+            onClick={() => void historyState.retryHistory()}
+          >
+            {historyState.loading()
+              ? getAlertHistoryLoadFailure().retryingLabel
+              : getAlertHistoryLoadFailure().retryLabel}
+          </Button>
+        </div>
+      </Show>
+      <Show when={!historyState.loading() && !historyState.historyLoadError()}>
+        <AlertHistoryFrequencyCard state={historyState} />
+      </Show>
       <AlertHistoryFiltersCard state={historyState} isMobile={isMobile()} />
       <AlertHistoryTableSection state={historyState} />
       <AlertHistoryAdministrationCard state={historyState} />
