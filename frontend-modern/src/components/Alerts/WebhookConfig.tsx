@@ -9,8 +9,8 @@ import { useWebhookConfigState } from './useWebhookConfigState';
 
 export interface WebhookConfigProps {
   webhooks: Webhook[];
-  onAdd: (webhook: Omit<Webhook, 'id'>) => void;
-  onUpdate: (webhook: Webhook) => void;
+  onAdd: (webhook: Omit<Webhook, 'id'>) => boolean | Promise<boolean>;
+  onUpdate: (webhook: Webhook) => boolean | Promise<boolean>;
   onDelete: (id: string) => void;
   onTest: (id: string, webhookData?: Omit<Webhook, 'id'>) => void;
   testing?: string | null;
@@ -26,6 +26,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           webhooks={props.webhooks}
           templates={state.templates}
           testing={props.testing}
+          saving={state.saving()}
           allEnabled={state.allEnabled}
           someEnabled={state.someEnabled}
           toggleAllWebhooks={state.toggleAllWebhooks}
@@ -58,12 +59,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
           testWebhookForm={state.testWebhookForm}
           saveWebhook={state.saveWebhook}
           testing={props.testing}
+          saving={state.saving}
+          saveError={state.saveError}
         />
       </Show>
 
       <Show when={!state.adding()}>
         <button
           onClick={state.openAddForm}
+          disabled={state.saving()}
           class="min-h-11 w-full border border-dashed border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover sm:min-h-0"
         >
           + {ALERT_WEBHOOK_ADD_LABEL}

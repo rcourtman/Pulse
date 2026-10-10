@@ -81,11 +81,13 @@ export function useAlertWebhookDestinationsState(
       const created = await NotificationsAPI.createWebhook(webhook);
       setWebhooks((current) => [...current, normalizeWebhook(created)]);
       notificationStore.success(getAlertWebhookMutationSuccess('add'));
+      return true;
     } catch (error) {
       logger.error('Failed to add webhook:', error);
       notificationStore.error(
         error instanceof Error ? error.message : getAlertWebhookMutationFailure('add'),
       );
+      return false;
     }
   };
 
@@ -96,11 +98,13 @@ export function useAlertWebhookDestinationsState(
         current.map((entry) => (entry.id === webhook.id ? normalizeWebhook(updated) : entry)),
       );
       notificationStore.success(getAlertWebhookMutationSuccess('update'));
+      return true;
     } catch (error) {
       logger.error('Failed to update webhook:', error);
       notificationStore.error(
         error instanceof Error ? error.message : getAlertWebhookMutationFailure('update'),
       );
+      return false;
     }
   };
 
