@@ -555,12 +555,16 @@ jobs:
           fi
           echo "Every internal/api shard passed."
 
-  scripts-and-build:
-    name: Script smoke tests & backend build
+  script-smoke:
+    name: Script smoke tests (shard ${{ matrix.shard }}/2)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -583,7 +587,43 @@ jobs:
             printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
 
       - name: Script smoke tests
-        run: scripts/tests/run.sh
+        # Isolated runners preserve each recipe's deadlines and process cleanup.
+        # Discover all suites in both shards; never maintain a second allowlist.
+        run: scripts/tests/run.sh --smoke-shard ${{ matrix.shard }}
+
+  scripts-and-build:
+    name: Script smoke tests & backend build
+    needs: [changes, script-smoke]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require every script smoke shard
+        env:
+          SMOKE_RESULT: ${{ needs.script-smoke.result }}
+        run: |
+          if [ "$SMOKE_RESULT" != success ]; then
+            echo "::error::Script smoke shards did not all pass (result: ${SMOKE_RESULT})"
+            exit 1
+          fi
+          echo "Every script smoke shard passed."
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Provide frontend embed stub
+        run: |
+          mkdir -p internal/api/frontend-modern/dist
+          [ -f internal/api/frontend-modern/dist/index.html ] || \
+            printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
 
       - name: Build Pulse backend
         run: go build ./cmd/pulse
