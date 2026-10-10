@@ -3707,10 +3707,17 @@ default` instead of fusing provider and badge text such as
     use the same host-or-node, workload-controls, workload-table reading order.
     When a platform names the embedded workload collection, that title and its
     inventory count must enter `WorkloadsSurface` through the `tableTitle`
-    slot. `WorkloadsTable` renders the slot inside the shared
-    `TableCardHeader`, including the filtered-empty table state; platform pages
+    slot. The slot renders inside the shared `TableCardHeader`, in
+    `WorkloadsTable` for rows and directly in `WorkloadsSurface` for the
+    filtered-empty table state; platform pages
     must not leave the same title floating above the filter card or recreate
-    table-header chrome outside the canonical Workloads frame.
+    table-header chrome outside the canonical Workloads frame. The slot is
+    also the only name the table keeps in kiosk, where the shared filter bar
+    unmounts, so a platform that embeds the collection must title it: VMware
+    vSphere titles its table "VMs" with the filtered row count, shown once the
+    workload toolbar is ready, and `VmwarePageSurface.contract.test.tsx` pins
+    that heading, and its count following the filtered rows, in the slot the
+    page hands the surface.
     Large provider inventories use the shared `createPlatformTablePreview` and
     `PlatformTablePreviewFooter` boundary to keep the controlled workload table
     in the initial reading flow: Proxmox shows eight node rows by default on

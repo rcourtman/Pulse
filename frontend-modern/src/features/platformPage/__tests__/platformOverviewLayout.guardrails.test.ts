@@ -877,6 +877,9 @@ describe('platform overview layout guardrails', () => {
       expect(unquote(jsxAttr(surface, 'forcedViewMode')), name).toBe(
         unquote(state.get('forcedViewMode')),
       );
+      // Each page names its table through the title slot, as a heading: kiosk
+      // unmounts the toolbar that otherwise introduces the table.
+      expect(jsxAttr(surface, 'tableTitle'), name).toContain('<h2');
     }
 
     // StorageSurface sits on the Proxmox Storage tab with the source locked and

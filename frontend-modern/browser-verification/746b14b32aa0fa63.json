@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "2ac9142d858b99b786acc161c3db3da020970be5",
+  "verified_at": "2026-10-10T13:00:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "39ee97076ab1df7b9370608c87c0e7ea0e9874d09426d989dea012c92e0e9e1c"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/overview?kiosk=1"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock DEMO_MODE stack (demo/demo, telemetry off), 7 ESXi hosts and 18 VMs, parent 2ac9142d85 (PR 2802 head) with the fix under Vite and, for the before pass, the committed VmwarePageSurface.tsx swapped in",
+    "before the fix: no h2 or h3 anywhere on the page in all four route and viewport combinations; in kiosk the VM table follows the Hosts table as a bare column-header row",
+    "after the fix, kiosk at 1440 and 390: no search field or toolbar (FilterBar unmounted) and one VMs h2 with count 18 in the table's TableCardHeader, directly under the HOSTS card",
+    "after the fix, normal at 1440 and 390: toolbar present (search placeholder 'Search vSphere VMs by name, host, cluster, or status', chips All 18 / Powered on 18 / Attention 0 / Powered off 0 at 1440, Filters button at 390) with the VMs 18 heading on the table card below it; the toolbar never carries the word VMs outside the search placeholder",
+    "heading inside its card header at all four combinations, no horizontal page overflow at 1440 or 390, accessibility tree reports heading level 2 'VMS 18' (the shared header uppercases it, as for HOSTS)",
+    "filtered-empty state (Powered off chip, 0 VMs): heading reads VMs 0 above 'No guests found' in the same TableCardHeader",
+    "no console errors outside the known demo-mode 403 and update-check noise"
+  ],
+  "interactions": [
+    "typed 'logging' in the vSphere search: heading count moved 18 to 2 and rows narrowed to two guests while the status chips stayed All 18 (the count is the filtered rows, the chips are inventory totals); cleared the search: back to 18",
+    "clicked the Powered off chip: heading VMs 0 with the filtered-empty table state; clicked the All chip: back to VMs 18 and the full table",
+    "loaded ?kiosk=1 at both viewports and confirmed the toolbar is absent while the heading remains",
+    "before and after screenshots taken in the same four combinations from the same Vite server"
+  ]
+}

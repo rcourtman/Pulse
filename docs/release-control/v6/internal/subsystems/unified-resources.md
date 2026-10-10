@@ -3250,9 +3250,10 @@ Trends, Details, History, range, and first-use discovery contract as the
 Proxmox overview, the only other `WorkloadsSurface` consumer. The page must not select only display and
 range props while silently dropping row-hover state from that shared resource
 projection. The vSphere surface mount carries only that page-owned state, the
-locked platform, the `vm` view and its empty-state copy; every resource and
-workload option stays on the page's `useWorkloadsState` call, the surface's
-only data input.
+locked platform, the `vm` view, its empty-state copy and its "VMs" table title;
+every resource and workload option stays on the page's `useWorkloadsState` call,
+the surface's only data input. The title is the one name the VM table keeps in
+kiosk, where the shared filter bar that otherwise introduces it unmounts.
 Docker and Kubernetes page owners use the same source-aware projection for
 their complete provider type families. Their linked agent rows remain visible
 because canonical merge preserves the provider source beside the agent source;

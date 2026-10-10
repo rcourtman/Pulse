@@ -537,6 +537,16 @@ function VmwareOverview(props: VmwareOverviewProps) {
         forcedViewMode="vm"
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
+        tableTitle={
+          <h2 class="inline-flex flex-wrap items-center gap-1.5">
+            VMs
+            <Show when={showSharedFilterToolbar()}>
+              <span class="font-semibold tabular-nums text-base-content">
+                {workloadsState.filteredGuests().length}
+              </span>
+            </Show>
+          </h2>
+        }
       />
     </div>
   );
