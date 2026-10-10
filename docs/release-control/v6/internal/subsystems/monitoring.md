@@ -17,6 +17,40 @@
 
 ## Purpose
 
+### Repeatable resource wiring publishes a complete binding once
+
+Router and tenant initialization applies saved notification policy before the
+first resource publication, then attaches the store and supplemental provider
+batch together. Repeating identical wiring does not rebuild the estate; the
+single setters retain their explicit-refresh behaviour. Explicit nil provider
+withdrawals remain in the router's initializer registry so existing and future
+tenants cannot retain a removed source. An empty saved private-CIDR allowlist
+revokes previous grants; absent/unreadable settings and the automatic public-URL
+fallback retain their existing semantics.
+
+A refresh captures its store/provider generation before collecting records.
+Delayed old collectors are refused before publication; full store writes are
+ordered after collection, without holding monitor or provider locks across
+callbacks. Changed bindings advance the existing alert epoch and join admitted
+old checks without clearing active alerts. Dependency setters, like a mock-mode
+switch, must not change bindings from an admitted alert callback. Consume-once
+source changes are drained only after an admitted publication, outside the
+publication lock. The read path keeps its existing non-blocking/freshness gate.
+
+Native TrueNAS/VMware providers and the demo adapter declare their mode. One
+mode read filters the pair before records, ownership or changes are collected,
+including the interval before the existing post-switch hook replaces them.
+Opposite-mode data cannot become a live/demo mixture; tenant fixture exclusions
+remain. Runtime-check shutdown, cancellation, token/tenant boundaries, resource
+wire shapes, thresholds, retention and guest/TLS safety fences are unchanged.
+
+`resource_wiring_test.go` and `router_resource_wiring_test.go` cover pass counts,
+first-alert policy, allowlist revocation, withdrawals, delayed collection and
+publication, re-entry, admitted-check joins and switch-hook gaps. These are
+bounded synthetic component controls, not whole-source, native startup/RSS,
+notification delivery or installed/reporter acceptance.
+
+
 ### Guest filesystem guidance honours its caller's logger
 
 Missing-filesystem guidance uses the existing caller context logger, falling
