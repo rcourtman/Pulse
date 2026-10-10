@@ -980,7 +980,17 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 		return fmt.Errorf("node id is required")
 	}
 
+	restoreSplit, err := m.liftNodeAgentSplit(hostID, nodeID)
+	if err != nil {
+		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
+	}
 	if err := m.state.SetHostNodeLinkIntent(hostID, nodeID, m.persistNodeLinkIntents); err != nil {
+		if restoreErr := restoreSplit(); restoreErr != nil {
+			log.Error().Err(restoreErr).
+				Str("hostID", hostID).
+				Str("nodeID", nodeID).
+				Msg("Failed to restore the operator's split after the manual node link failed")
+		}
 		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
 	}
 
@@ -990,6 +1000,76 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 		Msg("Manually linked host agent to PVE node")
 
 	return nil
+}
+
+// nodeAgentSplitStore is the resource store holding the operator's
+// node<->agent splits (unifiedresources.MonitorAdapter).
+type nodeAgentSplitStore interface {
+	ProxmoxNodeAgentSplitConfirmed(node models.Node, host models.Host) (bool, error)
+	LiftProxmoxNodeAgentSplit(node models.Node, host models.Host) ([]unifiedresources.ResourceExclusion, error)
+	RestoreProxmoxNodeAgentSplit(removed []unifiedresources.ResourceExclusion) error
+}
+
+func (m *Monitor) nodeAgentSplitStore() nodeAgentSplitStore {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	store, _ := m.resourceStore.(nodeAgentSplitStore)
+	return store
+}
+
+// liftNodeAgentSplit removes an operator split between the node and the
+// agent (resources API unlink or report-merge) before a manual link is
+// recorded. The link is the newer decision, and the registry's rows and the
+// state's hold-back both read the split from the resource store, so leaving
+// it would keep the pair apart in both despite the link. The returned
+// restore records the split again, for a link that then fails to persist.
+func (m *Monitor) liftNodeAgentSplit(hostID, nodeID string) (restore func() error, err error) {
+	restore = func() error { return nil }
+	store := m.nodeAgentSplitStore()
+	if store == nil {
+		return restore, nil
+	}
+	host, hostFound := m.state.GetHost(hostID)
+	node, nodeFound := m.state.GetNode(nodeID)
+	if !hostFound || !nodeFound {
+		// SetHostNodeLinkIntent reports the missing record.
+		return restore, nil
+	}
+	removed, err := store.LiftProxmoxNodeAgentSplit(node, host)
+	if err != nil {
+		return restore, fmt.Errorf("lift the operator's split: %w", err)
+	}
+	if len(removed) > 0 {
+		log.Info().
+			Str("hostID", hostID).
+			Str("nodeID", nodeID).
+			Int("exclusionsRemoved", len(removed)).
+			Msg("Manual node link replaced the operator's split of the node and agent")
+	}
+	return func() error { return store.RestoreProxmoxNodeAgentSplit(removed) }, nil
+}
+
+// nodeAgentSplitConfirmed reports whether the resource store's latest
+// decisions split the node from host's agent; an unreadable store confirms
+// nothing.
+func (m *Monitor) nodeAgentSplitConfirmed(nodeID string, host models.Host) bool {
+	store := m.nodeAgentSplitStore()
+	if store == nil {
+		return false
+	}
+	node, ok := m.state.GetNode(nodeID)
+	if !ok {
+		return false
+	}
+	split, err := store.ProxmoxNodeAgentSplitConfirmed(node, host)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("hostID", host.ID).
+			Str("nodeID", nodeID).
+			Msg("Could not read the operator's node and agent split; keeping the manual node link")
+		return false
+	}
+	return split
 }
 
 // UnlinkHostAgent removes the link between a host agent and its PVE node.
@@ -1644,6 +1724,19 @@ func (m *Monitor) MatchHostConfigContinuity(agentID, tokenID string) (models.Hos
 	return models.Host{}, false
 }
 
+// persistedNodeLinkTarget is the node a report persists as the agent's link.
+// A manual link an operator split holds back in state keeps its node in the
+// persisted intent: only a split the store confirms ends it (ApplyHostReport).
+func persistedNodeLinkTarget(store *config.HostContinuityStore, host models.Host) string {
+	linkedNodeID := strings.TrimSpace(host.LinkedNodeID)
+	if linkedNodeID == "" && host.NodeLinkSource == "manual" && store != nil {
+		if prior, ok := store.Get(host.ID); ok && prior.NodeLinkSource == "manual" {
+			return prior.LinkedNodeID
+		}
+	}
+	return linkedNodeID
+}
+
 func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report, order hostReportOrder) {
 	if m == nil || m.hostContinuityStore == nil {
 		return
@@ -1660,7 +1753,7 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 		AgentVersion:         strings.TrimSpace(host.AgentVersion),
 		Platform:             strings.TrimSpace(host.Platform),
 		NodeLinkSource:       host.NodeLinkSource,
-		LinkedNodeID:         strings.TrimSpace(host.LinkedNodeID),
+		LinkedNodeID:         persistedNodeLinkTarget(m.hostContinuityStore, host),
 		LinkedVMID:           strings.TrimSpace(host.LinkedVMID),
 		LinkedContainerID:    strings.TrimSpace(host.LinkedContainerID),
 		IsLegacy:             host.IsLegacy,
@@ -3579,6 +3672,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			prior = hostFromContinuityEntry(entry)
 		}
 	}
+	inferredNodeID, inferredVMID, inferredContainerID := linkedNodeID, linkedVMID, linkedContainerID
 	host.NodeLinkSource = "automatic"
 	if prior.NodeLinkSource == "manual" || prior.NodeLinkSource == "unlinked" ||
 		(prior.NodeLinkSource == "" && prior.LinkedNodeID != "") {
@@ -3586,9 +3680,36 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		linkedNodeID = prior.LinkedNodeID
 		linkedVMID, linkedContainerID = "", ""
 	}
+	// An operator split of the node a manual link names is the newer
+	// decision (the agents API's link removes an older split first), so it
+	// ends the manual intent, which persists with this report: the agent
+	// links as Pulse infers again, and the split holds that link back below.
+	// Kept, the intent would also reserve the node against other agents.
+	// The state may already hold the link back, so the node comes from the
+	// persisted intent, and only a split the store confirms ends it.
+	if host.NodeLinkSource == "manual" {
+		if linkedNodeID == "" && m.hostContinuityStore != nil {
+			if entry, ok := m.hostContinuityStore.Get(host.ID); ok && entry.NodeLinkSource == "manual" {
+				linkedNodeID = entry.LinkedNodeID
+			}
+		}
+		if linkedNodeID != "" && m.nodeAgentSplitConfirmed(linkedNodeID, host) {
+			host.NodeLinkSource = "automatic"
+			linkedNodeID, linkedVMID, linkedContainerID = inferredNodeID, inferredVMID, inferredContainerID
+			m.clearAgentLXCFilesystems(host.ID)
+		}
+	}
 	if linkedNodeID != "" && host.NodeLinkSource != "manual" && m.hostContinuityStore != nil &&
 		m.hostContinuityStore.NodeLinkReservedByOther(host.ID, linkedNodeID) {
 		linkedNodeID = ""
+	}
+	// The operator split this node from the agent (resources API unlink or
+	// report-merge): the agent's LXC filesystems and everything else that
+	// follows the link stay off the node, and what the agent already
+	// contributed to its containers goes with the link.
+	if linkedNodeID != "" && m.state.NodeAgentLinkSplit(linkedNodeID, host) {
+		linkedNodeID = ""
+		m.clearAgentLXCFilesystems(host.ID)
 	}
 	if linkedNodeID != "" {
 		host.LinkedNodeID = linkedNodeID
@@ -3659,6 +3780,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	m.state.UpsertHost(host)
+	// A split recorded since the check above is applied by the state under
+	// its own lock; what follows (the node's back link, the agent's LXC
+	// filesystems, its alert coverage and the persisted continuity) uses the
+	// link the state kept.
+	if host.LinkedNodeID != "" {
+		if stored, ok := m.state.GetHost(host.ID); ok && stored.LinkedNodeID != host.LinkedNodeID {
+			host.LinkedNodeID = stored.LinkedNodeID
+			m.clearAgentLXCFilesystems(host.ID)
+		}
+	}
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 	m.supersedeStaleHostAgentDuplicates(host, tokenRecord, existingHostModels)
 

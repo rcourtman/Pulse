@@ -91,7 +91,7 @@ func (m *Monitor) getHostAgentTemperatureForNode(node models.Node) *models.Tempe
 	nodes := readState.Nodes()
 	slot := m.polledNodeSlot(hosts, nodes, node)
 
-	matchedHost := hostAgentForNode(hosts, nodes, slot, node.Name)
+	matchedHost := hostAgentForNode(hosts, nodes, slot, node.Name, m.nodeAgentSplitFilter(node))
 	if matchedHost == nil {
 		// No directly-linked host agent found — check cluster sensor cache
 		return m.getClusterSensorTemperature(hosts, nodes, node, slot)
@@ -140,7 +140,10 @@ func (m *Monitor) carriedTemperatureOutlivesAgentLease(node models.Node, temp *m
 	}
 	hosts := readState.Hosts()
 	nodes := readState.Nodes()
-	matchedHost := hostAgentForNode(hosts, nodes, m.polledNodeSlot(hosts, nodes, node), node.Name)
+	// A split agent still counts here: the check asks whether a carried
+	// reading may have been the agent's, and one it supplied before the split
+	// must not outlive the agent's lease.
+	matchedHost := hostAgentForNode(hosts, nodes, m.polledNodeSlot(hosts, nodes, node), node.Name, nil)
 	if matchedHost == nil {
 		return false
 	}
@@ -272,8 +275,11 @@ func (m *Monitor) stateNodeFromView(view *unifiedresources.NodeView) models.Node
 // another node or to a guest, and finds nothing when a Proxmox node outside the
 // slot or a second unlinked agent has the name. Every link source (automatic,
 // manual, restored from continuity) stores the Proxmox source node ID, so slot
-// IDs compare with LinkedNodeID directly.
-func hostAgentForNode(hosts []*unifiedresources.HostView, nodes []*unifiedresources.NodeView, slot nodeSlot, nodeName string) *unifiedresources.HostView {
+// IDs compare with LinkedNodeID directly. The hostname fallback also
+// skips an agent the operator split from the node (split, which may be nil):
+// the split holds the link back, which would otherwise leave the agent
+// "unlinked" and let its name hand the node the machine's sensors.
+func hostAgentForNode(hosts []*unifiedresources.HostView, nodes []*unifiedresources.NodeView, slot nodeSlot, nodeName string, split func(*unifiedresources.HostView) bool) *unifiedresources.HostView {
 	for _, host := range hosts {
 		if slot.hasID(host.LinkedNodeID()) {
 			log.Debug().
@@ -296,6 +302,9 @@ func hostAgentForNode(hosts []*unifiedresources.HostView, nodes []*unifiedresour
 			continue
 		}
 		if strings.ToLower(strings.TrimSpace(host.Hostname())) != name {
+			continue
+		}
+		if split != nil && split(host) {
 			continue
 		}
 		if match != nil {

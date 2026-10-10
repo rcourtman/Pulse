@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"errors"
 	"net"
 	"slices"
 	"strings"
@@ -284,19 +285,205 @@ func (rr *ResourceRegistry) splitProxmoxNodeLink(node models.Node, host *models.
 	if host == nil || len(rr.exclusions) == 0 {
 		return node, host
 	}
-	_, nodeIdentity := resourceFromProxmoxNode(node, nil)
-	_, hostIdentity := resourceFromHost(*host)
-	if !rr.proxmoxNodeAgentSplitLocked(
-		nodeAgentLinkSide{sourceID: nodeID, identity: nodeIdentity},
-		nodeAgentLinkSide{sourceID: normalizeSourceID(host.ID), identity: hostIdentity},
-	) {
+	nodeSide, agentSide := proxmoxNodeAgentLinkSides(node, *host)
+	if !rr.proxmoxNodeAgentSplitLocked(nodeSide, agentSide) {
 		return node, host
 	}
 	if rr.splitAgents == nil {
 		rr.splitAgents = make(map[string]nodeAgentLinkSide)
 	}
-	rr.splitAgents[nodeID] = nodeAgentLinkSide{sourceID: normalizeSourceID(host.ID), identity: hostIdentity}
+	rr.splitAgents[nodeID] = agentSide
 	return node, nil
+}
+
+// proxmoxNodeAgentLinkSides returns the two sides of a monitored node and
+// agent pair as snapshot ingest reads them: each record's source ID and the
+// identity it derives on its own.
+func proxmoxNodeAgentLinkSides(node models.Node, host models.Host) (nodeAgentLinkSide, nodeAgentLinkSide) {
+	_, nodeIdentity := resourceFromProxmoxNode(node, nil)
+	_, hostIdentity := resourceFromHost(host)
+	return nodeAgentLinkSide{sourceID: normalizeSourceID(node.ID), identity: nodeIdentity},
+		nodeAgentLinkSide{sourceID: normalizeSourceID(host.ID), identity: hostIdentity}
+}
+
+// Monitoring keeps its own node<->agent link (models.Node.LinkedAgentID and
+// models.Host.LinkedNodeID), and that link, not the registry's rows, is what
+// the agent's SMART fallback and disk-exclude patterns on the node, guest
+// discovery, agent deployment, service discovery and the node and agent's
+// alert correlation read. It reads the operator's split from here
+// (models.NodeAgentSplitDecider) so it never treats a pair the registry
+// keeps apart as one machine, and the agents API's node link, an operator
+// decision newer than any split it overrides, removes that split here
+// first. The resource store therefore holds the one record of whether an
+// operator split a node from an agent.
+
+// ProxmoxNodeAgentSplit reports whether the operator split node from host's
+// agent, by the rule snapshot ingest applies to a node's link
+// (splitProxmoxNodeLink), also reading the agent under the ID the registry
+// holds it under (a pin can keep a machine-derived ID for an agent that no
+// longer reports its machine key). A registry without a store carries no
+// operator decisions. It takes no lock monitoring holds, so monitoring
+// calls it while holding its state lock.
+func (a *MonitorAdapter) ProxmoxNodeAgentSplit(node models.Node, host models.Host) bool {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return false
+	}
+	return registry.proxmoxNodeAgentSplit(node, host)
+}
+
+// ProxmoxNodeAgentSplitConfirmed reports whether the store's latest
+// decisions split node from host's agent. Unlike ProxmoxNodeAgentSplit,
+// which keeps a split it cannot confirm, it reports an unreadable store as
+// an error, for decisions that must not rest on an unconfirmed split.
+func (a *MonitorAdapter) ProxmoxNodeAgentSplitConfirmed(node models.Node, host models.Host) (bool, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil || strings.TrimSpace(node.ID) == "" || strings.TrimSpace(host.ID) == "" {
+		return false, nil
+	}
+	latest, err := storedOperatorPairDecisions(registry.store)
+	if err != nil {
+		return false, err
+	}
+	nodeSide, agentSide := registry.proxmoxNodeAgentLinkSidesHeld(node, host)
+	return registry.nodeAgentSplit(latest, nodeSide, agentSide), nil
+}
+
+// proxmoxNodeAgentLinkSidesHeld returns the pair's sides with the ID this
+// registry holds the agent under.
+func (rr *ResourceRegistry) proxmoxNodeAgentLinkSidesHeld(node models.Node, host models.Host) (nodeAgentLinkSide, nodeAgentLinkSide) {
+	nodeSide, agentSide := proxmoxNodeAgentLinkSides(node, host)
+	rr.mu.RLock()
+	agentSide.heldID = rr.bySource[SourceAgent][agentSide.sourceID]
+	rr.mu.RUnlock()
+	return nodeSide, agentSide
+}
+
+// proxmoxNodeAgentSplit decides by this generation's decisions, and a split
+// it finds is confirmed against the store's latest. Monitoring updates its
+// links before the rebuild that loads a newer decision, so by the
+// generation alone it would hold a relinked pair apart for one more poll,
+// and that rebuild would join the rows by the manual link alone, under the
+// link's primary ID rather than the ID the node's link joins them under.
+// Only a split is confirmed: splits are few, and a split monitoring misses
+// for a poll is applied by the registry to the node's link on that rebuild.
+// A split it cannot confirm, the store being unreadable, stands.
+func (rr *ResourceRegistry) proxmoxNodeAgentSplit(node models.Node, host models.Host) bool {
+	rr.mu.RLock()
+	none := len(rr.exclusions) == 0
+	rr.mu.RUnlock()
+	if none || strings.TrimSpace(node.ID) == "" || strings.TrimSpace(host.ID) == "" {
+		return false
+	}
+	nodeSide, agentSide := rr.proxmoxNodeAgentLinkSidesHeld(node, host)
+	rr.mu.RLock()
+	split := rr.proxmoxNodeAgentSplitLocked(nodeSide, agentSide)
+	rr.mu.RUnlock()
+	if !split {
+		return false
+	}
+	latest, err := storedOperatorPairDecisions(rr.store)
+	if err != nil {
+		return true
+	}
+	return rr.nodeAgentSplit(latest, nodeSide, agentSide)
+}
+
+// storedOperatorPairDecisions reads the store's current manual decisions as
+// loadOverrides does.
+func storedOperatorPairDecisions(store ResourceStore) (operatorPairDecisions, error) {
+	links, err := store.GetLinks()
+	if err != nil {
+		return operatorPairDecisions{}, err
+	}
+	exclusions, err := store.GetExclusions()
+	if err != nil {
+		return operatorPairDecisions{}, err
+	}
+	links, exclusions = effectiveManualPairDecisions(links, exclusions)
+	decisions := operatorPairDecisions{
+		exclusions: make(map[string]time.Time, len(exclusions)),
+		linksByID:  indexLinksByID(links),
+	}
+	for _, exclusion := range exclusions {
+		key := exclusionKey(CanonicalResourceID(exclusion.ResourceA), CanonicalResourceID(exclusion.ResourceB))
+		if at, ok := decisions.exclusions[key]; !ok || exclusion.CreatedAt.After(at) {
+			decisions.exclusions[key] = exclusion.CreatedAt
+		}
+	}
+	return decisions, nil
+}
+
+// LiftProxmoxNodeAgentSplit removes from the store every exclusion that
+// splits node from host's agent (nodeAgentSplit reads them across the IDs
+// each side can hold, and the ID the registry holds the agent under), so
+// the agents API's node link, made after the split, joins the pair: at
+// once in monitoring, whose decider confirms a split against the store, and
+// in the registry on its next rebuild. It returns the exclusions it removed,
+// for RestoreProxmoxNodeAgentSplit should recording the link fail; if a
+// removal fails it restores the ones already removed and returns the error.
+// Exclusions between other IDs stay, among them report-merge's exclusion of
+// the agent's own candidate, which also records splitting another source
+// off the agent.
+func (a *MonitorAdapter) LiftProxmoxNodeAgentSplit(node models.Node, host models.Host) ([]ResourceExclusion, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil, nil
+	}
+	return registry.liftProxmoxNodeAgentSplit(node, host)
+}
+
+// RestoreProxmoxNodeAgentSplit records again exclusions a lift removed, with
+// their original times, reasons and authors. A pair the operator decided
+// about since (a link or a new exclusion) keeps that newer decision.
+func (a *MonitorAdapter) RestoreProxmoxNodeAgentSplit(removed []ResourceExclusion) error {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil
+	}
+	return restoreExclusions(registry.store, removed)
+}
+
+func restoreExclusions(store ResourceStore, removed []ResourceExclusion) error {
+	var errs []error
+	for _, exclusion := range removed {
+		if _, err := store.RestoreExclusion(exclusion); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (rr *ResourceRegistry) liftProxmoxNodeAgentSplit(node models.Node, host models.Host) ([]ResourceExclusion, error) {
+	if strings.TrimSpace(node.ID) == "" || strings.TrimSpace(host.ID) == "" {
+		return nil, nil
+	}
+	// The store's decisions, not the generation's: a split recorded since
+	// the last rebuild is older than this link too.
+	stored, err := rr.store.GetExclusions()
+	if err != nil {
+		return nil, err
+	}
+	nodeSide, agentSide := rr.proxmoxNodeAgentLinkSidesHeld(node, host)
+	nodeIDs, agentIDs := rr.nodeAgentPairIDs(nodeSide, agentSide)
+	var removed []ResourceExclusion
+	for _, exclusion := range stored {
+		left, right := CanonicalResourceID(exclusion.ResourceA), CanonicalResourceID(exclusion.ResourceB)
+		if left == right || !((slices.Contains(nodeIDs, left) && slices.Contains(agentIDs, right)) ||
+			(slices.Contains(nodeIDs, right) && slices.Contains(agentIDs, left))) {
+			continue
+		}
+		// The row taken is the one removed, whatever the operator recorded
+		// for the pair since the listing above.
+		taken, found, err := rr.store.TakeExclusion(left, right)
+		if err != nil {
+			return nil, errors.Join(err, restoreExclusions(rr.store, removed))
+		}
+		if found {
+			removed = append(removed, taken)
+		}
+	}
+	return removed, nil
 }
 
 func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*models.Host) map[string]*models.Host {

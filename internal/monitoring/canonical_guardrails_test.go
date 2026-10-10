@@ -3078,22 +3078,26 @@ func TestMonitorResourceStaleThresholdsFollowRuntimePollingOverrides(t *testing.
 	})
 
 	// The adaptive scheduler picks intervals from its own bounds and never
-	// reads the per-platform overrides, so a save must not move freshness
-	// there; following adaptive cadence is a separate derivation.
+	// reads the per-platform intervals or overrides, so a save must not move
+	// freshness there: it follows the scheduler's maximum interval, which the
+	// 5-minute per-platform interval below would not give (10 minutes).
+	// TestMonitorResourceFreshnessFollowsAdaptiveCadence covers the cadence
+	// itself.
 	t.Run("adaptive scheduling ignores per-platform overrides", func(t *testing.T) {
 		base := &config.Config{PBSPollingInterval: 5 * time.Minute, PMGPollingInterval: 5 * time.Minute}
 		monitor := &Monitor{
 			config:    base.DeepCopy(),
-			scheduler: NewAdaptiveScheduler(SchedulerConfig{}, nil, nil, nil),
+			scheduler: NewAdaptiveScheduler(SchedulerConfig{MaxInterval: 15 * time.Minute}, nil, nil, nil),
 		}
+		const want = 30 * time.Minute
 		before := monitor.resourceStaleThresholds()
 		monitor.SetPBSPollingInterval(time.Minute)
 		monitor.SetPMGPollingInterval(time.Minute)
 		after := monitor.resourceStaleThresholds()
-		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG} {
-			if before[source] != 10*time.Minute || after[source] != before[source] {
-				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v throughout",
-					source, before[source], after[source], 10*time.Minute)
+		for _, source := range []unifiedresources.DataSource{unifiedresources.SourcePBS, unifiedresources.SourcePMG, unifiedresources.SourceProxmox} {
+			if before[source] != want || after[source] != want {
+				t.Errorf("%s threshold = %v -> %v across an override the adaptive scheduler ignores, want %v from its 15m maximum throughout",
+					source, before[source], after[source], want)
 			}
 		}
 	})

@@ -61,6 +61,90 @@ type State struct {
 	// are discarded as decisive evidence. Internal evidence only: never
 	// serialized and never part of snapshots.
 	pbsGuestConfirmations map[string]map[PBSGuestConfirmation]struct{}
+
+	// nodeAgentSplits holds back node<->agent links the operator split
+	// (SetNodeAgentSplitDecider); nil holds none back.
+	nodeAgentSplits NodeAgentSplitDecider
+}
+
+// NodeAgentSplitDecider reports whether the operator split a Proxmox node
+// from a host agent's machine (unlink or report-merge in the resources API,
+// recorded in the resource store and decided by
+// unifiedresources.MonitorAdapter). State holds such a link back on both
+// sides, so nothing that reads a node's linked agent or an agent's linked
+// node treats the pair as one machine: the agent's SMART inventory as the
+// node's disk fallback, its disk-exclude patterns on the node, guest
+// discovery, agent deployment, service discovery and the node and agent's
+// alert correlation.
+// State calls it with its lock held, so it must not call State.
+type NodeAgentSplitDecider interface {
+	ProxmoxNodeAgentSplit(node Node, host Host) bool
+}
+
+// SetNodeAgentSplitDecider installs the operator's split decisions and
+// holds back the links they split now; every later link write reads them
+// too. A held-back link returns when monitoring next infers it after the
+// decider stops splitting the pair. A manual link (the agents API's node
+// link) split afterwards ends on the agent's next report that finds the
+// split confirmed in the resource store, which records the agent's link as
+// automatic again.
+func (s *State) SetNodeAgentSplitDecider(d NodeAgentSplitDecider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nodeAgentSplits = d
+	holdBackSplitNodeLinks(d, s.Hosts, s.Nodes)
+}
+
+// NodeAgentLinkSplit reports whether the operator split the node with
+// nodeID from host's agent, so a link between them is held back.
+func (s *State) NodeAgentLinkSplit(nodeID string, host Host) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, nodeID, host)
+}
+
+func nodeAgentLinkSplitLocked(d NodeAgentSplitDecider, nodes []Node, nodeID string, host Host) bool {
+	nodeID = strings.TrimSpace(nodeID)
+	if d == nil || nodeID == "" || strings.TrimSpace(host.ID) == "" {
+		return false
+	}
+	for i := range nodes {
+		if nodes[i].ID == nodeID {
+			return d.ProxmoxNodeAgentSplit(nodes[i], host)
+		}
+	}
+	return false
+}
+
+// holdBackSplitNodeLinks clears both sides of every node<->agent link the
+// operator split.
+func holdBackSplitNodeLinks(d NodeAgentSplitDecider, hosts []Host, nodes []Node) {
+	if d == nil {
+		return
+	}
+	hostByID := make(map[string]Host, len(hosts))
+	for _, host := range hosts {
+		hostByID[host.ID] = host
+	}
+	for i := range nodes {
+		holdBackSplitNodeLink(d, &nodes[i], hostByID)
+	}
+	for i := range hosts {
+		if nodeAgentLinkSplitLocked(d, nodes, hosts[i].LinkedNodeID, hosts[i]) {
+			hosts[i].LinkedNodeID = ""
+		}
+	}
+}
+
+// holdBackSplitNodeLink clears node's linked agent if the operator split
+// the node from it.
+func holdBackSplitNodeLink(d NodeAgentSplitDecider, node *Node, hostByID map[string]Host) {
+	if d == nil || node.LinkedAgentID == "" {
+		return
+	}
+	if host, ok := hostByID[node.LinkedAgentID]; ok && d.ProxmoxNodeAgentSplit(*node, host) {
+		node.LinkedAgentID = ""
+	}
 }
 
 // PBSGuestConfirmation identifies one PBS snapshot as seen through a PVE
@@ -3968,7 +4052,7 @@ func preferNodeForMerge(existing Node, candidate Node) Node {
 	return existing
 }
 
-func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
+func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node, splits NodeAgentSplitDecider) {
 	// Explicit operator intent is pinned to the selected provider ID, never
 	// transferred by hostname to a replacement provider identity.
 	for _, host := range hosts {
@@ -3984,6 +4068,9 @@ func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
 			}
 		}
 	}
+	// A split recorded after a manual link is the newer decision (the
+	// agents API's link removes an older split before it records intent).
+	holdBackSplitNodeLinks(splits, hosts, nodes)
 	linkedNodeByHostID := make(map[string]string)
 	multipleNodeLinksByHostID := make(map[string]struct{})
 	for _, node := range nodes {
@@ -4082,10 +4169,20 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		linkedHostToKey[hostID] = key
 	}
+	// A split recorded since another instance's poll is read here, before that
+	// instance's retained link can steer where this poll's nodes fold.
+	var retainedHostByID map[string]Host
+	if s.nodeAgentSplits != nil && len(s.Hosts) > 0 {
+		retainedHostByID = make(map[string]Host, len(s.Hosts))
+		for _, host := range s.Hosts {
+			retainedHostByID[host.ID] = host
+		}
+	}
 	for _, node := range s.Nodes {
 		if node.Instance == instanceName {
 			continue
 		}
+		holdBackSplitNodeLink(s.nodeAgentSplits, &node, retainedHostByID)
 
 		key := nodeLogicalKey(node)
 		if key == "" {
@@ -4332,6 +4429,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			}
 		}
 
+		// A split agent is no evidence of this node's identity either, so
+		// hold the link back before the merge key reads it.
+		holdBackSplitNodeLink(s.nodeAgentSplits, &node, hostByID)
 		primaryKey := nodeLogicalKey(node)
 		targetKey := resolveNodeMergeKey(primaryKey, node, nodeMap, nodeAliasToKey, ambiguousNodeAliases)
 		if node.LinkedAgentID != "" {
@@ -4359,6 +4459,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			if existing, ok := nodeMap[targetKey]; ok {
 				if validHostAgentIDs[existing.LinkedAgentID] {
 					node.LinkedAgentID = existing.LinkedAgentID
+					holdBackSplitNodeLink(s.nodeAgentSplits, &node, hostByID)
 				}
 			}
 		}
@@ -4383,7 +4484,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		return newNodes[i].Name < newNodes[j].Name
 	})
 
-	reconcileHostNodeLinksLocked(s.Hosts, newNodes)
+	reconcileHostNodeLinksLocked(s.Hosts, newNodes, s.nodeAgentSplits)
 
 	s.Nodes = newNodes
 	s.LastUpdate = time.Now()
@@ -5471,10 +5572,22 @@ func (s *State) UpsertHost(host Host) {
 	defer s.mu.Unlock()
 
 	host = cloneHost(host)
+	if nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, host.LinkedNodeID, host) {
+		host.LinkedNodeID = ""
+	}
 	for i, node := range s.Nodes {
+		if host.ID == "" || node.LinkedAgentID != host.ID {
+			continue
+		}
+		// An operator split holds the link back on both sides, whatever the
+		// host's intent.
+		split := nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, node.ID, host)
+		if split && node.ID == host.LinkedNodeID {
+			host.LinkedNodeID = ""
+		}
 		// Legacy one-way links have unknown intent; an unmarked host update
 		// cannot authorise their removal (SMART fallback also uses these links).
-		if host.NodeLinkSource != "" && host.ID != "" && node.LinkedAgentID == host.ID && node.ID != host.LinkedNodeID {
+		if split || (host.NodeLinkSource != "" && node.ID != host.LinkedNodeID) {
 			s.Nodes[i].LinkedAgentID = ""
 		}
 	}
@@ -5511,6 +5624,51 @@ func (s *State) GetHost(hostID string) (Host, bool) {
 		}
 	}
 	return Host{}, false
+}
+
+// NodeSplitFromAgent reports whether the operator split the node with this
+// connection and name from the host agent with this ID. It reads the state in
+// place, so readers that ask once per container do not copy the records. A
+// node or agent not in state is not split.
+func (s *State) NodeSplitFromAgent(instance, name, agentID string) bool {
+	instance = strings.ToLower(strings.TrimSpace(instance))
+	name = strings.ToLower(strings.TrimSpace(name))
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.nodeAgentSplits == nil {
+		return false
+	}
+	var host *Host
+	for i := range s.Hosts {
+		if s.Hosts[i].ID == agentID {
+			host = &s.Hosts[i]
+			break
+		}
+	}
+	if host == nil {
+		return false
+	}
+	for i := range s.Nodes {
+		node := &s.Nodes[i]
+		if strings.ToLower(strings.TrimSpace(node.Instance)) == instance &&
+			strings.ToLower(strings.TrimSpace(node.Name)) == name {
+			return s.nodeAgentSplits.ProxmoxNodeAgentSplit(*node, *host)
+		}
+	}
+	return false
+}
+
+// GetNode returns one detached Proxmox node record.
+func (s *State) GetNode(nodeID string) (Node, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, node := range s.Nodes {
+		if node.ID == nodeID {
+			return cloneNode(node), true
+		}
+	}
+	return Node{}, false
 }
 
 // GetHosts returns a copy of all generic hosts.
@@ -5552,12 +5710,18 @@ func (s *State) ClearAllHosts() int {
 
 // LinkNodeToHostAgent updates a PVE node to link to its host agent.
 // This is called when a host agent registers and matches a known PVE node by hostname.
+// A node the operator split from the agent keeps no link to it.
 func (s *State) LinkNodeToHostAgent(nodeID, hostAgentID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, node := range s.Nodes {
 		if node.ID == nodeID {
+			for _, host := range s.Hosts {
+				if host.ID == hostAgentID && nodeAgentLinkSplitLocked(s.nodeAgentSplits, s.Nodes, nodeID, host) {
+					return true
+				}
+			}
 			s.Nodes[i].LinkedAgentID = hostAgentID
 			s.LastUpdate = time.Now()
 			return true

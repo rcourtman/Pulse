@@ -222,6 +222,12 @@ func (m *Monitor) enrichContainerWithAgentLXCFilesystems(
 	if strings.TrimSpace(container.Name) != entry.name {
 		return
 	}
+	// Admission required the agent to be linked to this node. A reading cached
+	// before the operator split the node from the agent is not shown once they
+	// are split, whether or not a later report cleared it or even named a node.
+	if m.state.NodeSplitFromAgent(instance, node, entry.agentID) {
+		return
+	}
 
 	container.Disks = append([]models.Disk(nil), entry.disks...)
 	for _, disk := range container.Disks {
