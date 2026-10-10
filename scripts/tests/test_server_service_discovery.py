@@ -19,8 +19,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh"))
-UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/pulse-auto-update.sh"))
+INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh")).resolve()
+UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/pulse-auto-update.sh")).resolve()
 REAL_SYSTEMCTL = shutil.which("systemctl")
 QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
          "pulse-backend.service", "pulse.service"]
@@ -55,7 +55,11 @@ if args[0] == "list-unit-files":
     os.write(1, os.environ["ROWS"].encode())
     sys.exit(int(os.environ["QUERY_EXIT"]))
 if args[0] == "show":
-    print("inactive" if (f / "stopped").exists() else "active")
+    state = "inactive" if (f / "stopped").exists() else "active"
+    if "--value" in args:
+        print(state)
+    else:
+        print("LoadState=loaded\nActiveState=" + state)
     sys.exit(0)
 if args[0] == "is-active":
     sys.exit(1 if (f / "stopped").exists() else 0)

@@ -52,6 +52,37 @@ execute the actual unattended helper's selection and
 `perform_update` entry/handoff with a fake installer, including timeout and
 failed/partial inventory before any service observation or installer call.
 
+### Unattended restoration requires observed service state
+
+Before backup, download, installer invocation or restart-trap setup, the
+standalone helper requires one complete successful observation of the exact
+selected unit's LoadState and ActiveState. Loaded and masked units are admitted
+only in settled active, inactive or failed states; missing, partial, duplicate,
+failed, timed-out, unavailable or transitional observations refuse the update.
+A failed is-active call is no longer treated as evidence of prior inactivity.
+Discovery, explicit identities, masks, consent and stable/signature admission
+retain their existing contracts.
+
+After an attempted installation, rollback replacement requires an observed
+inactive unit, or a bounded successful stop followed by a fresh inactive
+readback. Successful stop submission alone does not permit file replacement.
+Unknown/unsettled state retains the verified private backup, preserves the
+current destination bytes, suppresses restart and reports manual reconciliation.
+A post-install observation failure is not permission to start or roll back.
+The prior-active backstop starts only a freshly observed stopped/failed unit;
+it never starts a unit on a failed read. Restoration still stages and compares
+all saved files, uses atomic destination replacement and restarts only when
+prior activity was established. Incomplete restoration/start leaves the backup
+and fails; no new automatic retry, unmasking or config/data rollback is added.
+
+`TestAutoUpdateServiceStateFailsClosed` executes the production helper with
+private versioned file fixtures and an external confined manager, including
+real query/stop deadlines, successful/no-op/refused stops, failed readback,
+prior-state restoration and late unknown state. The existing signed transaction
+matrix and smoke controls retain their cryptographic, metadata and return-trap
+coverage. These are source/fixture controls, not native systemd/LXC recovery,
+published installer trust, #2785's stop cause or installed acceptance.
+
 ### Core E2E images are built once and admitted in the same run
 
 The secret-free Core E2E workflow builds its existing `e2e_runtime` server and
