@@ -1426,6 +1426,9 @@ type Monitor struct {
 	nodePendingUpdatesCache   map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
 	pveMembershipMisses       map[string]int                 // Consecutive authoritative membership absences by instance/node
 	resourceStore             ResourceStoreInterface         // Optional unified resource store for polling optimization
+	resourceWiringMu          sync.Mutex                     // Serializes dependency changes and their attachment effects, not provider/alert callbacks
+	resourceWiringGeneration  atomic.Uint64                  // Store/provider binding captured by a refresh
+	resourcePublishMu         sync.Mutex                     // Serializes full publications after provider collection
 	supplementalProviders     map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
 	recoveryManager           *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	recoveryIngestMu          sync.Mutex
@@ -5028,73 +5031,147 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 	log.Info().Msg("temperature monitoring disabled")
 }
 
-// SetResourceStore sets the resource store for polling optimization.
-// When set, the monitor will check if it should reduce polling frequency
-// for nodes that have host agents providing data.
+// SetResourceStore sets the resource store and immediately backfills it, even
+// when the same store is supplied again. Use SetResourceStoreAndProviders for
+// repeatable router/tenant initialization without redundant full refreshes.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
+	m.wireResourceStoreAndProviders(store, nil, true)
+}
+
+// SetResourceStoreAndProviders attaches the store and a batch of provider
+// updates in one critical section, then publishes once if anything changed.
+// Omitted sources are unchanged; an explicit nil withdraws a source. Like a
+// mock-mode switch, changing dependencies must not run inside an admitted
+// alert callback: it joins old alert calls before the new binding can publish.
+func (m *Monitor) SetResourceStoreAndProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
+	m.wireResourceStoreAndProviders(store, providers, false)
+}
+
+// sameWiredValue treats uncomparable dependency values as changed, never as a
+// reason to panic or silently skip a refresh.
+func sameWiredValue(a, b any) (same bool) {
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+	return a == b
+}
+
+func (m *Monitor) wireResourceStoreAndProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider, force bool) {
+	if m == nil {
+		return
+	}
+	m.resourceWiringMu.Lock()
 	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
 		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
 
 	m.mu.Lock()
+	_, providersChanged := m.registerSupplementalProvidersLocked(providers)
+	storeChanged := !sameWiredValue(m.resourceStore, store)
 	m.resourceStore = store
 	incidentStore := m.incidentStore
 	m.installNodeAgentSplitDeciderLocked()
+	changed := storeChanged || providersChanged
+	if changed {
+		m.resourceWiringGeneration.Add(1)
+	}
 	m.mu.Unlock()
-	m.installOperatorIntentResolver(store)
-	log.Info().Msg("resource store set for polling optimization")
 
-	timelineAttached := false
-	if incidentStore != nil {
-		if timelineStore, ok := store.(memory.IncidentTimelineStore); ok {
+	if storeChanged || force {
+		m.installOperatorIntentResolver(store)
+		if incidentStore != nil {
+			timelineStore, _ := store.(memory.IncidentTimelineStore)
 			incidentStore.SetResourceTimelineStore(timelineStore)
-			timelineAttached = true
-		} else {
-			incidentStore.SetResourceTimelineStore(nil)
+			if timelineStore != nil {
+				// Router/health serving must not wait for backlog projection.
+				m.scheduleAlertProjectionCatchUp()
+			}
 		}
 	}
-	if timelineAttached {
-		// The canonical boundary: with the durable resource store attached,
-		// restart repair can reach resource history as well as the incident
-		// fallback cache, and the replay watermark may advance. Run it in the
-		// background — router construction and health serving must not wait
-		// behind an un-projected backlog.
-		m.scheduleAlertProjectionCatchUp()
+	m.resourceWiringMu.Unlock()
+
+	if changed {
+		// The epoch guards dependency-derived alerts as well as mode-derived
+		// ones. No active alert is cleared here; the new inventory evaluates
+		// them normally. No monitor/state lock is held while joining old calls.
+		m.mockModeFence.advance()
 	}
 
-	// Immediately backfill the store from current state so ReadState
-	// consumers have data as soon as the store is wired.
-	// Guard against minimally initialized monitors (e.g., test fixtures
-	// with bare &Monitor{}) where m.state may be nil.
-	if store != nil && m.state != nil {
+	if changed || force {
+		m.backfillResourceStore(false)
+	}
+}
+
+func (m *Monitor) backfillResourceStore(allowEmptyState bool) {
+	// Bare monitor fixtures have no state. Read the pointer under the same
+	// lock used by a mock switch replacing it.
+	m.mu.RLock()
+	ready := m.resourceStore != nil && (m.state != nil || allowEmptyState)
+	m.mu.RUnlock()
+	if ready {
 		m.updateResourceStore(m.currentStateWithScope())
 	}
 }
 
-// SetSupplementalRecordsProvider configures source-native resource providers
-// that ingest alongside the legacy state snapshot path.
+// SetSupplementalRecordsProvider preserves the single-source explicit-refresh
+// behavior, including when the supplied provider is unchanged.
 func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSource, provider MonitorSupplementalRecordsProvider) {
+	m.SetSupplementalRecordsProviders(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{source: provider})
+}
+
+// SetSupplementalRecordsProviders applies a batch of source updates and
+// refreshes once. Empty source names are ignored; nil withdraws a provider.
+// Changed bindings have the same alert-callback restriction as the combined setter.
+func (m *Monitor) SetSupplementalRecordsProviders(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
 	if m == nil {
 		return
 	}
-
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
-		return
-	}
-
+	m.resourceWiringMu.Lock()
 	m.mu.Lock()
-	if m.supplementalProviders == nil {
-		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
-	}
-	if provider == nil {
-		delete(m.supplementalProviders, normalized)
-	} else {
-		m.supplementalProviders[normalized] = provider
+	usable, changed := m.registerSupplementalProvidersLocked(providers)
+	if changed {
+		m.resourceWiringGeneration.Add(1)
 	}
 	m.mu.Unlock()
+	m.resourceWiringMu.Unlock()
+	if changed {
+		m.mockModeFence.advance()
+	}
+	if usable {
+		// Source-native providers can publish into a store even before a
+		// legacy state exists (including minimally initialized monitors).
+		m.backfillResourceStore(true)
+	}
+}
 
-	m.updateResourceStore(m.currentStateWithScope())
+// The caller holds m.mu. Compare and update every source in the same section
+// as the store binding, so a refresh can never capture half a wiring batch.
+func (m *Monitor) registerSupplementalProvidersLocked(providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) (usable, changed bool) {
+	for source, provider := range providers {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if normalized == "" {
+			continue
+		}
+		usable = true
+		previous, registered := m.supplementalProviders[normalized]
+		if provider == nil {
+			if registered {
+				delete(m.supplementalProviders, normalized)
+				changed = true
+			}
+			continue
+		}
+		if !registered || !sameWiredValue(previous, provider) {
+			changed = true
+		}
+		if m.supplementalProviders == nil {
+			m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+		}
+		m.supplementalProviders[normalized] = provider
+	}
+	return usable, changed
 }
 
 // SetLicenseChecker wires the commercial feature gate used by monitoring-owned
@@ -5677,6 +5754,7 @@ func (m *Monitor) currentStateWithScope() (models.StateSnapshot, mockModeScope) 
 func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockModeScope) {
 	m.mu.RLock()
 	store := m.resourceStore
+	generation := m.resourceWiringGeneration.Load()
 	m.mu.RUnlock()
 
 	if store == nil {
@@ -5709,12 +5787,20 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 			Msg("[Resources] Suppressing legacy snapshot slices for provider-owned sources")
 	}
 
+	// Provider callbacks can read or re-enter the monitor. Collect without any
+	// publication/wiring lock, then refuse a binding that changed meanwhile.
+	if !scope.current() {
+		return
+	}
+	recordsBySource := m.collectSupplementalRecordsBySource()
+	m.resourcePublishMu.Lock()
+	if m.resourceWiringGeneration.Load() != generation {
+		m.resourcePublishMu.Unlock()
+		return
+	}
 	mark, published := scope.publish(func() bool {
-		recordsBySource := m.collectSupplementalRecordsBySource()
-		supplementalChanges := m.collectSupplementalChanges()
 		if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 			atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
-			recordSupplementalResourceChanges(store, supplementalChanges)
 			for source, records := range recordsBySource {
 				if len(records) == 0 {
 					continue
@@ -5743,14 +5829,20 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot, scope mockMode
 			}
 		}
 
-		recordSupplementalResourceChanges(store, supplementalChanges)
 		return true
 	})
-	if !published {
+	m.resourcePublishMu.Unlock()
+	if !published || m.resourceWiringGeneration.Load() != generation {
 		// The snapshot belongs to the mode the monitor just left.
 		return
 	}
-	m.syncPublishedResourceStore(store, scope, mark)
+	// Drain consume-once changes only for a pass that actually published. No
+	// provider callback runs under resourcePublishMu, and changes already
+	// drained remain history even if a subsequent rewire replaces the binding.
+	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	if m.resourceWiringGeneration.Load() == generation {
+		m.syncPublishedResourceStore(store, scope, mark)
+	}
 }
 
 // resourceSnapshotStore serves one GetAll clone to every consumer of a single

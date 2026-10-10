@@ -112,6 +112,7 @@ type Router struct {
 	monitorResourceAdapter          *unifiedresources.MonitorAdapter
 	monitorResourceAdapters         map[string]*unifiedresources.MonitorAdapter
 	monitorAdapterMu                sync.Mutex
+	monitorSupplementalMu           sync.Mutex // serializes provider updates with complete monitor initialization
 	monitorSupplementalRecords      map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider
 	reportingHandlers               *ReportingHandlers
 	configProfileHandler            *ConfigProfileHandler
@@ -1882,11 +1883,15 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		return
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
-		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(adapter)
-	}
+	r.monitorSupplementalMu.Lock()
+	defer r.monitorSupplementalMu.Unlock()
+	r.configureMonitorDependenciesLocked(m)
+}
 
+// The caller holds monitorSupplementalMu across reading and applying the
+// registry, not just copying the map: a delayed initializer must not reinstall
+// an old provider after a mock switch or withdrawal has completed.
+func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
 	// Tenant monitors must inherit the persisted instance-wide notification
 	// settings. System settings are stored globally, so without this a tenant
 	// monitor created after the allowlist was saved (or after a restart)
@@ -1896,11 +1901,11 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 	if r.persistence != nil {
 		if settings, err := r.persistence.LoadSystemSettings(); err == nil && settings != nil {
 			if nm := m.GetNotificationManager(); nm != nil {
-				if settings.WebhookAllowedPrivateCIDRs != "" {
-					if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
-						log.Error().Err(err).Msg("Failed to apply webhook allowed private CIDRs to tenant monitor")
-					}
+				if err := nm.UpdateAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs); err != nil {
+					log.Error().Err(err).Msg("Failed to apply webhook allowed private CIDRs to tenant monitor")
 				}
+				// An empty allowlist revokes old grants. An empty public URL
+				// keeps the notification manager's existing automatic fallback.
 				if settings.PublicURL != "" {
 					nm.SetPublicURL(settings.PublicURL)
 				}
@@ -1910,46 +1915,45 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		}
 	}
 
-	if len(r.monitorSupplementalRecords) == 0 {
-		return
-	}
-
-	keys := make([]string, 0, len(r.monitorSupplementalRecords))
-	for source := range r.monitorSupplementalRecords {
-		keys = append(keys, string(source))
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		source := unifiedresources.DataSource(key)
-		provider := r.monitorSupplementalRecords[source]
-		m.SetSupplementalRecordsProvider(source, provider)
+	// Apply saved notification policy before the first publication, which can
+	// evaluate alerts. The combined boundary avoids one refresh per source.
+	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+		m.SetResourceStoreAndProviders(adapter, r.monitorSupplementalRecords)
+	} else {
+		m.SetSupplementalRecordsProviders(r.monitorSupplementalRecords)
 	}
 }
 
 func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.DataSource, provider monitoring.MonitorSupplementalRecordsProvider) {
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{source: provider})
+}
+
+func (r *Router) setMonitorSupplementalRecordsProviders(providers map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider) {
 	if r == nil {
 		return
 	}
-
-	normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
-	if normalized == "" {
-		return
-	}
-
-	if r.monitorSupplementalRecords == nil {
-		r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
-	}
-	if provider == nil {
-		delete(r.monitorSupplementalRecords, normalized)
-	} else {
+	r.monitorSupplementalMu.Lock()
+	usable := false
+	for source, provider := range providers {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+		if normalized == "" {
+			continue
+		}
+		usable = true
+		if r.monitorSupplementalRecords == nil {
+			r.monitorSupplementalRecords = make(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider)
+		}
+		// Retain explicit nil withdrawals in initializer snapshots. Omitting a
+		// removed source would leave it installed in already-running tenants.
 		r.monitorSupplementalRecords[normalized] = provider
 	}
-
-	if r.monitor != nil {
-		r.monitor.SetSupplementalRecordsProvider(normalized, provider)
+	if usable && r.monitor != nil {
+		r.configureMonitorDependenciesLocked(r.monitor)
 	}
-	if r.mtMonitor != nil {
+	r.monitorSupplementalMu.Unlock()
+	if usable && r.mtMonitor != nil {
+		// Do not hold the router lock while taking the tenant-manager lock.
+		// Its callback obtains a fresh, serialized registry for each monitor.
 		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
 }
@@ -1970,8 +1974,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
 		}
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
+		r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: trueNASAdapter,
+			unifiedresources.SourceVMware:  vmwareAdapter,
+		})
 		return
 	}
 
@@ -1982,8 +1988,10 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
 	}
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
-	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
+	r.setMonitorSupplementalRecordsProviders(map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: r.trueNASPoller,
+		unifiedresources.SourceVMware:  r.vmwarePoller,
+	})
 }
 
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.
@@ -8441,6 +8449,8 @@ func (a mockSupplementalRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []
 	}
 	return mock.SupplementalRecords(a.source)
 }
+
+func (mockSupplementalRecordsAdapter) SupplementalRecordsMockMode() bool { return true }
 
 func (a mockSupplementalRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
 	return a.GetCurrentRecordsForOrg(orgID)

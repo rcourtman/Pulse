@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -913,6 +914,14 @@ func (m *Monitor) supplementalProviderSnapshot() map[unifiedresources.DataSource
 	}
 	m.mu.RUnlock()
 
+	// The flag flips before the router's post-switch hook runs. Use one mode
+	// for the pair, and keep these optional callbacks outside the monitor lock.
+	mode := mock.IsMockEnabled()
+	for source, provider := range snapshot {
+		if bound, ok := provider.(interface{ SupplementalRecordsMockMode() bool }); ok && bound.SupplementalRecordsMockMode() != mode {
+			delete(snapshot, source)
+		}
+	}
 	if len(snapshot) == 0 {
 		return nil
 	}

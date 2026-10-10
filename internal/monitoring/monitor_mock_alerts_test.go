@@ -694,7 +694,7 @@ func alertTypes(active []alerts.Alert) map[string]int {
 	return types
 }
 
-func TestLiveRefreshIgnoresARegistryRepublishedFromMockMode(t *testing.T) {
+func TestLiveRefreshRejectsCollectedRecordsFromMockMode(t *testing.T) {
 	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
 	pinDefaultMockEstate(t)
 	manager := newMockHostAlertTestManager(t)
@@ -758,7 +758,8 @@ func TestLiveRefreshIgnoresARegistryRepublishedFromMockMode(t *testing.T) {
 		}
 	}
 
-	// The mock-mode refresh now publishes the fixture estate over it.
+	// The old collector finishes, but must be refused before publication.
+	// Collection no longer owns a publication admission spanning the switch.
 	close(provider.release)
 	releasedProvider = true
 	waitForSignal(t, staleDone, 30*time.Second, "mock-mode refresh did not finish after it was released")
@@ -766,20 +767,17 @@ func TestLiveRefreshIgnoresARegistryRepublishedFromMockMode(t *testing.T) {
 	releasedList = true
 	waitForSignal(t, liveDone, 30*time.Second, "live refresh did not finish after it was released")
 
-	if active := manager.GetActiveAlerts(); len(active) != 0 {
-		t.Fatalf("a live refresh evaluated a registry the mock-mode refresh republished, leaving %d fixture alerts: %s",
-			len(active), describeAlerts(active))
+	for _, resource := range store.MonitorAdapter.GetAll() {
+		if slices.Contains(resource.Sources, unifiedresources.SourceVMware) {
+			t.Fatalf("the ended collector republished vSphere fixture resource %s", resource.ID)
+		}
 	}
-	if monitor.mockModeFence.registryCurrent() {
-		t.Fatal("the registry the mock-mode refresh republished counted as current")
+	if !monitor.mockModeFence.registryCurrent() {
+		t.Fatal("the refused collector disturbed the current live publication")
 	}
 
-	// The next live refresh is undisturbed: it replaces the registry and
-	// evaluates the live records.
-	monitor.updateResourceStore(monitor.currentStateWithScope())
-	if !monitor.mockModeFence.registryCurrent() {
-		t.Fatal("an undisturbed live rebuild did not make the registry current")
-	}
+	// The admitted live pass still evaluates its real source-native records;
+	// refusal of old collections must not become blanket alert suppression.
 	types := alertTypes(manager.GetActiveAlerts())
 	if types["zfs-pool-state"] == 0 {
 		t.Fatalf("the undisturbed live refresh raised no alert from the live TrueNAS records: %v", types)
