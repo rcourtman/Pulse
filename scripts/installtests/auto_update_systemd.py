@@ -159,6 +159,8 @@ class NativeLab:
                                                 "deadline_exceeded": True,
                                                 "observed_exit": process.returncode}
             raise RuntimeError("native command deadline exceeded") from None
+        # Private in-memory diagnostic for confined controls, never a receipt field.
+        self._last_output = output
         result = subprocess.CompletedProcess(args, process.returncode, output)
         if result.returncode not in ok:
             self.receipt["command_failure"] = {"command": Path(args[0]).name,

@@ -266,8 +266,11 @@ else:
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):
-                    lab.prepare()
-                    lab.exercise()
+                    try:
+                        lab.prepare()
+                        lab.exercise()
+                    except RuntimeError as error:
+                        self.fail(str(error) + "\nConfined fixture output:\n" + lab._last_output.decode())
                 self.assertEqual([p["name"] for p in lab.receipt["phases"]],
                                  ["forward", "manual-reverse", "failed-active", "failed-inactive",
                                   "failed-masked", "bad-signature", "incomplete-restore"])
