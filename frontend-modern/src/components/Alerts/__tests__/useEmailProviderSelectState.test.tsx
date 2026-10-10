@@ -48,9 +48,6 @@ const buildConfig = (overrides: Record<string, unknown> = {}) => ({
   to: ['alerts@example.com'],
   tls: false,
   startTLS: true,
-  replyTo: '',
-  maxRetries: 3,
-  retryDelay: 5,
   rateLimit: 60,
   ...overrides,
 });

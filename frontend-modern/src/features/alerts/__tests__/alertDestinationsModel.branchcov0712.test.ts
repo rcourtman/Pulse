@@ -21,9 +21,6 @@ function makeUIEmailConfig(overrides: Partial<UIEmailConfig> = {}): UIEmailConfi
     to: ['alerts@example.com'],
     tls: true,
     startTLS: true,
-    replyTo: '',
-    maxRetries: 3,
-    retryDelay: 60,
     rateLimit: 0,
     ...overrides,
   };
@@ -82,8 +79,8 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Exact payload shape — toStrictEqual verifies that UI-only fields
-  // (replyTo, maxRetries, retryDelay) are absent from the
+  // Exact payload shape — toStrictEqual verifies that unsupported fields
+  // (replyTo, maxRetries, retryDelay) stay absent from the
   // output and that falsy scalar values pass through unchanged.
   // -----------------------------------------------------------------------
   describe('payload shape', () => {
@@ -100,9 +97,6 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
           to: ['ops@example.com'],
           tls: false,
           startTLS: false,
-          replyTo: 'reply@example.com',
-          maxRetries: 5,
-          retryDelay: 120,
           rateLimit: 100,
         }),
       );
@@ -128,13 +122,13 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
     });
 
     it('does not include replyTo, maxRetries, or retryDelay in the payload', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({
-          replyTo: 'reply@example.com',
-          maxRetries: 10,
-          retryDelay: 300,
-        }),
-      );
+      const staleDraft = {
+        ...makeUIEmailConfig(),
+        replyTo: 'reply@example.com',
+        maxRetries: 10,
+        retryDelay: 300,
+      };
+      const result = buildEmailConfigPayload(staleDraft);
       expect(result).not.toHaveProperty('replyTo');
       expect(result).not.toHaveProperty('maxRetries');
       expect(result).not.toHaveProperty('retryDelay');

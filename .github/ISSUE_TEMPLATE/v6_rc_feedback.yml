@@ -14,6 +14,8 @@ body:
 
         Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
+        If a credential has already been posted, revoke it with its issuer and remove the public copy; editing a post is not revocation or proof that every copy is gone. Do not repost the original evidence; use the [private security disclosure route](https://github.com/rcourtman/Pulse/security/policy) for sensitive details.
+
   - type: dropdown
     id: feedback_type
     attributes:

@@ -1,7 +1,8 @@
 name: Reclaim closed PR CI capacity
 
-# A closed pull request no longer needs its queued or running verdicts. Run in
-# the base repository context so fork closures can release hosted capacity too;
+# A closed pull request no longer needs its requested, waiting, pending, queued
+# or running verdicts. Run in the base repository context so fork closures can
+# release hosted capacity too;
 # no pull-request code, artifact, cache, or secret enters this privileged job.
 on:
   pull_request_target:
