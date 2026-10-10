@@ -3610,7 +3610,7 @@ the mock-mode fence above): it stays a plain projection of current state for
 the window before a rebuild in the new epoch, after which the registry applies
 the links again. `TestMockUnifiedViewAppliesOperatorManualLinks` in
 `internal/monitoring/monitor_host_agents_test.go` pins the broadcast, the
-freshness advance and the cache, `TestFixtureGraphAppliesManualLinksAtEachIngestStage`
+freshness advance and the cache, `TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary`
 and `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
 `internal/mock/platform_fixtures_test.go` pin the linked fixture build, and
 `TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph` in

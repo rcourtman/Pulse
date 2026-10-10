@@ -7054,10 +7054,12 @@ links" below).
   its chain carries, so identical records leave the pair set and every
   folded ID as they were. The resources API's snapshot-seeded fallback,
   used only while the monitor has published no unified listing, still
-  ingests the snapshot and each supplemental source with a pass per call,
-  and so does the mock-mode fixture build (`internal/mock`): a chain whose
-  answer depends on the order its members' sources arrive in can settle
-  differently there than in the monitor's rebuild.
+  ingests the snapshot and each supplemental source with a pass per call.
+  The mock-mode fixture build (`internal/mock`) draws the rebuild's boundary
+  (`DeferManualLinks`, `ApplyDeferredManualLinks`; see "Mock-mode unified
+  view applies operator links"), so a chain whose answer depends on the
+  order its members' sources arrive in settles there as it does in the
+  monitor's rebuild.
 - Rows fold along the chain's links, deepest first, so each fold record
   names a stored link's pair. The links form a spanning tree from the root
   that follows the fold records the rows already carry before any other
@@ -7288,13 +7290,24 @@ identity pins, canonical-ID successions or change records, and the view's read
 state forwards no history to the operator's store, so fixture data stays out
 of durable state through it.
 
-- The links apply at each ingest stage, as in the live rebuild: the snapshot,
-  then the TrueNAS and vSphere records, then availability. An availability
-  check that names the folded resource by source reference resolves through
-  the fold and projects onto the primary. Folding the finished list instead
-  dropped the check with the folded row. A check that names the folded
-  resource by canonical ID still loses its target, as live (fold history
-  above).
+- The links apply at the live rebuild's boundary (the monitor's rebuild
+  holds the link pass back, above): the build holds the pass back
+  (`DeferManualLinks`), ingests the snapshot and the TrueNAS and vSphere
+  records, runs it once over that estate (`ApplyDeferredManualLinks`, which
+  takes the stale thresholds the ingests were given, nil for the registry's
+  own), and only then ingests availability. A chain of links is judged over
+  every member's source at once, as the rebuild judges it, so the row that
+  survives does not depend on which source arrives first: a Proxmox storage,
+  a TrueNAS VM and a vSphere VM linked in a cycle keep the TrueNAS VM whose
+  link is the oldest, where a pass after the TrueNAS records had already
+  folded it into the storage and kept the vSphere VM. A registry with no
+  links defers nothing, so the shared memoized snapshot is built exactly as
+  before. An availability check that names the folded resource by source
+  reference resolves through the fold and projects onto the primary, and so
+  does one that names it by canonical ID, which the registry resolves through
+  the fold history (`TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary`
+  in `internal/unifiedresources/availability_link_test.go`). Folding the
+  finished list instead dropped the check with the folded row.
 - A link reaches the view when the adapter's next rebuild loads it, the same
   point at which the live broadcast picks it up. The view's cache is keyed on
   the fixture data version and on the links' resource pairs and primaries, so
@@ -7325,10 +7338,17 @@ the rebuild and freshness advance on a link change with the fixture data
 version held, the cached build afterwards, the same rows as a store-backed
 registry seeded through resource ingest the way the resources API seeds, and
 no change rows reaching the store through the view.
-`TestFixtureGraphAppliesManualLinksAtEachIngestStage` and
+`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` and
 `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
-`internal/mock/platform_fixtures_test.go` pin the staged availability
-projection and the untouched shared snapshot, and
+`internal/mock/platform_fixtures_test.go` pin the rebuild's boundary (the
+cycle above settling on the row the monitor's rebuild keeps, which a pass per
+source does not, and the availability projection after the pass) and the
+untouched shared snapshot,
+`TestRegistryHoldsManualLinksBackUntilTheDeferredPass` and
+`TestRegistryDeferredLinkPassJudgesFreshnessByTheCallersThresholds` in
+`internal/unifiedresources/registry_merge_policy_test.go` pin the exported
+pair (the snapshot and record ingests wait, the pass runs once, and it judges
+freshness by the thresholds it is given), and
 `TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry` in
 `internal/unifiedresources/registry_test.go` pins the store-less registry
 against the store-backed one and the per-generation `ManualLinks` snapshot.

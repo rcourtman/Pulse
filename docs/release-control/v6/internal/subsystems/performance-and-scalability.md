@@ -3750,6 +3750,22 @@ nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
 
+### Mock linked fixture builds use the rebuild's link boundary
+
+The mock fixture build holds the operator-link pass back until the snapshot and
+every supplemental source but availability are ingested, then runs one deferred
+pass before availability (`DeferManualLinks`, `ApplyDeferredManualLinks`), as
+the monitor's rebuild does; the availability ingest runs its own pass after it,
+as in the rebuild. The shared memoized snapshot has no links, so it defers
+nothing and builds as before (about 52 ms and 65 MB on the default fixture
+estate, with or without the change). A linked build, which runs only when the
+fixture data version or the link list changes, pays one extra refresh round
+after the deferred pass: about 3 ms and 5 MB more on that estate, the same
+round the rebuild runs.
+`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` in
+`internal/mock/platform_fixtures_test.go` pins the result a pass per source
+does not reach.
+
 ### Alert passes resolve metrics targets without materializing the estate
 
 An alert pass makes one `Monitor.MetricsTargetForResource` call per resource
