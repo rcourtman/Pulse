@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "bcabde65c0628a17a6c67d3f8fb6f7dc761cab45",
+  "verified_at": "2026-10-10T06:10:08.925Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx",
+    "frontend-modern/src/features/alerts/helpers.ts",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/utils/alertEmailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx": "af3a0fd3ce727588d789c56a55e14dbbb960c7b8d89b594033040c4a48744fac",
+    "frontend-modern/src/features/alerts/helpers.ts": "f4c1ad656338ac5fca9ab5a183b5cfdcc8718085d76932108722c5ceb08df3bf",
+    "frontend-modern/src/features/alerts/types.ts": "b28f546f700fbfb04794811137a15759bf491591714aa6f9a2bb437ea8ba0cb5",
+    "frontend-modern/src/utils/alertEmailPresentation.ts": "5fc09fa8924277130f9722349bbd90df6927ec74841637aeb487147243dcf84b"
+  },
+  "routes": [
+    "/qualification/email (local fixture for the existing /alerts/notifications email panel; not a product route)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "name": "desktop-light"
+    },
+    {
+      "width": 1365,
+      "height": 900,
+      "name": "desktop-dark"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "name": "phone-light"
+    },
+    {
+      "width": 320,
+      "height": 844,
+      "name": "narrow-dark"
+    }
+  ],
+  "states": [
+    "Production AlertEmailDestinationsSection, EmailProviderSelect, destination state, NotificationsAPI and CSS, with synthetic local GET/PUT responses; Playwright 1.56.1 matches the integration lock. Desktop Chromium 141.0.7390.37 and narrow WebKit 26.0, light/dark.",
+    "Reply-to, max retries and retry delay are absent before and after expanding advanced settings. The form explains that Pulse manages retries.",
+    "Supported SMTP/From/rate/TLS edits survive the real save payload/API and reload while preserving masked password, recipients, tags, matching mode and minimum severity.",
+    "Off-state settings remain editable without enabling delivery; focus moves to the revealed provider control and Send test email remains disabled. Eight final screenshots inspected; changed labels/help fit, including 320 px. The inherited panel description truncates at 320 px.",
+    "These synthetic checks are not native SMTP, physical-phone, ordinary notification acceptance, protected publication or a release."
+  ],
+  "interactions": [
+    "32 assertion groups: load and expand; edit From/rate/security; save and reload; switch email off, reveal settings, edit rate, save and reload. Eight final on/off captures.",
+    "Exact wire payloads checked for each on/off save. No Test, Retry, Dismiss, Relay, provider/native call, unexpected API request or page error; no horizontal overflow.",
+    "Browser and preview server closed. Earlier fixture failures are retained separately; their exit 1 results are not cleared by this corrected verification."
+  ],
+  "evidence_sha256": {
+    "script": "43ea7edf443bd38ef7143be0c960082d739fc93dcb4cf288693b1baab7ee04b6",
+    "results": "1f485bfd85dc4a1ac995d0e85c28d3823cde022d08f73424990378ddc3bcac37",
+    "captures": {
+      "desktop-light-saved-on.png": "c55553f677140d22e3960916fe6af4ec43bfab684b6300c195e0b3e8b6dd5d64",
+      "desktop-light-saved-off.png": "e5e42c7f75d8d643b13cdea14af9192937a410059737d2ef2bb901dd8b9c2728",
+      "desktop-dark-saved-on.png": "64ac9d1e402b88e381eda4960f25e44c83cc93f8525b68d895ce23e483bee05c",
+      "desktop-dark-saved-off.png": "791c6f6382f7c2bc29be266a9317aea958adf199975a501976522cfa0e0ad9d5",
+      "phone-light-saved-on.png": "46d893531186b236d987de5c6d13cee60de1f1605669f7e6833c600d1f15a9dc",
+      "phone-light-saved-off.png": "1e7312b7241e526a307aa9f5d7d344e3ce13a54c3fff27e7ecbbcae70e00e190",
+      "narrow-dark-saved-on.png": "704ce0929a70915dfe6817260d9a7c3013940b17532aba182575204d7be08974",
+      "narrow-dark-saved-off.png": "6b34f46279a6a49e16b7a7b3a989c31a3864a59fd2b78f3582248b660791bbdd"
+    }
+  }
+}

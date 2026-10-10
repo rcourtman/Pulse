@@ -4,7 +4,6 @@ import {
   ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER,
   ALERT_EMAIL_HIDE_ADVANCED_OPTIONS_LABEL,
   ALERT_EMAIL_HIDE_SETUP_INSTRUCTIONS_LABEL,
-  ALERT_EMAIL_MAX_RETRIES_LABEL,
   ALERT_EMAIL_PASSWORD_LABEL,
   ALERT_EMAIL_PASSWORD_PLACEHOLDER,
   ALERT_EMAIL_RATE_LIMIT_LABEL,
@@ -12,9 +11,6 @@ import {
   ALERT_EMAIL_RECIPIENTS_FALLBACK_FROM,
   ALERT_EMAIL_RECIPIENTS_LABEL,
   ALERT_EMAIL_RECIPIENTS_PLACEHOLDER_SUFFIX,
-  ALERT_EMAIL_REPLY_TO_LABEL,
-  ALERT_EMAIL_REPLY_TO_PLACEHOLDER,
-  ALERT_EMAIL_RETRY_DELAY_LABEL,
   ALERT_EMAIL_SECURITY_LABEL,
   ALERT_EMAIL_SECURITY_NONE_LABEL,
   ALERT_EMAIL_SECURITY_STARTTLS_LABEL,
@@ -193,11 +189,9 @@ describe('alertEmailPresentation — branch coverage (batch 0718)', () => {
       expect(ALERT_EMAIL_SMTP_PORT_PLACEHOLDER).toBe('587');
     });
 
-    it('exposes the from / reply-to label + placeholder vocabulary', () => {
+    it('exposes the from-address label + placeholder vocabulary', () => {
       expect(ALERT_EMAIL_FROM_ADDRESS_LABEL).toBe('From address');
       expect(ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER).toBe('noreply@example.com');
-      expect(ALERT_EMAIL_REPLY_TO_LABEL).toBe('Reply-to address');
-      expect(ALERT_EMAIL_REPLY_TO_PLACEHOLDER).toBe('admin@example.com');
     });
 
     it('exposes the username label + both placeholder constants', () => {
@@ -237,11 +231,6 @@ describe('alertEmailPresentation — branch coverage (batch 0718)', () => {
     it('exposes the rate-limit label + suffix vocabulary', () => {
       expect(ALERT_EMAIL_RATE_LIMIT_LABEL).toBe('Rate limit');
       expect(ALERT_EMAIL_RATE_LIMIT_SUFFIX).toBe('/min');
-    });
-
-    it('exposes the retry vocabulary (max retries + retry delay)', () => {
-      expect(ALERT_EMAIL_MAX_RETRIES_LABEL).toBe('Max retries');
-      expect(ALERT_EMAIL_RETRY_DELAY_LABEL).toBe('Retry delay (seconds)');
     });
 
     it('exposes the test-email idle vocabulary (testing arm covered above)', () => {
