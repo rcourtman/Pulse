@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Docker server update plans preserve the saved deployment
+
+The existing update-plan API and banner's copyable instructions must not guess
+the container name or a replacement command without the operator's deployment
+definition. The Community Docker plan provides only a shell-literal image pull;
+it then requires a consistent private mounted-data backup, the previous image
+and the original Compose, saved run or container-manager definition. Recreation
+keeps mounts, ports, environment and restart policy, affects only Pulse and uses
+the actual service/container name. A failed pull leaves the running container
+unchanged; a second Pulse must not share its data. Installed image, version and
+health need readback, and image rollback alone cannot undo data migrations.
+
+Configured image repositories and the version remain one literal POSIX shell
+argument, including quotes, substitutions, whitespace and newlines. No backend
+shell execution, automatic Docker apply, schema change, guessed stop/remove/run
+or Compose mutation is added. The Pro edition still withholds Community pulls
+and uses its private digest-pinned broker/portal route.
+
+`TestDockerUpdatePlanPreservesSavedDeployment`, the real-shell
+`TestDockerUpdatePullInstructionIsLiteral` controls (a function replaces Docker,
+never a daemon), and `TestHandleGetUpdatePlan_DockerSavedDeployment` verify plan
+safety and the actual JSON handler path. These are source/recipe proofs, not a
+native Docker upgrade, published availability or an installed recovery result.
+
 ### Server service discovery cannot short-read or default after an unknown inventory
 
 The server installer consumes one bounded, complete `systemctl list-unit-files`
