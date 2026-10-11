@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "base_sha": "45a211387d5f3d008dc2ea9eb9b5d9c46001d0dd",
+  "verified_at": "2026-10-11T03:20:45.931971Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/utils/updatesPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "8c8bc717962306dbf1b2414bf5ab92016da1d9b1c81c7dd65295279b3de44fca",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "4a61962b92a34902b95704e260908f89cc9e99b56355ffde0902021c88e3ee60",
+    "frontend-modern/src/utils/updatesPresentation.ts": "a953fa9239a35a78b543edd1d695e56f2af33c1cfda5baf872630d9572952e55"
+  },
+  "routes": [
+    "/browser-tests/held-operator-time.html?surface=once",
+    "/browser-tests/held-operator-time.html?surface=server",
+    "/browser-tests/held-operator-time.html?surface=recurring",
+    "/browser-tests/held-operator-time.html?surface=updates"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Eight complete final-content cases: six final maintenance cases and two sufficient unchanged update cases. Desktop Chromium 141.0.7390.37/light and phone WebKit 26.0/dark; Playwright 1.56.1 matches the integration lock. Ten selected captures inspected. Not a fabricated single all-green run.",
+    "Held local one-off moves scheduled \u2192 active \u2192 expired at half-open boundaries without refetching or discarding policy/scheduler edits. Expected-offline, retired and never-auto-remediate controls persist.",
+    "Server-active occurrence is preserved as last reported after its own end passes, with current status explicitly unrefreshed. Neither monitoring resumption nor a new recurring occurrence is inferred. Inactive recurrence remains configured.",
+    "Successful global check ages 0s \u2192 1 min \u2192 2 mins without a new check, installation or verdict. Preview automatic-update lock and unsaved channel survive; source build withdraws check age and keeps Check Now unavailable.",
+    "No resource/API/schema/permission/action changes or native guest/backup/notification/updater, physical-phone, installed or publication acceptance."
+  ],
+  "interactions": [
+    "Real controls use desktop mouse and phone touch. Edit the existing policy note and schedule reason, cross shared-clock boundaries, and remove the operator-state source; withdrawn evidence stays absent.",
+    "Preview selection uses the existing pressed button; locks and source-build availability checked. Real update store obtains one local synthetic GET check, then no further check or operation.",
+    "Real components, router, CSS, query/store and existing shared clock; page clocks advance while held synthetic inputs remain unchanged. Every selected case has no page errors, unspecified API, off-origin request or mutation; no horizontal overflow. Own contexts, browsers and Vite server closed. Host descendant cleanup is not independently reported."
+  ],
+  "case_origins": [
+    {
+      "attempt": "browser-5",
+      "engine": "desktop",
+      "surface": "once",
+      "controls": 4
+    },
+    {
+      "attempt": "browser-5",
+      "engine": "desktop",
+      "surface": "server",
+      "controls": 2
+    },
+    {
+      "attempt": "browser-5",
+      "engine": "desktop",
+      "surface": "recurring",
+      "controls": 2
+    },
+    {
+      "attempt": "browser-5",
+      "engine": "phone",
+      "surface": "once",
+      "controls": 4
+    },
+    {
+      "attempt": "browser-5",
+      "engine": "phone",
+      "surface": "server",
+      "controls": 2
+    },
+    {
+      "attempt": "browser-5",
+      "engine": "phone",
+      "surface": "recurring",
+      "controls": 2
+    },
+    {
+      "attempt": "browser-3",
+      "engine": "desktop",
+      "surface": "updates",
+      "controls": 4
+    },
+    {
+      "attempt": "browser-3",
+      "engine": "phone",
+      "surface": "updates",
+      "controls": 4
+    }
+  ]
+}
