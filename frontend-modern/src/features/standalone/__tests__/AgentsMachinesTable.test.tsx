@@ -167,7 +167,7 @@ describe('AgentsMachinesTable', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
     try {
       const [machines, setMachines] = createStore([
-        resource({ id: 'silent', lastSeen: start, cpu: 24, agent: { stale: false } }),
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
       ]);
       const original = JSON.stringify(machines);
       const [mounted, setMounted] = createSignal(true);
