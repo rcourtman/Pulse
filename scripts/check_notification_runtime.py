@@ -225,10 +225,21 @@ class Journey:
                      {'name': 'unlisted-loopback', 'url': f'http://127.0.0.2:{self.sink.port}/blocked',
                       'enabled': True, 'method': 'POST', 'service': 'generic'}, expected=400)
 
+    def save_system_policy(self):
+        # This process's deployment owns telemetry=false. Do not weaken that
+        # lock or include its field in an otherwise unrelated settings patch.
+        self.request('/api/system/settings/update', {'telemetryEnabled': False}, expected=409)
+        self.phase('deployment-telemetry-lock-preserved')
+        self.request('/api/system/settings/update', {'publicURL': PUBLIC_URL,
+                     'webhookAllowedPrivateCIDRs': '127.0.0.1/32'})
+
     def assert_settings(self):
         settings = self.request('/api/system/settings')
         require(settings.get('publicURL') == PUBLIC_URL and
                 settings.get('webhookAllowedPrivateCIDRs') == '127.0.0.1/32', 'saved system policy changed')
+        require(settings.get('telemetryEnabled') is False and
+                settings.get('envOverrides', {}).get('PULSE_TELEMETRY') is True,
+                'deployment telemetry restriction changed')
         cfg = self.request('/api/alerts/config')
         require(cfg.get('enabled') and cfg.get('activationState') == 'active' and
                 cfg.get('agentDefaults', {}).get('cpu', {}).get('trigger') == 80,
@@ -277,8 +288,7 @@ class Journey:
             require(any(c.name == 'pulse_csrf' for c in self.cookies), 'login missing CSRF cookie')
             require(self.request('/api/resources?limit=500').get('data') == [], 'initial live estate not empty')
             self.phase('authenticated-empty-live-startup')
-            self.request('/api/system/settings/update', {'publicURL': PUBLIC_URL,
-                         'webhookAllowedPrivateCIDRs': '127.0.0.1/32', 'telemetryEnabled': False})
+            self.save_system_policy()
             self.denied_destination()
             self.request('/api/notifications/webhooks', {'name': 'owned-first-alert',
                          'url': f'http://127.0.0.1:{self.sink.port}/owned-alert', 'enabled': True,

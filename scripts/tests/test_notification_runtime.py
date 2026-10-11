@@ -103,6 +103,37 @@ class NotificationRuntimeControls(unittest.TestCase):
                 journey.request('/api/resources')
         journey.client.open.assert_called_once()
 
+    def test_settings_patch_preserves_and_tests_deployment_telemetry_lock(self):
+        journey = self.journey()
+        journey.request = mock.Mock()
+        with contextlib.redirect_stdout(io.StringIO()):
+            journey.save_system_policy()
+        self.assertEqual(journey.request.call_args_list, [
+            mock.call('/api/system/settings/update', {'telemetryEnabled': False}, expected=409),
+            mock.call('/api/system/settings/update', {'publicURL': RUNTIME.PUBLIC_URL,
+                      'webhookAllowedPrivateCIDRs': '127.0.0.1/32'})])
+        self.assertEqual(journey.phases, ['deployment-telemetry-lock-preserved'])
+        handler = (ROOT / 'internal/api/system_settings.go').read_text()
+        self.assertIn('rawRequest["telemetryEnabled"]; ok && h.config.EnvOverrides["PULSE_TELEMETRY"]', handler)
+
+    def test_policy_readback_requires_disabled_locked_telemetry(self):
+        system = {'publicURL': RUNTIME.PUBLIC_URL, 'webhookAllowedPrivateCIDRs': '127.0.0.1/32',
+                  'telemetryEnabled': False, 'envOverrides': {'PULSE_TELEMETRY': True}}
+        alerts = {'enabled': True, 'activationState': 'active',
+                  'agentDefaults': {'cpu': {'trigger': 80}}}
+        for telemetry, lock, allowed in [(False, True, True), (True, True, False),
+                                         (None, True, False), (False, False, False)]:
+            with self.subTest(telemetry=telemetry, lock=lock):
+                journey = self.journey()
+                settings = copy.deepcopy(system)
+                settings['telemetryEnabled'], settings['envOverrides']['PULSE_TELEMETRY'] = telemetry, lock
+                journey.request = mock.Mock(side_effect=[settings, alerts])
+                if allowed:
+                    journey.assert_settings()
+                else:
+                    with self.assertRaisesRegex(RUNTIME.Failure, 'telemetry restriction'):
+                        journey.assert_settings()
+
     def test_only_clean_matching_checkout_and_binary_admitted(self):
         valid = '\tbuild\tvcs=git\n\tbuild\tvcs.revision=' + SHA + '\n\tbuild\tvcs.modified=false\n'
         cases = [(SHA, 0, valid, True),
