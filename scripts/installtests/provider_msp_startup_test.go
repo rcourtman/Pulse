@@ -1,3 +1,5 @@
+//go:build linux
+
 package installtests
 
 import (
@@ -265,12 +267,17 @@ func startupCommand(t *testing.T, env []string, dir, program string, args ...str
 	defer cancel()
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir, cmd.Env = dir, env
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
 		// Environment and licence contents are never diagnostic output.
-		t.Fatalf("%s command failed: %v\n%s", filepath.Base(program), err, output)
+		t.Fatalf("%s command failed: %v\n%s\n%s", filepath.Base(program), err, stdout.String(), stderr.String())
 	}
-	return string(output)
+	if stderr.Len() != 0 {
+		// Compose warnings are evidence, not container IDs, ports or CLI facts.
+		t.Logf("%s diagnostics: %s", filepath.Base(program), stderr.String())
+	}
+	return stdout.String()
 }
 
 func startupRefusal(t *testing.T, env []string, dir, want, program string, args ...string) {
@@ -383,4 +390,18 @@ func startupFacts(output string) map[string]string {
 		}
 	}
 	return facts
+}
+
+// Compose may warn on stderr about optional unset variables even when it
+// succeeds. Never pass those diagnostics as the next docker exec identity.
+func TestProviderMSPStartupCommandSeparatesDiagnostics(t *testing.T) {
+	for _, value := range []string{"synthetic-container-id", "127.0.0.1:8443", "provider_msp_bootstrap_ok=true"} {
+		t.Run(value, func(t *testing.T) {
+			output := startupCommand(t, []string{"PATH=" + os.Getenv("PATH")}, t.TempDir(), "sh", "-c",
+				`printf '%s\n' "$1"; printf 'optional variable warning\n' >&2`, "fixture", value)
+			if output != value+"\n" {
+				t.Fatalf("command facts include diagnostics: %q", output)
+			}
+		})
+	}
 }

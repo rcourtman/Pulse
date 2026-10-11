@@ -7781,3 +7781,20 @@ or failed parsers, failed transport with a plausible body, redirects, pins and
 downgrade refusal. Existing extracted-function tests include the shared selector.
 These are source-level selection controls, not native installation, published
 release acceptance or a repair to a third-party community helper.
+
+
+### Combined-batch native fixture reconciliation (11 October 2026)
+
+The real provider-MSP startup fixture is Linux-only at compile time, matching
+its existing Linux transport admission. Its cloud-control-plane import must not
+pull Unix filesystem types into Windows installer test compilation. Windows
+installer and lifecycle tests remain enabled; the startup fixture still runs in
+the Linux process proof and hosted Compose job.
+
+Successful command stdout alone supplies container identities, published ports
+and bootstrap facts. Stderr warnings remain logged evidence, never arguments to
+the next Docker command. Failure diagnostics retain both streams and the original
+nonzero exit. `TestProviderMSPStartupCommandSeparatesDiagnostics` checks three
+consumer shapes with controlled successful stderr; it is not Docker acceptance.
+Hosted mounted-secret/readiness/persistence/refusal/cleanup checks remain required.
+Frontend fixture reformatting retains all assertions and changes no runtime UI.

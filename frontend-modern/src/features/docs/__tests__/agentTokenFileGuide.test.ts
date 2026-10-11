@@ -25,7 +25,9 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     expect(link?.getAttribute('href')).toBe(`#${id}`);
     expect(link?.hasAttribute('data-doc-link')).toBe(false);
     expect(link?.hasAttribute('target')).toBe(false);
-    expect(article.querySelector(`#${id}`)?.textContent).toBe('Token-file format is not shell syntax');
+    expect(article.querySelector(`#${id}`)?.textContent).toBe(
+      'Token-file format is not shell syntax',
+    );
     expect(guide).toBe(
       readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/UNIFIED_AGENT.md'), 'utf8'),
     );
@@ -55,10 +57,15 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     ].entries()) {
       expect(rows[index].textContent).toContain(phrase);
     }
-    const text = parts.map((element) => element.textContent).join(' ').replace(/\s+/g, ' ');
+    const text = parts
+      .map((element) => element.textContent)
+      .join(' ')
+      .replace(/\s+/g, ' ');
     expect(text).toContain('not the value, length, hint, screenshot or file');
     expect(text).toContain('Do not print, source, upload or edit the installed token file');
     expect(text).toContain('not proof of accepted reporting');
-    expect(parts.some((element) => element.matches('pre') || element.querySelector('pre'))).toBe(false);
+    expect(parts.some((element) => element.matches('pre') || element.querySelector('pre'))).toBe(
+      false,
+    );
   });
 });
