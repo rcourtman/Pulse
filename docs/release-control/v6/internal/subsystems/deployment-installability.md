@@ -4871,18 +4871,20 @@ governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
 The hosted control-plane source builder and integration mock builder are both
-on the reviewed `golang:1.26.8-alpine` digest
-`sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c`.
+on the reviewed `golang:1.26.9-alpine` digest
+`sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade`.
 `TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
 it does not pull the image, prove its registry contents, or qualify a deployed
 control plane. The release publisher's prebuilt control-plane target is a
 separate path and does not rebuild its binary from this stage.
-As of 2026-08-27, the governed release floor is Go `1.26.7`. It supersedes
-`1.26.5`, whose standard library is reachable through seven vulnerable Pulse
-call paths reported by `govulncheck`, including HTTP/TLS, URL parsing, SAML XML
-decoding, HTML templating, and public-key parsing. Both source-built container
-stages pin the Docker Official Images Linux amd64 manifest
-`sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468`;
+As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
+`1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
+call paths reported by `govulncheck` after the 2026-10-08 advisories, including
+`net/http`, `crypto/tls`, `html/template`, `os`, and `net/textproto`. The
+`golang.org/x/net` floor is `v0.60.0` for the same advisories. Source-built
+container stages pin the Docker Official Images manifest list for
+`golang:1.26.9-alpine`,
+`sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
