@@ -443,8 +443,24 @@ INSTALLER
   }
   sleep() { :; }
 
+  # This is a RETURN-trap control with a simulated manager and script binary,
+  # not a Linux process-identity test. Supply its verification handoff explicitly
+  # and require it to be reached for the exact service/new version. Real /proc
+  # refusals remain in test_auto_update_service_state.py and native CI.
+  AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS=0
+  verify_update_running_executable() {
+    [[ $# -eq 1 && "$1" == pulse ]] || return 1
+    ((AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS += 1))
+    [[ "$(get_current_version)" == v5.1.25 ]]
+  }
+
   trap - RETURN 2>/dev/null || true
   perform_update "v5.1.25" || status=1
+
+  if (( AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS != 1 )); then
+    echo "successful trap control did not reach its running-executable handoff exactly once" >&2
+    status=1
+  fi
 
   local leaked
   leaked="$(trap -p RETURN)"
@@ -460,6 +476,10 @@ INSTALLER
   leaked="$(trap -p RETURN)"
   if [[ -n "$leaked" ]]; then
     echo "perform_update leaked a RETURN trap on the prerelease refusal path: ${leaked}" >&2
+    status=1
+  fi
+  if (( AUTOUPDATE_TRAP_RUNTIME_VERIFICATIONS != 1 )); then
+    echo "prerelease refusal unexpectedly reached running-executable verification" >&2
     status=1
   fi
 
