@@ -133,6 +133,7 @@ All endpoints require admin authentication.
 | `GET` | `/api/truenas/connections` | List all configured TrueNAS connections |
 | `POST` | `/api/truenas/connections` | Add a new TrueNAS connection |
 | `DELETE` | `/api/truenas/connections/{id}` | Remove a TrueNAS connection |
+| `PUT` | `/api/truenas/connections/{id}` | Update a saved connection; send only the fields to change, and never a masked secret |
 | `POST` | `/api/truenas/connections/test` | Test a connection before saving |
 
 ### Testing and adding a connection (API)
