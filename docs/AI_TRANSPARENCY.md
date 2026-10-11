@@ -94,8 +94,9 @@ The 14 days start with that stable-release retest reply, not the fix commit,
 a beta or a release candidate. Only retest when it is safe; do not repeat an
 outage, update or backup just to answer.
 
-If neither the reporter nor another person reports the same problem during
-those 14 days, the issue may be closed with a note and the
+Only after at least 14 days without any reply from the reporter, and with no
+other person reporting the same problem since that retest request, may the
+issue be closed with a note and the
 `closed-needs-retest-timeout` label. This is a retest timeout, **not confirmed
 resolution**. It does not apply to feature requests, issues labelled
 `needs-human`, or reports with an unfixed or unexplained symptom.

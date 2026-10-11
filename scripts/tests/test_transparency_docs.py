@@ -76,7 +76,8 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("closed after 14 days without a reply and can be reopened", text)
                 self.assertIn("start with that stable-release retest reply", text)
                 self.assertIn("not the fix commit, a beta or a release candidate", text)
-                self.assertIn("neither the reporter nor another person reports the same problem", text)
+                self.assertIn("at least 14 days without any reply from the reporter", text)
+                self.assertIn("no other person reporting the same problem since that retest request", text)
 
     def test_timeout_is_not_confirmed_resolution_and_has_explicit_exclusions(self):
         for path, text in self.documents():

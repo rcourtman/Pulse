@@ -39,7 +39,10 @@ describe('public issue follow-through guidance', () => {
     const emphasis = paragraphs[2].querySelector('strong');
     expect(emphasis).not.toBeNull();
     expect(prose(emphasis!)).toBe('not confirmed resolution');
-    expect(prose(paragraphs[2])).toContain('neither the reporter nor another person');
+    expect(prose(paragraphs[2])).toContain('at least 14 days without any reply from the reporter');
+    expect(prose(paragraphs[2])).toContain(
+      'no other person reporting the same problem since that retest request',
+    );
     expect(prose(paragraphs[2])).toContain('an unfixed or unexplained symptom');
   });
 
