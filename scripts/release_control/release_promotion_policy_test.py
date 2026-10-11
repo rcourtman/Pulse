@@ -267,8 +267,8 @@ def rc_packet_paths_for_version(version: str) -> tuple[str, str, str] | None:
 
 
 def support_prerelease_packet_paths_for_version(version: str) -> tuple[str, str] | None:
-    """Return release-notes and changelog paths for post-GA support RC versions."""
-    if not re.match(r"^6\.\d+\.\d+-rc\.\d+$", version):
+    """Return release-notes and changelog paths for post-GA support beta and RC versions."""
+    if not re.match(r"^6\.\d+\.\d+-(?:rc|beta)\.\d+$", version):
         return None
     if version.startswith("6.0.0-rc."):
         return None
@@ -1661,7 +1661,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 release_notes = read(release_notes_path)
                 changelog = read(changelog_path)
 
-                self.assertIn("current v6 release candidate packet", release_index)
+                packet_label = "beta" if "-beta." in current_version else "release candidate"
+                self.assertIn(f"current v6 {packet_label} packet", release_index)
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
                 self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
