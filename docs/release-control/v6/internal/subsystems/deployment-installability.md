@@ -175,6 +175,17 @@ persistent-file hashes, restoration mode, backup disposition and owned cleanup.
 Seven phases cover forward/manual reverse, failed active/inactive/masked installs,
 invalid signatures and an incomplete restore that retains its backup without start.
 
+The independent active-runtime oracle brackets its process-byte read with two
+matching systemd observations after API readiness, including load, activity,
+positive decimal PID and mask/enablement. Both the running executable and the
+final installed executable must match the authenticated fixture hash, not just
+each other. A changed/failed observation, disappearing process or destination
+drift refuses the phase without any service-control action. Portable
+`test_runtime_readback_rejects_post_comparison_drift` controls reject each drift,
+including equally wrong running/installed bytes; the Go harness requires its
+completed verdict. These are acceptance-oracle controls, not a native systemd
+result or evidence of the cause of a customer interruption.
+
 The test uses signed local archives/installers and an ephemeral test signer.
 The signer is newly generated in this attempt's private directory, must be an
 executor-owned regular file and receives an explicit verified `0600` mode before

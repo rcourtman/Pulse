@@ -35,6 +35,8 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 		"test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode",
 		"test_real_verifier_accepts_fixture_and_refuses_tampering",
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
+		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
+		"test_runtime_readback_rejects_post_comparison_drift",
 		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
 	} {
 		if results[name] != "ok" {

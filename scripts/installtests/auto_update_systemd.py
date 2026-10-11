@@ -316,7 +316,8 @@ class NativeLab:
 
     def assert_runtime(self, tag, active):
         binary = self.root / "install/bin/pulse"
-        if digest(binary) != self.receipt["binaries"][tag]:
+        expected_hash = self.receipt["binaries"][tag]
+        if digest(binary) != expected_hash:
             raise RuntimeError("installed executable differs from authenticated fixture")
         if (self.root / "install/VERSION").read_text() != tag + "\n":
             raise RuntimeError("version sidecar differs")
@@ -349,10 +350,20 @@ class NativeLab:
             # Type=simple start can return before exec. Bind the observed
             # process after application readiness, not to that launch race.
             state = self.state()
-            if state["ActiveState"] != "active" or state["MainPID"] == "0":
+            if (state["LoadState"] != "loaded" or state["ActiveState"] != "active"
+                    or not re.fullmatch(r"[1-9][0-9]*", state["MainPID"])):
                 raise RuntimeError("served application has no active managed process")
-            if digest(Path("/proc") / state["MainPID"] / "exe") != digest(binary):
-                raise RuntimeError("running executable differs from installed executable")
+            if digest(Path("/proc") / state["MainPID"] / "exe") != expected_hash:
+                raise RuntimeError("running executable differs from authenticated fixture")
+            # A process or destination can change during the byte read. Do not
+            # accept a stale PID observation, or two equally wrong executables,
+            # as independent proof of the source transaction's final state.
+            observed = self.state()
+            if observed != state:
+                raise RuntimeError("managed process state changed during executable readback")
+            if digest(binary) != expected_hash:
+                raise RuntimeError("installed executable changed during runtime readback")
+            state = observed
         elif state["MainPID"] != "0":
             raise RuntimeError("inactive fixture retains a managed process")
         return state
