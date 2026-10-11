@@ -7695,6 +7695,21 @@ either omitted graph input or a later exclusion. Existing real-build ordering,
 Linux helper, Windows exit/service and installer checks remain unchanged. This
 is admission coverage, not a local Windows/macOS verdict or installed recovery.
 
+### Native server-upgrade source admission (11 October 2026)
+
+The native Unix installer inventory already exercises the root `install.sh`,
+`scripts/pulse-auto-update.sh`, and their service-state/log-sink, systemd-oracle
+and service-discovery Python fixtures. Both push-to-main and PR path filters
+now admit those five exact inputs, so changing one alone cannot bypass the
+existing native matrix. Agent install triggers, jobs, tools, assertions and
+deadlines are unchanged; no unrelated script or UI path is added.
+
+`TestNativeInstallerWorkflowAdmitsServerUpgradeSource` decodes each event and
+rejects deletion or exclusion of each input independently. Existing installer
+tool/partition and frontend-preparation controls still require the complete
+Unix inventory. This fixes check admission, not a macOS verdict, published-key
+installation, LXC restoration or the cause of a customer's stopped update.
+
 ### Bounded Docker module-proxy recovery (7 October 2026)
 
 The Docker backend builder uses `scripts/go-mod-download.sh` with the same
