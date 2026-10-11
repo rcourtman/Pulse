@@ -132,6 +132,11 @@ optional for host-local data.
    )
    ```
 
+   This is a plain token file, **not a shell script or `.env` file**. Do not
+   include `PULSE_TOKEN=`, `export`, comments or surrounding quotes. For an
+   existing authentication failure, use the [token-file format guidance](#token-file-format-is-not-shell-syntax)
+   before changing the saved credential or running another installation.
+
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
    in both the download and installation commands. Download to a new private
    file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
@@ -1155,6 +1160,37 @@ current registration, not persistence across a server restart, successful
 credential hand-off or accepted host reports. Retain the existing installation
 while those remaining distinctions are investigated. A listed record with
 `Never` is not, by itself, a reason to mint a replacement.
+
+#### Token-file format is not shell syntax
+
+If the intended record exists with the host scopes but lookup and reporting
+still return 401, keep credential selection separate from file contents.
+`--token-file` names a file; it does not establish which credential reached
+Pulse. An environment or explicit-token override is a separate possibility,
+not a diagnosis from `Never`.
+
+The agent trims whitespace at the beginning and end of a token file. It does
+**not** interpret shell syntax, strip quotes or extract a value from an
+assignment. These file forms therefore mean different things:
+
+| File form | What the agent reads |
+| --- | --- |
+| Bare token, possibly followed by a newline | The token value; this does not prove it matches the intended record or Pulse instance. |
+| Token surrounded by single or double quotes | The quotes remain part of the credential. |
+| Assignment prefix such as `PULSE_TOKEN=` or `export` | The prefix remains part of the credential; this is not an environment-file parser. |
+| Unknown | The format and cause remain unknown; no new installation is needed to complete a report. |
+
+Quotes or a prefix can cause rejection even when the intended record has the
+right scopes. A rejected credential can leave that record showing `Never`;
+this does not identify the cause of a particular installation's failure.
+
+Use how the file was saved or an existing private observation. If you cannot
+safely tell, say **unknown**. If asked, report only **bare**, **quoted**,
+**prefixed** or **unknown**, not the value, length, hint, screenshot or file.
+Do not print, source, upload or edit the installed token file, restart the
+service, generate a replacement or reinstall merely to classify it. A bare
+value still leaves credential selection, server record and instance matching
+to investigate; it is not proof of accepted reporting.
 
 If asked about the inventory, report only whether the record exists and the
 relevant metadata; do not share the token or its hint. Keep service environments,

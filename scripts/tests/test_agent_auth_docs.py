@@ -163,6 +163,31 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "broaden its permissions, reinstall or probe the agent"):
             self.assertIn(fact, text)
 
+    def test_file_format_guidance_matches_the_literal_reader_without_requesting_a_secret(self):
+        text = " ".join(section().split())
+        source = (ROOT / "cmd/pulse-agent/main.go").read_text()
+        reader = source.split("func resolveTokenInternal(", 1)[1].split(
+            "// 3. PULSE_TOKEN", 1)[0]
+        self.assertIn("readFile(tokenFileFlag)", reader)
+        self.assertIn("strings.TrimSpace(string(content))", reader)
+        self.assertNotIn("strings.Trim(", reader)
+        self.assertNotIn("strings.TrimPrefix(", reader)
+        validator = (ROOT / "internal/config/api_tokens.go").read_text().split(
+            "func (c *Config) ValidateAPIToken(", 1)[1].split(
+            "// IsValidAPIToken", 1)[0]
+        self.assertIn("auth.CompareAPIToken(rawToken, record.Hash)", validator)
+        self.assertLess(validator.index("auth.CompareAPIToken"), validator.index("LastUsedAt = &now"))
+        for fact in ("Token-file format is not shell syntax", "not a diagnosis from `Never`",
+                     "not** interpret shell syntax, strip quotes", "The quotes remain part",
+                     "The prefix remains part", "does not prove it matches",
+                     "rejected credential can leave that record showing `Never`",
+                     "Use how the file was saved or an existing private observation",
+                     "say **unknown**", "not the value, length, hint, screenshot or file",
+                     "Do not print, source, upload or edit", "merely to classify it",
+                     "not proof of accepted reporting"):
+            self.assertIn(fact, text)
+        self.assertIn("#token-file-format-is-not-shell-syntax", DOC.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
