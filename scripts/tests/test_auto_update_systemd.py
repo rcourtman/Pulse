@@ -428,10 +428,12 @@ if name == "sudo":
     @unittest.skipUnless(sys.platform.startswith("linux"), LINUX_ONLY_REASON)
     def test_connected_signed_archive_and_recovery_controls_without_host_manager(self):
         # Same orchestration and production shell functions, real signatures and
-        # ELF staging. Only this test replaces the manager, account/chown and
-        # unit output path. It is not native or real-Pulse runtime acceptance.
+        # ELF staging. This test replaces the manager, its process-byte readback,
+        # account/chown and unit path. /proc/123/exe maps only to the executable
+        # snapshot made by that simulated manager's start. Real owned /proc
+        # checks run separately; this is not native/real-Pulse acceptance.
         manager = r'''#!/usr/bin/python3
-import os, pathlib, sys
+import os, pathlib, shutil, sys
 root = pathlib.Path(os.environ["PULSE_NATIVE_ROOT"])
 # Tool startup must have an existing owned home, not create the lab before
 # NativeLab has admitted and claimed its scratch root (as on macOS).
@@ -450,6 +452,9 @@ if args[0] == "show":
 elif args[0] in ("start", "stop"):
  if args[0] == "start" and load != "loaded": sys.exit(1)
  statefile.write_text("active" if args[0] == "start" else "inactive")
+ process_bytes = root / "mock-managed-executable"
+ if args[0] == "start": shutil.copyfile(root / "install/bin/pulse", process_bytes)
+ else: process_bytes.unlink(missing_ok=True)
  if args[0] == "start" and not (root / "data/.encryption.key").exists():
   (root / "data/.encryption.key").write_text("synthetic persistence marker, not a key\n")
 elif args[0] == "mask": unit.symlink_to("/dev/null")
@@ -482,7 +487,11 @@ elif args[0] not in ("daemon-reload", "reset-failed"): sys.exit(97)
 import json, os, pathlib, sys
 with pathlib.Path({str(tool_trace)!r}).open('a') as receipt:
     receipt.write(json.dumps({name!r}) + '\\n')
-os.execv({executable!r}, [{executable!r}, *sys.argv[1:]])
+arguments = sys.argv[1:]
+if {name!r} == 'cmp' and '/proc/123/exe' in arguments:
+    arguments = [str(pathlib.Path(os.environ['PULSE_NATIVE_ROOT']) / 'mock-managed-executable')
+                 if arg == '/proc/123/exe' else arg for arg in arguments]
+os.execv({executable!r}, [{executable!r}, *arguments])
 ''')
                 tool.chmod(0o700)
             path = tools / "systemctl"; path.write_text(manager); path.chmod(0o755)

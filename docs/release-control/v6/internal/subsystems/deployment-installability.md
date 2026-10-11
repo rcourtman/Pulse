@@ -133,6 +133,36 @@ restoration safeguards. These facts
 cannot reconstruct exits or signals from an earlier interrupted attempt, or
 identify who stopped a host.
 
+### Active service state cannot stand in for the running executable
+
+After installed-version and active-state verification, the unattended updater
+compares the selected executable with the actual Linux `/proc/MainPID/exe` bytes.
+Two complete, bounded observations of the exact unit's LoadState, ActiveState
+and positive MainPID must surround that comparison and retain the same active
+PID. Successful recovery of a previously active unit has the same requirement
+before releasing its rollback backup. Equivalent bytes at a custom or symlinked
+path are admitted; replacing an old process's on-disk path is not proof that
+that process uses the replacement. A broken primary executable never falls
+back to an unrelated legacy file.
+
+Missing, duplicated, extra, failed or timed-out observations, an unavailable or
+different executable, a zero/malformed PID, or an identity/activity change leave
+the backup retained and current service alone for manual reconciliation. They
+cannot claim update/restoration success and grant no additional start, stop,
+rollback, mask/permission change or retry. A previously inactive unit that
+remains inactive still needs only installed-file verification; if it becomes
+active, its actual running executable must be checked too.
+
+`TestAutoUpdateServiceStateFailsClosed` requires the production-path success and
+restore refusal controls. `TestAutoUpdateRunningExecutableIdentity` requires
+Linux owned-process byte/readback/deadline controls: they run a private
+executable, atomically replace its path and inspect its real `/proc` entry.
+They do not use a native manager or install Pulse. Existing signed/manager-double
+matrices keep that distinction explicit. The containing hosted systemd recipe
+supplies real-Pulse/source/native evidence; this source repair alone establishes
+neither that result nor #2785's stop cause, published historical upgrade, timer
+sandbox or authenticated browser recovery.
+
 ### Current-source unattended transactions have a native CI check
 
 After the same checkout's production frontend, backend build and vet, ordinary

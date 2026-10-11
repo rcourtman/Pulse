@@ -406,6 +406,63 @@ read_update_service_state() {
     esac
 }
 
+# Active alone can describe an old executable left running after replacement.
+# Read one complete tuple so a missing/recycled process is not update evidence.
+read_update_service_main_pid() {
+    local service_name=$1 observation="" line="" load="" state="" pid=""
+    local seen_load=false seen_state=false seen_pid=false
+    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState --property=MainPID 2>/dev/null); then
+        log error "Cannot read running Pulse identity ($service_name); reconcile service state before recovery" >&2
+        return 1
+    fi
+    while IFS= read -r line; do
+        case "$line" in
+            LoadState=*)
+                [[ "$seen_load" == false ]] || return 1
+                seen_load=true; load=${line#LoadState=} ;;
+            ActiveState=*)
+                [[ "$seen_state" == false ]] || return 1
+                seen_state=true; state=${line#ActiveState=} ;;
+            MainPID=*)
+                [[ "$seen_pid" == false ]] || return 1
+                seen_pid=true; pid=${line#MainPID=} ;;
+            *) return 1 ;;
+        esac
+    done <<< "$observation"
+    if [[ "$seen_load" != true || "$seen_state" != true || "$seen_pid" != true ||
+          ( "$load" != loaded && "$load" != masked ) || "$state" != active ||
+          ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+        log error "Incomplete running Pulse identity ($service_name); reconcile service state before recovery" >&2
+        return 1
+    fi
+    printf '%s\n' "$pid"
+}
+
+# Never restart/roll back merely because process readback is unavailable or
+# differs. Keep the backup and current service for explicit reconciliation.
+# Byte comparison admits an equivalent executable at a custom/symlinked path,
+# but not a VERSION sidecar or an old process whose on-disk path was replaced.
+verify_update_running_executable() {
+    local service_name=$1 binary="" before_pid="" after_pid=""
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
+        binary="$INSTALL_DIR/bin/pulse"
+    else
+        binary="$INSTALL_DIR/pulse"
+    fi
+    before_pid=$(read_update_service_main_pid "$service_name") || return 2
+    if [[ ! -f "$binary" || ! -x "$binary" ]] ||
+       ! timeout -k 1 5 cmp -s -- "$binary" "/proc/$before_pid/exe"; then
+        log error "Cannot confirm running Pulse matches the installed executable ($service_name)" >&2
+        return 2
+    fi
+    after_pid=$(read_update_service_main_pid "$service_name") || return 2
+    if [[ "$before_pid" != "$after_pid" ]]; then
+        log error "Running Pulse identity changed during verification ($service_name)" >&2
+        return 2
+    fi
+    return 0
+}
+
 # Only a fresh, settled observation permits an explicit start. Return 2 for
 # uncertainty so callers do not turn an unavailable read into rollback consent.
 start_update_service_if_stopped() {
@@ -639,6 +696,12 @@ perform_update() {
                 elif [[ "$service_result" != 0 ]]; then
                     log error "Pulse service did not come back up after update"
                 else
+                    if ! verify_update_running_executable "$service_name"; then
+                        retain_backup="true"
+                        restart_allowed="false"
+                        log error "Running Pulse executable is unverified; backup retained at $backup_dir; reconcile service state before recovery"
+                        return 1
+                    fi
                     update_accepted="true"
                 fi
             else
@@ -646,7 +709,15 @@ perform_update() {
                 # not the obligation to observe the installed unit safely.
                 service_state=$(read_update_service_state "$service_name") || service_state="unknown"
                 case "$service_state" in
-                    active|inactive|failed) update_accepted="true" ;;
+                    active)
+                        if ! verify_update_running_executable "$service_name"; then
+                            retain_backup="true"
+                            restart_allowed="false"
+                            log error "Running Pulse executable is unverified; backup retained at $backup_dir; reconcile service state before recovery"
+                            return 1
+                        fi
+                        update_accepted="true" ;;
+                    inactive|failed) update_accepted="true" ;;
                     *)
                         retain_backup="true"
                         restart_allowed="false"
@@ -711,6 +782,10 @@ perform_update() {
     if [[ "$service_was_active" == "true" ]]; then
         if ! start_update_service_if_stopped "$service_name" || ! wait_for_service_active "$service_name" 20; then
             log error "Restored Pulse could not be started; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+        if ! verify_update_running_executable "$service_name"; then
+            log error "Restored running Pulse executable is unverified; backup retained at $backup_dir; manual recovery required"
             return 1
         fi
     fi
