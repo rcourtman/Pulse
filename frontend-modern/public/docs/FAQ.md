@@ -261,6 +261,11 @@ LXC or Docker chart alone does not establish a leak. Use the
 [read-only memory checks](TROUBLESHOOTING.md#memory-use-keeps-growing) for your
 deployment while it is responsive.
 
+A higher steady baseline is worth reporting even without continuing growth.
+A lower reading ten minutes into a new process is not a like-for-like comparison
+with a week-old run, or proof of recovery. Keep already available readings,
+versions, uptime and workload context; do not restart to create a comparison.
+
 Do not shorten retention, slow polling, restart Pulse or drop caches just to
 lower the reading. Shorter retention removes history, and slower polling can
 delay monitoring; neither establishes the cause. If the container is near its
