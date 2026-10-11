@@ -32,7 +32,8 @@ Day-2 operations run through the `pulse-control-plane` binary (via
 ```bash
 pulse-control-plane provider-msp bootstrap --account-name "Your MSP" --owner-email you@example.com
 pulse-control-plane provider-msp status
-pulse-control-plane provider-msp backup
+pulse-control-plane provider-msp backup create
+pulse-control-plane provider-msp backup verify [archive]
 pulse-control-plane provider-msp recover   # restore workspaces from backup or disk
 pulse-control-plane provider-msp preflight # pre-install environment checks
 ```

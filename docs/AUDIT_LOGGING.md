@@ -24,9 +24,9 @@ Pulse automatically captures the following events:
 | `password_change` | Password modifications | Password changed (Docker/systemd) |
 | `csrf_failure` | Blocked cross-site request forgery attempts | Invalid CSRF token |
 | `lockout_reset` | Account lockout resets | Admin reset lockout for user `bob` |
-| `oidc_login` | OIDC SSO login attempts (success/failure at each stage) | OIDC login success |
+| `sso_oidc_login` | OIDC SSO login attempts (success/failure at each stage) | OIDC login success |
 | `oidc_token_refresh` | OIDC token refresh success/failure (global, not tenant-scoped) | Token refreshed successfully |
-| `oidc_role_assignment` | Automatic role assignment from OIDC groups | Auto-assigned roles: operator, viewer |
+| `sso_oidc_role_assignment` | Automatic role assignment from OIDC groups | Auto-assigned roles: operator, viewer |
 | `saml_login` | SAML SSO login attempts | SAML login success via provider-id |
 | `saml_role_assignment` | Automatic role assignment from SAML groups | Auto-assigned roles: admin |
 | `sso_provider_created` | SSO provider configuration created | Created provider: Authentik |
@@ -261,8 +261,8 @@ of historical events or proof that their signatures are valid.
 ## Storage
 
 The default audit store lives in the Pulse data directory:
-- **Single-tenant:** `{data-dir}/audit/audit.db`
-- **Multi-tenant:** `{data-dir}/orgs/{org-id}/audit/audit.db`
+- **Single-tenant, and the default organisation in multi-tenant installs:** `{data-dir}/audit/audit.db`
+- **Non-default organisations (multi-tenant):** `{data-dir}/orgs/{org-id}/audit/audit.db`
 
 The default encrypted signing key is `.audit-signing.key` **inside the audit
 store directory**, alongside `audit.db`, not at the data-directory root. Its

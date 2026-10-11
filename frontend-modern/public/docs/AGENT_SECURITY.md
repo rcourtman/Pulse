@@ -111,12 +111,17 @@ Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
 LXC authorizes that guest-local agent to report Docker/Podman monitoring data
 according to its local module flags. A Proxmox node agent does not look inside
 LXCs by default. Its automatic LXC filesystem collector is a node-local
-capacity query only: it runs `pct list`, then `pct df <vmid>` for guests already
-reported running, and reports mount keys, volume labels, mount paths, and
-capacity/usage numbers. It does not run a command inside the guest or read
-guest files, processes, environment, or container-runtime metadata. It skips
-guests reported stopped and bounds command time, output, guest count, and disk
-count.
+capacity query only. On cgroup v2 PVE hosts it finds running guests from the
+node's container configs and cgroup state, reads each running guest's init
+process ID and status from cgroup and `/proc`, and measures mount capacity with
+statfs through `/proc/<pid>/root`. When that discovery cannot establish a guest's state (for
+example on cgroup v1 hosts) it falls back to `pct list`, with `lxc-info` to
+find each guest's init process, and it runs `pct df <vmid>` for a guest only
+when the statfs probe is unavailable or fails. It reports
+mount keys, volume labels, mount paths, and capacity/usage numbers. It does not
+run a command inside the guest or read guest file contents, environment, or
+container-runtime metadata. It skips guests reported stopped and bounds command
+time, output, guest count, and disk count.
 
 The node agent can collect Docker container inventory from LXC guests
 through `pct exec`, but only after an explicit server-side opt-in: the

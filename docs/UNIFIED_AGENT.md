@@ -516,14 +516,14 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | Flag | Env Var | Description | Default |
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
-| `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--token` | `PULSE_TOKEN` | API token. Required when enrolling (`--enroll`); otherwise the `token` file in the state directory is used when unset | *(none)* |
 | `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
 | `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining command/REST custom metrics and thresholds | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
 | `--enable-docker` | `PULSE_ENABLE_DOCKER` | Enable Docker / Podman metrics | `false` (auto-detect if not configured) |
-| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Force Docker / Podman runtime: `auto`, `docker`, or `podman` | `auto` |
+| `--docker-runtime` | `PULSE_DOCKER_RUNTIME` | Preferred Docker / Podman runtime: `auto`, `docker`, or `podman`. `docker` only uses an endpoint that reports Docker. `podman` is tried first, but if no Podman socket answers the agent falls back to a Docker endpoint and reports it as `docker` | `auto` |
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
@@ -542,7 +542,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
 | `--disable-registry-credentials` | `PULSE_DISABLE_REGISTRY_CREDENTIALS` | Do not read host Docker credentials (config.json / credential helpers) for registry update checks | `false` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
-| `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server that does not look local (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses). Sends the API token in cleartext; only for networks you fully control, e.g. internal networks numbered from public IP space | `false` |
+| `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server at an address that is not local. Local-network Pulse URLs (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses) already work over HTTP for the primary URL without this flag. The flag extends plain HTTP to any host, including servers numbered from public IP space. Sends the API token in cleartext; only for networks you fully control. Report-only observers still need their own `allowPlaintextHTTP` opt-in | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
@@ -555,7 +555,7 @@ Use `--health-addr :9191` only when another host must scrape the
 health/metrics endpoint over the network. Use `--health-addr ""` or
 `PULSE_HEALTH_ADDR=off` to disable that listener.
 
-**Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
+**Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → the `token` file in the state directory (`<state-dir>/token`; the default state directory is `/var/lib/pulse-agent` on Linux and macOS and `%ProgramData%\Pulse` on Windows).
 
 ### Agent log level
 
@@ -651,14 +651,14 @@ Auto-detection behavior:
 
 - **Host metrics**: Enabled by default.
 - **Docker/Podman**: Enabled automatically by the agent if Docker/Podman is detected and `PULSE_ENABLE_DOCKER` was not explicitly set. A local `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is a hard opt-out and is not re-enabled by auto-detection or remote profile config.
-- **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and `PULSE_ENABLE_KUBERNETES` was not explicitly set.
+- **Kubernetes**: Enabled automatically by the installer when a kubeconfig is detected and none of `--enable-kubernetes`, `--disable-kubernetes` or `--kubeconfig` was passed. The Linux/macOS installer (`install.sh`) does not read `PULSE_ENABLE_KUBERNETES` from the environment; pass `--disable-kubernetes` to opt out at install time.
 - **Proxmox**: Enabled automatically by the installer when Proxmox is detected. Type auto-detects `pve` vs `pbs` if not specified.
 
 To disable auto-detection, explicitly set the relevant flags or env vars, for example:
 
 - `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false`
-- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false`
-- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false`
+- `--enable-kubernetes=false` or `PULSE_ENABLE_KUBERNETES=false` (the Linux/macOS installer honours only the flag at install time)
+- `--enable-proxmox=false` or `PULSE_ENABLE_PROXMOX=false` for the agent binary and `install.ps1`. `install.sh` ignores the environment variable; pass `--enable-proxmox=false` or `--disable-proxmox` to it instead.
 
 ### Inside-Guest Runtime Boundaries
 
@@ -668,10 +668,14 @@ and task inventory on the Docker page.
 
 Pulse does not use a Proxmox node agent to look inside LXCs by default. The
 node agent does automatically collect filesystem capacity for running LXCs
-when the local `pct` tool is available. It uses bounded `pct list` and
-`pct df <vmid>` calls and reports only mount keys, volume labels, mount paths,
-and capacity/usage values; it does not run commands inside a guest or read
-guest files. Stopped LXCs retain the normal API-derived disk view.
+when the local `pct` tool is available. On cgroup v2 PVE hosts it finds running
+guests from the node's container configs and cgroup state and measures mount
+capacity with statfs through each guest's init process in `/proc`; it falls back
+to bounded `pct list` and `pct df <vmid>` calls when that discovery or a
+per-container probe cannot establish a guest's state. It reports only mount
+keys, volume labels, mount paths, and capacity/usage values; it does not run
+commands inside a guest or read guest files. Stopped LXCs retain the normal
+API-derived disk view.
 
 The optional Proxmox-side LXC Docker hint is off unless the Pulse server is started
 with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint uses
@@ -839,16 +843,20 @@ Use HTTPS or a trusted local network for that legacy migration. For
 high-assurance environments, install the v6 `pulse-agent` through the signed
 installer path instead of relying on a plain-HTTP first hop.
 
-To disable auto-updates:
-```bash
-# After private-file preparation and successful installer inspection
-bash "$HOME/.config/pulse/agent-install.sh" \
-  --url https://pulse.example.com \
-  --token-file "$HOME/.config/pulse/agent-token" --disable-auto-update
+To disable auto-updates, set `PULSE_DISABLE_AUTO_UPDATE=true` (or pass
+`--disable-auto-update`) on the `pulse-agent` process itself. The agent
+installer (`agent-install.sh`) does not accept `--disable-auto-update`, and
+setting the variable in the shell that runs the installer does not reach the
+installed service. For an agent installed as a Linux systemd service, add a
+drop-in with `sudo systemctl edit pulse-agent`:
 
-# Or set environment variable
-PULSE_DISABLE_AUTO_UPDATE=true
+```ini
+[Service]
+Environment="PULSE_DISABLE_AUTO_UPDATE=true"
 ```
+
+Then apply it with `sudo systemctl daemon-reload` and
+`sudo systemctl restart pulse-agent`.
 
 ## Remote Configuration (Agent Profiles, Pro/legacy Pro+/Cloud)
 
@@ -955,7 +963,7 @@ Use the unified installer (`install.sh`) for all new and existing deployments.
 
 ## Health Checks & Metrics
 
-The agent exposes HTTP endpoints for health checks and Prometheus metrics on port 9191 by default.
+The agent exposes HTTP endpoints for health checks and Prometheus metrics on `127.0.0.1:9191` by default (loopback only; see `--health-addr` in the configuration table).
 
 ### Endpoints
 
@@ -973,6 +981,8 @@ The agent exposes HTTP endpoints for health checks and Prometheus metrics on por
 | `pulse_agent_up` | Gauge | 1 when running, 0 when shutting down |
 
 ### Kubernetes Probes
+
+The default listener binds to `127.0.0.1`, which kubelet probes cannot reach because they connect to the pod IP. Set `PULSE_HEALTH_ADDR=:9191` (or `--health-addr :9191`) on the agent container before using these probes. That exposes `/healthz`, `/readyz` and `/metrics` on all pod interfaces, so restrict access with a NetworkPolicy.
 
 ```yaml
 livenessProbe:

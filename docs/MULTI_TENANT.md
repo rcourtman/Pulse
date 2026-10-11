@@ -19,8 +19,8 @@ The Community, Relay, and Pro tiers do not include the `multi_tenant` capability
 
 1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 2. Activate your Enterprise license in **Settings → Plans & Billing**.
-3. Go to **Settings → Organization** and click **Create Organization**.
-4. Name your organization and assign infrastructure to it.
+3. Create the organization with the session-authenticated `POST /api/orgs` endpoint (see [Creating an Organization](#creating-an-organization)). This build has no Create Organization button in **Settings → Organization**.
+4. Assign infrastructure to the organization.
 5. Use the **Org Switcher** in the header bar to switch between organizations.
 
 ## Concepts
@@ -57,7 +57,7 @@ Organizations can share specific resources with other organizations:
 
 ## Before Using the API
 
-Create organizations and manage members and shares in the signed-in Pulse UI.
+Manage members and shares in the signed-in Pulse UI. Organizations are created through the session-authenticated `POST /api/orgs` endpoint; the UI has no create control.
 These changes require **session-based user authentication** and the relevant
 organization role; API tokens are rejected with `403 session_required`, even
 when they have `settings:write`. The UI handles the session and CSRF protection.
@@ -86,14 +86,14 @@ The helper's loopback origin applies on the Pulse host; remotely, follow its
 HTTPS instructions and keep certificate verification enabled. Replace the
 example organization ID `production-datacenter` with your own, and run each
 read separately. The helper's support for other HTTP methods does not make
-organization mutations token-authenticated; keep those changes in the
+organization mutations token-authenticated; keep member and share changes in the
 signed-in UI with its session and CSRF protection.
 
 ## Managing Organizations
 
 ### Creating an Organization
 
-**UI:** Settings → Organization → Create Organization
+**UI:** none in this build; Settings → Organization has no create control.
 
 **API contract:** `POST /api/orgs`, session authentication only:
 ```json
@@ -193,10 +193,10 @@ When multi-tenant is enabled, **Settings → Organization** shows:
 
 | Panel | Description |
 |---|---|
-| **Overview** | Organization name, description, creation date |
+| **Overview** | Organization display name (editable), org ID, creation date, member count |
 | **Access** | Member list, invite/remove members, change roles |
 | **Sharing** | Outgoing and incoming resource shares |
-| **Billing & Plan** | Organization-level plan and license info |
+| **Billing** | Organization plan, usage policies and subscription status (the "Billing & Usage" panel) |
 
 ## API Reference
 
@@ -237,11 +237,11 @@ or a token's organization binding.
 
 ## Troubleshooting
 
-### "Multi-tenant is not enabled on this server" (501)
+### "Multi-tenant functionality is not enabled. Set PULSE_MULTI_TENANT_ENABLED=true to enable." (501)
 
 Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
 
-### "Multi-tenant requires an Enterprise license" (402)
+### "Multi-tenant access requires an Enterprise license" (402)
 
 Activate an Enterprise license with the `multi_tenant` capability in **Settings → Plans & Billing**.
 

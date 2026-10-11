@@ -31,7 +31,7 @@ The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standa
 1. **Closing the Circuit**: One successful poll moves *Half-Open* → *Closed* and resets failure count.
 2. **Backoff Calculation**: Retries use exponential backoff starting at 5s (multiplier 2, jitter 0.2) capped at 5m.
 3. **Transient vs. Permanent**:
-   - **Transient** errors (retryable) are retried up to 5 times before moving to the Dead Letter Queue.
+   - **Transient** errors (retryable) are retried until they fail 5 times in a row (the first attempt plus 4 retries), then move to the Dead Letter Queue.
    - **Permanent** errors move directly to the Dead Letter Queue.
 
 **Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 4s max) to keep fast feedback loops during tight polling windows.

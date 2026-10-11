@@ -24,14 +24,14 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 | Mode | Key | Detect | Investigate | Fix warning-level issues | Fix critical issues | Plan |
 |-------|-----|:------:|:-----------:|:------------------------:|:-------------------:|------|
 | **Watch only** | `monitor` | Yes | No | No | No | Community |
-| **Ask before changes** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
-| **Auto-fix safe issues** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
-| **Policy autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
+| **Ask first** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
+| **Safe auto-fix** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
+| **Autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
 - **Watch only** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or fix execution.
-- **Ask before changes** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
-- **Auto-fix safe issues** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
-- **Policy autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+- **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
+- **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
+- **Autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
 
@@ -158,10 +158,8 @@ When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findi
 |---------|---------|-------|-------------|
 | `patrol_investigation_budget` | 10 | 5–30 | Maximum evidence-tool calls per investigation; Patrol derives a separate model-response safety ceiling |
 | `patrol_investigation_timeout_sec` | 600 | 60–1800 | Maximum seconds per investigation |
-| `max_concurrent_investigations` | 3 | — | Parallel investigation limit |
-| `max_attempts_per_finding` | 3 | — | Retries before marking as `needs_attention` |
-| `investigation_cooldown_sec` | 3600 | — | Cooldown before re-investigating a finding |
-| `timeout_cooldown_sec` | 600 | — | Shorter cooldown after timeout failures |
+
+The following limits are fixed and cannot be changed: up to 3 investigations run in parallel, up to 3 attempts per finding, a 1 hour cooldown before re-investigating a finding, and a shorter 10 minute cooldown after a timeout failure.
 
 ---
 
@@ -203,9 +201,9 @@ To stop Pulse acting on a specific guest, host or container, open its drawer, ch
 For new deployments, gradually increase Patrol mode:
 
 1. **Start with Watch only** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
-2. **Move to Ask before changes where available** — Enable investigation. Review proposed fixes to build confidence.
-3. **Use Auto-fix safe issues when fix execution is enabled** — Let Patrol execute warning-level fixes while you approve critical fixes.
-4. **Consider Policy autopilot** — Only if your environment has comprehensive alerting and you trust the fix patterns.
+2. **Move to Ask first where available** — Enable investigation. Review proposed fixes to build confidence.
+3. **Use Safe auto-fix when fix execution is enabled** — Let Patrol execute warning-level fixes while you approve critical fixes.
+4. **Consider Autopilot** — Only if your environment has comprehensive alerting and you trust the fix patterns.
 
 ---
 

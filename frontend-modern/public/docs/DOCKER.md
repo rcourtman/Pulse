@@ -396,7 +396,7 @@ not grant command execution permission to monitoring tokens. See
 
 To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
-You can also toggle "Hide Docker Update Buttons" from the UI in **Settings → System → General** under **Docker / Podman updates**.
+You can also toggle **Hide update buttons** from the UI in **Settings → System → General** under **Docker / Podman updates**.
 
 ---
 
@@ -409,7 +409,7 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 - **Pulse Agent** installed on the container host (see [Unified Agent](UNIFIED_AGENT.md)) and currently connected
 - **Command execution enabled** on the agent — it is disabled by default. Either:
   - start the agent with `--enable-commands` (or `PULSE_ENABLE_COMMANDS=true`), or
-  - tick **Enable Pulse command execution** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission
+  - tick **Enable legacy combined command profile** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission (this is the transitional combined profile, not a least-privilege setting)
 - **Admin approval**: every lifecycle action requires confirmation by an admin in the UI before it runs. The agent then verifies the container's state before the change and confirms it actually reached the requested state afterwards.
 
 ### Limitations

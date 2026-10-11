@@ -53,7 +53,7 @@ class AgentProfileDocsTest(unittest.TestCase):
         for key in keys:
             with self.subTest(key=key):
                 self.assertIn(f'case "{key}":', startup)
-        self.assertIn("JSON numbers are interpreted as seconds", self.guide)
+        self.assertIn("must be a positive duration string", self.guide)
 
     def test_host_metrics_do_not_grant_command_authority(self):
         row = next(line for line in self.central.splitlines() if line.startswith("| `enable_host`"))
@@ -136,7 +136,7 @@ class AgentProfileDocsTest(unittest.TestCase):
                        "automatic retries", "Never paste a token or session cookie",
                        "Copy as cURL", "not full responses", "manually redacted excerpt",
                        "may call the configured AI provider", "not a read-only diagnostic",
-                       "not an empty profile list", "GET and POST only, not PUT or DELETE"):
+                       "not an empty profile list", "accepts GET, POST, PUT and DELETE"):
             self.assertIn(phrase, self.guide)
 
 

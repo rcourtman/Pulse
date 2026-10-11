@@ -83,7 +83,7 @@ class AgentDocsTest(unittest.TestCase):
                     count += 1
         # Include the separate runner-only removal command, not just the
         # collector uninstall and the existing setup/cleanup recipes.
-        self.assertEqual(count, 18)
+        self.assertEqual(count, 17)
 
     def test_private_file_preparation_preserves_existing_token(self):
         command = recipe(NAMES[0], 'credential_file="$config_dir/agent-token"')
@@ -321,7 +321,7 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
         profiles = []
         for name in NAMES:
             profiles.extend(block for block in blocks(name) if 'bash "$HOME/.config/pulse/agent-install.sh"' in block and "--token-file" in block)
-        self.assertEqual(len(profiles), 11)
+        self.assertEqual(len(profiles), 10)
         fixture = '''#!/bin/bash
 python3 - "$@" <<'PY'
 import json, os, stat, sys
@@ -364,7 +364,7 @@ PY
                                  ["--enable-proxmox", "--proxmox-type", "pbs"],
                                  ["--enable-docker"], ["--enable-docker=false"],
                                  ["--enable-kubernetes"], ["--enable-host=false", "--enable-docker"],
-                                 ["--disable-auto-update"], ["--enable-proxmox"]]
+                                 ["--enable-proxmox"]]
             actual_profiles = [re.findall(r"--(?:enable-[a-z]+(?:=false)?|disable-auto-update|proxmox-type\s+(?:pve|pbs))", p) for p in profiles]
             for expected in expected_profiles:
                 # Compare the actual argv tokens, retaining the type's value.

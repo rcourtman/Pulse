@@ -119,7 +119,7 @@ Pulse can also collect temperatures by SSHing into each host that does not have 
 ### Setup
 
 1. Generate the node setup command from the UI:
-   **Settings -> Infrastructure -> Add Node**
+   **Settings -> Infrastructure -> Add infrastructure**, choose **Proxmox VE**, and use the setup guide's **Copy command** button
 2. Run the command on each Proxmox host. The setup script can:
    - Create the required API user and permissions
    - Add a restricted SSH key entry for temperature collection
@@ -131,7 +131,7 @@ The SSH entry added to `authorized_keys` is restricted to the Pulse sensor wrapp
 command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
 ```
 
-If you use a non-standard SSH port, set `SSH_PORT` (system-wide) or configure it in **Settings -> System**.
+If you use a non-standard SSH port, set the `SSH_PORT` environment variable on the Pulse server (see `docs/CONFIGURATION.md`). There is no SSH port control in **Settings -> System**.
 
 ### Containerized Pulse
 
