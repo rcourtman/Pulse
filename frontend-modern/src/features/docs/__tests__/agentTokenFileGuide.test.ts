@@ -20,8 +20,10 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     const link = Array.from(article.querySelectorAll('a')).find(
       (anchor) => anchor.textContent === 'token-file format guidance',
     );
-    expect(link?.getAttribute('href')).toBe(`/docs/UNIFIED_AGENT#${id}`);
-    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    // Same-document fragments stay native; .md links alone are rewritten by
+    // resolveDocLink. The real-browser test verifies the Docs focus handler.
+    expect(link?.getAttribute('href')).toBe(`#${id}`);
+    expect(link?.hasAttribute('data-doc-link')).toBe(false);
     expect(link?.hasAttribute('target')).toBe(false);
     expect(article.querySelector(`#${id}`)?.textContent).toBe('Token-file format is not shell syntax');
     expect(guide).toBe(
