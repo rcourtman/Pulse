@@ -1352,15 +1352,20 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 			"Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them",
 		)
 	}
+	// The release train's betas point at their packet as "beta", candidates as "release candidate".
+	packetLabel := "release candidate"
+	if strings.Contains(version, "-beta.") {
+		packetLabel = "beta"
+	}
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("docs", "UPGRADE_v6.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "Chart.yaml"),
 		"version: "+version,
