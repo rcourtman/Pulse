@@ -27271,3 +27271,49 @@ func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
 		}
 	}
 }
+
+// A failed support probe must not direct an operator to remove the trust
+// boundary which rejected it. These are diagnostic errors, not native faults.
+func TestContract_DiagnosticsTLSRecoveryPreservesTrust(t *testing.T) {
+	for _, message := range []string{
+		"x509: certificate signed by unknown authority",
+		"x509: certificate has expired or is not yet valid",
+		"x509: certificate is valid for pve.local, not 192.0.2.10",
+		"certificate fingerprint mismatch: expected fixture-old, got fixture-new",
+	} {
+		t.Run(message, func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(errors.New(message), "probe failed")
+			if failure.kind != "tls_certificate_mismatch" {
+				t.Fatalf("TLS kind = %q", failure.kind)
+			}
+			for _, want := range []string{"independently verify", "hostname", "expiry", "trusted chain", "only after", "Do not disable"} {
+				if !strings.Contains(failure.troubleshooting, want) {
+					t.Errorf("TLS recovery omits %q: %s", want, failure.troubleshooting)
+				}
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSDeadlineIsNotCertificateEvidence(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("TLS certificate endpoint: %w", context.DeadlineExceeded),
+		fmt.Errorf("TLS certificate endpoint: %w", context.Canceled),
+		errors.New(`Get "https://certificate.example:8006/api2/json/nodes": net/http: TLS handshake timeout`),
+		errors.New("tls: handshake timeout"),
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(err, "probe stopped")
+			wantKind := "connection_timeout"
+			if errors.Is(err, context.Canceled) {
+				wantKind = "connection_failed"
+			}
+			if failure.kind != wantKind {
+				t.Fatalf("kind = %q, want %q; guidance = %q", failure.kind, wantKind, failure.troubleshooting)
+			}
+			if strings.Contains(failure.troubleshooting, "fingerprint") || strings.Contains(failure.troubleshooting, "disable verification") {
+				t.Fatalf("stopped handshake was treated as trust evidence: %s", failure.troubleshooting)
+			}
+		})
+	}
+}
