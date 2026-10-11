@@ -4,6 +4,7 @@ This changelog describes the changes since `v6.5.0`. Stable `v6.5.0` remains the
 
 ## Changes since v6.5.0
 
+- Release v6.6.0-beta.1 (#2845)
 - Let the release metadata tests accept beta versions (#2844)
 - Update source-map-js in the Cloud portal lockfile to 1.2.2 (#2843)
 - Show diagnostics callers only the API tokens they may manage (#2841)
