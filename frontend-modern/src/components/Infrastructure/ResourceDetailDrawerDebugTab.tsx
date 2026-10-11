@@ -3,6 +3,7 @@ import type { Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
 interface ResourceDetailDrawerDebugTabProps {
@@ -14,6 +15,7 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
   props,
 ) => {
   const { drawer } = props;
+  const now = useRelativeTimeNow();
 
   return (
     <div class="space-y-3">
@@ -66,14 +68,16 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
             <For each={drawer.sourceSections()}>
               {(section) => {
                 const status = drawer.sourceStatus()[section.id];
-                const lastSeenText = formatRelativeTime(status?.lastSeen);
+                // A silent source keeps the same section mounted. Age its
+                // original timestamp without renewing the reading or status.
+                const lastSeenText = () => formatRelativeTime(status?.lastSeen, { now: now() });
                 return (
                   <details class="rounded-md border border-border bg-surface p-3">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-base-content">
                       <span>{section.label}</span>
                       <span class="text-[11px] text-muted">
                         {status?.status ?? 'unknown'}
-                        {lastSeenText ? ` • ${lastSeenText}` : ''}
+                        {lastSeenText() ? ` • ${lastSeenText()}` : ''}
                       </span>
                     </summary>
                     <Show when={status?.error}>
