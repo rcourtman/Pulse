@@ -104,10 +104,9 @@ func TestImportedTimelineReplayDoesNotReadDiscardedProjections(t *testing.T) {
 
 type replayCheckpointRecorder struct {
 	*unifiedresources.MonitorAdapter
-	manager       *alerts.Manager
-	imports       int
-	checkpoint    int64
-	checkpointIDs []int64
+	manager    *alerts.Manager
+	imports    int
+	checkpoint int64
 }
 
 func (s *replayCheckpointRecorder) RecordChange(change unifiedresources.ResourceChange) error {
