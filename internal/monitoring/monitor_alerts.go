@@ -415,7 +415,7 @@ func (m *Monitor) materializeImportedAlertTimeline(alert *alerts.Alert, imported
 		}
 	}
 
-	m.incidentStore.EnsureAlertOccurrence(alert, resolvedAt)
+	m.incidentStore.MaterializeAlertOccurrence(alert, resolvedAt)
 	firedAt := alert.StartTime
 	if firedAt.IsZero() {
 		firedAt = importedAt
