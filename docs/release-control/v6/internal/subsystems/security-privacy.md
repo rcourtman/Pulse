@@ -3253,3 +3253,17 @@ aliases a reference can resolve through), so a reference resolves to the same
 canonical ID for as long as the fixture structure holds. Outside mock mode it
 is the read state the resolver used before. No authentication, authorization, token or
 tenant-isolation path is touched.
+
+
+### Reporting rejection guidance preserves credentials and command ceilings
+
+`internal/hostagent/agent.go` no longer treats 401 as proof of lost upgrade or
+restore credentials or prescribes reinstall/replacement. Primary and observer
+reporting direct operators to the existing credential's issuing instance,
+record and endpoint policy without logging token values or response bodies.
+A 403 does not call for disabling host monitoring or adding command authority.
+Request authentication, TLS/HTTP opt-ins, token scopes, identities, buffers and
+command ceilings are unchanged. The host and observer auth-guidance recovery
+controls in `send_report_test.go` and `observer_delivery_test.go` verify observed
+status/endpoint, non-disclosure and resumed ordinary reporting with the same
+credential. They are not a credential inventory probe or native recovery proof.
