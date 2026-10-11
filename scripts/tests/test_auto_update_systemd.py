@@ -20,6 +20,8 @@ SPEC.loader.exec_module(native)
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 STEP = "Check current-source unattended recovery on native systemd"
 FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout")
+LINUX_CONTROL = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
+LINUX_ONLY_REASON = "Linux server ELF execution; portable controls remain required on macOS"
 
 
 def selected_fixture_commands():
@@ -152,6 +154,65 @@ class NativeContracts(unittest.TestCase):
             self.assertNotIn("PRIVATE KEY", retained)
             self.assertNotIn(str(root), retained)
             self.assertNotIn(lab._last_output.decode(), retained)
+
+    def test_prepare_owns_generated_signer_mode_before_first_real_signature(self):
+        # Reproduce the exact observed mode, not its unknown generation cause.
+        # Run real OpenSSH signing before stopping ahead of account/unit writes.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            before, after = base / "a", base / "b"
+            before.write_bytes(b"before\n"); after.write_bytes(b"after\n")
+            lab = native.NativeLab(base / "lab", ROOT, before, after, "a" * 40)
+            lab.unit = base / "absent.service"
+            original_run = lab.run
+            def confined_run(*args, **kwargs):
+                if args[0] in (str(before), str(after)) and args[1:] == ("--version",):
+                    tag = native.TAGS[0 if args[0] == str(before) else 1]
+                    return subprocess.CompletedProcess(args, 0, ("Pulse " + tag + "\n").encode())
+                if args[0] != "ssh-keygen":
+                    raise AssertionError("unexpected service/account operation")
+                result = original_run(*args, **kwargs)
+                if args[1] == "-q":
+                    (lab.root / "signer/key").chmod(0o644)
+                return result
+            def first_signature(archive):
+                self.assertEqual((lab.root / "signer/key").stat().st_mode & 0o777, 0o600)
+                native.NativeLab.sign(lab, archive)
+                self.assertTrue(Path(str(archive) + ".sshsig").is_file())
+                raise RuntimeError("stop before account/unit mutation")
+            try:
+                with patch.object(lab, "state", return_value={"LoadState": "not-found"}), \
+                     patch.object(lab, "run", side_effect=confined_run), \
+                     patch.object(lab, "sign", side_effect=first_signature):
+                    with self.assertRaisesRegex(RuntimeError, "stop before account/unit mutation"):
+                        lab.prepare()
+                    self.assertFalse(lab.owned_unit)
+                    self.assertFalse(lab.owned_user)
+            finally:
+                lab.cleanup()
+            self.assertTrue(lab.receipt["cleanup"]["complete"])
+
+    def test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode(self):
+        for mutation in ("existing", "symlink", "generated-symlink", "directory", "owner", "chmod", "mode-unchanged"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); (root / "signer").mkdir(mode=0o700)
+                key = root / "signer/key"
+                marker = root / "keep"; marker.write_text("not a key; not ours\n")
+                lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
+                if mutation == "existing": key.write_text("not a key; not ours\n")
+                if mutation == "symlink": key.symlink_to(marker)
+                def generate(*args):
+                    if mutation == "generated-symlink": key.symlink_to(marker)
+                    elif mutation == "directory": key.mkdir()
+                    else: key.write_text("mode/type fixture; not a key\n")
+                with patch.object(lab, "signer_command", side_effect=generate) as command, \
+                     patch.object(native.os, "geteuid", return_value=-1 if mutation == "owner" else os.getuid()), \
+                     patch.object(Path, "chmod", side_effect=OSError("mode change unavailable") if mutation == "chmod" else None):
+                    with self.assertRaises((ValueError, OSError)):
+                        lab.create_signer()
+                    if mutation in ("existing", "symlink"): command.assert_not_called()
+                    else: command.assert_called_once()
+                self.assertEqual(marker.read_text(), "not a key; not ours\n")
 
     def test_signer_timeout_does_not_attribute_stale_output_to_new_command(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -349,6 +410,22 @@ if name == "sudo":
         self.assertEqual([call[0] for call in calls], ["git"])
         self.assertFalse(receipt)
 
+    def test_connected_linux_control_is_required_without_macho_or_validator_bypass(self):
+        connected = getattr(NativeContracts, LINUX_CONTROL)
+        self.assertEqual(getattr(connected, "__unittest_skip__", False), not sys.platform.startswith("linux"))
+        # Import just the definitions as each platform would. No fixture is run
+        # under a false platform identity, and no production function is changed.
+        for platform in ("linux", "darwin"):
+            spec = importlib.util.spec_from_file_location("platform_contracts", Path(__file__))
+            module = importlib.util.module_from_spec(spec)
+            with patch.object(sys, "platform", platform): spec.loader.exec_module(module)
+            control = getattr(module.NativeContracts, LINUX_CONTROL)
+            self.assertEqual(getattr(control, "__unittest_skip__", False), platform != "linux")
+            for name in unittest.defaultTestLoader.getTestCaseNames(module.NativeContracts):
+                if name != LINUX_CONTROL:
+                    self.assertFalse(getattr(getattr(module.NativeContracts, name), "__unittest_skip__", False), name)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), LINUX_ONLY_REASON)
     def test_connected_signed_archive_and_recovery_controls_without_host_manager(self):
         # Same orchestration and production shell functions, real signatures and
         # ELF staging. Only this test replaces the manager, account/chown and

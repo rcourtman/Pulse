@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,28 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("native updater harness controls: %v\n%s", err, out)
+	}
+	// The Linux server's ELF staging cannot execute on a macOS agent runner.
+	// Its connected check must pass on both Linux architectures; macOS skips
+	// only that check, never the portable signing/admission/recovery oracles.
+	for _, name := range []string{
+		"test_prepare_owns_generated_signer_mode_before_first_real_signature",
+		"test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode",
+		"test_real_verifier_accepts_fixture_and_refuses_tampering",
+		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
+		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.NativeContracts."+name+") ... ok") {
+			t.Fatalf("required portable native-harness control %s did not pass:\n%s", name, out)
+		}
+	}
+	const connected = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
+	verdict := " ... ok"
+	if runtime.GOOS != "linux" {
+		verdict = " ... skipped 'Linux server ELF execution; portable controls remain required on macOS'"
+	}
+	if !strings.Contains(string(out), connected+" (__main__.NativeContracts."+connected+")"+verdict) {
+		t.Fatalf("required Linux connected control has wrong platform verdict:\n%s", out)
 	}
 }
 

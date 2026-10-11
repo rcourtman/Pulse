@@ -212,8 +212,7 @@ class NativeLab:
         for tag, binary in self.binaries.items():
             if self.run(str(binary), "--version").stdout.decode().splitlines()[0] != "Pulse " + tag:
                 raise ValueError("synthetic binary identity mismatch")
-        self.signer_command("generate-ephemeral-key", "-q", "-t", "ed25519", "-N", "", "-f",
-                            str(self.root / "signer/key"))
+        self.create_signer()
         for tag, binary in self.binaries.items():
             version = self.root / "VERSION"
             version.write_text(tag + "\n")
@@ -246,6 +245,22 @@ class NativeLab:
         files = (".env", "system.json", ".encryption.key", "native-persistence-sentinel")
         self.baseline_data = {p: digest(data / p) for p in files}
         self.baseline_mode = (self.root / "install/bin/pulse").stat().st_mode & 0o777
+
+    def create_signer(self):
+        # The directory is exclusive and private to this attempt. Establish
+        # the generated key's mode explicitly before signing: the hosted
+        # receipt observed 0644 and OpenSSH refused the first archive. Never
+        # repair/adopt an existing key or relax the real verifier's checks.
+        key = self.root / "signer/key"
+        if key.exists() or key.is_symlink():
+            raise ValueError("fixture signer already exists")
+        self.signer_command("generate-ephemeral-key", "-q", "-t", "ed25519", "-N", "", "-f", str(key))
+        info = key.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid():
+            raise ValueError("fixture signer is not an owned regular file")
+        key.chmod(0o600)
+        if stat.S_IMODE(key.lstat().st_mode) != 0o600:
+            raise ValueError("fixture signer is not owner-only")
 
     def signer_command(self, operation, *arguments):
         """Retain non-secret facts about a failed, fixed ephemeral-signer step.

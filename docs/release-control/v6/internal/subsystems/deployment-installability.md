@@ -135,8 +135,12 @@ persistent-file hashes, restoration mode, backup disposition and owned cleanup.
 Seven phases cover forward/manual reverse, failed active/inactive/masked installs,
 invalid signatures and an incomplete restore that retains its backup without start.
 
-The test uses signed local archives/installers and an ephemeral test signer;
-production source pins are unchanged. Only fixed fixture download transport and
+The test uses signed local archives/installers and an ephemeral test signer.
+The signer is newly generated in this attempt's private directory, must be an
+executor-owned regular file and receives an explicit verified `0600` mode before
+the first signature. Existing keys/symlinks, wrong ownership/type and failed mode
+changes stop before account or service writes; production source pins and OpenSSH
+permission checks are unchanged. Only fixed fixture download transport and
 private temporary-file placement are adapted. No network fallback, manager/sleep
 double, production credential, release publication or container-detection bypass
 is admitted by the native runner. The real unit keeps ProtectHome, PrivateTmp and
@@ -154,7 +158,12 @@ tracked-source delta, not merely a plausible commit label after frontend prepara
 `TestAutoUpdateNativeSystemdHarnessContracts` checks the exact recipe, admission,
 closed transport, real local signatures and phase refusals, and runs the connected
 source/archive/recovery orchestration with an explicitly confined manager/account/
-unit-path double and tiny ELF fixtures. Those controls are not native acceptance.
+unit-path double and tiny ELF fixtures on Linux. Both native Linux architectures
+must pass that connected control. macOS agent jobs explicitly skip only Linux
+server ELF execution rather than substitute Mach-O, fake architecture admission
+or weaken version/signature/recovery checks. Portable signer, source admission,
+recipe and recovery-oracle controls remain required there; the Go bridge rejects
+an omitted control or unexpected skip. These controls are not native acceptance.
 The first actually containing CI receipt/logs must establish the native result.
 Even a complete native synthetic transaction does **not** establish a published
 signed historical release pair, full installer main, timer-service sandbox,
