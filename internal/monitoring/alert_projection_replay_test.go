@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -73,8 +74,8 @@ func TestImportedTimelineReplayDoesNotReadDiscardedProjections(t *testing.T) {
 	incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
 	incidents.SetResourceTimelineStore(history)
 	m := &Monitor{alertManager: manager, resourceStore: adapter, incidentStore: incidents}
-	m.replayAlertLifecycleProjections()
-	m.replayAlertLifecycleProjections() // the watermark must make this a no-op
+	m.replayAlertLifecycleProjections(context.Background())
+	m.replayAlertLifecycleProjections(context.Background()) // the watermark must make this a no-op
 	reads := history.filteredReads.Load() + history.identityReads.Load() + history.recentReads.Load()
 	t.Logf("imported=%d discarded-projection reads: filtered=%d identities=%d recent=%d", len(snapshots),
 		history.filteredReads.Load(), history.identityReads.Load(), history.recentReads.Load())
@@ -136,7 +137,7 @@ func TestImportedTimelineReplayCheckpointAndCacheRecovery(t *testing.T) {
 	incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{MaxIncidents: 2})
 	incidents.SetResourceTimelineStore(adapter)
 	m := &Monitor{alertManager: manager, resourceStore: recorder, incidentStore: incidents}
-	m.replayAlertLifecycleProjections()
+	m.replayAlertLifecycleProjections(context.Background())
 	require.Equal(t, len(snapshots), recorder.imports)
 	require.Positive(t, recorder.checkpoint, "checkpoint must persist before the next import")
 	complete := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer)
@@ -149,7 +150,7 @@ func TestImportedTimelineReplayCheckpointAndCacheRecovery(t *testing.T) {
 	repaired.SetResourceTimelineStore(adapter)
 	resume := &Monitor{alertManager: manager, resourceStore: recorder, incidentStore: repaired}
 	before := recorder.imports
-	resume.replayAlertLifecycleProjections()
+	resume.replayAlertLifecycleProjections(context.Background())
 	require.Equal(t, before+1, recorder.imports)
 	require.Equal(t, complete, manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer))
 	changes, err := store.GetRecentChanges("shared-resource", time.Time{}, 2*len(snapshots)+1)

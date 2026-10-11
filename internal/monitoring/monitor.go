@@ -1344,7 +1344,11 @@ type Monitor struct {
 	alertPushCallback          func(*alerts.Alert)
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
-	alertProjectionReplayMu    sync.Mutex     // serializes lifecycle projection replay passes
+	alertProjectionReplayMu    sync.Mutex // serializes lifecycle projection replay passes
+	alertProjectionMu          sync.Mutex // closes admission before joining background replay
+	alertProjectionCtx         context.Context
+	alertProjectionCancel      context.CancelFunc
+	alertProjectionStopped     bool
 	alertProjectionWG          sync.WaitGroup // tracks scheduled background catch-up runs
 	notificationMgr            *notifications.NotificationManager
 	deadMan                    *deadManRuntime
@@ -2254,6 +2258,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Msg("Starting monitoring loop")
 
 	m.setRuntimeContext(ctx, wsHub)
+	// Router attachment can start history replay before Start. Tenant teardown
+	// must not observe this runtime as finished while that writer still owns
+	// the canonical history or its durable replay watermark.
+	defer m.stopAlertProjectionCatchUp()
 	defer m.stopMockMetricsSampler()
 
 	// Best-effort startup cleanup: when direct PBS is configured, remove legacy
@@ -8281,6 +8289,10 @@ func (m *Monitor) Stop() {
 
 func (m *Monitor) stop() error {
 	log.Info().Msg("stopping monitor")
+
+	// Also cover monitors stopped before Start. Refuse new replay admissions,
+	// finish the current occurrence, and checkpoint before closing any stores.
+	m.stopAlertProjectionCatchUp()
 
 	// A trailing agent-report refresh must not run against stores closed below.
 	m.stopAgentReportRefresh()
