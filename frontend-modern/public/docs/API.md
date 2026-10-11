@@ -1613,25 +1613,42 @@ Runs a focused investigation for an alert payload (used by the UI).
     `?include=tool_calls`. Returns `400` when the ID is empty, `404`
     (`not_found`) when no retained run has that ID, and `503`
     (`service_unavailable`) when the Patrol service is unavailable.
-- `GET /api/ai/patrol/stream` (Pro)
-- `POST /api/ai/patrol/run` (admin, Pro)
-- `POST /api/ai/patrol/acknowledge` (Pro)
+- `GET /api/ai/patrol/stream` (`ai:execute`)
+  - Server-sent events for live Patrol progress. Send `Last-Event-ID` (or the
+    `last_event_id` query parameter) to resume after the last event `id`;
+    replay is best-effort.
+- `POST /api/ai/patrol/run` (admin, `ai:execute`)
+  - Community installs are limited to one successful full run per hour and
+    get `429 patrol_rate_limited` until it has passed. Pro and Cloud have no
+    cap.
+- `POST /api/ai/patrol/acknowledge` (`ai:execute`)
 - `POST /api/ai/patrol/dismiss`
 - `POST /api/ai/patrol/findings/note`
 - `POST /api/ai/patrol/resolve`
-- `POST /api/ai/patrol/snooze` (Pro)
-- `POST /api/ai/patrol/suppress` (Pro)
-- `GET /api/ai/patrol/suppressions` (Pro)
-- `POST /api/ai/patrol/suppressions` (Pro)
-- `DELETE /api/ai/patrol/suppressions/{id}` (Pro)
-- `GET /api/ai/patrol/dismissed` (Pro)
+- `POST /api/ai/patrol/snooze` (`ai:execute`)
+- `POST /api/ai/patrol/suppress` (`ai:execute`)
+- `GET /api/ai/patrol/suppressions` (`ai:execute`)
+- `POST /api/ai/patrol/suppressions` (`ai:execute`)
+- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`)
+- `GET /api/ai/patrol/dismissed` (`ai:execute`)
+
+Patrol itself and managing its findings (acknowledge, snooze, suppress,
+dismiss) are available on Community. Only the paid-labelled routes below
+return `402`. Tokens issued for Pulse Mobile (`relay:mobile:access`) are also
+accepted on the acknowledge, dismiss and snooze routes.
 
 ### Findings & Investigations
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
-- `POST /api/ai/findings/{id}/reinvestigate`
-- `POST /api/ai/findings/{id}/reapprove` (Pro)
+- `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`)
+  - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
+    Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
+    `409 investigation_running` while one is already in progress.
+- `POST /api/ai/findings/{id}/reapprove` (Pro, `ai:execute`; retired: it always
+  returns `410 Gone` with error code `command_fix_retired`; approve typed
+  actions through `POST /api/actions/{id}/decision` (`actions:approve`)
+  instead)
 
 ### Approvals & Command Execution (Pro)
 - `GET /api/ai/approvals`
