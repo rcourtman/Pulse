@@ -155,7 +155,7 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
         });
         if (surface === 'machines') {
           const row = page.locator('[data-agents-machine-row="fixture-agent"]');
-          const dot = row.locator('span[title="online"]');
+          const dot = row.locator('span[title="online"], span[role="img"]');
           // Machines no longer has a posture card. Compare with the production
           // classification helper, not an obsolete UI from the old proposal.
           const posture = page.getByTestId('fixture-posture-summary');
@@ -191,7 +191,7 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
           });
           await page.evaluate(() => window.__pr2600.remount());
           assert.match(
-            await row.locator('span[title="online"]').getAttribute('class'),
+            await row.locator('span[title="online"], span[role="img"]').getAttribute('class'),
             /bg-amber-500/,
           );
           record.checks.push(

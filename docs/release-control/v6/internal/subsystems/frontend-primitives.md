@@ -4541,6 +4541,14 @@ resolves late` in
 The existing Machines status dot subscribes to the shared relative-time clock
 for the unchanged five-minute agent-report fallback, agreeing with the
 standalone classification helper without a new report, row timer or API read.
+Machines health chip counts and selected results now use that same classifier
+at the same clock instant rather than the canonical last-reported status.
+Healthy excludes warning/stale rows, Degraded includes them and Offline retains
+the existing danger precedence. Muted/unclassified rows stay in All only.
+The status dot tooltip and accessible name expose that same current label
+(Online, Stale or Offline), not an online tooltip on an amber retained row.
+The canonical status, stale flag and timestamps remain observations, not derived
+health. Search, focus, route-owned selection and removal behaviour are unchanged.
 Attention sort classifies once per resource per call, preserving priority and
 numeric-name ordering without keeping a cross-call status cache. Debug source
 summaries read current status/error/last-seen by section ID, not a record captured
@@ -4552,6 +4560,13 @@ plus `browser-tests/pr2600-monitoring.cjs` on desktop and touch-phone engines,
 cover clock-only staleness and arriving status replacement. These are
 synthetic source/presentation checks, not collector, workload recovery,
 whole-fleet performance, installed or release acceptance.
+`browser-tests/machines-health-filters.cjs` additionally covers expanded phone
+filters, exact freshness boundary, Healthy/Degraded clicks, arriving/withdrawn
+reports and preserved URL/search. The Proxmox identity and TrueNAS error guide
+checks still render the complete shipped guides through the production renderer;
+their per-suite fixture reuses only identical source/path renders, returns
+isolated clones and invalidates changed input. No renderer, guide bytes,
+assertions or test deadlines are weakened.
 
 ### Manual update freshness
 

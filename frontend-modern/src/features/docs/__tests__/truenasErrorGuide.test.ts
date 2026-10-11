@@ -2,22 +2,19 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
-function renderGuide(name: string): HTMLElement {
+const renderGuide = createGuideFixture((name) => {
   // An exact-parent input proves that the former advice fails these checks
   // without altering the committed source used by the proof.
   const input = process.env[`PULSE_${name}_GUIDE_TEST_INPUT`];
-  const source = readFileSync(
+  return readFileSync(
     input ?? path.join(repoRoot, 'frontend-modern/public/docs', `${name}.md`),
     'utf8',
   );
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(source, name);
-  return article;
-}
+});
 
 function sectionAt(article: HTMLElement, id: string): HTMLElement {
   const heading = article.querySelector(id);
