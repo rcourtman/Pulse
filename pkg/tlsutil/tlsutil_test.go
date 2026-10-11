@@ -392,3 +392,22 @@ func TestFingerprintVerifier_TLSVersion(t *testing.T) {
 		t.Errorf("MinVersion should be %v, got %v", minimumTLSVersion, config.MinVersion)
 	}
 }
+
+// No service listens on these fixed ports in the isolated source-proof guest.
+// The public helper's dial error exposes its actual selected authority, without
+// requiring a privileged listener, a resolver override or an external probe.
+func TestFetchFingerprintEndpointSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, address string
+	}{
+		{"explicit-https-default", "https://127.0.0.1", "127.0.0.1:443"},
+		{"bare-ipv6-default", "::1", "[::1]:8006"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fingerprint, err := FetchFingerprint(tc.input)
+			if fingerprint != "" || err == nil || !strings.HasPrefix(err.Error(), "failed to connect to "+tc.address+":") {
+				t.Fatalf("capture did not dial the requested authority %s: fingerprint=%q error=%v", tc.address, fingerprint, err)
+			}
+		})
+	}
+}
