@@ -441,6 +441,19 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
+		// From here quick setup sets the administrator username and password
+		// and replaces every API token with a full-access one. That is
+		// instance-wide authority, so an API-token caller needs it too;
+		// settings:write alone must not be enough to take the instance over.
+		if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil && !tokenHasInstanceWideAuthority(callerToken) {
+			log.Warn().
+				Str("token_id", callerToken.ID).
+				Str("ip", clientIP).
+				Msg("API token without instance-wide authority attempted quick security setup")
+			http.Error(w, "Security setup replaces the administrator credentials and every API token, so it needs a full-access token that is not bound to any non-default organization.", http.StatusForbidden)
+			return
+		}
+
 		if setupRequest.Force {
 			log.Info().Msg("Quick security setup invoked with force=true - rotating credentials")
 		}

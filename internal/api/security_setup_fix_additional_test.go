@@ -564,7 +564,7 @@ func TestQuickSecuritySetupRestoresTokensWhenPersistenceFails(t *testing.T) {
 		t.Fatalf("hash existing password: %v", err)
 	}
 	rawOldToken := strings.Repeat("ab", 32)
-	oldToken, err := config.NewAPITokenRecord(rawOldToken, "existing token", []string{config.ScopeSettingsWrite})
+	oldToken, err := config.NewAPITokenRecord(rawOldToken, "existing token", []string{config.ScopeWildcard})
 	if err != nil {
 		t.Fatalf("new existing token: %v", err)
 	}
