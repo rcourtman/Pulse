@@ -8098,6 +8098,21 @@ machine-readable `errorKind` values with operator guidance in
 certificate mismatch, refused connections, unreachable networks, DNS failures,
 timeouts, and unknown connection failures must remain distinguishable in
 support bundles instead of collapsing into a generic connection failure string.
+TLS recovery guidance must preserve certificate verification: check the
+configured endpoint's hostname, validity and trusted chain, and independently
+verify certificate identity before adding or updating a saved fingerprint.
+Neither a trusted network nor a failed probe justifies advice to disable
+verification or switch to HTTP. Wrapped cancellation and typed network/deadline
+timeouts take precedence over certificate words in endpoint/error text;
+serialized scheduler timeout messages retain the same distinction. The existing
+`errorKind` vocabulary and trust settings remain unchanged. Production loopback
+PVE/PBS probes must reject untrusted chains and changed pins before sending HTTP
+credentials, preserve saved trust, and resume only when the fixture operator
+supplies the independently known pin. A successful PBS probe still does not
+establish scheduler recovery without a completed poll. Verification:
+`TestComputeDiagnosticsTLSRefusalAndVerifiedRecovery`,
+`TestComputeDiagnosticsTLSHandshakeDeadline`, and the
+`TestContract_DiagnosticsTLS*` controls, including JSON/LastError round trips.
 PBS connection state follows the same scheduler-ledger authority as the
 Settings connections response and connection-alert snapshots.
 `InstancePollStatus.LastError` is a current outstanding failure that is cleared
