@@ -314,6 +314,50 @@ describe('availabilitySettingsModel', () => {
     expect(getAvailabilityTargetHealth(unavailable(2))).toBe('offline');
   });
 
+  it('names expired loaded evidence without overriding pause or stopped-probe copy', () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    const check = target({
+      status: {
+        ...target(),
+        targetId: 'mqtt-broker',
+        available: true,
+        aggregateState: 'healthy',
+        expectedLocations: 2,
+        lastChecked: new Date(start).toISOString(),
+      },
+    });
+    const resource = {
+      type: 'network-endpoint',
+      platformType: 'availability',
+      status: 'online',
+      availability: {
+        ...check.status,
+        evidence: { validUntil: new Date(start + 10_000).toISOString() },
+      },
+    } as never;
+    expect(getAvailabilityTargetStatusLabel(check, resource, start)).toBe(
+      'Available from all 2 locations',
+    );
+    expect(getAvailabilityTargetStatusLabel(check, resource, start + 30_000)).toBe('Stale');
+    expect(
+      getAvailabilityTargetStatusLabel({ ...check, enabled: false }, resource, start + 30_000),
+    ).toBe('Paused');
+    expect(
+      getAvailabilityTargetStatusLabel(
+        {
+          ...check,
+          status: {
+            ...check.status!,
+            outcome: 'indeterminate',
+            lastError: 'no recent report from probe agent',
+          },
+        },
+        resource,
+        start + 30_000,
+      ),
+    ).toBe('No recent probe report');
+  });
+
   it('defers to the Machines status of the loaded resource', () => {
     const healthyTarget = target({
       status: {

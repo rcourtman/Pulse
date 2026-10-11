@@ -163,6 +163,32 @@ export async function waitForAppShell(page: Page, timeoutMs = 20_000) {
   );
 }
 
+async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_000) {
+  // A protected URL and a nonempty root also describe pending bootstrap and
+  // Login after a rejected summary request. The app-scroll-shell mounts only
+  // after loading, needsAuth and enhanced-store admission have completed.
+  const outcome = await page.waitForFunction(
+    () => {
+      const visible = (selector: string) => {
+        const element = document.querySelector(selector);
+        return element !== null && element.getClientRects().length > 0 &&
+          getComputedStyle(element).visibility !== "hidden";
+      };
+      if (visible('input[name="username"]')) return "login";
+      return visible(".app-scroll-shell") ? "authenticated" : false;
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+  try {
+    if (await outcome.jsonValue() !== "authenticated") {
+      throw new Error("Shared cookie session was rejected by browser bootstrap");
+    }
+  } finally {
+    await outcome.dispose();
+  }
+}
+
 export async function waitForPulseReady(page: Page, timeoutMs = 120_000) {
   const startedAt = Date.now();
   let lastError: unknown = null;
@@ -1157,8 +1183,11 @@ async function authenticateWithSharedCookieSession(page: Page): Promise<boolean>
       throw new Error(`Shared cookie session probe failed: ${status}`);
     }
     await page.context().addCookies(cookies);
-    await page.goto("/");
-    await waitForAppShell(page);
+    // Root/login skip protected bootstrap without a per-tab login hint.
+    // Validate the saved cookies through the existing workspace entry, never
+    // by restoring token/tenant storage or falling back after browser refusal.
+    await page.goto("/infrastructure");
+    await waitForAuthenticatedAppShell(page);
     await expect(page).toHaveURL(AUTHENTICATED_URL);
     return true;
   } finally {

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "20f36e1621a713a1ab90b9e6d835c22ca16a88f9",
+  "verified_at": "2026-10-11T03:23:11.779429Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "606c8b9ba04b171dd21a94968e07ab0ad5e04205e9d4c11791529898d12684b8"
+  },
+  "routes": [
+    "/browser-tests/held-operator-time.html?surface=guest"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Fresh pass at the committed source parent, not old captures rebound after integration. Two completed cases, desktop Chromium 141.0.7390.37/light and phone WebKit 26.0/dark; Playwright 1.56.1 matches integration lock. All four captures inspected.",
+    "Actual full GuestDrawer and final Overview, real CSS/router/model/formatter/shared clock with synthetic local inputs. Current held CPU alert becomes Last reading at 10 mins, then 11 mins, while the visible Proxmox memory-source/cache note and Linux-only QEMU advice stay visible.",
+    "All four cache-inclusive sources keep the visible note; QEMU and Pulse agent sources remove it without refreshing the held alert. Last-known fallback stays qualified; unavailable source removes caveat. Withdrawn alert stays absent through a clock tick.",
+    "No claim of full App, native guest/QGA/freeze/thaw, real memory pressure, notification or updater recovery, physical phone, installed or containing-release acceptance."
+  ],
+  "interactions": [
+    "Advance the page clock on an unchanged guest/alert; source changes are synthetic same-identity memory inputs, not provider reads or operations. No assertion of OS-native tooltip or touch tooltip display.",
+    "Both cases have no page error, unspecified API, off-origin request, mutation or horizontal overflow. Actual context/browser/Vite closure recorded; host descendant cleanup is not independently reported."
+  ],
+  "control_count": 14
+}

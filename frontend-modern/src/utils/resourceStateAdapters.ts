@@ -210,7 +210,9 @@ const mergePlatformData = (
         ? mergeProxmoxFacet(asRecord(incoming[key]), asRecord(existing[key]))
         : key === 'agent'
           ? mergeAgentFacet(asRecord(incoming[key]), asRecord(existing[key]))
-          : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+          : key === 'availability'
+            ? (asRecord(incoming[key]) ?? asRecord(existing[key]))
+            : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (key === 'docker') {
       if (hasDockerFacetEvidence(nested)) {
         merged[key] = nested;
@@ -222,6 +224,11 @@ const mergePlatformData = (
     if (nested) {
       merged[key] = nested;
     }
+  }
+
+  // A departed availability source must not resurrect its check set from the mirror.
+  if (!shouldKeepSourceFacet(incomingSources, 'availability')) {
+    delete merged.availabilityChecks;
   }
 
   for (const key of [
@@ -677,6 +684,18 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
         : mergeRecord(incomingFacet, existingFacet)
     : incomingFacet;
 
+// Availability summaries/check sets are complete records in REST and in the
+// websocket baseline rebuilt from merge patches. Their optional failure,
+// location and certificate fields are withdrawn by omission on recovery.
+// Only an absent record retains enrichment, and only while its source remains.
+const replaceCanonicalSourceFacet = <T>(
+  incoming: T | undefined,
+  existing: T | undefined,
+  sources: string[] | undefined,
+  ...sourceCandidates: string[]
+): T | undefined =>
+  incoming ?? (shouldKeepSourceFacet(sources, ...sourceCandidates) ? existing : undefined);
+
 // A missing field alone can be a partial snapshot. Explicit unavailable raw
 // evidence plus no canonical metric means the producer has withdrawn memory;
 // retaining the previous display metric would hide that state.
@@ -904,17 +923,18 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incomingSources,
       'truenas',
     ) as Resource['truenas'],
-    availability: mergeCanonicalSourceFacet(
-      incoming.availability as JsonRecord | undefined,
-      existingCanonical.availability as JsonRecord | undefined,
+    availability: replaceCanonicalSourceFacet(
+      incoming.availability,
+      existingCanonical.availability,
       incomingSources,
       'availability',
-    ) as Resource['availability'],
-    availabilityChecks:
-      incoming.availabilityChecks ??
-      (shouldKeepSourceFacet(incomingSources, 'availability')
-        ? existingCanonical.availabilityChecks
-        : undefined),
+    ),
+    availabilityChecks: replaceCanonicalSourceFacet(
+      incoming.availabilityChecks,
+      existingCanonical.availabilityChecks,
+      incomingSources,
+      'availability',
+    ),
     storage: mergeRecord(
       incoming.storage as JsonRecord | undefined,
       existingCanonical.storage as JsonRecord | undefined,

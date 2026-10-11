@@ -290,6 +290,55 @@ jobs:
           go vet -mod=readonly -p=2 ./cmd/pulse ./internal/api
           sha256sum "$RUNNER_TEMP/pulse-real-embed"
 
+      # #2785: confined manager doubles cannot establish native recovery.
+      # Reuse this job's real embed/cache on a fresh hosted VM, not a release,
+      # customer LXC, privileged worker or new maintainer dispatcher.
+      - name: Check current-source unattended recovery on native systemd
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --quiet HEAD
+          diff -qr --no-dereference frontend-modern/dist internal/api/frontend-modern/dist
+          go build -mod=readonly -p=2 -ldflags='-X main.Version=v0.0.1' -o "$RUNNER_TEMP/pulse-native-before" ./cmd/pulse
+          go build -mod=readonly -p=2 -ldflags='-X main.Version=v0.0.2' -o "$RUNNER_TEMP/pulse-native-after" ./cmd/pulse
+          sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
+            GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse \
+            EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+            python3 scripts/installtests/auto_update_systemd.py \
+              --before "$RUNNER_TEMP/pulse-native-before" --after "$RUNNER_TEMP/pulse-native-after" \
+              --receipt "$RUNNER_TEMP/pulse-native-updater.json"
+
+      - name: Retain bounded native updater receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-updater-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-native-updater.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Reuse the exact real-embed binary, rather than another build or mock
+      # lifecycle callback. This owns only disposable loopback endpoints/data:
+      # saved policy must reach ordinary alerts and survive a real restart.
+      - name: Check ordinary notification policy and restart
+        timeout-minutes: 3
+        run: >-
+          python3 scripts/check_notification_runtime.py
+          --binary "$RUNNER_TEMP/pulse-real-embed"
+          --expected-source-sha "${{ github.sha }}"
+          --receipt "$RUNNER_TEMP/pulse-notification-runtime.json"
+
+      - name: Retain bounded notification runtime receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notification-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-notification-runtime.json
+          if-no-files-found: warn
+          retention-days: 7
+
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
       - name: Require frontend dependency audit

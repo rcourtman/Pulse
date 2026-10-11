@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -415,7 +416,7 @@ func (m *Monitor) materializeImportedAlertTimeline(alert *alerts.Alert, imported
 		}
 	}
 
-	m.incidentStore.EnsureAlertOccurrence(alert, resolvedAt)
+	m.incidentStore.MaterializeAlertOccurrence(alert, resolvedAt)
 	firedAt := alert.StartTime
 	if firedAt.IsZero() {
 		firedAt = importedAt
@@ -470,17 +471,43 @@ func (m *Monitor) scheduleAlertProjectionCatchUp() {
 	if m == nil {
 		return
 	}
+	m.alertProjectionMu.Lock()
+	if m.alertProjectionStopped {
+		m.alertProjectionMu.Unlock()
+		return
+	}
+	if m.alertProjectionCtx == nil {
+		m.alertProjectionCtx, m.alertProjectionCancel = context.WithCancel(context.Background())
+	}
+	ctx := m.alertProjectionCtx
+	// Add and closing admission share a lock: shutdown must never race a new
+	// Add against Wait on an empty group, including attachment before Start.
 	m.alertProjectionWG.Add(1)
+	m.alertProjectionMu.Unlock()
 	go func() {
 		defer m.alertProjectionWG.Done()
 		defer recoverFromPanic("alertProjectionCatchUp")
-		m.replayAlertLifecycleProjections()
-		m.reconcileActiveAlertTimelines()
+		m.replayAlertLifecycleProjections(ctx)
+		m.reconcileActiveAlertTimelines(ctx)
 	}()
 }
 
-func (m *Monitor) replayAlertLifecycleProjections() {
-	if m == nil || m.alertManager == nil {
+func (m *Monitor) stopAlertProjectionCatchUp() {
+	m.alertProjectionMu.Lock()
+	m.alertProjectionStopped = true
+	if m.alertProjectionCancel != nil {
+		m.alertProjectionCancel()
+	}
+	m.alertProjectionMu.Unlock()
+	// An admitted canonical write cannot be interrupted safely. Start stays
+	// live until it finishes; the existing tenant deletion budget then retains
+	// the runtime and its data if that writer is blocked, rather than removing
+	// its directory underneath it.
+	m.alertProjectionWG.Wait()
+}
+
+func (m *Monitor) replayAlertLifecycleProjections(ctx context.Context) {
+	if m == nil || m.alertManager == nil || ctx.Err() != nil {
 		return
 	}
 	// Serialize passes instead of skipping: a second trigger waits for the
@@ -488,6 +515,9 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	// that need replay-complete semantics can rely on a finished call.
 	m.alertProjectionReplayMu.Lock()
 	defer m.alertProjectionReplayMu.Unlock()
+	if ctx.Err() != nil {
+		return
+	}
 
 	m.mu.RLock()
 	_, hasRecorder := m.resourceStore.(canonicalResourceChangeRecorder)
@@ -503,6 +533,12 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	maxApplied := afterID
 	visited := 0
 	err := m.alertManager.ReplayLifecycleEvents(afterID, func(eventID int64, event alerts.LifecycleEvent) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// Apply the whole occurrence (including imported acknowledgement and
+		// resolution) before advancing its watermark, even if shutdown arrives
+		// during a canonical write. Cancellation only stops the next event.
 		m.handleAlertLifecycleEvent(event)
 		if eventID > maxApplied {
 			maxApplied = eventID
@@ -513,12 +549,16 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 		}
 		return nil
 	})
-	if err != nil {
+	cancelled := err != nil && errors.Is(err, ctx.Err())
+	if err != nil && !cancelled {
 		log.Error().Err(err).Msg("failed to replay canonical alert lifecycle projections")
 		return
 	}
 	if advance && maxApplied > afterID {
 		m.alertManager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, maxApplied)
+	}
+	if cancelled {
+		return // The next runtime resumes the unapplied tail, not the full log.
 	}
 	if visited > 0 {
 		log.Info().
@@ -529,17 +569,23 @@ func (m *Monitor) replayAlertLifecycleProjections() {
 	}
 }
 
-func (m *Monitor) reconcileActiveAlertTimelines() {
-	if m == nil || m.alertManager == nil || m.incidentStore == nil {
+func (m *Monitor) reconcileActiveAlertTimelines(ctx context.Context) {
+	if m == nil || m.alertManager == nil || m.incidentStore == nil || ctx.Err() != nil {
 		return
 	}
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	for i := range activeAlerts {
+		if ctx.Err() != nil {
+			return
+		}
 		alert := &activeAlerts[i]
 		page, err := m.incidentStore.QueryIncidents(memory.IncidentQuery{AlertIdentifier: alert.ID, StartedAt: alert.StartTime, Limit: 1})
 		if err != nil {
 			log.Warn().Err(err).Msg("Skipping alert timeline reconciliation because canonical history is unavailable")
 			continue
+		}
+		if ctx.Err() != nil {
+			return
 		}
 		var timeline *memory.Incident
 		if len(page.Incidents) > 0 {

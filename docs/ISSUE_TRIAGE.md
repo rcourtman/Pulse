@@ -132,6 +132,17 @@ profiles, heap dumps, databases or full process command lines in a public
 thread; use locally reviewed counter summaries, without restarting, creating
 load or changing polling or retention just to measure.
 
+For Pulse memory reports, a higher steady baseline and continuing growth are
+different problems. A plateau does not dismiss an increased memory requirement;
+do not require a leak or a rising series before retaining a baseline regression.
+Compare already supplied process scope, units, versions, uptime, workload and
+enabled collectors/features. A week-old run and a ten-minute new process are
+not comparable steady-state evidence, and a startup CPU saving does not prove
+lower RSS. Preserve those limits instead of claiming recovery or asking for
+another restart, downgrade, profile or unchanged sample. If the reporter
+clarifies that the problem is the baseline, carry that goal to the engineering
+owner; growth-rate evidence alone does not answer it. Unknown context is valid.
+
 For VM or LXC memory disagreements, retain where each existing reading appears
 (overview, History, alert, Patrol or another tool), whether the comparison was
 measured inside the affected guest or on its hypervisor node, and the original

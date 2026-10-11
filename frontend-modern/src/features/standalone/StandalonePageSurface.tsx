@@ -32,6 +32,7 @@ import {
 } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import {
   AvailabilityChecksTable,
@@ -69,6 +70,7 @@ const StandalonePostureCard: Component<{
   noun: string;
   summary: StandalonePostureSummary;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const headline = () => {
     if (props.summary.critical > 0) {
       return `${props.summary.critical} ${props.noun}${props.summary.critical === 1 ? '' : 's'} offline`;
@@ -89,7 +91,11 @@ const StandalonePostureCard: Component<{
   };
   const latestUpdate = () =>
     props.summary.latestUpdateAt
-      ? formatRelativeTime(props.summary.latestUpdateAt, { compact: true, emptyText: 'unknown' })
+      ? formatRelativeTime(props.summary.latestUpdateAt, {
+          compact: true,
+          emptyText: 'unknown',
+          now: now(),
+        })
       : 'unknown';
 
   return (
@@ -135,6 +141,7 @@ const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
     : 'machines';
 
 export function StandalonePageSurface() {
+  const now = useRelativeTimeNow();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -183,7 +190,7 @@ export function StandalonePageSurface() {
     setSearchParams({ [STANDALONE_QUERY_PARAMS.view]: view }, { replace: true });
   };
   const availabilityPosture = createMemo(() =>
-    buildStandalonePostureSummary(model().availabilityChecks),
+    buildStandalonePostureSummary(model().availabilityChecks, now()),
   );
   const showLoading = createMemo(
     () =>

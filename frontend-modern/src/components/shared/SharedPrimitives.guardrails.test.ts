@@ -8784,11 +8784,11 @@ describe('shared primitive guardrails', () => {
       'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
     ]) {
       const source = readFrontendSource(liveAlertConsumer);
-      expect(source).toContain('...getAlertAttentionCopy(alert)');
+      expect(source).toContain('...getAlertAttentionCopy(alert, now)');
       expect(source).not.toContain('message: alert.message');
     }
     expect(readFrontendSource('src/components/Workloads/guestDrawerModel.ts')).toContain(
-      'getAlertAttentionCopy(alert)',
+      'getAlertAttentionCopy(alert, now)',
     );
 
     const overviewConsumers = [

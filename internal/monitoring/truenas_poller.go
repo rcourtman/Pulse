@@ -993,6 +993,11 @@ func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 
 // SupplementalRecords adapts TrueNAS records to the monitor supplemental
 // provider contract.
+// SupplementalRecordsMockMode binds native records to real infrastructure.
+// Mock-mode publications must not read this cached inventory before the
+// router's post-switch hook replaces the platform provider pair.
+func (*TrueNASPoller) SupplementalRecordsMockMode() bool { return false }
+
 func (p *TrueNASPoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
 	return p.GetCurrentRecordsForOrg(orgID)
 }

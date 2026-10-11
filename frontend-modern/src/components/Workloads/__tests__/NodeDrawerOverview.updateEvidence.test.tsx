@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NodeDrawerOverview } from '@/components/Workloads/NodeDrawerOverview';
 import type { Node } from '@/types/api';
@@ -24,9 +24,36 @@ const makeNode = (overrides: Partial<Node>): Node =>
     ...overrides,
   }) as Node;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('NodeDrawerOverview update evidence', () => {
+  it.each(['checked', 'stale'] as const)(
+    'ages %s evidence without inventing a new check or changing its verdict',
+    (status) => {
+      const start = Date.parse('2026-10-10T12:00:00Z');
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+      const node = makeNode({
+        pendingUpdates: 0,
+        pendingUpdatesStatus: status,
+        pendingUpdatesCheckedAt: new Date(start - 60_000).toISOString(),
+        ...(status === 'stale' ? { pendingUpdatesReason: 'check_failed' as const } : {}),
+      });
+      render(() => <NodeDrawerOverview node={node} />);
+      expect(screen.getByText(/No pending updates.*checked 1 min ago/)).toBeInTheDocument();
+      vi.advanceTimersByTime(60_000);
+      expect(screen.getByText(/No pending updates.*checked 2 mins ago/)).toHaveAttribute(
+        'title',
+        status === 'checked'
+          ? 'Last successful update check 2 mins ago'
+          : 'Latest check failed · last success 2 mins ago',
+      );
+      expect(node.pendingUpdatesStatus).toBe(status);
+      expect(node.pendingUpdatesCheckedAt).toBe(new Date(start - 60_000).toISOString());
+    },
+  );
   it('shows confirmed zero evidence instead of omitting the update row', () => {
     render(() => (
       <NodeDrawerOverview

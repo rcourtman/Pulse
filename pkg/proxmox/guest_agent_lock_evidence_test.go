@@ -127,17 +127,29 @@ func TestGuestAgentLockEvidenceRejectsRedirects(t *testing.T) {
 						if commands.Load() != want || redirected.Load() != 0 {
 							t.Errorf("wire commands/redirected = %d/%d, want %d/0", commands.Load(), redirected.Load(), want)
 						}
-						// Ordinary config reads retain their existing redirect
-						// policy; do not globally mutate c.httpClient.
-						if _, err := c.GetVMConfig(context.Background(), "node", 105); err != nil || redirected.Load() != 1 {
-							t.Errorf("ordinary config redirect policy changed: redirects=%d err=%v", redirected.Load(), err)
+						// Ordinary reads can follow a same-origin proxy path, but
+						// cannot move credentials to another endpoint. Lock evidence
+						// remains stricter and refuses both, without mutating the
+						// ordinary client's policy.
+						_, configErr := c.GetVMConfig(context.Background(), "node", 105)
+						wantRedirected := int32(1)
+						if crossEndpoint {
+							wantRedirected = 0
+							if configErr == nil || !strings.Contains(configErr.Error(), "same origin") {
+								t.Errorf("ordinary config accepted a changed origin: %v", configErr)
+							}
+						} else if configErr != nil {
+							t.Errorf("ordinary same-origin proxy redirect failed: %v", configErr)
+						}
+						if redirected.Load() != wantRedirected {
+							t.Errorf("ordinary redirected requests = %d, want %d", redirected.Load(), wantRedirected)
 						}
 						healthy.Store(true)
 						if err := read(context.Background(), backupTestClient(t, server.URL), 105); err != nil {
 							t.Fatalf("valid same-target config did not resume: %v", err)
 						}
-						if commands.Load() != want+1 || redirected.Load() != 1 {
-							t.Errorf("resumed commands/redirected = %d/%d, want %d/1", commands.Load(), redirected.Load(), want+1)
+						if commands.Load() != want+1 || redirected.Load() != wantRedirected {
+							t.Errorf("resumed commands/redirected = %d/%d, want %d/%d", commands.Load(), redirected.Load(), want+1, wantRedirected)
 						}
 					})
 				}

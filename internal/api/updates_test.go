@@ -1060,6 +1060,41 @@ func TestUpdateHandlersRegistryProvidesPlans(t *testing.T) {
 	}
 }
 
+func TestHandleGetUpdatePlan_DockerSavedDeployment(t *testing.T) {
+	setMockModeForTest(t, true)
+	t.Setenv("PULSE_DOCKER_IMAGE_REPO", "registry.example:5000/team/pulse")
+	h := NewUpdateHandlers(nil, nil)
+	// Exercise the real registered adapter through the handler, independent
+	// of the test host's deployment detection and without a Docker daemon.
+	h.registry.Register("mock", updates.NewDockerUpdater())
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v6.5.0", nil)
+	h.HandleGetUpdatePlan(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("plan status = %d: %s", w.Code, w.Body.String())
+	}
+	var plan updates.UpdatePlan
+	if err := json.NewDecoder(w.Body).Decode(&plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.CanAutoUpdate || plan.RequiresRoot || !plan.RollbackSupport {
+		t.Fatalf("Docker plan capabilities changed: %+v", plan)
+	}
+	if len(plan.Instructions) != 5 || plan.Instructions[0] != "docker pull 'registry.example:5000/team/pulse:6.5.0'" {
+		t.Fatalf("copyable Docker plan = %v", plan.Instructions)
+	}
+	for _, instruction := range plan.Instructions[1:] {
+		if strings.HasPrefix(instruction, "docker ") || strings.Contains(instruction, "--name pulse") {
+			t.Fatalf("wire plan guesses a deployment mutation: %q", instruction)
+		}
+	}
+	if !strings.Contains(plan.Instructions[2], "original Compose file") ||
+		!strings.Contains(plan.Instructions[3], "leave the running container unchanged") ||
+		len(plan.Prerequisites) != 2 {
+		t.Fatalf("saved-deployment safety did not reach the API: %+v", plan)
+	}
+}
+
 func TestHandleGetUpdatePlan_IncludesUpgradeReadiness(t *testing.T) {
 	setMockModeForTest(t, true)
 

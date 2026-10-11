@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
@@ -230,6 +231,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
   };
   const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
 
+  const now = useRelativeTimeNow();
   const stats = createMemo(() => instance()?.mailStats);
   const quarantine = createMemo(() => instance()?.quarantine);
   const nodes = createMemo<PMGNodeStatus[]>(() => instance()?.nodes ?? []);
@@ -352,7 +354,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getAlertAttentionCopy(alert),
+          ...getAlertAttentionCopy(alert, now),
           subject: name(),
           metric: alertTypeDisplayLabel(alert.type),
           severity: alert.level,

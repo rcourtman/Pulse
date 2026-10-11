@@ -15,6 +15,7 @@ import {
 } from '@/api/resourceOperatorState';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { ResourceCapability } from '@/types/resource';
 import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
 
@@ -44,6 +45,7 @@ interface ResourceOperatorStateSectionProps {
 export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectionProps> = (
   props,
 ) => {
+  const now = useRelativeTimeNow();
   // Fetch the persisted state via the non-suspending helper so the
   // drawer's parent Suspense boundary does not flicker the page-level
   // fallback while operator-state is in flight. null means "no entry"
@@ -337,16 +339,20 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
   // Compute whether a maintenance window covers `now` so the section
   // can badge it. Distinct from `scheduledMaintenanceWindow` — both
-  // active and future windows are surfaced, with different copy.
+  // active and future windows are surfaced, with different copy. The
+  // shared clock expires local one-off presentation without refetching
+  // persisted state (which would also rehydrate the operator's edits).
+  // Explicit server activity, including recurring windows, stays authoritative:
+  // after its reported end, qualify that verdict rather than infer resumption.
   const activeMaintenanceWindow = createMemo(() => {
     const current = persisted();
     if (current?.maintenanceWindowActive && current.maintenanceActiveEndAt) return current;
     if (!current?.maintenanceStartAt || !current?.maintenanceEndAt) return null;
-    const now = Date.now();
+    const currentTime = now();
     const start = Date.parse(current.maintenanceStartAt);
     const end = Date.parse(current.maintenanceEndAt);
     if (Number.isNaN(start) || Number.isNaN(end)) return null;
-    if (now < start || now >= end) return null;
+    if (currentTime < start || currentTime >= end) return null;
     return current;
   });
 
@@ -356,11 +362,18 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   const scheduledMaintenanceWindow = createMemo(() => {
     const current = persisted();
     if (!current?.maintenanceStartAt || !current?.maintenanceEndAt) return null;
-    const now = Date.now();
+    const currentTime = now();
     const start = Date.parse(current.maintenanceStartAt);
     if (Number.isNaN(start)) return null;
-    if (start <= now) return null;
+    if (start <= currentTime) return null;
     return current;
+  });
+
+  const serverMaintenanceReportEnded = createMemo(() => {
+    const current = persisted();
+    if (!current?.maintenanceWindowActive || !current.maintenanceActiveEndAt) return false;
+    const end = Date.parse(current.maintenanceActiveEndAt);
+    return Number.isFinite(end) && now() >= end;
   });
 
   const hasAnyMaintenanceWindow = createMemo(() =>
@@ -576,17 +589,28 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={activeMaintenanceWindow()}>
         <div class="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
-          <span class="font-semibold">Maintenance window active.</span> Attention on this resource
+          <span class="font-semibold">
+            {serverMaintenanceReportEnded()
+              ? 'Last reported maintenance window.'
+              : 'Maintenance window active.'}
+          </span>{' '}
+          {serverMaintenanceReportEnded() ? 'Attention was reported paused on' : 'Attention on'}{' '}
+          this resource
           <Show when={activeMaintenanceWindow()!.maintenanceScope === 'resource_and_descendants'}>
             {' '}
             and its descendants
           </Show>{' '}
-          is paused until{' '}
+          {serverMaintenanceReportEnded() ? 'until' : 'is paused until'}{' '}
           {new Date(
             activeMaintenanceWindow()!.maintenanceActiveEndAt ??
               activeMaintenanceWindow()!.maintenanceEndAt!,
           ).toLocaleString()}
           .
+          <Show when={serverMaintenanceReportEnded()}>
+            <span class="block mt-0.5">
+              The reported end has passed. Current maintenance status has not been refreshed.
+            </span>
+          </Show>
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
           </Show>

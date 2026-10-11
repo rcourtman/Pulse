@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "80ef7a2923b5bee25d3aa48ce678f2d4b286725f",
+  "verified_at": "2026-10-11T04:29:14.340458Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/MaintenanceVerificationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/MaintenanceVerificationSection.tsx": "af1eac63570ab102272f25fb1ec5cade2ee3508284600a131ff71a9c860efa87"
+  },
+  "routes": ["/browser-tests/maintenance-evidence.html"],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Full production ResourceDetailDrawer Manage, actual report component, query/transport, CSS and shared clock; synthetic local-only snapshots/HTTP. Desktop Chromium 141.0.7390.37/light and phone WebKit 26.0/dark. Playwright 1.56.1 matches integration lock.",
+    "Checked, Window ended and Reviewed remain distinct historical events through minute/hour boundaries; all four verdicts, evidence, operator locks and unsaved note preserved. Go zero-time completion stays unknown.",
+    "Loading, 503 unavailable, 403 denied and successful empty read remain distinct. Explicit keyboard read-only retry; no unsolicited retry or mutation on a tick. The full drawer already remounts at a different ID; opening Manage there shows only its own report state. Component-level held-prop isolation and same-resource failed-refresh retention are separately covered by runtime tests.",
+    "Two completed cases / 16 controls / twelve inspected screenshots, no page error, unspecified/off-origin request, operation or horizontal overflow. No full App, actual authentication, backend review/rerun, appliance, guest recovery, native notification, installed or released acceptance."
+  ],
+  "interactions": [
+    "Advance only the page clock with held reports. Observe stable verdict/counts and saved restrictions; preserve unsaved operator note.",
+    "Synthetic resource selection uses existing keyed drawer reset, then explicitly open Manage. Held GET returns 503, keyboard Retry reports returns 403, another explicit GET returns empty; reports stay absent through ticks.",
+    "All twelve resulting captures visually inspected. Both contexts, browsers and Vite closed; host descendant cleanup is not independently reported. Earlier failed/cancelled/unknown attempts are retained, not rebound or counted here."
+  ],
+  "control_count": 16
+}

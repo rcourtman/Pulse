@@ -106,6 +106,63 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "missing record", "service is presenting the same token"):
             self.assertIn(fact, text)
 
+    def test_missing_record_check_registers_once_before_touching_the_agent(self):
+        text = " ".join(section().split())
+        install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
+        generation = install.split("const generateInstallToken = async (", 1)[1].split(
+            "const handleGenerateToken = async", 1)[0]
+        self.assertIn("NodesAPI.createHostAgentInstallToken", generation)
+        self.assertIn("enableCommands: withCommands", generation)
+        self.assertNotIn("deleteToken", generation)
+        ui = (ROOT / "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx").read_text()
+        self.assertIn("Generate token", ui)
+        inventory = (ROOT / "internal/api/security_tokens.go").read_text()
+        listing = inventory.split("func (r *Router) handleListAPITokens(", 1)[1].split(
+            "// handleGetAPIToken", 1)[0]
+        self.assertIn("range r.config.APITokens", listing)
+        self.assertIn("toAPITokenDTO(record)", listing)
+        for fact in ("If the intended record is absent", "server registration",
+                     "one new install token a distinct name", "Before running any install command",
+                     "refresh the page", "does not change the Pi or any other agent's saved credential",
+                     "Leave command execution disabled", "missing or disappears, stop there",
+                     "do not generate more tokens", "generation showed an error",
+                     "not persistence across a server restart", "successful credential hand-off",
+                     "accepted host reports", "Retain the existing installation",
+                     "not, by itself, a reason to mint a replacement"):
+            self.assertIn(fact, text)
+
+    def test_docker_only_record_is_not_host_authority_or_a_401_diagnosis(self):
+        text = " ".join(section().split())
+        routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
+        for endpoint, required in (("docker/report", "ScopeDockerReport"),
+                                   ("agent/report", "ScopeAgentReport"),
+                                   ("agent/lookup", "ScopeAgentReport")):
+            self.assertIn(
+                f'"/api/agents/{endpoint}", RequireAuth(r.config, '
+                f'RequireScope(config.{required},', routes,
+            )
+        labels = (ROOT / "frontend-modern/src/constants/apiScopes.ts").read_text()
+        for constant, value, label in (
+            ("AGENT_REPORT_SCOPE", "agent:report", "Agent reporting"),
+            ("AGENT_CONFIG_READ_SCOPE", "agent:config:read", "Agent config fetch"),
+        ):
+            self.assertIn(f"export const {constant} = '{value}';", labels)
+            self.assertIn(f"value: {constant},\n    label: '{label}'", labels)
+            self.assertIn(f"**{label}** (`{value}`)", text)
+        scopes = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        host = scopes.split("func HostScopes(", 1)[1].split("\n}", 1)[0]
+        for required in ("ScopeAgentReport", "ScopeAgentConfigRead"):
+            self.assertIn(f"config.{required}", host)
+        self.assertNotIn("ScopeWildcard", host)
+        self.assertNotIn("ScopeSettingsWrite", host)
+        for fact in ("If the listed record has only Docker reporting", "`docker:report`",
+                     "not the host module's lookup", "scope does not explain an earlier 401",
+                     "Command execution and administrator scope are not required",
+                     "includes both host scopes automatically", "manually selected scope set",
+                     "retain which screen generated it", "do not generate another token",
+                     "broaden its permissions, reinstall or probe the agent"):
+            self.assertIn(fact, text)
+
 
 if __name__ == "__main__":
     unittest.main()

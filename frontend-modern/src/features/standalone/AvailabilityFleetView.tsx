@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
@@ -226,6 +227,7 @@ export const AvailabilityFleetView: Component<{
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const [selectedResourceId, setSelectedResourceId] = createSignal<string>();
   const selectedResource = createMemo(() =>
     props.resources.find((resource) => resource.id === selectedResourceId()),
@@ -275,8 +277,8 @@ export const AvailabilityFleetView: Component<{
         <For each={props.resources}>
           {(resource) => {
             const availability = () => availabilityFor(resource);
-            const probe = () => getAvailabilityProbePresentation(resource);
-            const indicator = () => getStandaloneResourceStatusIndicator(resource);
+            const probe = () => getAvailabilityProbePresentation(resource, new Date(now()));
+            const indicator = () => getStandaloneResourceStatusIndicator(resource, now());
             const targetID = () => availability()?.targetId ?? resource.platformId ?? resource.id;
             const history = () => props.historyByTarget.get(targetID());
             const buckets = () => history()?.buckets ?? [];
@@ -295,6 +297,7 @@ export const AvailabilityFleetView: Component<{
               formatRelativeTime(availability()?.lastChecked, {
                 compact: true,
                 emptyText: 'Not checked',
+                now: now(),
               });
             const latency = () => {
               const value = availability()?.latencyMillis;

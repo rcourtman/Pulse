@@ -17,6 +17,40 @@
 
 ## Purpose
 
+### Repeatable resource wiring publishes a complete binding once
+
+Router and tenant initialization applies saved notification policy before the
+first resource publication, then attaches the store and supplemental provider
+batch together. Repeating identical wiring does not rebuild the estate; the
+single setters retain their explicit-refresh behaviour. Explicit nil provider
+withdrawals remain in the router's initializer registry so existing and future
+tenants cannot retain a removed source. An empty saved private-CIDR allowlist
+revokes previous grants; absent/unreadable settings and the automatic public-URL
+fallback retain their existing semantics.
+
+A refresh captures its store/provider generation before collecting records.
+Delayed old collectors are refused before publication; full store writes are
+ordered after collection, without holding monitor or provider locks across
+callbacks. Changed bindings advance the existing alert epoch and join admitted
+old checks without clearing active alerts. Dependency setters, like a mock-mode
+switch, must not change bindings from an admitted alert callback. Consume-once
+source changes are drained only after an admitted publication, outside the
+publication lock. The read path keeps its existing non-blocking/freshness gate.
+
+Native TrueNAS/VMware providers and the demo adapter declare their mode. One
+mode read filters the pair before records, ownership or changes are collected,
+including the interval before the existing post-switch hook replaces them.
+Opposite-mode data cannot become a live/demo mixture; tenant fixture exclusions
+remain. Runtime-check shutdown, cancellation, token/tenant boundaries, resource
+wire shapes, thresholds, retention and guest/TLS safety fences are unchanged.
+
+`resource_wiring_test.go` and `router_resource_wiring_test.go` cover pass counts,
+first-alert policy, allowlist revocation, withdrawals, delayed collection and
+publication, re-entry, admitted-check joins and switch-hook gaps. These are
+bounded synthetic component controls, not whole-source, native startup/RSS,
+notification delivery or installed/reporter acceptance.
+
+
 ### Guest filesystem guidance honours its caller's logger
 
 Missing-filesystem guidance uses the existing caller context logger, falling
@@ -140,7 +174,14 @@ It does not invent a negative memory observation or clear an existing pause.
 Independent status/balloon/linked-agent memory, filesystem-first ordering,
 unknown-OS compatibility and all command/backup-lock admission remain intact.
 The first unknown-OS poll can still attempt the existing Linux fallback; this
-change does not add a probe or infer an OS from a display name/configuration hint.
+requires completing ordinary metadata collection first. Both detailed-status
+collectors now collect filesystems, then metadata, then optional Linux memory.
+On an ordinary cold start or expired metadata refresh, the real OS reply can
+therefore establish the existing Windows exclusion before an inappropriate
+Linux read creates a shared pause. No extra probe, persistent OS hint or
+configuration/display-name inference is added. If metadata itself is uncertain,
+the same channel guard still prevents every later command; independent current
+status/balloon/linked-agent memory is not turned into guest meminfo evidence.
 
 `TestGuestWindowsMeminfoPollingContract` covers the real direct/cluster clients
 and both collectors after an actual OS read: repeated NTFS usage through zero,
@@ -150,6 +191,19 @@ controls pin exact OS-name boundaries, original age/identity, partial-fetch
 evidence, Linux recovery and cache/source compatibility. These are synthetic
 source controls, not native QEMU-only Windows recovery, thaw, cross-process or
 restart containment, reporter resolution or release acceptance.
+
+`TestGuestWindowsRestartPollingContract` starts empty monitors through both real
+clients and both collectors, ages actual OS receipts for the expiry control,
+and runs two distinct fresh test processes against the same loopback endpoint.
+It checks both NTFS volumes, healthy zero recovery, OS/canonical/public state,
+memory source and in-memory/persistent History. The Linux command's fixture
+response remains an unexplained HTTP 500: recovery comes from not sending it,
+not from a completion exemption. Lock, in-flight/shared-client uncertainty,
+original ages, Linux/unknown and replacement-identity controls remain covered.
+The ordinary supported loopback process restart is source acceptance, not
+native Pro/PVE restart recovery, every-filesystem writes/liveness, independent
+thaw, prior-active restoration or a released fix. Existing OS-info safety
+suppression and metadata backoff are not reset to force recovery.
 
 ### QGA fallback eligibility keeps its original observation age
 
@@ -7091,3 +7145,20 @@ checks each of those readers after a report-merge, against a control
 exclusion that splits nothing, and `TestManualNodeLinkReplacesAnOperatorSplit`
 covers the agents API's link after a split, a split after it, and a
 resources API relink.
+
+### Resource publication ownership correction (10 October 2026)
+
+One refresh captures its store, binding generation, tenant and provider set once.
+Snapshot-source ownership, records and consume-once changes use that selection;
+changes are drained only after an admitted publication, into that pass's store.
+Replaced or ended-epoch collections and skipped read refreshes leave changes
+pending. An admitted old pass can finish its own history without consuming a
+replacement provider's events. Poll-provider replacement also invalidates pending
+collections. Provider callbacks run outside wiring, publication and adapter locks.
+Read refreshes share ingest publication ordering, retain fresh-generation skips
+and never queue behind a warm ingest; a cold read still builds its first registry.
+
+`resource_publication_ownership_test.go` supplies deterministic channel barriers,
+consume-once replacement-store controls, refused and skipped drains, read-provider
+re-entry, and duplicate/loss assertions, alongside the original initialization,
+tenant withdrawal, saved first-alert policy and joined-shutdown controls.

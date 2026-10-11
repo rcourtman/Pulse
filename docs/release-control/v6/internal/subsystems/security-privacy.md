@@ -18,6 +18,58 @@
 
 ## Purpose
 
+### Infrastructure credentials remain within the configured HTTP origin
+
+The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects
+only within the first request's scheme, hostname and effective port. This
+protects token and ticket headers, CSRF headers and replayable password bodies
+before a redirected request reaches another service, subdomain or plaintext
+endpoint. Redirect userinfo and invalid authorities are refused. Hostname
+case, default ports and equivalent IPv6 literals are canonicalised; IPv6 zone
+case remains significant. The existing ten-redirect limit and same-origin
+proxy path/query redirects remain supported.
+
+System CA checks, configured leaf pins, the TLS floor, explicit verification
+opt-outs, initial HTTP configuration, DNS/proxy routing and independent cluster
+member admission do not change. Guest-agent commands and backup-lock evidence
+retain their stricter no-redirect policy, including same-origin redirects; an
+ordinary read's policy cannot admit a redirected guest command.
+
+`TestInfrastructureRedirectOriginPolicy`,
+`TestInfrastructureRedirectChainAndLimit` and
+`TestCreateHTTPClientRedirectAuthorityValidation` pin the shared boundary.
+`TestInfrastructureRedirectRefusesConnectedOriginChanges` uses actual owned
+TLS/plaintext sockets in CA, pin and explicit opt-out modes. PVE and PBS
+`client_redirect_test.go` exercise actual token, ticket/CSRF and password
+JSON/form flows plus retained same-origin proxy reads with synthetic credentials.
+These are bounded source controls, not an installed connection or an observed
+credential incident.
+
+### Certificate capture uses the connection's socket authority
+
+`tlsutil.FetchFingerprint` selects an explicit HTTP(S) URL's host and port,
+including 443 for a portless HTTPS URL and 80 for a portless HTTP URL. Bare
+hostnames and IP addresses retain the existing Proxmox default, 8006. Explicit
+ports and IPv6 zones are preserved; IPv6 socket addresses are bracketed rather
+than formed by appending a port to a bare literal. Proxy base paths never
+change the socket authority. Invalid authorities, userinfo, query/fragment and
+invalid ports fail before dialing, using the existing base-URL validation.
+
+Capture remains only a bounded, credential-free TLS handshake with a parseable
+peer certificate; it sends no HTTP request, grants no trust and changes no
+saved pin, verification choice, CA policy or authentication. A plaintext HTTP
+service cannot become trusted through this TLS-only capture. Declared-member
+first-use and established-pin recovery rules remain as below.
+
+`TestFetchFingerprintEndpointSelection` discriminates the previous wrong-port
+and bare-IPv6 failures through the public helper. `TestFingerprintTargetAuthority`
+and `TestFetchFingerprintRejectsInvalidAuthorityBeforeDial` check exact parsing;
+`TestFetchFingerprintConnectedAuthority` and
+`TestFetchFingerprintLegacyDefaultConnected` check actual distinct loopback
+leaves over IPv4/IPv6 and unchanged bare-host defaults, without HTTP. Existing
+cluster trust and provisioning controls remain required. This is source proof,
+not installed connection recovery or completion of #2140.
+
 ### TLS pin failures remain local typed trust evidence
 
 `tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,

@@ -506,8 +506,8 @@ func TestActiveTimelineReconciliationIsIdempotent(t *testing.T) {
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
 	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
-	monitor.reconcileActiveAlertTimelines()
-	monitor.reconcileActiveAlertTimelines()
+	monitor.reconcileActiveAlertTimelines(context.Background())
+	monitor.reconcileActiveAlertTimelines(context.Background())
 
 	active := manager.GetActiveAlerts()
 	if len(active) != 1 {
@@ -560,8 +560,8 @@ func TestLifecycleReplayRepairsResolvedIncidentTimeline(t *testing.T) {
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
 	incidentStore.SetResourceTimelineStore(monitor.resourceStore.(memory.IncidentTimelineStore))
-	monitor.replayAlertLifecycleProjections()
-	monitor.replayAlertLifecycleProjections()
+	monitor.replayAlertLifecycleProjections(context.Background())
+	monitor.replayAlertLifecycleProjections(context.Background())
 
 	timeline := incidentStore.GetTimelineByAlertAt(alertID, startedAt)
 	if timeline == nil || len(timeline.Events) != 2 {
@@ -682,7 +682,7 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 	// not advance the durable watermark, or resource-timeline projections for
 	// those events would never materialize.
 	partial := &Monitor{alertManager: manager, incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{})}
-	partial.replayAlertLifecycleProjections()
+	partial.replayAlertLifecycleProjections(context.Background())
 	if got := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer); got != 0 {
 		t.Fatalf("watermark after partial-surface replay = %d, want 0", got)
 	}
@@ -693,7 +693,7 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
 	}
-	monitor.replayAlertLifecycleProjections()
+	monitor.replayAlertLifecycleProjections(context.Background())
 	watermark := manager.LifecycleProjectionWatermark(alertLifecycleProjectionConsumer)
 	if watermark == 0 {
 		t.Fatal("watermark did not advance after full-surface replay")
@@ -707,14 +707,14 @@ func TestLifecycleReplayWatermarkBoundsSubsequentPasses(t *testing.T) {
 		incidentStore: memory.NewIncidentStore(memory.IncidentStoreConfig{}),
 		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(freshResources)),
 	}
-	rerun.replayAlertLifecycleProjections()
+	rerun.replayAlertLifecycleProjections(context.Background())
 	if changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10); err != nil || len(changes) != 0 {
 		t.Fatalf("bounded pass wrote %d changes (err %v), want none", len(changes), err)
 	}
 
 	// Resetting the watermark forces a full repair replay for rebuilt stores.
 	manager.StoreLifecycleProjectionWatermark(alertLifecycleProjectionConsumer, 0)
-	rerun.replayAlertLifecycleProjections()
+	rerun.replayAlertLifecycleProjections(context.Background())
 	changes, err := freshResources.GetRecentChanges(vm.ID, time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetRecentChanges after watermark reset: %v", err)
