@@ -6402,7 +6402,17 @@ The Alert History table's density tracks in `index.css` carry per-column widths
 through `--alert-history-<column>-width` custom properties set on the table at
 each density. Fixed layout sizes all nine tracks before collapsed ones are
 removed, so the visible widths sum to 100% and the table width is the sum of
-all nine; `App.architecture.test.ts` checks both at every density.
+all nine; `App.architecture.test.ts` checks both at every density, the pixel
+minimums the content-bound tracks need at the narrowest card their density
+serves, that each density block sits inside its 50rem, 64rem or 80rem
+container query, and that Message keeps at least 18% of the card. Below an
+80rem card the Alert History table's Resource and Message cells wrap in a
+`line-clamp-2` wrapper that sets `whitespace-normal` itself (the global
+`.table-fixed td` rule forces nowrap), so more of a row reads without hover on
+a row that has no disclosure to recover the rest; Message keeps a two-line
+minimum height so its length never changes a row's height, which the shared
+windowing hook's single measured row assumes, and from an 80rem card both
+cells return to a one-line clamp (`@min-[80rem]:line-clamp-1`).
 Alert History investigation detail is also responsive by interaction model,
 not only by CSS. Desktop may keep Timeline and Resource incident detail inline
 with its table row, while the virtualized phone card list must open the shared
