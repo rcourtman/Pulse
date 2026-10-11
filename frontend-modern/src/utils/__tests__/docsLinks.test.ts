@@ -691,6 +691,13 @@ describe('docsLinks', () => {
       expect(text).toContain('AI budgets still apply. GET and CSV never use AI narration');
     }
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    // Keep both upstream route descriptions beside the shared spending guard.
+    expect(apiReference).toContain(
+      'API-token callers also need the `ai:execute` scope for AI narration.',
+    );
+    expect(apiReference).toContain(
+      'AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used. CSV output is never narrated.',
+    );
     expect(apiReference).toContain('it never calls an AI provider');
     expect(apiReference).toContain('`405` with `Allow: GET, POST`');
     const msp = readFileSync(path.join(repoRoot, 'docs', 'MSP.md'), 'utf8');
