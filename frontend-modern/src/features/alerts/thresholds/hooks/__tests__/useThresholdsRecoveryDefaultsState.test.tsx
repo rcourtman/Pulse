@@ -93,6 +93,42 @@ describe('useThresholdsRecoveryDefaultsState', () => {
     });
   });
 
+  // The Off toggle stages -1 for a critical age. The sanitizers used to raise
+  // a 0 critical to the warning age, so turning critical off made backups and
+  // snapshots go critical at the warning age instead.
+  it('keeps an Off critical age Off instead of raising it to the warning age', () => {
+    let captured: ReturnType<typeof useThresholdsRecoveryDefaultsState> | undefined;
+
+    const Harness = () => {
+      captured = useThresholdsRecoveryDefaultsState(buildProps());
+      return null;
+    };
+
+    render(() => <Harness />);
+
+    expect(
+      captured!.sanitizeBackupConfig({
+        alertOrphaned: true,
+        criticalDays: -1,
+        enabled: true,
+        freshHours: 24,
+        ignoreVMIDs: [],
+        staleHours: 72,
+        warningDays: 7,
+      }),
+    ).toMatchObject({ criticalDays: 0, warningDays: 7 });
+
+    expect(
+      captured!.sanitizeSnapshotConfig({
+        criticalDays: -1,
+        criticalSizeGiB: 0,
+        enabled: true,
+        warningDays: 30,
+        warningSizeGiB: 50,
+      }),
+    ).toMatchObject({ criticalDays: 0, warningDays: 30, criticalSizeGiB: 50 });
+  });
+
   it('tracks factory drift for backup and snapshot defaults', () => {
     let captured: ReturnType<typeof useThresholdsRecoveryDefaultsState> | undefined;
 

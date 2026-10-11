@@ -865,6 +865,12 @@ func normalizeAlertDefaults(config *alerts.AlertConfig) {
 		config.TimeThresholds["all"] = defaultDelay
 	}
 
+	// Docker and PMG count thresholds decode unset when the JSON omits them
+	// (an import or an alerts.json older than the field); resolve that marker
+	// here so it never reaches disk, where it would read back as Off.
+	alerts.NormalizeDockerDefaults(config)
+	alerts.NormalizePMGDefaults(config)
+
 	// Snapshot defaults
 	if config.SnapshotDefaults.WarningDays < 0 {
 		config.SnapshotDefaults.WarningDays = 0

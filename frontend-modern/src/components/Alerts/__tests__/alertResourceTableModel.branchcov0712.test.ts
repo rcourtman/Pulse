@@ -551,20 +551,33 @@ describe('alertResourceSupportsMetric', () => {
     });
   });
 
+  // PMG thresholds exist only as PMG defaults; per-server edits were dropped.
+  describe('pmg — nothing supported per server', () => {
+    it('returns false for queue and host metrics', () => {
+      expect(alertResourceSupportsMetric('pmg', 'queueTotalWarning')).toBe(false);
+      expect(alertResourceSupportsMetric('pmg', 'cpu')).toBe(false);
+    });
+  });
+
   describe('vmwareNetwork — nothing supported', () => {
     it('returns false for any metric', () => {
       expect(alertResourceSupportsMetric('vmwareNetwork', 'cpu')).toBe(false);
     });
   });
 
-  describe('dockerContainer — restart + memory-warn set', () => {
-    it('supports restart and memory-warn metrics', () => {
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartWindow')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryCriticalPct')).toBe(true);
+  describe('dockerContainer — cpu and memory only', () => {
+    it('supports the metrics a container override stores', () => {
       expect(alertResourceSupportsMetric('dockerContainer', 'cpu')).toBe(true);
       expect(alertResourceSupportsMetric('dockerContainer', 'memory')).toBe(true);
+    });
+
+    // Restart and memory-limit rules exist only as Docker defaults; the
+    // backend dropped per-container edits of them on save.
+    it('rejects the restart and memory-limit rules', () => {
+      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(false);
+      expect(alertResourceSupportsMetric('dockerContainer', 'restartWindow')).toBe(false);
+      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(false);
+      expect(alertResourceSupportsMetric('dockerContainer', 'memoryCriticalPct')).toBe(false);
     });
 
     it('rejects temperature and disk', () => {

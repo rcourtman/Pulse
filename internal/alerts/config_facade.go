@@ -118,6 +118,14 @@ func ensureValidHysteresis(threshold *HysteresisThreshold, metricName string) {
 	alertconfig.EnsureValidHysteresis(threshold, metricName)
 }
 
+// NormalizeDockerDefaults fills unset Docker container thresholds with their
+// factory values and stores an Off count threshold as 0.
+func NormalizeDockerDefaults(config *AlertConfig) { alertconfig.NormalizeDockerDefaults(config) }
+
+// NormalizePMGDefaults fills unset PMG thresholds with their factory values
+// and stores an Off threshold as 0.
+func NormalizePMGDefaults(config *AlertConfig) { alertconfig.NormalizePMGDefaults(config) }
+
 func normalizeSnapshotDefaults(config *AlertConfig) { alertconfig.NormalizeSnapshotDefaults(config) }
 func normalizeBackupDefaults(config *AlertConfig)   { alertconfig.NormalizeBackupDefaults(config) }
 

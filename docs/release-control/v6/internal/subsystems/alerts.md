@@ -4010,10 +4010,10 @@ defaults states them in its header through
 reads the same column list and defaults object the group's resource table
 edits (each section hoists its columns into one module constant), and drops
 every metric `isAlertResourceMetricOff` reports, so the header can never show
-a limit the engine is not evaluating. Rules whose zero means a fallback rather
-than Off are stated as whole rules with their effective values: Docker's
-restart loop (count within its window) and memory-limit warn/critical, which
-`NormalizeDockerDefaults` always resolves to positive values. Backup age is
+a limit the engine is not evaluating. Docker's restart loop (count within its
+window) and memory-limit warn/critical are stated as whole rules with their
+effective values: an unset value is the factory value, and a rule or level at
+0 reads "off", as the engine evaluates it. Backup age is
 summarized by its warning and critical days only, because fresh and stale
 hours colour the dashboard and never alert. A group switched off as a whole
 shows its Disabled badge and no defaults line. The CPU averaging line counts
@@ -4024,6 +4024,45 @@ a compact shared `FormSelect` with its profile name as a visible label. Docker
 and Machines list their resource groups before Docker-only rules and the
 SMART card. Threshold values, inheritance, metric evaluation windows and
 persistence are unchanged.
+
+### Off is 0 for Docker and PMG count thresholds, and per-row edits exist only where an override stores them
+
+Docker's restart-loop and memory-limit thresholds and every PMG threshold are
+plain ints in `DockerThresholdConfig` and `PMGThresholdConfig`, and 0 is Off:
+the PMG checks already skipped a level at 0, and the Docker restart-loop check
+now turns off when its count or window is 0 while the memory-limit check
+evaluates warning and critical as independent levels. The settings Off toggle
+sends -1, so `NormalizeDockerDefaults` and `NormalizePMGDefaults` store any
+negative value as 0 instead of the factory value they used to substitute, which
+reverted every Off on save. To keep a value an older `alerts.json` or an import
+predates from reading as Off, `AlertConfig` and both threshold types decode
+omitted keys as `ThresholdCountUnset`, and the normalizers (also run by
+`ConfigPersistence` on load and save) replace that marker with the factory
+value before the config is used or written. A PMG quarantine growth level needs
+both its percentage and its minimum growth; either at 0 turns that level off,
+because passing one alone made the canonical spec invalid and skipped the whole
+quarantine check.
+
+A Docker container override re-enables state alerts over a disabled Docker
+default only when it carries its own powered-off severity, the same rule
+`applyThresholdOverride` applies to every other resource. `DisableConnectivity`
+is a plain bool, so an override saved for a CPU threshold alone used to turn
+that container's state alerts back on.
+
+The frontend mirrors the backend instead of second-guessing it. Backup and
+snapshot ages keep a critical of 0 Off, both in the editor's sanitizers
+(`useThresholdsRecoveryDefaultsState`) and in the saved payload
+(`normalizeAgeWarningCriticalPair`); only snapshot sizes raise a 0 critical to
+the warning size, as the backend does. Per-resource rows offer only metrics `ThresholdConfig` stores:
+`alertResourceSupportsMetric` gives Docker containers CPU and memory, and PMG
+servers nothing, and the PMG section has no bulk edit, because restart,
+memory-limit and PMG thresholds exist only as defaults and the backend dropped
+per-container and per-server edits of them on save.
+
+Not covered here: AI Patrol's threshold adapter (`internal/ai/alert_threshold_adapter.go`)
+still maps an Off alert threshold to its factory value, so Patrol keeps flagging
+a metric whose alerts are off; honouring Off there is a Patrol product decision,
+because a zero Patrol level would flag every reading.
 
 ### External watchdog is Pulse-availability evidence, not notification delivery
 

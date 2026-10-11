@@ -315,4 +315,37 @@ describe('alertsConfigurationModel', () => {
     }
     expect(reloaded.storageDefault).toBe(0);
   });
+
+  // The backend reads a critical age of 0 as Off. The editor's Off toggle
+  // stages -1, which used to be raised to the warning age, so backups and
+  // snapshots went critical at the warning age instead of never.
+  it('saves an Off backup or snapshot critical age as 0 and reads it back Off', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.backupDefaults = {
+      ...snapshot.backupDefaults,
+      warningDays: 7,
+      criticalDays: ALERT_RESOURCE_METRIC_OFF_VALUE,
+    };
+    snapshot.snapshotDefaults = {
+      ...snapshot.snapshotDefaults,
+      warningDays: 30,
+      criticalDays: ALERT_RESOURCE_METRIC_OFF_VALUE,
+    };
+
+    const { alertConfig } = buildAlertsConfigurationPayload({
+      snapshot,
+      rawOverridesConfig: {},
+      alertsActivationState: null,
+      alertsActivationConfig: null,
+    });
+
+    expect(alertConfig?.backupDefaults?.warningDays).toBe(7);
+    expect(alertConfig?.backupDefaults?.criticalDays).toBe(0);
+    expect(alertConfig?.snapshotDefaults?.warningDays).toBe(30);
+    expect(alertConfig?.snapshotDefaults?.criticalDays).toBe(0);
+
+    const reloaded = readAlertsConfigurationSnapshot(alertConfig as AlertConfig);
+    expect(reloaded.backupDefaults.criticalDays).toBe(0);
+    expect(reloaded.snapshotDefaults.criticalDays).toBe(0);
+  });
 });

@@ -22747,3 +22747,214 @@ func TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
 		t.Fatalf("a SATA alert without a disk type was resolved by the 70C agent default although its trigger is 55C")
 	}
 }
+
+func exitedDockerHost(hostID, containerID, name string) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:     containerID,
+			Name:   name,
+			State:  "exited",
+			Status: "Exited (1) seconds ago",
+		}},
+	}
+}
+
+// An override saved for a container's CPU threshold alone carries no
+// DisableConnectivity, and used to turn that container's state alerts back
+// on although the operator had turned them off for every container.
+func TestDockerContainerThresholdOverrideKeepsDisabledStateDefault(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StateDisableConnectivity = true
+	cfg.Overrides = map[string]ThresholdConfig{
+		dockerContainerOverrideKey("host-off", "web"): {CPU: &HysteresisThreshold{Trigger: 95, Clear: 90}},
+	}
+	m.UpdateConfig(cfg)
+
+	host := exitedDockerHost("host-off", "container-off", "web")
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := DockerContainerResourceID(host.ID, "container-off", "")
+	if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-state-%s", resourceID)) {
+		t.Fatal("a CPU-only override re-enabled container state alerts that the Docker default turns off")
+	}
+}
+
+// The row's own offline control stores a severity, and that alone turns
+// state alerts back on over a disabled default.
+func TestDockerContainerSeverityOverrideReenablesStateAlerts(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.DockerDefaults.StateDisableConnectivity = true
+	cfg.Overrides = map[string]ThresholdConfig{
+		dockerContainerOverrideKey("host-on", "db"): {PoweredOffSeverity: AlertLevelCritical},
+	}
+	m.UpdateConfig(cfg)
+
+	host := exitedDockerHost("host-on", "container-on", "db")
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	resourceID := DockerContainerResourceID(host.ID, "container-on", "")
+	alert, exists := testLookupActiveAlert(t, m, fmt.Sprintf("docker-container-state-%s", resourceID))
+	if !exists {
+		t.Fatal("an override with its own severity should re-enable container state alerts")
+	}
+	if alert.Level != AlertLevelCritical {
+		t.Fatalf("alert level = %s, want critical from the override", alert.Level)
+	}
+}
+
+func restartingDockerHost(hostID, containerID string, restarts int) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:           containerID,
+			Name:         "flappy",
+			State:        "running",
+			Status:       "Up 1 second",
+			RestartCount: restarts,
+		}},
+	}
+}
+
+func TestDockerRestartLoopOffAtZero(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		count, window int
+		wantAlert     bool
+	}{
+		{name: "on", count: 3, window: 300, wantAlert: true},
+		{name: "count off", count: 0, window: 300},
+		{name: "window off", count: 3, window: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.DockerDefaults.RestartCount = tc.count
+			cfg.DockerDefaults.RestartWindow = tc.window
+			m.UpdateConfig(cfg)
+
+			hostID, containerID := "host-restart-off", "container-restart-off"
+			m.CheckDockerHost(restartingDockerHost(hostID, containerID, 0))
+			m.CheckDockerHost(restartingDockerHost(hostID, containerID, 5))
+
+			resourceID := DockerContainerResourceID(hostID, containerID, "")
+			got := testHasActiveAlert(t, m, fmt.Sprintf("docker-container-restart-loop-%s", resourceID))
+			if got != tc.wantAlert {
+				t.Fatalf("restart loop alert = %v, want %v (count %d, window %d)", got, tc.wantAlert, tc.count, tc.window)
+			}
+		})
+	}
+}
+
+func memoryLimitDockerHost(hostID, containerID string, usedPct int64) models.DockerHost {
+	return models.DockerHost{
+		ID:          hostID,
+		DisplayName: "Docker Host",
+		Hostname:    "docker.local",
+		Containers: []models.DockerContainer{{
+			ID:          containerID,
+			Name:        "memory-hog",
+			State:       "running",
+			Status:      "Up 10 minutes",
+			MemoryUsage: usedPct * 1024 * 1024,
+			MemoryLimit: 100 * 1024 * 1024,
+		}},
+	}
+}
+
+func TestDockerMemoryLimitLevelsOffAtZero(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		warn, crit int
+		usedPct    int64
+		wantLevel  AlertLevel // empty means no alert
+	}{
+		{name: "warning off, below critical", warn: 0, crit: 95, usedPct: 92},
+		{name: "warning off, above critical", warn: 0, crit: 95, usedPct: 97, wantLevel: AlertLevelCritical},
+		{name: "critical off, above both", warn: 90, crit: 0, usedPct: 97, wantLevel: AlertLevelWarning},
+		{name: "both off", warn: 0, crit: 0, usedPct: 99},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.DockerDefaults.MemoryWarnPct = tc.warn
+			cfg.DockerDefaults.MemoryCriticalPct = tc.crit
+			m.UpdateConfig(cfg)
+
+			hostID, containerID := "host-memlimit-off", "container-memlimit-off"
+			m.CheckDockerHost(memoryLimitDockerHost(hostID, containerID, tc.usedPct))
+
+			resourceID := DockerContainerResourceID(hostID, containerID, "")
+			alert, exists := testLookupActiveAlert(t, m, fmt.Sprintf("docker-container-memory-limit-%s", resourceID))
+			if tc.wantLevel == "" {
+				if exists {
+					t.Fatalf("unexpected %s memory limit alert at %d%% (warn %d, crit %d)", alert.Level, tc.usedPct, tc.warn, tc.crit)
+				}
+				return
+			}
+			if !exists {
+				t.Fatalf("expected %s memory limit alert at %d%% (warn %d, crit %d)", tc.wantLevel, tc.usedPct, tc.warn, tc.crit)
+			}
+			if alert.Level != tc.wantLevel {
+				t.Fatalf("alert level = %s, want %s", alert.Level, tc.wantLevel)
+			}
+		})
+	}
+}
+
+// The settings Off toggle sends -1. The normalizer used to turn it, and 0,
+// back into the factory value, so Off never stuck for these thresholds.
+func TestConfigUpdateKeepsDockerAndPMGThresholdsOff(t *testing.T) {
+	m := newTestManager(t)
+	update := []byte(`{
+		"dockerDefaults": {"cpu": {"trigger": 80, "clear": 75}, "restartCount": -1, "restartWindow": 300, "memoryWarnPct": 0, "memoryCriticalPct": 95},
+		"pmgDefaults": {"queueTotalWarning": -1, "queueTotalCritical": 0, "holdQueueWarn": 150}
+	}`)
+	if _, err := m.ApplyConfigUpdate(update); err != nil {
+		t.Fatalf("ApplyConfigUpdate: %v", err)
+	}
+	cfg := m.GetConfig()
+
+	docker := cfg.DockerDefaults
+	if docker.RestartCount != 0 || docker.MemoryWarnPct != 0 {
+		t.Fatalf("docker Off thresholds = restartCount %d, memoryWarnPct %d; want 0, 0", docker.RestartCount, docker.MemoryWarnPct)
+	}
+	if docker.RestartWindow != 300 || docker.MemoryCriticalPct != 95 {
+		t.Fatalf("docker set thresholds = restartWindow %d, memoryCriticalPct %d; want 300, 95", docker.RestartWindow, docker.MemoryCriticalPct)
+	}
+
+	pmg := cfg.PMGDefaults
+	if pmg.QueueTotalWarning != 0 || pmg.QueueTotalCritical != 0 {
+		t.Fatalf("PMG Off thresholds = queueTotalWarning %d, queueTotalCritical %d; want 0, 0", pmg.QueueTotalWarning, pmg.QueueTotalCritical)
+	}
+	if pmg.HoldQueueWarn != 150 {
+		t.Fatalf("PMG holdQueueWarn = %d, want the sent 150", pmg.HoldQueueWarn)
+	}
+	// A key the section omits is unset, not Off: it takes the factory value.
+	if pmg.HoldQueueCritical != 300 || pmg.OldestMessageWarnMins != 30 {
+		t.Fatalf("PMG omitted thresholds = holdQueueCritical %d, oldestMessageWarnMins %d; want factory 300, 30", pmg.HoldQueueCritical, pmg.OldestMessageWarnMins)
+	}
+}
+
+// One half of a quarantine growth level set to Off used to make the spec
+// invalid, which skipped the whole check, absolute thresholds included.
+func TestPMGQuarantineGrowthHalfOffKeepsAbsoluteCheck(t *testing.T) {
+	m := newTestManager(t)
+	defaults := m.GetConfig().PMGDefaults
+	defaults.QuarantineGrowthWarnMin = 0 // Off; QuarantineGrowthWarnPct stays 25
+	pmg := models.PMGInstance{ID: "pmg-half-off", Name: "mail"}
+
+	m.checkQuarantineMetric(pmg, "spam", defaults.QuarantineSpamWarn+500, nil, defaults)
+
+	if !testHasActiveAlert(t, m, fmt.Sprintf("%s-quarantine-spam", pmg.ID)) {
+		t.Fatal("spam quarantine above its absolute warning raised no alert while a growth level was half off")
+	}
+}

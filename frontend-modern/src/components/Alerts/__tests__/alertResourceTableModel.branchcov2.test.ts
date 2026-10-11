@@ -581,14 +581,12 @@ describe('alertResourceSupportsMetric', () => {
     });
   });
 
-  describe('dockerContainer — restart + memory-warn set', () => {
-    it('supports restart and memory-warn metrics', () => {
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'restartWindow')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(true);
-      expect(alertResourceSupportsMetric('dockerContainer', 'memoryCriticalPct')).toBe(true);
+  describe('dockerContainer — cpu and memory only', () => {
+    it('supports cpu and memory but not the Docker-default-only rules', () => {
       expect(alertResourceSupportsMetric('dockerContainer', 'cpu')).toBe(true);
       expect(alertResourceSupportsMetric('dockerContainer', 'memory')).toBe(true);
+      expect(alertResourceSupportsMetric('dockerContainer', 'restartCount')).toBe(false);
+      expect(alertResourceSupportsMetric('dockerContainer', 'memoryWarnPct')).toBe(false);
     });
 
     it('rejects temperature and disk', () => {

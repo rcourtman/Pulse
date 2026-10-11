@@ -9264,3 +9264,14 @@ VmwareOverview retains the page-owned workload state and renders an h2 VMs
 through the WorkloadsSurface tableTitle slot. Kiosk may remove the filter bar,
 not this name. The count is filtered rows once shared-toolbar readiness holds,
 including zero; no extra state, toolbar, route or hidden input is added.
+
+### Threshold Off reads as the engine reads it (11 October 2026)
+
+The alerts feature model and the shared threshold summary helper mirror the
+backend's Off encoding rather than substituting their own. A backup or snapshot
+critical age left Off stays 0 instead of rising to the warning age, and the
+Docker restart-loop and memory-limit summary items read "off" for a rule or
+level at 0 instead of restating factory values. Per-resource rows render a
+muted dash for metrics an override cannot store (Docker container restart and
+memory-limit rules, every PMG threshold). No shared primitive, table component
+or layout changes.
