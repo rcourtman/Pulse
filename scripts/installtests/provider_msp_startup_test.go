@@ -267,15 +267,18 @@ func startupCommand(t *testing.T, env []string, dir, program string, args ...str
 	defer cancel()
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir, cmd.Env = dir, env
+	// Compose may warn on stderr even for a successful ps/port/config read.
+	// Only stdout is machine readback: a warning must never become a container
+	// identity, URL, mount digest, bootstrap fact or owned-resource observation.
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if err != nil {
 		// Environment and licence contents are never diagnostic output.
-		t.Fatalf("%s command failed: %v\n%s\n%s", filepath.Base(program), err, stdout.String(), stderr.String())
+		t.Fatalf("%s command failed: %v\nstdout:\n%s\nstderr:\n%s", filepath.Base(program), err, stdout.String(), stderr.String())
 	}
 	if stderr.Len() != 0 {
-		// Compose warnings are evidence, not container IDs, ports or CLI facts.
-		t.Logf("%s diagnostics: %s", filepath.Base(program), stderr.String())
+		t.Logf("%s stderr: %s", filepath.Base(program), stderr.String())
 	}
 	return stdout.String()
 }
