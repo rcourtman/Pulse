@@ -2218,3 +2218,22 @@ describe('node import preview authority boundary', () => {
     expect(nodeCredentialSlotSource).toContain('if (saveBlockedByImportPlan())');
   });
 });
+
+describe('ordinary uninstall copy surfaces', () => {
+  it('keeps both installer families reachable without an installation token and uses the shared state', () => {
+    const removal = infrastructureInstallerSectionSource.slice(
+      infrastructureInstallerSectionSource.indexOf('Uninstall agent'),
+    );
+    expect(removal).toContain('copyToClipboard(state.getUninstallCommand())');
+    expect(removal).toContain('copyToClipboard(state.getWindowsUninstallCommand())');
+    expect(removal).not.toContain('commandsUnlocked');
+    expect(removal).not.toContain('requiresToken');
+    expect(removal).not.toContain('handleGenerateToken');
+    expect(removal).toContain('saved connection');
+    expect(removal).not.toContain("If the agent can't reach this server");
+    expect(infrastructureWorkspaceSource).toContain('linux: operations.getUninstallCommand()');
+    expect(infrastructureWorkspaceSource).toContain(
+      'windows: operations.getWindowsUninstallCommand()',
+    );
+  });
+});

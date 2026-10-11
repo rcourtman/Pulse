@@ -907,7 +907,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           </summary>
           <div class="mt-3 space-y-3">
             <p class="text-xs text-muted">
-              Run the appropriate command on your machine to remove the Pulse agent:
+              Run the appropriate command on the agent's host. Removal uses its saved connection and
+              credentials. You do not need to generate another token.
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
@@ -930,7 +931,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               </div>
             </div>
             <p class="text-xs italic text-muted">
-              If the agent can't reach this server, run directly on the machine:{' '}
+              To use the installer saved on a Unix host, run:{' '}
               <code class="rounded-sm bg-surface-hover px-1 not-italic">
                 sudo bash /var/lib/pulse-agent/install.sh --uninstall
               </code>{' '}
@@ -943,6 +944,11 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 /boot/config/plugins/pulse-agent/install.sh
               </code>
               )
+            </p>
+            <p class="text-xs text-muted">
+              If a Unix install has saved credentials, its server must confirm removal before local
+              credentials and services are deleted. If it is refused, restore trusted connectivity
+              before retrying.
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">

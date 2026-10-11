@@ -1344,6 +1344,19 @@ layouts, scoped filtering, day selection and later inventory replacement.
 
 Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
 
+### Removal copy actions are independent of install unlock state
+
+The existing Infrastructure installer, source-manager and removed Agent Doctor
+controls copy removal commands before or after installation-token generation,
+without minting, displaying or embedding another credential. Displayed command
+and copied text must agree. Guidance describes saved host connection/credentials
+and does not present the saved Unix helper as an offline authentication bypass.
+The `agent-uninstall.cjs` parent/final desktop and touch-phone matrix exercises
+these production components with synthetic API data, including selected trust,
+canonical identity, optional authentication and installation's separate token
+gate. No route, navigation entry or remote-execution surface is added; native
+removal/failure retention and containing publication remain separate evidence.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`
