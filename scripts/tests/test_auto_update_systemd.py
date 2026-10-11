@@ -188,6 +188,59 @@ class NativeContracts(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertFalse(lab.receipt["cleanup"]["owned_fixture_removed"])
 
+    def test_prepare_allocates_scratch_before_child_home_initialisation(self):
+        # Model a child runtime that eagerly initialises HOME. This catches the
+        # macOS control's FileExistsError without pretending to run systemd.
+        for load in ("not-found", "loaded"):
+            with self.subTest(load=load), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                before, after = base / "a", base / "b"
+                before.write_bytes(b"before\n"); after.write_bytes(b"after\n")
+                lab = native.NativeLab(base / "lab", ROOT, before, after, "a" * 40)
+                lab.unit = base / "absent.service"
+                def child_observation():
+                    lab.root.mkdir(exist_ok=True)
+                    (lab.root / "child-home-marker").write_text("runtime initialised HOME\n")
+                    return {"LoadState": load}
+                def bounded_command(*args, **kwargs):
+                    if args[0] in (str(before), str(after)) and args[1:] == ("--version",):
+                        tag = native.TAGS[0 if args[0] == str(before) else 1]
+                        return subprocess.CompletedProcess(args, 0, ("Pulse " + tag + "\n").encode())
+                    raise RuntimeError("stop before signer or service mutation")
+                with patch.object(lab, "state", side_effect=child_observation) as observation, \
+                     patch.object(lab, "run", side_effect=bounded_command):
+                    expected = ValueError if load == "loaded" else RuntimeError
+                    with self.assertRaises(expected):
+                        lab.prepare()
+                    observation.assert_called_once()
+                    self.assertTrue(lab.owned_root)
+                    self.assertTrue((lab.root / "child-home-marker").exists())
+                    self.assertFalse(lab.owned_unit)
+                    self.assertFalse(lab.owned_user)
+                    lab.cleanup()
+                self.assertFalse(lab.root.exists())
+                self.assertTrue(lab.receipt["cleanup"]["complete"])
+
+    def test_prepare_refuses_existing_directory_or_symlink_before_child(self):
+        for symlink in (False, True):
+            with self.subTest(symlink=symlink), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory); prior = base / "prior"; prior.mkdir()
+                marker = prior / "keep"; marker.write_text("not ours\n")
+                root = base / "lab" if symlink else prior
+                if symlink:
+                    root.symlink_to(prior, target_is_directory=True)
+                lab = native.NativeLab(root, ROOT, base / "a", base / "b", "a" * 40)
+                lab.unit = base / "absent.service"
+                with patch.object(lab, "state", side_effect=AssertionError("unowned child")) as observation:
+                    with self.assertRaises(FileExistsError):
+                        lab.prepare()
+                    observation.assert_not_called()
+                    self.assertFalse(lab.owned_root)
+                    lab.cleanup()
+                self.assertEqual(marker.read_text(), "not ours\n")
+                self.assertTrue(root.exists())
+                self.assertFalse(lab.receipt["cleanup"]["owned_fixture_removed"])
+
     def run_recipe(self, failure="", mismatch=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); tools = root / "tools"; tools.mkdir()

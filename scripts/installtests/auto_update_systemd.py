@@ -191,10 +191,13 @@ class NativeLab:
         for path in (self.unit, Path("/run/systemd/system") / self.unit.name):
             if path.exists() or path.is_symlink():
                 raise ValueError("native fixture unit already exists")
-        if self.state()["LoadState"] != "not-found":
-            raise ValueError("native fixture unit is already known to systemd")
+        # Own the fresh scratch/HOME before launching any child. A platform
+        # runtime may initialise HOME even for a read-only manager observation.
+        # mkdir remains exclusive: never adopt or clean a pre-existing path.
         self.root.mkdir(mode=0o755)  # A pulse-owned service must traverse it.
         self.owned_root = True
+        if self.state()["LoadState"] != "not-found":
+            raise ValueError("native fixture unit is already known to systemd")
         for name in ("tools", "tmp", "archives", "signer"):
             (self.root / name).mkdir(mode=0o700 if name == "signer" else 0o755)
         source = (self.repo / "install.sh").read_text()
