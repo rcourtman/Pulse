@@ -81,7 +81,19 @@ func (r *Router) registerMonitoringResourceRoutes(
 		r.mux.HandleFunc("/api/maintenance-verifications/{reportId}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.maintenanceVerificationHandlers.HandleGet)))
 		r.mux.HandleFunc("POST /api/maintenance-verifications/{reportId}/review", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, r.maintenanceVerificationHandlers.HandleReview)))
 	}
-	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
+	// HandleResourceRoutes also dispatches POST link, unlink and report-merge,
+	// which persist resource identity changes, so anything other than a read
+	// needs the write scope.
+	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		scope := config.ScopeMonitoringRead
+		if req.Method != http.MethodGet && req.Method != http.MethodHead {
+			scope = config.ScopeMonitoringWrite
+		}
+		if !ensureScope(w, req, scope) {
+			return
+		}
+		r.resourceHandlers.HandleResourceRoutes(w, req)
+	}))
 	// Agent-consumable bundled context — substrate for any LLM agent
 	// (in-process Patrol/Assistant or external) that needs the full
 	// situated picture of a resource in one read instead of chaining
