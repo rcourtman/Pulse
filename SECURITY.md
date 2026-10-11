@@ -105,19 +105,17 @@ rotate keys regularly.
 
 #### Auditing Your Deployment
 
-```bash
-# Detect vulnerable containers
-ls /home/pulse/.ssh/id_ed25519* 2>/dev/null && echo "⚠️  SSH keys present"
-```
+Review the existing deployment's SSH keys and mounts privately with its
+administrator. Checking one filename, or a failed file lookup, does not prove
+that no key is present. Do not share private keys, full service definitions or
+container inspections; those can contain credentials.
 
-Verify temperature collection is agent-based:
-
-- UI: the Proxmox or Machines page shows the host as agent-backed after the agent reports.
-- On each Proxmox host:
-  ```bash
-  systemctl status pulse-agent
-  journalctl -u pulse-agent -n 200 --no-pager
-  ```
+For temperature collection, check the affected host on **Proxmox** or
+**Machines**, keeping its agent version, last activity and sensor observation
+time separate. A reporting agent does not prove that every reading is fresh.
+Use the [existing Linux temperature checks](docs/TEMPERATURE_MONITORING.md#check-existing-linux-readings-safely)
+only when collection is safe. During a backup, freeze/thaw or an unresponsive-host
+incident, defer live checks and follow [backup safety](docs/VM_DISK_MONITORING.md#backup-safety).
 
 **Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
@@ -544,42 +542,57 @@ Endpoints enforce scope checks before processing. A token without the required s
 
 ### Runtime Logging Configuration
 
-Pulse supports configurable logging (level, format, optional file output, rotation) via environment variables.
+Start with existing evidence at the current log level and the
+[bounded Pulse log readers](docs/TROUBLESHOOTING.md#inspect-notification-logs).
+**Debug is not a prerequisite for a report.** It can produce much more output,
+including private names, paths and raw guest-filesystem responses. Do not enable
+it, repeat the failed action or run Diagnostics just to fill an evidence gap.
+If the interface stalls after enabling Debug, return to the previous working
+level through the existing deployment's log-level control; do not reproduce the
+stall. A responsive interface afterwards is not proof of underlying recovery.
 
-#### Security Benefits
-- Enable debug logging temporarily for incident investigation
-- Switch to JSON format for SIEM integration
-- Adjust verbosity based on security posture
-- Control file rotation to manage audit log retention
+The **Log Level** control in **Settings → Support → System Logs** changes the
+server-wide threshold immediately, not just the browser's filter. Its saved
+value is used at startup unless `LOG_LEVEL` overrides it. See
+[log levels and display controls](docs/CONFIGURATION.md#log-levels).
 
-#### Configuration Options
+#### Server logging environment settings
 
-**Via environment variables:**
-```bash
-# Systemd
-sudo systemctl edit pulse
-[Service]
-Environment="LOG_LEVEL=info"
-Environment="LOG_FORMAT=json"
-Environment="LOG_MAX_SIZE=100"        # MB per log file
-Environment="LOG_MAX_AGE=30"          # Days to retain logs
-Environment="LOG_COMPRESS=true"       # Compress rotated logs
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `LOG_LEVEL` | Startup threshold (`info`, `warn`, `error` or `debug`) | `info` |
+| `LOG_FORMAT` | Output format (`auto`, `json` or `console`) | `auto` |
+| `LOG_FILE` | Additional rotating file output | Unset |
+| `LOG_MAX_SIZE` | File rotation size in MB | `100` |
+| `LOG_MAX_AGE` | Rotated-file retention in positive days | `30` |
+| `LOG_COMPRESS` | Compress rotated files | `true` |
 
-# Docker
-docker run \
-  -e LOG_LEVEL=info \
-  -e LOG_FORMAT=json \
-  -e LOG_MAX_SIZE=100 \
-  -e LOG_MAX_AGE=30 \
-  -e LOG_COMPRESS=true \
-  rcourtman/pulse:latest
-```
+File rotation and compression apply only when `LOG_FILE` is configured. These
+settings do not bound the systemd journal, container logs or browser log buffer,
+and do not configure the separate **Audit Log** retention. Zero or negative
+`LOG_MAX_AGE` values do not disable cleanup: they are ignored with a startup
+warning and the default applies. JSON formatting and compression do not redact
+private information. Preserve incident evidence; do not delete logs or shorten
+retention merely to complete a report.
 
-**Security Considerations:**
-- Debug logs may contain sensitive data—enable only when needed
-- JSON format recommended for security monitoring and SIEM
-- Adjust retention based on compliance requirements
-- Changes take effect on restart
+Change only the intended settings in the existing deployment's managed source:
+
+- **Systemd / Proxmox LXC:** edit the active service's environment file or
+  drop-in privately. Reload the service manager if its unit or drop-in changed,
+  then restart that service during a suitable maintenance window. For LXC,
+  work inside the Pulse container, not on the Proxmox host.
+- **Docker / Compose:** use the existing manager's recreate/redeploy operation
+  for an environment change; `docker restart` does not apply it. Preserve the
+  same image, persistent data mounts, credentials and other settings. Do not
+  start a replacement `docker run` container just to change logging.
+
+**Pause Stream** and **Clear Log Output** affect only the browser display; they
+do not stop server logging, erase retained logs or remove them from a
+**Support Bundle**. The bundle can include a complete log file, configuration
+and environment information. Keep it private and share only relevant, locally
+reviewed, redacted excerpts, not the whole archive. During backups, freeze/thaw
+or an unresponsive-host incident, defer collection and follow
+[safe diagnostics guidance](docs/TROUBLESHOOTING.md#collect-diagnostics-safely).
 
 ## CORS (Cross-Origin Resource Sharing)
 
@@ -646,7 +659,12 @@ straight to `jq` can make a failed request look successful.
 - **Backoff Delays**: Increased backoff may indicate rate limiting or errors
 - **Error Rates**: Track failed API calls and authentication attempts
 
-Use the API endpoint above or export diagnostics from **Settings → Diagnostics** when troubleshooting.
+Use existing status and incident evidence first. The endpoint above is a
+read-only status check, not proof that every workload or collector is healthy.
+Collect new evidence only when Pulse is running and collection is safe; follow
+[safe diagnostics guidance](docs/TROUBLESHOOTING.md#collect-diagnostics-safely)
+rather than running Diagnostics during backups, freeze/thaw or an
+unresponsive-host incident. Review responses locally before sharing them.
 
 ### Existing Mobile Pairings (Retirement)
 
@@ -690,14 +708,28 @@ open Pulse in the phone's browser.
 - ❌ **DON'T**: Embed credentials in client-side code
 
 ### Verification Checklist
-Manually verify your deployment follows security best practices:
-- No hardcoded credentials in environment files
-- No credentials exposed in logs (check `docker logs pulse`)
-- All passwords stored as bcrypt hashes (60 characters, starting with `$2a$` or `$2b$`)
-- Server-side API token records stored as SHA3-256 hashes (64 characters);
-  agents still need a private raw credential to authenticate
-- Secure file permissions on `/etc/pulse/.env` (600)
-- No credential leaks in API responses (test with `curl`)
+
+Review the existing deployment privately; a successful check is not a complete
+security audit, and absence from one excerpt is not proof that no secret leaked.
+
+- Protect the active credential source and its backups, including any
+  deployment-supplied plaintext password. Follow
+  [private authentication configuration](docs/CONFIGURATION.md#private-docker-authentication-file),
+  rather than posting environment files or replacing a working installation.
+- Server-side API token records contain SHA3-256 hashes; agents still require
+  a private raw credential. Neither a token's shape nor a partial hint match
+  proves that it is the credential used by a particular running process.
+- Preserve the intended service ownership and owner-only access to sensitive
+  files in the actual data directory. Review the
+  [encryption and recovery limits](#encryption-scope-and-recovery); do not grant
+  wider permissions or delete keys to repair a read failure.
+- Review relevant existing logs, API responses and screenshots locally before
+  sharing a redacted excerpt. Use the [bounded log readers](docs/TROUBLESHOOTING.md#inspect-notification-logs),
+  not full logs, Support Bundles, service environments or network exports.
+  Do not extract browser cookies or use **Copy as cURL** to create evidence.
+- If private information was posted, use
+  [disclosure containment](docs/TROUBLESHOOTING.md#if-you-already-posted-private-information).
+  Removing the public copy does not revoke an exposed credential.
 
 ## Account Lockout and Recovery
 
