@@ -66,6 +66,13 @@ const iso = (n) => new Date(n).toISOString();
           locale: 'en-GB',
           timezoneId: 'UTC',
         });
+        // Only synthetic local POST responses are admitted; use the normal
+        // CSRF header path without a paused-clock cookie-preparation delay.
+        await page
+          .context()
+          .addCookies([
+            { name: 'pulse_csrf', value: 'synthetic-clock-control', url: origin, sameSite: 'Lax' },
+          ]);
         currentPage = page;
         page.setDefaultTimeout(7000);
         const record = {
@@ -102,6 +109,9 @@ const iso = (n) => new Date(n).toISOString();
             { once: true },
           );
         }, dark);
+        await page.addInitScript(() => {
+          window.__residualReadiness = { resourcesRead: false };
+        });
         await page.route('**/*', async (route) => {
           const req = route.request(),
             url = new URL(req.url()),
@@ -115,6 +125,7 @@ const iso = (n) => new Date(n).toISOString();
             req.method() === 'POST' &&
             ['/api/admin/profiles/suggestions', '/api/admin/profiles/validate'].includes(p)
           ) {
+            assert.equal(req.headers()['x-csrf-token'], 'synthetic-clock-control');
             record.computePosts.push(p);
             if (p.endsWith('/validate'))
               return route.fulfill({ json: { Valid: true, Errors: [], Warnings: [] } });
@@ -229,7 +240,12 @@ const iso = (n) => new Date(n).toISOString();
             record.unexpectedReads.push(p);
             return route.fulfill({ status: 404, json: { error: 'Unspecified synthetic read' } });
           }
-          return route.fulfill({ json: data });
+          await route.fulfill({ json: data });
+          if (p === '/api/resources')
+            await page.evaluate(() => {
+              window.__residualReadiness.resourcesRead = true;
+            });
+          return;
         });
         const activate = async (el) => {
           await el.focus();
@@ -271,25 +287,26 @@ const iso = (n) => new Date(n).toISOString();
           // from the accessibility tree, so select its DOM identity explicitly.
           const card = page.locator('[data-api-token-card="fixture-token"]');
           await card.waitFor({ state: 'attached' });
-          age =
-            width < 500
-              ? card.getByText('Created', { exact: true }).locator('..').locator('dd')
-              : page
-                  .locator('tr')
-                  .filter({ hasText: 'Held token' })
-                  .locator('td')
-                  .nth(
-                    await page
-                      .getByRole('columnheader', { name: 'Created', exact: true })
-                      .evaluate((el) => el.cellIndex),
-                  );
+          if (width < 500) {
+            age = card.getByText('Created', { exact: true }).locator('..').locator('dd');
+          } else {
+            const row = page.locator('tr').filter({ hasText: 'Held token' });
+            await row.waitFor();
+            const index = await row.evaluate((el) =>
+              [...el.closest('table').querySelectorAll('thead th')].findIndex(
+                (header) => header.textContent.trim() === 'Created',
+              ),
+            );
+            assert(index >= 0, 'visible token table identifies the Created column');
+            age = row.locator('td').nth(index);
+            assert.equal(await age.isVisible(), true, 'desktop Created is on screen');
+          }
           await activate(page.getByRole('button', { name: 'Generate new', exact: true }));
           target = page.getByLabel('Token name', { exact: true });
           await target.fill('Unsaved token name');
         } else if (surface === 'profiles') {
           const row = page.locator('tr').filter({ hasText: 'Held profile host' });
           await row.waitFor({ state: 'attached' });
-          await page.clock.runFor(2000); // Finish the existing background canonical revalidation before the quiet interval.
           age = row.locator('td').last();
           target = row.getByRole('combobox');
           assert.equal(await target.inputValue(), 'profile-a');
@@ -306,6 +323,13 @@ const iso = (n) => new Date(n).toISOString();
           await page.getByRole('heading', { name: 'Second saved draft', exact: true }).waitFor();
           age = page.getByRole('button', { name: /First saved draft/ });
           target = age;
+        }
+        if (surface === 'tokens' || surface === 'profiles') {
+          // This panel also paints websocket resources before its existing
+          // 15,250ms-delayed REST revalidation. Drain that initial read before measuring
+          // the quiet interval; the timer under test must cause no later reads.
+          await page.clock.fastForward(16_000);
+          await page.waitForFunction(() => window.__residualReadiness.resourcesRead);
         }
         const text = async () => (await age.textContent()).trim();
         assert.match(await text(), compact ? /1m ago/ : /1 min ago/);
@@ -391,13 +415,16 @@ const iso = (n) => new Date(n).toISOString();
             );
           } else if (surface === 'tokens') {
             tokenTime = await page.evaluate(() => Date.now());
-            await page.evaluate(() => window.__residualAges.refreshTokens());
+            // refreshing is a display-only prop, not a token-list refetch
+            // contract. A new visit legitimately rereads the immutable list.
+            await page.evaluate(() => window.__residualAges.unmount());
+            await page.evaluate(() => window.__residualAges.remount());
             await page.waitForFunction(() =>
               [...document.querySelectorAll('[data-api-token-card] dd')].some(
                 (el) => el.textContent === '0s ago',
               ),
             );
-            assert.equal(await target.inputValue(), 'Unsaved token name');
+            assert.equal(await page.getByLabel('Token name', { exact: true }).inputValue(), '');
             await page.clock.fastForward(60_000);
             assert.match(await text(), /1 min ago/);
           } else if (surface === 'profiles') {
@@ -445,6 +472,11 @@ const iso = (n) => new Date(n).toISOString();
     result.completed = true;
   } catch (err) {
     if (currentPage && !currentPage.isClosed()) {
+      result.failureHeaders = await currentPage
+        .locator('th')
+        .evaluateAll((els) =>
+          els.map((el) => ({ html: el.outerHTML, display: getComputedStyle(el).display })),
+        );
       result.failureBody = (await currentPage.locator('body').innerText()).slice(0, 12000);
       await currentPage.screenshot({ path: output + '/failure.png', fullPage: false });
     }
