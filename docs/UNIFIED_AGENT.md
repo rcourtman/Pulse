@@ -1112,6 +1112,22 @@ service is presenting the same token. Last-used metadata is not a token-use
 audit and does not identify which consumer authenticated. These observations
 do not prove that the running service is using that record.
 
+**If the listed record has only Docker reporting:** `docker:report` permits
+Docker/Podman telemetry, not the host module's lookup or OS, CPU and disk
+reports. A normal host needs **Agent reporting** (`agent:report`) and
+**Agent config fetch** (`agent:config:read`). Command execution and administrator
+scope are not required. Once authentication succeeds, a missing reporting scope
+returns 403 with `missing_scope`; Docker-only scope does not explain an earlier
+401 or prove which credential the service presented.
+
+The **Infrastructure → Install on a host → Generate token** flow includes both
+host scopes automatically. **API Access → Create token** allows a manually
+selected scope set. If the intended host record is Docker-only, retain which
+screen generated it before choosing a repair; do not generate another token,
+broaden its permissions, reinstall or probe the agent just to distinguish the
+two flows. Inventory presence and `Never` alone establish neither successful
+credential hand-off nor accepted reporting.
+
 **If the intended record is absent:** separate server registration from the
 agent's credential hand-off before another installation. On that same instance,
 open **Settings → Infrastructure → Install on a host**, give one new install

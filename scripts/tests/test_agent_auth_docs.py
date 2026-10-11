@@ -131,6 +131,38 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "not, by itself, a reason to mint a replacement"):
             self.assertIn(fact, text)
 
+    def test_docker_only_record_is_not_host_authority_or_a_401_diagnosis(self):
+        text = " ".join(section().split())
+        routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
+        for endpoint, required in (("docker/report", "ScopeDockerReport"),
+                                   ("agent/report", "ScopeAgentReport"),
+                                   ("agent/lookup", "ScopeAgentReport")):
+            self.assertIn(
+                f'"/api/agents/{endpoint}", RequireAuth(r.config, '
+                f'RequireScope(config.{required},', routes,
+            )
+        labels = (ROOT / "frontend-modern/src/constants/apiScopes.ts").read_text()
+        for constant, value, label in (
+            ("AGENT_REPORT_SCOPE", "agent:report", "Agent reporting"),
+            ("AGENT_CONFIG_READ_SCOPE", "agent:config:read", "Agent config fetch"),
+        ):
+            self.assertIn(f"export const {constant} = '{value}';", labels)
+            self.assertIn(f"value: {constant},\n    label: '{label}'", labels)
+            self.assertIn(f"**{label}** (`{value}`)", text)
+        scopes = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        host = scopes.split("func HostScopes(", 1)[1].split("\n}", 1)[0]
+        for required in ("ScopeAgentReport", "ScopeAgentConfigRead"):
+            self.assertIn(f"config.{required}", host)
+        self.assertNotIn("ScopeWildcard", host)
+        self.assertNotIn("ScopeSettingsWrite", host)
+        for fact in ("If the listed record has only Docker reporting", "`docker:report`",
+                     "not the host module's lookup", "scope does not explain an earlier 401",
+                     "Command execution and administrator scope are not required",
+                     "includes both host scopes automatically", "manually selected scope set",
+                     "retain which screen generated it", "do not generate another token",
+                     "broaden its permissions, reinstall or probe the agent"):
+            self.assertIn(fact, text)
+
 
 if __name__ == "__main__":
     unittest.main()
