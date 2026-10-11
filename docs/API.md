@@ -356,19 +356,19 @@ Returns child resources for the parent ID.
 `GET /api/resources/{id}/metrics`
 Returns the resource metrics payload.
 
-`POST /api/resources/{id}/link`
+`POST /api/resources/{id}/link` (`monitoring:write`)
 Manually link two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/resources/{id}/unlink`
+`POST /api/resources/{id}/unlink` (`monitoring:write`)
 Manually unlink two resources.
 ```json
 { "targetId": "resource-id", "reason": "optional note" }
 ```
 
-`POST /api/resources/{id}/report-merge`
+`POST /api/resources/{id}/report-merge` (`monitoring:write`)
 Report an incorrect merge (creates exclusions).
 ```json
 { "sources": ["proxmox", "agent"], "notes": "optional note" }
@@ -1130,9 +1130,15 @@ Supports actions:
 Callers need an admin session, or an API token with the `settings:write` scope; a token without that scope gets `403` with `error: "missing_scope"`. Identifier can be a username or IP address. An empty identifier returns `400 missing_identifier`. Success returns `{ "success": true, "message": "Lockout reset for admin" }`.
 
 ### Regenerate API Token (Admin)
-`POST /api/security/regenerate-token`
+`POST /api/security/regenerate-token` (admin, `settings:write`)
 
-Returns a new raw token (shown once) and updates stored hashes:
+Replaces every stored API token with one new full-access token. All other
+tokens stop working. An API token may call this only if it has full-access
+scope (`*`) and is not bound to a non-default organization; any other token
+gets `403`, and should use `POST /api/security/tokens/{id}/rotate` to replace
+just itself.
+
+Returns the new raw token (shown once) and updates stored hashes:
 ```json
 {
   "success": true,
