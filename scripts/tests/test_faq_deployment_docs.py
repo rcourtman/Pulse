@@ -20,6 +20,38 @@ def answer(heading):
 
 
 class FAQDeploymentDocsTest(unittest.TestCase):
+    def test_alert_off_is_scoped_and_does_not_promise_universal_overrides(self):
+        text = answer("Can I disable alerts for specific metrics?")
+        for phrase in ("controls offered in **Alerts → Thresholds**", "save, then reopen",
+                       "not every default has a per-resource control",
+                       "rather than treating `-1` as a universal value",
+                       "does not hide its readings, stop collection",
+                       "Check both the default and any override",
+                       "explicit threshold can remain active",
+                       "warning and critical levels separately"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        runtime = (ROOT / "internal/alerts/config_runtime.go").read_text()
+        self.assertIn("if override.Memory != nil", runtime)
+        self.assertIn("result.Memory = ensureHysteresisThreshold(cloneThreshold(override.Memory))", runtime)
+
+    def test_alert_off_does_not_promise_patrol_or_queue_suppression(self):
+        text = answer("Can I disable alerts for specific metrics?")
+        for phrase in ("Patrol findings are separate from threshold alerts",
+                       "CPU, memory, guest-disk and storage usage",
+                       "built-in threshold when the corresponding alert default is Off",
+                       "Disabling a notification destination is different",
+                       "Already queued notifications can reflect earlier settings",
+                       "Do not induce an alert, send another Test or retry the queue"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        adapter = (ROOT / "internal/ai/alert_threshold_adapter.go").read_text()
+        self.assertIn("ok && trigger > 0", adapter)
+        self.assertIn("return defaultVal", adapter)
+        for method in ("GetNodeCPUThreshold", "GetNodeMemoryThreshold", "GetGuestMemoryThreshold",
+                       "GetGuestDiskThreshold", "GetStorageThreshold"):
+            self.assertIn(f"func (a *AlertThresholdAdapter) {method}", adapter)
+
     def test_ports_distinguish_listener_mapping_and_server_host(self):
         text = answer("How do I change the port?")
         for phrase in ("`FRONTEND_PORT`", "default **7655**", "`PULSE_AGENT_INGEST_PORT`",

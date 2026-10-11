@@ -148,7 +148,32 @@ navigation was retired during the v6 prerelease cycle. See the
 older release candidate.
 
 ### Can I disable alerts for specific metrics?
-Yes. Go to **Alerts → Thresholds** and use the On/Off toggle next to any metric while editing, or set the value to `-1`. You can do this globally or per-resource (VM/Node).
+
+Yes, for the controls offered in **Alerts → Thresholds**. Edit the relevant
+default or resource row, use its **On/Off** toggle, save, then reopen the editor
+to check the saved setting. The available resource overrides differ by platform;
+not every default has a per-resource control. Use the editor rather than treating
+`-1` as a universal value or hand-editing `alerts.json`.
+
+**Off applies to that alert check, not all monitoring:**
+
+- A metric's Off toggle does not hide its readings, stop collection or disable
+  unrelated checks. Memory alerts, connectivity alerts and backup-age alerts
+  are separate controls. Check warning and critical levels separately too.
+- Check both the default and any override on the affected resource. A resource's
+  explicit threshold can remain active even when its default is Off.
+- Disabling a notification destination is different from disabling alert
+  evaluation. Already queued notifications can reflect earlier settings; a
+  message alone does not prove a new alert was evaluated after the save.
+- **Patrol findings are separate from threshold alerts.** For CPU, memory,
+  guest-disk and storage usage, Patrol currently uses its built-in threshold
+  when the corresponding alert default is Off. Turning these alerts Off does
+  not suppress a Patrol finding. See [how Patrol works](AI.md#how-patrol-works).
+
+Use the existing alert entry or Patrol finding to identify which path produced
+the warning. For missing messages, use the
+[ordinary notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+Do not induce an alert, send another Test or retry the queue merely to check Off.
 
 ### How do I monitor temperature?
 
