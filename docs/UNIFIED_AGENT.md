@@ -557,6 +557,15 @@ health/metrics endpoint over the network. Use `--health-addr ""` or
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → the `token` file in the state directory (`<state-dir>/token`; the default state directory is `/var/lib/pulse-agent` on Linux and macOS and `%ProgramData%\Pulse` on Windows).
 
+An explicitly selected token file must be readable by the agent service and
+contain a non-empty bare token, not quotes or a `PULSE_TOKEN=` assignment.
+Surrounding whitespace is ignored. A missing, unreadable or empty selected file
+stops startup rather than using an environment or implicit state-file token.
+The startup error does not print the file path or token. With `--enroll`, a
+previously stored non-empty `runtime.token` still takes precedence, so removing
+the bootstrap file does not break ordinary agent restarts. Do not share token
+contents, service environment contents or token hints when asking for help.
+
 ### Agent log level
 
 The default `info` level records normal lifecycle and connection messages.

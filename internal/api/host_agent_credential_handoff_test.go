@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -92,7 +93,20 @@ func TestHostAgentCredentialFileHandoff(t *testing.T) {
 						t.Error("could not observe synthetic report")
 					}
 					r.Body = io.NopCloser(bytes.NewReader(body))
-					if err := json.Unmarshal(body, &event.report); err != nil {
+					// Observe the real wire encoding without changing the body
+					// delivered to the canonical router and decompressor.
+					var reportBody io.Reader = bytes.NewReader(body)
+					if r.Header.Get("Content-Encoding") == "gzip" {
+						compressed, err := gzip.NewReader(reportBody)
+						if err != nil {
+							t.Error("could not observe compressed synthetic report")
+							w.WriteHeader(http.StatusBadRequest)
+							return
+						}
+						defer compressed.Close()
+						reportBody = compressed
+					}
+					if err := json.NewDecoder(io.LimitReader(reportBody, 4<<20)).Decode(&event.report); err != nil {
 						t.Error("could not decode synthetic report")
 					}
 				}
