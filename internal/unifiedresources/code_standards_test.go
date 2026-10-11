@@ -1193,7 +1193,8 @@ func TestPlatformActivityTimelineContractStaysCanonical(t *testing.T) {
 		},
 		filepath.Join("..", "monitoring", "monitor.go"): {
 			"type MonitorSupplementalChangesProvider interface {",
-			"recordSupplementalResourceChanges(store, supplementalChanges)",
+			"binding := m.captureResourceStoreBinding()",
+			"recordSupplementalResourceChanges(store, binding.providers.changes(m))",
 			"func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {",
 		},
 		filepath.Join("..", "monitoring", "vmware_poller.go"): {

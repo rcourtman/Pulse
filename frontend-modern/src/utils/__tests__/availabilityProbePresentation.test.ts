@@ -237,3 +237,20 @@ describe('availabilityProbePresentation', () => {
     expect(presentation?.toneClassName).toContain('amber');
   });
 });
+
+it('measures all probe ages from the supplied clock rather than Date.now', () => {
+  const clock = new Date('2026-10-10T12:02:00Z');
+  const probe = getAvailabilityProbePresentation(
+    makeAvailabilityResource({
+      availability: {
+        protocol: 'https',
+        available: false,
+        lastChecked: '2026-10-10T12:01:00Z',
+        lastSuccess: '2026-10-10T12:00:00Z',
+      },
+    }),
+    clock,
+  );
+  expect(probe?.detailLabel).toContain('checked 1 min ago');
+  expect(probe?.detailLabel).toContain('last success 2 mins ago');
+});

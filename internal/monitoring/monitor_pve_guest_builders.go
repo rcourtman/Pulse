@@ -98,6 +98,31 @@ func (m *Monitor) applyVMStatusDetails(
 			Msg("VM guest agent is not currently queryable")
 	}
 
+	// Learn or refresh the OS before the optional Linux-only memory fallback.
+	// Otherwise an uncertain /proc/meminfo reply on a cold/expired Windows
+	// guest can fence OS discovery on every poll, so the Windows exclusion
+	// never becomes usable. Filesystems remain first; metadata and memory
+	// retain the same per-command lock, completion and shared-channel guard.
+	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
+	if metadataDeferred {
+		state.guestAgentStatus = "deferred"
+	}
+	if len(guestIPs) > 0 {
+		state.ipAddresses = guestIPs
+	}
+	if len(guestIfaces) > 0 {
+		state.networkInterfaces = guestIfaces
+	}
+	if guestOSName != "" {
+		state.osName = guestOSName
+	}
+	if guestOSVersion != "" {
+		state.osVersion = guestOSVersion
+	}
+	if guestAgentVersion != "" {
+		state.agentVersion = guestAgentVersion
+	}
+
 	var memoryDeferred bool
 	state.memTotal, state.memUsed, state.memorySource, memoryDeferred = m.resolveGuestStatusMemory(
 		ctx,
@@ -119,27 +144,6 @@ func (m *Monitor) applyVMStatusDetails(
 	}
 
 	mergeVMRuntimeCounters(state, status)
-
-	// Gather guest metadata from the agent when available
-	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
-	if metadataDeferred {
-		state.guestAgentStatus = "deferred"
-	}
-	if len(guestIPs) > 0 {
-		state.ipAddresses = guestIPs
-	}
-	if len(guestIfaces) > 0 {
-		state.networkInterfaces = guestIfaces
-	}
-	if guestOSName != "" {
-		state.osName = guestOSName
-	}
-	if guestOSVersion != "" {
-		state.osVersion = guestOSVersion
-	}
-	if guestAgentVersion != "" {
-		state.agentVersion = guestAgentVersion
-	}
 }
 
 func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface, state *vmBuildState) {

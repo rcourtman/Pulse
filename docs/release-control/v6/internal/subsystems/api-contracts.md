@@ -8092,6 +8092,21 @@ machine-readable `errorKind` values with operator guidance in
 certificate mismatch, refused connections, unreachable networks, DNS failures,
 timeouts, and unknown connection failures must remain distinguishable in
 support bundles instead of collapsing into a generic connection failure string.
+TLS recovery guidance must preserve certificate verification: check the
+configured endpoint's hostname, validity and trusted chain, and independently
+verify certificate identity before adding or updating a saved fingerprint.
+Neither a trusted network nor a failed probe justifies advice to disable
+verification or switch to HTTP. Wrapped cancellation and typed network/deadline
+timeouts take precedence over certificate words in endpoint/error text;
+serialized scheduler timeout messages retain the same distinction. The existing
+`errorKind` vocabulary and trust settings remain unchanged. Production loopback
+PVE/PBS probes must reject untrusted chains and changed pins before sending HTTP
+credentials, preserve saved trust, and resume only when the fixture operator
+supplies the independently known pin. A successful PBS probe still does not
+establish scheduler recovery without a completed poll. Verification:
+`TestComputeDiagnosticsTLSRefusalAndVerifiedRecovery`,
+`TestComputeDiagnosticsTLSHandshakeDeadline`, and the
+`TestContract_DiagnosticsTLS*` controls, including JSON/LastError round trips.
 PBS connection state follows the same scheduler-ledger authority as the
 Settings connections response and connection-alert snapshots.
 `InstancePollStatus.LastError` is a current outstanding failure that is cleared
@@ -12095,3 +12110,15 @@ and `TestAlertConnectionSnapshotsKeepConfiguredPlatformRowsWithoutTheHosts` in
 finding's resource reference through `Monitor.GetUnifiedStructureReadState`; in
 mock mode that is the view built for the current fixture structure, outside it
 the read state it used before.
+
+### Loaded availability Settings honours evidence expiry (10 October 2026)
+
+The existing availability Settings client passes the shared current time to
+loaded-resource health classification, count, colour, label and status tooltip. Time
+alone can move a healthy retained observation to attention; it performs no
+new target read, test, mutation or authentication/scope change. Target-only
+fallback, intentional pause, wire fields and configured failure threshold remain
+unchanged. The mounted Settings test holds source/target identities fixed and
+checks one initial list call while the expiry is crossed.
+An expired loaded check reads Stale rather than Online in an amber badge;
+intentional pause and the dedicated stopped-probe label still take precedence.

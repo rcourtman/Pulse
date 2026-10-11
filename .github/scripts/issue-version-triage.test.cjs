@@ -627,6 +627,17 @@ for (const [name, field] of [
     assert.match(attachment, /summarise only relevant counters after local review/);
   });
 
+  test(`baseline memory regressions need no continuing growth or restart: ${name}`, () => {
+    const attachment = evidenceField();
+    assert.match(attachment, /higher steady baseline from growth during one uninterrupted run/);
+    assert.match(attachment, /worth reporting even if usage stays flat/);
+    assert.match(attachment, /already available versions, uptime, workload and enabled collectors\/features/);
+    assert.match(attachment, /not proof of recovery compared with a days-old run/);
+    assert.match(attachment, /Unknown context is valid/);
+    assert.match(attachment, /do not restart, downgrade or change features to create a comparison/);
+    assert.doesNotMatch(attachment, /required: true|render:/);
+  });
+
   test(`guest memory comparisons retain optional target and sample context: ${name}`, () => {
     const attachment = evidenceField();
     assert.match(attachment, /For CPU, memory or disk-write reports about Pulse itself/);

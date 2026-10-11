@@ -251,6 +251,74 @@ describe('PatrolAttentionWorkbench', () => {
       </Router>
     ));
 
+  it('ages the retained empty-view evaluation without another list read', async () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const calm = summary({ evaluatedAt: new Date(start - 60_000).toISOString() });
+    apiMocks.getList.mockResolvedValue(listResponse([], calm));
+    try {
+      renderWorkbench();
+      expect(await screen.findByText(/Checked 1m ago/)).toBeInTheDocument();
+      // Hold the existing input at the loader boundary, independently of
+      // the workbench's ordinary 30-second polling timer.
+      const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
+      vi.advanceTimersByTime(60_000);
+      expect(screen.getByText(/Checked 2m ago/)).toBeInTheDocument();
+      expect(apiMocks.getList).toHaveBeenCalledOnce();
+      expect(calm.evaluatedAt).toBe(new Date(start - 60_000).toISOString());
+      held.mockRestore();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it('ages list, detail and flapping-window observations without repeating an operation', async () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const active = item({
+      lastObservedAt: new Date(start - 60_000).toISOString(),
+      flapping: {
+        transitionCount: 11,
+        windowHours: 24,
+        firstTransitionAt: new Date(start - 10 * 60_000).toISOString(),
+        lastTransitionAt: new Date(start - 2 * 60_000).toISOString(),
+      },
+    });
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    try {
+      renderWorkbench();
+      const row = await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' });
+      expect(row).toHaveTextContent('Last seen 1m ago');
+      fireEvent.click(row);
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      await waitFor(() => expect(detailRegion).toHaveTextContent('Last seen 1m ago'));
+      fireEvent.click(screen.getByText('Evidence and history'));
+      expect(detailRegion).toHaveTextContent(/first 10m ago.*latest 2m ago/);
+      const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
+      vi.advanceTimersByTime(60_000);
+      expect(row).toHaveTextContent('Last seen 2m ago');
+      expect(detailRegion).toHaveTextContent('Last seen 2m ago');
+      expect(detailRegion).toHaveTextContent(/first 11m ago.*latest 3m ago/);
+      expect(apiMocks.getList).toHaveBeenCalledOnce();
+      expect(apiMocks.getDetail).toHaveBeenCalledOnce();
+      expect(apiMocks.planAction).not.toHaveBeenCalled();
+      expect(apiMocks.acknowledge).not.toHaveBeenCalled();
+      expect(active.evidenceFreshness).toBe('fresh');
+      held.mockRestore();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
   it('renders a plain trustworthy calm state without a proof strip', async () => {
     const calm = summary({ evaluatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() });
     apiMocks.getList.mockResolvedValue(listResponse([], calm));

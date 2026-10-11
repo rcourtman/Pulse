@@ -1,3 +1,4 @@
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { Show, createEffect, createMemo, createSignal, onMount, type Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { isAgentlessAvailabilityResource } from '@/features/standalone/standalonePageModel';
@@ -44,6 +45,7 @@ const sortTargets = (targets: readonly AvailabilityTarget[]): AvailabilityTarget
   [...targets].sort((left, right) => left.name.localeCompare(right.name));
 
 export const AvailabilitySettingsPanel: Component = () => {
+  const now = useRelativeTimeNow();
   const location = useLocation();
   const navigate = useNavigate();
   const { resources } = useResources();
@@ -201,7 +203,7 @@ export const AvailabilitySettingsPanel: Component = () => {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-base-content">
-                {getAvailabilityTargetsSummary(targets(), resourceForTarget)}
+                {getAvailabilityTargetsSummary(targets(), resourceForTarget, now())}
               </div>
               <p class="mt-1 text-xs leading-5 text-muted">
                 Monitor endpoint-only devices and services with ICMP, TCP, and HTTP probes.
@@ -288,13 +290,18 @@ export const AvailabilitySettingsPanel: Component = () => {
                           {target.name}
                         </div>
                         <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target, resourceForTarget(target))}`}
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target, resourceForTarget(target), now())}`}
                           title={getAvailabilityTargetStatusTitle(
                             target,
                             resourceForTarget(target),
+                            now(),
                           )}
                         >
-                          {getAvailabilityTargetStatusLabel(target)}
+                          {getAvailabilityTargetStatusLabel(
+                            target,
+                            resourceForTarget(target),
+                            now(),
+                          )}
                         </span>
                         <Show
                           when={getAvailabilityTargetProbeSourceLabel(target, probeAgentOptions())}

@@ -125,7 +125,7 @@ export function getMetricAlertLastBreachAt(
  */
 export function getMetricAlertPresentation(
   alert: Pick<Alert, 'type' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
-  now: number = Date.now(),
+  now: number,
 ): MetricAlertPresentation | null {
   const status = alert.metricStatus;
   if (!isUsableStatus(status)) return null;
@@ -200,9 +200,12 @@ export interface AlertAttentionCopy {
 /** Copy for an alert row in a drawer's "Needs attention" list. */
 export function getAlertAttentionCopy(
   alert: Pick<Alert, 'type' | 'message' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
-  now: number = Date.now(),
+  now: number | (() => number),
 ): AlertAttentionCopy {
-  const presentation = getMetricAlertPresentation(alert, now);
+  // Legacy/non-metric alerts do not subscribe their copy to the shared tick.
+  const presentation = isUsableStatus(alert.metricStatus)
+    ? getMetricAlertPresentation(alert, typeof now === 'function' ? now() : now)
+    : null;
   if (!presentation) return { message: alert.message };
   return {
     message: presentation.summary,

@@ -9,14 +9,14 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
-import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
+import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
-import { getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
+import { getGuestDrawerAlertAttention, getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -2050,4 +2050,41 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('200');
     });
   });
+});
+
+it('forwards the mounted guest clock without changing the evaluated breach or clear rule', () => {
+  const at = '2026-10-10T12:00:00Z';
+  const alert = {
+    id: 'held-cpu',
+    resourceId: 'inst1-node1-100',
+    resourceName: 'test-vm',
+    node: 'node1',
+    instance: 'inst1',
+    type: 'cpu',
+    message: 'Old breach',
+    level: 'warning',
+    value: 92,
+    threshold: 80,
+    startTime: at,
+    acknowledged: false,
+    metricStatus: {
+      phase: 'latched',
+      value: 72,
+      unit: '%',
+      observedAt: at,
+      lastBreachAt: '2026-10-10T11:40:00Z',
+      trigger: 80,
+      recovery: 70,
+    },
+  } as Alert;
+  const now = vi.fn(() => Date.parse(at) + 11 * 60_000);
+  const copy = getGuestDrawerAlertAttention(
+    alert,
+    { guest: makeGuest(), memoryDisplayBasis: 'guest' },
+    now,
+  );
+  expect(copy.message).toBe('Last reading: CPU 72%, 11 mins ago');
+  expect(copy.detail).toBe('Stays open until it reaches 70% or lower.');
+  expect(copy.title).toContain('Last reading at or above 80%: 92%, 31 mins ago');
+  expect(now).toHaveBeenCalledOnce();
 });

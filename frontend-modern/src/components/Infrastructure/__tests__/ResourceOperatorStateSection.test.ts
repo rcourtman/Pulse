@@ -213,7 +213,8 @@ describe('ResourceOperatorStateSection', () => {
     // "scheduled" badge instead.
     expect(sectionSource).toContain('activeMaintenanceWindow');
     expect(sectionSource).toContain('Maintenance window active.');
-    expect(sectionSource).toContain('if (now < start || now >= end) return null;');
+    expect(sectionSource).toContain('const currentTime = now();');
+    expect(sectionSource).toContain('if (currentTime < start || currentTime >= end) return null;');
   });
 
   it('attributes the persisted state with set-by and set-at metadata', () => {

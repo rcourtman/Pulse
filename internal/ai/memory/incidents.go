@@ -534,8 +534,25 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 // canonical events exist, QueryIncidents replaces these snapshot-derived
 // lifecycle breadcrumbs with the durable projection.
 func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) *Incident {
-	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
+	if !s.materializeAlertOccurrence(alert, resolvedAt) {
 		return nil
+	}
+	return s.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+}
+
+// MaterializeAlertOccurrence repairs the same snapshot-derived occurrence as
+// EnsureAlertOccurrence without reading its projected timeline. Lifecycle
+// replay writes canonical changes separately and discards the returned
+// timeline, so hydrating it for every imported snapshot only adds history
+// reads and copies. Callers serving a timeline must use EnsureAlertOccurrence
+// or QueryIncidents, retaining canonical evidence and read-error semantics.
+func (s *IncidentStore) MaterializeAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) {
+	s.materializeAlertOccurrence(alert, resolvedAt)
+}
+
+func (s *IncidentStore) materializeAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) bool {
+	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
+		return false
 	}
 
 	s.mu.Lock()
@@ -589,7 +606,7 @@ func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *t
 	}
 	s.mu.Unlock()
 
-	return s.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+	return true
 }
 
 // RecordAnalysis adds an AI analysis event to the incident for an alert.

@@ -65,7 +65,7 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                 self.assertEqual(argv, expected[reader])
                 self.assertEqual(result.stdout, SMTP_ERROR + WEBHOOK_ERROR)
                 self.assertNotRegex(copied, r"\b(?:grep|curl|inspect|restart|printenv)\b|--follow|--token")
-                self.assertIn("--signal=TERM --kill-after=1s 8s", copied)
+                self.assertIn("--signal=KILL 8s", copied)
 
     def test_docker_application_logs_on_both_streams_remain_visible(self):
         result, _ = self.exercise("docker", stdout=WEBHOOK_ERROR, stderr=SMTP_ERROR)
@@ -91,11 +91,11 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         for reader in recipes():
             with self.subTest(reader=reader):
                 result, _ = self.exercise(reader, stdout=PARTIAL_EMAIL_LOG, hang="term")
-                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.returncode, 137, result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertIn("Log read unavailable", result.stderr)
 
-    def test_reader_ignoring_term_is_killed_after_one_second_grace(self):
+    def test_reader_ignoring_term_is_killed_at_the_hard_deadline(self):
         result, _ = self.exercise("docker", stdout=PARTIAL_EMAIL_LOG, hang="ignore-term")
         self.assertEqual(result.returncode, 137, result.stderr)
         self.assertEqual(result.stdout, "")

@@ -166,6 +166,57 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
+  it('ages the availability posture and latest-data label without reloading resources', () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const resources = [
+      resource({
+        id: 'clock-check',
+        type: 'network-endpoint',
+        platformType: 'availability',
+        sources: ['availability'],
+        lastSeen: start - 60_000,
+        availability: freshAvailability({
+          evidence: {
+            id: 'clock-evidence',
+            source: { provider: 'availability', collector: 'probe' },
+            subject: { resourceId: 'clock-check' },
+            observedAt: new Date(start).toISOString(),
+            ingestedAt: new Date(start).toISOString(),
+            validUntil: new Date(start + 10_000).toISOString(),
+            completeness: 'complete',
+            confidence: 'confirmed',
+            permissions: 'sufficient',
+          },
+        }),
+      }),
+    ];
+    const refetch = vi.fn();
+    mocks.pathname = '/standalone/availability';
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => resources,
+      loading: () => false,
+      error: () => null,
+      refetch,
+    });
+    try {
+      render(() => <StandalonePageSurface />);
+      const posture = screen.getByTestId('standalone-posture-summary');
+      expect(posture).toHaveTextContent('All 1 check reporting normally');
+      expect(posture).toHaveTextContent('latest data 1m ago');
+      vi.advanceTimersByTime(60_000);
+      expect(posture).toHaveTextContent('1 check needs attention');
+      expect(posture).toHaveTextContent('0 healthy');
+      expect(posture).toHaveTextContent('latest data 2m ago');
+      expect(screen.getByTestId('standalone-posture-summary')).toBe(posture);
+      expect(refetch).not.toHaveBeenCalled();
+      expect(resources[0].availability?.available).toBe(true);
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps machine search and normalized status in route-owned saved-view state', () => {
     mocks.searchParams = { q: 'ubuntu', status: 'running' };
     render(() => <StandalonePageSurface />);

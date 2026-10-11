@@ -29,8 +29,10 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 			terminal              bool
 		}{
 			{"windows-unsupported-memory", "file-read", "Microsoft Windows 11", "ntfs", true},
+			{"linux-unsupported-memory", "file-read", "Linux", "ext4", true},
 			{"android-unsupported-os", "get-osinfo", "Android", "ext4", true},
-			{"uncertain-memory", "file-read", "Microsoft Windows 11", "ntfs", false},
+			{"uncertain-memory", "file-read", "Linux", "ext4", false},
+			{"unknown-os-uncertain-memory", "file-read", "", "ext4", false},
 			{"uncertain-network", "network-get-interfaces", "Android", "ext4", false},
 			{"uncertain-os", "get-osinfo", "Android", "ext4", false},
 			{"uncertain-version", "info", "Microsoft Windows 11", "ntfs", false},

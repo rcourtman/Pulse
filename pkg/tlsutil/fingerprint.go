@@ -9,9 +9,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 const minimumTLSVersion = tls.VersionTLS12
@@ -53,21 +57,13 @@ func UnverifiedPeerCertificateCaptureTLSConfig() *tls.Config {
 
 // FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
 // This is used for TOFU (Trust On First Use) when discovering cluster peers.
-// The host should be in the format "hostname:port" or "https://hostname:port".
+// Explicit URLs retain their HTTP(S) authority, including the scheme's default
+// port. A bare hostname or IP retains the legacy Proxmox default port, 8006.
+// Capture is always a TLS handshake, not an HTTP request or a grant of trust.
 func FetchFingerprint(host string) (string, error) {
-	// Normalize the host to just host:port format
-	targetHost := host
-	if strings.HasPrefix(host, "https://") || strings.HasPrefix(host, "http://") {
-		parsed, err := url.Parse(host)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse host URL: %w", err)
-		}
-		targetHost = parsed.Host
-	}
-
-	// Ensure port is present (default to 8006 for Proxmox)
-	if _, _, err := net.SplitHostPort(targetHost); err != nil {
-		targetHost = targetHost + ":8006"
+	targetHost, err := fingerprintTarget(host)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse host URL: %w", err)
 	}
 
 	// Create a TLS connection that explicitly accepts parseable peer certificates
@@ -98,6 +94,59 @@ func FetchFingerprint(host string) (string, error) {
 	// Calculate SHA256 fingerprint of the leaf certificate
 	fingerprint := sha256.Sum256(certs[0].Raw)
 	return hex.EncodeToString(fingerprint[:]), nil
+}
+
+func fingerprintTarget(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	explicitURL := strings.Contains(raw, "://")
+	if !explicitURL {
+		// A port on an IPv6 literal must be bracketed. An entire bare IPv6
+		// address (including a zone) is a host, never a guessed host:port pair.
+		host, port, splitErr := net.SplitHostPort(raw)
+		if splitErr != nil {
+			host = strings.TrimSuffix(strings.TrimPrefix(raw, "["), "]")
+		}
+		if address, err := netip.ParseAddr(host); err == nil && address.Is6() {
+			authority := "[" + address.String() + "]"
+			if splitErr == nil {
+				authority = net.JoinHostPort(address.String(), port)
+			}
+			// URL.String escapes a zone's percent separator exactly once.
+			raw = (&url.URL{Scheme: "https", Host: authority}).String()
+		}
+	}
+	u, err := securityutil.NormalizeHTTPBaseURL(raw, "https")
+	if err != nil {
+		return "", err
+	}
+	if !explicitURL && u.Path != "" {
+		return "", fmt.Errorf("a base path requires an explicit HTTP(S) URL")
+	}
+	if strings.HasPrefix(u.Host, "[") {
+		if address, err := netip.ParseAddr(u.Hostname()); err != nil || !address.Is6() {
+			return "", fmt.Errorf("brackets require a valid IPv6 address")
+		}
+	} else if strings.Count(u.Host, ":") > 1 {
+		return "", fmt.Errorf("an IPv6 URL authority must be bracketed")
+	}
+	port := u.Port()
+	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", fmt.Errorf("port is empty")
+		}
+		port = "8006"
+		if explicitURL {
+			port = "443"
+			if u.Scheme == "http" {
+				port = "80"
+			}
+		}
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return "", fmt.Errorf("port must be between 1 and 65535")
+	}
+	return net.JoinHostPort(u.Hostname(), strconv.FormatUint(number, 10)), nil
 }
 
 // FingerprintVerifier creates a custom TLS config that verifies server certificate fingerprint
@@ -165,6 +214,52 @@ func proxyFromEnvironmentBypassingLocalInfrastructure(req *http.Request) (*url.U
 	return http.ProxyFromEnvironment(req)
 }
 
+// Infrastructure requests can carry tokens, tickets, CSRF headers or replayable
+// login bodies. Go's default redirect policy does not bind those to a port or
+// scheme, and may forward some credentials to subdomains. Allow proxy path
+// redirects only within the first request's origin, before any redirected dial.
+func infrastructureRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if req == nil || len(via) == 0 || via[0] == nil {
+		return fmt.Errorf("infrastructure redirects require an original request")
+	}
+	origin, originErr := infrastructureRedirectOrigin(via[0].URL)
+	destination, destinationErr := infrastructureRedirectOrigin(req.URL)
+	if originErr != nil || destinationErr != nil || origin != destination {
+		return fmt.Errorf("infrastructure redirects must stay on the same origin")
+	}
+	return nil
+}
+
+func infrastructureRedirectOrigin(u *url.URL) (string, error) {
+	if u == nil || u.User != nil || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "", fmt.Errorf("invalid HTTP origin")
+	}
+	host := u.Hostname()
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String() // Canonical IPv6, preserving zone case.
+	} else {
+		host = strings.ToLower(host)
+	}
+	port := u.Port()
+	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", fmt.Errorf("port is empty")
+		}
+		port = "443"
+		if u.Scheme == "http" {
+			port = "80"
+		}
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return "", fmt.Errorf("port must be between 1 and 65535")
+	}
+	return u.Scheme + "://" + net.JoinHostPort(host, strconv.FormatUint(number, 10)), nil
+}
+
 // CreateHTTPClient creates an HTTP client with appropriate TLS configuration
 func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 	return CreateHTTPClientWithTimeout(verifySSL, fingerprint, 60*time.Second)
@@ -204,7 +299,8 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 	}
 
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
+		Transport:     transport,
+		Timeout:       timeout,
+		CheckRedirect: infrastructureRedirectPolicy,
 	}
 }

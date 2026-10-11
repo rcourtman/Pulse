@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { VmwarePageSurface } from '../VmwarePageSurface';
@@ -76,7 +77,9 @@ vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
 }));
 
 vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
-  WorkloadsSurface: () => <div data-testid="workloads-surface" />,
+  WorkloadsSurface: (props: { tableTitle?: JSX.Element }) => (
+    <div data-testid="workloads-surface">{props.tableTitle}</div>
+  ),
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
@@ -131,6 +134,7 @@ describe('VmwarePageSurface contract', () => {
       surfaceConnected: () => false,
       surfaceInitialDataReceived: () => false,
       allGuests: () => [],
+      filteredGuests: () => [],
       search: () => '',
       setSearch: vi.fn(),
     });
@@ -160,6 +164,7 @@ describe('VmwarePageSurface contract', () => {
       surfaceConnected: () => true,
       surfaceInitialDataReceived: () => true,
       allGuests: () => [{ id: 'vm-app-01' }],
+      filteredGuests: () => [{ id: 'vm-app-01' }],
       search: () => '',
       setSearch: vi.fn(),
     });
@@ -171,6 +176,38 @@ describe('VmwarePageSurface contract', () => {
         .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('titles the VM table through the tableTitle slot and counts the filtered rows', () => {
+    setResources([makeResource({ id: 'vm-app-01', type: 'vm' })]);
+    const [ready, setReady] = createSignal(false);
+    const [filtered, setFiltered] = createSignal([{ id: 'vm-app-01' }, { id: 'vm-app-02' }]);
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: ready,
+      surfaceInitialDataReceived: ready,
+      allGuests: () => [{ id: 'vm-app-01' }, { id: 'vm-app-02' }, { id: 'vm-app-03' }],
+      filteredGuests: filtered,
+      search: () => 'app',
+      setSearch: vi.fn(),
+    });
+
+    // The mocked surface renders the slot unconditionally; the real one renders
+    // it with the table or the empty card. Kiosk unmounts the filter bar that
+    // otherwise introduces the table, so the title has to carry the name.
+    render(() => <VmwarePageSurface />);
+    const heading = () =>
+      within(screen.getByTestId('workloads-surface')).getByRole('heading', { level: 2 });
+    expect(heading()).toHaveTextContent(/^VMs$/);
+
+    // Once the toolbar is ready the count is the filtered rows (2), not the
+    // inventory (3), and it keeps following them.
+    setReady(true);
+    expect(heading()).toHaveTextContent(/^VMs\s*2$/);
+    setFiltered([{ id: 'vm-app-01' }]);
+    expect(heading()).toHaveTextContent(/^VMs\s*1$/);
+    setFiltered([]);
+    expect(heading()).toHaveTextContent(/^VMs\s*0$/);
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
   it('surfaces stale in-guest agents on correlated vSphere VMs', () => {

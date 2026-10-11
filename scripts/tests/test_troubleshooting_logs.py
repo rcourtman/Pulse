@@ -15,6 +15,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -44,20 +45,28 @@ def recipes(heading: str = "### Correlate Logs with Requests") -> dict[str, str]
 READER = f'''#!{sys.executable}
 import json, os, pathlib, signal, sys, time
 pathlib.Path(os.environ['READER_ARGV']).write_text(json.dumps(sys.argv[1:]))
-sys.stdout.write(os.environ.get('LOG_STDOUT', ''))
-sys.stderr.write(os.environ.get('LOG_STDERR', ''))
+pathlib.Path(os.environ['READER_PID']).write_text(json.dumps({{
+    'pid': os.getpid(),
+    'start': pathlib.Path('/proc/self/stat').read_text().split(')', 1)[1].split()[19],
+}}))
+sys.stdout.write(pathlib.Path(os.environ['LOG_STDOUT_FILE']).read_text())
+sys.stderr.write(pathlib.Path(os.environ['LOG_STDERR_FILE']).read_text())
 sys.stdout.flush()
 sys.stderr.flush()
 if os.environ.get('READER_HANG'):
-    if os.environ['READER_HANG'] == 'ignore-term':
+    if os.environ['READER_HANG'] in ('ignore-term', 'ignore-term-closed-pipes'):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    if os.environ['READER_HANG'] == 'ignore-term-closed-pipes':
+        os.close(1)
+        os.close(2)
     time.sleep(30)
 sys.exit(int(os.environ.get('READER_EXIT', '0')))
 '''
 
 
 def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: str = "",
-                        exit_code: int = 0, hang: str = "", missing_timeout: bool = False):
+                        exit_code: int = 0, hang: str = "", missing_timeout: bool = False,
+                        missing_tool: str = "", unavailable_temp: bool = False):
     """Own and clean up only this synthetic shell's process group on failure."""
     with tempfile.TemporaryDirectory() as temporary:
         directory = Path(temporary)
@@ -65,9 +74,41 @@ def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: s
         command.write_text(READER, encoding="utf-8")
         command.chmod(0o700)
         argv = directory / "argv.json"
-        path = str(directory) if missing_timeout else f"{directory}:{os.environ['PATH']}"
-        env = dict(os.environ, PATH=path, READER_ARGV=str(argv), LOG_STDOUT=stdout,
-                   LOG_STDERR=stderr, READER_EXIT=str(exit_code), READER_HANG=hang)
+        pid_file = directory / "reader.pid"
+        stdout_file, stderr_file = directory / "stdout.txt", directory / "stderr.txt"
+        # Files keep the large-record controls out of exec's argument/environment
+        # size limit. These are synthetic bytes, never a real journal or token.
+        stdout_file.write_text(stdout, encoding="utf-8")
+        stderr_file.write_text(stderr, encoding="utf-8")
+        log_directory = directory / "log-temporary"
+        log_directory.mkdir(mode=0o700)
+        cleanup_file = directory / "cleanup.jsonl"
+        real_rm = shutil.which("rm")
+        (directory / "rm").write_text(f'''#!{sys.executable}
+import json, os, pathlib, stat, sys
+path = pathlib.Path(sys.argv[2])
+assert sys.argv[1] == '--' and len(sys.argv) == 3
+assert path.parent == pathlib.Path(os.environ['LOG_TEMPORARY'])
+assert path.name.startswith('pulse-log.')
+info = path.stat()
+with pathlib.Path(os.environ['LOG_CLEANUP']).open('a') as receipt:
+    receipt.write(json.dumps({{'mode': stat.S_IMODE(info.st_mode), 'bytes': info.st_size}}) + '\\n')
+os.execv({real_rm!r}, [{real_rm!r}] + sys.argv[1:])
+''', encoding="utf-8")
+        (directory / "rm").chmod(0o700)
+        if missing_tool:
+            for tool in ("bash", "timeout", "head", "mktemp", "wc", "cat", "grep"):
+                if tool != missing_tool:
+                    (directory / tool).symlink_to(shutil.which(tool))
+            if missing_tool == "rm":
+                (directory / "rm").unlink()
+        path = (str(directory) if missing_timeout or missing_tool
+                else f"{directory}:{os.environ['PATH']}")
+        env = dict(os.environ, PATH=path, READER_ARGV=str(argv), READER_PID=str(pid_file),
+                   LOG_STDOUT_FILE=str(stdout_file), LOG_STDERR_FILE=str(stderr_file),
+                   READER_EXIT=str(exit_code), READER_HANG=hang,
+                   LOG_TEMPORARY=str(log_directory), LOG_CLEANUP=str(cleanup_file),
+                   TMPDIR=str(log_directory / "absent" if unavailable_temp else log_directory))
         with subprocess.Popen([shutil.which("bash"), "-c", copied], env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, start_new_session=True) as process:
@@ -81,6 +122,37 @@ def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: s
                 process.communicate(timeout=5)
                 raise
         result = subprocess.CompletedProcess(process.args, process.returncode, output, errors)
+        result.log_cleanup = ([json.loads(line) for line in cleanup_file.read_text().splitlines()]
+                              if cleanup_file.exists() else [])
+        if list(log_directory.iterdir()):
+            raise AssertionError("copied recipe left a private log file behind")
+        # The reader is a child of timeout/the collection shell, not ours to
+        # waitpid. A zombie is terminated, not still collecting. Observe only
+        # the recorded fixture PID; never search for or stop a real service.
+        result.reader_running = False
+        if pid_file.exists():
+            identity = json.loads(pid_file.read_text())
+            try:
+                pid_fd = os.pidfd_open(identity["pid"])
+            except ProcessLookupError:
+                pid_fd = None
+            if pid_fd is not None:
+                try:
+                    for _ in range(50):
+                        try:
+                            fields = Path(f"/proc/{identity['pid']}/stat").read_text().split(")", 1)[1].split()
+                        except FileNotFoundError:
+                            break
+                        if fields[19] != identity["start"] or fields[0] == "Z":
+                            break
+                        time.sleep(0.01)
+                    else:
+                        # The pidfd cannot signal a recycled PID. Clean up
+                        # only the captured synthetic child, then fail proof.
+                        signal.pidfd_send_signal(pid_fd, signal.SIGKILL)
+                        result.reader_running = True
+                finally:
+                    os.close(pid_fd)
         return result, json.loads(argv.read_text()) if argv.exists() else None
 
 
@@ -140,7 +212,7 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
         for reader in recipes():
             with self.subTest(reader=reader):
                 result = self.exercise(reader, stdout=JSON_LOG, hang="term")
-                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.returncode, 137, result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertIn("Log read unavailable", result.stderr)
 
@@ -154,7 +226,7 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
 
     def test_console_only_selector_is_a_negative_control_for_json(self):
         copied = recipes()["journalctl"].replace(
-            'grep -F -- "$REQUEST_ID"', 'grep -F -- "request_id=$REQUEST_ID"'
+            'grep -aF -- "$REQUEST_ID"', 'grep -aF -- "request_id=$REQUEST_ID"'
         )
         result = self.exercise("journalctl", stdout=JSON_LOG, recipe=copied)
         self.assertEqual(result.returncode, 1)
@@ -222,9 +294,9 @@ class GeneralLogEvidenceTest(unittest.TestCase):
         for reader in recipes("### Inspect Notification Logs"):
             with self.subTest(reader=reader):
                 result = self.exercise(reader, stdout="partial error\n", hang="term")
-                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.returncode, 137, result.stderr)
                 self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+                self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
     def test_general_readers_do_not_fall_back_when_timeout_is_missing(self):
         for reader in recipes("### Inspect Notification Logs"):
@@ -256,7 +328,7 @@ class SeverityLogEvidenceTest(unittest.TestCase):
 
     def test_priority_reader_keeps_incident_bounds_without_privilege_or_mutation(self):
         copied = self.copied()
-        for bound in ("--signal=TERM --kill-after=1s 8s", "--since '15 minutes ago'",
+        for bound in ("--signal=KILL 8s", "--since '15 minutes ago'",
                       "--lines 200", "--no-pager"):
             self.assertIn(bound, copied)
         self.assertNotRegex(copied, r"\b(?:sudo|systemctl|curl|grep)\b|--follow")
@@ -279,9 +351,9 @@ class SeverityLogEvidenceTest(unittest.TestCase):
 
     def test_real_deadline_withholds_partial_warning(self):
         result = self.exercise(stdout=JSON_LOG, hang="term")
-        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertEqual(result.returncode, 137, result.stderr)
         self.assertEqual(result.stdout, "")
-        self.assertIn("Log read unavailable (exit 124)", result.stderr)
+        self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
     def test_missing_timeout_stops_before_reading(self):
         result = self.exercise(missing_timeout=True)
@@ -304,6 +376,104 @@ class SeverityLogEvidenceTest(unittest.TestCase):
                          "planned maintenance window", "settings and data"):
             self.assertIn(boundary, guide)
         self.assertNotIn("systemctl cat", guide)
+
+
+class LogByteBoundsTest(unittest.TestCase):
+    """Read the actual server and agent entry points, not a duplicate helper."""
+
+    def copied_recipes(self):
+        copied = []
+        for heading in ("### Inspect Notification Logs", "### Correlate Logs with Requests"):
+            copied.extend((heading, reader, recipe)
+                          for reader, recipe in recipes(heading).items())
+        copied.append(("severity", "journalctl", SeverityLogEvidenceTest().copied()))
+        agent_doc = (ROOT / "docs/UNIFIED_AGENT.md").read_text()
+        agent_section = agent_doc.split("### Collect agent logs safely\n", 1)[1].split("\n### ", 1)[0]
+        agent_blocks = re.findall(r"```bash\n(.*?)```", agent_section, re.DOTALL)
+        self.assertEqual(len(agent_blocks), 1)
+        copied.append(("agent", "journalctl", agent_blocks[0]))
+        self.assertEqual(len(copied), 6)
+        return copied
+
+    def exercise(self, reader, recipe, **settings):
+        result, argv = exercise_log_recipe(reader, recipe, **settings)
+        self.assertFalse(result.reader_running, "reader survived the copied collection shell")
+        for cleanup in result.log_cleanup:
+            self.assertEqual(cleanup["mode"], 0o600)
+            self.assertLessEqual(cleanup["bytes"], 262145)
+        return result, argv
+
+    def test_exact_byte_limit_preserves_a_complete_record_and_private_file_cleanup(self):
+        log = "abc123 " + "x" * (262144 - 8) + "\n"
+        self.assertEqual(len(log.encode()), 262144)
+        for heading, reader, recipe in self.copied_recipes():
+            with self.subTest(section=heading, reader=reader):
+                result, _ = self.exercise(reader, recipe, stdout=log)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, log)
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.log_cleanup, [{"mode": 0o600, "bytes": 262144}])
+
+    def test_single_large_record_and_large_stderr_are_unavailable_not_a_partial_match(self):
+        for heading, reader, recipe in self.copied_recipes():
+            for stream in ("stdout", "stderr"):
+                with self.subTest(section=heading, reader=reader, stream=stream):
+                    result, _ = self.exercise(reader, recipe, **{stream: "abc123 " + "x" * 1048576})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("unavailable", result.stderr)
+                    self.assertNotIn("abc123", result.stderr)
+                    self.assertEqual(result.log_cleanup, [{"mode": 0o600, "bytes": 262145}])
+
+    def test_limit_counts_actual_bytes_including_unicode_nuls_and_trailing_newlines(self):
+        for heading, reader, recipe in self.copied_recipes():
+            for log in ("abc123" + "\n" * 262139, "é" * 131073, "\0" * 262145):
+                with self.subTest(section=heading, reader=reader, first_byte=repr(log[0])):
+                    result, _ = self.exercise(reader, recipe, stdout=log)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("unavailable", result.stderr)
+                    self.assertEqual(result.log_cleanup, [{"mode": 0o600, "bytes": 262145}])
+
+    def test_failed_reader_still_has_no_excerpt_and_removes_its_private_buffer(self):
+        for heading, reader, recipe in self.copied_recipes():
+            with self.subTest(section=heading, reader=reader):
+                result, _ = self.exercise(reader, recipe, stdout="abc123 partial\n", exit_code=2)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(len(result.log_cleanup), 1)
+
+    def test_missing_limiter_or_private_temp_path_stops_before_the_reader(self):
+        for heading, reader, recipe in self.copied_recipes():
+            for settings in ({"missing_tool": "head"}, {"unavailable_temp": True}):
+                with self.subTest(section=heading, reader=reader, settings=settings):
+                    result, argv = self.exercise(reader, recipe, **settings)
+                    self.assertIsNone(argv)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("unavailable", result.stderr)
+                    self.assertEqual(result.log_cleanup, [])
+
+    def test_hard_deadline_terminates_closed_pipe_term_resistant_readers_and_cleans_buffer(self):
+        selected = [("docker", recipes("### Inspect Notification Logs")["docker"]),
+                    ("journalctl", self.copied_recipes()[-1][2])]
+        for reader, recipe in selected:
+            with self.subTest(reader=reader):
+                result, _ = self.exercise(reader, recipe, stdout="partial private log\n",
+                                          hang="ignore-term-closed-pipes")
+                self.assertEqual(result.returncode, 137, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("partial private log", result.stderr)
+                self.assertEqual(len(result.log_cleanup), 1)
+
+    def test_each_entry_keeps_collection_deadline_pipe_failures_and_byte_limiter_together(self):
+        for heading, reader, recipe in self.copied_recipes():
+            with self.subTest(section=heading, reader=reader):
+                subprocess.run(["bash", "-n", "-c", recipe], check=True, capture_output=True)
+                for bound in ("umask 077", "timeout --signal=KILL 8s bash -o pipefail",
+                              "2>&1 | head -c 262145", '" -gt 262144 ]', "trap 'rm --"):
+                    self.assertIn(bound, recipe)
+                self.assertNotIn("--foreground", recipe)
 
 
 if __name__ == "__main__":

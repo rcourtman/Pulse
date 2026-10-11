@@ -3251,6 +3251,12 @@ func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
 	testGuestWindowsMeminfoPolling(t)
 }
 
+func TestGuestWindowsRestartPollingContract(t *testing.T) {
+	t.Run("cold-and-expired", testGuestWindowsBootstrapPolling)
+	t.Run("process-restart", testGuestWindowsBootstrapProcessRestart)
+	t.Run("admission-and-identity", testGuestWindowsBootstrapSafety)
+}
+
 func TestGuestMemoryObservationContract(t *testing.T) {
 	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
 	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)

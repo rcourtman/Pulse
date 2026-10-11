@@ -512,6 +512,11 @@ func (p *VMwarePoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 }
 
 // SupplementalRecords implements the monitor supplemental-record provider contract.
+// SupplementalRecordsMockMode binds native records to real infrastructure.
+// Mock-mode publications must not read this cached inventory before the
+// router's post-switch hook replaces the platform provider pair.
+func (*VMwarePoller) SupplementalRecordsMockMode() bool { return false }
+
 func (p *VMwarePoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
 	return p.GetCurrentRecordsForOrg(orgID)
 }

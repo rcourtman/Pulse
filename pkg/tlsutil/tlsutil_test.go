@@ -13,6 +13,55 @@ import (
 	"time"
 )
 
+func TestCreateHTTPClientRedirectAuthorityValidation(t *testing.T) {
+	for _, mode := range []struct {
+		name        string
+		verify      bool
+		fingerprint string
+	}{
+		{"ca", true, ""},
+		{"pin", true, strings.Repeat("a", 64)},
+		{"explicit-opt-out", false, ""},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			client := CreateHTTPClient(mode.verify, mode.fingerprint)
+			if client.CheckRedirect == nil {
+				t.Fatal("infrastructure client uses the unrestricted default redirect policy")
+			}
+			for _, pair := range []struct {
+				name, original, target string
+				allowed                bool
+			}{
+				{"default-port", "https://pve.test", "https://PVE.test:0443/path", true},
+				{"ipv6", "https://[::1]:443", "https://[0:0:0:0:0:0:0:1]/path", true},
+				{"zone", "https://[fe80::1%25eth0]", "https://[fe80::1%25eth0]/path", true},
+				{"zone-case", "https://[fe80::1%25eth0]", "https://[fe80::1%25ETH0]/path", false},
+				{"empty-port", "https://pve.test", "https://pve.test:/path", false},
+				{"zero-port", "https://pve.test", "https://pve.test:0/path", false},
+				{"port-overflow", "https://pve.test", "https://pve.test:65536/path", false},
+			} {
+				t.Run(pair.name, func(t *testing.T) {
+					original, err := url.Parse(pair.original)
+					if err != nil {
+						t.Fatal(err)
+					}
+					target, err := url.Parse(pair.target)
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = client.CheckRedirect(&http.Request{URL: target}, []*http.Request{{URL: original}})
+					if (err == nil) != pair.allowed {
+						t.Fatalf("origin comparison allowed=%t: %v", pair.allowed, err)
+					}
+				})
+			}
+			if client.CheckRedirect(nil, nil) == nil || client.CheckRedirect(&http.Request{}, []*http.Request{nil}) == nil {
+				t.Fatal("missing origin evidence admitted a redirect")
+			}
+		})
+	}
+}
+
 func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 	// Fingerprint with colons
 	fp1 := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
@@ -390,5 +439,73 @@ func TestFingerprintVerifier_TLSVersion(t *testing.T) {
 
 	if config.MinVersion != minimumTLSVersion {
 		t.Errorf("MinVersion should be %v, got %v", minimumTLSVersion, config.MinVersion)
+	}
+}
+
+// No service listens on these fixed ports in the isolated source-proof guest.
+// The public helper's dial error exposes its actual selected authority, without
+// requiring a privileged listener, a resolver override or an external probe.
+func TestFetchFingerprintEndpointSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, address string
+	}{
+		{"explicit-https-default", "https://127.0.0.1", "127.0.0.1:443"},
+		{"explicit-http-default", "http://127.0.0.1", "127.0.0.1:80"},
+		{"bare-ipv6-default", "::1", "[::1]:8006"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fingerprint, err := FetchFingerprint(tc.input)
+			if fingerprint != "" || err == nil || !strings.HasPrefix(err.Error(), "failed to connect to "+tc.address+":") {
+				t.Fatalf("capture did not dial the requested authority %s: fingerprint=%q error=%v", tc.address, fingerprint, err)
+			}
+		})
+	}
+}
+
+func TestFingerprintTargetAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		input, address string
+	}{
+		{"pve.example", "pve.example:8006"},
+		{"pve.example:8007", "pve.example:8007"},
+		{"127.0.0.1", "127.0.0.1:8006"},
+		{"[::1]", "[::1]:8006"},
+		{"2001:db8::1", "[2001:db8::1]:8006"},
+		{"fe80::1%eth0", "[fe80::1%eth0]:8006"},
+		{"[::1]:8443", "[::1]:8443"},
+		{"https://pve.example", "pve.example:443"},
+		{"HTTPS://pve.example/proxy/", "pve.example:443"},
+		{"http://pve.example", "pve.example:80"},
+		{"https://pve.example:08006/proxy/", "pve.example:8006"},
+		{"https://[2001:db8::1]/proxy/", "[2001:db8::1]:443"},
+		{"https://[fe80::1%25eth0]:8443/proxy/", "[fe80::1%eth0]:8443"},
+		{" https://pve.example:65535/ ", "pve.example:65535"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			address, err := fingerprintTarget(tc.input)
+			if err != nil || address != tc.address {
+				t.Fatalf("capture authority = %q, %v; want %q", address, err, tc.address)
+			}
+		})
+	}
+}
+
+func TestFetchFingerprintRejectsInvalidAuthorityBeforeDial(t *testing.T) {
+	for _, input := range []string{
+		"", "https://", "ftp://127.0.0.1:8006", "https://[::1", "https://::1",
+		"https://127.0.0.1:", "https://127.0.0.1:0", "https://127.0.0.1:65536",
+		"https://127.0.0.1:abc", "https://[not-an-ip]:8006", "127.0.0.1/proxy",
+		"https://fixture-user:fixture-password@127.0.0.1:8006",
+		"https://127.0.0.1:8006/?query=fixture", "https://127.0.0.1:8006/#fragment",
+	} {
+		t.Run(input, func(t *testing.T) {
+			fingerprint, err := FetchFingerprint(input)
+			if fingerprint != "" || err == nil || !strings.HasPrefix(err.Error(), "failed to parse host URL:") {
+				t.Fatalf("invalid authority reached dial or capture: fingerprint=%q error=%v", fingerprint, err)
+			}
+			if strings.Contains(err.Error(), "fixture-password") {
+				t.Fatal("invalid authority exposed userinfo in its error")
+			}
+		})
 	}
 }
