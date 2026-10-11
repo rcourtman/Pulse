@@ -908,7 +908,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           <div class="mt-3 space-y-3">
             <p class="text-xs text-muted">
               Run the appropriate command on the agent's host. Removal uses its saved connection and
-              credentials; you do not need to generate another token.
+              credentials. You do not need to generate another token.
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>

@@ -942,7 +942,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
                                     not run commands remotely. Removal uses the host's saved
-                                    connection and credentials; do not generate a new token.
+                                    connection and credentials. Do not generate a new token.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (
