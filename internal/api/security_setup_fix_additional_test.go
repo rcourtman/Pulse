@@ -106,7 +106,7 @@ func TestHandleRegenerateAPIToken_DoesNotRequireEnvFile(t *testing.T) {
 func TestHandleRegenerateAPITokenInheritsOwnerFromCallerToken(t *testing.T) {
 	dataDir := t.TempDir()
 	rawCallerToken := "regen-owner-token-123.12345678"
-	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "admin-token", []string{config.ScopeSettingsWrite})
+	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "admin-token", []string{config.ScopeWildcard})
 	if err != nil {
 		t.Fatalf("new caller token record: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestHandleRegenerateAPITokenInheritsOwnerFromCallerToken(t *testing.T) {
 func TestHandleRegenerateAPITokenRollsBackWhenPersistenceFails(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "state")
 	rawCallerToken := "regen-persistence-token-123.12345678"
-	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "existing-admin-token", []string{config.ScopeSettingsWrite})
+	callerRecord, err := config.NewAPITokenRecord(rawCallerToken, "existing-admin-token", []string{config.ScopeWildcard})
 	if err != nil {
 		t.Fatalf("new caller token record: %v", err)
 	}
