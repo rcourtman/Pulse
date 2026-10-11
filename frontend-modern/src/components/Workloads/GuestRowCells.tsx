@@ -403,6 +403,11 @@ function BackupStatusCell(props: {
   const focusClass =
     'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 
+  // The indicator sits in the guest name cell, where on phones the whole row
+  // is the disclosure target (the expand chevron is screen-reader only). Keep
+  // its touch target at the 24px minimum: a 44px box covered most of the
+  // name cell's row-tap area and doubled every phone row's height. The
+  // backup-column badge owns its own cell, so it keeps the 44px target.
   return (
     <>
       <button
@@ -410,7 +415,7 @@ function BackupStatusCell(props: {
         type="button"
         class={
           props.indicator
-            ? `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-sm sm:min-h-0 sm:min-w-0 ${config().color} ${focusClass}`
+            ? `inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm sm:min-h-0 sm:min-w-0 ${config().color} ${focusClass}`
             : `${getBackupAgeBadgeClass(displayStatus())} min-h-11 min-w-11 sm:min-h-0 ${focusClass}`
         }
         onMouseEnter={tip.onMouseEnter}
