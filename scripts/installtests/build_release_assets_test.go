@@ -5407,3 +5407,82 @@ func TestDockerModuleDownloadKeepsPinnedGraphAndBoundedRecovery(t *testing.T) {
 		t.Fatalf("missing actual-shell module-download proof: %v", err)
 	}
 }
+
+func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "provider-msp-startup.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Permissions map[string]string `yaml:"permissions"`
+		On          map[string]struct {
+			Branches []string `yaml:"branches"`
+			Paths    []string `yaml:"paths"`
+		} `yaml:"on"`
+		Jobs map[string]struct {
+			RunsOn  string `yaml:"runs-on"`
+			Timeout int    `yaml:"timeout-minutes"`
+			Steps   []struct {
+				Name        string            `yaml:"name"`
+				Uses        string            `yaml:"uses"`
+				Run         string            `yaml:"run"`
+				Dir         string            `yaml:"working-directory"`
+				Env         map[string]string `yaml:"env"`
+				With        map[string]string `yaml:"with"`
+				Tolerant    any               `yaml:"continue-on-error"`
+				Conditional any               `yaml:"if"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(workflow.Jobs) != 1 || len(workflow.On) != 2 {
+		t.Fatal("startup CI must remain one read-only PR/main job")
+	}
+	for _, event := range []string{"push", "pull_request"} {
+		trigger, ok := workflow.On[event]
+		if !ok || len(trigger.Branches) != 1 || trigger.Branches[0] != "main" {
+			t.Fatalf("missing main admission for %s", event)
+		}
+		for _, path := range []string{"internal/cloudcp/**", "cmd/pulse-control-plane/**", "deploy/provider-msp/**", "pkg/licensing/**", "scripts/installtests/provider_msp*", "frontend-modern/**", "go.mod", "go.sum", ".github/workflows/provider-msp-startup.yml"} {
+			found := false
+			for _, actual := range trigger.Paths {
+				found = found || path == actual
+			}
+			if !found {
+				t.Fatalf("%s cannot admit changes to %s", event, path)
+			}
+		}
+	}
+	job := workflow.Jobs["startup"]
+	if job.RunsOn != "ubuntu-24.04" || job.Timeout <= 0 || job.Timeout > 20 {
+		t.Fatal("startup CI must use a bounded disposable hosted runner")
+	}
+	built, accepted, exact := false, false, false
+	for _, step := range job.Steps {
+		if step.Tolerant != nil || step.Conditional != nil {
+			t.Fatalf("startup proof step must not be optional/tolerant: %s", step.Name)
+		}
+		if strings.HasPrefix(step.Uses, "actions/checkout@") {
+			if step.With["persist-credentials"] != "false" || step.With["ref"] != "${{ github.sha }}" {
+				t.Fatal("checkout must be credential-free and exact-source")
+			}
+		}
+		if step.Env["EXPECTED_SOURCE_SHA"] == "${{ github.sha }}" && strings.Contains(step.Run, `test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`) {
+			exact = true
+		}
+		if step.Dir == "frontend-modern" && strings.Contains(step.Run, "npm ci --no-audit && npm run build") {
+			built = true
+		}
+		if step.Env["PULSE_TEST_PROVIDER_MSP_STARTUP"] == "compose" {
+			if !built || !exact || !strings.Contains(step.Run, "set -euo pipefail") || !strings.Contains(step.Run, "go test -count=1 -timeout 12m ./scripts/installtests") || !strings.Contains(step.Run, "-run '^TestProviderMSPProductionStartup$' -v") || !strings.Contains(step.Run, "grep -q '^--- PASS: TestProviderMSPProductionStartup '") {
+				t.Fatal("native acceptance must require real embeds, exact source, Compose execution and an actual PASS (not skip)")
+			}
+			accepted = true
+		}
+	}
+	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
+		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
+	}
+}

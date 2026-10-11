@@ -1481,6 +1481,29 @@ dedicated worker when combined; concurrent execution can stretch otherwise
 passing monitoring tests into load-induced failures and must not be used as a
 release-latency optimization.
 
+### Provider-MSP unlicensed startup uses one Compose configuration
+
+The provider bundle leaves `CP_PROVIDER_MSP_LICENSE_FILE` blank when evaluation
+issuance is deliberately skipped or unavailable. Both pre-issuance and final
+setup validation use the same shipped Compose file: a blank host path mounts
+`/dev/null` as the required unused secret source and leaves the daemon licence
+path unset; a supplied path maps to `/run/secrets/provider_msp_license` and must
+validate. Setup no longer substitutes an explicit empty licence path only for
+its first configuration parse. Image pins, Docker proxy, storage guardrails,
+least-privilege mounts and all Stripe/Relay exclusions are unchanged.
+
+The `Provider MSP startup` PR/main workflow uses exact-source credential-free
+checkout and the declared Go/Node graphs on a disposable hosted Linux VM. It
+builds real API assets and the release daemon using only synthetic test licences,
+then runs the opt-in `TestProviderMSPProductionStartup` Compose transport. Missing
+Docker/Compose fails; a skipped test cannot satisfy the job. The test checks actual
+mounted secrets, licensed/unlicensed readiness and authenticated plan limits,
+account/owner persistence across clean restarts, explicit licence/configuration
+refusals, and owned container/network/volume teardown. It does not use an edge
+router, customer data, production Docker socket, licence service or release
+publisher. The offline process transport verifies the daemon but is not proof of
+the native Compose mount or a full provider installation/tenant lifecycle.
+
 ## Canonical Files
 
 1. `internal/updates/`

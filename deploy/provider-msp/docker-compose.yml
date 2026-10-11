@@ -68,7 +68,8 @@ services:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - CP_TRUSTED_PROXY_CIDRS=${CP_TRUSTED_PROXY_CIDRS}
-      - CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license
+      # A blank host path selects evaluation, not an explicitly empty licence.
+      - CP_PROVIDER_MSP_LICENSE_FILE=${CP_PROVIDER_MSP_LICENSE_FILE:+/run/secrets/provider_msp_license}
       - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
       - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
       - CP_STORAGE_GUARDRAILS_ENABLED=${CP_STORAGE_GUARDRAILS_ENABLED:-true}
@@ -106,7 +107,8 @@ services:
 
 secrets:
   provider_msp_license:
-    file: ${CP_PROVIDER_MSP_LICENSE_FILE:?CP_PROVIDER_MSP_LICENSE_FILE must point to the signed provider MSP license file}
+    # Compose requires a secret source even when the daemon will not read it.
+    file: ${CP_PROVIDER_MSP_LICENSE_FILE:-/dev/null}
 
 networks:
   pulse-provider-msp:

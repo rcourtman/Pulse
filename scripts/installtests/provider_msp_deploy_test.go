@@ -78,7 +78,7 @@ func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 	)
 	assertContainsAll(t, text,
 		"CP_DATA_DIR=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}",
-		"CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license",
+		"CP_PROVIDER_MSP_LICENSE_FILE=${CP_PROVIDER_MSP_LICENSE_FILE:+/run/secrets/provider_msp_license}",
 		"CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
 		"CP_TRUSTED_PROXY_CIDRS=${CP_TRUSTED_PROXY_CIDRS}",
 		"DOCKER_HOST=tcp://docker-socket-proxy:2375",
@@ -411,8 +411,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		`--format '{{json .Manifest}}'`,
 		`jq -r 'if type == "object" then .digest // empty else empty end'`,
 		`awk '$1 == "Digest:" {print $2; exit}'`,
-		"validate_compose_config --allow-missing-evaluation-license",
-		`CP_PROVIDER_MSP_LICENSE_FILE=/dev/null docker compose config --quiet`,
+		"validate_compose_config\n  pull_provider_images",
 		`docker pull "${image_ref}"`,
 		`if [[ "${current}" == *@sha256:*`,
 		`ref="${current}"`,
@@ -434,7 +433,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
 		t.Fatal("evaluation must be issued only after pinned provider images are reachable")
 	}
-	setupSequence := "validate_compose_config --allow-missing-evaluation-license\n  pull_provider_images\n  # Issue the evaluation only after the host is configured and the immutable\n  # images are reachable. This makes an issued evaluation a useful activation\n  # signal rather than a record created before setup can succeed.\n  ensure_eval_license\n  validate_compose_config"
+	setupSequence := "validate_compose_config\n  pull_provider_images\n  # Issue the evaluation only after the host is configured and the immutable\n  # images are reachable. This makes an issued evaluation a useful activation\n  # signal rather than a record created before setup can succeed.\n  ensure_eval_license\n  validate_compose_config"
 	if !strings.Contains(script, setupSequence) {
 		t.Fatal("setup must validate compose, pull pinned images, issue the evaluation, then validate compose with the installed licence")
 	}
@@ -828,4 +827,57 @@ func TestProviderMSPUpgradeFromBundleRepinsToTheBundleRelease(t *testing.T) {
 			t.Fatalf("dry run did not print the pin plan:\n%s", output)
 		}
 	})
+}
+
+func TestProviderMSPEvaluationFallbackUsesTheSameFinalComposeConfig(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(scriptBytes)
+	const entry = "\nmain \"$@\"\n"
+	if !strings.HasSuffix(script, entry) {
+		t.Fatal("cannot safely remove the installer entrypoint from the shell fixture")
+	}
+	for _, skip := range []string{"1", "0"} {
+		t.Run("skip="+skip, func(t *testing.T) {
+			dir := t.TempDir()
+			env := "CP_PROVIDER_MSP_LICENSE_FILE=\n"
+			if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// No installer, package manager, Docker daemon or licence service.
+			// Only the actual best-effort and validation functions execute.
+			fixture := strings.TrimSuffix(script, entry) + `
+
+derive_lease_signing_public_key() { printf 'synthetic-public-key'; }
+jq() { printf '{}'; }
+curl() { return 7; }
+docker() {
+  [[ "$*" == 'compose config --quiet' ]] || exit 81
+  [[ ! -v CP_PROVIDER_MSP_LICENSE_FILE ]] || exit 82
+  printf 'same-compose-config\n'
+}
+validate_compose_config
+ensure_eval_license
+validate_compose_config
+`
+			cmd := exec.Command("bash", "-c", fixture)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "PULSE_PROVIDER_MSP_INSTALL_DIR=" + dir, "PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE=" + skip}
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("best-effort evaluation must reach final validation: %v\n%s", err, output)
+			}
+			if strings.Count(string(output), "same-compose-config\n") != 2 {
+				t.Fatalf("pre/final validation did not both use the same config: %s", output)
+			}
+			if skip == "0" && !strings.Contains(string(output), "could not reach the license server") {
+				t.Fatal("fixture did not exercise unavailable licence issuance")
+			}
+			after, err := os.ReadFile(filepath.Join(dir, ".env"))
+			if err != nil || string(after) != env {
+				t.Fatal("fallback changed the blank operator licence selection")
+			}
+		})
+	}
 }
