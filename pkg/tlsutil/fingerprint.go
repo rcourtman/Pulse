@@ -214,6 +214,52 @@ func proxyFromEnvironmentBypassingLocalInfrastructure(req *http.Request) (*url.U
 	return http.ProxyFromEnvironment(req)
 }
 
+// Infrastructure requests can carry tokens, tickets, CSRF headers or replayable
+// login bodies. Go's default redirect policy does not bind those to a port or
+// scheme, and may forward some credentials to subdomains. Allow proxy path
+// redirects only within the first request's origin, before any redirected dial.
+func infrastructureRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if req == nil || len(via) == 0 || via[0] == nil {
+		return fmt.Errorf("infrastructure redirects require an original request")
+	}
+	origin, originErr := infrastructureRedirectOrigin(via[0].URL)
+	destination, destinationErr := infrastructureRedirectOrigin(req.URL)
+	if originErr != nil || destinationErr != nil || origin != destination {
+		return fmt.Errorf("infrastructure redirects must stay on the same origin")
+	}
+	return nil
+}
+
+func infrastructureRedirectOrigin(u *url.URL) (string, error) {
+	if u == nil || u.User != nil || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "", fmt.Errorf("invalid HTTP origin")
+	}
+	host := u.Hostname()
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String() // Canonical IPv6, preserving zone case.
+	} else {
+		host = strings.ToLower(host)
+	}
+	port := u.Port()
+	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", fmt.Errorf("port is empty")
+		}
+		port = "443"
+		if u.Scheme == "http" {
+			port = "80"
+		}
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return "", fmt.Errorf("port must be between 1 and 65535")
+	}
+	return u.Scheme + "://" + net.JoinHostPort(host, strconv.FormatUint(number, 10)), nil
+}
+
 // CreateHTTPClient creates an HTTP client with appropriate TLS configuration
 func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 	return CreateHTTPClientWithTimeout(verifySSL, fingerprint, 60*time.Second)
@@ -253,7 +299,8 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 	}
 
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
+		Transport:     transport,
+		Timeout:       timeout,
+		CheckRedirect: infrastructureRedirectPolicy,
 	}
 }
