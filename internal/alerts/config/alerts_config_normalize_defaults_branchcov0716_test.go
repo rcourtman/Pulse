@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -31,7 +32,7 @@ func ptrHtEq(got *alertconfig.HysteresisThreshold, want alertconfig.HysteresisTh
 }
 
 // expectedPMGDefaults returns the canonical PMGThresholdConfig the normalizer
-// must seed whenever a field is non-positive.
+// must seed whenever a field is unset.
 func expectedPMGDefaults() alertconfig.PMGThresholdConfig {
 	return alertconfig.PMGThresholdConfig{
 		QueueTotalWarning:       500,
@@ -53,18 +54,37 @@ func expectedPMGDefaults() alertconfig.PMGThresholdConfig {
 	}
 }
 
-// TestBranchCovNormalizePMGDefaults covers the <=0 default-seeding branch and
-// the >0 preserve branch for every field of PMGThresholdConfig.
+// unsetPMGDefaults is what decoding leaves for a pmgDefaults section the JSON
+// omits.
+func unsetPMGDefaults() alertconfig.PMGThresholdConfig {
+	var cfg alertconfig.AlertConfig
+	if err := json.Unmarshal([]byte(`{}`), &cfg); err != nil {
+		panic(err)
+	}
+	return cfg.PMGDefaults
+}
+
+// TestBranchCovNormalizePMGDefaults covers the unset default-seeding branch,
+// the Off (0, or a negative toggle value) branch and the >0 preserve branch
+// for every field of PMGThresholdConfig.
 func TestBranchCovNormalizePMGDefaults(t *testing.T) {
-	t.Run("zero-valued config seeds every field with its canonical default", func(t *testing.T) {
-		cfg := &alertconfig.AlertConfig{}
+	t.Run("unset config seeds every field with its canonical default", func(t *testing.T) {
+		cfg := &alertconfig.AlertConfig{PMGDefaults: unsetPMGDefaults()}
 		alertconfig.NormalizePMGDefaults(cfg)
 		if !reflect.DeepEqual(cfg.PMGDefaults, expectedPMGDefaults()) {
 			t.Fatalf("PMGDefaults = %+v, want defaults %+v", cfg.PMGDefaults, expectedPMGDefaults())
 		}
 	})
 
-	t.Run("negative values are replaced with defaults (<=0 branch)", func(t *testing.T) {
+	t.Run("zero-valued config keeps every field Off", func(t *testing.T) {
+		cfg := &alertconfig.AlertConfig{}
+		alertconfig.NormalizePMGDefaults(cfg)
+		if !reflect.DeepEqual(cfg.PMGDefaults, alertconfig.PMGThresholdConfig{}) {
+			t.Fatalf("PMGDefaults = %+v, want every field Off (0)", cfg.PMGDefaults)
+		}
+	})
+
+	t.Run("negative values are stored as Off", func(t *testing.T) {
 		cfg := &alertconfig.AlertConfig{
 			PMGDefaults: alertconfig.PMGThresholdConfig{
 				QueueTotalWarning:       -1,
@@ -86,8 +106,8 @@ func TestBranchCovNormalizePMGDefaults(t *testing.T) {
 			},
 		}
 		alertconfig.NormalizePMGDefaults(cfg)
-		if !reflect.DeepEqual(cfg.PMGDefaults, expectedPMGDefaults()) {
-			t.Fatalf("PMGDefaults = %+v, want defaults (negatives replaced)", cfg.PMGDefaults)
+		if !reflect.DeepEqual(cfg.PMGDefaults, alertconfig.PMGThresholdConfig{}) {
+			t.Fatalf("PMGDefaults = %+v, want every field Off (0)", cfg.PMGDefaults)
 		}
 	})
 
@@ -117,18 +137,18 @@ func TestBranchCovNormalizePMGDefaults(t *testing.T) {
 		}
 	})
 
-	t.Run("mixed zero/negative/positive fields only seed the non-positive ones", func(t *testing.T) {
-		cfg := &alertconfig.AlertConfig{
-			PMGDefaults: alertconfig.PMGThresholdConfig{
-				QueueTotalWarning:     0,    // -> 500
-				QueueTotalCritical:    7777, // preserved
-				OldestMessageWarnMins: -5,   // -> 30
-				HoldQueueWarn:         42,   // preserved
-			},
-		}
+	t.Run("mixed unset/zero/negative/positive fields only seed the unset ones", func(t *testing.T) {
+		pmg := unsetPMGDefaults()
+		pmg.QueueTotalWarning = 0      // Off, kept
+		pmg.QueueTotalCritical = 7777  // preserved
+		pmg.OldestMessageWarnMins = -1 // Off toggle -> 0
+		pmg.HoldQueueWarn = 42         // preserved
+		cfg := &alertconfig.AlertConfig{PMGDefaults: pmg}
 		alertconfig.NormalizePMGDefaults(cfg)
 		want := expectedPMGDefaults()
+		want.QueueTotalWarning = 0
 		want.QueueTotalCritical = 7777
+		want.OldestMessageWarnMins = 0
 		want.HoldQueueWarn = 42
 		if !reflect.DeepEqual(cfg.PMGDefaults, want) {
 			t.Fatalf("PMGDefaults = %+v, want %+v", cfg.PMGDefaults, want)

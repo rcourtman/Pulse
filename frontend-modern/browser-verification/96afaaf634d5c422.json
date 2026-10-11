@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "149b55c3f942464f4978bcf3f4b26f7f45063f7e",
+  "verified_at": "2026-10-11T17:03:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPMGSection.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts",
+    "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPMGSection.tsx": "bddf4da818ec12d05e2992fa752cc0a0ceec6140185b96afbea3943f9a507ec1",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "93098cd63b72a56cda1a8bd21280b57b39569f3b967f45dc2fabc72f9accb390",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "7371a268e73420581c857d987a5c373b8418af0ad3c6f424c45fae9b987eea5f",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts": "6624fc383186a07e5e68f0ab5bfa824bf67ae185f1cc595ff99777d95cfc4fb3",
+    "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts": "fb7e3ccb888c627e7ced6a3ae6c2b7c8ee5d27b309360a1fe5ae0582b5e8dcd5"
+  },
+  "routes": [
+    "/alerts/thresholds/mail-gateway",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 600
+    },
+    {
+      "width": 760,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private PULSE_MOCK_MODE stack (sidecar backend on :7687, Vite on :5197), fresh data dir: alert config reports factory Docker restart 3 / memory warn 90 and PMG queue warn 500",
+    "Mail Gateway Thresholds global defaults with Queue Warn and Growth Warn Min Off after save and reload; header omits Queue Warn; API and alerts.json store 0 for both; no invalid quarantine spec warnings in the backend log",
+    "Mail Gateway per-server cards (mail-gateway-eu, mail-gateway-us) show only the offline control, and the row editor offers only a note and offline, no queue fields",
+    "Docker Containers global defaults with Restart Count and Memory Warn % Off after save and reload; header reads Restart loop off; API and alerts.json store 0 for both",
+    "Docker container cards (loki, loki-2, nginx-edge) show CPU and Memory only; the loki editor offers note, CPU and Memory only; desktop container rows show no restart or memory-limit cells",
+    "Recovery global defaults enabled with Critical Days Off after save and reload; header reads Warning 7 days; API stores criticalDays 0 with warningDays 7 (before the sanitizer fix the same toggle snapped to Critical 7)",
+    "Docker container state alert for stopped nextcloud cleared by the Docker offline default and stays cleared after a CPU-only override for that container is saved"
+  ],
+  "interactions": [
+    "Expanded Mail Gateway Thresholds, toggled Queue Warn and Growth Warn Min Off, clicked Save Changes, reloaded",
+    "Opened the mail-gateway-eu row editor and cancelled it",
+    "Expanded Containers at 1280px and 760px, toggled Restart Count and Memory Warn % Off, clicked Save Changes, reloaded",
+    "Opened and cancelled the loki container threshold editor",
+    "Expanded Recovery, enabled backup alerts, toggled Critical Days Off, clicked Save Changes, reloaded",
+    "PUT /api/alerts/config with stateDisableConnectivity and then a CPU-only nextcloud override; read /api/alerts/active after each poll"
+  ]
+}
