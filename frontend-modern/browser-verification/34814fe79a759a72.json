@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "6e54a792e4ecdacaecc2e9554cf05634eb58c1b0",
+  "verified_at": "2026-10-11T14:26:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+    "frontend-modern/src/components/Settings/SuggestProfileModal.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx": "86d997626a00efde5dbfbbed61f08e39b03f7e4594e84833bdd7b22ea01a0ef1",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "d5fa94f6bea6cce231dda539f2f97293095ef1e296b760f7d40cc28eea9383b6",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "b04f2c250213bd9394abd7cbc877c76ead962ea69ffa93a6e6af738431ea5016",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "31944a8715d7b5eefb36ab8aa6d10df912f3542d1bf252a85c39aec44cdd37e4",
+    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx": "a683af54b59a932f8d83b1bc0903a0617ffe9209f225c8ad7cd4405d56c594cb",
+    "frontend-modern/src/components/Settings/SuggestProfileModal.tsx": "580def5226062061adc1f7dbfd2ef83f2481454dcba56ccd69b4ebd3437c640c"
+  },
+  "routes": [
+    "/browser-tests/residual-evidence-ages.html?surface=resource (existing production panels with synthetic local data; not an added application route)",
+    "/browser-tests/residual-evidence-ages.html?surface=operator (existing production panels with synthetic local data; not an added application route)",
+    "/browser-tests/residual-evidence-ages.html?surface=tokens (existing production panels with synthetic local data; not an added application route)",
+    "/browser-tests/residual-evidence-ages.html?surface=profiles (existing production panels with synthetic local data; not an added application route)",
+    "/browser-tests/residual-evidence-ages.html?surface=drafts (existing production panels with synthetic local data; not an added application route)"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches integration lock. Chromium 141.0.7390.37 light desktop and WebKit 26.0 dark touch phone; 10 groups and 20 final initial/held captures inspected, with matching 20 inspected current-parent captures. Not a native guest, physical phone, full application, release or provider acceptance.",
+    "Held observations move from one minute to two hours in change summary/history, saved operator set time, both token Created projections, profile Last Seen and older draft ages. Original source timestamps, status, scopes, saved policy and payload stay unchanged. Profile Last Seen remains deliberately hidden on phones.",
+    "No clock-triggered read, computation, save or token write in each quiet interval. Initial canonical REST revalidation is completed before the measurement, not removed. No page errors, unexpected reads, off-origin traffic or page-level horizontal overflow; all browser pages and server close."
+  ],
+  "interactions": [
+    "Desktop Enter and phone tap open change filters; focused filters, unsaved operator note/token name and profile assignment survive two simulated hours. Expected offline, Retired and Never auto-remediate remain unchanged.",
+    "Replace and remove canonical changes, and replace a live agent observation; new timestamps initialise correctly and continue to age. A separate explicit token-panel remount rereads supplied canonical Created and starts a new form; no unsupported refreshing-prop refetch or unsaved-draft preservation across remount is claimed.",
+    "Return to the first saved draft and accept its original prompt/configuration into a local callback; exactly two synthetic suggestion responses, no extra age-triggered suggestion, profile save or external provider call."
+  ]
+}

@@ -77,9 +77,50 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('SuggestProfileModal', () => {
+  it('ages an older draft without regenerating or changing its saved settings', async () => {
+    const start = Date.parse('2026-10-11T11:00:00Z');
+    vi.useFakeTimers({ now: start });
+    const first = {
+      name: 'First saved draft',
+      description: 'First draft',
+      config: { interval: '30s' },
+      rationale: [],
+    };
+    const second = { ...first, name: 'Second saved draft', config: { interval: '1m' } };
+    suggestProfileMock.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    validateConfigMock.mockResolvedValue({ valid: true, errors: [], warnings: [] });
+    const { onSuggestionAccepted } = renderModal();
+    const prompt = screen.getByPlaceholderText(
+      'Describe the agents and use case for this profile...',
+    );
+    fireEvent.input(prompt, { target: { value: 'Original draft request' } });
+    fireEvent.click(screen.getByRole('button', { name: /get ideas/i }));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    fireEvent.input(prompt, { target: { value: 'Second draft request' } });
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await vi.advanceTimersByTimeAsync(0);
+    const older = screen.getByRole('button', { name: /First saved draft/ });
+    expect(older).toHaveTextContent('1 min ago');
+    older.focus();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(older).toHaveTextContent('2 hours ago');
+    expect(older).toHaveFocus();
+    expect(screen.getByRole('button', { name: /First saved draft/ })).toBe(older);
+    expect(prompt).toHaveValue('Second draft request');
+    expect(suggestProfileMock).toHaveBeenCalledTimes(2);
+    fireEvent.click(older);
+    expect(prompt).toHaveValue('Original draft request');
+    fireEvent.click(screen.getByRole('button', { name: /use this profile/i }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onSuggestionAccepted).toHaveBeenCalledWith(first);
+    expect(suggestProfileMock).toHaveBeenCalledTimes(2);
+  });
+
   it('surfaces canonical schema payload failures instead of flattening them into a generic fallback', async () => {
     getConfigSchemaMock.mockRejectedValueOnce(
       new Error('Invalid agent profile schema response from Pulse.'),

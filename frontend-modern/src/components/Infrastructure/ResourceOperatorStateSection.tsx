@@ -581,7 +581,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               <span>Set by {persisted()!.setBy} </span>
             </Show>
             <Show when={persisted()?.setAt}>
-              <span>{formatRelativeTime(persisted()!.setAt, { compact: true })}</span>
+              <span>{formatRelativeTime(persisted()!.setAt, { compact: true, now: now() })}</span>
             </Show>
           </span>
         </Show>
