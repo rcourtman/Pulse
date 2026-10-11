@@ -280,7 +280,7 @@ class NativeContracts(unittest.TestCase):
                     lab.state = unittest.mock.Mock(return_value={**state, "ActiveState": "inactive"})
                     with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "inactive")
                     continue
-                lab.state = unittest.mock.Mock(side_effect=[state, observed])
+                lab.state = unittest.mock.Mock(side_effect=[state, observed, observed])
                 order = []
                 def response(url, **kwargs):
                     endpoint = url.rsplit("/", 1)[-1]
@@ -301,6 +301,70 @@ class NativeContracts(unittest.TestCase):
                         self.assertEqual(lab.assert_runtime("v0.0.2", "active"), observed)
                 self.assertEqual(order[:2], ["health", "version"])
                 self.assertEqual(order[2:], [] if mutation == "stopped-after-readiness" else ["process"])
+
+    def test_runtime_readback_rejects_post_comparison_drift(self):
+        # Portable manager/API observations, never native acceptance. Keep the
+        # final oracle independent of the updater's own executable verifier.
+        mutations = ("", "pid", "activity", "load", "enablement", "installed",
+                     "equally-wrong-bytes", "missing-process", "failed-readback")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                lab = self.make_phase(directory)
+                state = dict(LoadState="loaded", ActiveState="active", UnitFileState="disabled", MainPID="2")
+                final = state.copy()
+                changes = {
+                    "pid": {"MainPID": "3"},
+                    "activity": {"ActiveState": "inactive", "MainPID": "0"},
+                    "load": {"LoadState": "not-found"},
+                    "enablement": {"UnitFileState": "masked"},
+                }
+                final.update(changes.get(mutation, {}))
+                end = OSError("confined manager read failed") if mutation == "failed-readback" else final
+                lab.state = unittest.mock.Mock(side_effect=[state, state, end])
+                binary = lab.root / "install/bin/pulse"
+                expected = lab.receipt["binaries"]["v0.0.2"]
+                original_digest = native.digest
+                def process_digest(path):
+                    if str(path) == "/proc/2/exe":
+                        if mutation == "missing-process":
+                            raise FileNotFoundError("confined missing process")
+                        if mutation in ("installed", "equally-wrong-bytes"):
+                            binary.write_bytes(b"changed during executable readback\n")
+                        return original_digest(binary) if mutation == "equally-wrong-bytes" else expected
+                    return original_digest(path)
+                def response(url, **kwargs):
+                    return io.BytesIO(json.dumps({"status": "healthy"} if url.endswith("/health")
+                                                 else {"version": "v0.0.2"}).encode())
+                with patch.object(native, "digest", side_effect=process_digest), \
+                     patch.object(native.urllib.request, "urlopen", side_effect=response), \
+                     patch.object(lab, "run", side_effect=AssertionError("readback cannot control a service")):
+                    if mutation:
+                        with self.assertRaises((RuntimeError, OSError)):
+                            lab.assert_runtime("v0.0.2", "active")
+                        self.assertEqual(lab.receipt["phases"], [])
+                    else:
+                        self.assertEqual(lab.assert_runtime("v0.0.2", "active"), state)
+                        self.assertEqual(lab.state.call_count, 3)
+
+        # Refuse malformed or non-active manager identity before constructing
+        # a process path, even when a digest double would otherwise match.
+        for pid, load in (("0", "loaded"), ("-2", "loaded"), ("02", "loaded"),
+                          ("2/../1", "loaded"), ("unknown", "loaded"), ("2", "masked")):
+            with self.subTest(pid=pid, load=load), tempfile.TemporaryDirectory() as directory:
+                lab = self.make_phase(directory)
+                state = dict(LoadState=load, ActiveState="active", UnitFileState="disabled", MainPID=pid)
+                lab.state = unittest.mock.Mock(return_value=state)
+                original_digest = native.digest
+                def no_process_digest(path):
+                    if str(path).startswith("/proc/"):
+                        raise AssertionError("invalid manager identity reached process-byte read")
+                    return original_digest(path)
+                def response(url, **kwargs):
+                    return io.BytesIO(json.dumps({"status": "healthy"} if url.endswith("/health")
+                                                 else {"version": "v0.0.2"}).encode())
+                with patch.object(native, "digest", side_effect=no_process_digest), \
+                     patch.object(native.urllib.request, "urlopen", side_effect=response):
+                    with self.assertRaises(RuntimeError): lab.assert_runtime("v0.0.2", "active")
 
     def test_cleanup_never_deletes_preexisting_unowned_scratch(self):
         with tempfile.TemporaryDirectory() as directory:
