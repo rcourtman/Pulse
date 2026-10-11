@@ -174,7 +174,14 @@ It does not invent a negative memory observation or clear an existing pause.
 Independent status/balloon/linked-agent memory, filesystem-first ordering,
 unknown-OS compatibility and all command/backup-lock admission remain intact.
 The first unknown-OS poll can still attempt the existing Linux fallback; this
-change does not add a probe or infer an OS from a display name/configuration hint.
+requires completing ordinary metadata collection first. Both detailed-status
+collectors now collect filesystems, then metadata, then optional Linux memory.
+On an ordinary cold start or expired metadata refresh, the real OS reply can
+therefore establish the existing Windows exclusion before an inappropriate
+Linux read creates a shared pause. No extra probe, persistent OS hint or
+configuration/display-name inference is added. If metadata itself is uncertain,
+the same channel guard still prevents every later command; independent current
+status/balloon/linked-agent memory is not turned into guest meminfo evidence.
 
 `TestGuestWindowsMeminfoPollingContract` covers the real direct/cluster clients
 and both collectors after an actual OS read: repeated NTFS usage through zero,
@@ -184,6 +191,19 @@ controls pin exact OS-name boundaries, original age/identity, partial-fetch
 evidence, Linux recovery and cache/source compatibility. These are synthetic
 source controls, not native QEMU-only Windows recovery, thaw, cross-process or
 restart containment, reporter resolution or release acceptance.
+
+`TestGuestWindowsRestartPollingContract` starts empty monitors through both real
+clients and both collectors, ages actual OS receipts for the expiry control,
+and runs two distinct fresh test processes against the same loopback endpoint.
+It checks both NTFS volumes, healthy zero recovery, OS/canonical/public state,
+memory source and in-memory/persistent History. The Linux command's fixture
+response remains an unexplained HTTP 500: recovery comes from not sending it,
+not from a completion exemption. Lock, in-flight/shared-client uncertainty,
+original ages, Linux/unknown and replacement-identity controls remain covered.
+The ordinary supported loopback process restart is source acceptance, not
+native Pro/PVE restart recovery, every-filesystem writes/liveness, independent
+thaw, prior-active restoration or a released fix. Existing OS-info safety
+suppression and metadata backoff are not reset to force recovery.
 
 ### QGA fallback eligibility keeps its original observation age
 

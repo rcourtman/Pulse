@@ -3254,6 +3254,7 @@ func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
 func TestGuestWindowsRestartPollingContract(t *testing.T) {
 	t.Run("cold-and-expired", testGuestWindowsBootstrapPolling)
 	t.Run("process-restart", testGuestWindowsBootstrapProcessRestart)
+	t.Run("admission-and-identity", testGuestWindowsBootstrapSafety)
 }
 
 func TestGuestMemoryObservationContract(t *testing.T) {

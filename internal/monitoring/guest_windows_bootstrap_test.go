@@ -72,6 +72,7 @@ func (f *windowsBootstrapFixture) serve(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	f.mu.Lock()
 	osName, uncertain, locked, available := f.osName, f.uncertain, f.locked, f.linuxAvailable
+	fsEntered, fsRelease := f.fsEntered, f.fsRelease
 	f.mu.Unlock()
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/nodes"):
@@ -94,9 +95,9 @@ func (f *windowsBootstrapFixture) serve(w http.ResponseWriter, r *http.Request) 
 	f.mu.Lock()
 	f.commands = append(f.commands, cmd)
 	f.mu.Unlock()
-	if cmd == "get-fsinfo" && f.fsEntered != nil {
-		f.fsOnce.Do(func() { close(f.fsEntered) })
-		<-f.fsRelease
+	if cmd == "get-fsinfo" && fsEntered != nil {
+		f.fsOnce.Do(func() { close(fsEntered) })
+		<-fsRelease
 	}
 	if cmd == uncertain || cmd == "file-read" && osName == bootstrapWindowsOS {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -208,6 +209,20 @@ func checkWindowsBootstrapReading(t *testing.T, vm models.VM, poll int) {
 	}
 	if vm.OSName != bootstrapWindowsOS || vm.Disk.Total != int64(2000*bootstrapMiB) || vm.Disk.Used != wantDisk || len(vm.Disks) != 2 || vm.GuestAgentStatus != "available" || vm.DiskStatusReason != "" || vm.Memory.Used != int64(2+poll)*int64(bootstrapMiB) || vm.Memory.Observation.Source != "status-mem" || vm.Memory.Observation.State != "current" || vm.CPU != float64(poll)/10 {
 		t.Errorf("bootstrap poll %d: OS=%q disk=%d/%d rows=%d guest=%q reason=%q memory=%d/%s/%s CPU=%v", poll, vm.OSName, vm.Disk.Used, vm.Disk.Total, len(vm.Disks), vm.GuestAgentStatus, vm.DiskStatusReason, vm.Memory.Used, vm.Memory.Observation.Source, vm.Memory.Observation.State, vm.CPU)
+	}
+	wantVolumes := map[string][2]int64{`C:\`: {int64(1500 * bootstrapMiB), int64(400 * bootstrapMiB)}, `D:\`: {int64(500 * bootstrapMiB), int64(100 * bootstrapMiB)}}
+	if poll == 2 {
+		for mount, volume := range wantVolumes {
+			volume[1] = 0
+			wantVolumes[mount] = volume
+		}
+	}
+	volumes := make(map[string][2]int64)
+	for _, disk := range vm.Disks {
+		volumes[disk.Mountpoint] = [2]int64{disk.Total, disk.Used}
+	}
+	if !reflect.DeepEqual(volumes, wantVolumes) {
+		t.Errorf("bootstrap poll %d lost individual NTFS volumes: %v, want %v", poll, volumes, wantVolumes)
 	}
 }
 
@@ -373,6 +388,161 @@ func testGuestWindowsBootstrapProcessRestart(t *testing.T) {
 					}
 					t.Logf("process %d PID=%d OS=%q disk=%d memory-source=%s", poll, result.PID, result.VM.OSName, result.VM.Disk.Used, result.VM.Memory.Observation.Source)
 				}
+			})
+		}
+	}
+}
+func testGuestWindowsBootstrapSafety(t *testing.T) {
+	for _, kind := range []string{"client", "cluster-client"} {
+		for _, collector := range []string{"cluster", "node"} {
+			t.Run(kind+"/"+collector, func(t *testing.T) {
+				t.Run("authoritative-lock", func(t *testing.T) {
+					f, s := newWindowsBootstrapFixture(t)
+					f.mu.Lock()
+					f.locked = true
+					f.mu.Unlock()
+					m := windowsBootstrapMonitor(t)
+					// Only metadata scheduling is shortened in this fixture. Lock
+					// checks, client deadlines and command fencing are unchanged.
+					m.guestMetadataRetryBackoff = time.Nanosecond
+					client := windowsBootstrapClient(t, s.URL, kind)
+					vm := windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1)
+					if vm.GuestAgentStatus != "deferred" || vm.DiskStatusReason != "vm-locked" || len(f.trace()) != 0 || len(m.guestMetadataCache) != 0 || len(m.vmAgentMemCache) != 0 {
+						t.Error("cold Windows bootstrap bypassed the backup lock or invented evidence")
+					}
+					f.mu.Lock()
+					f.locked = false
+					f.mu.Unlock()
+					checkWindowsBootstrapReading(t, windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1), 1)
+					if got := f.trace(); !reflect.DeepEqual(got, []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info"}) {
+						t.Errorf("unlocked ordinary bootstrap trace=%v", got)
+					}
+					checkBootstrapHistory(t, m, makeGuestID("bootstrap", "node", 105), "disk", []float64{25})
+				})
+				t.Run("in-flight-channel", func(t *testing.T) {
+					f, s := newWindowsBootstrapFixture(t)
+					f.mu.Lock()
+					f.fsEntered, f.fsRelease = make(chan struct{}), make(chan struct{})
+					f.mu.Unlock()
+					m := windowsBootstrapMonitor(t)
+					client := windowsBootstrapClient(t, s.URL, kind)
+					done := make(chan models.VM, 1)
+					go func() { done <- windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1) }()
+					select {
+					case <-f.fsEntered:
+					case <-time.After(windowsPollingHangGuard):
+						close(f.fsRelease)
+						t.Fatal("filesystem request never entered")
+					}
+					_, err := windowsBootstrapClient(t, s.URL, kind).GetVMAgentInfo(context.Background(), "node", 105)
+					if proxmox.GuestAgentDeferredReason(err) != "agent-busy" || !reflect.DeepEqual(f.trace(), []string{"get-fsinfo"}) {
+						t.Errorf("new diagnostic bypassed in-flight bootstrap: %v trace=%v", err, f.trace())
+					}
+					close(f.fsRelease)
+					select {
+					case vm := <-done:
+						checkWindowsBootstrapReading(t, vm, 1)
+					case <-time.After(windowsPollingHangGuard):
+						t.Fatal("bootstrap did not finish after its original request completed")
+					}
+					if got := f.trace(); !reflect.DeepEqual(got, []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info"}) {
+						t.Errorf("in-flight owner lost the ordinary bootstrap: %v", got)
+					}
+				})
+				for _, uncertain := range []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info"} {
+					t.Run("uncertain-"+uncertain, func(t *testing.T) {
+						f, s := newWindowsBootstrapFixture(t)
+						f.mu.Lock()
+						f.uncertain = uncertain
+						f.mu.Unlock()
+						m := windowsBootstrapMonitor(t)
+						m.guestAgentRetries = 2 // No uncertain command may be retried.
+						client := windowsBootstrapClient(t, s.URL, kind)
+						first := windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1)
+						trace := f.trace()
+						if first.GuestAgentStatus != "deferred" || len(trace) == 0 || trace[len(trace)-1] != uncertain || len(m.vmAgentMemCache) != 0 {
+							t.Errorf("unknown completion was exempted, replayed or lost: %v guest=%q", trace, first.GuestAgentStatus)
+						}
+						for _, cmd := range trace {
+							if cmd == "file-read" {
+								t.Fatal("optional Linux read followed an uncertain bootstrap command")
+							}
+						}
+						_, err := windowsBootstrapClient(t, s.URL, kind).GetVMAgentInfo(context.Background(), "node", 105)
+						if proxmox.GuestAgentDeferredReason(err) != "agent-cooldown" || !reflect.DeepEqual(f.trace(), trace) {
+							t.Errorf("new client escaped bootstrap uncertainty: %v trace=%v", err, f.trace())
+						}
+						originalOS := m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)]
+						id := makeGuestID("bootstrap", "node", 105)
+						if uncertain == "get-fsinfo" {
+							checkBootstrapHistory(t, m, id, "disk", nil)
+						} else {
+							checkBootstrapHistory(t, m, id, "disk", []float64{25})
+						}
+						// Distinct History keys expose false renewal. The live one-
+						// minute uncertainty fence is not advanced or overwritten.
+						time.Sleep(1100 * time.Millisecond)
+						f.poll.Store(2)
+						second := windowsBootstrapPoll(t, m, windowsBootstrapClient(t, s.URL, kind), collector, "bootstrap", "node", 105, 2)
+						if second.GuestAgentStatus != "deferred" || !reflect.DeepEqual(f.trace(), trace) || !reflect.DeepEqual(m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)], originalOS) || len(m.vmAgentMemCache) != 0 {
+							t.Error("paused poll dispatched or renewed original OS/memory evidence")
+						}
+						if uncertain != "get-fsinfo" {
+							if second.Disk.Used != first.Disk.Used || second.DiskObservation != first.DiskObservation || second.DiskStatusReason != "prev-agent-cooldown" {
+								t.Error("paused poll lost or renewed the accepted filesystem receipt")
+							}
+							checkBootstrapHistory(t, m, id, "disk", []float64{25})
+						} else {
+							checkBootstrapHistory(t, m, id, "disk", nil)
+						}
+						// A new monitor is still in the same process: cold caches do
+						// not permit it to bypass the original client's admission.
+						cold := windowsBootstrapMonitor(t)
+						blocked := windowsBootstrapPoll(t, cold, windowsBootstrapClient(t, s.URL, kind), collector, "bootstrap", "node", 105, 2)
+						if blocked.GuestAgentStatus != "deferred" || !reflect.DeepEqual(f.trace(), trace) || len(cold.guestMetadataCache) != 0 || len(cold.vmAgentMemCache) != 0 {
+							t.Error("cold monitor bypassed live process uncertainty")
+						}
+						checkBootstrapHistory(t, m, id, "cpu", []float64{10, 20})
+						checkBootstrapHistory(t, m, id, "memory", []float64{37.5, 50})
+					})
+				}
+				t.Run("linux-unknown-and-replacement", func(t *testing.T) {
+					f, s := newWindowsBootstrapFixture(t)
+					m := windowsBootstrapMonitor(t)
+					client := windowsBootstrapClient(t, s.URL, kind)
+					checkWindowsBootstrapReading(t, windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1), 1)
+					original := m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)]
+					for _, identity := range []struct {
+						instance, node, os string
+						id                 int
+					}{{"other", "node", "Linux", 105}, {"bootstrap", "other", "", 105}, {"bootstrap", "node", "Linux", 106}} {
+						f.mu.Lock()
+						f.osName = identity.os
+						f.mu.Unlock()
+						f.resetTrace()
+						vm := windowsBootstrapPoll(t, m, client, collector, identity.instance, identity.node, identity.id, 1)
+						if !reflect.DeepEqual(f.trace(), []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info", "file-read"}) || vm.Memory.Used != int64(2*bootstrapMiB) || vm.Memory.Observation.Source != "guest-agent-meminfo" || vm.GuestAgentStatus != "available" {
+							t.Errorf("Windows evidence/config hint suppressed another identity's Linux fallback: trace=%v memory=%+v", f.trace(), vm.Memory)
+						}
+					}
+					if !reflect.DeepEqual(m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)], original) {
+						t.Error("replacement identity renewed the original Windows evidence")
+					}
+					// A reinstalled guest at the same tuple must be reclassified
+					// from its new OS receipt, including measured-zero availability.
+					key := guestMetadataCacheKey("bootstrap", "node", 105)
+					aged := time.Now().Add(-2 * vmAgentMemCleanupMaxAge)
+					original.fetchedAt, original.osInfoObservedAt = aged, aged
+					m.guestMetadataCache[key], m.guestMetadataLimiter[key] = original, aged
+					f.mu.Lock()
+					f.osName, f.linuxAvailable = "Linux", 0
+					f.mu.Unlock()
+					f.resetTrace()
+					vm := windowsBootstrapPoll(t, m, client, collector, "bootstrap", "node", 105, 1)
+					if vm.Memory.Used != int64(8*bootstrapMiB) || vm.Memory.Observation.Source != "guest-agent-meminfo" || m.guestMetadataCache[key].windowsGuest || vm.OSName != "Linux" || !reflect.DeepEqual(f.trace(), []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info", "file-read"}) {
+						t.Errorf("new actual Linux OS failed to invalidate expired Windows evidence: trace=%v OS=%q memory=%+v", f.trace(), vm.OSName, vm.Memory)
+					}
+				})
 			})
 		}
 	}
