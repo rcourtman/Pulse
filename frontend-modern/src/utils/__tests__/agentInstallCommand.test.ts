@@ -613,9 +613,9 @@ describe('terminal-to-runtime token-file preservation', { timeout: 25_000 }, () 
             expect(readFileSync(join(fixture.dir, 'saved-changed'), 'utf8')).toBe(
               phase === 0 || input !== inputs[phase - 1] ? 'true' : 'false',
             );
-            expect(
-              execFileSync('stat', ['-c', '%a', state], { encoding: 'utf8' }).trim(),
-            ).toBe('700');
+            expect(execFileSync('stat', ['-c', '%a', state], { encoding: 'utf8' }).trim()).toBe(
+              '700',
+            );
             expect(
               execFileSync('stat', ['-c', '%a', join(state, 'token')], { encoding: 'utf8' }).trim(),
             ).toBe('600');
