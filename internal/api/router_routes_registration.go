@@ -61,8 +61,11 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/agents/host/report", wrapLegacyHostAlias("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport))))
 	r.mux.HandleFunc("/api/agents/agent/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/lookup", wrapLegacyHostAlias("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup))))
-	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall)))
-	r.mux.HandleFunc("/api/agents/host/uninstall", wrapLegacyHostAlias("/api/agents/host/uninstall", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))))
+	// Uninstall is a collector's self-removal by token. Anything that is not a
+	// token takes the administrative removal path inside the handler, so it must
+	// be an administrator, as for the unlink and delete routes below.
+	r.mux.HandleFunc("/api/agents/agent/uninstall", RequireAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall)))
+	r.mux.HandleFunc("/api/agents/host/uninstall", wrapLegacyHostAlias("/api/agents/host/uninstall", RequireAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleUninstall))))
 	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
 	r.mux.HandleFunc("/api/agents/agent/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink)))
 	r.mux.HandleFunc("/api/agents/host/unlink", wrapLegacyHostAlias("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink))))
