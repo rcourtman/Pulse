@@ -7,18 +7,25 @@ import { renderDocMarkdown, stripLeadingTitle } from '../docMarkdown';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const shippedDocs = path.join(repoRoot, 'frontend-modern/public/docs');
 const source = readFileSync(path.join(shippedDocs, 'TROUBLESHOOTING.md'), 'utf8');
+const renderedGuides = new Map<string, HTMLElement>();
 
-function renderGuide(name: string, markdown?: string): HTMLElement {
+function renderGuide(name: string): HTMLElement {
+  // Several destinations share a long guide. Render each immutable document
+  // once, rather than making sixteen navigation checks parse it repeatedly.
+  // entry() clones its section, so the cached article is never modified.
+  const cached = renderedGuides.get(name);
+  if (cached) return cached;
   const article = document.createElement('article');
   article.innerHTML = renderDocMarkdown(
-    stripLeadingTitle(markdown ?? readFileSync(path.join(shippedDocs, `${name}.md`), 'utf8')),
+    stripLeadingTitle(readFileSync(path.join(shippedDocs, `${name}.md`), 'utf8')),
     name,
   );
+  renderedGuides.set(name, article);
   return article;
 }
 
 function entry(): HTMLElement {
-  const article = renderGuide('TROUBLESHOOTING', source);
+  const article = renderGuide('TROUBLESHOOTING');
   const heading = article.querySelector('h2');
   expect(heading?.id).toBe('choose-the-affected-workflow');
   const section = document.createElement('section');
