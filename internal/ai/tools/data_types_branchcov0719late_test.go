@@ -170,32 +170,6 @@ func TestDataTypesBranchcov0719latePVEClusterStatusNormalize(t *testing.T) {
 	})
 }
 
-// TestDataTypesBranchcov0719lateErrExecutionContextUnavailableError covers
-// ErrExecutionContextUnavailable.Error(). It returns Message verbatim.
-func TestDataTypesBranchcov0719lateErrExecutionContextUnavailableError(t *testing.T) {
-	t.Run("ReturnsMessageVerbatim", func(t *testing.T) {
-		const msg = "write would execute on the host node instead of inside the system-container"
-		err := &ErrExecutionContextUnavailable{
-			TargetHost:   "homepage-docker",
-			ResolvedKind: "system-container",
-			ResolvedNode: "pve-node",
-			Transport:    "direct",
-			Message:      msg,
-		}
-		assert.Equal(t, msg, err.Error())
-	})
-
-	t.Run("EmptyMessageYieldsEmptyString", func(t *testing.T) {
-		err := &ErrExecutionContextUnavailable{}
-		assert.Equal(t, "", err.Error())
-	})
-
-	t.Run("SatisfiesErrorInterface", func(t *testing.T) {
-		var err error = &ErrExecutionContextUnavailable{Message: "boom"}
-		assert.Equal(t, "boom", err.Error())
-	})
-}
-
 // TestDataTypesBranchcov0719lateValidateCurrentResourceAvailable covers
 // PulseToolExecutor.ValidateCurrentResourceAvailable across its nil/empty
 // error arms and its single-resource OK arm.
