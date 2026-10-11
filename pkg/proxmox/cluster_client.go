@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,10 @@ func sanitizeEndpointError(errMsg string) string {
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
 func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
+	// The caller may reuse configuration storage after construction. Keep live
+	// routing and first-use trust on the same membership snapshot registered for
+	// guest-command coordination, including during initial health checks.
+	endpoints = slices.Clone(endpoints)
 	registerGuestAgentEndpoints(config.Host, endpoints)
 	// The client owns subsequent first-use captures. Do not mutate the caller's
 	// saved trust map or let another client overwrite it without our mutex.

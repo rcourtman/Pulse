@@ -4502,6 +4502,28 @@ checks that used to work anonymously keep working, and
 keeps detection anonymous-only without reading the store or executing
 helpers.
 
+### Docker Hub image aliases use the manifest API
+
+Docker / Podman image metadata lookup treats bare, `docker.io`,
+`index.docker.io`, `registry.docker.io` and `registry-1.docker.io` Hub
+references equivalently: manifests use HTTPS `registry-1.docker.io`, token
+negotiation retains the Hub service and repository-only pull scope, and a
+single-component official repository gains `library/`. Explicit ports and
+other registry hosts retain their own repository paths and authentication.
+Equivalent Hub references share a platform-specific cache, not a cache across
+different architectures. Stored Hub credentials retain the legacy index-key
+lookup and never enter metadata reports; only the negotiated token is attached
+to manifest requests. Digest-pinned images and every Hub spelling of the
+Pulse-managed repository remain outside generic update detection.
+
+Normalization must not weaken non-manifest refusal, turn registry failures into
+update availability, change local RepoDigest/index/platform comparison, or run
+an image update. `TestDockerHubReferenceRouting`,
+`TestDockerHubAliasLookupContract`, `TestDockerHubAliasLookupFailures` and
+`TestDockerHubAliasesPreserveManagedAndPinnedExclusions` pin these boundaries
+with synthetic registry transport and credential files. They establish source
+behaviour, not live Hub, installed-agent or reporter recovery.
+
 ### Governed action readiness remains outside agent lifecycle authority
 
 The canonical Actions lifecycle may ask an executor-owned
