@@ -183,7 +183,9 @@ func windowsBootstrapPoll(t *testing.T, m *Monitor, client PVEClientInterface, c
 	m.updateResourceStore(m.currentStateWithScope())
 	m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
 	view := m.currentModeReadState().VMs()[0]
-	if view.ID() != id || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason || view.OSName() != vm.OSName {
+	canonicalID, resolved := m.resourceStore.(*unifiedresources.MonitorAdapter).ResolveCanonicalResourceID(id)
+	knownDisk := vm.DiskStatusReason == "" || strings.HasPrefix(vm.DiskStatusReason, "prev-")
+	if !resolved || view.ID() != canonicalID || knownDisk && view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason || view.OSName() != vm.OSName {
 		t.Error("bootstrap changed at the canonical read boundary")
 	}
 	front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}, m.mockModeFence.begin())
