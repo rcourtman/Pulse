@@ -149,7 +149,10 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
           await page.screenshot({ path, fullPage: true });
           result.captures.push({ path: path.replace('/workspace/', ''), sha256: hash(path) });
         };
-        await page.goto(`${origin}/browser-tests/pr2600-monitoring.html?surface=${surface}`);
+        await page.goto(`${origin}/browser-tests/pr2600-monitoring.html?surface=${surface}`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
+        });
         if (surface === 'machines') {
           const row = page.locator('[data-agents-machine-row="fixture-agent"]');
           const dot = row.locator('span[title="online"]');
