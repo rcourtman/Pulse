@@ -126,23 +126,50 @@ exit "$status"
 '''
 
 
-LOGGER = r'''#!/usr/bin/env python3
-import json, os, sys
-from pathlib import Path
-f = Path(os.environ["FIXTURE"])
-args = sys.argv[1:]
-with (f / "logger-calls").open("a") as out:
-    out.write(json.dumps(args) + "\n")
-if (args[:3] != ["-t", "pulse-custom@department-auto-update", "-p"]
-        or len(args) < 5 or args[3] not in ("user.info", "user.warn", "user.error")):
-    sys.exit(97)
-if args[4:5] and args[4].startswith("installer: "):
-    count_path = f / "collector-count"
-    count = int(count_path.read_text()) + 1 if count_path.exists() else 1
-    count_path.write_text(str(count))
-    sys.exit(int(os.environ.get("COLLECTOR_EXIT_" + str(count), os.environ["COLLECTOR_EXIT"])))
-sys.exit(0)
+LOGGER = r'''#!/bin/sh
+set -eu
+# Keep every external sink invocation and exact argv, without starting Python
+# for each of the matrix's 528 installer lines. Counted NUL frames preserve
+# empty arguments, whitespace and newlines; no host journal is contacted.
+printf '%s\000' "$#" "$@" >> "$FIXTURE/logger-calls"
+[ "$#" -ge 5 ] || exit 97
+[ "$1" = -t ] && [ "$2" = pulse-custom@department-auto-update ] && [ "$3" = -p ] || exit 97
+case "$4" in user.info|user.warn|user.error) ;; *) exit 97 ;; esac
+case "$5" in
+    'installer: '*)
+        count=0
+        if [ -f "$FIXTURE/collector-count" ]; then
+            IFS= read -r count < "$FIXTURE/collector-count"
+        fi
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$FIXTURE/collector-count"
+        while IFS=' ' read -r line status; do
+            if [ "$line" = "$count" ]; then exit "$status"; fi
+        done < "$FIXTURE/collector-failures"
+        exit "$COLLECTOR_EXIT"
+        ;;
+esac
 '''
+
+
+def read_logger_calls(path):
+    if not path.exists():
+        return []
+    fields = path.read_bytes().split(b"\0")
+    if fields.pop() != b"":
+        raise ValueError("unterminated logger argument frame")
+    calls, offset = [], 0
+    while offset < len(fields):
+        size = fields[offset]
+        if not size.isdigit():
+            raise ValueError("invalid logger argument count")
+        count = int(size)
+        offset += 1
+        if count > len(fields) - offset:
+            raise ValueError("incomplete logger argument frame")
+        calls.append([arg.decode("utf-8") for arg in fields[offset:offset + count]])
+        offset += count
+    return calls
 
 
 class UpdaterFixture(unittest.TestCase):
@@ -159,6 +186,8 @@ class UpdaterFixture(unittest.TestCase):
             # its external sink is confined; no host journal is contacted.
             (f / "tools/logger").write_text(LOGGER)
             (f / "tools/logger").chmod(0o755)
+            (f / "collector-failures").write_text(
+                "".join(f"{line} {status}\n" for line, status in (collector_failures or {}).items()))
             old = b"#!/bin/sh\necho 'Pulse v6.5.0'\n"
             new = b"#!/bin/sh\necho 'Pulse v6.6.0'\n"
             (f / "install/bin/pulse").write_bytes(old)
@@ -201,8 +230,7 @@ class UpdaterFixture(unittest.TestCase):
                                runtime_probes=(f / "runtime-probes").read_text().splitlines()
                                if (f / "runtime-probes").exists() else [],
                                collected=int((f / "collector-count").read_text()) if (f / "collector-count").exists() else 0,
-                               logger_calls=[json.loads(line) for line in (f / "logger-calls").read_text().splitlines()]
-                               if (f / "logger-calls").exists() else [],
+                               logger_calls=read_logger_calls(f / "logger-calls"),
                                started=(f / "start-ran").exists(), state=(f / "state").read_text().strip(),
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
                                backups=[(b / "pulse-bin").read_bytes() for b in backups],
@@ -217,6 +245,35 @@ class UpdaterFixture(unittest.TestCase):
 
 
 class UpdateLogSinks(UpdaterFixture):
+    def test_logger_double_keeps_complete_argument_frames_and_exit_sequence(self):
+        with tempfile.TemporaryDirectory(prefix="pulse-updater-logger-") as directory:
+            f = Path(directory)
+            logger = f / "logger"
+            logger.write_text(LOGGER)
+            logger.chmod(0o755)
+            (f / "collector-failures").write_text("1 73\n2 42\n5 73\n")
+            env = dict(os.environ, FIXTURE=str(f), COLLECTOR_EXIT="0")
+            prefix = ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
+            calls = []
+            for message, status in (("installer: first", 73), ("installer: second", 42),
+                                    ("installer: quoted \" and \\ and\ttab\nnext ü", 0),
+                                    ("installer: later", 0), ("installer: final", 73)):
+                args = prefix + [message, "", "separate argument"]
+                calls.append(args)
+                r = subprocess.run([str(logger)] + args, env=env, capture_output=True, timeout=5)
+                self.assertEqual(r.returncode, status, r.stderr)
+            invalid = prefix[:3] + ["user.invalid", "invalid priority"]
+            calls.append(invalid)
+            r = subprocess.run([str(logger)] + invalid, env=env, capture_output=True, timeout=5)
+            self.assertEqual(r.returncode, 97)
+            self.assertEqual(read_logger_calls(f / "logger-calls"), calls)
+            self.assertEqual((f / "collector-count").read_text(), "5\n")
+            for malformed in (b"5\0one\0", b"-1\0", b"no-count\0", b"1\0unterminated"):
+                with self.subTest(malformed=malformed):
+                    (f / "malformed").write_bytes(malformed)
+                    with self.assertRaises(ValueError):
+                        read_logger_calls(f / "malformed")
+
     # Keep the expensive real-collector matrix separate from manager timeout
     # controls, without widening their deadline or dropping any combinations.
     def test_real_log_retains_each_sink_failure_in_conditional_calls(self):
