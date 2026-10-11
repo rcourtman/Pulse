@@ -547,7 +547,7 @@ func TestBuildAPITokenDiagnostic_WithDockerUsage(t *testing.T) {
 		t.Fatalf("ApplyDockerReport legacy: %v", err)
 	}
 
-	diag := buildAPITokenDiagnostic(cfg, monitor)
+	diag := buildAPITokenDiagnostic(cfg, monitor, nil)
 	if diag == nil || !diag.Enabled {
 		t.Fatalf("expected diagnostics enabled")
 	}

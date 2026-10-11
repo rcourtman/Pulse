@@ -816,7 +816,7 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 
 	if ok && !cachedEntry.cachedAt.IsZero() && now.Sub(cachedEntry.cachedAt) <= diagnosticsCacheTTL {
 		diagnosticsCacheHits.Inc()
-		writeDiagnosticsResponse(w, cachedEntry.diag, cachedEntry.cachedAt)
+		writeDiagnosticsResponse(w, r.diagnosticsForCaller(req, cachedEntry.diag), cachedEntry.cachedAt)
 		return
 	}
 
@@ -857,7 +857,23 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	})
 
 	result := v.(diagResult)
-	writeDiagnosticsResponse(w, result.diag, result.cachedAt)
+	writeDiagnosticsResponse(w, r.diagnosticsForCaller(req, result.diag), result.cachedAt)
+}
+
+// diagnosticsForCaller adapts a cached diagnostics result to the caller. The
+// cache holds one result per organization scope, built for the instance, and
+// is shared by every caller, so per-caller filtering happens here, after the
+// cache. The API token section lists credentials, so an API-token caller sees
+// only the tokens it may manage (see callerTokenMayManage); instance-wide
+// tokens and browser sessions get the full section.
+func (r *Router) diagnosticsForCaller(req *http.Request, diag DiagnosticsInfo) DiagnosticsInfo {
+	caller := getAPITokenRecordFromRequest(req)
+	if caller == nil || tokenHasInstanceWideAuthority(caller) || diag.APITokens == nil {
+		return diag
+	}
+	view := diag
+	view.APITokens = buildAPITokenDiagnostic(r.config, r.monitor, caller)
+	return view
 }
 
 func writeDiagnosticsResponse(w http.ResponseWriter, diag DiagnosticsInfo, cachedAt time.Time) {
@@ -1079,7 +1095,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	runtime.ReadMemStats(&memStats)
 	diag.System = buildSystemDiagnostic(memStats, currentProcessRSS(), debug.SetMemoryLimit(-1))
 
-	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
+	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor, nil)
 	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)
 
 	// Test each configured node
@@ -1322,14 +1338,27 @@ func buildDiscoveryDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *
 	return discovery
 }
 
-func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *APITokenDiagnostic {
+// buildAPITokenDiagnostic summarises the token inventory. A nil caller sees
+// every token; an API-token caller sees only the tokens callerTokenMayManage
+// allows, and the counts, notes and usage are computed over that view.
+func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor, caller *config.APITokenRecord) *APITokenDiagnostic {
 	if cfg == nil {
 		return nil
 	}
 
+	records := make([]config.APITokenRecord, 0, len(cfg.APITokens))
+	visibleIDs := make(map[string]struct{}, len(cfg.APITokens))
+	for _, record := range cfg.APITokens {
+		if !callerTokenMayManage(caller, &record) {
+			continue
+		}
+		records = append(records, record)
+		visibleIDs[record.ID] = struct{}{}
+	}
+
 	diag := &APITokenDiagnostic{
 		Enabled:    cfg.HasAPITokens(),
-		TokenCount: len(cfg.APITokens),
+		TokenCount: len(records),
 	}
 
 	appendNote := func(note string) {
@@ -1339,15 +1368,15 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 		diag.Notes = append(diag.Notes, note)
 	}
 
-	diag.RecommendTokenSetup = len(cfg.APITokens) == 0
+	diag.RecommendTokenSetup = !cfg.HasAPITokens()
 
 	if diag.RecommendTokenSetup {
 		appendNote("No API tokens are configured. Open Settings → Security to generate dedicated tokens for each automation or agent.")
 	}
 
-	tokens := make([]APITokenSummary, 0, len(cfg.APITokens))
+	tokens := make([]APITokenSummary, 0, len(records))
 	unusedCount := 0
-	for _, record := range cfg.APITokens {
+	for _, record := range records {
 		summary := APITokenSummary{
 			ID:   record.ID,
 			Name: record.Name,
@@ -1380,8 +1409,8 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 	diag.Tokens = tokens
 	diag.UnusedTokenCount = unusedCount
 
-	if len(cfg.APITokens) > 0 {
-		if unusedCount == len(cfg.APITokens) {
+	if len(records) > 0 {
+		if unusedCount == len(records) {
 			appendNote("Configured API tokens have not been used yet. Update your agents or automations to switch to the new tokens.")
 		} else if unusedCount > 0 {
 			appendNote(fmt.Sprintf("%d API token(s) have never been used. Remove unused tokens or update the corresponding agents.", unusedCount))
@@ -1397,6 +1426,9 @@ func buildAPITokenDiagnostic(cfg *config.Config, monitor *monitoring.Monitor) *A
 					continue
 				}
 				tokenID := strings.TrimSpace(host.TokenID())
+				if _, visible := visibleIDs[tokenID]; !visible {
+					continue
+				}
 				tokenUsage[tokenID] = append(tokenUsage[tokenID], name)
 			}
 		}
