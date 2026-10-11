@@ -241,6 +241,9 @@ if name == "sudo":
         manager = r'''#!/usr/bin/python3
 import os, pathlib, sys
 root = pathlib.Path(os.environ["PULSE_NATIVE_ROOT"])
+# Tool startup must have an existing owned home, not create the lab before
+# NativeLab has admitted and claimed its scratch root (as on macOS).
+if not pathlib.Path(os.environ["HOME"]).is_dir(): sys.exit(96)
 unit = root / "pulse-source-updater.service"
 args = sys.argv[1:]
 if any(".service" in a and a != "pulse-source-updater.service" for a in args): sys.exit(97)
@@ -304,6 +307,7 @@ else: sys.exit(97)
                 binaries.append(binary)
             lab = FixtureLab(base / "lab", ROOT, *binaries, "a" * 40)
             lab.unit = lab.root / "pulse-source-updater.service"
+            lab.env["HOME"] = str(base)
             lab.env["PATH"] = str(lab.root / "tools") + ":" + str(tools) + ":/usr/sbin:/usr/bin:/sbin:/bin"
             original_write = Path.write_text
             def relocate(path, data, *args, **kwargs):

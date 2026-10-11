@@ -1578,8 +1578,9 @@ describe('settings architecture guardrails', () => {
     // comparison (#1601). The copy stays in the presentation owner, never
     // inline in the panel shell.
     expect(updatesSettingsPanelSource).toContain(
-      'getUpdateCheckedLabel(updateStore.lastCheckedAt())',
+      'getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())',
     );
+    expect(updatesSettingsPanelSource).toContain('const now = useRelativeTimeNow()');
     expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
     expect(updatesPresentationSource).toContain("return 'Not checked yet'");
     expect(updatesPresentationSource).toContain('`Checked ${relative}`');

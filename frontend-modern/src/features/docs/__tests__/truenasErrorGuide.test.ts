@@ -107,7 +107,9 @@ describe('shipped TrueNAS error diagnosis', () => {
     const commands = [...target.querySelectorAll('pre code')].map((node) => node.textContent!);
     expect(commands).toHaveLength(2);
     for (const command of commands) {
-      expect(command).toContain('--signal=TERM --kill-after=1s 8s');
+      expect(command).toContain('--signal=KILL 8s');
+      expect(command).toContain('head -c 262145');
+      expect(command).toContain('excerpt exceeds 256 KiB');
       expect(command).toContain('no partial excerpt shown');
       expect(command).toContain('no unbounded fallback');
       expect(command).not.toMatch(/grep|--follow|restart|curl/);
@@ -124,7 +126,7 @@ describe('shipped TrueNAS error diagnosis', () => {
       'no request ID is required',
       'inside the Pulse container',
       'not on the Proxmox host or the TrueNAS appliance',
-      'eight-second deadline and one-second termination grace',
+      'eight-second hard deadline and a 256 KiB byte limit',
       'record limit alone does not bound a hung reader',
       'do not use an unbounded substitute',
       'only after a successful read',
