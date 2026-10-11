@@ -704,15 +704,9 @@ the license must bind that key or the control plane will refuse to start."
 
 validate_compose_config() {
   log "validating compose config"
-  local license_file
-  license_file="$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env")"
-  if [[ "${1:-}" == "--allow-missing-evaluation-license" && -z "${license_file}" ]]; then
-    # Compose requires a non-empty secret source even for a config-only
-    # parse. Use a non-secret placeholder for this pre-issuance validation;
-    # the normal validation after ensure_eval_license uses the real file.
-    (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && CP_PROVIDER_MSP_LICENSE_FILE=/dev/null docker compose config --quiet)
-    return 0
-  fi
+  # An empty CP_PROVIDER_MSP_LICENSE_FILE (unlicensed evaluation) is valid:
+  # the compose file mounts an empty secret and leaves the control plane's
+  # licence path unset.
   (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose config --quiet)
 }
 
@@ -843,7 +837,7 @@ main() {
   create_data_dirs
   ensure_docker_network
   block_container_metadata_service
-  validate_compose_config --allow-missing-evaluation-license
+  validate_compose_config
   pull_provider_images
   # Issue the evaluation only after the host is configured and the immutable
   # images are reachable. This makes an issued evaluation a useful activation

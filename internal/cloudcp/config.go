@@ -455,7 +455,11 @@ func (c *CPConfig) validate() error {
 		if strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 			return fmt.Errorf("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY is required when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
-		if c.Environment == "production" && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
+		// A provider-hosted control plane may run unlicensed (msp_eval, two
+		// client workspaces): that is how an air-gapped host, or one that
+		// cannot reach the license server, still starts. Only the
+		// Pulse-hosted MSP plane has no such mode.
+		if c.Environment == "production" && !c.IsProviderHostedMSP() && strings.TrimSpace(c.ProviderMSPLicenseFile) == "" {
 			return fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required in production when CP_CONTROL_PLANE_MODE=%s", c.ControlPlaneMode)
 		}
 		if !strings.HasPrefix(strings.ToLower(c.ProviderMSPPlanVersion), "msp_") {

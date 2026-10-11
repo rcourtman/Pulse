@@ -68,7 +68,10 @@ services:
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - CP_TRUSTED_PROXY_CIDRS=${CP_TRUSTED_PROXY_CIDRS}
-      - CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license
+      # Only point the control plane at the secret when a licence is installed.
+      # Unlicensed (air-gapped, or the license server was unreachable), the
+      # variable is empty and the control plane runs the evaluation plan.
+      - CP_PROVIDER_MSP_LICENSE_FILE=${CP_PROVIDER_MSP_LICENSE_FILE:+/run/secrets/provider_msp_license}
       - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
       - CP_ALLOW_DOCKERLESS_PROVISIONING=${CP_ALLOW_DOCKERLESS_PROVISIONING:-false}
       - CP_STORAGE_GUARDRAILS_ENABLED=${CP_STORAGE_GUARDRAILS_ENABLED:-true}
@@ -106,7 +109,9 @@ services:
 
 secrets:
   provider_msp_license:
-    file: ${CP_PROVIDER_MSP_LICENSE_FILE:?CP_PROVIDER_MSP_LICENSE_FILE must point to the signed provider MSP license file}
+    # /dev/null stands in when no licence is installed, so the mount is empty
+    # and unused; compose requires a source even for an unreferenced secret.
+    file: ${CP_PROVIDER_MSP_LICENSE_FILE:-/dev/null}
 
 networks:
   pulse-provider-msp:

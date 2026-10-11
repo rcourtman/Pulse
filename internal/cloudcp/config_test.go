@@ -794,8 +794,45 @@ func TestLoadConfig_PulseHostedMSPDoesNotRequireLeaseSigningBinding(t *testing.T
 	}
 }
 
-func TestLoadConfig_ProviderHostedMSPRequiresLicenseFileInProduction(t *testing.T) {
+// An air-gapped host, or one that cannot reach the license server, installs
+// without a licence file (setup.sh leaves CP_PROVIDER_MSP_LICENSE_FILE empty).
+// Production must start it on the evaluation plan rather than refuse.
+func TestLoadConfig_ProviderHostedMSPStartsUnlicensedInProduction(t *testing.T) {
 	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() unlicensed production provider-hosted MSP: %v", err)
+	}
+	if cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want %q", cfg.ProviderMSPPlanVersion, pkglicensing.PlanVersionMSPEval)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceEnvFallback {
+		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceEnvFallback)
+	}
+}
+
+// A licence path that is set must still resolve to a real licence: an empty
+// file there is a truncated install, not a choice to evaluate.
+func TestLoadConfig_ProviderHostedMSPRejectsEmptyLicenseFileInProduction(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	empty := filepath.Join(t.TempDir(), "empty.jwt")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", empty)
+
+	_, err := LoadConfig()
+	if err == nil || !strings.Contains(err.Error(), "CP_PROVIDER_MSP_LICENSE_FILE is empty") {
+		t.Fatalf("expected empty licence file to be rejected, got %v", err)
+	}
+}
+
+func TestLoadConfig_PulseHostedMSPRequiresLicenseFileInProduction(t *testing.T) {
+	setPulseHostedMSPEnv(t)
 	t.Setenv("CP_ENV", "production")
 
 	_, err := LoadConfig()

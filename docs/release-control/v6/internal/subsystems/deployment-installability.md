@@ -6769,6 +6769,15 @@ skips the request outright for air-gapped hosts. An existing evaluation licence
 on disk is reused rather than re-requested. The install must never abort
 because an evaluation licence could not be obtained.
 
+"Unlicensed" has to hold end to end, not only in `setup.sh`. The bundle's
+`docker-compose.yml` falls back to an empty `/dev/null` secret and sets the
+control plane's `CP_PROVIDER_MSP_LICENSE_FILE` only when a licence is
+installed, and a provider-hosted control plane starts on `msp_eval` in
+production without one (the Pulse-hosted MSP plane still requires a licence).
+A licence path that is set but empty or unreadable remains a startup error.
+`TestProviderMSPComposeAcceptsUnlicensedAndLicensedInstalls` runs the real
+compose parser over both shapes.
+
 ### Least-privilege agent install profile
 
 The unified agent installer (`scripts/install.sh`) offers

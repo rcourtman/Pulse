@@ -1,6 +1,7 @@
 package installtests
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,7 +79,7 @@ func TestProviderMSPDeployComposeIsProviderModeAndStripeFree(t *testing.T) {
 	)
 	assertContainsAll(t, text,
 		"CP_DATA_DIR=${PULSE_PROVIDER_MSP_DATA_DIR:-/data}",
-		"CP_PROVIDER_MSP_LICENSE_FILE=/run/secrets/provider_msp_license",
+		"CP_PROVIDER_MSP_LICENSE_FILE=${CP_PROVIDER_MSP_LICENSE_FILE:+/run/secrets/provider_msp_license}",
 		"CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
 		"CP_TRUSTED_PROXY_CIDRS=${CP_TRUSTED_PROXY_CIDRS}",
 		"DOCKER_HOST=tcp://docker-socket-proxy:2375",
@@ -411,8 +412,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		`--format '{{json .Manifest}}'`,
 		`jq -r 'if type == "object" then .digest // empty else empty end'`,
 		`awk '$1 == "Digest:" {print $2; exit}'`,
-		"validate_compose_config --allow-missing-evaluation-license",
-		`CP_PROVIDER_MSP_LICENSE_FILE=/dev/null docker compose config --quiet`,
+		"validate_compose_config\n  pull_provider_images",
 		`docker pull "${image_ref}"`,
 		`if [[ "${current}" == *@sha256:*`,
 		`ref="${current}"`,
@@ -434,7 +434,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
 		t.Fatal("evaluation must be issued only after pinned provider images are reachable")
 	}
-	setupSequence := "validate_compose_config --allow-missing-evaluation-license\n  pull_provider_images\n  # Issue the evaluation only after the host is configured and the immutable\n  # images are reachable. This makes an issued evaluation a useful activation\n  # signal rather than a record created before setup can succeed.\n  ensure_eval_license\n  validate_compose_config"
+	setupSequence := "validate_compose_config\n  pull_provider_images\n  # Issue the evaluation only after the host is configured and the immutable\n  # images are reachable. This makes an issued evaluation a useful activation\n  # signal rather than a record created before setup can succeed.\n  ensure_eval_license\n  validate_compose_config"
 	if !strings.Contains(script, setupSequence) {
 		t.Fatal("setup must validate compose, pull pinned images, issue the evaluation, then validate compose with the installed licence")
 	}
@@ -473,6 +473,85 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 			t.Fatalf(".env.example must ship %s blank so setup.sh resolves its digest", key)
 		}
 	}
+}
+
+// The documented air-gapped path (PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE=1), and
+// the fallback when the license server is unreachable, both leave
+// CP_PROVIDER_MSP_LICENSE_FILE blank. The compose file used to require it
+// non-empty, so the final validation and `up` failed, and it always pointed
+// the container at an empty secret file, which the control plane refuses.
+// This runs the real compose parser on the shipped file, which a text match
+// on the script cannot prove.
+func TestProviderMSPComposeAcceptsUnlicensedAndLicensedInstalls(t *testing.T) {
+	if err := exec.Command("docker", "compose", "version").Run(); err != nil {
+		t.Skip("docker compose is not available")
+	}
+
+	composeBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read provider MSP compose: %v", err)
+	}
+	// Setup validates the unlicensed config before pulling images, so the
+	// fault must not return as a required variable.
+	assertNotContainsAny(t, string(composeBytes), "CP_PROVIDER_MSP_LICENSE_FILE:?")
+
+	resolve := func(t *testing.T, licenseFile string) (secretFile, containerLicensePath string) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "docker-compose.yml"), composeBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env := "DOMAIN=msp.example.com\nACME_EMAIL=ops@example.com\nCP_ENV=production\nCP_ADMIN_KEY=k\n" +
+			"CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse@sha256:" + strings.Repeat("a", 64) + "\n" +
+			"CP_TRUSTED_PROXY_CIDRS=172.20.0.0/16\n" +
+			"TRAEFIK_IMAGE=traefik@sha256:" + strings.Repeat("a", 64) + "\n" +
+			"DOCKER_SOCKET_PROXY_IMAGE=tecnativa/docker-socket-proxy@sha256:" + strings.Repeat("a", 64) + "\n" +
+			"CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane@sha256:" + strings.Repeat("a", 64) + "\n" +
+			"CP_PROVIDER_MSP_LICENSE_FILE=" + licenseFile + "\n"
+		if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(env), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("docker", "compose", "config", "--format", "json")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "COMPOSE_PROJECT_NAME=pulse-provider-msp-test")
+		output, err := cmd.Output()
+		if err != nil {
+			stderr := ""
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				stderr = string(exitErr.Stderr)
+			}
+			t.Fatalf("docker compose config with CP_PROVIDER_MSP_LICENSE_FILE=%q: %v\n%s", licenseFile, err, stderr)
+		}
+		var parsed struct {
+			Secrets  map[string]struct{ File string } `json:"secrets"`
+			Services map[string]struct {
+				Environment map[string]string `json:"environment"`
+			} `json:"services"`
+		}
+		if err := json.Unmarshal(output, &parsed); err != nil {
+			t.Fatalf("parse compose config: %v", err)
+		}
+		return parsed.Secrets["provider_msp_license"].File, parsed.Services["control-plane"].Environment["CP_PROVIDER_MSP_LICENSE_FILE"]
+	}
+
+	t.Run("unlicensed leaves the control plane licence path unset", func(t *testing.T) {
+		secretFile, containerPath := resolve(t, "")
+		if secretFile != "/dev/null" {
+			t.Fatalf("unlicensed secret source = %q, want /dev/null", secretFile)
+		}
+		if containerPath != "" {
+			t.Fatalf("unlicensed control plane licence path = %q, want empty so it runs the evaluation plan", containerPath)
+		}
+	})
+	t.Run("licensed mounts the file and points the control plane at it", func(t *testing.T) {
+		secretFile, containerPath := resolve(t, "./provider-msp-eval-license.jwt")
+		if !strings.HasSuffix(secretFile, "/provider-msp-eval-license.jwt") {
+			t.Fatalf("licensed secret source = %q, want the installed licence file", secretFile)
+		}
+		if containerPath != "/run/secrets/provider_msp_license" {
+			t.Fatalf("licensed control plane licence path = %q, want the mounted secret", containerPath)
+		}
+	})
 }
 
 func TestProviderMSPResolveImageDigestAcceptsManifestJSON(t *testing.T) {
