@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Explicit agent credential-file failure does not borrow authority
+
+The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an
+explicit `--token` so an environment value cannot shadow `--token-file`. A
+selected unreadable or empty credential file stops startup without disclosing
+the file path or contents and without substituting environment/state authority.
+Non-empty direct tokens retain first priority; implicit token-optional startup
+and enrolled runtime-token restart remain supported. Opaque credential contents
+are not interpreted as shell assignments or unquoted on the operator's behalf.
+
+Actual flag-loading/error controls are `TestLoadConfigTokenSources` and
+`TestResolveTokenSelectedFileReadErrorIsPrivate`. The synthetic trusted-HTTPS
+`TestHostAgentCredentialFileHandoff` also checks no request on selected-file
+failure, no environment credential use, no token in agent logs, preserved
+monitoring-only scopes/commands and ordinary process identity continuity.
+Neither this local journey nor a credential's inventory entry establishes
+authentication or recovery of an unobserved installed agent.
+
 ### Infrastructure credentials remain within the configured HTTP origin
 
 The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects

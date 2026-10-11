@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Selected agent credential files retain their own authority
+
+The real agent flag-loading path resolves a non-empty explicit `--token` before
+`--token-file`, then `PULSE_TOKEN`, then the resolved instance's implicit token
+file. An environment fallback must not become the direct flag's default and
+shadow the operator's selected file. A selected unreadable or empty file stops
+startup with a credential-safe error rather than borrowing another credential
+or starting unauthenticated. Implicit token-optional startup remains supported.
+With enrolment enabled, an existing non-empty `runtime.token` still takes
+precedence and permits restart even when the bootstrap file has been removed.
+Token contents remain opaque: surrounding whitespace is trimmed, but quotes
+and shell assignments are not interpreted or repaired into credentials.
+
+`TestLoadConfigTokenSources` covers actual flag parsing, source priority,
+selected-file failure, custom state, enrolment, identity, TLS verification and
+monitoring-only command ceilings. `TestResolveTokenSelectedFileReadErrorIsPrivate`
+checks that file errors expose neither the configured path nor its contents.
+`TestHostAgentCredentialFileHandoff` joins the authenticated host issuer, actual
+installer token-writer function, private file modes, compiled agent and trusted
+HTTPS lookup/report routes. It checks normal process restart, credential
+last-use, identity continuity, environment non-use and adverse representations.
+That synthetic process journey does not exercise the terminal prompt, complete
+privileged installer, a reporter's configuration or installed recovery.
+
 A legacy client echoing the projected `controlled` mode into an unrelated AI
 settings PUT must retain a stored `autonomous` preference and its existing
 legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegacyPolicy`
