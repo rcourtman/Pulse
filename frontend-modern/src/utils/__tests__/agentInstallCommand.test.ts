@@ -543,6 +543,101 @@ const runPrivateUnix = (
     timeout: 20000,
   });
 
+// Join the real generated terminal prompt to the canonical installer's writer,
+// rather than stopping at the recording installer's copy of the hand-off file.
+// Downloads, preflight and root/sudo remain simulated. This does not run the
+// agent, authenticate a server request or establish installed recovery.
+describe('terminal-to-runtime token-file preservation', { timeout: 25_000 }, () => {
+  const original = '0123456789abcdef'.repeat(4);
+  const duplicated = original.slice(0, 24) + original.slice(20, 24) + original.slice(24);
+  const legacy = 'legacy-synthetic-token.with-dashes_12345';
+
+  it.each(['0', '1000'])(
+    'preserves correct, same-hint duplicated and legacy input through the real writer (uid=%s)',
+    (uid) => {
+      const source = readFileSync(join(process.cwd(), '..', 'scripts', 'install.sh'), 'utf8');
+      const start = source.indexOf('ensure_runtime_token_file() {');
+      const end = source.indexOf('\nclear_proxmox_state_if_needed() {', start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const writer = source.slice(start, end);
+      expect(duplicated.slice(0, 6)).toBe(original.slice(0, 6));
+      expect(duplicated.slice(-4)).toBe(original.slice(-4));
+      expect(duplicated).not.toBe(original);
+
+      for (const [name, inputs] of [
+        ['correct', [original, original]],
+        ['duplicated-middle then original restoration', [duplicated, original, original]],
+        ['legacy', [legacy, legacy]],
+      ] as const) {
+        const fixture = makeUnixFixture();
+        try {
+          const installerPath = join(fixture.dir, 'installer');
+          const recorder = readFileSync(installerPath, 'utf8');
+          const copy = '  cat "$token_file" > "$CAPTURE"';
+          expect(recorder).toContain(copy);
+          writeFileSync(
+            installerPath,
+            recorder.replace(
+              copy,
+              `${copy}
+  PULSE_TOKEN=$(cat "$token_file")
+  TMP_FILES=(); ENROLL=false; EXIT_GENERAL=1
+  log_info() { :; }; fail() { exit 1; }
+  ${writer}
+  ensure_runtime_token_file "$SAVED_STATE"
+  printf %s "$RUNTIME_TOKEN_CHANGED" > "$SAVED_CHANGED"`,
+            ),
+          );
+          const state = join(fixture.dir, 'saved-state');
+          const command = buildUnixAgentInstallCommand({
+            baseUrl: 'https://pulse.invalid',
+            token: original,
+            extraArgs: ['--enable-host'],
+          });
+          for (const [phase, input] of inputs.entries()) {
+            const history = join(fixture.dir, `history-${phase}`);
+            const result = runPrivateUnix(
+              command,
+              input,
+              {
+                ...fixture.env(uid),
+                SAVED_STATE: state,
+                SAVED_CHANGED: join(fixture.dir, 'saved-changed'),
+              },
+              history,
+            );
+            expect(result.status, result.stdout + result.stderr).toBe(0);
+            expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(input);
+            expect(readFileSync(join(state, 'token'), 'utf8')).toBe(input);
+            expect(readFileSync(join(fixture.dir, 'saved-changed'), 'utf8')).toBe(
+              phase === 0 || input !== inputs[phase - 1] ? 'true' : 'false',
+            );
+            expect(execFileSync('stat', ['-c', '%a', state], { encoding: 'utf8' }).trim()).toBe('700');
+            expect(
+              execFileSync('stat', ['-c', '%a', join(state, 'token')], { encoding: 'utf8' }).trim(),
+            ).toBe('600');
+            expect(readFileSync(join(fixture.dir, 'secret-env'), 'utf8')).toBe(':');
+            for (const text of [
+              command,
+              readFileSync(join(fixture.dir, 'argv'), 'utf8'),
+              readFileSync(history, 'utf8'),
+              result.stdout,
+              result.stderr,
+            ]) {
+              expect(text).not.toContain(input);
+            }
+            assertUnixCleanup(fixture.dir);
+            console.info(`terminal/writer uid=${uid} case=${name} phase=${phase} bytes=${input.length} exact=true private=true cleaned=true`);
+          }
+        } finally {
+          fixture.close();
+        }
+      }
+    },
+  );
+});
+
 // The PTY has a 15s deadline and its caller a 20s ceiling. Let both return
 // their terminal/cleanup assertions before Vitest's enclosing budget expires.
 describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => {

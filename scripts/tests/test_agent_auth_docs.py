@@ -106,6 +106,19 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "missing record", "service is presenting the same token"):
             self.assertIn(fact, text)
 
+    def test_matching_hint_is_not_whole_credential_equality(self):
+        text = " ".join(section().split())
+        for fact in ("matching token hint", "only the visible ends", "whole token",
+                     "duplicated or missing characters in the middle",
+                     "does not establish which step introduced the error",
+                     "Legacy token formats remain supported",
+                     "do not replace a token merely because its length or format differs"):
+            self.assertIn(fact, text)
+        comparison = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func CompareAPIToken(", 1)[1].split("\n}", 1)[0]
+        self.assertIn("HashAPIToken(token)", comparison)
+        self.assertIn("subtle.ConstantTimeCompare", comparison)
+
     def test_missing_record_check_registers_once_before_touching_the_agent(self):
         text = " ".join(section().split())
         install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()

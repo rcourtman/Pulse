@@ -1196,6 +1196,13 @@ Quotes or a prefix can cause rejection even when the intended record has the
 right scopes. A rejected credential can leave that record showing `Never`;
 this does not identify the cause of a particular installation's failure.
 
+A matching token hint confirms only the visible ends, not the whole token.
+Pulse authenticates the whole token: duplicated or missing characters in the
+middle can still cause rejection. Finding such a difference does not establish
+which step introduced the error. Legacy token formats remain supported;
+do not replace a token merely because its length or format differs from a
+newly generated one.
+
 Use how the file was saved or an existing private observation. If you cannot
 safely tell, say **unknown**. If asked, report only **bare**, **quoted**,
 **prefixed** or **unknown**, not the value, length, hint, screenshot or file.
