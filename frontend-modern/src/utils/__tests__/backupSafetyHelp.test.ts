@@ -136,10 +136,15 @@ describe('manual backup safety help', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
-    const link = render(troubleshooting, 'TROUBLESHOOTING').querySelector(
+    // The symptom-first navigation also links to this precaution. Check both
+    // entry points instead of assuming the detailed warning is the first link.
+    const links = render(troubleshooting, 'TROUBLESHOOTING').querySelectorAll(
       'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
     );
-    expect(link?.textContent).toBe('manual backup precaution');
+    expect([...links].map((link) => link.textContent)).toEqual([
+      'Backup safety',
+      'manual backup precaution',
+    ]);
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
     for (const fragment of [
