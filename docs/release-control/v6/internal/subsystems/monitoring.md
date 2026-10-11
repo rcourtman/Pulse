@@ -701,8 +701,12 @@ callers, share fail-fast per-guest admission within this Pulse process. Clients
 for the same endpoint and configured cluster aliases coordinate across methods;
 VMIDs remain serial through node migration. Other VMs and independent endpoints
 remain independent. No guest payload or credentials enter coordination state.
-Coordination keys treat DNS hostname case, numeric/default HTTP(S) ports and
-equivalent IPv6 spellings as the same configured origin. Alias registration
+Coordination keys treat DNS hostname case, numeric/default HTTP(S) ports,
+equivalent IPv6 spellings and unzoned IPv4-mapped spellings of the same numeric
+IPv4 address as the same channel. The mapped-address equivalence applies only
+to guest admission, not saved certificate-pin identity or first-use trust.
+Compatible IPv6, NAT64, DNS aliases and zoned addresses are not unmapped.
+Alias registration
 uses that same key, including when a standalone request is already in flight
 or two configured alias groups are joined. Scheme, non-default port, base-path
 case, IPv6 zone and VMID still separate independent sources. No DNS lookup or
@@ -714,6 +718,13 @@ cannot queue follow-up commands through another spelling. Other VMs, independent
 origins and known-completed resumption retain normal admission. These source
 controls do not establish native QGA completion, thaw or restart protection;
 the existing process-local one-minute uncertainty pause is unchanged.
+`pkg/proxmox/guest_agent_ipv4mapped_test.go` additionally crosses a real IPv4
+loopback listener through both numeric address forms, in both directions,
+without a custom dialer. All six read methods share in-flight and uncertainty
+refusals; fresh cluster clients and migrated node names retain the same VMID
+fence. Other VMs and ordinary non-QGA status remain readable, and refusals do
+not renew the original uncertainty deadline. The canonical cluster API tests
+keep distinct saved pins and the existing declared-member/no-replacement policy.
 Before each command and before returning its fully received bounded payload,
 Pulse reads the operation lock from VM config. Any nonempty lock (not just
 backup), missing/malformed config or an unverifiable lock defers the command.

@@ -230,9 +230,10 @@ func clusterEndpointKey(endpoint string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	// Reuse the origin/base-path identity used for guest coordination, without
-	// joining cluster aliases or changing the actual request/TLS authority.
-	return guestAgentEndpointKey(u.String())
+	// Keep the existing TLS origin/base-path identity, without joining cluster
+	// aliases or guest admission's IPv4-mapped equivalence. Serializing guest
+	// work is not permission to share saved pins across request authorities.
+	return proxmoxEndpointKey(u.String(), false)
 }
 
 func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string, bool) {
