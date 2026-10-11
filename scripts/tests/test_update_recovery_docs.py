@@ -344,6 +344,38 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         doctor = (ROOT / "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx").read_text()
         self.assertIn("· Privilege: {target.privilegeLabel}", doctor)
 
+    def test_legacy_monitoring_help_does_not_require_runner_migration_or_more_logs(self):
+        docker = " ".join(section("DOCKER", "Command agent is not connected", "####").split())
+        for phrase in (
+            "`root` identifies the collector's OS user", "`commands legacy`",
+            "does not establish that commands are enabled", "`monitoring credential`",
+            "cannot authenticate the legacy command channel",
+            "Do not add execution rights to that token as a repair",
+            "`Credential not issued` and `Runner not connected`",
+            "An absent runner alone does not rule out an authorised legacy command connection",
+            "not proof of a broken collector", "your usual Docker or Podman administration tool",
+            "Neither is a diagnostic prerequisite", "unknown is valid",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, docker)
+        model = (ROOT / "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts").read_text()
+        for label in ("Credential not issued", "Runner not connected"):
+            self.assertIn(label, model)
+        self.assertIn("privilege.actionRunnerCredentialIssued", model)
+        self.assertIn("privilege.actionRunnerConnected", model)
+        self.assertIn("!privilege.credentialExec", model)
+
+        unified = " ".join(section("UNIFIED_AGENT", "Commands enabled but remote control blocked", "###").split())
+        for phrase in (
+            "DOCKER.md#command-agent-is-not-connected",
+            "without widening a token or converting the collector",
+            "an authorised command connection was intended",
+            "Do not collect more logs just to confirm the known monitoring scope",
+        ):
+            self.assertIn(phrase, unified)
+        self.assertEqual(guide("UNIFIED_AGENT"),
+                         (ROOT / "frontend-modern/public/docs/UNIFIED_AGENT.md").read_text())
+
     def test_update_failure_entry_reuses_bounded_readers_before_any_recovery(self):
         text = " ".join(section("AUTO_UPDATE", "Update failed", "###").split())
         for phrase in ("**Pulse server**", "UNIFIED_AGENT.md#auto-update",

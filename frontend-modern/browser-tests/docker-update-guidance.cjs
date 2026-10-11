@@ -139,7 +139,38 @@ const { chromium, webkit } = require('playwright');
         dispatchEvent(new PopStateEvent('popstate'));
       });
       await waitForHeading('command-agent-is-not-connected');
+      const authorityGuide = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
+      for (const phrase of [
+        "root identifies the collector's OS user, not its server-side permission",
+        'commands legacy identifies an older, unmarked compatibility profile',
+        'cannot authenticate the legacy command channel',
+        'An absent runner alone does not rule out an authorised legacy command connection',
+        'not proof of a broken collector',
+        'your usual Docker or Podman administration tool',
+        'Neither is a diagnostic prerequisite',
+        'unknown is valid',
+      ])
+        assert.ok(authorityGuide.includes(phrase), phrase);
       await page.screenshot({ path: path.join(artifacts, `${engine}-authority.png`) });
+      // The existing profile choices are optional operator decisions. Both
+      // links must be usable by keyboard; do not exercise any install action.
+      for (const [name, id] of [
+        ['agent privilege model', 'agent-privilege-model'],
+        ['least-privilege profile', 'least-privilege-agent-profile'],
+      ]) {
+        await page.getByRole('link', { name, exact: true }).focus();
+        if (id === 'agent-privilege-model') {
+          await page.screenshot({ path: path.join(artifacts, `${engine}-profile-choice.png`) });
+        }
+        await page.keyboard.press('Enter');
+        await waitForHeading(id);
+        assert.ok(page.url().endsWith(`/docs/AGENT_SECURITY#${id}`));
+        await page.evaluate(() => {
+          history.pushState({}, '', '/docs/DOCKER#command-agent-is-not-connected');
+          dispatchEvent(new PopStateEvent('popstate'));
+        });
+        await waitForHeading('command-agent-is-not-connected');
+      }
       await page
         .getByRole('link', {
           name: 'command-channel connection and admission checks',
@@ -165,6 +196,8 @@ const { chromium, webkit } = require('playwright');
         refusedSentUnknownStages: true,
         commandGuidanceBeforeShellChecks: true,
         keyboardTroubleshootingAndCommandChannelLinks: true,
+        legacyCredentialAndIndependentRunnerDistinguished: true,
+        keyboardOptionalProfileLinks: true,
         headingsFocusedAndVisible: true,
         noHorizontalOverflow: true,
         errors,
