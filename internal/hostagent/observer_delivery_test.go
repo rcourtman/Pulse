@@ -1,9 +1,12 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -11,6 +14,60 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
+
+func TestObserverAuthGuidanceAndSameCredentialRecovery(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			const token = "synthetic-observer-credential-not-for-logs"
+			const responseSecret = "synthetic-observer-body-not-for-logs"
+			var responseStatus atomic.Int32
+			responseStatus.Store(int32(status))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != agentReportEndpoint || r.Header.Get("X-API-Token") != token || r.Header.Get("Authorization") != "Bearer "+token {
+					t.Error("ordinary observer report changed its endpoint or credential")
+				}
+				code := int(responseStatus.Load())
+				w.WriteHeader(code)
+				if code == http.StatusOK {
+					_, _ = io.WriteString(w, `{"success":true,"config":{"commandsEnabled":true}}`)
+				} else {
+					_, _ = io.WriteString(w, responseSecret)
+				}
+			}))
+			defer server.Close()
+			var logs bytes.Buffer
+			primaryAcknowledgements := 0
+			a := &Agent{
+				cfg: Config{APIToken: "synthetic-primary-credential", CommandAuthorityProfile: CommandAuthorityMonitoringOnly,
+					OnPrimaryReportAccepted: func() { primaryAcknowledgements++ }},
+				logger: zerolog.New(&logs), reportBuffer: utils.New[agentshost.Report](8),
+			}
+			observer := &observerReporter{
+				target:     ObserverTarget{Name: "synthetic-destination", PulseURL: server.URL, APIToken: token},
+				httpClient: server.Client(), reportBuffer: utils.New[agentshost.Report](8),
+			}
+			report := agentshost.Report{Agent: agentshost.AgentInfo{ID: "auth-diagnostic-agent"}}
+			for range 2 {
+				a.deliverObserverReport(context.Background(), observer, report)
+			}
+			assertSafeReportAuthLog(t, logs.String(), server.URL, status, true, token, responseSecret)
+			if got := strings.Count(logs.String(), "Pulse observer rejected host reporting"); got != 1 || !observer.reportBuffer.IsEmpty() {
+				t.Fatal("observer rejection did not stay bounded and throttled")
+			}
+			responseStatus.Store(http.StatusOK)
+			a.deliverObserverReport(context.Background(), observer, report)
+			if !observer.lastAuthFailureLog.IsZero() || !observer.reportBuffer.IsEmpty() || primaryAcknowledgements != 0 || a.cfg.EnableCommands || a.cfg.CommandAuthorityProfile != CommandAuthorityMonitoringOnly || a.cfg.APIToken != "synthetic-primary-credential" || observer.target.APIToken != token {
+				t.Fatal("observer recovery changed credentials, primary readiness or command authority")
+			}
+			responseStatus.Store(int32(status))
+			a.deliverObserverReport(context.Background(), observer, report)
+			if got := strings.Count(logs.String(), "Pulse observer rejected host reporting"); got != 2 {
+				t.Fatal("ordinary recovery did not reset the observer diagnostic throttle")
+			}
+		})
+	}
+}
 
 func TestObserverDeliveryIsIsolatedAndReportOnly(t *testing.T) {
 	primaryRequests := atomic.Int32{}

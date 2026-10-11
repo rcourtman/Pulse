@@ -1118,9 +1118,12 @@ agent host, or inspect an already retained excerpt privately. Distinguish:
   status and redacted error, separately from the lookup failure.
 
 If both lookup and host reporting return 401, this is not a lookup-only failure.
-The host log's restore/upgrade explanation is generic, not an established cause
-for that installation. If you already tried reinstalling, do not repeat it to
-collect evidence; check the intended token record below first.
+An older host log's restore/upgrade explanation is generic, not an established
+cause for that installation. If you already tried reinstalling, do not repeat it
+to collect evidence; check the intended token record below first. A 401 alone
+does not require a replacement credential, and a 403 is not a reason to disable
+host monitoring or enable command execution. Ordinary reporting can recover with
+the same credential after the endpoint's access is restored.
 
 A running local service or successful-looking installer output does not prove
 that Pulse accepted a fresh report. No host-report error in the selected log

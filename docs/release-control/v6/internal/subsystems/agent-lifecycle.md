@@ -9515,3 +9515,21 @@ the primary of its earliest-created link, so lists that differ only in a time
 can leave a different row standing. Agent registration, enrolment, install, update,
 removal, report identity and continuity are unchanged, and real-mode
 resolution still goes through the live registry.
+
+
+### Reporting authentication errors do not prescribe credential replacement
+
+Host reporting's 401 diagnostic identifies the configured endpoint and directs
+an operator to the existing API Access record and issuing instance, not a
+presumed restore/upgrade loss or another installation. A 403 directs the operator
+to `agent:report` and endpoint policy without disabling host monitoring or
+requesting command execution. Observer reporting retains its destination, status
+and endpoint and never requires replacement solely from an HTTP status.
+Rejected current/buffered reports still drop rather than grow a queue; ordinary
+polling may recover with the same credential. Primary readiness, observer
+isolation, diagnostic throttles and command ceilings are unchanged.
+`TestHostReportingAuthGuidanceAndSameCredentialRecovery` and
+`TestObserverAuthGuidanceAndSameCredentialRecovery` cover both statuses, current
+and buffered primary paths, record/instance guidance, secret/body non-disclosure
+and same-credential recovery. These synthetic HTTP controls do not establish an
+installed host's cause or reporting recovery.
