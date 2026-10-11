@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
@@ -592,6 +593,34 @@ func singleReportRequestFromQuery(q url.Values) singleReportRequestBody {
 // Assistant settings.
 const reportGETNarrativeNote = "Tip: This report was requested with GET, which never uses Pulse Assistant. Generate it from Settings, or request it with POST, to include AI narration when Pulse Assistant is configured."
 
+// reportScopeNarrativeNote replaces the "Configure Pulse Assistant" tip on a
+// POST report requested with an API token that may not spend AI budget.
+const reportScopeNarrativeNote = "Tip: This report was requested with an API token that does not hold the ai:execute scope, so Pulse Assistant was not used. Use a token with ai:execute, or generate the report from Settings, to include AI narration when Pulse Assistant is configured."
+
+// reportCallerMayUseAI reports whether the caller of a report request may
+// spend the tenant's AI budget on narration. Narration is a paid provider call
+// recorded in the cost ledger, so an API token needs ai:execute for it, as
+// every other AI-spending route does; settings:read is not enough. Callers that
+// are not tokens (browser sessions, scheduled reports) are unaffected.
+func reportCallerMayUseAI(ctx context.Context) bool {
+	record, ok := internalauth.GetAPIToken(ctx).(*config.APITokenRecord)
+	if !ok || record == nil {
+		return true
+	}
+	return record.HasScope(config.ScopeAIExecute)
+}
+
+// scopeLimitedReportNarrator narrates reports requested by a token without
+// ai:execute with the deterministic summary and never calls an AI provider.
+type scopeLimitedReportNarrator struct{}
+
+func (scopeLimitedReportNarrator) Narrate(ctx context.Context, in reporting.NarrativeInput) (reporting.Narrative, error) {
+	out, err := reporting.HeuristicNarrator{}.Narrate(ctx, in)
+	out.Source = reporting.NarrativeSourceHeuristic
+	out.Disclaimer = reportScopeNarrativeNote
+	return out, err
+}
+
 // getReportNarrator narrates GET single-resource reports with the
 // deterministic summary and never calls an AI provider.
 type getReportNarrator struct{}
@@ -714,10 +743,14 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	// from an AI service that is already running.
 	var narrator reporting.Narrator
 	var findings reporting.FindingsProvider
-	if r.Method == http.MethodPost {
+	switch {
+	case r.Method == http.MethodPost && reportCallerMayUseAI(r.Context()):
 		narrator, _, findings = h.resolveNarrator(r.Context())
 		req.Narrator = narrator
-	} else {
+	case r.Method == http.MethodPost:
+		findings = h.resolveExistingFindings(r.Context())
+		req.Narrator = scopeLimitedReportNarrator{}
+	default:
 		findings = h.resolveExistingFindings(r.Context())
 		req.Narrator = getReportNarrator{}
 	}
@@ -1192,7 +1225,14 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 
-	_, fleetNarrator, findings := h.resolveNarrator(ctx)
+	var fleetNarrator reporting.FleetNarrator
+	var findings reporting.FindingsProvider
+	if reportCallerMayUseAI(ctx) {
+		_, fleetNarrator, findings = h.resolveNarrator(ctx)
+	} else {
+		// A nil fleet narrator falls back to the deterministic summary.
+		findings = h.resolveExistingFindings(ctx)
+	}
 	multiReq.FleetNarrator = fleetNarrator
 	multiReq.FindingsProvider = findings
 
