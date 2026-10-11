@@ -635,6 +635,12 @@ func TestClusterClientFingerprintTrustContract(t *testing.T) {
 	testClusterClientFingerprintTrust(t)
 }
 
+func TestClusterClientEndpointOwnershipContract(t *testing.T) {
+	t.Run("routing-and-first-use-trust", testClusterClientEndpointOwnershipRoutingAndTrust)
+	t.Run("shared-guest-admission", testClusterClientEndpointOwnershipGuestAdmission)
+	t.Run("input-shape", testClusterClientEndpointOwnershipShape)
+}
+
 // Guest admission equivalence must not broaden the existing certificate trust scope.
 func TestGuestAgentIPv4MappedTrustScope(t *testing.T) {
 	const ipv4 = "https://192.0.2.10:8006/tenant"
