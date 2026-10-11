@@ -307,11 +307,11 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 
 	callerToken := getAPITokenRecordFromRequest(req)
 	tokens := make([]apiTokenDTO, 0, len(r.config.APITokens))
-	for idx := range r.config.APITokens {
-		if !callerTokenMayManage(callerToken, &r.config.APITokens[idx]) {
+	for _, record := range r.config.APITokens {
+		if !callerTokenMayManage(callerToken, &record) {
 			continue
 		}
-		tokens = append(tokens, toAPITokenDTO(r.config.APITokens[idx]))
+		tokens = append(tokens, toAPITokenDTO(record))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
