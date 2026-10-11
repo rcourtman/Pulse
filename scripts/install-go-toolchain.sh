@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION_FILE="${SCRIPT_DIR}/.go-version"
-DEFAULT_VERSION="go1.26.8"
+DEFAULT_VERSION="go1.26.9"
 TARGET_ROOT="/opt/toolchains/go"
 DOWNLOAD_ROOT="https://dl.google.com/go"
 GOPATH_DIR="/var/lib/pulse/go"
@@ -14,7 +14,8 @@ if [[ ! -f "$VERSION_FILE" ]]; then
   echo "$DEFAULT_VERSION" | sudo tee "$VERSION_FILE" >/dev/null
 fi
 VERSION="$(tr -d '
-' < "$VERSION_FILE")"
+
+' < "$VERSION_FILE")"
 ARCHIVE="${VERSION}.linux-amd64.tar.gz"
 DOWNLOAD_DIR="${TMPDIR:-/tmp}/go-install"
 ARCHIVE_PATH="$DOWNLOAD_DIR/$ARCHIVE"
@@ -28,7 +29,8 @@ fi
 curl -fsSL "$DOWNLOAD_ROOT/$ARCHIVE.sha256" -o "$SHA_PATH"
 
 CHECKSUM="$(tr -d '
-' < "$SHA_PATH")"
+
+' < "$SHA_PATH")"
 printf '%s  %s
 ' "$CHECKSUM" "$ARCHIVE_PATH" | sha256sum -c -
 
