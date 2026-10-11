@@ -120,7 +120,18 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/objectives", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjectives)))
 	r.mux.HandleFunc("/api/ai/patrol/objectives/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjective)))
 	r.mux.HandleFunc("/api/ai/patrol/attention", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteAttentionList, r.attentionHandlers.HandleAttention)))
-	r.mux.HandleFunc("/api/ai/patrol/attention/", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteAttentionDetail, r.attentionHandlers.HandleAttention)))
+	// One prefix serves reads, lifecycle mutations and action planning. The
+	// outer gate follows the dispatch in HandleAttention: a lifecycle mutation
+	// is admitted by the mutation scope (monitoring:write), everything else by
+	// the read scope. Action planning keeps its own entitlement and
+	// plan/approve/execute authorization inside the handler.
+	r.mux.HandleFunc("/api/ai/patrol/attention/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
+		route := relayMobileRouteAttentionDetail
+		if req.Method == http.MethodPost && isAttentionMutationPath(strings.TrimPrefix(req.URL.Path, "/api/ai/patrol/attention")) {
+			route = relayMobileRouteAttentionMutation
+		}
+		requireRelayMobileRuntimeRoute(route, r.attentionHandlers.HandleAttention)(w, req)
+	}))
 	// SECURITY: AI Patrol read endpoints - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetFindingsHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleForcePatrol)))
