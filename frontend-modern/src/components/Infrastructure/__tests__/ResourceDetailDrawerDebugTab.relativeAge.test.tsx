@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -65,6 +66,53 @@ afterEach(() => {
 });
 
 describe('resource Debug source ages', () => {
+  it('follows arriving status records while payload sections, disclosure and focus stay mounted', () => {
+    vi.useFakeTimers({ now: start });
+    const [resource, setResource] = createStore(
+      makeResource() as Resource & { platformData: PlatformData },
+    );
+    const view = render(() => <Fixture resource={resource} />);
+    const details = [...view.container.querySelectorAll('details')];
+    const summaries = details.map((element) => element.querySelector('summary')!);
+    const payloads = details.map((element) => element.querySelector('pre')!.textContent);
+    details[0].open = true;
+    summaries[0].focus();
+
+    // Only source status is replaced, as in a nested canonical store update.
+    // The real derived-state sourceSections memo keeps its original entries.
+    setResource('platformData', 'sourceStatus', {
+      proxmox: { status: 'available', lastSeen: start },
+      agent: {
+        status: 'error',
+        lastSeen: new Date(start).toISOString(),
+        error: 'Agent unavailable',
+      },
+    });
+    expect(summaries[0]).toHaveTextContent('available • 0s ago');
+    expect(summaries[1]).toHaveTextContent('error • 0s ago');
+    expect(within(view.container).queryByText('Guest read deferred')).not.toBeInTheDocument();
+    expect(within(view.container).getByText('Agent unavailable')).toBeInTheDocument();
+    expect([...view.container.querySelectorAll('details')]).toEqual(details);
+    expect(details[0].open).toBe(true);
+    expect(summaries[0]).toHaveFocus();
+    expect(details.map((element) => element.querySelector('pre')!.textContent)).toEqual(payloads);
+
+    vi.advanceTimersByTime(60_000);
+    expect(summaries[0]).toHaveTextContent('available • 1 min ago');
+    expect(summaries[1]).toHaveTextContent('error • 1 min ago');
+    setResource(
+      'platformData',
+      'sourceStatus',
+      reconcile({
+        proxmox: { status: 'deferred', lastSeen: 'invalid', error: 'No usable timestamp' },
+      }),
+    );
+    expect(summaries[0].textContent).toBe('Proxmoxdeferred');
+    expect(summaries[1].textContent).toBe('Agentunknown');
+    expect(within(view.container).queryByText('Agent unavailable')).not.toBeInTheDocument();
+    expect(within(view.container).getByText('No usable timestamp')).toBeInTheDocument();
+  });
+
   it('ages held source timestamps with the drawer without receiving another snapshot', () => {
     vi.useFakeTimers({ now: start });
     const resource = makeResource();

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
@@ -7,9 +7,10 @@ import { MonitoringAPI } from '@/api/monitoring';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
+import { RELATIVE_TIME_TICK_MS, useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
+import { buildStandalonePostureSummary } from '../standalonePageModel';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
@@ -161,6 +162,179 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('keeps health counts and selected rows truthful for retained, arriving and withdrawn reports', () => {
+    const start = Date.parse('2026-10-11T17:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    try {
+      const [machines, setMachines] = createStore([
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
+      ]);
+      const original = JSON.stringify(machines);
+      const [search, setSearch] = createSignal('silent');
+      const [status, setStatus] = createSignal<'all' | 'online' | 'degraded' | 'offline'>('all');
+      const view = render(() => (
+        <AgentsMachinesTable
+          resources={machines}
+          emptyIcon={emptyIcon}
+          emptyTitle="No machines"
+          emptyDescription="Install Pulse Agent."
+          externalSearch={search}
+          onExternalSearchChange={setSearch}
+          externalStatus={status}
+          onExternalStatusChange={setStatus}
+        />
+      ));
+      const chip = (label: string, count: number) =>
+        screen.getByRole('button', { name: `${label}, ${count}` });
+      const rows = () => view.container.querySelectorAll('[data-agents-machine-row]');
+      fireEvent.click(chip('Healthy', 1));
+      const healthy = chip('Healthy', 1);
+      healthy.focus();
+      expect(rows()).toHaveLength(1);
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(rows()).toHaveLength(1);
+      expect(chip('Healthy', 1)).toHaveAttribute('aria-pressed', 'true');
+
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(rows()).toHaveLength(0);
+      expect(chip('Healthy', 0)).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Degraded', 1)).toBeInTheDocument();
+      expect(chip('Offline', 0)).toBeInTheDocument();
+      expect(document.activeElement).toBe(healthy);
+      expect(search()).toBe('silent');
+      expect(status()).toBe('online');
+      expect(JSON.stringify(machines)).toBe(original);
+
+      fireEvent.click(chip('Degraded', 1));
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0].querySelector('span[role="img"]')).toHaveClass('bg-amber-500');
+      expect(screen.getByRole('img', { name: 'Stale' })).toHaveAttribute('title', 'Stale');
+      expect(screen.getByTestId('agent-machine-cpu-bar')).toHaveAttribute('data-usage', '24');
+      setMachines(0, 'lastSeen', Date.now());
+      expect(rows()).toHaveLength(0);
+      expect(chip('Degraded', 0)).toHaveAttribute('aria-pressed', 'true');
+      expect(chip('Healthy', 1)).toBeInTheDocument();
+
+      fireEvent.click(chip('Healthy', 1));
+      expect(rows()).toHaveLength(1);
+      setMachines(0, 'lastSeen', 0);
+      setMachines(0, 'agent', 'stale', true);
+      expect(rows()).toHaveLength(0);
+      fireEvent.click(chip('Degraded', 1));
+      expect(rows()).toHaveLength(1);
+      expect(machines[0].status).toBe('online');
+
+      setMachines(0, 'status', 'offline');
+      expect(rows()).toHaveLength(0);
+      expect(chip('Healthy', 0)).toBeInTheDocument();
+      fireEvent.click(chip('Offline', 1));
+      expect(rows()[0].querySelector('span[title="Offline"]')).toHaveClass('bg-red-500');
+      expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+      expect(search()).toBe('silent');
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not promote unknown status or missing freshness to Healthy or Offline', () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({ id: 'fresh', lastSeen: now }),
+          resource({ id: 'unknown', status: 'unknown', lastSeen: now }),
+          resource({ id: 'unclassified', status: undefined, lastSeen: 0 }),
+          resource({ id: 'offline', status: 'offline', lastSeen: 0, agent: { stale: true } }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+    const ids = () =>
+      [...container.querySelectorAll('[data-agents-machine-row]')].map((row) =>
+        row.getAttribute('data-agents-machine-row'),
+      );
+    // Explicit Unknown already has a warning row; unclassified has a muted row.
+    // Neither is promoted. All keeps the latter visible without claiming health.
+    expect(ids()).toHaveLength(4);
+    fireEvent.click(screen.getByRole('button', { name: 'Healthy, 1' }));
+    expect(ids()).toEqual(['fresh']);
+    fireEvent.click(screen.getByRole('button', { name: 'Degraded, 1' }));
+    expect(ids()).toEqual(['unknown']);
+    fireEvent.click(screen.getByRole('button', { name: 'Offline, 1' }));
+    expect(ids()).toEqual(['offline']);
+    fireEvent.click(screen.getByRole('button', { name: 'All, 4' }));
+    expect(ids()).toHaveLength(4);
+  });
+
+  it('keeps the retained row status in agreement with posture across the five-minute clock boundary', () => {
+    const start = Date.parse('2026-10-11T17:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    try {
+      const [machines, setMachines] = createStore([
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
+      ]);
+      const original = JSON.stringify(machines);
+      const [mounted, setMounted] = createSignal(true);
+      const view = render(() => {
+        const now = useRelativeTimeNow();
+        return (
+          <>
+            <output data-testid="posture-attention">
+              {buildStandalonePostureSummary(machines, now()).attention}
+            </output>
+            <Show when={mounted()}>
+              <AgentsMachinesTable
+                resources={machines}
+                emptyIcon={emptyIcon}
+                emptyTitle="No machines"
+                emptyDescription="Install Pulse Agent."
+              />
+            </Show>
+          </>
+        );
+      });
+      const dot = () => view.container.querySelector('[data-agents-machine-row] span[role="img"]')!;
+      const row = view.container.querySelector('[data-agents-machine-row]');
+      const cpu = screen.getByTestId('agent-machine-cpu-bar');
+      expect(dot()).toHaveClass('bg-emerald-500');
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('1');
+      expect(dot()).toHaveClass('bg-amber-500');
+      expect(view.container.querySelector('[data-agents-machine-row]')).toBe(row);
+      expect(screen.getByTestId('agent-machine-cpu-bar')).toBe(cpu);
+      expect(cpu).toHaveAttribute('data-usage', '24');
+      expect(JSON.stringify(machines)).toBe(original);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
+
+      setMounted(false);
+      setMounted(true);
+      expect(dot()).toHaveClass('bg-amber-500');
+      setMachines(0, 'lastSeen', Date.now());
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+      setMachines(0, 'status', 'offline');
+      expect(
+        view.container.querySelector('[data-agents-machine-row] span[title="Offline"]'),
+      ).toHaveClass('bg-red-500');
+      expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps disk and last-seen telemetry in the phone column set', () => {
     const { container } = render(() => (
       <AgentsMachinesTable

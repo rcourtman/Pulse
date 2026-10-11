@@ -4536,6 +4536,47 @@ resolves late` in
 
 ## Current State
 
+### Retained monitoring status remains reactive (11 October 2026)
+
+The existing Machines status dot subscribes to the shared relative-time clock
+for the unchanged five-minute agent-report fallback, agreeing with the
+standalone classification helper without a new report, row timer or API read.
+Machines health chip counts and selected results now use that same classifier
+at the same clock instant rather than the canonical last-reported status.
+Healthy excludes warning/stale rows, Degraded includes them and Offline retains
+the existing danger precedence. Muted/unclassified rows stay in All only.
+The status dot tooltip and accessible name expose that same current label
+(Online, Stale or Offline), not an online tooltip on an amber retained row.
+The canonical status, stale flag and timestamps remain observations, not derived
+health. Search, route-owned selection and removal behaviour are unchanged.
+The shared FilterButtonGroup keys buttons by logical value rather than transient
+option-object identity. Count, label, disabled, icon and order updates keep the
+same focused button while its option survives; withdrawn keys retire normally.
+Numeric and string values stay distinct, and selection uses the current entry.
+FilterButtonGroup.test.tsx covers those replacement/reorder/removal boundaries;
+FilterToolbar.test.tsx covers the live segmented-control label projection and
+forwarded selection at the shared wrapper boundary;
+the Machines clock/selection control exercises the production toolbar on desktop
+and touch-phone browsers.
+Attention sort classifies once per resource per call, preserving priority and
+numeric-name ordering without keeping a cross-call status cache. Debug source
+summaries read current status/error/last-seen by section ID, not a record captured
+when a retained payload section first mounted. Disclosure, focus and payload
+remain owned by that section.
+
+The Machines, standalone model and Debug relative-age regression controls,
+plus `browser-tests/pr2600-monitoring.cjs` on desktop and touch-phone engines,
+cover clock-only staleness and arriving status replacement. These are
+synthetic source/presentation checks, not collector, workload recovery,
+whole-fleet performance, installed or release acceptance.
+`browser-tests/machines-health-filters.cjs` additionally covers expanded phone
+filters, exact freshness boundary, Healthy/Degraded clicks, arriving/withdrawn
+reports and preserved URL/search. The Proxmox identity and TrueNAS error guide
+checks still render the complete shipped guides through the production renderer;
+their per-suite fixture reuses only identical source/path renders, returns
+isolated clones and invalidates changed input. No renderer, guide bytes,
+assertions or test deadlines are weakened.
+
 ### Manual update freshness
 
 The update panel has a dedicated proof route to `updatesPresentation.test.ts`,

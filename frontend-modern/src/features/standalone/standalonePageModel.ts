@@ -110,11 +110,18 @@ export function sortStandaloneResourcesByAttention(
   resources: readonly Resource[],
   nowMs = Date.now(),
 ): Resource[] {
+  // Clock ticks can re-sort retained resources. Classify each once for this
+  // sort, not twice per comparison, without caching across source updates.
+  const priority = new Map<Resource, number>();
+  for (const resource of resources) {
+    priority.set(
+      resource,
+      ATTENTION_SORT_PRIORITY[getStandaloneResourceStatusIndicator(resource, nowMs).variant],
+    );
+  }
   return [...resources].sort((left, right) => {
-    const leftPriority =
-      ATTENTION_SORT_PRIORITY[getStandaloneResourceStatusIndicator(left, nowMs).variant];
-    const rightPriority =
-      ATTENTION_SORT_PRIORITY[getStandaloneResourceStatusIndicator(right, nowMs).variant];
+    const leftPriority = priority.get(left)!;
+    const rightPriority = priority.get(right)!;
     if (leftPriority !== rightPriority) return leftPriority - rightPriority;
     return left.displayName.localeCompare(right.displayName, undefined, { numeric: true });
   });

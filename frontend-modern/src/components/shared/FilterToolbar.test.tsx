@@ -65,6 +65,50 @@ describe('FilterHeader', () => {
     expect(onChange).toHaveBeenCalledWith('warnings');
   });
 
+  it('preserves segmented-control focus and selection across live label projections', () => {
+    const [healthyCount, setHealthyCount] = createSignal(1);
+    const [selected, setSelected] = createSignal('online');
+    const onChange = vi.fn();
+    render(() => (
+      <FilterSegmentedControl
+        value={selected()}
+        onChange={(next) => {
+          setSelected(next);
+          onChange(next);
+        }}
+        options={[
+          {
+            value: 'online',
+            label: <span>Healthy {healthyCount()}</span>,
+            ariaLabel: `Healthy, ${healthyCount()}`,
+          },
+          {
+            value: 'degraded',
+            label: <span>Degraded {1 - healthyCount()}</span>,
+            ariaLabel: `Degraded, ${1 - healthyCount()}`,
+          },
+        ]}
+      />
+    ));
+    const healthy = screen.getByRole('button', { name: 'Healthy, 1' });
+    const degraded = screen.getByRole('button', { name: 'Degraded, 0' });
+    healthy.focus();
+    setHealthyCount(0);
+    expect(screen.getByRole('button', { name: 'Healthy, 0' })).toBe(healthy);
+    expect(healthy).toHaveTextContent('Healthy 0');
+    expect(document.activeElement).toBe(healthy);
+    expect(healthy).toHaveAttribute('aria-pressed', 'true');
+    degraded.click();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('degraded');
+    expect(healthy).toHaveAttribute('aria-pressed', 'false');
+    expect(degraded).toHaveAttribute('aria-pressed', 'true');
+    degraded.focus();
+    setHealthyCount(1);
+    expect(screen.getByRole('button', { name: 'Degraded, 0' })).toBe(degraded);
+    expect(document.activeElement).toBe(degraded);
+    expect(degraded).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('uses labeled toggle groups for compact stable filter choices', () => {
     const onChange = vi.fn();
     render(() => (

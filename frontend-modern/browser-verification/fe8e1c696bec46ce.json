@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "d1842b98f2b8753e097a608db6545095901bfec9",
+  "verified_at": "2026-10-11T19:44:01.301539Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "1d44ab764a9a30af38780a3424e0bd5026a332ef09a42f437ae1693ddf4cd7b9"
+  },
+  "routes": [
+    "/browser-tests/machines-health-filters.html, using production StandalonePageSurface/router/table/shared filters and q/status state; synthetic local evidence, not a new application route"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 950
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches the integration lock. Desktop Chromium 141.0.7390.37 light and dark touch-phone WebKit 26.0; exact d1842b98 parent and final runtime hashes checked. All twenty-four settled parent/final screenshots inspected.",
+    "After selecting and focusing Healthy, report age exactly five minutes remains Healthy. The next shared-clock tick changes Healthy 1 to 0 and Degraded 0 to 1, and correctly removes the held row. Parent disconnects the button and drops focus to BODY. Final keeps the same connected button and its focus, retaining the selected filter and identity search. Both quiet-clock controls perform no read/write.",
+    "Healthy/Degraded accessible counts agree with current row status and actual selected membership. The retained snapshot is unchanged by the clock. Arrival and explicit withdrawal update membership, and Stale is the accessible status name and tooltip. Unknown/offline and disabled/reordered/withdrawn keys remain source-test boundaries, not native acceptance.",
+    "No unexpected read, write, off-origin request, page or console error, or page-level horizontal overflow; normal source-update metadata revalidation is preserved. Both browser and server close. Synthetic browser evidence is not a full application, physical device, guest thaw/writes/liveness/restoration, native recovery, publication or release."
+  ],
+  "interactions": [
+    "Expand phone Filters, enter identity search, select Healthy and Degraded, inspect rows and filtered-empty states; route-owned q/status remain.",
+    "Focus the selected Healthy button before quiet clock advancement; record the same button identity and document.activeElement before and after count replacement.",
+    "Inject an arriving ordinary report, then a stale/withdrawn-report observation, without changing canonical status, thresholds or polling."
+  ]
+}
