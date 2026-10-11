@@ -100,6 +100,56 @@ func TestSingleReportAINarrationNeedsAIExecuteForTokens(t *testing.T) {
 	}
 }
 
+// Spending authority never changes GET's no-AI transport contract.
+func TestSingleReportGETNeverUsesAIRegardlessOfTokenScopes(t *testing.T) {
+	for _, tc := range reportNarrationCallers {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			engine := &recordingReportEngine{ReportEngine: reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})}
+			original := reporting.GetEngine()
+			reporting.SetEngine(engine)
+			t.Cleanup(func() { reporting.SetEngine(original) })
+
+			narrator := &countingReportNarrator{}
+			var narratorResolves, findingsResolves atomic.Int32
+			handler := NewReportingHandlers(nil, nil)
+			handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+				narratorResolves.Add(1)
+				return narrator, nil, nil
+			})
+			handler.SetExistingFindingsResolver(func(context.Context) reporting.FindingsProvider {
+				findingsResolves.Add(1)
+				return nil
+			})
+
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1", nil)
+			if caller := reportCaller(t, tc.scopes); caller != nil {
+				attachAPITokenRecord(req, caller)
+			}
+			rec := httptest.NewRecorder()
+			handler.HandleGenerateReport(rec, req)
+			if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+				t.Fatalf("status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+			}
+			if narrator.calls.Load() != 0 || narratorResolves.Load() != 0 || findingsResolves.Load() != 1 {
+				t.Fatalf("GET narration calls=%d service resolves=%d existing findings=%d, want 0, 0, 1", narrator.calls.Load(), narratorResolves.Load(), findingsResolves.Load())
+			}
+			narrative, err := engine.NarrativeFor(engine.requests[len(engine.requests)-1])
+			if err != nil {
+				t.Fatalf("narrative: %v", err)
+			}
+			if narrative.Source != reporting.NarrativeSourceHeuristic || narrative.Disclaimer != reportGETNarrativeNote {
+				t.Fatalf("narrative = source %q disclaimer %q, want the deterministic summary with the GET note", narrative.Source, narrative.Disclaimer)
+			}
+		})
+	}
+}
+
 type stubFleetNarrator struct{}
 
 func (stubFleetNarrator) NarrateFleet(context.Context, reporting.FleetNarrativeInput) (reporting.FleetNarrative, error) {

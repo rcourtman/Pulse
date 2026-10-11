@@ -622,19 +622,63 @@ describe('docsLinks', () => {
     expect(apiReference).not.toContain('Mobile Remote Access');
   });
 
-  it('documents POST as the only report transport that uses Pulse Assistant', () => {
+  it('keeps report narration behind both POST and the token spending scope', () => {
     const handler = readFileSync(
       path.join(repoRoot, 'internal', 'api', 'metrics_reporting_handlers.go'),
       'utf8',
     );
-    expect(handler).toContain(
-      'if r.Method == http.MethodPost {\n\t\tnarrator, _, findings = h.resolveNarrator(r.Context())',
+    const single = handler
+      .split('func (h *ReportingHandlers) HandleGenerateReport(')[1]
+      .split('\nfunc ')[0];
+    const fleet = handler
+      .split('func (h *ReportingHandlers) generateMultiReportFromBody(')[1]
+      .split('\nfunc ')[0];
+    const caller = handler.split('func reportCallerMayUseAI(')[1].split('\nfunc ')[0];
+
+    // Whitespace is not the contract. Both permission checks and the separate
+    // deterministic paths are; behavioural Go tests exercise every caller.
+    expect(single).toMatch(
+      /case r\.Method == http\.MethodPost && reportCallerMayUseAI\(r\.Context\(\)\):\s*narrator, _, findings = h\.resolveNarrator\(r\.Context\(\)\)/,
     );
-    expect(handler).toContain('req.Narrator = getReportNarrator{}');
+    expect(single.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
+    expect(single).toMatch(
+      /case r\.Method == http\.MethodPost:\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = scopeLimitedReportNarrator\{\}/,
+    );
+    expect(single).toMatch(
+      /default:\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = getReportNarrator\{\}/,
+    );
+    expect(caller).toContain('internalauth.GetAPIToken(ctx).(*config.APITokenRecord)');
+    expect(caller).toMatch(/if !ok \|\| record == nil \{\s*return true/);
+    expect(caller).toContain('return record.HasScope(config.ScopeAIExecute)');
+    expect(fleet).toMatch(
+      /if reportCallerMayUseAI\(ctx\) \{\s*_, fleetNarrator, findings = h\.resolveNarrator\(ctx\)/,
+    );
+    expect(fleet.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
+    expect(fleet).toMatch(
+      /\} else \{\s*(?:\/\/[^\n]*\n\s*)*findings = h\.resolveExistingFindings\(ctx\)/,
+    );
+  });
+
+  it('ships report help that separates read permission from AI spending', () => {
     for (const guide of ['API.md', 'MSP.md']) {
       const rootDoc = readFileSync(path.join(repoRoot, 'docs', guide), 'utf8');
       expect(readFileSync(path.join(frontendRoot, 'public', 'docs', guide), 'utf8')).toBe(rootDoc);
       expect(rootDoc).toContain('`POST /api/admin/reports/generate` (');
+      const rendered = document.createElement('div');
+      rendered.innerHTML = renderDocMarkdown(rootDoc, guide.replace('.md', ''));
+      const text = rendered.textContent?.replace(/\s+/g, ' ');
+      expect(text).toContain('Report generation uses settings:read.');
+      expect(text).toContain(
+        'For single-resource and fleet PDF narration, an API token also needs ai:execute (or full access).',
+      );
+      expect(text).toContain(
+        'Without it, the report still succeeds with a deterministic summary and no AI provider call',
+      );
+      expect(text).toContain('a single-resource PDF also explains the missing scope.');
+      expect(text).toContain(
+        'Browser sessions and server-run schedules keep their existing narration behaviour.',
+      );
+      expect(text).toContain('AI budgets still apply. GET and CSV never use AI narration');
     }
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     expect(apiReference).toContain('it never calls an AI provider');
