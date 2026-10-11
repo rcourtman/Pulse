@@ -164,9 +164,17 @@ func (h *ReportingHandlers) requireCommercialFeature(ctx context.Context, featur
 	return service.RequireFeature(feature)
 }
 
+// resolveNarrator returns the AI narrators and findings provider for a
+// request. A caller that may not spend AI budget (see reportCallerMayUseAI)
+// gets no narrator and only the findings of an AI service that is already
+// running, and the resolver, which can construct a tenant AI service, is never
+// called. Every report path goes through here, so none can skip the check.
 func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
 	if h == nil || h.narratorResolver == nil {
 		return nil, nil, nil
+	}
+	if !reportCallerMayUseAI(ctx) {
+		return nil, nil, h.resolveExistingFindings(ctx)
 	}
 	return h.narratorResolver(ctx)
 }
@@ -743,14 +751,14 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	// from an AI service that is already running.
 	var narrator reporting.Narrator
 	var findings reporting.FindingsProvider
-	switch {
-	case r.Method == http.MethodPost && reportCallerMayUseAI(r.Context()):
+	if r.Method == http.MethodPost {
 		narrator, _, findings = h.resolveNarrator(r.Context())
 		req.Narrator = narrator
-	case r.Method == http.MethodPost:
-		findings = h.resolveExistingFindings(r.Context())
-		req.Narrator = scopeLimitedReportNarrator{}
-	default:
+		if !reportCallerMayUseAI(r.Context()) {
+			// resolveNarrator withheld the AI narrator; say why in the report.
+			req.Narrator = scopeLimitedReportNarrator{}
+		}
+	} else {
 		findings = h.resolveExistingFindings(r.Context())
 		req.Narrator = getReportNarrator{}
 	}
@@ -1225,14 +1233,7 @@ func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, bod
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 
-	var fleetNarrator reporting.FleetNarrator
-	var findings reporting.FindingsProvider
-	if reportCallerMayUseAI(ctx) {
-		_, fleetNarrator, findings = h.resolveNarrator(ctx)
-	} else {
-		// A nil fleet narrator falls back to the deterministic summary.
-		findings = h.resolveExistingFindings(ctx)
-	}
+	_, fleetNarrator, findings := h.resolveNarrator(ctx)
 	multiReq.FleetNarrator = fleetNarrator
 	multiReq.FindingsProvider = findings
 
