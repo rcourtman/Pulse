@@ -67,22 +67,22 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
           <div class="space-y-2">
             <For each={drawer.sourceSections()}>
               {(section) => {
-                const status = drawer.sourceStatus()[section.id];
-                // A silent source keeps the same section mounted. Age its
-                // original timestamp without renewing the reading or status.
-                const lastSeenText = () => formatRelativeTime(status?.lastSeen, { now: now() });
+                // Status can arrive independently of this retained payload
+                // section. Read it reactively; only age its original timestamp.
+                const status = () => drawer.sourceStatus()[section.id];
+                const lastSeenText = () => formatRelativeTime(status()?.lastSeen, { now: now() });
                 return (
                   <details class="rounded-md border border-border bg-surface p-3">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-base-content">
                       <span>{section.label}</span>
                       <span class="text-[11px] text-muted">
-                        {status?.status ?? 'unknown'}
+                        {status()?.status ?? 'unknown'}
                         {lastSeenText() ? ` • ${lastSeenText()}` : ''}
                       </span>
                     </summary>
-                    <Show when={status?.error}>
+                    <Show when={status()?.error}>
                       <div class="mt-2 text-[11px] text-amber-600 dark:text-amber-300">
-                        {status?.error}
+                        {status()?.error}
                       </div>
                     </Show>
                     <pre class="mt-3 max-h-[220px] overflow-auto rounded-md bg-surface p-3 text-[11px] text-base-content">

@@ -1568,7 +1568,7 @@ export const AgentsMachinesTable: Component<{
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
-                    const indicator = () => getStandaloneResourceStatusIndicator(machine);
+                    const indicator = () => getStandaloneResourceStatusIndicator(machine, now());
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const telemetryFallback = () =>
                       canRenderMetrics()

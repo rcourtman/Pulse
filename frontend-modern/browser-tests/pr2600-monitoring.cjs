@@ -156,14 +156,12 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
         if (surface === 'machines') {
           const row = page.locator('[data-agents-machine-row="fixture-agent"]');
           const dot = row.locator('span[title="online"]');
-          const posture = page.getByTestId('standalone-posture-summary');
+          // Machines no longer has a posture card. Compare with the production
+          // classification helper, not an obsolete UI from the old proposal.
+          const posture = page.getByTestId('fixture-posture-summary');
           await row.waitFor();
           await page.clock.runFor(20000); // Complete the ordinary initial canonical revalidation.
-          await page.waitForFunction(() =>
-            document
-              .querySelector('[data-testid="standalone-posture-summary"]')
-              ?.textContent.includes('reporting normally'),
-          );
+          assert.match(await posture.innerText(), /0 need attention/);
           assert.match(await dot.getAttribute('class'), /bg-emerald-500/);
           await row.evaluate((el) => {
             window.__originalRow = el;
@@ -176,7 +174,7 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
           await page.clock.runFor(220000); // The original report is exactly five minutes old.
           assert.match(await dot.getAttribute('class'), /bg-emerald-500/);
           await page.clock.runFor(30000);
-          assert.match(await posture.innerText(), /1 machine needs attention/);
+          assert.match(await posture.innerText(), /1 need attention/);
           const heldClass = await dot.getAttribute('class');
           assert.match(heldClass, binding.mode === 'parent' ? /bg-emerald-500/ : /bg-amber-500/);
           assert.equal(await page.evaluate(() => window.__pr2600.snapshot()), snapshot);
@@ -282,6 +280,12 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
     }
     result.completed = true;
   } finally {
+    if (currentPage) {
+      result.unfinishedPage = await currentPage
+        .locator('body')
+        .innerText()
+        .catch(() => 'unavailable');
+    }
     if (currentPage) await currentPage.close();
     if (browser) await browser.close();
     result.cleanup.browserClosed = true;

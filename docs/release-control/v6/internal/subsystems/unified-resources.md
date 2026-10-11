@@ -3144,6 +3144,29 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Retained Machines and Debug status (11 October 2026)
+
+The Machines row status reads the same existing shared clock as its posture
+summary. A held online agent becomes Stale only under the unchanged five-minute
+fallback; clock ticks neither renew its report nor set its canonical stale flag.
+The row retains identity and metric values, and an actual report or offline
+status still updates its presentation. Attention sorting classifies each input
+resource once per call, retains the priority/name order and never caches status
+across calls or mutates the input inventory.
+
+Debug source status, error and last-seen are reactive by section ID even when
+source payload sections stay mounted. New status records withdraw obsolete
+errors; absent/invalid timestamps do not acquire an age. Source payload,
+disclosure and focus survive status-only updates and quiet age ticks.
+
+Verification: the Machines table, standalone page-model and Debug relative-age
+tests cover the retained-row boundary, per-resource classification count and
+ordinary source-status replacement. `browser-tests/pr2600-monitoring.cjs`
+compares exact-parent and repaired production surfaces on desktop Chromium and
+touch-phone WebKit using synthetic local data. It establishes presentation,
+not a probe, guest thaw/writes/liveness/restoration, native collector recovery,
+whole-fleet CPU relief, publication or release availability.
+
 ### Interface-associated display addresses
 
 VM and LXC projections retain the collector's interface-associated IP order in

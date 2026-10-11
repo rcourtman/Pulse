@@ -4,6 +4,8 @@ import { createStore, reconcile } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { StandalonePageSurface } from '../src/features/standalone/StandalonePageSurface';
+import { buildStandalonePostureSummary } from '../src/features/standalone/standalonePageModel';
+import { useRelativeTimeNow } from '../src/utils/relativeTimeClock';
 import { ResourceDetailDrawerDebugTab } from '../src/components/Infrastructure/ResourceDetailDrawerDebugTab';
 import { useResourceDetailDrawerDerivedState } from '../src/components/Infrastructure/useResourceDetailDrawerDerivedState';
 import type { UseResourceDetailDrawerStateResult } from '../src/components/Infrastructure/useResourceDetailDrawerState';
@@ -91,6 +93,7 @@ function DebugFixture() {
   return <ResourceDetailDrawerDebugTab resource={debugResource} drawer={drawer} />;
 }
 function Fixture() {
+  const now = useRelativeTimeNow();
   const [mounted, setMounted] = createSignal(true);
   (window as any).__pr2600 = {
     snapshot: () => JSON.stringify({ machine: wsState.resources[0], debugResource }),
@@ -124,6 +127,12 @@ function Fixture() {
     <main class="mx-auto min-h-screen max-w-6xl space-y-3 bg-surface p-3 text-base-content">
       <h1 class="text-base font-semibold">Retained monitoring evidence</h1>
       <p class="text-xs text-muted">Synthetic local data. No collector or guest command is sent.</p>
+      <Show when={surface === 'machines'}>
+        <output data-testid="fixture-posture-summary" class="text-xs text-muted">
+          Classification control:{' '}
+          {buildStandalonePostureSummary(wsState.resources, now()).attention} need attention
+        </output>
+      </Show>
       <Show when={mounted()}>
         <Show when={surface === 'machines'} fallback={<DebugFixture />}>
           <StandalonePageSurface />

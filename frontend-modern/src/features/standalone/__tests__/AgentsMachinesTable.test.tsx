@@ -205,6 +205,9 @@ describe('AgentsMachinesTable', () => {
       expect(screen.getByTestId('agent-machine-cpu-bar')).toBe(cpu);
       expect(cpu).toHaveAttribute('data-usage', '24');
       expect(JSON.stringify(machines)).toBe(original);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
 
       setMounted(false);
       setMounted(true);
