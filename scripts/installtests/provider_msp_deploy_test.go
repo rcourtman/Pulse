@@ -854,7 +854,7 @@ derive_lease_signing_public_key() { printf 'synthetic-public-key'; }
 jq() { printf '{}'; }
 curl() { return 7; }
 docker() {
-  [[ "$*" == 'compose config --quiet' ]] || exit 81
+  [[ "$#" == 3 && "$1" == compose && "$2" == config && "$3" == --quiet ]] || exit 81
   [[ ! -v CP_PROVIDER_MSP_LICENSE_FILE ]] || exit 82
   printf 'same-compose-config\n'
 }
