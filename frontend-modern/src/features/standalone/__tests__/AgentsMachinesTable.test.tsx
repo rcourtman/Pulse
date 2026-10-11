@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
@@ -7,9 +7,10 @@ import { MonitoringAPI } from '@/api/monitoring';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
+import { RELATIVE_TIME_TICK_MS, useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
+import { buildStandalonePostureSummary } from '../standalonePageModel';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
@@ -161,6 +162,70 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('keeps the retained row status in agreement with posture across the five-minute clock boundary', () => {
+    const start = Date.parse('2026-10-11T17:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    try {
+      const [machines, setMachines] = createStore([
+        resource({ id: 'silent', lastSeen: start, cpu: { current: 24 }, agent: { stale: false } }),
+      ]);
+      const original = JSON.stringify(machines);
+      const [mounted, setMounted] = createSignal(true);
+      const view = render(() => {
+        const now = useRelativeTimeNow();
+        return (
+          <>
+            <output data-testid="posture-attention">
+              {buildStandalonePostureSummary(machines, now()).attention}
+            </output>
+            <Show when={mounted()}>
+              <AgentsMachinesTable
+                resources={machines}
+                emptyIcon={emptyIcon}
+                emptyTitle="No machines"
+                emptyDescription="Install Pulse Agent."
+              />
+            </Show>
+          </>
+        );
+      });
+      const dot = () =>
+        view.container.querySelector('[data-agents-machine-row] span[title="online"]')!;
+      const row = view.container.querySelector('[data-agents-machine-row]');
+      const cpu = screen.getByTestId('agent-machine-cpu-bar');
+      expect(dot()).toHaveClass('bg-emerald-500');
+      vi.advanceTimersByTime(5 * 60_000);
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('1');
+      expect(dot()).toHaveClass('bg-amber-500');
+      expect(view.container.querySelector('[data-agents-machine-row]')).toBe(row);
+      expect(screen.getByTestId('agent-machine-cpu-bar')).toBe(cpu);
+      expect(cpu).toHaveAttribute('data-usage', '24');
+      expect(JSON.stringify(machines)).toBe(original);
+      expect(deleteAgentMock).not.toHaveBeenCalled();
+      expect(deleteAgentMetadataMock).not.toHaveBeenCalled();
+      expect(getAllAgentMetadataMock).toHaveBeenCalledTimes(1);
+
+      setMounted(false);
+      setMounted(true);
+      expect(dot()).toHaveClass('bg-amber-500');
+      setMachines(0, 'lastSeen', Date.now());
+      expect(dot()).toHaveClass('bg-emerald-500');
+      expect(screen.getByTestId('posture-attention')).toHaveTextContent('0');
+      setMachines(0, 'status', 'offline');
+      expect(
+        view.container.querySelector('[data-agents-machine-row] span[title="offline"]'),
+      ).toHaveClass('bg-red-500');
+      expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps disk and last-seen telemetry in the phone column set', () => {
     const { container } = render(() => (
       <AgentsMachinesTable

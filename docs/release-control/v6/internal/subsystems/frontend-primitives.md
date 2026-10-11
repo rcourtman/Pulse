@@ -4536,6 +4536,23 @@ resolves late` in
 
 ## Current State
 
+### Retained monitoring status remains reactive (11 October 2026)
+
+The existing Machines status dot subscribes to the shared relative-time clock
+for the unchanged five-minute agent-report fallback, agreeing with the
+standalone classification helper without a new report, row timer or API read.
+Attention sort classifies once per resource per call, preserving priority and
+numeric-name ordering without keeping a cross-call status cache. Debug source
+summaries read current status/error/last-seen by section ID, not a record captured
+when a retained payload section first mounted. Disclosure, focus and payload
+remain owned by that section.
+
+The Machines, standalone model and Debug relative-age regression controls,
+plus `browser-tests/pr2600-monitoring.cjs` on desktop and touch-phone engines,
+cover clock-only staleness and arriving status replacement. These are
+synthetic source/presentation checks, not collector, workload recovery,
+whole-fleet performance, installed or release acceptance.
+
 ### Manual update freshness
 
 The update panel has a dedicated proof route to `updatesPresentation.test.ts`,
