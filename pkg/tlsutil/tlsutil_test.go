@@ -13,6 +13,55 @@ import (
 	"time"
 )
 
+func TestCreateHTTPClientRedirectAuthorityValidation(t *testing.T) {
+	for _, mode := range []struct {
+		name        string
+		verify      bool
+		fingerprint string
+	}{
+		{"ca", true, ""},
+		{"pin", true, strings.Repeat("a", 64)},
+		{"explicit-opt-out", false, ""},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			client := CreateHTTPClient(mode.verify, mode.fingerprint)
+			if client.CheckRedirect == nil {
+				t.Fatal("infrastructure client uses the unrestricted default redirect policy")
+			}
+			for _, pair := range []struct {
+				name, original, target string
+				allowed                bool
+			}{
+				{"default-port", "https://pve.test", "https://PVE.test:0443/path", true},
+				{"ipv6", "https://[::1]:443", "https://[0:0:0:0:0:0:0:1]/path", true},
+				{"zone", "https://[fe80::1%25eth0]", "https://[fe80::1%25eth0]/path", true},
+				{"zone-case", "https://[fe80::1%25eth0]", "https://[fe80::1%25ETH0]/path", false},
+				{"empty-port", "https://pve.test", "https://pve.test:/path", false},
+				{"zero-port", "https://pve.test", "https://pve.test:0/path", false},
+				{"port-overflow", "https://pve.test", "https://pve.test:65536/path", false},
+			} {
+				t.Run(pair.name, func(t *testing.T) {
+					original, err := url.Parse(pair.original)
+					if err != nil {
+						t.Fatal(err)
+					}
+					target, err := url.Parse(pair.target)
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = client.CheckRedirect(&http.Request{URL: target}, []*http.Request{{URL: original}})
+					if (err == nil) != pair.allowed {
+						t.Fatalf("origin comparison allowed=%t: %v", pair.allowed, err)
+					}
+				})
+			}
+			if client.CheckRedirect(nil, nil) == nil || client.CheckRedirect(&http.Request{}, []*http.Request{nil}) == nil {
+				t.Fatal("missing origin evidence admitted a redirect")
+			}
+		})
+	}
+}
+
 func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 	// Fingerprint with colons
 	fp1 := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
