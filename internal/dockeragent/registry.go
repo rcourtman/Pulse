@@ -130,9 +130,11 @@ type ImageUpdateResult struct {
 
 func isPulseManagedImageReference(image string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(image))
+	if host, rest, explicit := strings.Cut(normalized, "/"); explicit && isDockerHubRegistry(host) {
+		normalized = rest
+	}
 	for _, repository := range []string{
 		"rcourtman/pulse",
-		"docker.io/rcourtman/pulse",
 		"license.pulserelay.pro/pulse-pro",
 		"registry.pulserelay.pro/pulse/pulse-pro",
 	} {
@@ -141,6 +143,17 @@ func isPulseManagedImageReference(image string) bool {
 			strings.HasPrefix(normalized, repository+"@") {
 			return true
 		}
+	}
+	return false
+}
+
+// Hub reference and credential aliases name the same registry, but manifests
+// and pull tokens must use the v2 API rather than Docker Hub's web/index hosts.
+// A port or a lookalike domain is a distinct registry and must not be rewritten.
+func isDockerHubRegistry(host string) bool {
+	switch strings.ToLower(host) {
+	case "docker.io", "index.docker.io", "registry.docker.io", "registry-1.docker.io":
+		return true
 	}
 	return false
 }
@@ -949,6 +962,15 @@ func parseImageReference(image string) (registry, repository, tag string) {
 	} else {
 		// Docker Hub with namespace (e.g., "myrepo/myapp")
 		repository = image
+	}
+
+	if isDockerHubRegistry(registry) {
+		registry = "registry-1.docker.io"
+		// Explicit official-image references need the same library namespace
+		// as their short form; never add it to a custom registry's repository.
+		if !strings.Contains(repository, "/") {
+			repository = "library/" + repository
+		}
 	}
 
 	return registry, repository, tag
