@@ -17,6 +17,19 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 type AlertHistoryAlert = ReturnType<AlertHistoryState['groupedAlerts']>[number]['alerts'][number];
 
+// Below an 80rem card the cells that say which resource and what happened wrap
+// instead of ending in an ellipsis after one line. Message then holds two lines,
+// so its length never changes the row's height: the windowing hook sizes its
+// spacers from one measured row, and rows of mixed heights make a long history
+// jump as it scrolls. From an 80rem card the message track is wide enough for
+// one line, so both cells return to a one-line clamp, the single-line row the
+// other platform tables keep. Text past its lines ends in an ellipsis and keeps
+// its title.
+const ALERT_HISTORY_MESSAGE_TEXT_CLASS =
+  'line-clamp-2 min-h-[2lh] @min-[80rem]:line-clamp-1 @min-[80rem]:min-h-0 whitespace-normal wrap-break-word text-base-content';
+const ALERT_HISTORY_RESOURCE_TEXT_CLASS =
+  'line-clamp-2 @min-[80rem]:line-clamp-1 whitespace-normal wrap-break-word text-base-content';
+
 interface AlertHistoryTableAlertRowProps {
   alert: AlertHistoryAlert;
   state: AlertHistoryState;
@@ -42,11 +55,18 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           {props.state.formatAlertRowTime(props.alert.startTime)}
         </TableCell>
 
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('name')} max-w-[150px] truncate font-medium text-base-content`}
-          title={props.alert.resourceName}
-        >
-          {props.alert.resourceName}
+        {/* The row has no disclosure of its own, so the two cells that say
+            which resource and what happened wrap instead of ending in an
+            ellipsis; the title still carries the full text. The wrapper opts
+            back into wrapping because `.table-fixed td` forces nowrap. */}
+        <TableCell class={`${getPlatformTableCellClassForKind('name')} font-medium`}>
+          <div
+            class={ALERT_HISTORY_RESOURCE_TEXT_CLASS}
+            data-alert-history-cell="resource"
+            title={props.alert.resourceName}
+          >
+            {props.alert.resourceName}
+          </div>
         </TableCell>
 
         <TableCell
@@ -66,11 +86,14 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           </span>
         </TableCell>
 
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} max-w-[300px] truncate text-base-content`}
-          title={descriptionCopy().title}
-        >
-          {descriptionCopy().text}
+        <TableCell class={getPlatformTableCellClassForKind('text')}>
+          <div
+            class={ALERT_HISTORY_MESSAGE_TEXT_CLASS}
+            data-alert-history-cell="message"
+            title={descriptionCopy().title}
+          >
+            {descriptionCopy().text}
+          </div>
         </TableCell>
 
         <TableCell

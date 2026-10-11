@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "168e82d24c9a6e4ab8e9857b365e2182ef588e9c",
+  "verified_at": "2026-10-11T08:37:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "3a3c38b52c7940d75a7ab12617418baf93b7e599035459fb712c583dac332701",
+    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx": "f24d5cf38babd8990672f0fe716999b8eea43c1a07625cde3b6271d0efdd3fa0",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "mock estate of 8 nodes, 3 Docker/K8s hosts and about 90 history rows, 12-hour locale, final built bytes, headless Chromium with Liberation Sans forced (wider than most system fonts), measured at 1024, 1180, 1280, 1366, 1440, 1500, 1700, 1770 and 2000px windows (cards of 600 to 1492px) against an unpatched build of the same tree: messages ending in an ellipsis 82 of 88 -> 24 of 90 at 1024, 54 -> 17 at 1280, 24 -> 8 at 1440, 32 -> 4 at 1700, 9 -> 7 at 2000; median row 75px -> 49px from 1280 to 1700 with median equal to max (uniform rows); wide cards keep their 39px single-line row; no clipped time cell or header at any of the nine widths",
+    "1024px window with the rail open (600px card): Message 142px and wrapped, three actions still stacked so rows stay 75 to 105px, no clipped header",
+    "768px window: table renders with Time, Resource, Severity, Message, Status and Actions, no horizontal scroll, Timeline and Resource panels open and close",
+    "390px phone: the card list renders as before, no horizontal overflow, no page errors",
+    "600-row mocked history (windowing active, 139 rows mounted) scrolled in 60px wheel steps tracking one row: uniform 49px rows gave 0 jumps over 3px in 414 comparisons; the same page with the message minimum height stripped (rows of 39px and 49px) gave 46 jumps up to 20px",
+    "the in-app browser with system fonts was used for the unpatched table at 1024px (Message 109px, 105px rows) and an earlier patched build, not the final bytes"
+  ],
+  "interactions": [
+    "clicked Timeline on a row (one extra panel row appeared, button read Hide), clicked again (panel row removed), clicked Resource (panel row appeared) at 1440 and 768, identical to the unpatched build",
+    "focused the Timeline button with element.focus() and confirmed it is focusable and keeps focus (no key presses were sent)",
+    "read each message cell title against its text on 20 rows",
+    "put the base file back for the row markup, the section header, the width blocks and the 50rem switch point in turn and confirmed the matching proof fails each time, then restored byte-equal"
+  ]
+}

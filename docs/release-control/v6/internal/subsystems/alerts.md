@@ -1506,13 +1506,42 @@ Info option whose count and filtered rows use the same predicate as every
 other severity.
 
 The desktop alert history table sizes each column for its content instead of
-giving all visible columns an equal share. Timestamp, severity, duration,
-status, type and node get what their content needs (status fits
-"acknowledged"), Resource and Node keep at least their old share, the two row
-actions stay within two lines (one line from an 80rem card), and Message, the
-column that says what happened, takes the rest. Equal shares held Message to
-the same 100-160px as the timestamp, so at most a fifth of messages read in
-full at any width; from a 960px viewport a third to four fifths now do.
+giving all visible columns an equal share. Each density is sized for the
+narrowest card it serves (600px, 800px, 1024px and 1280px): Time (the column
+header; the cell is the row's clock time, `08:27 AM` in a 12-hour locale),
+severity, duration, status ("acknowledged" needs 119px with its cell padding),
+the Resource header, the type badge and node (from 1024px) and the three row
+actions on one line (177px) get the pixels their content and header need at
+that width, and Message, the column that says what happened, takes the rest
+and never falls under 18% of the card; `App.architecture.test.ts` holds those
+minimums and the 50rem, 64rem and 80rem switch points. From an 800px card the
+three actions share one line; below it they stack, which makes those rows
+taller, and rows there still differ by how many action buttons they stack.
+Below an 80rem card, Resource and Message cells wrap inside a `line-clamp-2`
+wrapper (`data-alert-history-cell`) instead of ending in an ellipsis after one
+line, so more of what happened reads without hover. A message or name longer
+than its two lines still ends in an ellipsis with the full text on its title;
+the table does not claim to expose every value without hover. The wrapper sets
+`whitespace-normal` itself because `.table-fixed td` forces nowrap. Message
+also keeps a two-line minimum height (`min-h-[2lh]`) so a message's length
+never changes its row's height: the shared windowing hook sizes its spacers
+from a single measured row. Scrolling a 600-row history in 60px wheel steps
+(414 tracked comparisons) moved a tracked row by exactly the scroll distance
+with uniform 49px rows, while the same history with the minimum removed (rows
+of 39px and 49px) showed 46 steps where the row jumped by up to 20px. From an
+80rem card both cells return to a one-line clamp, the single 39px row that
+card already had (`@min-[80rem]:line-clamp-1`, minimum height released).
+Measured on the mock estate in a real browser (the estate regenerates on
+every run, so the row count differs: 88 before, 90 after), messages that ended
+in an ellipsis fell from 82 of 88 rows to 24 of 90 at a 1024px window with the
+rail open (a 600px card), from 54 of 88 to 17 of 90 at 1280px, from 24 to 8 at
+1440px and from 32 to 4 at 1700px, and the median row from 75px to 49px at
+every window from 1280px to 1700px; at 2000px, where the cells keep a
+one-line clamp as before, 9 of 88 became 7 of 90. No time cell or header
+ended in an ellipsis at nine windows from 1024px to 2000px in a 12-hour
+locale. Cards narrower than 600px, which a window of about 900px with
+the rail open produces, are still cramped; a container-driven switch to the
+card list is the remaining fix.
 
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives

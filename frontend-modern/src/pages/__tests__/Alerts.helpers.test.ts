@@ -532,6 +532,27 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toContain('alert-history-timestamp-column');
     expect(alertHistoryTableSectionSource).toContain('alert-history-full-detail-column');
     expect(alertHistoryTableAlertRowSource).toContain('alert-history-timestamp-column');
+    // The time column is headed "Time", as on the phone card, because
+    // "Timestamp" needed 93px and ended in an ellipsis in the time track.
+    expect(alertHistoryTableSectionSource).toMatch(/>\s*Time\s*<\/TableHead>/);
+    expect(alertHistoryTableSectionSource).not.toMatch(/>\s*Timestamp\s*<\/TableHead>/);
+    // A history row has no disclosure, so the cells that say which resource and
+    // what happened wrap instead of truncating. Only the node cell may still end
+    // in an ellipsis, and a cell-level max-width would cap a track the CSS sized.
+    expect(alertHistoryTableAlertRowSource).toContain('ALERT_HISTORY_MESSAGE_TEXT_CLASS');
+    expect(alertHistoryTableAlertRowSource).toContain('ALERT_HISTORY_RESOURCE_TEXT_CLASS');
+    // Message holds two lines on every row so the windowing hook's single
+    // measured row height stays true as a long history scrolls.
+    expect(alertHistoryTableAlertRowSource).toMatch(
+      /ALERT_HISTORY_MESSAGE_TEXT_CLASS =\s*'line-clamp-2 min-h-\[2lh\] @min-\[80rem\]:line-clamp-1 @min-\[80rem\]:min-h-0 whitespace-normal wrap-break-word /,
+    );
+    expect(alertHistoryTableAlertRowSource).toMatch(
+      /ALERT_HISTORY_RESOURCE_TEXT_CLASS =\s*'line-clamp-2 @min-\[80rem\]:line-clamp-1 whitespace-normal wrap-break-word /,
+    );
+    expect(alertHistoryTableAlertRowSource).not.toMatch(/max-w-\[\d+px\]/);
+    expect(alertHistoryTableAlertRowSource).not.toMatch(
+      /ALERT_HISTORY_(?:MESSAGE|RESOURCE)_TEXT_CLASS =\s*'[^']*\btruncate\b/,
+    );
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded-sm border border-border',
     );
