@@ -9533,3 +9533,13 @@ isolation, diagnostic throttles and command ceilings are unchanged.
 and buffered primary paths, record/instance guidance, secret/body non-disclosure
 and same-credential recovery. These synthetic HTTP controls do not establish an
 installed host's cause or reporting recovery.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Agent diagnostics may not expose other organizations' API-token records to a narrow token caller. The diagnostics token list uses the existing caller-management authority; no agent reporting, install, command or credential scope is broadened. Session callers retain their existing diagnostic authority.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.

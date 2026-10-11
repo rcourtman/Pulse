@@ -989,7 +989,7 @@ apply. GET and CSV never use AI narration.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default fleet report title.
-  - Fleet PDF narration follows the same `ai:execute` rule for API tokens; without it, the report uses the deterministic summary. CSV output is never narrated.
+  - AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used. CSV output is never narrated.
 - `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
   - Query params: `format` (`csv` only; optional and defaults to `csv`)
   - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.

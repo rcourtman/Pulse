@@ -6811,3 +6811,13 @@ reads the structure view (see "Mock-mode metrics-target lookups ride the
 fixture structure revision" in the monitoring contract). Real mode, its stores,
 backups, retention, snapshots, migrations and recovery paths are unchanged, and
 none is added or moved.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Diagnostics output filters API-token inventory by the existing caller-management authority without changing token persistence, recovery, rotation or lifecycle. A narrow token receives only manageable records, not another organization's credential inventory; session diagnostic authority is unchanged.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.

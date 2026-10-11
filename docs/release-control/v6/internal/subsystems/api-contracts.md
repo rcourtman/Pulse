@@ -12146,3 +12146,13 @@ unchanged. The mounted Settings test holds source/target identities fixed and
 checks one initial list call while the expiry is crossed.
 An expired loaded check reads Stale rather than Online in an amber badge;
 intentional pause and the dedicated stopped-probe label still take precedence.
+
+
+### Upstream diagnostics visibility composition (11 October 2026)
+
+Diagnostics token listings follow the same caller authority as token administration: API-token callers see only records they may manage in their organizations, and sessions retain their existing authority. The diagnostic endpoint does not elevate a narrow monitoring credential into an instance-wide token inventory. Single and fleet PDF narration use the shared ai:execute gate; report permission alone yields deterministic output, and CSV never invokes narration.
+
+The accepted upstream `diagnostics_token_visibility_test.go` controls and API
+reference route checks cover caller filtering and the documented authority.
+Final-source checks must retain this upstream behavior beside the reviewed
+reporting/help repairs; source proof is not installed credential recovery.
