@@ -975,11 +975,13 @@ delivery for all resources.
   - Body fields: `format` (pdf/csv, default `pdf`), `resourceType`, `resourceId`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default title for that resource report.
   - When Pulse Assistant is configured, the configured AI provider narrates a PDF's executive summary; each narration counts against the AI budget and appears in AI usage. If the call fails, times out or the budget is spent, the PDF falls back to the deterministic summary. CSV output is never narrated. The settings UI uses this method.
+  - API-token callers also need the `ai:execute` scope for AI narration. With only `settings:read` the report is still produced, with the deterministic summary and a note saying why.
 - `GET /api/admin/reports/generate` (admin, `settings:read`)
   - Takes the same fields as query params and returns the same report, except that it never calls an AI provider: a PDF carries the deterministic summary and a note saying AI narration needs `POST`. Other methods return `405` with `Allow: GET, POST`.
 - `POST /api/admin/reports/generate-multi` (admin, `settings:read`)
   - Body fields: `resources` (1-50 entries of `{resourceType,resourceId}`), `format`, `metricType` (optional), `start`/`end` (RFC3339, optional; defaults to last 24h), `title` (optional)
   - If `title` is omitted, the backend applies the canonical default fleet report title.
+  - AI narration of the fleet summary follows the same rule as single reports: API-token callers need `ai:execute`, otherwise the deterministic summary is used.
 - `GET /api/admin/reports/inventory/vms/export` (admin, `settings:read`)
   - Query params: `format` (`csv` only; optional and defaults to `csv`)
   - Exports the current fleet-wide VM inventory as spreadsheet-friendly CSV using the canonical runtime model.
@@ -1079,6 +1081,13 @@ Returns authentication status, proxy auth state, and security posture flags.
 ```
 In Docker installs, the response includes a restart notice.
 
+API-token callers manage only the tokens in their own organizations: every
+organization a target token is bound to must be one the caller is bound to.
+Tokens from other organizations are left out of the list and answer `404` on
+read, edit, delete and rotate. Only an instance-wide token (full access, bound
+only to the default organization) can create, edit, rotate or delete another
+instance-wide token. Browser sessions are not limited this way.
+
 ### List API Tokens
 `GET /api/security/tokens`
 
@@ -1102,6 +1111,14 @@ API-token callers that change scopes must already hold every existing scope on
 the target token and every scope they request. The update takes effect on the
 token's next request without changing its ID, secret, expiry, or organization
 bindings.
+
+### Rotate API Token
+`POST /api/security/tokens/<id>/rotate`
+
+Replaces one token with a new one and returns `{ "token": "raw-token", "record": { ... } }`
+(the raw token is shown once). The new token keeps the old one's name, scopes,
+organization bindings, metadata and expiry, and the old token stops working.
+API-token callers must hold every scope on the target token.
 
 ### Revoke Token
 `DELETE /api/security/tokens/<id>`
@@ -1205,6 +1222,9 @@ Returns `204 No Content` on success.
 `POST /api/security/quick-setup`
 
 Requires a valid bootstrap token (header `X-Setup-Token`) or an authenticated session.
+When authentication is already configured, a request that would change credentials
+(`force: true`) from an API token needs an instance-wide full-access token; any
+other token gets `403`.
 
 ```json
 {
@@ -1778,8 +1798,8 @@ Serves the PowerShell installer for Windows.
 `GET /api/agents/agent/lookup?hostname=<hostname>`  
 Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 
-`POST /api/agents/agent/uninstall`  
-Agent self-unregister during uninstall. Requires `agent:report`.
+`POST /api/agents/agent/uninstall` (`agent:report` token, or an admin session)  
+Agent self-unregister during uninstall: a token holding `agent:report` removes the agent that token owns. Without a token, only an admin session can remove an agent this way.
 
 `POST /api/agents/agent/unlink` (admin, `settings:write`)  
 Unlinks an agent from a node.
