@@ -203,6 +203,13 @@ func (r *Router) createAPITokenRecord(
 	if record.OrgID == "" {
 		record.OrgID = "default"
 	}
+	// A full-access token in the default organization is instance-wide. A
+	// caller that is not itself instance-wide must not mint one, even if it
+	// holds every scope, because it would escape its own organization binding.
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil &&
+		tokenHasInstanceWideAuthority(record) && !tokenHasInstanceWideAuthority(callerToken) {
+		return "", nil, fmt.Errorf("Cannot grant scope %q in the default organization: your token is not an instance-wide full-access token", config.ScopeWildcard)
+	}
 	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 	if err := mergeAPITokenMetadata(record, metadata); err != nil {
 		return "", nil, err
@@ -242,6 +249,53 @@ func (r *Router) createAPITokenRecord(
 }
 
 // handleListAPITokens returns all configured API tokens (metadata only).
+// tokenOrgSet returns the organizations a token is bound to. OrgIDs takes
+// precedence over OrgID, and an unbound token belongs to the default org.
+func tokenOrgSet(record *config.APITokenRecord) []string {
+	bound := record.GetBoundOrgs()
+	if len(bound) == 0 {
+		return []string{"default"}
+	}
+	orgs := make([]string, 0, len(bound))
+	for _, orgID := range bound {
+		orgID = strings.TrimSpace(orgID)
+		if orgID == "" {
+			orgID = "default"
+		}
+		orgs = append(orgs, orgID)
+	}
+	return orgs
+}
+
+// callerTokenMayManage reports whether an API-token caller may see or change
+// a token. The token inventory is global, so a caller bound to one
+// organization must not reach another organization's credentials. Instance-wide
+// full-access tokens keep managing every token, and callers that are not
+// tokens (browser sessions) are unaffected.
+func callerTokenMayManage(caller, target *config.APITokenRecord) bool {
+	if caller == nil || tokenHasInstanceWideAuthority(caller) {
+		return true
+	}
+	// An instance-wide token is the most powerful credential, and rotating it
+	// returns its raw value. A caller holding full-access scope passes the
+	// scope containment checks, so unless it is itself instance-wide it must
+	// not touch one, even when its organizations are a superset of the
+	// target's. Callers without full access are refused by those checks.
+	if caller.HasScope(config.ScopeWildcard) && tokenHasInstanceWideAuthority(target) {
+		return false
+	}
+	allowed := make(map[string]struct{})
+	for _, orgID := range tokenOrgSet(caller) {
+		allowed[orgID] = struct{}{}
+	}
+	for _, orgID := range tokenOrgSet(target) {
+		if _, ok := allowed[orgID]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -251,9 +305,13 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
 
+	callerToken := getAPITokenRecordFromRequest(req)
 	tokens := make([]apiTokenDTO, 0, len(r.config.APITokens))
-	for _, record := range r.config.APITokens {
-		tokens = append(tokens, toAPITokenDTO(record))
+	for idx := range r.config.APITokens {
+		if !callerTokenMayManage(callerToken, &r.config.APITokens[idx]) {
+			continue
+		}
+		tokens = append(tokens, toAPITokenDTO(r.config.APITokens[idx]))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -278,8 +336,10 @@ func (r *Router) handleGetAPIToken(w http.ResponseWriter, req *http.Request) {
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
 
-	for _, record := range r.config.APITokens {
-		if record.ID != tokenID {
+	callerToken := getAPITokenRecordFromRequest(req)
+	for idx := range r.config.APITokens {
+		record := r.config.APITokens[idx]
+		if record.ID != tokenID || !callerTokenMayManage(callerToken, &r.config.APITokens[idx]) {
 			continue
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -444,6 +504,12 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	if !callerTokenMayManage(getAPITokenRecordFromRequest(req), &r.config.APITokens[tokenIndex]) {
+		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
+		http.Error(w, "Token not found", http.StatusNotFound)
+		return
+	}
+
 	storedRecord := r.config.APITokens[tokenIndex]
 	oldRecord := storedRecord.Clone()
 
@@ -469,6 +535,16 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 					http.Error(w, fmt.Sprintf("Cannot grant scope %q: your token does not have this scope", scope), http.StatusForbidden)
 					return
 				}
+			}
+			// Widening a default-organization token to full access makes it
+			// instance-wide, which only an instance-wide caller may create.
+			promoted := oldRecord.Clone()
+			promoted.Scopes = append([]string(nil), scopes...)
+			if tokenHasInstanceWideAuthority(&promoted) && !tokenHasInstanceWideAuthority(callerToken) {
+				r.auditTokenEvent(req, "token_updated", false,
+					fmt.Sprintf("Scope update denied: caller cannot make token id=%s instance-wide", tokenID))
+				http.Error(w, fmt.Sprintf("Cannot grant scope %q in the default organization: your token is not an instance-wide full-access token", config.ScopeWildcard), http.StatusForbidden)
+				return
 			}
 		}
 	}
@@ -603,6 +679,15 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	// limited-scope token from deleting a broader token and forcing rotation or
 	// lockout on a more privileged credential.
 	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		if !callerTokenMayManage(callerToken, removed) {
+			// Put the record back before returning so the in-memory config is unchanged.
+			r.config.APITokens = append(r.config.APITokens, *removed)
+			r.config.SortAPITokens()
+			r.auditTokenEvent(req, "token_deleted", false,
+				fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
+			http.Error(w, "Token not found", http.StatusNotFound)
+			return
+		}
 		for _, targetScope := range removed.Scopes {
 			if !callerToken.HasScope(targetScope) {
 				// Put the record back before returning so the in-memory config is unchanged.
@@ -681,7 +766,16 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Scope escalation prevention: if the caller is an API token, they can only
 	// rotate tokens whose scopes are a subset of their own. This prevents a
 	// limited-scope token from rotating a wildcard token to obtain its raw value.
+	// The same applies to organizations: a caller bound to one organization
+	// must not rotate, and so obtain the raw value of, another organization's
+	// token.
 	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		if !callerTokenMayManage(callerToken, &oldRecord) {
+			r.auditTokenEvent(req, "token_rotated", false,
+				fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
+			http.Error(w, "Token not found", http.StatusNotFound)
+			return
+		}
 		for _, targetScope := range oldRecord.Scopes {
 			if !callerToken.HasScope(targetScope) {
 				r.auditTokenEvent(req, "token_rotated", false,
