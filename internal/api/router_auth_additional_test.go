@@ -17,6 +17,17 @@ import (
 
 func newAuthRouter(t *testing.T) *Router {
 	t.Helper()
+	dir := t.TempDir()
+	// Basic authentication creates both a session and its CSRF token. Bare
+	// handler fixtures must own that setup instead of relying on a previous
+	// router test to have initialized the process-wide stores.
+	InitSessionStore(dir)
+	InitCSRFStore(dir)
+	t.Cleanup(func() {
+		resetSessionStoreForTests()
+		resetCSRFStoreForTests()
+		resetSessionTracking()
+	})
 	hashed, err := auth.HashPassword("currentpassword")
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
@@ -25,7 +36,7 @@ func newAuthRouter(t *testing.T) *Router {
 		config: &config.Config{
 			AuthUser:   "admin",
 			AuthPass:   hashed,
-			ConfigPath: t.TempDir(),
+			ConfigPath: dir,
 		},
 	}
 }
