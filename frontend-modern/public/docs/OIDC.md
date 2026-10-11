@@ -154,7 +154,7 @@ service as a substitute for verified revocation.
 
 ### Microsoft Entra ID (formerly Azure AD)
 
-Create the provider in Pulse first (**Settings → Security → Single Sign-On → Add Provider**) so it gets its ID — Pulse generates a UUID per provider and shows the resulting callback URL. You need that URL for the Entra redirect URI below.
+Create the provider in Pulse first (**Settings → Security → Single Sign-On → Add OIDC**) so it gets its ID — Pulse generates a UUID per provider and shows the resulting callback URL. You need that URL for the Entra redirect URI below.
 
 **In the Entra admin center:**
 
@@ -170,7 +170,7 @@ Create the provider in Pulse first (**Settings → Security → Single Sign-On �
 - **Issuer URL**: `https://login.microsoftonline.com/<tenant-id>/v2.0`
 - **Client ID**: the app registration's *Application (client) ID*.
 - **Client Secret**: the secret value from step 3.
-- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback`, matching the app registration exactly. The bare `/api/oidc/callback` is a v5 compatibility path that only serves the legacy env-configured provider — don't use it for a new provider.
+- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback`, matching the app registration exactly. The bare `/api/oidc/callback` is a v5 compatibility path. It is mapped to the legacy (v5-migrated or env-configured) provider; if that provider is not enabled, Pulse instead serves the provider whose login started from it (recovered from the pending login state). Don't use it as the redirect URI for a new provider.
 - **Scopes**: exactly `openid profile email`. Do **not** add `groups`. Entra has no `groups` scope and fails the whole authorization request with `AADSTS650053`; group membership arrives in the ID token from the Token configuration step, not from a scope.
 - **Groups Claim**: `groups`
 - **Allowed Groups**: the group's Object ID (GUID), not its display name.
@@ -187,7 +187,7 @@ Create the provider in Pulse first (**Settings → Security → Single Sign-On �
 | **`invalid_id_token`** | Compare the configured issuer with the IdP issuer locally; use the existing redacted error, not a token dump or newly enabled Debug logs. |
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
 | **Redirect Loop** | Check `X-Forwarded-Proto` header (must be `https`) and cookie settings. |
-| **Self-Signed Certs** | Set the **CA Bundle** field on the SSO provider to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). The field is stored on the provider record as `oidc.caBundle`; there is no `OIDC_CA_BUNDLE` env var. |
+| **Self-Signed Certs** | The SSO provider form in Settings has no CA Bundle field. Set `oidc.caBundle` on the provider through the SSO provider API (`/api/security/sso/providers`) to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). For a provider configured with the legacy `OIDC_ENABLED` environment variables, set `OIDC_CA_BUNDLE` instead (see [Configuration](CONFIGURATION.md)). |
 
 ### Safe diagnosis
 

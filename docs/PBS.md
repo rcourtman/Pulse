@@ -79,8 +79,9 @@ Use this only when you also need host-local telemetry. The Linux agent normally
 runs as root; it is not required to fix API authentication or missing backup
 permissions. Review [Agent Security](AGENT_SECURITY.md) first.
 
-Create a separate Pulse token in **API Access**, using the **Agent host** preset
-for reporting, configuration reads and agent management. This is a **Pulse**
+Create a separate Pulse token in **API Access**, using the **Agent** preset
+for reporting and configuration reads; it does not include agent lifecycle
+management (`agent:manage`). This is a **Pulse**
 token, not the **PBS** token used above. Do not enable command execution just
 for monitoring.
 

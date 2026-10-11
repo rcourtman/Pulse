@@ -86,7 +86,7 @@ These fields and behaviors are stable; ticket-routing integrations can rely on t
 **Events.** `{{.Event}}` is `"alert"` or `"resolved"` — there is no separate
 "info" event class. A resolved event closes an alert occurrence, not necessarily
 a recovered condition; see [non-recovery closes](#resolved-does-not-always-mean-recovered).
-Resolved delivery depends on **Notify on resolve** and a
+Resolved delivery depends on **Recovery notifications** (Alerts → Schedule, set to Enabled) and a
 successful firing-delivery receipt for that occurrence and destination. Do not
 assume that every configured webhook receives both events.
 
@@ -297,7 +297,7 @@ Keep ticket correlation separate from suppressing repeated processing:
   fractional seconds as below. Do not assume the shorter string is universally
   unique. A test or legacy payload can lack member identity; keep incomplete or
   ambiguous events for reconciliation rather than silently treating them as
-  duplicates. **Send test** alone does not validate this lifecycle.
+  duplicates. **Test** alone does not validate this lifecycle.
 - Commit receiver state and the ticket action atomically, or use your ticket
   system's durable idempotent operation. Do not mark an event processed before
   its action succeeds. Exact signed-byte replays can be rejected separately,
@@ -591,7 +591,8 @@ To acknowledge or clear from the PSA side, use a `monitoring:write` token: `POST
 
 | Action | Endpoint | Scope |
 |--------|----------|-------|
-| Create / update / delete per-org webhook | `POST` / `PUT` / `DELETE /api/notifications/webhooks` | `settings:write` (admin) |
+| Create per-org webhook | `POST /api/notifications/webhooks` | `settings:write` (admin) |
+| Update / delete per-org webhook | `PUT` / `DELETE /api/notifications/webhooks/<id>` | `settings:write` (admin) |
 | List per-org webhooks | `GET /api/notifications/webhooks` | `settings:read` (admin) |
 | Read active / historical alerts | `GET /api/alerts/active`, `GET /api/alerts/history` | `monitoring:read` |
 | Acknowledge / clear alerts | `POST /api/alerts/acknowledge`, `POST /api/alerts/clear` | `monitoring:write` |

@@ -122,7 +122,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 11. **Audit Logging (`pkg/audit`)**
     - Defence-in-depth: every mutation is logged to SQLite, optionally signed with per-tenant encryption keys.
-    - Async logging mode (`PULSE_AUDIT_ASYNC`) for high-throughput environments.
+    - Async audit logging is on by default (`PULSE_AUDIT_ASYNC=false` disables it); see `docs/CONFIGURATION.md`.
     - Tenant-aware logger manager for isolated per-org audit trails.
 
 ### Data Flow

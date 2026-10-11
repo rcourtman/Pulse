@@ -45,7 +45,7 @@ Relay was designed with a zero-trust model:
 | **Back-pressure** | Data limiters prevent channel flooding |
 | **License-gated** | Requires an active Relay-or-higher license |
 | **Configurable** | Can be enabled/disabled at any time via Settings |
-| **Audit** | Relay connection events are logged to the audit trail |
+| **Audit** | Pulse Mobile relay access token creation is recorded in the audit trail. Relay connection events are written to the Pulse server log. |
 
 ## Configuration
 
@@ -77,8 +77,8 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 |---|---|---|---|
 | `GET` | `/api/settings/relay` | `settings:read` | Get relay status and config |
 | `PUT` | `/api/settings/relay` | `settings:write` | Update relay settings |
-| `POST` | `/api/onboarding/qr` | `settings:read` | Generate mobile onboarding QR code |
-| `POST` | `/api/onboarding/deep-link` | `settings:read` | Generate mobile deep link |
+| `GET` | `/api/onboarding/qr` | `settings:read` | Generate mobile onboarding QR code |
+| `GET` | `/api/onboarding/deep-link` | `settings:read` | Generate mobile deep link |
 
 ## Pulse Mobile Pairing
 

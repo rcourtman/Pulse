@@ -64,7 +64,7 @@ or substitute the top-level GitHub server installer.
 
 ### 3. Add Proxmox / TrueNAS Connections
 
-Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastructure → Platform connections**.
+Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastructure** (**Add infrastructure**).
 
 ### 4. Set Up Mobile Access
 

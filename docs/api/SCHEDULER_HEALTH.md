@@ -43,8 +43,7 @@ Returns a real-time snapshot of the adaptive scheduler, including queue state, c
       "instance": "pve-a",
       "type": "pve",
       "lastSuccess": "2025-10-20T13:05:10Z",
-      "stalenessSeconds": 32,
-      "stalenessScore": 0.12
+      "score": 0.12
     }
   ],
   "instances": [

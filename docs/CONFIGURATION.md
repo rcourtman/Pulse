@@ -235,7 +235,7 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `allowedEmbedOrigins` | Comma-separated `frame-ancestors` allowlist |
 | `webhookAllowedPrivateCIDRs` | Allowlist for private webhook targets |
 | `updateChannel` | Update channel (`stable` or `rc`) |
-| `autoUpdateEnabled` | Allow one-click updates |
+| `autoUpdateEnabled` | Allow unattended automatic updates from the systemd update timer (`stable` channel only) |
 | `publicURL` | Public URL used in links/notifications |
 | `hideLocalLogin` | Hide username/password login form |
 | `temperatureMonitoringEnabled` | Enable temperature monitoring (where supported) |
@@ -267,12 +267,14 @@ Environment variables take precedence over `system.json`.
 | `FRONTEND_PORT` | Public listening port (web UI, API, and agent ingest) | `7655` |
 | `PORT` | **Deprecated** legacy alias for `FRONTEND_PORT`, honored only when `FRONTEND_PORT` is unset. Logs a deprecation warning at startup; switch to `FRONTEND_PORT`. | *(unset)* |
 | `PULSE_AGENT_INGEST_PORT` | Optional dedicated port for the complete agent control plane: reports/config (`/api/agents/*`), command admission (`/api/agent/ws`), version checks, and bootstrap downloads. The web UI and management API stay isolated. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
+| `HTTP_REDIRECT_PORT` | Optional plain-HTTP port that redirects to HTTPS on `FRONTEND_PORT`. Requires `HTTPS_ENABLED=true` with `TLS_CERT_FILE` and `TLS_KEY_FILE`. Must differ from `FRONTEND_PORT`. `0` = disabled. | `0` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
 | `LOG_MAX_SIZE` | Log rotation size (MB) | `100` |
-| `LOG_MAX_AGE` | Keep rotated logs for N days (`0` disables cleanup) | `30` |
+| `LOG_MAX_AGE` | Keep rotated logs for N days (positive integer; zero or negative values are ignored with a startup warning and the default applies) | `30` |
 | `LOG_COMPRESS` | Gzip rotated logs | `true` |
+| `PULSE_AUDIT_ASYNC` | Queues audit-log writes in memory (up to 4096 events) and saves them in the background, so requests do not wait on audit storage. If the queue is full, the event is written synchronously instead. Only the value `false` (case-insensitive) turns the queue off and writes each event synchronously. Events still queued when the process is killed without a clean shutdown are not written. | `true` |
 
 #### Log Levels
 
@@ -334,7 +336,7 @@ not the whole bundle.
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated immediate proxy IPs/CIDRs trusted for forwarded client IP, scheme, host and port. Use the peer seen by Pulse; wildcard ranges are rejected. See [Reverse Proxy](REVERSE_PROXY.md#before-configuring-the-proxy). | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
-| `ALLOW_UNPROTECTED_EXPORT` | Allow unauthenticated config export on public networks when no auth is configured (use with caution) | `false` |
+| `ALLOW_UNPROTECTED_EXPORT` | Set to `true` to allow unauthenticated config export from any non-loopback client (private LAN as well as public networks), only while no password, API token, proxy secret, SSO or hosted mode is configured. Export only: import is never enabled by this (use with caution) | `false` |
 
 ### Split-Port Agent Ingest (Network Isolation)
 
@@ -481,7 +483,7 @@ monitoring defect.
 | ---------- | ------------- | --------- |
 | `LOG_FILE` | Log file path (empty = stderr only) | *(unset)* |
 | `LOG_MAX_SIZE` | Log file max size (MB) | `100` |
-| `LOG_MAX_AGE` | Log file retention (days, `0` disables cleanup) | `30` |
+| `LOG_MAX_AGE` | Log file retention (positive days; zero or negative values are ignored with a startup warning and the default applies) | `30` |
 | `LOG_COMPRESS` | Compress rotated logs | `true` |
 
 
@@ -492,7 +494,7 @@ These are stored in `system.json` and managed via the UI.
 | Key | Description | Default |
 | ----- | ------------- | --------- |
 | `updateChannel` | Update channel (`stable` or `rc`) | `stable` |
-| `autoUpdateEnabled` | Allow one-click updates | `false` |
+| `autoUpdateEnabled` | Allow unattended automatic updates from the systemd update timer (`stable` channel only) | `false` |
 
 > **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`) are kept in sync for backwards compatibility but are not read at runtime. The former `autoUpdateCheckInterval` / `autoUpdateTime` fields were never consumed and are ignored if present; the update schedule lives in the systemd timer.
 >
@@ -1061,6 +1063,8 @@ docker run --init -e HTTPS_ENABLED=true \
   -e TLS_KEY_FILE=/certs/key.pem ...
 ```
 
+To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port other than `FRONTEND_PORT` (for example `80`). Pulse listens on that port on the same bind address as the web UI and answers requests with a `301` redirect to the same host on the HTTPS `FRONTEND_PORT`. The redirect listener starts only when `HTTPS_ENABLED=true` and both `TLS_CERT_FILE` and `TLS_KEY_FILE` are set; otherwise the value has no effect. A non-numeric or out-of-range value is ignored silently, which leaves the redirect disabled.
+
 > **Important (Docker with HTTPS)**: Always use `--init` (or `init: true` in docker-compose) when enabling HTTPS. The Alpine-based healthcheck uses busybox `wget`, which spawns `ssl_client` subprocesses. Without an init process to reap them, these become zombie processes over time.
 
 ---
@@ -1196,10 +1200,10 @@ Pulse v6 supports first-class TrueNAS SCALE and CORE monitoring.
 
 ### Adding a TrueNAS Instance
 
-1. Go to **Settings → TrueNAS**.
-2. Click **Add Connection**.
-3. Enter the URL (e.g., `https://truenas.local`) and an API key.
-4. Click **Test Connection** to verify, then **Save**.
+1. Go to **Settings → Infrastructure**.
+2. Click **Add infrastructure** and choose **TrueNAS**.
+3. Enter the host (e.g., `truenas.local`), the port and whether to use HTTPS, then the API key and the username that owns the key.
+4. Click **Test connection** to verify, then **Add connection**.
 
 ### Creating a TrueNAS API Key
 
@@ -1217,8 +1221,8 @@ On your TrueNAS system:
 | Apps | TrueNAS Overview |
 | ZFS Pools & datasets | Storage page |
 | Physical disks | Storage page |
-| ZFS Snapshots | Recovery page |
-| Replication tasks | Recovery page |
+| ZFS Snapshots | TrueNAS → Protection |
+| Replication tasks | TrueNAS → Protection |
 | TrueNAS alerts | Alerts page |
 
 TrueNAS connections are stored encrypted in `truenas.enc`.
@@ -1233,8 +1237,8 @@ The relay protocol provides end-to-end encrypted remote access foundations for P
 
 ### Configuration
 
-1. Go to **Settings → Relay**.
-2. Toggle relay **On**.
+1. Go to **Settings → Pulse Mobile**.
+2. Turn on **Allow Pulse Mobile connections**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 
 ### Environment Overrides
@@ -1249,7 +1253,7 @@ going through the UI, two environment variables override the persisted
 | `PULSE_RELAY_SERVER` | Override relay server URL. Must be a valid `ws://` or `wss://` URL with no userinfo, query, or fragment. Invalid values are logged and ignored. | `wss://relay.pulserelay.pro/ws/instance` |
 
 Precedence: env vars beat the file. If you set `PULSE_RELAY_ENABLED=true`,
-saving the relay form in **Settings → Relay** will then persist the
+saving the relay settings in **Settings → Pulse Mobile** will then persist the
 env-effective state to disk, so removing the env var later does not
 automatically revert relay back to its previous file-stored state — clear
 relay in the UI as well if you want to fully disable it.

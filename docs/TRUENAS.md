@@ -6,10 +6,10 @@ Pulse v6 includes first-class monitoring for **TrueNAS SCALE** and **TrueNAS COR
 
 1. Go to **Settings → Infrastructure**.
 2. Click **Add infrastructure** and choose **TrueNAS**. Existing connections
-   are listed under **Platform connections**.
+   are listed under **Connected systems**.
 3. Enter the TrueNAS URL (e.g., `https://truenas.local`), the API key, and the
    username that owns the key.
-4. Click **Test Connection**, then **Save**. The test reads system information
+4. Click **Test connection**, then **Add connection**. The test reads system information
    on a separate connection; it does not validate inventory or metric collection.
 5. Leave the saved connection enabled and allow at least one configured polling
    interval (60 seconds by default). Check that the appliance and expected
@@ -79,9 +79,9 @@ only its colour. Heat, native SMART faults and stale or missing readings are
 separate evidence. A cool disk can still have a SMART fault; a retained **last
 known** temperature is not a current reading, and no temperature is not zero.
 
-Check the saved rule in **Alerts → Thresholds → TrueNAS → TrueNAS Disks**:
+Check the saved rule in **Alerts → Thresholds → TrueNAS → Disks**:
 
-- A disk's own temperature override takes precedence over the **TrueNAS Disks**
+- A disk's own temperature override takes precedence over the **Disks**
   default. With neither set, it inherits **Disk temperature by type**.
 - The inherited type policy is off when the agent **Disk Temp** default is off;
   an explicit TrueNAS temperature rule can still enable it for TrueNAS disks.
@@ -137,7 +137,7 @@ All endpoints require admin authentication.
 
 ### Testing and adding a connection (API)
 
-Prefer **Settings → Infrastructure → Platform connections** for setup. These
+Prefer **Settings → Infrastructure** (**Add infrastructure**) for setup. These
 API examples are for an authorised administrator using curl 7.76 or later,
 not a way to diagnose stale polling. Testing makes a live system-information
 request to TrueNAS; saving creates a connection and starts ordinary polling.
@@ -233,7 +233,7 @@ Only after reviewing the test response, create the connection once:
 
 A successful save returns HTTP **201** and the new connection's `id`, not
 proof of a complete poll. If saving times out or loses its response, it may
-already have created the connection. Check **Platform connections** or
+already have created the connection. Check **Connected systems** or
 `/api/truenas/connections` in your existing signed-in Pulse browser before
 trying again; do not blindly repeat POST and create duplicates. Continue with
 the [ordinary polling checks](#stale-truenas-data) for collection acceptance.

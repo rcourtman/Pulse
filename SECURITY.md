@@ -366,7 +366,7 @@ Pulse supports **OIDC** and **SAML** SSO providers with multi-provider configura
 - **OIDC**: Google, Authentik, Keycloak, Auth0, or any compliant provider.
 - **SAML**: For enterprise IdPs that use SAML assertions.
 - Multiple providers can be enabled simultaneously; the login page shows all available SSO buttons.
-- Configure via **Settings → Security → SSO Providers** (admin required).
+- Configure via **Settings → Security → Single Sign-On** (admin required).
 
 See `docs/PROXY_AUTH.md` for proxy-based auth (Authentik, Authelia, Cloudflare).
 

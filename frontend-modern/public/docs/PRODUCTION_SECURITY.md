@@ -18,8 +18,8 @@ utilization, storage, guests, and status.
 | **Proxmox API plus host agent:** API coverage plus host-local SMART, temperatures, ZFS/Ceph/mdadm detail, arbitrary mount capacity, and full LXC filesystem capacity | The Linux agent runs as `root` by default for the supported full-telemetry profile. |
 | **Guest-local agent:** Host metrics and optional Docker/Podman inventory inside a VM or LXC | The agent is trusted inside that guest only; it does not grant Pulse access to the hypervisor. |
 
-For most Proxmox installations, begin with **Settings → Infrastructure →
-Platform connections**. Add a host agent only after identifying a metric that
+For most Proxmox installations, begin with **Settings → Infrastructure**
+(**Add infrastructure**). Add a host agent only after identifying a metric that
 the Proxmox API cannot provide. The complete capability matrix is in
 [Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
 
@@ -112,7 +112,9 @@ and management API.
   permissions Pulse needs, and rotate a token before revoking the credential
   currently used by a live connection or agent.
 - Do not put host SSH private keys in a Pulse Docker or LXC container. Pulse
-  blocks that pattern; use API-only monitoring or a host-local agent instead.
+  logs a security warning when it collects temperatures over SSH from a
+  container but still uses the key; use API-only monitoring or a host-local
+  agent instead.
 - Restrict the Pulse data directory and backups as secrets. They contain
   encrypted credentials as well as sessions, API-token state, and the key
   material needed by the installation.

@@ -75,7 +75,7 @@ Patrol is a scheduled model workflow that builds a rich, system-wide snapshot an
 Scheduled/Event Trigger
         │
         ▼
-buildSeedContext()  ── infrastructure evidence and policy context
+buildTriageSeedSectionsState()  ── infrastructure evidence and policy context
         │
         ▼
 LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
@@ -118,7 +118,7 @@ can handle the steady-state signal.
 
 ### The Patrol attention queue
 
-The first thing Patrol shows is **Needs attention**, a single operator queue
+The first thing Patrol shows is the **Inbox** tab, a decision inbox headed "N decisions need you" (or "No decisions are waiting"), a single operator queue
 projected from Pulse's canonical alert lifecycle. It combines current
 operational state with evidence quality and protection context; it does not
 create a second finding lifecycle.
@@ -168,7 +168,7 @@ Every patrol run passes the LLM comprehensive context about your environment:
 
 Beyond raw metrics, Patrol prepares structured evidence for the model:
 
-- **Trend summaries** — 24h and 7d samples showing `growing`, `stable`, `declining`, or `volatile` behavior
+- **Trend summaries** — 24h and 7d samples showing `growing`, `stable`, or `declining` behavior
 - **Baseline evidence** — Z-score anomaly evidence from historical metrics
 - **Capacity estimates** — "Storage pool reaches 95% in about 12 days at current growth rate"
 - **Infrastructure changes** — Detected config changes, VM migrations, new deployments
@@ -228,7 +228,7 @@ Note: `info` and `watch` level findings are filtered out to reduce noise.
 
 Findings can be managed via the UI or API:
 
-- **Get help**: Chat with AI to troubleshoot the issue
+- **Open in Assistant**: Open Pulse Assistant with the finding attached to troubleshoot the issue (on Patrol findings it appears under **Resolve or dismiss**)
 - **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
 - **Dismiss**: Record feedback about this finding; use **Reopen** to undo its dismissal
 - **Create rule**: Permanently auto-dismiss future findings for the selected resource and category
@@ -368,9 +368,9 @@ Patrol supports four modes that decide how far Pulse can go after it finds an is
 | Mode | Behavior | Plan |
 |-------|----------|------|
 | **Watch only** | Detect issues only. No investigation or fixes. | Community (BYOK) |
-| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
-| **Auto-fix safe issues** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
-| **Policy autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
+| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Safe auto-fix** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+| **Autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
 
 Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit.
 
@@ -409,8 +409,8 @@ MaybeInvestigateFinding()
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MaxEvidenceCalls` | 15 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
-| `MaxTurns` | 17 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
+| `MaxEvidenceCalls` | 10 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
+| `MaxTurns` | 12 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
 | `Timeout` | 10 min | Maximum duration per investigation |
 | `MaxConcurrent` | 3 | Maximum concurrent investigations |
 | `MaxAttemptsPerFinding` | 3 | Maximum investigation attempts per finding |
@@ -508,7 +508,7 @@ never excluded a guest from action plans, so it has been removed.
 ## Weekly summary and email
 
 Pulse's **This week** summary adds up retained Patrol activity over the last
-seven days. Open **Patrol → Activity** to read it; use **Settings → Reporting**
+seven days. Open **Patrol → Activity** to read it; use **Settings → Data & Reports**
 to schedule the same summary by email. The card, weekly email and **Report type**
 selector are included in **v6.5.0**. An older build can lack these controls.
 
@@ -545,7 +545,7 @@ grant scheduling access. See [Plans and entitlements](PULSE_PRO.md).
 1. Check that email notifications are **enabled and configured** under
    **Alerts → Notifications**. Listing recipients on a schedule does not
    configure a mail provider or enable email.
-2. Open **Settings → Reporting**, choose **Create schedule**, then set
+2. Open **Settings → Data & Reports**, choose **Create schedule**, then set
    **Report type** to **Patrol weekly summary**.
 3. Enter a schedule name, weekday, time and an IANA **Timezone**, such as
    `Europe/London`. The summary is weekly, covers the last seven days, and is
@@ -841,7 +841,7 @@ Patrol runs on a configurable schedule:
 | 10 min – 7 days | Configurable interval (default: 6 hours) |
 
 Patrol can also be triggered by:
-- **Manual run**: Click "Run Patrol" in the UI
+- **Manual run**: Click "Check now" in the Patrol header (the button shows "Starting…" or "Running…" while a run is starting or in progress)
 - **Alert-triggered analysis (Pro and above)**: Runs when an alert fires
 - **API call**: `POST /api/ai/patrol/run`
 

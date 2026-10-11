@@ -133,7 +133,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures TLS 7d (schema v5) | `0` | Count terminal failures classified locally as certificate or TLS failures without sending certificates, hostnames, or raw errors |
 | Notification failures configuration 7d (schema v5) | `0` | Count terminal failures classified locally as missing or invalid destination configuration without sending configuration values |
 | Notification failures rejected 7d (schema v5; new schema v15 classifications are HTTP 4xx) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content; schema v5-v14 included destination HTTP 5xx responses, and those locally retained rows can remain in this rolling count for up to seven days after upgrade |
-| Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination HTTP 5xx server errors without sending response content, destination identity, or provider identity |
+| Notification failures server error 7d (schema v15) | `0` | Count terminal failures classified locally as destination server-side or temporary failures (HTTP 5xx responses, the temporary HTTP 423 Locked and 425 Too Early responses, and transient SMTP 4xx replies) without sending response content, destination identity, or provider identity |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
 | AI provider class | `local` | See one closed bucket for how the Patrol (or default) model is reached: `none`, `local` (Ollama or a private-network OpenAI-compatible endpoint), `cloud_byok` (a hosted provider with your own key), `cloud_subscription` (the Codex or Claude CLI subscription route), or `hosted_legacy` (the retired Pulse-hosted route), without sending the provider, model name, endpoint, or account |
@@ -283,8 +283,9 @@ performed locally; raw error text and destination/provider identity are never
 included in the payload.
 
 Schema v15 adds an eighth
-fixed notification terminal-failure counter for destination HTTP 5xx server
-errors. From v15 onward,
+fixed notification terminal-failure counter for destination server-side or
+temporary failures: HTTP 5xx responses, the temporary HTTP 423 Locked and 425
+Too Early responses, and transient SMTP 4xx replies. From v15 onward,
 new terminal failures enter `notification_failures_rejected_7d` only for HTTP
 4xx destination or payload rejections. Locally retained v5-v14 rows may still
 include HTTP 5xx responses for up to seven days after upgrade; first-heartbeat

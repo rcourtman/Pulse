@@ -256,7 +256,8 @@ for the different results and evidence to retain.
 
 #### Audit Log is empty
 
-Clear the event, user, date and success filters, and check the selected
+Clear the Event, user search, Outcome and Verification filters (or use
+**Clear all filters** in the empty-state message), and check the selected
 organisation first. A query error is not an empty history. **Pulse Pro runtime
 required** means an active licence is running on the public community runtime;
 follow the panel's **Download Pulse Pro** link rather than buying another
