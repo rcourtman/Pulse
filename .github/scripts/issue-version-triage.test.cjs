@@ -5,6 +5,63 @@ const path = require("node:path");
 
 const triage = require("./issue-version-triage.cjs");
 
+// GitHub issue forms do not submit markdown-only guidance as report fields.
+// Detailed, optional guidance belongs immediately before the input it helps;
+// test that location rather than requiring every reader to see it expanded.
+function fieldGuidance(form, id) {
+  const blocks = form.split(/(?=^  - type: )/m).slice(1);
+  const index = blocks.findIndex(block => block.includes(`    id: ${id}\n`));
+  assert.ok(index >= 0, `missing input ${id}`);
+  const preceding = blocks[index - 1] || "";
+  return (preceding.startsWith("  - type: markdown\n") ? preceding : "") + blocks[index];
+}
+
+for (const [name, summary, evidence] of [
+  ["bug_report.yml", "bug_description", "logs"],
+  ["v6_rc_feedback.yml", "summary", "evidence"],
+]) {
+  test(`specialist intake guidance stays optional and beside its input: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const blocks = form.split(/(?=^  - type: )/m).slice(1);
+    const disclosures = [];
+    for (const block of blocks) {
+      if (!block.includes("<details")) continue;
+      assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
+      assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
+      const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
+      assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
+      for (const [, title, content] of groups) {
+        assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
+        assert.ok(content.trim(), "a disclosure must retain its guidance");
+        disclosures.push(title);
+      }
+    }
+    assert.deepEqual(disclosures.sort(), [
+      "Failed upgrade: which attempt, stop and recovery?",
+      "Several hosts or clusters: preserve which names and IDs repeat",
+      "Notification delivery: Test versus ordinary alerts",
+      "Pulse CPU, memory or disk writes: comparable measurements",
+      "VM or LXC memory: guest versus hypervisor readings",
+    ].sort());
+    for (const [id, titles] of [
+      ["upgrade_context", ["Failed upgrade:"]],
+      [summary, ["Several hosts or clusters:"]],
+      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
+    ]) {
+      const guidance = fieldGuidance(form, id);
+      for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
+    }
+    // Collection and public-disclosure warnings are never hidden in a disclosure.
+    const introduction = blocks[0];
+    assert.doesNotMatch(introduction, /<details/);
+    assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
+    assert.match(introduction, /Anything you attach here is public/);
+    const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
+    assert.match(attachment, /Review files and screenshots locally/);
+    assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+  });
+}
+
 function createGithub({
   latestVersion = "6.0.1",
   existingLabels = new Set(),
@@ -503,7 +560,7 @@ test("bug and pre-release forms accept truthful evidence for installs that never
 test("both bug forms keep an optional failed-upgrade timeline without unsafe collection", () => {
   for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
     const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
-    const timeline = form.split("    id: upgrade_context\n")[1]?.split("  - type: ")[0];
+    const timeline = fieldGuidance(form, "upgrade_context");
     assert.ok(timeline, name);
     assert.match(timeline, /label: Upgrade attempt and recovery/);
     assert.match(timeline, /required: false/);
@@ -601,7 +658,7 @@ for (const [name, field] of [
 ]) {
   const evidenceField = () => {
     const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
-    return form.split(`    id: ${field}\n`)[1].split("  - type: ")[0];
+    return fieldGuidance(form, field);
   };
 
   test(`performance report measurement context stays optional: ${name}`, () => {
