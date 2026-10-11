@@ -3381,6 +3381,13 @@ An MSP control plane without a licence file runs on the `msp_eval` plan
 version, not on the cheapest paid tier. `msp_eval` has a workspace limit of two
 and is neither purchasable nor part of the published pricing ladder.
 
+That rule holds in production for `provider_hosted_msp`: `LoadConfig` no longer
+requires `CP_PROVIDER_MSP_LICENSE_FILE` there, so an air-gapped install, or one
+whose licence request failed, starts on `msp_eval` instead of being refused.
+`pulse_hosted_msp` keeps the production requirement. A licence path that is set
+but empty or unreadable is still a startup error, because a truncated paid
+licence must not fall silently to evaluation.
+
 An earlier revision of this paragraph claimed `msp_eval` "carries the same MSP
 capabilities". That was wrong and is corrected here. A plan version selects the
 workspace cap; it does not by itself entitle a client workspace. Release-build
