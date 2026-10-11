@@ -679,6 +679,28 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 	}
 }
 
+// tokenHasInstanceWideAuthority reports whether a token holds full-access scope
+// and is not bound to any organization other than the default one. OrgIDs
+// takes precedence over OrgID, as it does for tenant access checks.
+func tokenHasInstanceWideAuthority(record *config.APITokenRecord) bool {
+	if record == nil || !record.HasScope(config.ScopeWildcard) {
+		return false
+	}
+	isDefault := func(orgID string) bool {
+		orgID = strings.TrimSpace(orgID)
+		return orgID == "" || orgID == "default"
+	}
+	if len(record.OrgIDs) > 0 {
+		for _, orgID := range record.OrgIDs {
+			if !isDefault(orgID) {
+				return false
+			}
+		}
+		return true
+	}
+	return isDefault(record.OrgID)
+}
+
 // HandleRegenerateAPIToken generates and persists a new API token.
 func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Request) {
 	if rq.Method != http.MethodPost {
@@ -703,6 +725,19 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 	}
 
 	if !ensureSettingsWriteScope(r.config, w, rq) {
+		return
+	}
+
+	// Regeneration replaces the whole token inventory, wildcard tokens
+	// included, and issues a full-access credential. A token caller therefore
+	// needs instance-wide full-access authority; a scoped or organization-bound
+	// token replaces just itself through /api/security/tokens/{id}/rotate.
+	if callerToken := getAPITokenRecordFromRequest(rq); callerToken != nil && !tokenHasInstanceWideAuthority(callerToken) {
+		log.Warn().
+			Str("token_id", callerToken.ID).
+			Str("ip", GetClientIP(rq)).
+			Msg("API token without instance-wide authority attempted to regenerate every token")
+		http.Error(w, "Regenerating API tokens replaces every token, so it needs a full-access token that is not bound to any non-default organization. Use POST /api/security/tokens/{id}/rotate to replace one token.", http.StatusForbidden)
 		return
 	}
 
