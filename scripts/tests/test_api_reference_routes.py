@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Keep docs/API.md aligned with the routes and scopes the server registers.
+
+Static checks only: no server, credentials or network. Each check reads the
+reference and a router or handler source file, so drift in either direction
+fails here instead of surfacing as a support question.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DOC = ROOT / "docs/API.md"
+SCOPES = ROOT / "pkg/auth/scopes.go"
+
+SCOPE_TOKEN = re.compile(r"`([a-z]+(?::[a-z]+)+)`")
+ROUTE_LINE = re.compile(r"`(?:GET|POST|PUT|PATCH|DELETE)(?:/(?:GET|POST|PUT|PATCH|DELETE))* /api/")
+
+
+def read(path: str | Path) -> str:
+    return (ROOT / path).read_text(encoding="utf-8") if isinstance(path, str) else path.read_text(encoding="utf-8")
+
+
+def known_scopes(text: str) -> set[str]:
+    return set(re.findall(r'Scope\w+\s*=\s*"([^"]+)"', text))
+
+
+def unknown_scopes_in_reference(doc: str, scopes: set[str]) -> list[str]:
+    """Scope-looking tokens on route lines that no code constant defines.
+
+    Only tokens whose first segment is a real scope family are judged, so a
+    request value such as `provider:model` is not mistaken for a scope.
+    """
+    families = {scope.split(":")[0] for scope in scopes}
+    unknown: list[str] = []
+    for line in doc.splitlines():
+        if not ROUTE_LINE.search(line):
+            continue
+        for token in SCOPE_TOKEN.findall(line):
+            if token.split(":")[0] in families and token not in scopes:
+                unknown.append(f"{token} in: {line.strip()[:100]}")
+    return unknown
+
+
+def missing_anchors(pairs: list[tuple[str, str, str]], doc: str, sources: dict[str, str]) -> list[str]:
+    """Each pair is (text the reference must contain, source file, text the code must contain)."""
+    failures: list[str] = []
+    for doc_text, source, code_text in pairs:
+        if doc_text not in doc:
+            failures.append(f"reference lacks: {doc_text}")
+        if code_text not in sources[source]:
+            failures.append(f"{source} lacks: {code_text}")
+    return failures
+
+
+# (reference text, source file, code text). Routes this guide documents on the
+# strength of the registration or handler named here.
+ROUTE_ANCHORS = [
+    ("`GET /api/ai/patrol/runs/{id}` (`ai:execute`)",
+     "internal/api/router_routes_ai_relay.go",
+     'r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,'),
+    ("`POST /api/availability-history` (`monitoring:read`)",
+     "internal/api/router_routes_monitoring.go",
+     'r.mux.HandleFunc("/api/availability-history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,'),
+    ("`POST /api/agents/agent/{agent_id}/allow-reenroll` (admin, `settings:write`)",
+     "internal/api/router_routes_registration.go",
+     'strings.HasSuffix(req.URL.Path, "/allow-reenroll")'),
+    ("`PUT /api/truenas/connections/{id}` (admin, `settings:write`)",
+     "internal/api/router_routes_registration.go",
+     "update:  r.trueNASHandlers.HandleUpdate,"),
+    ("`POST /api/truenas/connections/{id}/test` (admin, `settings:write`)",
+     "internal/api/router_routes_registration.go",
+     "test:    r.trueNASHandlers.HandleTestSavedConnection,"),
+    # Every profile route is wrapped once, for all methods, including GET.
+    ("Token callers also need `settings:write` on every profile route, including GET requests",
+     "internal/api/router_routes_registration.go",
+     'r.mux.Handle("/api/admin/profiles/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,'),
+    ("`PUT /api/notifications/email` (admin, `settings:write`)",
+     "internal/api/alerting/notifications.go",
+     'case path == "/email" && r.Method == http.MethodPut:\n\t\tif !requireAnyScope(config.ScopeSettingsWrite'),
+]
+
+
+class APIReferenceRoutesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.doc = read(DOC)
+        cls.scopes = known_scopes(read(SCOPES))
+        cls.sources = {source: read(source) for _, source, _ in ROUTE_ANCHORS}
+
+    def test_scope_catalogue_was_parsed(self) -> None:
+        for scope in ("monitoring:read", "settings:write", "ai:execute", "audit:read"):
+            self.assertIn(scope, self.scopes)
+
+    def test_every_scope_named_on_a_route_line_exists_in_code(self) -> None:
+        self.assertEqual(unknown_scopes_in_reference(self.doc, self.scopes), [])
+
+    def test_documented_routes_match_their_registration(self) -> None:
+        self.assertEqual(missing_anchors(ROUTE_ANCHORS, self.doc, self.sources), [])
+
+    def test_retired_remediation_routes_say_so(self) -> None:
+        for route in ("approve", "execute", "rollback"):
+            line = next(l for l in self.doc.splitlines() if l.startswith(f"- `POST /api/ai/remediation/{route}`"))
+            self.assertIn("410 Gone", line, route)
+            self.assertIn("command_remediation_retired", line, route)
+
+    def test_validate_token_is_not_filed_under_the_licensed_audit_log(self) -> None:
+        audit = self.doc.split("## 🧾 Audit Log (Pro)", 1)[1].split("\n## ", 1)[0]
+        self.assertNotIn("/api/security/validate-token", audit)
+        self.assertIn("/api/security/validate-token", self.doc)
+
+    def test_negative_controls_fail_when_reference_or_code_drift(self) -> None:
+        # An invented scope on a route line is reported.
+        drifted = self.doc.replace("`POST /api/availability-history` (`monitoring:read`)",
+                                   "`POST /api/availability-history` (`monitoring:peek`)")
+        self.assertNotEqual(drifted, self.doc)
+        self.assertTrue(unknown_scopes_in_reference(drifted, self.scopes))
+        # A route dropped from the reference is reported.
+        without_route = self.doc.replace("`GET /api/ai/patrol/runs/{id}` (`ai:execute`)", "")
+        self.assertTrue(missing_anchors(ROUTE_ANCHORS, without_route, self.sources))
+        # A route whose wrapper loses its scope in code is reported.
+        weakened = dict(self.sources)
+        key = "internal/api/router_routes_monitoring.go"
+        weakened[key] = weakened[key].replace("RequireScope(config.ScopeMonitoringRead,", "RequireScope(config.ScopeSettingsRead,")
+        self.assertTrue(missing_anchors(ROUTE_ANCHORS, self.doc, weakened))
+
+
+if __name__ == "__main__":
+    unittest.main()
