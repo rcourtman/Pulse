@@ -5,6 +5,11 @@ import (
 	"sync/atomic"
 )
 
+// Store/provider rewiring also advances this epoch: its old inventory must
+// not reach alerts after the new dependency binding is published. Unlike a
+// mode switch, rewiring does not clear active alerts. Both callers join only
+// admitted alert-manager calls, never a slow provider read or registry write.
+//
 // mockModeFence keeps alert evaluations of mode-dependent data inside the
 // mock-mode epoch they read it in. GetState, the fixture graph, recovery
 // rollups and the connection ledger all switch source when mock mode flips,
