@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,10 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("native updater harness controls: %v\n%s", err, out)
 	}
+	results, err := nativeHarnessControlResults(string(out))
+	if err != nil {
+		t.Fatalf("incomplete native-harness result inventory: %v\n%s", err, out)
+	}
 	// The Linux server's ELF staging cannot execute on a macOS agent runner.
 	// Its connected check must pass on both Linux architectures; macOS skips
 	// only that check, never the portable signing/admission/recovery oracles.
@@ -32,17 +37,73 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
 		"test_connected_linux_control_is_required_without_macho_or_validator_bypass",
 	} {
-		if !strings.Contains(string(out), name+" (__main__.NativeContracts."+name+") ... ok") {
+		if results[name] != "ok" {
 			t.Fatalf("required portable native-harness control %s did not pass:\n%s", name, out)
 		}
 	}
 	const connected = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
-	verdict := " ... ok"
+	verdict := "ok"
 	if runtime.GOOS != "linux" {
-		verdict = " ... skipped 'Linux server ELF execution; portable controls remain required on macOS'"
+		verdict = "skipped 'Linux server ELF execution; portable controls remain required on macOS'"
 	}
-	if !strings.Contains(string(out), connected+" (__main__.NativeContracts."+connected+")"+verdict) {
+	if results[connected] != verdict {
 		t.Fatalf("required Linux connected control has wrong platform verdict:\n%s", out)
+	}
+}
+
+// unittest writes its result to stderr while the native recipe prints phase
+// markers to stdout. CombinedOutput can put those markers between the method
+// header and its verdict. Require a complete, unique verdict rather than a
+// single adjacent header/"ok" string; do not mistake a phase for completion.
+func nativeHarnessControlResults(output string) (map[string]string, error) {
+	results := make(map[string]string)
+	current := ""
+	for _, line := range strings.Split(output, "\n") {
+		if name, tail, found := strings.Cut(line, " (__main__.NativeContracts."); found && strings.HasPrefix(name, "test_") {
+			if current != "" {
+				return nil, fmt.Errorf("missing verdict for %s", current)
+			}
+			if _, duplicate := results[name]; duplicate {
+				return nil, fmt.Errorf("duplicate result for %s", name)
+			}
+			verdict, exact := strings.CutPrefix(tail, name+") ... ")
+			if !exact {
+				return nil, fmt.Errorf("mismatched method identity for %s", name)
+			}
+			current = name
+			line = verdict
+		}
+		if current != "" && (line == "ok" || strings.HasPrefix(line, "skipped ")) {
+			results[current] = line
+			current = ""
+		}
+	}
+	if current != "" {
+		return nil, fmt.Errorf("missing verdict for %s", current)
+	}
+	return results, nil
+}
+
+func TestAutoUpdateNativeControlResultsRetainInterleavedPhaseVerdicts(t *testing.T) {
+	const header = "test_fixture (__main__.NativeContracts.test_fixture) ... "
+	for _, verdict := range []string{"ok", "skipped 'Linux-only fixture'"} {
+		for _, phases := range []string{"", "NATIVE_UPDATER_PHASE=forward\nNATIVE_UPDATER_PHASE=manual-reverse\n"} {
+			out := header + phases + verdict + "\n\nRan 1 test\n\nOK\n"
+			results, err := nativeHarnessControlResults(out)
+			if err != nil || len(results) != 1 || results["test_fixture"] != verdict {
+				t.Fatalf("lost exact verdict %q with phase output %q: %v, %v", verdict, phases, results, err)
+			}
+		}
+	}
+	for _, out := range []string{
+		header + "NATIVE_UPDATER_PHASE=forward\n\nOK\n",
+		header + "ok\n" + header + "ok\n",
+		header + "NATIVE_UPDATER_PHASE=forward\n" + "test_next (__main__.NativeContracts.test_next) ... ok\n",
+		"test_fixture (__main__.NativeContracts.test_other) ... ok\n",
+	} {
+		if _, err := nativeHarnessControlResults(out); err == nil {
+			t.Fatalf("accepted incomplete/duplicate/mismatched method results: %q", out)
+		}
 	}
 }
 
