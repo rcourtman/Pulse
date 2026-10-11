@@ -634,29 +634,33 @@ describe('docsLinks', () => {
       .split('func (h *ReportingHandlers) generateMultiReportFromBody(')[1]
       .split('\nfunc ')[0];
     const caller = handler.split('func reportCallerMayUseAI(')[1].split('\nfunc ')[0];
+    const resolver = handler
+      .split('func (h *ReportingHandlers) resolveNarrator(')[1]
+      .split('\nfunc ')[0];
 
-    // Whitespace is not the contract. Both permission checks and the separate
-    // deterministic paths are; behavioural Go tests exercise every caller.
+    // The shared resolver owns spending permission; the handler still owns
+    // GET's deterministic path. Behavioural Go tests exercise every caller.
     expect(single).toMatch(
-      /case r\.Method == http\.MethodPost && reportCallerMayUseAI\(r\.Context\(\)\):\s*narrator, _, findings = h\.resolveNarrator\(r\.Context\(\)\)/,
+      /if r\.Method == http\.MethodPost \{\s*narrator, _, findings = h\.resolveNarrator\(r\.Context\(\)\)/,
     );
     expect(single.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
     expect(single).toMatch(
-      /case r\.Method == http\.MethodPost:\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = scopeLimitedReportNarrator\{\}/,
+      /if !reportCallerMayUseAI\(r\.Context\(\)\) \{\s*(?:\/\/[^\n]*\n\s*)*req\.Narrator = scopeLimitedReportNarrator\{\}/,
     );
     expect(single).toMatch(
-      /default:\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = getReportNarrator\{\}/,
+      /\} else \{\s*findings = h\.resolveExistingFindings\(r\.Context\(\)\)\s*req\.Narrator = getReportNarrator\{\}/,
     );
     expect(caller).toContain('internalauth.GetAPIToken(ctx).(*config.APITokenRecord)');
     expect(caller).toMatch(/if !ok \|\| record == nil \{\s*return true/);
     expect(caller).toContain('return record.HasScope(config.ScopeAIExecute)');
+    expect(resolver).toMatch(
+      /if !reportCallerMayUseAI\(ctx\) \{\s*return nil, nil, h\.resolveExistingFindings\(ctx\)\s*\}\s*return h\.narratorResolver\(ctx\)/,
+    );
+    expect(resolver.match(/h\.narratorResolver\(/g)).toHaveLength(1);
     expect(fleet).toMatch(
-      /if reportCallerMayUseAI\(ctx\) \{\s*_, fleetNarrator, findings = h\.resolveNarrator\(ctx\)/,
+      /_, fleetNarrator, findings := h\.resolveNarrator\(ctx\)/,
     );
     expect(fleet.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
-    expect(fleet).toMatch(
-      /\} else \{\s*(?:\/\/[^\n]*\n\s*)*findings = h\.resolveExistingFindings\(ctx\)/,
-    );
   });
 
   it('ships report help that separates read permission from AI spending', () => {

@@ -10234,8 +10234,9 @@ it. `generate-multi` and the manual schedule run endpoint
 (`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
 schedules run from the server's scheduler, not an HTTP request.
 POST alone does not authorise narration by an API token. Both the
-single-resource and fleet generation paths call `reportCallerMayUseAI` before
-`resolveNarrator`: a token must carry `ai:execute` (including full-access
+single-resource and fleet generation paths use `resolveNarrator`, whose shared
+gate calls `reportCallerMayUseAI` before resolving AI narrators: a token must
+carry `ai:execute` (including full-access
 tokens), in addition to the route's `settings:read` generation scope. A
 read-only token still receives the report, but with deterministic narration
 and an existing-service-only findings lookup, never an AI service resolution
