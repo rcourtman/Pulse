@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -27269,5 +27270,99 @@ func TestContract_AssistantSettingsAdvertisePlanningNotExecution(t *testing.T) {
 		if _, ok := payload["protected_guests"]; ok {
 			t.Fatalf("the retired protected_guests field must not be projected: %s", payload["protected_guests"])
 		}
+	}
+}
+
+// A failed support probe must not direct an operator to remove the trust
+// boundary which rejected it. These are diagnostic errors, not native faults.
+func TestContract_DiagnosticsTLSRecoveryPreservesTrust(t *testing.T) {
+	for _, message := range []string{
+		"x509: certificate signed by unknown authority",
+		"x509: certificate has expired or is not yet valid",
+		"x509: certificate is valid for pve.local, not 192.0.2.10",
+		"certificate fingerprint mismatch: expected fixture-old, got fixture-new",
+	} {
+		t.Run(message, func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(errors.New(message), "probe failed")
+			if failure.kind != "tls_certificate_mismatch" {
+				t.Fatalf("TLS kind = %q", failure.kind)
+			}
+			for _, want := range []string{"independently verify", "hostname", "expiry", "trusted chain", "only after", "Do not disable"} {
+				if !strings.Contains(failure.troubleshooting, want) {
+					t.Errorf("TLS recovery omits %q: %s", want, failure.troubleshooting)
+				}
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSDeadlineIsNotCertificateEvidence(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("TLS certificate endpoint: %w", context.DeadlineExceeded),
+		fmt.Errorf("TLS certificate endpoint: %w", context.Canceled),
+		errors.New(`Get "https://certificate.example:8006/api2/json/nodes": net/http: TLS handshake timeout`),
+		errors.New("tls: handshake timeout"),
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(err, "probe stopped")
+			wantKind := "connection_timeout"
+			if errors.Is(err, context.Canceled) {
+				wantKind = "connection_failed"
+			}
+			if failure.kind != wantKind {
+				t.Fatalf("kind = %q, want %q; guidance = %q", failure.kind, wantKind, failure.troubleshooting)
+			}
+			if strings.Contains(failure.troubleshooting, "fingerprint") || strings.Contains(failure.troubleshooting, "disable verification") {
+				t.Fatalf("stopped handshake was treated as trust evidence: %s", failure.troubleshooting)
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSTypedTimeout(t *testing.T) {
+	for _, err := range []error{
+		&url.Error{Op: "Get", URL: "https://certificate.example:8006", Err: &net.DNSError{Err: "fixture stalled", Name: "certificate.example", IsTimeout: true}},
+		&net.OpError{Op: "dial", Net: "tcp", Err: fmt.Errorf("certificate endpoint: %w", os.ErrDeadlineExceeded)},
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(err, "probe failed")
+			if failure.kind != "connection_timeout" || strings.Contains(failure.troubleshooting, "fingerprint") {
+				t.Fatalf("typed timeout lost to endpoint text: %+v", failure)
+			}
+		})
+	}
+}
+
+func TestContract_DiagnosticsTLSGuidanceSurvivesSerialization(t *testing.T) {
+	for _, message := range []string{
+		"certificate fingerprint mismatch: expected fixture-old, got fixture-new",
+		`Get "https://certificate.example:8007/api2/json/version": net/http: TLS handshake timeout`,
+		"connection timed out",
+	} {
+		t.Run(message, func(t *testing.T) {
+			failure := classifyDiagnosticsConnectionFailure(errors.New(message), "probe failed")
+			diag := EmptyDiagnosticsInfo()
+			diag.Nodes = []NodeDiagnostic{{ID: "pve-fixture"}}
+			diag.PBS = []PBSDiagnostic{{ID: "pbs-fixture"}}
+			applyNodeDiagnosticFailure(&diag.Nodes[0], failure)
+			applyPBSDiagnosticFailure(&diag.PBS[0], failure)
+			applyPBSConnectionDiagnostic(&diag.PBS[0], Connection{State: ConnectionStateUnreachable,
+				StateReason: "poll failed", LastError: &ConnectionError{Message: message}})
+			rec := httptest.NewRecorder()
+			writeDiagnosticsResponse(rec, diag, time.Time{})
+			var payload DiagnosticsInfo
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Nodes[0].ErrorKind != failure.kind || payload.PBS[0].ErrorKind != failure.kind || payload.PBS[0].Probe.ErrorKind != failure.kind {
+				t.Fatal("serialized PVE, PBS scheduler and PBS probe diagnoses disagree")
+			}
+			if payload.Nodes[0].Troubleshooting != failure.troubleshooting || payload.PBS[0].Troubleshooting != failure.troubleshooting || payload.PBS[0].Probe.Troubleshooting != failure.troubleshooting {
+				t.Fatal("safe guidance was lost between diagnostics and support JSON")
+			}
+			if payload.Nodes[0].Connected || payload.PBS[0].Connected || payload.PBS[0].Probe.Connected || payload.PBS[0].State != ConnectionStateUnreachable || payload.PBS[0].LastError.Message != message {
+				t.Fatal("diagnostic guidance changed the observed connection failure")
+			}
+		})
 	}
 }

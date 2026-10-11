@@ -3,8 +3,11 @@ package api
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -311,6 +314,128 @@ func TestComputeDiagnostics_PVE_HonoursStoredFingerprint(t *testing.T) {
 	}
 	if node.AuthMethod != "api_token" {
 		t.Errorf("expected authMethod=api_token, got %q", node.AuthMethod)
+	}
+}
+
+// Real loopback TLS probes exercise the production PVE/PBS diagnostics, not
+// just the guidance helper. No native guest, backup or trust setting is changed.
+func TestComputeDiagnosticsTLSRefusalAndVerifiedRecovery(t *testing.T) {
+	for _, initialPin := range []string{"", strings.Repeat("0", 64)} {
+		name := "untrusted-chain"
+		if initialPin != "" {
+			name = "changed-pin"
+		}
+		t.Run(name, func(t *testing.T) {
+			var pveReads, pbsReads atomic.Int32
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if req.URL.Path == "/api2/json/version" {
+					pbsReads.Add(1)
+					if req.Header.Get("Authorization") != "PBSAPIToken=fixture@pbs!diagnostics:fixture-token" {
+						http.Error(w, "unexpected fixture auth", http.StatusUnauthorized)
+						return
+					}
+					io.WriteString(w, `{"data":{"version":"3.4.2","release":"1"}}`)
+					return
+				}
+				pveReads.Add(1)
+				if req.Header.Get("Authorization") != "PVEAPIToken=fixture@pve!diagnostics=fixture-token" {
+					http.Error(w, "unexpected fixture auth", http.StatusUnauthorized)
+					return
+				}
+				if strings.Contains(req.URL.Path, "/agent/") {
+					t.Error("empty fixture inventory unexpectedly queued a guest command")
+				}
+				io.WriteString(w, `{"data":[]}`)
+			}))
+			server.Config.ErrorLog = log.New(io.Discard, "", 0)
+			server.StartTLS()
+			t.Cleanup(server.Close)
+			fingerprint := sha256.Sum256(server.Certificate().Raw)
+			verifiedPin := hex.EncodeToString(fingerprint[:])
+			cfg := &config.Config{
+				DataPath: t.TempDir(),
+				PVEInstances: []config.PVEInstance{{Name: "pve-fixture", Host: server.URL,
+					TokenName: "fixture@pve!diagnostics", TokenValue: "fixture-token", VerifySSL: true, Fingerprint: initialPin}},
+				PBSInstances: []config.PBSInstance{{Name: "pbs-fixture", Host: server.URL,
+					TokenName: "fixture@pbs!diagnostics", TokenValue: "fixture-token", VerifySSL: true, Fingerprint: initialPin}},
+			}
+			// Diagnostics requires a runtime for uptime and scheduler state.
+			// Keep it target-free: only the direct probes contact this server.
+			monitor := newMonitorForDiagnostics(t, &config.Config{DataPath: t.TempDir()})
+			router := &Router{config: cfg, monitor: monitor}
+			diag := router.computeDiagnostics(context.Background())
+			if len(diag.Nodes) != 1 || len(diag.PBS) != 1 || diag.Nodes[0].Connected || diag.PBS[0].Probe.Connected {
+				t.Fatalf("TLS-refused probes reported connectivity: %+v %+v", diag.Nodes, diag.PBS)
+			}
+			for _, failure := range []struct{ kind, guidance string }{
+				{diag.Nodes[0].ErrorKind, diag.Nodes[0].Troubleshooting},
+				{diag.PBS[0].Probe.ErrorKind, diag.PBS[0].Probe.Troubleshooting},
+			} {
+				if failure.kind != "tls_certificate_mismatch" || !strings.Contains(failure.guidance, "independently verify") || !strings.Contains(failure.guidance, "Do not disable verification") {
+					t.Errorf("unsafe or lost TLS diagnosis: %+v", failure)
+				}
+			}
+			if pveReads.Load() != 0 || pbsReads.Load() != 0 {
+				t.Fatal("HTTP credentials reached an endpoint rejected by TLS")
+			}
+			if !cfg.PVEInstances[0].VerifySSL || !cfg.PBSInstances[0].VerifySSL || cfg.PVEInstances[0].Fingerprint != initialPin || cfg.PBSInstances[0].Fingerprint != initialPin {
+				t.Fatal("failed diagnostics changed saved trust")
+			}
+
+			// Only this fixture operator supplies the known peer identity; the
+			// diagnostic path must not capture or replace the pin on its own.
+			cfg.PVEInstances[0].Fingerprint = verifiedPin
+			cfg.PBSInstances[0].Fingerprint = verifiedPin
+			recovered := router.computeDiagnostics(context.Background())
+			if !recovered.Nodes[0].Connected || !recovered.PBS[0].Probe.Connected || pveReads.Load() == 0 || pbsReads.Load() == 0 {
+				t.Fatalf("verified same-endpoint recovery failed: %+v %+v", recovered.Nodes, recovered.PBS)
+			}
+			if recovered.PBS[0].Connected {
+				t.Fatal("a successful support probe established PBS scheduler recovery without a completed poll")
+			}
+			if !cfg.PVEInstances[0].VerifySSL || !cfg.PBSInstances[0].VerifySSL || cfg.PVEInstances[0].Fingerprint != verifiedPin || cfg.PBSInstances[0].Fingerprint != verifiedPin || cfg.PVEInstances[0].TokenValue != "fixture-token" || cfg.PBSInstances[0].TokenValue != "fixture-token" {
+				t.Fatal("successful diagnostics changed trust or credentials")
+			}
+		})
+	}
+}
+
+func TestComputeDiagnosticsTLSHandshakeDeadline(t *testing.T) {
+	for _, provider := range []string{"pve", "pbs"} {
+		t.Run(provider, func(t *testing.T) {
+			var handshakes, httpReads atomic.Int32
+			release := make(chan struct{})
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { httpReads.Add(1) }))
+			server.Config.ErrorLog = log.New(io.Discard, "", 0)
+			server.TLS = &tls.Config{GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+				handshakes.Add(1)
+				<-release
+				return nil, nil
+			}}
+			server.StartTLS()
+			defer server.Close()
+			defer close(release)
+			cfg := &config.Config{DataPath: t.TempDir()}
+			if provider == "pve" {
+				cfg.PVEInstances = []config.PVEInstance{{Name: "pve-fixture", Host: server.URL, TokenName: "fixture@pve!diagnostics", TokenValue: "fixture-token", VerifySSL: true}}
+			} else {
+				cfg.PBSInstances = []config.PBSInstance{{Name: "pbs-fixture", Host: server.URL, TokenName: "fixture@pbs!diagnostics", TokenValue: "fixture-token", VerifySSL: true}}
+			}
+			monitor := newMonitorForDiagnostics(t, &config.Config{DataPath: t.TempDir()})
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			diag := (&Router{config: cfg, monitor: monitor}).computeDiagnostics(ctx)
+			var kind, guidance string
+			if provider == "pve" {
+				kind, guidance = diag.Nodes[0].ErrorKind, diag.Nodes[0].Troubleshooting
+			} else {
+				kind, guidance = diag.PBS[0].Probe.ErrorKind, diag.PBS[0].Probe.Troubleshooting
+			}
+			if handshakes.Load() == 0 || httpReads.Load() != 0 || kind != "connection_timeout" || strings.Contains(guidance, "fingerprint") {
+				t.Fatalf("handshake deadline became a trust fault: handshakes=%d HTTP=%d kind=%q guidance=%q", handshakes.Load(), httpReads.Load(), kind, guidance)
+			}
+		})
 	}
 }
 

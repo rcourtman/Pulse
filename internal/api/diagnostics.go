@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/user"
@@ -929,6 +930,33 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 	}
 	lower := strings.ToLower(raw)
 
+	// A stopped handshake is not evidence that a certificate is wrong. Check
+	// typed causes before text, which also contains the requested URL and can
+	// mention "certificate" or "TLS" in an otherwise ordinary endpoint name.
+	if errors.Is(err, context.Canceled) {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_failed",
+			message:         "Connection check was cancelled",
+			troubleshooting: "The diagnostic request was cancelled; no certificate-trust failure was established. Keep the saved TLS settings.",
+		}
+	}
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &networkError) && networkError.Timeout()) ||
+		strings.Contains(lower, "context deadline exceeded") ||
+		strings.Contains(lower, "client.timeout exceeded") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "tls handshake timeout") ||
+		strings.Contains(lower, "tls: handshake timeout") ||
+		strings.Contains(lower, "timeout awaiting response headers") ||
+		strings.Contains(lower, "connection timed out") {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_timeout",
+			message:         "Connection timed out",
+			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
+		}
+	}
+
 	if strings.Contains(lower, "invalid") && strings.Contains(lower, "host") {
 		return diagnosticsConnectionFailure{
 			kind:            "invalid_host_url",
@@ -968,7 +996,7 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 		return diagnosticsConnectionFailure{
 			kind:            "tls_certificate_mismatch",
 			message:         "TLS certificate mismatch or untrusted certificate",
-			troubleshooting: "Update the stored certificate fingerprint, fix the node certificate, or disable verification only on a trusted network.",
+			troubleshooting: "Check the configured endpoint's certificate hostname, expiry and trusted chain. If a fingerprint is needed or has changed, independently verify the certificate's identity and add or update the saved fingerprint only after that verification. Do not disable verification or switch to HTTP to diagnose the failure.",
 		}
 	}
 	if strings.Contains(lower, "authentication") ||
@@ -985,18 +1013,6 @@ func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) dia
 			troubleshooting: "Rotate the node credentials in Settings, then verify the user or token has the required Proxmox permissions.",
 		}
 	}
-	if strings.Contains(lower, "context deadline exceeded") ||
-		strings.Contains(lower, "client.timeout exceeded") ||
-		strings.Contains(lower, "i/o timeout") ||
-		strings.Contains(lower, "tls handshake timeout") ||
-		strings.Contains(lower, "timeout awaiting response headers") {
-		return diagnosticsConnectionFailure{
-			kind:            "connection_timeout",
-			message:         "Connection timed out",
-			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
-		}
-	}
-
 	if fallbackMessage == "" {
 		fallbackMessage = "Connection check failed"
 	}
