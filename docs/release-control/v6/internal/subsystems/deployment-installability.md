@@ -6995,6 +6995,16 @@ for per-client single-resource reports and say a `GET` with query parameters
 still returns the report without the Pulse Assistant narrative, matching the
 server, which lets only `POST` narrate. Install, upgrade and provider bundle
 delivery are unchanged.
+The same per-client report help distinguishes generation's `settings:read`
+scope from narration's additional `ai:execute` permission for API tokens, for
+single-resource and fleet PDFs alike. A token without spending authority still
+gets a deterministic report, not a generation failure or an instruction to
+broaden monitoring permissions. GET/CSV never narrate, while browser sessions,
+server-run schedules and budgets keep their existing rules. Canonical and
+shipped MSP copy must match; `docsLinks.test.ts` checks the rendered permission,
+fallback and unchanged-surface guidance. The production Docs/router browser
+fixture checks both API and MSP report sections on desktop and touch phone
+without API requests, mutations or provider calls.
 
 ### Convergence log-reader compatibility (5 September 2026)
 

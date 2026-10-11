@@ -10233,6 +10233,29 @@ be able to spend AI budget. The reporting catalog advertises the transport as
 it. `generate-multi` and the manual schedule run endpoint
 (`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
 schedules run from the server's scheduler, not an HTTP request.
+POST alone does not authorise narration by an API token. Both the
+single-resource and fleet generation paths call `reportCallerMayUseAI` before
+`resolveNarrator`: a token must carry `ai:execute` (including full-access
+tokens), in addition to the route's `settings:read` generation scope. A
+read-only token still receives the report, but with deterministic narration
+and an existing-service-only findings lookup, never an AI service resolution
+or provider call. The single-resource scope fallback uses
+`scopeLimitedReportNarrator` and explains the missing scope; the fleet fallback
+leaves `FleetNarrator` nil for the engine's heuristic summary. Browser sessions
+and server-run schedules carry no API token and keep their existing narration
+behaviour. An API-token-triggered schedule run shares the fleet narration gate;
+its separate `settings:write` route scope and all schedule/budget rules remain
+unchanged. GET stays deterministic even for tokens permitted to spend AI budget.
+The canonical API/MSP references and their shipped mirrors distinguish read
+permission, narration permission, and GET/CSV behaviour. `docsLinks.test.ts`
+checks both method/scope branches and renders that guidance rather than
+requiring the old whitespace-sensitive, unconditional POST branch.
+`TestSingleReportAINarrationNeedsAIExecuteForTokens` and
+`TestFleetReportAINarrationNeedsAIExecuteForTokens` exercise browser, read-only,
+read-plus-monitoring, AI-execution, and full-access callers.
+`TestSingleReportGETNeverUsesAIRegardlessOfTokenScopes` crosses those same
+callers with GET and proves no narration/service resolution, the GET-specific
+heuristic note, and preservation of existing findings.
 `TestContract_SingleReportAINarrationRequiresPOST` pins the rule on a real
 engine: GET, HEAD, PUT and DELETE make no narrator call and no AI service
 resolution, while POST makes one of each.
