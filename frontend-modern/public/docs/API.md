@@ -171,7 +171,7 @@ Public endpoints include:
 - `GET /api/health`
 - `GET /api/version`
 - `GET /api/agent/version` (agent update checks)
-- `GET /api/setup-script` (requires a setup token)
+- `GET /api/setup-script` (public; the generated script prompts for its setup token at runtime and skips auto-registration if none is supplied)
 
 ## 🔏 Scopes and Admin Access
 
@@ -589,25 +589,27 @@ Response:
 ### Resource Metadata
 User notes, tags, and custom URLs for resources.
 
-- `GET /api/agents/metadata` (admin or `monitoring:read`)
-- `GET /api/agents/metadata/{agentId}` (admin or `monitoring:read`)
-- `PUT /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
-- `DELETE /api/agents/metadata/{agentId}` (admin or `monitoring:write`)
+These routes do not require admin access. Any authenticated browser session can call them, and API tokens need the scope shown.
 
-- `GET /api/guests/metadata` (admin or `monitoring:read`)
-- `GET /api/guests/metadata/{guestId}` (admin or `monitoring:read`)
-- `PUT /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
-- `DELETE /api/guests/metadata/{guestId}` (admin or `monitoring:write`)
+- `GET /api/agents/metadata` (`monitoring:read`)
+- `GET /api/agents/metadata/{agentId}` (`monitoring:read`)
+- `PUT /api/agents/metadata/{agentId}` (`monitoring:write`)
+- `DELETE /api/agents/metadata/{agentId}` (`monitoring:write`)
 
-- `GET /api/docker/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/metadata/{containerId}` (admin or `monitoring:read`)
-- `PUT /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/metadata/{containerId}` (admin or `monitoring:write`)
+- `GET /api/guests/metadata` (`monitoring:read`)
+- `GET /api/guests/metadata/{guestId}` (`monitoring:read`)
+- `PUT /api/guests/metadata/{guestId}` (`monitoring:write`)
+- `DELETE /api/guests/metadata/{guestId}` (`monitoring:write`)
 
-- `GET /api/docker/runtimes/metadata` (admin or `monitoring:read`)
-- `GET /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:read`)
-- `PUT /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
-- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (admin or `monitoring:write`)
+- `GET /api/docker/metadata` (`monitoring:read`)
+- `GET /api/docker/metadata/{containerId}` (`monitoring:read`)
+- `PUT /api/docker/metadata/{containerId}` (`monitoring:write`)
+- `DELETE /api/docker/metadata/{containerId}` (`monitoring:write`)
+
+- `GET /api/docker/runtimes/metadata` (`monitoring:read`)
+- `GET /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:read`)
+- `PUT /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:write`)
+- `DELETE /api/docker/runtimes/metadata/{runtimeId}` (`monitoring:write`)
 
 ### Version Info
 `GET /api/version`
@@ -891,8 +893,8 @@ Returns time-series data for CPU, Memory, and Storage.
 Returns storage chart data.
 
 ### Storage Stats
-`GET /api/storage/`
-Detailed storage usage per node and pool.
+`GET /api/storage/{storageId}` (`monitoring:read`)
+Returns one storage resource by its `id`, wrapped as `{"data": {...}, "timestamp": 1700000000}`. The `data` object includes `id`, `name`, `node`, `instance`, `type`, `status`, `total`, `used`, `free`, `usage`, `content`, `shared`, `enabled` and `active`. Returns HTTP 404 with code `storage_not_found` for an unknown ID, and HTTP 405 for methods other than GET. A request without an ID (`GET /api/storage/`) returns HTTP 400 with code `missing_storage_id`.
 
 ### Recovery (formerly Backups / Snapshots)
 Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
@@ -924,29 +926,29 @@ points, rollups, posture, and filter semantics.
 ## 🔔 Notifications
 
 ### Send Test Notification
-`POST /api/notifications/test` (admin)
-Triggers a test alert to all configured channels.
+`POST /api/notifications/test` (admin, `settings:write`)
+Sends one test notification through a single channel per request, not all configured channels. The JSON body `method` (or `type`) selects `email`, `webhook`, or `apprise` and uses the saved configuration. `webhookId` targets one specific saved webhook. `config` tests unsaved email or Apprise settings. If alert delivery is paused, the response includes `deliveryPaused: true`.
 
 ### Email, Apprise, and Webhooks
-- `GET /api/notifications/email` (admin)
-- `PUT /api/notifications/email` (admin)
-- `GET /api/notifications/apprise` (admin)
-- `PUT /api/notifications/apprise` (admin)
-- `GET /api/notifications/webhooks` (admin)
-- `POST /api/notifications/webhooks` (admin)
-- `PUT /api/notifications/webhooks/<id>` (admin)
-- `DELETE /api/notifications/webhooks/<id>` (admin)
-- `POST /api/notifications/webhooks/test` (admin)
-- `GET /api/notifications/webhook-templates` (admin)
-- `GET /api/notifications/webhook-history` (admin)
-- `GET /api/notifications/email-providers` (admin)
+- `GET /api/notifications/email` (admin, `settings:read`; `settings:write` also accepted)
+- `PUT /api/notifications/email` (admin, `settings:write`)
+- `GET /api/notifications/apprise` (admin, `settings:read`; `settings:write` also accepted)
+- `PUT /api/notifications/apprise` (admin, `settings:write`)
+- `GET /api/notifications/webhooks` (admin, `settings:read`; `settings:write` also accepted)
+- `POST /api/notifications/webhooks` (admin, `settings:write`)
+- `PUT /api/notifications/webhooks/<id>` (admin, `settings:write`)
+- `DELETE /api/notifications/webhooks/<id>` (admin, `settings:write`)
+- `POST /api/notifications/webhooks/test` (admin, `settings:write`)
+- `GET /api/notifications/webhook-templates` (admin, `settings:read`; `settings:write` also accepted)
+- `GET /api/notifications/webhook-history` (admin, `settings:read`; `settings:write` also accepted)
+- `GET /api/notifications/email-providers` (admin, `settings:read`; `settings:write` also accepted)
 
 Email and webhook configurations accept optional `tagFilter` (an array of
 resource-tag strings) and `tagFilterMode` (`"all"` or `"any"`). An omitted
 field is preserved on update; an empty `tagFilter` clears routing and restores
 delivery for all resources.
 
-- `GET /api/notifications/health` (admin)
+- `GET /api/notifications/health` (admin, `settings:read`; `settings:write` also accepted)
   - Queue health is `degraded` whenever any retained `failed` or `dlq`
     delivery exists, and `unavailable` when queue state cannot be read.
     Recoverable failed attempts that returned to `pending` for retry do not
@@ -1003,12 +1005,19 @@ Common reporting error codes:
     text. Completed attempts are retained for 7 days; dead-letter attempts are
     retained for 30 days, so the response reports both windows explicitly.
   - `limit` defaults to 50 and is capped at 200.
-- `GET /api/notifications/queue/stats` (admin)
+- `GET /api/notifications/queue/stats` (admin, `settings:read` and `monitoring:read`)
   - Returns counts for all rows still retained by the queue. Status counts have
     different retention windows and are not a delivery rate or lifetime total.
 - `GET /api/notifications/dlq` (admin)
 - `POST /api/notifications/dlq/retry` (admin)
-- `POST /api/notifications/dlq/delete` (admin)
+- `POST /api/notifications/dlq/delete` (admin, `settings:write`; `DELETE` also accepted)
+  - Body: `{ "id": "<notification id>" }`. Marks that queue row `cancelled`
+    with the note "Manually deleted from DLQ"; the row is not removed and is
+    retained for 7 days like other cancelled rows. The endpoint does not check
+    that the row is in the dead-letter queue.
+  - Returns `{ "success": true, "message": "Notification deleted from DLQ",
+    "id": "<notification id>" }`. An empty or missing `id`, or an invalid JSON
+    body, returns `400`. An unknown `id` returns `500`.
 - `POST /api/notifications/terminal-failures/retry` (admin, `settings:write`)
   - Returns every retained `failed` or `dlq` delivery to `pending` with a fresh
     retry budget. Existing per-attempt delivery history is preserved.
@@ -1079,19 +1088,30 @@ In Docker installs, the response includes a restart notice.
 { "name": "ansible-script", "scopes": ["monitoring:read"] }
 ```
 
-### Edit API Token Scopes
+### Edit API Token
 `PATCH /api/security/tokens/<id>`
 ```json
 { "scopes": ["monitoring:read", "settings:read"] }
 ```
 
-The `scopes` field is required and must contain at least one known scope.
-Wildcard access (`"*"`) cannot be combined with other scopes. The update takes
-effect on the token's next request without changing its ID, secret, expiry, or
-organization bindings.
+Send `scopes`, `name`, or both; a body with neither returns 400. A rename-only
+body such as `{ "name": "new-name" }` leaves the scopes unchanged, and a blank
+`name` returns 400. When `scopes` is sent it must contain at least one known
+scope, and wildcard access (`"*"`) cannot be combined with other scopes.
+API-token callers that change scopes must already hold every existing scope on
+the target token and every scope they request. The update takes effect on the
+token's next request without changing its ID, secret, expiry, or organization
+bindings.
 
 ### Revoke Token
 `DELETE /api/security/tokens/<id>`
+
+### Validate API Token (admin session or `settings:write` token)
+`POST /api/security/validate-token`
+```json
+{ "token": "raw-token" }
+```
+Returns `{ "valid": true, "message": "Token is valid" }` for a known, unexpired token. An unknown or expired token returns HTTP 200 with `"valid": false` and `"message": "Token is invalid"`. An empty `token` returns HTTP 400 with `"valid": false` and `"message": "Token is required"`. When no API tokens are configured, the response is HTTP 200 with `"valid": false` and `"message": "API token authentication is not configured"`. API-token callers need the `settings:write` scope; a token without it gets HTTP 403. Non-admin proxy-auth callers get HTTP 403. Requests over the rate limit get HTTP 429. A successful validation updates the token's last-used time. This endpoint is not gated by the Pro audit licence.
 
 ### Recovery (Localhost or Recovery Token)
 `POST /api/security/recovery`
@@ -1102,12 +1122,12 @@ Supports actions:
 
 `GET /api/security/recovery` returns recovery mode status.
 
-### Reset Account Lockout (Admin)
-`POST /api/security/reset-lockout`
+### Reset Account Lockout (Admin or settings:write token)
+`POST /api/security/reset-lockout` (admin, `settings:write`)
 ```json
 { "identifier": "admin" }
 ```
-Identifier can be a username or IP address.
+Callers need an admin session, or an API token with the `settings:write` scope; a token without that scope gets `403` with `error: "missing_scope"`. Identifier can be a username or IP address. An empty identifier returns `400 missing_identifier`. Success returns `{ "success": true, "message": "Lockout reset for admin" }`.
 
 ### Regenerate API Token (Admin)
 `POST /api/security/regenerate-token`
@@ -1163,16 +1183,6 @@ Response:
   "verified": true,
   "message": "Event signature verified"
 }
-```
-
-### Validate API Token (Admin)
-`POST /api/security/validate-token`
-```json
-{ "token": "raw-token" }
-```
-Returns:
-```json
-{ "valid": true, "message": "Token is valid" }
 ```
 
 ### Bootstrap Token Validation (Public)
@@ -1287,11 +1297,11 @@ Returns minimal server info for installer scripts.
 OIDC and SAML configuration is managed via SSO providers.
 
 ### SSO Provider Management (Community)
-- `GET /api/security/sso/providers` (admin)
-- `POST /api/security/sso/providers` (admin)
-- `GET /api/security/sso/providers/{id}` (admin)
-- `PUT /api/security/sso/providers/{id}` (admin)
-- `DELETE /api/security/sso/providers/{id}` (admin)
+- `GET /api/security/sso/providers` (admin, `settings:read`)
+- `POST /api/security/sso/providers` (admin, `settings:write`)
+- `GET /api/security/sso/providers/{id}` (admin, `settings:read`)
+- `PUT /api/security/sso/providers/{id}` (admin, `settings:write`)
+- `DELETE /api/security/sso/providers/{id}` (admin, `settings:write`)
 
 Provider mutation request contract:
 - Max request body: 1MB.
@@ -1300,8 +1310,8 @@ Provider mutation request contract:
 - OIDC and SAML providers are included with the Community SSO entitlement.
 
 ### SSO Test and Metadata Preview (Community)
-- `POST /api/security/sso/providers/test` (admin)
-- `POST /api/security/sso/providers/metadata/preview` (admin)
+- `POST /api/security/sso/providers/test` (admin, `settings:write`)
+- `POST /api/security/sso/providers/metadata/preview` (admin, `settings:read`)
 
 Test/preview request contract:
 - Max request body: 32KB.
@@ -1318,13 +1328,13 @@ Test/preview request contract:
 ### License Features (Authenticated)
 `GET /api/license/features`
 
-### Activate License (Admin)
+### Activate License (Admin, `settings:write`)
 `POST /api/license/activate`
 ```json
 { "license_key": "PASTE_KEY_HERE" }
 ```
 
-### Clear License (Admin)
+### Clear License (Admin, `settings:write`)
 `POST /api/license/clear`
 
 ---
@@ -1597,6 +1607,12 @@ Runs a focused investigation for an alert payload (used by the UI).
     `409 patrol_objective_revision_conflict`.
 - `GET /api/ai/patrol/history`
 - `GET /api/ai/patrol/runs`
+- `GET /api/ai/patrol/runs/{id}` (`ai:execute`)
+  - Returns one retained Patrol run by the `id` from `GET /api/ai/patrol/runs`.
+    Percent-encode the ID in the path. Tool-call arrays are omitted unless
+    `?include=tool_calls`. Returns `400` when the ID is empty, `404`
+    (`not_found`) when no retained run has that ID, and `503`
+    (`service_unavailable`) when the Patrol service is unavailable.
 - `GET /api/ai/patrol/stream` (Pro)
 - `POST /api/ai/patrol/run` (admin, Pro)
 - `POST /api/ai/patrol/acknowledge` (Pro)
@@ -1628,14 +1644,9 @@ Runs a focused investigation for an alert payload (used by the UI).
 ### Remediation Plans (Pro)
 - `GET /api/ai/remediation/plans`
 - `GET /api/ai/remediation/plan?plan_id=<id>`
-- `POST /api/ai/remediation/approve`
-- `POST /api/ai/remediation/execute`
-- `POST /api/ai/remediation/rollback`
-
-Request bodies:
-- `approve`: `{ "plan_id": "...", "approved_by": "api" }`
-- `execute`: `{ "execution_id": "..." }`
-- `rollback`: `{ "execution_id": "..." }`
+- `POST /api/ai/remediation/approve` (`ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response; approve typed actions through `POST /api/actions/{id}/decision` (`actions:approve`) instead)
+- `POST /api/ai/remediation/execute` (admin, `ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response)
+- `POST /api/ai/remediation/rollback` (admin, `ai:execute`; retired: on Pro builds it always returns `410 Gone` with error code `command_remediation_retired` after the licence, method and scope checks, and community builds return a licence-required response; no rollback runs through this endpoint)
 
 ### Intelligence & Forecasting
 - `GET /api/ai/intelligence`
@@ -1753,6 +1764,9 @@ Unlinks an agent from a node.
 `DELETE /api/agents/agent/{agent_id}` (admin, `settings:write`)  
 Removes an agent from state.
 
+`POST /api/agents/agent/{agent_id}/allow-reenroll` (admin, `settings:write`)  
+Clears the removal block left by `DELETE /api/agents/agent/{agent_id}` so the agent can report again. Returns `{"success": true, "agentId": "<agent_id>"}`. Other methods return `405`.
+
 ### Agent Linking (Admin)
 - `POST /api/agents/agent/link` (admin, `settings:write`)
 - `POST /api/agents/agent/unlink` (admin, `settings:write`)
@@ -1812,22 +1826,24 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/display-name` (`kubernetes:manage`)
 
 ### Agent Profiles (Pro)
-`GET /api/admin/profiles` (admin, Pro)
-`POST /api/admin/profiles` (admin, Pro)
-`GET /api/admin/profiles/{id}` (admin, Pro)
-`PUT /api/admin/profiles/{id}` (admin, Pro)
-`DELETE /api/admin/profiles/{id}` (admin, Pro)
-`GET /api/admin/profiles/schema` (admin, Pro)
-`POST /api/admin/profiles/validate` (admin, Pro)
-`POST /api/admin/profiles/suggestions` (admin, Pro)
-`GET /api/admin/profiles/changelog` (admin, Pro)
-`GET /api/admin/profiles/deployments` (admin, Pro)
-`POST /api/admin/profiles/deployments` (admin, Pro)
-`GET /api/admin/profiles/{id}/versions` (admin, Pro)
-`POST /api/admin/profiles/{id}/rollback/{version}` (admin, Pro)
-`GET /api/admin/profiles/assignments` (admin, Pro)
-`POST /api/admin/profiles/assignments` (admin, Pro)
-`DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
+`GET /api/admin/profiles/` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`PUT /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`DELETE /api/admin/profiles/{id}` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/schema` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/validate` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/suggestions` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/changelog` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/deployments` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/deployments` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/{id}/versions` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/{id}/rollback/{version}` (admin, `settings:write`, Pro)
+`GET /api/admin/profiles/assignments` (admin, `settings:write`, Pro)
+`POST /api/admin/profiles/assignments` (admin, `settings:write`, Pro)
+`DELETE /api/admin/profiles/assignments/{agent_id}` (admin, `settings:write`, Pro)
+
+Every profile route requires admin access and the `agent_profiles` licence feature (HTTP 402 when unlicensed). Token callers also need `settings:write` on every profile route, including GET requests; session requests are not subject to the token scope check. Use the trailing slash on the collection path; the path without it is redirected, not served.
 
 ---
 
@@ -1840,12 +1856,12 @@ the API for automation.
 
 ### Target Management
 
-- `GET /api/availability-targets` (`settings:read`) - List configured targets and latest probe status.
-- `POST /api/availability-targets` (`settings:write`) - Add a target.
-- `PUT /api/availability-targets/{id}` (`settings:write`) - Update a target.
-- `DELETE /api/availability-targets/{id}` (`settings:write`) - Remove a target.
-- `POST /api/availability-targets/test` (`settings:write`) - Test an unsaved target.
-- `POST /api/availability-targets/{id}/test` (`settings:write`) - Test a saved target.
+- `GET /api/availability-targets` (admin, `settings:read`) - List configured targets and latest probe status.
+- `POST /api/availability-targets` (admin, `settings:write`) - Add a target.
+- `PUT /api/availability-targets/{id}` (admin, `settings:write`) - Update a target.
+- `DELETE /api/availability-targets/{id}` (admin, `settings:write`) - Remove a target.
+- `POST /api/availability-targets/test` (admin, `settings:write`) - Test an unsaved target. If the body includes the `id` of a saved target, that target's stored HTTP credentials are reused, but only while the HTTP scheme, host and port are unchanged.
+- `POST /api/availability-targets/{id}/test` (admin, `settings:write`) - Test a saved target.
 
 Target payload fields:
 
@@ -1896,6 +1912,14 @@ Example ping-only target:
 
 The create response and subsequent reads return `"protocol": "icmp"`.
 
+### History
+
+- `POST /api/availability-history` (`monitoring:read`) - Recent state and latency history for up to 200 availability targets in one request. Body: `{"targetIds": ["<target-id>"], "range": "24h"}`. `targetIds` is required; blank and duplicate IDs are dropped, and at most 200 unique IDs are accepted. `range` is optional (default `24h`). Allowed ranges are `1h`, `6h`, `12h`, `24h`, `7d`, `14d`, `30d`, `90d`, and `365d`. A range longer than the licence's metrics history retention returns `402` (free tier: 7 days). Non-POST methods return `405`.
+
+Response (`200`): `start` and `end` (UTC, end truncated to the minute) and `targets`. Each target has `targetId` and either `summary` (`reachableSeconds`, `unreachableSeconds`, `indeterminateSeconds`, `unknownSeconds`, `coveragePercent`, optional `availabilityPercent`, optional `reachableLatencyMillis`) with `buckets` (at most 120) and, only when present, `revisionBoundaries`; or an `error` with code `not_found` when the ID is not a configured target. An unknown ID does not fail the batch.
+
+Errors: `400` with `invalid_request` (malformed JSON, unknown fields, or body over 32 KiB), `missing_target_ids`, `too_many_target_ids`, or `invalid_range`. Server-side failures return `500` or `503` with a typed error code.
+
 ---
 
 ## 🐟 TrueNAS
@@ -1906,7 +1930,9 @@ TrueNAS connection management endpoints for adding, testing, and removing TrueNA
 - `GET /api/truenas/connections` (admin, `settings:read`) — List configured TrueNAS connections.
 - `POST /api/truenas/connections` (admin, `settings:write`) — Add a new TrueNAS connection.
 - `POST /api/truenas/connections/test` (admin, `settings:write`) — Test a TrueNAS connection before saving.
+- `POST /api/truenas/connections/{id}/test` (admin, `settings:write`) — Live-test a saved connection with its stored credentials. An optional JSON body overrides fields for this test only and is not saved. Returns `404` (`truenas_not_found`) for an unknown ID and `400` (`truenas_invalid_config` or `truenas_connection_failed`) on failure. The probe does not clear poll errors or advance poll freshness, so check the `poll` field from `GET /api/truenas/connections` to see whether ordinary polling has recovered.
 - `DELETE /api/truenas/connections/{id}` (admin, `settings:write`) — Remove a TrueNAS connection.
+- `PUT /api/truenas/connections/{id}` (admin, `settings:write`) — Update a saved TrueNAS connection. Send only the fields to change in a private JSON file; omitted fields keep their stored values. A masked `apiKey` or `password` returned by a GET response is kept from the stored record, so never send a masked value as a new secret. Saving does not test the connection. Setting `monitorDatasets`, `monitorPools` and `monitorReplication` all to `false` is saved as all enabled. Returns 200 with the redacted connection, 400 `validation_error`, 404 `truenas_not_found`, or 403 `mock_mode_enabled` in mock mode.
 
 TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, alerts) are surfaced through the unified `/api/resources` endpoint with `source=truenas`.
 
@@ -1918,10 +1944,10 @@ End-to-end encrypted relay protocol for mobile connectivity.
 
 > Relay pairing endpoints generate the QR code and deep link used by supported Pulse Mobile clients.
 
-### Relay Configuration (Admin, Relay and Above)
-- `GET /api/settings/relay` (admin, `settings:read`, Relay+) — Get current relay configuration.
-- `PUT /api/settings/relay` (admin, `settings:write`, Relay+) — Update relay configuration.
-- `GET /api/settings/relay/status` (admin, `settings:read`, Relay+) — Get relay connection status.
+### Relay Configuration (Relay and Above; admin session or scoped token)
+- `GET /api/settings/relay` (`settings:read` token scope, or admin session, Relay+) — Get current relay configuration.
+- `PUT /api/settings/relay` (`settings:write` token scope, or admin session, Relay+) — Update relay configuration.
+- `GET /api/settings/relay/status` (`settings:read` token scope, or admin session, Relay+) — Get relay connection status.
 
 ### Mobile Onboarding
 - `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for Pulse Mobile pairing.
