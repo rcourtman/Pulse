@@ -159,7 +159,7 @@ class TrueNASDocsTest(unittest.TestCase):
                 self.assertCountEqual(result.stdout.splitlines(), ["startup failed", "TrueNAS collection failed"])
                 self.assertEqual(result.stderr, "")
                 self.assertNotRegex(recipe, r"\b(?:grep|curl|inspect|restart|printenv)\b|--follow")
-                self.assertIn("--signal=TERM --kill-after=1s 8s", recipe)
+                self.assertIn("--signal=KILL 8s", recipe)
 
     def test_log_reader_failure_is_preserved_even_with_a_matching_partial_line(self):
         for reader, recipe in self.log_recipes().items():
@@ -176,11 +176,11 @@ class TrueNASDocsTest(unittest.TestCase):
         for reader, recipe in self.log_recipes().items():
             with self.subTest(reader=reader):
                 result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n", hang="term")
-                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.returncode, 137, result.stderr)
                 self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+                self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
-    def test_reader_ignoring_term_is_killed_after_the_grace_period(self):
+    def test_reader_ignoring_term_is_killed_at_the_hard_deadline(self):
         result, _ = self.exercise_log("docker", self.log_recipes()["docker"],
                                      stdout="TrueNAS polling\n", hang="ignore-term")
         self.assertEqual(result.returncode, 137, result.stderr)
@@ -224,7 +224,7 @@ class TrueNASDocsTest(unittest.TestCase):
                          "not sanitised", "not the whole excerpt", "manually redacted",
                          "anything echoed in an error", "enable Debug",
                          "record limit alone does not bound a hung reader", "GNU `timeout`",
-                         "eight-second deadline and one-second termination grace",
+                         "eight-second hard deadline",
                          "no request ID is required", "only after a successful read",
                          "withholds partial output", "do not use an unbounded substitute"):
             self.assertIn(boundary, prose)

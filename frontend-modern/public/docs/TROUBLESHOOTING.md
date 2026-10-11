@@ -350,14 +350,31 @@ incident's time window; no new action or request ID is needed.
 ```bash
 # systemd / Proxmox LXC — warning and higher priority
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
-if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse -p warning --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
-  if [ -n "$pulse_logs" ]; then
-    printf '%s\n' "$pulse_logs"
+fi
+trap 'rm -- "$pulse_log_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+journalctl -u pulse -p warning --since '15 minutes ago' --lines 200 --no-pager 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! pulse_log_bytes=$(wc -c < "$pulse_log_file" 2>/dev/null); then
+    printf 'Log read unavailable: excerpt size could not be checked.\n' >&2
+    exit 1
   fi
+  if [ "$pulse_log_bytes" -gt 262144 ]; then
+    printf 'Log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$pulse_log_file"
 else
   pulse_log_status=$?
   printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
@@ -366,10 +383,11 @@ fi
 )
 ```
 
-This requires **GNU `timeout`**, reads at most 200 records from the last 15
-minutes and allows eight seconds plus a one-second termination grace. A failed
-or timed-out read is unavailable, not an empty warning search; no partial
-excerpt is shown. Stop if the utility or journal access is unavailable; do not
+This requires **GNU `timeout`** and the listed local utilities, reads at most
+200 records from the last 15 minutes, and limits the excerpt to **256 KiB**.
+The eight-second hard deadline covers the reader and byte limiter together.
+A failed, oversized or timed-out read is unavailable, not an empty warning
+search; no partial excerpt is shown. Stop if a utility or journal access is unavailable; do not
 use an unbounded substitute. These local excerpts are **not sanitised**; follow
 [log-sharing precautions](#inspect-notification-logs) before sharing any line.
 
@@ -1283,22 +1301,42 @@ inside the Pulse container, not on the Proxmox host. Adjust the time window to
 the original incident and substitute your actual service or container name
 (`pulse-backend` on some older systemd installs). These examples read at most
 200 records from the last 15 minutes; they do not follow the log or send a test.
-Each requires **GNU `timeout`** and gives the reader eight seconds plus a
-one-second termination grace. If it is unavailable, stop rather than running
-an unbounded substitute. These are Bash examples; the enclosing subshell keeps
-an unavailable read from exiting your interactive shell.
+Each requires **GNU `timeout`** and the listed local utilities. A **256 KiB**
+byte limit complements the record limit: a single log record can be large.
+The eight-second hard deadline kills only the read-only collection group,
+including the reader and byte limiter, not Pulse or Docker. If a required
+utility is unavailable, stop rather than running an unbounded substitute.
+These are Bash examples; the enclosing subshell keeps an unavailable read from
+exiting your interactive shell.
 
 ```bash
 # systemd / Proxmox LXC
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
-if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
-  if [ -n "$pulse_logs" ]; then
-    printf '%s\n' "$pulse_logs"
+fi
+trap 'rm -- "$pulse_log_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! pulse_log_bytes=$(wc -c < "$pulse_log_file" 2>/dev/null); then
+    printf 'Log read unavailable: excerpt size could not be checked.\n' >&2
+    exit 1
   fi
+  if [ "$pulse_log_bytes" -gt 262144 ]; then
+    printf 'Log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$pulse_log_file"
 else
   pulse_log_status=$?
   printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
@@ -1310,14 +1348,31 @@ fi
 ```bash
 # Docker
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
-if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 200 pulse 2>&1); then
-  if [ -n "$pulse_logs" ]; then
-    printf '%s\n' "$pulse_logs"
+fi
+trap 'rm -- "$pulse_log_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+docker logs --since 15m --tail 200 pulse 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! pulse_log_bytes=$(wc -c < "$pulse_log_file" 2>/dev/null); then
+    printf 'Log read unavailable: excerpt size could not be checked.\n' >&2
+    exit 1
   fi
+  if [ "$pulse_log_bytes" -gt 262144 ]; then
+    printf 'Log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$pulse_log_file"
 else
   pulse_log_status=$?
   printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
@@ -1327,10 +1382,14 @@ fi
 ```
 
 Application logs can be written to stdout or stderr; these commands collect
-both into one local excerpt, without preserving stdout/stderr attribution,
-and display it **only after the reader completes successfully**.
-A failed or timed-out read displays only an unavailable message and its exit
-code, not a partial excerpt that could be mistaken for complete evidence.
+both into one owner-only temporary file, without preserving stdout/stderr
+attribution, and display it **only after the reader completes successfully**
+and the byte limit is checked. The file holds at most 256 KiB plus one byte
+used to detect overflow; it is removed when the subshell exits. A failed,
+oversized or timed-out read shows no partial excerpt that could be mistaken
+for complete evidence. If the shell is forcibly interrupted, an owner-only
+`pulse-log.*` file may remain in its temporary directory; remove that exact
+file privately, not unrelated logs or deployment data.
 Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
 and hide a failed read behind a matching partial line. A nonzero reader exit,
 access error or missing service/container is a failed read, not “no delivery
@@ -1358,25 +1417,44 @@ Replace `abc123` below with the response's ID. Run only the command for your
 deployment, on the Pulse host using an account authorised to read its logs.
 These examples limit collection to the last 15 minutes and 1,000 lines; adjust
 the time window to the original incident rather than repeating the failed action.
-Like the notification-log examples above, these require **GNU `timeout`**,
-allow eight seconds plus a one-second termination grace, and search **only a
-successfully completed read**. A deadline or failure shows no partial match;
-missing `timeout` does not fall back to an unbounded reader.
+Like the notification-log examples above, these require **GNU `timeout`**
+and the listed local utilities, enforce an eight-second hard deadline and a
+**256 KiB** byte limit, and search **only a successfully completed read**.
+They use an owner-only temporary file with the same cleanup precautions. A
+deadline, overflow or failure shows no partial match; a missing utility does
+not fall back to an unbounded reader. Keep the original response status, time
+and ID if the chosen window is too large; do not raise the limit or repeat the
+failed action to fill that gap.
 
 ```bash
 # systemd / Proxmox LXC
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm grep; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
+fi
+trap 'rm -- "$pulse_log_file"' EXIT
 REQUEST_ID='abc123'
-if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager 2>&1); then
-  if [ -n "$pulse_logs" ]; then
-    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
-  else
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! pulse_log_bytes=$(wc -c < "$pulse_log_file" 2>/dev/null); then
+    printf 'Log read unavailable: excerpt size could not be checked.\n' >&2
     exit 1
   fi
+  if [ "$pulse_log_bytes" -gt 262144 ]; then
+    printf 'Log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  grep -aF -- "$REQUEST_ID" "$pulse_log_file"
 else
   pulse_log_status=$?
   printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
@@ -1388,17 +1466,32 @@ fi
 ```bash
 # Docker
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm grep; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
+fi
+trap 'rm -- "$pulse_log_file"' EXIT
 REQUEST_ID='abc123'
-if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 1000 pulse 2>&1); then
-  if [ -n "$pulse_logs" ]; then
-    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
-  else
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+docker logs --since 15m --tail 1000 pulse 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! pulse_log_bytes=$(wc -c < "$pulse_log_file" 2>/dev/null); then
+    printf 'Log read unavailable: excerpt size could not be checked.\n' >&2
     exit 1
   fi
+  if [ "$pulse_log_bytes" -gt 262144 ]; then
+    printf 'Log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  grep -aF -- "$REQUEST_ID" "$pulse_log_file"
 else
   pulse_log_status=$?
   printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
@@ -1408,9 +1501,11 @@ fi
 ```
 
 A log-reader failure is not an empty search result: resolve any access or
-container/service error locally first. Exit **124** means the reader exceeded
-the deadline; **137** can mean the termination grace also elapsed. Neither
-establishes that Pulse itself is hung. Do not restart Pulse or Docker, enable
+container/service error locally first. Exit **137** can mean the hard deadline
+killed the collection group; an oversized excerpt is also unavailable. The
+byte limiter can close the pipe before the reader finishes, producing a
+nonzero reader exit such as **141**. These are collection results, not proof
+that Pulse itself is hung. Do not restart Pulse or Docker, enable
 Debug, widen collection or repeat the failed action merely to obtain logs.
 Even a successful read with no match does not prove the request succeeded. At the default log level, this middleware
 logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
