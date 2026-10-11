@@ -76,6 +76,21 @@ func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan struct{}, f
 	return entered, unblock
 }
 
+func awaitTenantRuntimeShutdown(t *testing.T, manager *MultiTenantMonitor, orgID string) {
+	t.Helper()
+	manager.mu.RLock()
+	done := manager.tenantDone[orgID]
+	manager.mu.RUnlock()
+	if done == nil {
+		t.Fatal("tenant has no owned runtime completion signal")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("tenant runtime did not join its released writer")
+	}
+}
+
 func TestMonitorStartJoinsMockAlertChecksBeforeReturning(t *testing.T) {
 	configureAlertShutdownFixture(t)
 	monitor, err := New(&config.Config{DataPath: t.TempDir()})
@@ -213,6 +228,10 @@ func TestTenantDeletionRetainsBlockedAlertPassThenRemovesCompletedRuntime(t *tes
 		t.Fatalf("blocked runtime lost its organization data: %v", err)
 	}
 	unblock()
+	// Releasing the callback is not completion of the remaining alert pass,
+	// sampler or Start. Observe the owned runtime signal, not a second race
+	// against the deliberately short refusal budget (especially under -race).
+	awaitTenantRuntimeShutdown(t, manager, "alert-owner")
 	if err := manager.BeginTenantDeletion("alert-owner"); err != nil {
 		t.Fatalf("completed alert pass prevented safe removal: %v", err)
 	}

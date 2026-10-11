@@ -315,6 +315,7 @@ func TestTenantDeletionRetainsBlockedAlertProjectionThenRemovesCompletedRuntime(
 	_, err = os.Stat(filepath.Join(orgPath, "org.json"))
 	require.NoError(t, err, "blocked writer must retain organization bytes")
 	unblock()
+	awaitTenantRuntimeShutdown(t, manager, "history-owner")
 	require.NoError(t, manager.BeginTenantDeletion("history-owner"))
 	require.NoError(t, persistence.DeleteOrganization("history-owner"))
 	manager.FinishTenantDeletion("history-owner")
