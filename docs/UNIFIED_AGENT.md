@@ -137,6 +137,15 @@ optional for host-local data.
    existing authentication failure, use the [token-file format guidance](#token-file-format-is-not-shell-syntax)
    before changing the saved credential or running another installation.
 
+   Before a first installation, check the complete value privately against the
+   token just generated, not only its visible ends. Current **Infrastructure →
+   Install on a host** tokens contain exactly **64 lowercase hexadecimal
+   characters** (`0–9`, `a–f`); duplicated characters or an internal space or
+   newline are not part of that value. This describes that generator, not every
+   legacy, manually supplied or bootstrap credential. A matching shape alone
+   does not authenticate a token. Keep the value out of commands, terminal
+   output, screenshots and reports.
+
 2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
    in both the download and installation commands. Download to a new private
    file. This ignores local curl settings, accepts only HTTP **200** over HTTPS,
@@ -1190,11 +1199,21 @@ assignment. These file forms therefore mean different things:
 | Bare token, possibly followed by a newline | The token value; this does not prove it matches the intended record or Pulse instance. |
 | Token surrounded by single or double quotes | The quotes remain part of the credential. |
 | Assignment prefix such as `PULSE_TOKEN=` or `export` | The prefix remains part of the credential; this is not an environment-file parser. |
+| Duplicated or missing characters, or whitespace inside a bare value | These change the credential; trimming the file's ends does not repair them. |
 | Unknown | The format and cause remain unknown; no new installation is needed to complete a report. |
 
 Quotes or a prefix can cause rejection even when the intended record has the
 right scopes. A rejected credential can leave that record showing `Never`;
 this does not identify the cause of a particular installation's failure.
+
+**Bare does not mean intact.** For a token from the current **Infrastructure →
+Install on a host** generator, privately check the 64-character lowercase
+hexadecimal shape described in [private-file installation](#private-file-installation-linux-macos-and-nas).
+The inventory's **Hint** shows only the first six and last four characters:
+duplicated or changed middle characters can leave both ends matching. Even an
+intact shape and matching hint do not prove full equality, the intended Pulse
+instance or accepted reporting. Do not apply this shape check to other token
+families or rotate a working credential because it looks different.
 
 Use how the file was saved or an existing private observation. If you cannot
 safely tell, say **unknown**. If asked, report only **bare**, **quoted**,

@@ -188,6 +188,40 @@ class AgentAuthDocsTest(unittest.TestCase):
             self.assertIn(fact, text)
         self.assertIn("#token-file-format-is-not-shell-syntax", DOC.read_text())
 
+    def test_first_install_checks_the_whole_current_host_token_privately(self):
+        guide = DOC.read_text(encoding="utf-8")
+        preparation = " ".join(guide.split("### Private-file installation: Linux, macOS and NAS", 1)[1]
+                               .split("2. Replace", 1)[0].split())
+        issuance = (ROOT / "internal/api/agenttokens/install.go").read_text()
+        self.assertIn("rawToken, err := internalauth.GenerateAPIToken()", issuance)
+        generator = (ROOT / "pkg/auth/token.go").read_text().split(
+            "func GenerateAPIToken()", 1)[1].split("// HashAPIToken", 1)[0]
+        self.assertIn("make([]byte, 32)", generator)
+        self.assertIn("hex.EncodeToString(bytes)", generator)
+        for fact in ("Before a first installation", "complete value privately",
+                     "not only its visible ends", "64 lowercase hexadecimal",
+                     "duplicated characters", "internal space or newline",
+                     "not every legacy, manually supplied or bootstrap credential",
+                     "matching shape alone does not authenticate",
+                     "commands, terminal output, screenshots and reports"):
+            self.assertIn(fact, preparation)
+
+    def test_bare_file_can_be_damaged_without_changing_its_hint(self):
+        text = " ".join(section().split())
+        metadata = (ROOT / "internal/config/api_tokens.go").read_text()
+        prefix = metadata.split("func tokenPrefix(", 1)[1].split("// tokenSuffix", 1)[0]
+        suffix = metadata.split("func tokenSuffix(", 1)[1].split("// HasAPITokens", 1)[0]
+        self.assertIn("value[:6]", prefix)
+        self.assertIn("value[len(value)-4:]", suffix)
+        for fact in ("Bare does not mean intact", "Duplicated or missing characters",
+                     "whitespace inside a bare value", "trimming the file's ends does not repair",
+                     "first six and last four characters", "middle characters can leave both ends matching",
+                     "do not prove full equality", "intended Pulse instance or accepted reporting",
+                     "Do not apply this shape check to other token families",
+                     "rotate a working credential because it looks different"):
+            self.assertIn(fact, text)
+        self.assertIn("#private-file-installation-linux-macos-and-nas", section())
+
 
 if __name__ == "__main__":
     unittest.main()
