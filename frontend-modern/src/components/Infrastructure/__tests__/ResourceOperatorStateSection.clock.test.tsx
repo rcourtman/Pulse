@@ -42,6 +42,27 @@ describe('held operator maintenance evidence', () => {
     vi.useRealTimers();
   });
 
+  it('ages the saved set time without saving, releasing policy or losing an unsaved note', async () => {
+    const record = state({ canonicalId: 'held-policy-set-time' });
+    await mount(record);
+    const setBy = screen.getByText(/Set by fixture-admin/).parentElement!;
+    expect(setBy).toHaveTextContent('1m ago');
+    const note = screen.getByLabelText('Operator note');
+    fireEvent.input(note, { target: { value: 'Unsaved note remains' } });
+    note.focus();
+    await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+    expect(setBy).toHaveTextContent('2h ago');
+    expect(note).toHaveFocus();
+    expect(note).toHaveValue('Unsaved note remains');
+    expect(screen.getByText('Save overrides')).toBeInTheDocument();
+    expect(screen.getByLabelText('Never auto-remediate this resource')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(api.apiFetchJSON).toHaveBeenCalledTimes(1);
+    expect(record.setAt).toBe(iso(-60_000));
+  });
+
   it('moves a held one-off window from scheduled to active to expired at its half-open boundaries', async () => {
     await mount(state({ maintenanceStartAt: iso(30_000), maintenanceEndAt: iso(60_000) }));
     expect(screen.getByText('Maintenance window scheduled.')).toBeInTheDocument();

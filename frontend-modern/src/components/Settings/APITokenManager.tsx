@@ -15,6 +15,7 @@ import {
 import { API_TOKEN_CREATE_ANCHOR } from '@/routing/resourceLinks';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
 import type { APITokenRecord } from '@/types/api';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
@@ -30,6 +31,7 @@ const APITokenManagerDialogs = lazy(() =>
 );
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
+  const now = useRelativeTimeNow();
   const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
   const [tokenToEdit, setTokenToEdit] = createSignal<APITokenRecord | null>(null);
   const [editScopes, setEditScopes] = createSignal<string[]>([]);
@@ -564,7 +566,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     <div class="space-y-1">
                       <dt class="font-semibold uppercase tracking-wide text-muted">Created</dt>
                       <dd class="text-base-content">
-                        {formatRelativeTime(new Date(token.createdAt).getTime())}
+                        {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                       </dd>
                     </div>
                   </dl>
@@ -608,7 +610,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 label: 'Created',
                 render: (token) => (
                   <span class="text-muted">
-                    {formatRelativeTime(new Date(token.createdAt).getTime())}
+                    {formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })}
                   </span>
                 ),
               },

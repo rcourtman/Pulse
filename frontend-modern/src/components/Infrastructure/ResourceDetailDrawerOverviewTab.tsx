@@ -12,6 +12,7 @@ import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertsForUnifiedResource } from '@/utils/alerts';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
@@ -367,6 +368,7 @@ export const ResourceAccessDisclosure: Component<{
 export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOverviewTabProps> = (
   props,
 ) => {
+  const now = useRelativeTimeNow();
   const resource = () => props.resource;
   const { drawer } = props;
   const showPlatformId = () => shouldShowResourcePlatformId(resource());
@@ -616,10 +618,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                               {kindPresentation.label}
                             </div>
                             <div class="mt-0.5 text-muted">
-                              {formatRelativeTime(change.observedAt)}
+                              {formatRelativeTime(change.observedAt, { now: now() })}
                               <Show when={change.occurredAt}>
                                 <span class="mx-1">•</span>
-                                <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
+                                <span>
+                                  Occurred {formatRelativeTime(change.occurredAt, { now: now() })}
+                                </span>
                               </Show>
                             </div>
                           </div>

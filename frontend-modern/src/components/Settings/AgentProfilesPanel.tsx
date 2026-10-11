@@ -25,8 +25,10 @@ import Settings from 'lucide-solid/icons/settings';
 import Lightbulb from 'lucide-solid/icons/lightbulb';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useAgentProfilesPanelState } from './useAgentProfilesPanelState';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 export const AgentProfilesPanel: Component = () => {
+  const now = useRelativeTimeNow();
   const featureGateCopy = getAgentProfilesFeatureGateCopy();
   const {
     aiAvailable,
@@ -310,7 +312,9 @@ export const AgentProfilesPanel: Component = () => {
                     hiddenOnMobile: true,
                     render: (agent) => (
                       <span class="text-muted">
-                        {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
+                        {agent.lastSeen
+                          ? formatRelativeTime(agent.lastSeen, { now: now() })
+                          : 'Never'}
                       </span>
                     ),
                   },
