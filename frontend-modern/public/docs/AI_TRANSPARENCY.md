@@ -79,6 +79,35 @@ released source, and ask for a retest when appropriate. See the
 [published releases](https://github.com/rcourtman/Pulse/releases) for available
 versions; a source commit or a passing test alone does not establish availability.
 
+## Issue resolution and retesting
+
+A bug is resolved when the reporter confirms recovery, or the maintainer
+reproduces the correction with no reported symptom left unresolved. A working
+workaround, one recovered screen or a merged fix does not settle every part of
+a mixed report. Other dispositions, such as a duplicate, need their own
+explanation; a feature request's demand-ledger entry is not an implemented feature.
+
+After a fix for every reported symptom ships in a stable release, the maintainer
+names that version and asks for a retest in the original issue. That reply says
+the issue will be closed after 14 days without a reply and can be reopened.
+The 14 days start with that stable-release retest reply, not the fix commit,
+a beta or a release candidate. Only retest when it is safe; do not repeat an
+outage, update or backup just to answer.
+
+Only after at least 14 days without any reply from the reporter, and with no
+other person reporting the same problem since that retest request, may the
+issue be closed with a note and the
+`closed-needs-retest-timeout` label. This is a retest timeout, **not confirmed
+resolution**. It does not apply to feature requests, issues labelled
+`needs-human`, or reports with an unfixed or unexplained symptom.
+
+If the problem persists, or a close missed part of the report, comment on the
+original issue rather than filing it again. Say which symptom remains and give
+the version already observed, with any relevant [locally reviewed, redacted
+evidence](TROUBLESHOOTING.md#collect-diagnostics-safely); unknown details are
+valid and credentials stay private. Credible continuing failures or a mistaken
+close are grounds to reopen the issue, not evidence to dismiss because it was closed.
+
 ## Authority and responsibility
 
 The automated maintainer owns ordinary maintenance and public Pulse issue
