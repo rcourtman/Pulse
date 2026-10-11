@@ -360,7 +360,10 @@ func TestComputeDiagnosticsTLSRefusalAndVerifiedRecovery(t *testing.T) {
 				PBSInstances: []config.PBSInstance{{Name: "pbs-fixture", Host: server.URL,
 					TokenName: "fixture@pbs!diagnostics", TokenValue: "fixture-token", VerifySSL: true, Fingerprint: initialPin}},
 			}
-			router := &Router{config: cfg}
+			// Diagnostics requires a runtime for uptime and scheduler state.
+			// Keep it target-free: only the direct probes contact this server.
+			monitor := newMonitorForDiagnostics(t, &config.Config{DataPath: t.TempDir()})
+			router := &Router{config: cfg, monitor: monitor}
 			diag := router.computeDiagnostics(context.Background())
 			if len(diag.Nodes) != 1 || len(diag.PBS) != 1 || diag.Nodes[0].Connected || diag.PBS[0].Probe.Connected {
 				t.Fatalf("TLS-refused probes reported connectivity: %+v %+v", diag.Nodes, diag.PBS)
@@ -419,9 +422,10 @@ func TestComputeDiagnosticsTLSHandshakeDeadline(t *testing.T) {
 			} else {
 				cfg.PBSInstances = []config.PBSInstance{{Name: "pbs-fixture", Host: server.URL, TokenName: "fixture@pbs!diagnostics", TokenValue: "fixture-token", VerifySSL: true}}
 			}
+			monitor := newMonitorForDiagnostics(t, &config.Config{DataPath: t.TempDir()})
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			diag := (&Router{config: cfg}).computeDiagnostics(ctx)
+			diag := (&Router{config: cfg, monitor: monitor}).computeDiagnostics(ctx)
 			var kind, guidance string
 			if provider == "pve" {
 				kind, guidance = diag.Nodes[0].ErrorKind, diag.Nodes[0].Troubleshooting
