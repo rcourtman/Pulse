@@ -113,6 +113,16 @@ overwrite them. The collector drains installer output even after a log-write
 failure, retains the first failure across later successful writes, and includes
 a final line without a newline. It must not close the installer pipe early or
 admit an update because a later write hid missing diagnostic evidence.
+
+The production `log()` primitive attempts both its system logger and stdout
+sinks and returns the first failed sink's exit even under a conditional caller
+that disables Bash errexit. A successful stdout write cannot conceal a failed
+logger write, nor a successful logger conceal failed stdout. Confined controls
+keep `log()` intact, substitute only the external logger and exercise closed
+stdout; the connected collector control drains more than a pipe buffer through
+an early, later or final unterminated-line logger failure, records both pipeline
+exits and preserves the existing verified restoration/prior-active rules. These
+controls do not establish a host journal's availability or #2785's stop cause.
 A failed collector does not establish installer failure; zero exits establish
 pipeline completion only, not version, service or update acceptance.
 The existing signed transaction and confined service-state tests

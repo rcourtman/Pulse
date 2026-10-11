@@ -22,8 +22,16 @@ PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+Bldz
 log() {
     local level=$1
     shift
-    logger -t "$LOG_TAG" -p "user.$level" "$@"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@"
+    local logger_status=0 output_status=0
+    # Conditional callers disable errexit throughout this function. Try both
+    # sinks, but never let successful stdout hide a failed journal write (or
+    # vice versa). The installer collector owns draining and the first error.
+    logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@" || output_status=$?
+    if [[ "$logger_status" != 0 ]]; then
+        return "$logger_status"
+    fi
+    return "$output_status"
 }
 
 release_signature_key_available() {
