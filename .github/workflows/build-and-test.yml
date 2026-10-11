@@ -319,6 +319,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # Reuse the exact real-embed binary, rather than another build or mock
+      # lifecycle callback. This owns only disposable loopback endpoints/data:
+      # saved policy must reach ordinary alerts and survive a real restart.
+      - name: Check ordinary notification policy and restart
+        timeout-minutes: 3
+        run: >-
+          python3 scripts/check_notification_runtime.py
+          --binary "$RUNNER_TEMP/pulse-real-embed"
+          --expected-source-sha "${{ github.sha }}"
+          --receipt "$RUNNER_TEMP/pulse-notification-runtime.json"
+
+      - name: Retain bounded notification runtime receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notification-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-notification-runtime.json
+          if-no-files-found: warn
+          retention-days: 7
+
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
       - name: Require frontend dependency audit
