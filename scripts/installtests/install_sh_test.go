@@ -5474,6 +5474,13 @@ esac
 `)
 			script := `source "$AUTO_UPDATER"
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+# This URL/handoff fixture has script binaries and a simulated manager,
+# not a managed process. Record the exact verifier handoff; real owned
+# process identity and fail-closed transactions are required separately.
+verify_update_running_executable() {
+    [[ "$1" == pulse-url-fixture ]] || return 97
+    printf '%s\n' "$1" >> "$FIXTURE_DIR/process-readback.log"
+}
 # Relocate only the helper's temporary files, keeping creation/mode/cleanup real.
 mktemp() {
     local -a args=("$@")
@@ -5514,6 +5521,14 @@ fi
 				if call != "show pulse-url-fixture --no-pager --property=LoadState --property=ActiveState" {
 					t.Fatalf("unexpected manager mutation or query: %s\n%s", call, out)
 				}
+			}
+			processReadback, processErr := os.ReadFile(filepath.Join(tmpDir, "process-readback.log"))
+			if tc.admitted && tc.state == "active" {
+				if processErr != nil || string(processReadback) != "pulse-url-fixture\n" {
+					t.Fatalf("active verifier handoff did not use the selected service: %v\n%s", processErr, processReadback)
+				}
+			} else if !os.IsNotExist(processErr) {
+				t.Fatalf("inactive/refused transaction reached process verification: %v\n%s", processErr, processReadback)
 			}
 			temporary, err := os.ReadDir(filepath.Join(tmpDir, "tmp"))
 			if err != nil || len(temporary) != 0 {
