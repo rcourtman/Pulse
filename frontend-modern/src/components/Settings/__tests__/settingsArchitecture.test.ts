@@ -1575,10 +1575,15 @@ describe('settings architecture guardrails', () => {
     // The displayed verdict can come from the 24h localStorage cache, so the
     // Up to date state must carry the age of the check it came from through
     // the shared presentation helper, or a stale verdict reads as a live
-    // comparison (#1601). The copy stays in the presentation owner, never
-    // inline in the panel shell.
+    // comparison (#1601). The shared clock must keep that age moving while
+    // the panel stays mounted. The copy stays in the presentation owner,
+    // never inline in the panel shell.
     expect(updatesSettingsPanelSource).toContain(
-      'getUpdateCheckedLabel(updateStore.lastCheckedAt())',
+      "import { useRelativeTimeNow } from '@/utils/relativeTimeClock';",
+    );
+    expect(updatesSettingsPanelSource).toContain('const now = useRelativeTimeNow();');
+    expect(updatesSettingsPanelSource).toContain(
+      'getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())',
     );
     expect(updatesSettingsPanelSource).toContain('!props.versionInfo()?.isSourceBuild');
     expect(updatesPresentationSource).toContain("return 'Not checked yet'");
