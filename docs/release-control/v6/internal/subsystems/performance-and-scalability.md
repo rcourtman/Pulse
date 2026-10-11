@@ -84,8 +84,8 @@ guest recovery, ordinary QEMU-only polling or release availability.
 ### Narrow Workloads identity during guest locks
 
 In narrow and phone layouts, the guest name and status occupy the first line;
-the unchanged backup evidence control moves below the name, retaining its
-44 px touch target. The guest lock occupies a separate, wrapping line below
+the unchanged backup evidence control moves below the name with a 24 px touch
+target (see Accessible Workloads backup evidence). The guest lock occupies a separate, wrapping line below
 that identity. It must not consume the name's
 horizontal space or spill into the adjacent metrics. The full lock remains
 visible; a long name keeps its full title and existing truncation. Wider layouts
@@ -4033,8 +4033,12 @@ open the same named-guest completion evidence that fine-pointer hover shows.
 Exact time and age use readable theme text rather than colour alone. The shared
 Dialog owns focus, Escape/backdrop dismissal and background isolation, and
 returns focus to the originating disclosure. Nested evidence activation must
-not trigger the enclosing guest row. Touch targets are at least 44px; compact
-desktop shields and the existing status colours remain.
+not trigger the enclosing guest row. The Backup column badge keeps a touch
+target of at least 44px. The name indicator keeps 24px (the WCAG 2.2 AA
+minimum): on phones the whole guest row is the disclosure target and the expand
+chevron is screen-reader only, so a 44px box covered the lower left of every
+row's tap area and grew phone rows from about 34px to 64px. Compact desktop
+shields and the existing status colours remain.
 
 The Backup column badge does not truncate. Running (73px with its shield) and
 Unknown (79px) need about 95px with cell padding, so the compact layout weights

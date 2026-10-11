@@ -2158,6 +2158,56 @@ describe('GuestRow', () => {
 
       expect(disclosureButton.className).not.toContain('sr-only');
     });
+
+    // jsdom has no layout, so this pins the classes that decide phone
+    // geometry. On a 375px mock stack a 44px name-cell backup indicator
+    // covered the lower left of every row (the row is the phone disclosure
+    // target) and grew rows from 33.5px to 63.5px; at 24px rows are 43.5px
+    // and a tap beside the shield opens the guest drawer.
+    it('regression: keeps the phone name-cell backup indicator to a 24px target', () => {
+      const onClick = vi.fn();
+      const guest = makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.now() - 3_600_000,
+      });
+      renderGuestRow({
+        guest,
+        isGroupedView: true,
+        workloadTableLayoutMode: 'phone',
+        visibleColumnIds: ['name', 'cpu'],
+        onClick,
+      });
+      const disclosure = screen.getByRole('button', { name: `Expand ${guest.name}` });
+      const indicator = screen.getByRole('button', { name: /^Last backup:/ });
+      const indicatorClasses = indicator.className.split(/\s+/);
+
+      expect(disclosure.className.split(/\s+/)).toEqual(expect.arrayContaining(['h-9', 'w-9']));
+      expect(indicatorClasses).toEqual(
+        expect.arrayContaining(['min-h-6', 'min-w-6', 'sm:min-h-0', 'sm:min-w-0']),
+      );
+      expect(indicatorClasses).not.toContain('min-h-11');
+      expect(indicatorClasses).not.toContain('min-w-11');
+
+      fireEvent.click(indicator);
+      expect(
+        screen.getByRole('dialog', { name: `Backup status details for ${guest.name}` }),
+      ).toBeVisible();
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('keeps the 44px touch target on the Backup column badge', () => {
+      renderGuestRow({
+        guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: Date.now() }),
+        workloadTableLayoutMode: 'phone',
+        visibleColumnIds: ['name', 'backup'],
+      });
+      const badge = screen.getByRole('button', { name: /^Backup status:/ });
+
+      expect(badge.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['min-h-11', 'min-w-11']),
+      );
+    });
   });
 
   describe('custom URL on the name cell', () => {
