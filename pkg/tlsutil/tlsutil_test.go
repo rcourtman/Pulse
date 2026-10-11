@@ -401,12 +401,61 @@ func TestFetchFingerprintEndpointSelection(t *testing.T) {
 		name, input, address string
 	}{
 		{"explicit-https-default", "https://127.0.0.1", "127.0.0.1:443"},
+		{"explicit-http-default", "http://127.0.0.1", "127.0.0.1:80"},
 		{"bare-ipv6-default", "::1", "[::1]:8006"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fingerprint, err := FetchFingerprint(tc.input)
 			if fingerprint != "" || err == nil || !strings.HasPrefix(err.Error(), "failed to connect to "+tc.address+":") {
 				t.Fatalf("capture did not dial the requested authority %s: fingerprint=%q error=%v", tc.address, fingerprint, err)
+			}
+		})
+	}
+}
+
+func TestFingerprintTargetAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		input, address string
+	}{
+		{"pve.example", "pve.example:8006"},
+		{"pve.example:8007", "pve.example:8007"},
+		{"127.0.0.1", "127.0.0.1:8006"},
+		{"[::1]", "[::1]:8006"},
+		{"2001:db8::1", "[2001:db8::1]:8006"},
+		{"fe80::1%eth0", "[fe80::1%eth0]:8006"},
+		{"[::1]:8443", "[::1]:8443"},
+		{"https://pve.example", "pve.example:443"},
+		{"HTTPS://pve.example/proxy/", "pve.example:443"},
+		{"http://pve.example", "pve.example:80"},
+		{"https://pve.example:08006/proxy/", "pve.example:8006"},
+		{"https://[2001:db8::1]/proxy/", "[2001:db8::1]:443"},
+		{"https://[fe80::1%25eth0]:8443/proxy/", "[fe80::1%eth0]:8443"},
+		{" https://pve.example:65535/ ", "pve.example:65535"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			address, err := fingerprintTarget(tc.input)
+			if err != nil || address != tc.address {
+				t.Fatalf("capture authority = %q, %v; want %q", address, err, tc.address)
+			}
+		})
+	}
+}
+
+func TestFetchFingerprintRejectsInvalidAuthorityBeforeDial(t *testing.T) {
+	for _, input := range []string{
+		"", "https://", "ftp://127.0.0.1:8006", "https://[::1", "https://::1",
+		"https://127.0.0.1:", "https://127.0.0.1:0", "https://127.0.0.1:65536",
+		"https://127.0.0.1:abc", "https://[not-an-ip]:8006", "127.0.0.1/proxy",
+		"https://fixture-user:fixture-password@127.0.0.1:8006",
+		"https://127.0.0.1:8006/?query=fixture", "https://127.0.0.1:8006/#fragment",
+	} {
+		t.Run(input, func(t *testing.T) {
+			fingerprint, err := FetchFingerprint(input)
+			if fingerprint != "" || err == nil || !strings.HasPrefix(err.Error(), "failed to parse host URL:") {
+				t.Fatalf("invalid authority reached dial or capture: fingerprint=%q error=%v", fingerprint, err)
+			}
+			if strings.Contains(err.Error(), "fixture-password") {
+				t.Fatal("invalid authority exposed userinfo in its error")
 			}
 		})
 	}

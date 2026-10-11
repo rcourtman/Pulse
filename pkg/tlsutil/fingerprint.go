@@ -9,9 +9,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 const minimumTLSVersion = tls.VersionTLS12
@@ -53,21 +57,13 @@ func UnverifiedPeerCertificateCaptureTLSConfig() *tls.Config {
 
 // FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
 // This is used for TOFU (Trust On First Use) when discovering cluster peers.
-// The host should be in the format "hostname:port" or "https://hostname:port".
+// Explicit URLs retain their HTTP(S) authority, including the scheme's default
+// port. A bare hostname or IP retains the legacy Proxmox default port, 8006.
+// Capture is always a TLS handshake, not an HTTP request or a grant of trust.
 func FetchFingerprint(host string) (string, error) {
-	// Normalize the host to just host:port format
-	targetHost := host
-	if strings.HasPrefix(host, "https://") || strings.HasPrefix(host, "http://") {
-		parsed, err := url.Parse(host)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse host URL: %w", err)
-		}
-		targetHost = parsed.Host
-	}
-
-	// Ensure port is present (default to 8006 for Proxmox)
-	if _, _, err := net.SplitHostPort(targetHost); err != nil {
-		targetHost = targetHost + ":8006"
+	targetHost, err := fingerprintTarget(host)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse host URL: %w", err)
 	}
 
 	// Create a TLS connection that explicitly accepts parseable peer certificates
@@ -98,6 +94,59 @@ func FetchFingerprint(host string) (string, error) {
 	// Calculate SHA256 fingerprint of the leaf certificate
 	fingerprint := sha256.Sum256(certs[0].Raw)
 	return hex.EncodeToString(fingerprint[:]), nil
+}
+
+func fingerprintTarget(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	explicitURL := strings.Contains(raw, "://")
+	if !explicitURL {
+		// A port on an IPv6 literal must be bracketed. An entire bare IPv6
+		// address (including a zone) is a host, never a guessed host:port pair.
+		host, port, splitErr := net.SplitHostPort(raw)
+		if splitErr != nil {
+			host = strings.TrimSuffix(strings.TrimPrefix(raw, "["), "]")
+		}
+		if address, err := netip.ParseAddr(host); err == nil && address.Is6() {
+			authority := "[" + address.String() + "]"
+			if splitErr == nil {
+				authority = net.JoinHostPort(address.String(), port)
+			}
+			// URL.String escapes a zone's percent separator exactly once.
+			raw = (&url.URL{Scheme: "https", Host: authority}).String()
+		}
+	}
+	u, err := securityutil.NormalizeHTTPBaseURL(raw, "https")
+	if err != nil {
+		return "", err
+	}
+	if !explicitURL && u.Path != "" {
+		return "", fmt.Errorf("a base path requires an explicit HTTP(S) URL")
+	}
+	if strings.HasPrefix(u.Host, "[") {
+		if address, err := netip.ParseAddr(u.Hostname()); err != nil || !address.Is6() {
+			return "", fmt.Errorf("brackets require a valid IPv6 address")
+		}
+	} else if strings.Count(u.Host, ":") > 1 {
+		return "", fmt.Errorf("an IPv6 URL authority must be bracketed")
+	}
+	port := u.Port()
+	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", fmt.Errorf("port is empty")
+		}
+		port = "8006"
+		if explicitURL {
+			port = "443"
+			if u.Scheme == "http" {
+				port = "80"
+			}
+		}
+	}
+	number, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || number == 0 {
+		return "", fmt.Errorf("port must be between 1 and 65535")
+	}
+	return net.JoinHostPort(u.Hostname(), strconv.FormatUint(number, 10)), nil
 }
 
 // FingerprintVerifier creates a custom TLS config that verifies server certificate fingerprint

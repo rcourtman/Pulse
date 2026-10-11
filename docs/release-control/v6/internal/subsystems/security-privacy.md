@@ -18,6 +18,31 @@
 
 ## Purpose
 
+### Certificate capture uses the connection's socket authority
+
+`tlsutil.FetchFingerprint` selects an explicit HTTP(S) URL's host and port,
+including 443 for a portless HTTPS URL and 80 for a portless HTTP URL. Bare
+hostnames and IP addresses retain the existing Proxmox default, 8006. Explicit
+ports and IPv6 zones are preserved; IPv6 socket addresses are bracketed rather
+than formed by appending a port to a bare literal. Proxy base paths never
+change the socket authority. Invalid authorities, userinfo, query/fragment and
+invalid ports fail before dialing, using the existing base-URL validation.
+
+Capture remains only a bounded, credential-free TLS handshake with a parseable
+peer certificate; it sends no HTTP request, grants no trust and changes no
+saved pin, verification choice, CA policy or authentication. A plaintext HTTP
+service cannot become trusted through this TLS-only capture. Declared-member
+first-use and established-pin recovery rules remain as below.
+
+`TestFetchFingerprintEndpointSelection` discriminates the previous wrong-port
+and bare-IPv6 failures through the public helper. `TestFingerprintTargetAuthority`
+and `TestFetchFingerprintRejectsInvalidAuthorityBeforeDial` check exact parsing;
+`TestFetchFingerprintConnectedAuthority` and
+`TestFetchFingerprintLegacyDefaultConnected` check actual distinct loopback
+leaves over IPv4/IPv6 and unchanged bare-host defaults, without HTTP. Existing
+cluster trust and provisioning controls remain required. This is source proof,
+not installed connection recovery or completion of #2140.
+
 ### TLS pin failures remain local typed trust evidence
 
 `tlsutil.FingerprintVerifier` preserves its existing certificate digest checks,
