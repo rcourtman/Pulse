@@ -108,6 +108,26 @@ class APIReferenceRoutesTest(unittest.TestCase):
             self.assertIn("410 Gone", line, route)
             self.assertIn("command_remediation_retired", line, route)
 
+    def test_patrol_routes_documented_without_a_paid_label_have_no_licence_wrapper(self) -> None:
+        # Patrol and managing its findings are free; only governed fixes are Pro.
+        router = read("internal/api/router_routes_ai_relay.go")
+        for name in ("stream", "run", "acknowledge", "snooze", "suppress", "suppressions", "dismissed"):
+            route = f"/api/ai/patrol/{name}"
+            bullets = [line for line in self.doc.splitlines()
+                       if re.match(r"- `(?:GET|POST|DELETE) %s(?:/\{id\})?`" % re.escape(route), line)]
+            self.assertTrue(bullets, route)
+            for bullet in bullets:
+                self.assertNotIn("Pro", bullet)
+            start = router.index(f'HandleFunc("{route}"')
+            following = router.find("r.mux.Handle", start + 10)
+            registration = router[start:following if following != -1 else start + 900]
+            self.assertNotIn("RequireLicenseFeature", registration, route)
+
+    def test_reapprove_is_documented_as_retired(self) -> None:
+        entry = self.doc.split("`POST /api/ai/findings/{id}/reapprove`", 1)[1].split("\n\n", 1)[0]
+        for text in ("retired", "410 Gone", "command_fix_retired"):
+            self.assertIn(text, entry)
+
     def test_validate_token_is_not_filed_under_the_licensed_audit_log(self) -> None:
         audit = self.doc.split("## 🧾 Audit Log (Pro)", 1)[1].split("\n## ", 1)[0]
         self.assertNotIn("/api/security/validate-token", audit)
