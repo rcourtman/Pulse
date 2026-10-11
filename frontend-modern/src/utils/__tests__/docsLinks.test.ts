@@ -664,8 +664,16 @@ describe('docsLinks', () => {
       const rootDoc = readFileSync(path.join(repoRoot, 'docs', guide), 'utf8');
       expect(readFileSync(path.join(frontendRoot, 'public', 'docs', guide), 'utf8')).toBe(rootDoc);
       expect(rootDoc).toContain('`POST /api/admin/reports/generate` (');
+      // Parse the actual report section, not both entire reference guides:
+      // unrelated installation/API tables are not this narration contract.
+      const reportSection =
+        guide === 'API.md'
+          ? rootDoc
+              .split('### Advanced Reporting (Pro)')[1]
+              .split('### Queue and Dead-Letter Tools')[0]
+          : rootDoc.split('## Per-client reports')[1].split('## Licensing')[0];
       const rendered = document.createElement('div');
-      rendered.innerHTML = renderDocMarkdown(rootDoc, guide.replace('.md', ''));
+      rendered.innerHTML = renderDocMarkdown(reportSection, guide.replace('.md', ''));
       const text = rendered.textContent?.replace(/\s+/g, ' ');
       expect(text).toContain('Report generation uses settings:read.');
       expect(text).toContain(
