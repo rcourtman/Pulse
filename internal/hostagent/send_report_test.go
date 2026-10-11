@@ -305,7 +305,7 @@ func TestHostReportingAuthGuidanceAndSameCredentialRecovery(t *testing.T) {
 				var logs bytes.Buffer
 				primaryAcknowledgements := 0
 				a := &Agent{
-					cfg: Config{APIToken: token, EnableHost: true, CommandAuthorityProfile: CommandAuthorityMonitoringOnly,
+					cfg: Config{APIToken: token, AgentID: "auth-diagnostic-agent", CommandAuthorityProfile: CommandAuthorityMonitoringOnly,
 						OnPrimaryReportAccepted: func() { primaryAcknowledgements++ }},
 					logger: zerolog.New(&logs), httpClient: server.Client(), trimmedPulseURL: server.URL,
 					reportBuffer: utils.New[agentshost.Report](8),
@@ -329,8 +329,8 @@ func TestHostReportingAuthGuidanceAndSameCredentialRecovery(t *testing.T) {
 				if primaryAcknowledgements != 1 || accepted.Load() != 1 || !a.lastAuthFailureLog.IsZero() || !a.reportBuffer.IsEmpty() {
 					t.Fatal("successful current report did not restore acceptance and reset the diagnostic throttle")
 				}
-				if a.cfg.APIToken != token || !a.cfg.EnableHost || a.cfg.EnableCommands || a.cfg.CommandAuthorityProfile != CommandAuthorityMonitoringOnly {
-					t.Fatal("authentication guidance changed credentials, monitoring or command authority")
+				if a.cfg.APIToken != token || a.cfg.AgentID != report.Agent.ID || a.cfg.EnableCommands || a.cfg.CommandAuthorityProfile != CommandAuthorityMonitoringOnly {
+					t.Fatal("authentication guidance changed credentials, identity or command authority")
 				}
 			})
 		}
