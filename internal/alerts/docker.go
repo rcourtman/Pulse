@@ -824,10 +824,16 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	disableConnectivity := defaultDisable
 	severity := defaultSeverity
 	if hasOverride {
-		if defaultDisable && !override.DisableConnectivity {
-			disableConnectivity = false
-		} else if override.DisableConnectivity {
+		// Same rule as applyThresholdOverride: an override turns state
+		// alerts back on over a disabled default only when it carries the
+		// row's own severity. DisableConnectivity is a plain bool, so an
+		// override saved for a CPU or memory threshold alone reads false
+		// here, and used to re-enable state alerts the operator had turned
+		// off for every container.
+		if override.DisableConnectivity {
 			disableConnectivity = true
+		} else if override.PoweredOffSeverity != "" {
+			disableConnectivity = false
 		}
 
 		if override.PoweredOffSeverity != "" {
@@ -1001,14 +1007,15 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 
 	m.mu.Lock()
 
-	// Get config values with defaults
+	// NormalizeDockerDefaults owns the factory values; 0 here is the
+	// operator's Off, so either one set to 0 turns restart-loop alerts off.
 	restartThreshold := m.config.DockerDefaults.RestartCount
-	if restartThreshold == 0 {
-		restartThreshold = 3 // Default: 3 restarts
-	}
 	timeWindow := m.config.DockerDefaults.RestartWindow
-	if timeWindow == 0 {
-		timeWindow = 300 // Default: 5 minutes (300 seconds)
+	if restartThreshold <= 0 || timeWindow <= 0 {
+		delete(m.dockerRestartTracking, resourceID)
+		m.mu.Unlock()
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-restart-loop"))
+		return
 	}
 
 	record, exists := m.dockerRestartTracking[resourceID]
@@ -1169,18 +1176,21 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 	warnThreshold := float64(m.config.DockerDefaults.MemoryWarnPct)
 	criticalThreshold := float64(m.config.DockerDefaults.MemoryCriticalPct)
 	m.mu.RUnlock()
-	if warnThreshold == 0 {
-		warnThreshold = 90.0 // Default: 90%
-	}
-	if criticalThreshold == 0 {
-		criticalThreshold = 95.0 // Default: 95%
+	// NormalizeDockerDefaults owns the factory values; 0 here is the
+	// operator's Off for that level.
+	if warnThreshold <= 0 && criticalThreshold <= 0 {
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-memory-limit"))
+		return
 	}
 
 	// Calculate percentage of limit used
 	limitPercent := (float64(container.MemoryUsage) / float64(container.MemoryLimit)) * 100
 
-	clearThreshold := warnThreshold - 5
-	recovery := clearThreshold
+	activation := warnThreshold
+	if activation <= 0 {
+		activation = criticalThreshold
+	}
+	recovery := activation - 5
 	spec, err := buildCanonicalSeverityThresholdSpecWithRecovery(resourceID+"-memory-limit", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "memory-limit-percent", warnThreshold, criticalThreshold, &recovery, false)
 	if err != nil {
 		log.Warn().

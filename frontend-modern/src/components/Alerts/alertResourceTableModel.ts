@@ -377,15 +377,15 @@ export function alertResourceSupportsMetric(
   if (resourceType === 'vmwareNetwork') {
     return false;
   }
+  // A per-resource override stores only the metrics in the backend's
+  // ThresholdConfig. Restart and memory-limit rules exist only as Docker
+  // defaults, and PMG thresholds only as PMG defaults, so the backend dropped
+  // per-container and per-server edits of them on save.
   if (resourceType === 'dockerContainer') {
-    return [
-      'cpu',
-      'memory',
-      'restartCount',
-      'restartWindow',
-      'memoryWarnPct',
-      'memoryCriticalPct',
-    ].includes(metric);
+    return ['cpu', 'memory'].includes(metric);
+  }
+  if (resourceType === 'pmg') {
+    return false;
   }
   return true;
 }

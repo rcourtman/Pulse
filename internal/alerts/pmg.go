@@ -714,8 +714,20 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 		}
 	}
 
-	if absoluteWarn <= 0 && absoluteCrit <= 0 &&
-		defaults.QuarantineGrowthWarnMin <= 0 && defaults.QuarantineGrowthCritMin <= 0 {
+	// A growth level needs both its percentage and its minimum message
+	// growth; either one set to Off (0) turns that level off. Passing one
+	// without the other made the spec invalid, which skipped the whole
+	// quarantine check, absolute thresholds included.
+	growthWarnPct, growthWarnMin := defaults.QuarantineGrowthWarnPct, defaults.QuarantineGrowthWarnMin
+	if growthWarnPct <= 0 || growthWarnMin <= 0 {
+		growthWarnPct, growthWarnMin = 0, 0
+	}
+	growthCritPct, growthCritMin := defaults.QuarantineGrowthCritPct, defaults.QuarantineGrowthCritMin
+	if growthCritPct <= 0 || growthCritMin <= 0 {
+		growthCritPct, growthCritMin = 0, 0
+	}
+
+	if absoluteWarn <= 0 && absoluteCrit <= 0 && growthWarnMin <= 0 && growthCritMin <= 0 {
 		m.clearAlert(buildCanonicalStateID(pmg.ID, alertID))
 		return
 	}
@@ -728,10 +740,10 @@ func (m *Manager) checkQuarantineMetric(pmg models.PMGInstance, metricType strin
 		"quarantine-"+metricType,
 		float64(absoluteWarn),
 		float64(absoluteCrit),
-		float64(defaults.QuarantineGrowthWarnMin),
-		float64(defaults.QuarantineGrowthCritMin),
-		float64(defaults.QuarantineGrowthWarnPct),
-		float64(defaults.QuarantineGrowthCritPct),
+		float64(growthWarnMin),
+		float64(growthCritMin),
+		float64(growthWarnPct),
+		float64(growthCritPct),
 		2*time.Hour,
 		false,
 	)

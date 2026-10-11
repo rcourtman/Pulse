@@ -67,23 +67,30 @@ func NormalizeDockerThreshold(th HysteresisThreshold, defaultTrigger float64, me
 	return normalized
 }
 
+// normalizeThresholdCount resolves a Docker or PMG count threshold, where 0 is
+// Off. A value the decoded JSON did not carry takes the factory value. Any
+// other negative value is Off: the settings Off toggle sends -1, and this
+// normalizer used to turn it back into the factory value.
+func normalizeThresholdCount(value, factory int) int {
+	switch {
+	case value == ThresholdCountUnset:
+		return factory
+	case value < 0:
+		return 0
+	default:
+		return value
+	}
+}
+
 func NormalizeDockerDefaults(config *AlertConfig) {
 	config.DockerDefaults.CPU = NormalizeDockerThreshold(config.DockerDefaults.CPU, 80, "docker.cpu")
 	config.DockerDefaults.Memory = NormalizeDockerThreshold(config.DockerDefaults.Memory, 85, "docker.memory")
 	config.DockerDefaults.Disk = NormalizeDockerThreshold(config.DockerDefaults.Disk, 85, "docker.disk")
 
-	if config.DockerDefaults.RestartCount <= 0 {
-		config.DockerDefaults.RestartCount = 3
-	}
-	if config.DockerDefaults.RestartWindow <= 0 {
-		config.DockerDefaults.RestartWindow = 300
-	}
-	if config.DockerDefaults.MemoryWarnPct <= 0 {
-		config.DockerDefaults.MemoryWarnPct = 90
-	}
-	if config.DockerDefaults.MemoryCriticalPct <= 0 {
-		config.DockerDefaults.MemoryCriticalPct = 95
-	}
+	config.DockerDefaults.RestartCount = normalizeThresholdCount(config.DockerDefaults.RestartCount, 3)
+	config.DockerDefaults.RestartWindow = normalizeThresholdCount(config.DockerDefaults.RestartWindow, 300)
+	config.DockerDefaults.MemoryWarnPct = normalizeThresholdCount(config.DockerDefaults.MemoryWarnPct, 90)
+	config.DockerDefaults.MemoryCriticalPct = normalizeThresholdCount(config.DockerDefaults.MemoryCriticalPct, 95)
 	if config.DockerDefaults.ServiceWarnGapPct <= 0 {
 		config.DockerDefaults.ServiceWarnGapPct = 10
 	}
@@ -107,55 +114,26 @@ func NormalizeDockerDefaults(config *AlertConfig) {
 	}
 }
 
+// NormalizePMGDefaults fills unset PMG thresholds with their factory values.
+// Each threshold is Off at 0, as the PMG checks read it.
 func NormalizePMGDefaults(config *AlertConfig) {
-	if config.PMGDefaults.QueueTotalWarning <= 0 {
-		config.PMGDefaults.QueueTotalWarning = 500
-	}
-	if config.PMGDefaults.QueueTotalCritical <= 0 {
-		config.PMGDefaults.QueueTotalCritical = 1000
-	}
-	if config.PMGDefaults.OldestMessageWarnMins <= 0 {
-		config.PMGDefaults.OldestMessageWarnMins = 30
-	}
-	if config.PMGDefaults.OldestMessageCritMins <= 0 {
-		config.PMGDefaults.OldestMessageCritMins = 60
-	}
-	if config.PMGDefaults.DeferredQueueWarn <= 0 {
-		config.PMGDefaults.DeferredQueueWarn = 200
-	}
-	if config.PMGDefaults.DeferredQueueCritical <= 0 {
-		config.PMGDefaults.DeferredQueueCritical = 500
-	}
-	if config.PMGDefaults.HoldQueueWarn <= 0 {
-		config.PMGDefaults.HoldQueueWarn = 100
-	}
-	if config.PMGDefaults.HoldQueueCritical <= 0 {
-		config.PMGDefaults.HoldQueueCritical = 300
-	}
-	if config.PMGDefaults.QuarantineSpamWarn <= 0 {
-		config.PMGDefaults.QuarantineSpamWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineSpamCritical <= 0 {
-		config.PMGDefaults.QuarantineSpamCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineVirusWarn <= 0 {
-		config.PMGDefaults.QuarantineVirusWarn = 2000
-	}
-	if config.PMGDefaults.QuarantineVirusCritical <= 0 {
-		config.PMGDefaults.QuarantineVirusCritical = 5000
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnPct = 25
-	}
-	if config.PMGDefaults.QuarantineGrowthWarnMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthWarnMin = 250
-	}
-	if config.PMGDefaults.QuarantineGrowthCritPct <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritPct = 50
-	}
-	if config.PMGDefaults.QuarantineGrowthCritMin <= 0 {
-		config.PMGDefaults.QuarantineGrowthCritMin = 500
-	}
+	d := &config.PMGDefaults
+	d.QueueTotalWarning = normalizeThresholdCount(d.QueueTotalWarning, 500)
+	d.QueueTotalCritical = normalizeThresholdCount(d.QueueTotalCritical, 1000)
+	d.OldestMessageWarnMins = normalizeThresholdCount(d.OldestMessageWarnMins, 30)
+	d.OldestMessageCritMins = normalizeThresholdCount(d.OldestMessageCritMins, 60)
+	d.DeferredQueueWarn = normalizeThresholdCount(d.DeferredQueueWarn, 200)
+	d.DeferredQueueCritical = normalizeThresholdCount(d.DeferredQueueCritical, 500)
+	d.HoldQueueWarn = normalizeThresholdCount(d.HoldQueueWarn, 100)
+	d.HoldQueueCritical = normalizeThresholdCount(d.HoldQueueCritical, 300)
+	d.QuarantineSpamWarn = normalizeThresholdCount(d.QuarantineSpamWarn, 2000)
+	d.QuarantineSpamCritical = normalizeThresholdCount(d.QuarantineSpamCritical, 5000)
+	d.QuarantineVirusWarn = normalizeThresholdCount(d.QuarantineVirusWarn, 2000)
+	d.QuarantineVirusCritical = normalizeThresholdCount(d.QuarantineVirusCritical, 5000)
+	d.QuarantineGrowthWarnPct = normalizeThresholdCount(d.QuarantineGrowthWarnPct, 25)
+	d.QuarantineGrowthWarnMin = normalizeThresholdCount(d.QuarantineGrowthWarnMin, 250)
+	d.QuarantineGrowthCritPct = normalizeThresholdCount(d.QuarantineGrowthCritPct, 50)
+	d.QuarantineGrowthCritMin = normalizeThresholdCount(d.QuarantineGrowthCritMin, 500)
 }
 
 // NormalizePBSDefaults ensures PBS server threshold defaults exist.

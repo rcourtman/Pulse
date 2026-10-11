@@ -27,11 +27,10 @@ export function useThresholdsRecoveryDefaultsState(props: ThresholdsTableProps) 
     let warning = Math.max(0, Math.round(config.warningDays ?? 0));
     let critical = Math.max(0, Math.round(config.criticalDays ?? 0));
 
+    // A critical age of 0 is Off, as the backend reads it; raising it to the
+    // warning age made the Off toggle turn critical on at the warning age.
     if (critical > 0 && warning > critical) {
       warning = critical;
-    }
-    if (critical === 0 && warning > 0) {
-      critical = warning;
     }
 
     const rawWarningSize = Number.isFinite(config.warningSizeGiB)
@@ -85,11 +84,10 @@ export function useThresholdsRecoveryDefaultsState(props: ThresholdsTableProps) 
       ),
     );
 
+    // A critical age of 0 is Off, as the backend reads it; raising it to the
+    // warning age made the Off toggle turn critical on at the warning age.
     if (critical > 0 && warning > critical) {
       warning = critical;
-    }
-    if (critical === 0 && warning > 0) {
-      critical = warning;
     }
     if (stale < fresh) {
       stale = fresh;

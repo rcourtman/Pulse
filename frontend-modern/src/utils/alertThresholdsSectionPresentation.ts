@@ -99,11 +99,12 @@ export function getAlertThresholdsDefaultsSummary(
   return `Defaults: ${shown.join(' · ')}${hidden > 0 ? ` · +${hidden} more` : ''}`;
 }
 
-// Docker's restart-loop and memory-limit rules always run: config
-// normalization (internal/alerts/config/normalize.go, NormalizeDockerDefaults)
-// replaces any value <= 0 with these fallbacks. So the summary states the
-// effective rule rather than treating zero as Off, and pairs the restart count
-// with its window because neither means anything alone.
+// Docker's restart-loop and memory-limit rules, as the alert engine reads
+// them after config normalization (internal/alerts/config/normalize.go,
+// NormalizeDockerDefaults): an unset value takes these factory values, and 0
+// (or the editor's -1 Off value) is Off. The restart count pairs with its
+// window because neither means anything alone, so either one Off turns the
+// restart-loop rule off; memory-limit warn and critical are independent levels.
 const DOCKER_RULE_FALLBACKS = {
   restartCount: 3,
   restartWindow: 300,
@@ -111,11 +112,21 @@ const DOCKER_RULE_FALLBACKS = {
   memoryCriticalPct: 95,
 } as const;
 
-const effectiveDockerRule = (value: number | undefined, fallback: number) =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+// Returns the effective value, or null when the rule level is Off.
+const effectiveDockerRule = (value: number | undefined, fallback: number): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return value > 0 ? value : null;
+};
 
 const formatRestartWindow = (seconds: number) =>
   seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`;
+
+const formatMemoryLimitRule = (warn: number | null, critical: number | null) => {
+  if (warn === null && critical === null) return 'Memory limit off';
+  if (warn === null) return `Memory limit ${critical}% critical`;
+  if (critical === null) return `Memory limit ${warn}% warn`;
+  return `Memory limit ${warn}% warn, ${critical}% critical`;
+};
 
 export function getDockerContainerRuleSummaryItems(defaults: {
   restartCount?: number;
@@ -131,7 +142,9 @@ export function getDockerContainerRuleSummaryItems(defaults: {
     DOCKER_RULE_FALLBACKS.memoryCriticalPct,
   );
   return [
-    `Restart loop ${restarts} in ${formatRestartWindow(window)}`,
-    `Memory limit ${warn}% warn, ${critical}% critical`,
+    restarts === null || window === null
+      ? 'Restart loop off'
+      : `Restart loop ${restarts} in ${formatRestartWindow(window)}`,
+    formatMemoryLimitRule(warn, critical),
   ];
 }

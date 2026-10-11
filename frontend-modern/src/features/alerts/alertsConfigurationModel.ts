@@ -231,6 +231,22 @@ const normalizeWarningCriticalPair = (
   };
 };
 
+// Backup and snapshot ages, as the backend reads them: each level is Off at 0
+// (the editor's Off toggle stages -1), and a warning above a set critical
+// drops to it. Unlike sizes, a critical age left Off stays Off; raising it to
+// the warning age made backups go critical at the warning age.
+const normalizeAgeWarningCriticalPair = (
+  warning: number | undefined,
+  critical: number | undefined,
+): { warning: number; critical: number } => {
+  const safeWarning = Math.max(0, warning ?? 0);
+  const safeCritical = Math.max(0, critical ?? 0);
+  return {
+    warning: safeCritical > 0 && safeWarning > safeCritical ? safeCritical : safeWarning,
+    critical: safeCritical,
+  };
+};
+
 const normalizeStringList = (values: string[] | undefined): string[] =>
   (values ?? []).map((value) => value.trim()).filter((value) => value.length > 0);
 
@@ -562,7 +578,7 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.backupDefaults) {
-    const normalizedPair = normalizeWarningCriticalPair(
+    const normalizedPair = normalizeAgeWarningCriticalPair(
       config.backupDefaults.warningDays,
       config.backupDefaults.criticalDays,
     );
@@ -585,7 +601,7 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   }
 
   if (config.snapshotDefaults) {
-    const normalizedPair = normalizeWarningCriticalPair(
+    const normalizedPair = normalizeAgeWarningCriticalPair(
       config.snapshotDefaults.warningDays,
       config.snapshotDefaults.criticalDays,
     );
@@ -745,7 +761,7 @@ export function buildAlertsConfigurationPayload({
     };
   }
 
-  const normalizedSnapshotPair = normalizeWarningCriticalPair(
+  const normalizedSnapshotPair = normalizeAgeWarningCriticalPair(
     snapshot.snapshotDefaults.warningDays,
     snapshot.snapshotDefaults.criticalDays,
   );
@@ -753,7 +769,7 @@ export function buildAlertsConfigurationPayload({
     snapshot.snapshotDefaults.warningSizeGiB,
     snapshot.snapshotDefaults.criticalSizeGiB,
   );
-  const normalizedBackupPair = normalizeWarningCriticalPair(
+  const normalizedBackupPair = normalizeAgeWarningCriticalPair(
     snapshot.backupDefaults.warningDays,
     snapshot.backupDefaults.criticalDays,
   );

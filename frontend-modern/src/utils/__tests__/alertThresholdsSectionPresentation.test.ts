@@ -77,16 +77,27 @@ describe('alertThresholdsSectionPresentation', () => {
         memoryCriticalPct: 95,
       }),
     ).toEqual(['Restart loop 3 in 5 min', 'Memory limit 90% warn, 95% critical']);
-    // Config normalization replaces <= 0 with the fallbacks, so these rules
-    // never read as Off.
+    // 0 (or the editor's -1) is Off for these rules, as the engine reads
+    // them; the header must not state a limit that never alerts.
     expect(
       getDockerContainerRuleSummaryItems({
         restartCount: -1,
-        restartWindow: 0,
+        restartWindow: 300,
         memoryWarnPct: 0,
         memoryCriticalPct: -1,
       }),
-    ).toEqual(['Restart loop 3 in 5 min', 'Memory limit 90% warn, 95% critical']);
+    ).toEqual(['Restart loop off', 'Memory limit off']);
+    expect(
+      getDockerContainerRuleSummaryItems({
+        restartCount: 3,
+        restartWindow: 0,
+        memoryWarnPct: 0,
+        memoryCriticalPct: 95,
+      }),
+    ).toEqual(['Restart loop off', 'Memory limit 95% critical']);
+    expect(getDockerContainerRuleSummaryItems({ memoryWarnPct: 90, memoryCriticalPct: 0 })[1]).toBe(
+      'Memory limit 90% warn',
+    );
     expect(getDockerContainerRuleSummaryItems({ restartCount: 5, restartWindow: 90 })[0]).toBe(
       'Restart loop 5 in 90s',
     );

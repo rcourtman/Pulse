@@ -65,7 +65,6 @@ export function ThresholdsTableProxmoxPMGSection(props: ThresholdsTableSectionPr
             setEditingThresholds={state.setEditingThresholds}
             editingNote={state.editingNote}
             setEditingNote={state.setEditingNote}
-            onBulkEdit={(ids) => state.handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %'])}
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
             globalDefaults={state.pmgGlobalDefaults()}
