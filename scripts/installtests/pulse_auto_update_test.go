@@ -143,6 +143,8 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 	for _, name := range []string{
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
+		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_failure_drains_installer_and_preserves_recovery",
 	} {
 		passed := false
 		for _, line := range strings.Split(string(out), "\n") {

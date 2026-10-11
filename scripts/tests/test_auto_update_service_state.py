@@ -66,6 +66,7 @@ sys.exit(97)
 
 HARNESS = r'''
 source "$UPDATER"
+if [[ "$REAL_LOG" != true ]]; then
 log() {
     printf '[%s] %s\n' "$1" "${*:2}"
     if [[ "${2:-}" == 'installer: '* ]]; then
@@ -77,6 +78,7 @@ log() {
         return "${!status_name:-$COLLECTOR_EXIT}"
     fi
 }
+fi
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
 sleep() { :; } # Only the liveness wait; timeout/manager deadlines are real.
 verify_release_signature() { :; }
@@ -114,15 +116,39 @@ exit "$status"
 '''
 
 
+LOGGER = r'''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+f = Path(os.environ["FIXTURE"])
+args = sys.argv[1:]
+with (f / "logger-calls").open("a") as out:
+    out.write(json.dumps(args) + "\n")
+if (args[:3] != ["-t", "pulse-custom@department-auto-update", "-p"]
+        or len(args) < 5 or args[3] not in ("user.info", "user.warn", "user.error")):
+    sys.exit(97)
+if args[4:5] and args[4].startswith("installer: "):
+    count_path = f / "collector-count"
+    count = int(count_path.read_text()) + 1 if count_path.exists() else 1
+    count_path.write_text(str(count))
+    sys.exit(int(os.environ.get("COLLECTOR_EXIT_" + str(count), os.environ["COLLECTOR_EXIT"])))
+sys.exit(0)
+'''
+
+
 class UpdateServiceState(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
-                    installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None):
+                    installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
+                    real_log=False):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
                 (f / name).mkdir(parents=True)
             (f / "tools/systemctl").write_text(MANAGER)
             (f / "tools/systemctl").chmod(0o755)
+            # The production log() remains intact in real-log controls. Only
+            # its external sink is confined; no host journal is contacted.
+            (f / "tools/logger").write_text(LOGGER)
+            (f / "tools/logger").chmod(0o755)
             old = b"#!/bin/sh\necho 'Pulse v6.5.0'\n"
             new = b"#!/bin/sh\necho 'Pulse v6.6.0'\n"
             (f / "install/bin/pulse").write_bytes(old)
@@ -149,6 +175,7 @@ class UpdateServiceState(unittest.TestCase):
                        INSTALLER_STATE="active" if mode in ("stop-noop", "stop-error", "stop-hang", "after-error", "readback-error", "readback-empty") else "inactive",
                        INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
                        COLLECTOR_EXIT=str(collector_exit),
+                       REAL_LOG="true" if real_log else "false",
                        PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
             for line, status in (collector_failures or {}).items():
                 env[f"COLLECTOR_EXIT_{line}"] = str(status)
@@ -162,6 +189,8 @@ class UpdateServiceState(unittest.TestCase):
                                installed=(f / "installer-ran").exists(), stopped=(f / "stop-ran").exists(),
                                installer_finished=(f / "installer-finished").exists(),
                                collected=int((f / "collector-count").read_text()) if (f / "collector-count").exists() else 0,
+                               logger_calls=[json.loads(line) for line in (f / "logger-calls").read_text().splitlines()]
+                               if (f / "logger-calls").exists() else [],
                                started=(f / "start-ran").exists(), state=(f / "state").read_text().strip(),
                                binary=(f / "install/bin/pulse").read_bytes(), version=(f / "install/VERSION").read_text(),
                                backups=[(b / "pulse-bin").read_bytes() for b in backups],
@@ -173,6 +202,61 @@ class UpdateServiceState(unittest.TestCase):
                 # All read/mutation calls target the exact explicit service.
                 self.assertIn("pulse-custom@department", args)
             return observation
+
+    def test_real_log_retains_each_sink_failure_in_conditional_calls(self):
+        for logger_exit, closed_stdout, expected in ((0, False, 0), (73, False, 73),
+                                                      (0, True, 1), (73, True, 73)):
+            with self.subTest(logger_exit=logger_exit, closed_stdout=closed_stdout):
+                with tempfile.TemporaryDirectory(prefix="pulse-updater-log-") as directory:
+                    f = Path(directory)
+                    (f / "tools").mkdir()
+                    # Only the external logger is substituted, not log().
+                    (f / "tools/logger").write_text(
+                        '#!/bin/sh\n'
+                        'printf "%s\\n" "$*" > "$FIXTURE/logger-args"\n'
+                        'exit "$LOGGER_EXIT"\n')
+                    (f / "tools/logger").chmod(0o755)
+                    env = dict(os.environ, FIXTURE=str(f), UPDATER=str(UPDATER),
+                               PULSE_SERVICE_NAME="pulse-custom@department", LOGGER_EXIT=str(logger_exit),
+                               PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
+                    redirect = " 1>&-" if closed_stdout else ""
+                    script = ('set -euo pipefail\nsource "$UPDATER"\nstatus=0\n'
+                              'log info "sink control"' + redirect + ' || status=$?\n'
+                              'printf "OBSERVED_STATUS=%s\\n" "$status"\n')
+                    r = subprocess.run(["bash", "-c", script], env=env, capture_output=True, timeout=5)
+                    self.assertEqual(r.returncode, 0)
+                    self.assertIn(f"OBSERVED_STATUS={expected}\n", r.stdout.decode())
+                    self.assertEqual((f / "logger-args").read_text(),
+                                     "-t pulse-custom@department-auto-update -p user.info sink control\n")
+                    self.assertEqual("[info] sink control" in r.stdout.decode(), not closed_stdout)
+
+    def test_real_logger_failure_drains_installer_and_preserves_recovery(self):
+        # More than a pipe buffer, plus an unterminated final line. These run
+        # production log(), perform_update and its collector together: a green
+        # log() double cannot establish that a real sink failure is retained.
+        lines = ["opening"] + ["x" * 2048 for _ in range(64)] + ["final installer evidence"]
+        for state in ("active", "inactive"):
+            for failures in ({}, {1: 73}, {1: 73, 2: 42}, {len(lines): 73}):
+                with self.subTest(state=state, failures=failures):
+                    r = self.run_fixture(state=state, success=True, real_log=True,
+                                         installer_output="\n".join(lines), collector_failures=failures)
+                    self.assertTrue(r["installer_finished"])
+                    self.assertEqual(r["collected"], len(lines))
+                    self.assertTrue("installer: final installer evidence" in r["output"])
+                    installer_calls = [args for args in r["logger_calls"] if args[4].startswith("installer: ")]
+                    self.assertEqual(len(installer_calls), len(lines))
+                    self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
+                                        for args in installer_calls))
+                    expected = ("Installer pipeline failed (installer exit: 0; log collector exit: 73)"
+                                if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
+                    self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
+                    self.assertEqual(r["exit"], 1 if failures else 0)
+                    self.assertEqual("Update successfully installed and verified" in r["output"], not failures)
+                    self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n" if failures
+                                     else b"#!/bin/sh\necho 'Pulse v6.6.0'\n")
+                    self.assertEqual(r["version"], "v6.5.0\n" if failures else "v6.6.0\n")
+                    self.assertEqual(r["started"], state == "active")
+                    self.assertEqual(r["backups"], [])
 
     def test_unknown_initial_state_refuses_before_backup_download_or_installer(self):
         cases = [(m, "active", "loaded") for m in
