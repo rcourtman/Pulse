@@ -145,8 +145,6 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 		"test_rollback_keeps_backup_until_restored_running_executable_matches",
 		"test_early_collector_failure_survives_later_success_and_drains_installer",
 		"test_unterminated_final_installer_line_is_collected_and_its_failure_retained",
-		"test_real_log_retains_each_sink_failure_in_conditional_calls",
-		"test_real_logger_failure_drains_installer_and_preserves_recovery",
 	}
 	for _, name := range required {
 		passed := false
@@ -157,6 +155,33 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 		}
 		if !passed {
 			t.Fatalf("required updater collector control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
+// Keep the full real-sink matrix mandatory, but give it its own existing-size
+// bound rather than exhausting the service-state suite's manager deadlines.
+func TestAutoUpdateLogSinkFailures(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateLogSinks")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("unattended real-log sink controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_real_log_retains_each_sink_failure_in_conditional_calls",
+		"test_real_logger_failure_drains_installer_and_preserves_recovery",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required real-log sink control %s did not pass:\n%s", name, out)
 		}
 	}
 }

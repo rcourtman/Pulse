@@ -19,7 +19,7 @@ native = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(native)
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 STEP = "Check current-source unattended recovery on native systemd"
-FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout")
+FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout", "cmp")
 LINUX_CONTROL = "test_connected_signed_archive_and_recovery_controls_without_host_manager"
 LINUX_ONLY_REASON = "Linux server ELF execution; portable controls remain required on macOS"
 
@@ -481,7 +481,8 @@ elif args[0] not in ("daemon-reload", "reset-failed"): sys.exit(97)
             tool_trace = base / "selected-tools.jsonl"
             for name, executable in selected.items():
                 # Record only tool identity, never shell arguments or key/log
-                # bytes. Execute the actual supplied GNU utility, not a double.
+                # bytes. Execute the actual supplied GNU utility; only the
+                # manager double's fixed process path is redirected below.
                 tool = tools / name
                 tool.write_text(f'''#!{sys.executable}
 import json, os, pathlib, sys

@@ -84,7 +84,9 @@ fi
 # This transaction fixture has a simulated manager and shell-script binaries.
 # The separate process controls below exercise the production /proc comparison.
 verify_update_running_executable() {
-    printf '%s\n' "$(get_current_version)" >> "$FIXTURE/runtime-probes"
+    local fixture_version=""
+    IFS= read -r fixture_version < "$INSTALL_DIR/VERSION"
+    printf '%s\n' "$fixture_version" >> "$FIXTURE/runtime-probes"
     return "$RUNTIME_EXIT"
 }
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
@@ -143,7 +145,7 @@ sys.exit(0)
 '''
 
 
-class UpdateServiceState(unittest.TestCase):
+class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
                     real_log=False, runtime_exit=0, installer_state=None):
@@ -213,6 +215,10 @@ class UpdateServiceState(unittest.TestCase):
                 self.assertIn("pulse-custom@department", args)
             return observation
 
+
+class UpdateLogSinks(UpdaterFixture):
+    # Keep the expensive real-collector matrix separate from manager timeout
+    # controls, without widening their deadline or dropping any combinations.
     def test_real_log_retains_each_sink_failure_in_conditional_calls(self):
         for logger_exit, closed_stdout, expected in ((0, False, 0), (73, False, 73),
                                                       (0, True, 1), (73, True, 73)):
@@ -268,6 +274,8 @@ class UpdateServiceState(unittest.TestCase):
                     self.assertEqual(r["started"], state == "active")
                     self.assertEqual(r["backups"], [])
 
+
+class UpdateServiceState(UpdaterFixture):
     def test_success_cannot_claim_unverified_running_executable(self):
         # A matching new disk version and an active manager are insufficient.
         # Preserve the currently active service; uncertainty grants no stop,
