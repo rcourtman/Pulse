@@ -6,7 +6,9 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -17,6 +19,17 @@ native = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(native)
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 STEP = "Check current-source unattended recovery on native systemd"
+FIXTURE_COMMANDS = ("bash", "tar", "chmod", "mv", "timeout")
+
+
+def selected_fixture_commands():
+    # The containing native job has already supplied its Linux-only tools.
+    # Capture only these executables, not the whole ambient PATH or environment.
+    commands = {name: shutil.which(name) for name in FIXTURE_COMMANDS}
+    for name, executable in commands.items():
+        if executable is None:
+            raise ValueError("missing installer fixture tool: " + name)
+    return commands
 
 
 def recipe(source):
@@ -49,6 +62,13 @@ def recipe(source):
 
 
 class NativeContracts(unittest.TestCase):
+    def test_fixture_command_selection_refuses_missing_tools_without_fallback(self):
+        for missing in FIXTURE_COMMANDS:
+            with self.subTest(missing=missing), patch.object(shutil, "which", side_effect=
+                    lambda name: None if name == missing else "/supplied/" + name):
+                with self.assertRaisesRegex(ValueError, "missing installer fixture tool: " + missing):
+                    selected_fixture_commands()
+
     def test_definition_boundary_is_exact_and_rejects_drift(self):
         source = (ROOT / "install.sh").read_text()
         definitions = native.installer_definitions(source)
@@ -106,6 +126,48 @@ class NativeContracts(unittest.TestCase):
             result = subprocess.run(["/bin/bash", "-c", shell], env=lab.env, capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertIn(b"Cryptographic signature verification failed", result.stdout)
+
+    def test_signer_failure_retains_operation_and_metadata_not_private_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "signer").mkdir(mode=0o700)
+            lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
+            lab.signer_command("generate-ephemeral-key", "-q", "-t", "ed25519", "-N", "", "-f",
+                               str(root / "signer/key"))
+            target = root / "installer"
+            target.write_text("closed synthetic fixture, not a release\n")
+            # A real OpenSSH refusal, not a simulated exit code or key read.
+            (root / "signer/key").chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "native command failed"):
+                lab.sign(target)
+            failure = lab.receipt["command_failure"]
+            self.assertEqual(failure["operation"], "sign-installer")
+            self.assertEqual(failure["observed_exit"], 255)
+            self.assertIn("private-key-permissions", failure["observed_diagnostics"])
+            self.assertEqual(failure["signer_key_metadata"], {
+                "present": True, "regular_file": True, "mode": "0644", "owned_by_executor": True,
+            })
+            self.assertFalse(Path(str(target) + ".sshsig").exists())
+            retained = json.dumps(lab.receipt)
+            self.assertNotIn("PRIVATE KEY", retained)
+            self.assertNotIn(str(root), retained)
+            self.assertNotIn(lab._last_output.decode(), retained)
+
+    def test_signer_timeout_does_not_attribute_stale_output_to_new_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lab = native.NativeLab(root, ROOT, root / "a", root / "b", "a" * 40)
+            lab._last_output = b"UNPROTECTED PRIVATE KEY FILE from an earlier command"
+            def timeout(*args):
+                lab.receipt["command_failure"] = {"command": "ssh-keygen", "deadline_exceeded": True,
+                                                  "observed_exit": -9}
+                raise RuntimeError("native command deadline exceeded")
+            with patch.object(lab, "run", side_effect=timeout), self.assertRaises(RuntimeError):
+                lab.signer_command("generate-ephemeral-key", "-q")
+            failure = lab.receipt["command_failure"]
+            self.assertEqual(failure["operation"], "generate-ephemeral-key")
+            self.assertEqual(failure["signer_key_metadata"], {"present": False})
+            self.assertNotIn("observed_diagnostics", failure)
 
     def make_phase(self, directory, mutation=""):
         root = Path(directory)
@@ -318,6 +380,11 @@ elif args[0] == "unmask": unit.unlink()
 elif args[0] not in ("daemon-reload", "reset-failed"): sys.exit(97)
 '''
         class FixtureLab(native.NativeLab):
+            def run(self, *args, **kwargs):
+                if args[0] == "/bin/bash":
+                    args = (str(tools / "bash"), *args[1:])
+                return super().run(*args, **kwargs)
+
             def assert_runtime(self, tag, active):
                 if native.digest(self.root / "install/bin/pulse") != self.receipt["binaries"][tag]:
                     raise RuntimeError("fixture executable mismatch")
@@ -328,6 +395,19 @@ elif args[0] not in ("daemon-reload", "reset-failed"): sys.exit(97)
                 return state
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory); tools = base / "tools"; tools.mkdir()
+            selected = selected_fixture_commands()
+            tool_trace = base / "selected-tools.jsonl"
+            for name, executable in selected.items():
+                # Record only tool identity, never shell arguments or key/log
+                # bytes. Execute the actual supplied GNU utility, not a double.
+                tool = tools / name
+                tool.write_text(f'''#!{sys.executable}
+import json, os, pathlib, sys
+with pathlib.Path({str(tool_trace)!r}).open('a') as receipt:
+    receipt.write(json.dumps({name!r}) + '\\n')
+os.execv({executable!r}, [{executable!r}, *sys.argv[1:]])
+''')
+                tool.chmod(0o700)
             path = tools / "systemctl"; path.write_text(manager); path.chmod(0o755)
             account = r'''#!/usr/bin/python3
 import os, pathlib, sys
@@ -385,6 +465,9 @@ else: sys.exit(97)
                                  ["forward", "manual-reverse", "failed-active", "failed-inactive",
                                   "failed-masked", "bad-signature", "incomplete-restore"])
                 self.assertTrue(lab.receipt["phases"][-1]["backup_retained"])
+                used = [json.loads(line) for line in tool_trace.read_text().splitlines()]
+                self.assertEqual(set(used), set(FIXTURE_COMMANDS),
+                                 "nested shell lost a containing-job fixture tool")
             finally:
                 lab.cleanup()
             self.assertTrue(lab.receipt["cleanup"]["complete"])
