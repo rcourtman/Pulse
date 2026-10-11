@@ -1525,6 +1525,14 @@ shapes with a real child process that emits an unset-variable warning;
 and diagnostic retention. These offline controls do not establish hosted Compose
 readiness, mounted-secret identity, persisted restart or clean owned teardown.
 
+The Linux-only startup fixture and its command controls must be excluded at
+compile time on other platforms. A runtime platform skip cannot prevent the
+control-plane's Unix-only dependencies from breaking Windows installer checks.
+`TestProviderMSPStartupFixturesStayLinuxOnly` exercises Go's file-selection
+rules for Linux, Windows and macOS; cross-compilation of the complete installer
+test package must also succeed. This does not substitute for execution of the
+Windows lifecycle controls or macOS installer and logging checks on native CI.
+
 ## Canonical Files
 
 1. `internal/updates/`

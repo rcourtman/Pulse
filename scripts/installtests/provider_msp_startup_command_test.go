@@ -1,12 +1,33 @@
+//go:build linux
+
 package installtests
 
 import (
 	"fmt"
+	"go/build"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
+
+func TestProviderMSPStartupFixturesStayLinuxOnly(t *testing.T) {
+	for _, platform := range []string{"linux", "windows", "darwin"} {
+		for _, name := range []string{"provider_msp_startup_test.go", "provider_msp_startup_command_test.go"} {
+			t.Run(platform+"/"+name, func(t *testing.T) {
+				ctx := build.Default
+				ctx.GOOS, ctx.GOARCH = platform, "amd64"
+				included, err := ctx.MatchFile(repoFile("scripts", "installtests"), name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if included != (platform == "linux") {
+					t.Fatalf("%s fixture inclusion on %s is %v, want %v", name, platform, included, platform == "linux")
+				}
+			})
+		}
+	}
+}
 
 // Exercise the real command helper with separate child-process output streams.
 // Compose emits unset-variable warnings on stderr even when a read succeeds.

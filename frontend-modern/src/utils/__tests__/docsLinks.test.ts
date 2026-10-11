@@ -657,9 +657,7 @@ describe('docsLinks', () => {
       /if !reportCallerMayUseAI\(ctx\) \{\s*return nil, nil, h\.resolveExistingFindings\(ctx\)\s*\}\s*return h\.narratorResolver\(ctx\)/,
     );
     expect(resolver.match(/h\.narratorResolver\(/g)).toHaveLength(1);
-    expect(fleet).toMatch(
-      /_, fleetNarrator, findings := h\.resolveNarrator\(ctx\)/,
-    );
+    expect(fleet).toMatch(/_, fleetNarrator, findings := h\.resolveNarrator\(ctx\)/);
     expect(fleet.match(/h\.resolveNarrator\(/g)).toHaveLength(1);
   });
 
