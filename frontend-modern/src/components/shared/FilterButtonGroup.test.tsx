@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Sun from 'lucide-solid/icons/sun';
-import { FilterButtonGroup } from './FilterButtonGroup';
+import Moon from 'lucide-solid/icons/moon';
+import { createSignal } from 'solid-js';
+import { FilterButtonGroup, type FilterOption } from './FilterButtonGroup';
 import filterButtonGroupSource from './FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from './filterButtonGroupModel.ts?raw';
 import filterButtonGroupStateSource from './useFilterButtonGroupState.ts?raw';
@@ -66,6 +68,72 @@ describe('FilterButtonGroup', () => {
 
     fireEvent.click(darkButton);
     expect(onChange).toHaveBeenCalledWith('dark');
+  });
+
+  it('keeps logical button identity and focus while counts, order and metadata change', () => {
+    const [options, setOptions] = createSignal<FilterOption<string>[]>([
+      { value: 'all', label: 'All', count: 1 },
+      { value: 'online', label: 'Healthy', count: 1, icon: Sun },
+      { value: 'degraded', label: 'Degraded', count: 0 },
+    ]);
+    const [value, setValue] = createSignal('online');
+    const onChange = vi.fn();
+    render(() => <FilterButtonGroup options={options()} value={value()} onChange={onChange} />);
+    const healthy = screen.getByRole('button', { name: 'Healthy, 1' });
+    const oldIcon = healthy.querySelector('svg');
+    healthy.focus();
+    setOptions([
+      { value: 'degraded', label: 'Needs attention', count: 2 },
+      {
+        value: 'online',
+        label: 'Fresh',
+        count: 0,
+        icon: Moon,
+        title: 'Current report',
+      },
+      { value: 'all', label: 'All', count: 2 },
+    ]);
+    expect(screen.getByRole('button', { name: 'Fresh, 0' })).toBe(healthy);
+    expect(document.activeElement).toBe(healthy);
+    expect(healthy).toHaveAttribute('title', 'Current report');
+    expect(healthy).not.toBeDisabled();
+    expect(healthy.querySelector('svg')).not.toBe(oldIcon);
+    expect(
+      screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Needs attention, 2', 'Fresh, 0', 'All, 2']);
+    setOptions(options().map((option) => ({ ...option, disabled: true })));
+    expect(screen.getByRole('button', { name: 'Fresh, 0' })).toBe(healthy);
+    expect(healthy).toBeDisabled();
+    fireEvent.click(healthy);
+    expect(onChange).not.toHaveBeenCalled();
+
+    setOptions(options().map((option) => ({ ...option, disabled: false, icon: undefined })));
+    setValue('degraded');
+    expect(healthy).toHaveAttribute('aria-pressed', 'false');
+    expect(healthy.querySelector('svg')).toBeNull();
+    fireEvent.click(healthy);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('online');
+    setOptions(options().filter((option) => option.value !== 'online'));
+    expect(healthy.isConnected).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Fresh, 0' })).toBeNull();
+  });
+
+  it('keeps numeric and string values distinct during replacement and reordering', () => {
+    const [options, setOptions] = createSignal<FilterOption<number | string>[]>([
+      { value: 0, label: 'Number', count: 1 },
+      { value: '0', label: 'String', count: 2 },
+    ]);
+    render(() => <FilterButtonGroup options={options()} value={0} onChange={() => undefined} />);
+    const number = screen.getByRole('button', { name: 'Number, 1' });
+    const string = screen.getByRole('button', { name: 'String, 2' });
+    setOptions([
+      { value: '0', label: 'String', count: 3 },
+      { value: 0, label: 'Number', count: 4 },
+    ]);
+    expect(screen.getByRole('button', { name: 'Number, 4' })).toBe(number);
+    expect(screen.getByRole('button', { name: 'String, 3' })).toBe(string);
+    expect(number).toHaveAttribute('aria-pressed', 'true');
+    expect(string).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('renders an optional count directly beside its label', () => {

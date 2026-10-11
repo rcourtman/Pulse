@@ -228,6 +228,33 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
       await page.waitForURL((url) => url.searchParams.get('status') === 'degraded');
       assert.equal(await row.count(), binding.mode === 'parent' ? 0 : 1);
       await capture('withdrawn-degraded');
+      // Counts update on quiet clock ticks too: the selected logical button
+      // must retain keyboard focus even when its row leaves the filter.
+      await page.evaluate(() => window.__healthFilters.report());
+      await button('Healthy').click();
+      await page.waitForURL((url) => url.searchParams.get('status') === 'online');
+      await page.clock.runFor(1000); // Settle ordinary source metadata refresh.
+      await button('Healthy').focus();
+      await button('Healthy').evaluate((el) => {
+        window.__focusedHealthButton = el;
+      });
+      const focusReads = record.reads.length;
+      await page.clock.runFor(299000);
+      await counts(1, 0);
+      await page.clock.runFor(30000);
+      await counts(0, 1);
+      assert.equal(await row.count(), 0);
+      const focus = await page.evaluate(() => ({
+        originalButtonConnected: window.__focusedHealthButton.isConnected,
+        focusRetained: document.activeElement === window.__focusedHealthButton,
+        currentFocusTag: document.activeElement.tagName,
+      }));
+      assert.equal(focus.originalButtonConnected, binding.focus_expected);
+      assert.equal(focus.focusRetained, binding.focus_expected);
+      assert.equal(record.reads.length, focusReads);
+      assert.equal(new URL(page.url()).searchParams.get('status'), 'online');
+      record.focusCheck = { ...focus, clockReads: 0, selectedHealthyEmpty: true };
+      await capture('focused-health-clock');
       assert.equal(record.reads.filter((p) => p === '/api/resources').length, 1);
       record.sourceUpdateReads = record.reads.slice(reads);
       for (const p of record.sourceUpdateReads) assert.equal(p, '/api/agents/metadata');

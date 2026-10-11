@@ -4548,7 +4548,16 @@ the existing danger precedence. Muted/unclassified rows stay in All only.
 The status dot tooltip and accessible name expose that same current label
 (Online, Stale or Offline), not an online tooltip on an amber retained row.
 The canonical status, stale flag and timestamps remain observations, not derived
-health. Search, focus, route-owned selection and removal behaviour are unchanged.
+health. Search, route-owned selection and removal behaviour are unchanged.
+The shared FilterButtonGroup keys buttons by logical value rather than transient
+option-object identity. Count, label, disabled, icon and order updates keep the
+same focused button while its option survives; withdrawn keys retire normally.
+Numeric and string values stay distinct, and selection uses the current entry.
+FilterButtonGroup.test.tsx covers those replacement/reorder/removal boundaries;
+FilterToolbar.test.tsx covers the live segmented-control label projection and
+forwarded selection at the shared wrapper boundary;
+the Machines clock/selection control exercises the production toolbar on desktop
+and touch-phone browsers.
 Attention sort classifies once per resource per call, preserving priority and
 numeric-name ordering without keeping a cross-call status cache. Debug source
 summaries read current status/error/last-seen by section ID, not a record captured
