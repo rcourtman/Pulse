@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -51,7 +52,7 @@ func testClusterClientEndpointOwnershipRoutingAndTrust(t *testing.T) {
 	if captured || cc.getEndpointFingerprint(declared.server.URL) != declaredPin {
 		t.Error("caller-owned endpoint edit changed the client's trust state")
 	}
-	t.Logf("original pinned monitoring preserved; injected endpoint authenticated requests=%d", other.requests.Load())
+	t.Logf("observed injected endpoint authenticated requests=%d; original pin unchanged=%t", other.requests.Load(), cc.getEndpointFingerprint(declared.server.URL) == declaredPin)
 }
 
 func testClusterClientEndpointOwnershipGuestAdmission(t *testing.T) {
@@ -150,7 +151,7 @@ func testClusterClientEndpointOwnershipGuestAdmission(t *testing.T) {
 	if originalCommands.Load() != 3 || otherRequests.Load() != 0 {
 		t.Errorf("recovery left declared targets: original commands=%d, other requests=%d", originalCommands.Load(), otherRequests.Load())
 	}
-	t.Logf("six busy reads fenced; independent guest and completed guest resume; other requests=%d", otherRequests.Load())
+	t.Logf("observed original commands=%d, other requests=%d; six busy-read results checked", originalCommands.Load(), otherRequests.Load())
 }
 
 func testClusterClientEndpointOwnershipShape(t *testing.T) {
@@ -164,4 +165,50 @@ func testClusterClientEndpointOwnershipShape(t *testing.T) {
 			t.Error("endpoint snapshot changed order, duplicates, nil/empty shape or ownership")
 		}
 	}
+}
+
+func testClusterClientEndpointOwnershipConcurrentReads(t *testing.T) {
+	var declaredRequests, otherRequests atomic.Int32
+	newServer := func(name string, requests *atomic.Int32) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests.Add(1)
+			if r.URL.Path != "/api2/json/nodes" || r.Header.Get("Authorization") != "PVEAPIToken=fixture@pve!pulse=fixture" {
+				t.Error("ordinary monitoring path or fixture authentication changed")
+			}
+			fmt.Fprintf(w, `{"data":[{"node":%q,"status":"online"}]}`, name)
+		}))
+	}
+	declared := newServer("declared", &declaredRequests)
+	defer declared.Close()
+	other := newServer("other", &otherRequests)
+	defer other.Close()
+	input := []string{declared.URL}
+	cc := NewClusterClient("owned-concurrent", ClientConfig{Host: declared.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second}, input, nil)
+	started, stop, joined := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(joined)
+		close(started)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				input[0] = other.URL
+				runtime.Gosched()
+				input[0] = declared.URL
+			}
+		}
+	}()
+	defer func() { close(stop); <-joined }()
+	<-started
+	for i := 0; i < 32; i++ {
+		nodes, err := cc.GetNodes(context.Background())
+		if err != nil || len(nodes) != 1 || nodes[0].Node != "declared" {
+			t.Fatalf("concurrent configuration reuse changed ordinary monitoring: %v", err)
+		}
+	}
+	if declaredRequests.Load() != 33 || otherRequests.Load() != 0 {
+		t.Error("concurrent configuration reuse changed the authenticated target")
+	}
+	t.Logf("observed declared requests=%d, other requests=%d during 32 concurrent-input reads", declaredRequests.Load(), otherRequests.Load())
 }

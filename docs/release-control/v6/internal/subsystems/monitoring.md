@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Cluster endpoint membership belongs to its client
+
+`NewClusterClient` snapshots the supplied endpoint slice before registering
+shared guest-command aliases or starting health and trust checks. After the
+constructor returns, reusing caller configuration storage cannot replace live
+failover targets, declare a new first-use TLS member, or route a guest read
+outside its registered serial channel. Routing, health recovery and trust
+admission use that same client-owned snapshot. Order, duplicate entries and
+nil/empty inputs retain their previous semantics; actual configuration changes
+still construct a replacement client rather than editing an existing client
+through a borrowed slice.
+
+`TestClusterClientEndpointOwnershipContract` exercises pinned ordinary reads,
+typed TLS mismatch/first-use refusal, all six guest-read paths while a response
+body is in flight, independent-guest and completed-command resumption, input
+shape and concurrent caller reuse. Its fixtures use only synthetic credentials
+and local sockets. Endpoint URLs, saved pins, CA/opt-out and first-use policy,
+alias equivalence, backup locks, uncertainty fences and non-replay are unchanged.
+This is source-bound admission safety, not native workload thaw, Windows restart
+recovery, the cause of a reported guest failure, or installed/release acceptance.
+
 ### Repeatable resource wiring publishes a complete binding once
 
 Router and tenant initialization applies saved notification policy before the

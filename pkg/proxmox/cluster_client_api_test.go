@@ -639,6 +639,7 @@ func TestClusterClientEndpointOwnershipContract(t *testing.T) {
 	t.Run("routing-and-first-use-trust", testClusterClientEndpointOwnershipRoutingAndTrust)
 	t.Run("shared-guest-admission", testClusterClientEndpointOwnershipGuestAdmission)
 	t.Run("input-shape", testClusterClientEndpointOwnershipShape)
+	t.Run("concurrent-ordinary-reads", testClusterClientEndpointOwnershipConcurrentReads)
 }
 
 // Guest admission equivalence must not broaden the existing certificate trust scope.
