@@ -27,7 +27,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
@@ -512,7 +511,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		return nil, fmt.Errorf("patrol skipped: %w", err)
 	}
 
-	// Gather guest intelligence (discovery + reachability) before building seed context
+	// Gather guest reachability before building seed context
 	intelCtx, intelCancel := context.WithTimeout(ctx, 5*time.Second)
 	guestIntel := p.gatherGuestIntelligence(intelCtx)
 	intelCancel()
@@ -1149,7 +1148,6 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 		// P0 — always include.
 		{priority: 0, name: "triage_overview", content: formatTriageOverviewSection(triage)},
 		{priority: 0, name: "operator_objectives", content: p.seedPatrolObjectives(sortedScopedIDs(seedSet), scope != nil, now)},
-		{priority: 0, name: "objective_credential_references", content: p.seedObjectiveCredentialReferences(scope)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, seedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(seedSet))},
@@ -1204,7 +1202,6 @@ func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *P
 	sections := []seedSection{
 		// P0 — always include.
 		{priority: 0, name: "operator_objectives", content: p.seedPatrolObjectives(effectiveScopeIDs, scope != nil, now)},
-		{priority: 0, name: "objective_credential_references", content: p.seedObjectiveCredentialReferences(scope)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, scopedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, effectiveScopeIDs)},
@@ -1230,61 +1227,6 @@ func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *P
 	}
 
 	return sections, seededFindingIDs
-}
-
-func (p *PatrolService) seedObjectiveCredentialReferences(scope *PatrolScope) string {
-	if scope == nil || scope.ObjectiveContext == nil || len(scope.ResourceIDs) == 0 {
-		return ""
-	}
-
-	p.mu.RLock()
-	discoveryStore := p.discoveryStore
-	p.mu.RUnlock()
-	if discoveryStore == nil {
-		return ""
-	}
-
-	discoveries, err := discoveryStore.List()
-	if err != nil {
-		log.Debug().Err(err).Msg("AI Patrol: Failed to load discovery credential references")
-		return ""
-	}
-	discoveries = servicediscovery.FilterDiscoveriesByResourceIDs(discoveries, scope.ResourceIDs)
-	sort.Slice(discoveries, func(i, j int) bool { return discoveries[i].ID < discoveries[j].ID })
-
-	const maxReferences = 24
-	referenceCount := 0
-	var lines []string
-	for _, discovery := range discoveries {
-		if discovery == nil || len(discovery.UserSecrets) == 0 {
-			continue
-		}
-		keys := make([]string, 0, len(discovery.UserSecrets))
-		for key := range discovery.UserSecrets {
-			if key = strings.TrimSpace(key); key != "" {
-				keys = append(keys, key)
-			}
-		}
-		sort.Strings(keys)
-		if remaining := maxReferences - referenceCount; remaining < len(keys) {
-			keys = keys[:max(remaining, 0)]
-		}
-		if len(keys) == 0 {
-			break
-		}
-		lines = append(lines, fmt.Sprintf("- %s: %s", discovery.ID, strings.Join(keys, ", ")))
-		referenceCount += len(keys)
-		if referenceCount >= maxReferences {
-			break
-		}
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-
-	return "# Scoped Credential References\n" +
-		"These are encrypted discovery credential names available to bounded local observers. Values are never model-visible. Reference an exact name through a supported observer secret_ref field; do not request or infer its value.\n" +
-		strings.Join(lines, "\n") + "\n"
 }
 
 func (p *PatrolService) calculateSeedBudget() int {
@@ -1904,7 +1846,6 @@ type patrolGuestInventoryRow struct {
 	vmid                      int
 	ip                        string
 	lastBackup                time.Time
-	service                   string
 	reachable                 string
 }
 
@@ -2044,7 +1985,6 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				vmid:       vmv.VMID(),
 				ip:         patrolFirstIP(vmv.IPAddresses()),
 				lastBackup: vmv.LastBackup(),
-				service:    formatService(gi),
 				reachable:  formatReachable(reachableFromIntel(gi)),
 			})
 		}
@@ -2068,7 +2008,6 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				vmid:       ctv.VMID(),
 				ip:         patrolFirstIP(ctv.IPAddresses()),
 				lastBackup: ctv.LastBackup(),
-				service:    formatService(gi),
 				reachable:  formatReachable(reachableFromIntel(gi)),
 			})
 		}
@@ -2094,7 +2033,6 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			vmid:       vm.VMID,
 			ip:         patrolFirstIP(vm.IPAddresses),
 			lastBackup: vm.LastBackup,
-			service:    formatService(gi),
 			reachable:  formatReachable(reachableFromIntel(gi)),
 		})
 	}
@@ -2116,7 +2054,6 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			vmid:       ct.VMID,
 			ip:         patrolFirstIP(ct.IPAddresses),
 			lastBackup: ct.LastBackup,
-			service:    formatService(gi),
 			reachable:  formatReachable(reachableFromIntel(gi)),
 		})
 	}
@@ -2821,15 +2758,15 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 			}
 		} else {
 			sb.WriteString("# Guest Metrics\n")
-			sb.WriteString("| Name | Type | Node | Service | CPU | Mem | Disk | Status | Reachable | Last Backup |\n")
-			sb.WriteString("|------|------|------|---------|-----|-----|------|--------|-----------|-------------|\n")
+			sb.WriteString("| Name | Type | Node | CPU | Mem | Disk | Status | Reachable | Last Backup |\n")
+			sb.WriteString("|------|------|------|-----|-----|------|--------|-----------|-------------|\n")
 			for _, g := range guests {
 				backup := "never"
 				if !g.lastBackup.IsZero() {
 					backup = seedFormatTimeAgo(now, g.lastBackup)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
-					g.name, g.gType, g.node, g.service, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
+					g.name, g.gType, g.node, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
 			}
 			sb.WriteString("\n")
 
@@ -2837,13 +2774,9 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 			var issues []serviceHealthIssue
 			for _, g := range guests {
 				if g.status == "running" && g.reachable == "NO" {
-					svc := g.service
-					if svc == "-" {
-						svc = g.gType // "VM" or "Container"
-					}
 					issues = append(issues, serviceHealthIssue{
 						name:    g.name,
-						service: svc,
+						service: g.gType, // "VM" or "Container"
 						node:    g.node,
 					})
 				}

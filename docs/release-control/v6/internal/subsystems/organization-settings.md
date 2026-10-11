@@ -173,6 +173,14 @@ Organisation overview, access and sharing use the authenticated currentUsername 
 
 ## Current State
 
+### AI Service Context settings panel removed (2026-10-11)
+
+`settingsPanelRegistryContext.tsx` and the settings registry no longer carry
+the `system-ai-discovery` panel: the AI Service Context page left with AI
+Discovery. The `/settings/pulse-intelligence/discovery` path and the legacy
+`?tab=system-ai-discovery` value still resolve to Assistant settings, so old
+links land on a live page. Organization-scoped settings are unaffected.
+
 This subsystem now sits under the dedicated security, identity, and privacy
 lane so role boundaries, organization membership semantics, and cross-org
 sharing behavior stay governed as a first-class trust surface.

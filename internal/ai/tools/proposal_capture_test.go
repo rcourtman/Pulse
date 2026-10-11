@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
+	"testing"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"reflect"
-	"sync"
-	"testing"
 )
 
 func testProposalCatalog() ProposalCatalog {

@@ -13,7 +13,6 @@ func TestKnownToolNamesIncludesRegisteredTools(t *testing.T) {
 	// shared provider-tool name catalog.
 	expected := []string{
 		agentcapabilities.PulseQueryToolName,
-		agentcapabilities.PulseDiscoveryToolName,
 		agentcapabilities.PulseReadToolName,
 		agentcapabilities.PulseSummarizeToolName,
 		agentcapabilities.PulseControlToolName,

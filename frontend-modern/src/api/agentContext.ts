@@ -1,5 +1,4 @@
 import { apiFetchJSON } from '@/utils/apiClient';
-import type { ResourceDiscoveryReadiness } from '@/types/resource';
 
 export interface AgentResourceContextFact {
   label: string;
@@ -70,7 +69,6 @@ export interface AgentResourceContext {
   resourceType: string;
   resourceName: string;
   technology?: string;
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   activeFindings: AgentResourceFindingSnapshot[];
   pendingApprovals: AgentResourceApprovalSummary[];
   recentActions: AgentResourceActionSummary[];

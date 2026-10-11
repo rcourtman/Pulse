@@ -1,7 +1,6 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { Show, Suspense, lazy } from 'solid-js';
 
-import { formatDiscoveryAge } from '@/api/discovery';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -12,7 +11,6 @@ import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSecti
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
-import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes } from '@/utils/format';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
@@ -21,7 +19,6 @@ import {
   getWorkloadsGuestProtectionPresentation,
 } from '@/utils/workloadGuestPresentation';
 
-import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { buildWorkloadsDiskPresentation } from './diskListModel';
 import {
   getGuestDrawerAlertAttention,
@@ -68,7 +65,6 @@ interface GuestDrawerOverviewProps {
     dateLabel: string;
   } | null;
   diskThresholds?: MetricDisplayThresholds | null;
-  discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
   workloadActionAgentTitle: string;
   parentMemoryTotal?: GuestDrawerProps['parentMemoryTotal'];
   memoryDisplayBasis?: GuestDrawerProps['memoryDisplayBasis'];
@@ -134,23 +130,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             props.guest.backupInProgress ? 'Running · not completed yet' : null,
             { tone: 'warning', wrap: true },
           ),
-          makeDetailRow(
-            'Identified service',
-            props.discoveryIdentifiedSummary
-              ? [
-                  props.discoveryIdentifiedSummary.serviceName,
-                  props.discoveryIdentifiedSummary.category,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              : null,
-          ),
         ]),
       },
     ]);
 
   const technicalSections = () => {
-    const discovery = props.discoveryIdentifiedSummary;
     const nested = props.nestedWorkloadContext;
     const nestedItems = nested?.items.slice(0, 4) ?? [];
     const nestedHiddenCount = nested ? Math.max(0, nested.count - nestedItems.length) : 0;
@@ -177,21 +161,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       (diskReadState === 'unavailable' ? 'Filesystem usage is unavailable.' : null);
 
     return compactDetailSections([
-      discovery
-        ? {
-            label: 'Identified Service',
-            rows: compactDetailRows([
-              makeDetailRow('Version', discovery.serviceVersion),
-              makeDetailRow('Endpoint', discovery.suggestedUrl, { wrap: true }),
-              discovery.portCount > 0 ? makeDetailRow('Ports', `${discovery.portCount}`) : null,
-              makeDetailRow('Source', discovery.sourceLabel),
-              makeDetailRow(
-                'Observed',
-                discovery.observedAt ? formatDiscoveryAge(discovery.observedAt) : null,
-              ),
-            ]),
-          }
-        : null,
       {
         label: 'System',
         rows: compactDetailRows([
@@ -393,20 +362,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 checks={props.guest.availabilityChecks}
               />
             </div>
-          </div>
-        </Show>
-        <Show
-          when={
-            props.discoveryIdentifiedSummary?.suggestedAvailabilityProbe &&
-            !props.guest.availability &&
-            !props.guest.availabilityChecks?.length
-          }
-        >
-          <div class="mt-3 max-w-sm">
-            <AvailabilityProbeSuggestionCard
-              suggestion={props.discoveryIdentifiedSummary!.suggestedAvailabilityProbe!}
-              linkedResourceId={props.guest.id}
-            />
           </div>
         </Show>
       </div>

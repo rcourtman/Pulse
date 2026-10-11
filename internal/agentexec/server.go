@@ -897,7 +897,7 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 	case PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case PolicyRequireApproval:
-		// Trusted internal subsystems (e.g. servicediscovery deep scans) carry
+		// Trusted internal subsystems (e.g. the Docker-in-guest checker) carry
 		// a hardcoded command catalog and never accept user-supplied commands,
 		// so the user-driven approval gate does not apply to them.
 		if cmd.Trusted {

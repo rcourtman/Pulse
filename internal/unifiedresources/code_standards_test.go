@@ -25,8 +25,7 @@ package unifiedresources
 //
 // Consumer package policy:
 //
-//   - internal/ai/*, internal/api/*, internal/infradiscovery/,
-//     internal/servicediscovery/: MUST use ReadState. Direct state reads
+//   - internal/ai/*, internal/api/*: MUST use ReadState. Direct state reads
 //     are banned for all migrated resource types.
 //
 //   - internal/monitoring/, internal/mock/, internal/models/,
@@ -471,7 +470,6 @@ var consumerPackages = []consumerPackage{
 	{dir: "ai/chat", exemptFiles: nil},
 	{dir: "ai", exemptFiles: nil},
 	{dir: "api", exemptFiles: nil},
-	{dir: "servicediscovery", exemptFiles: nil},
 }
 
 // TestNoDirectStateAccessForMigratedResources ensures that consumer packages
@@ -1360,16 +1358,12 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"unifiedresources.ResourcePolicyRedactedValue(",
 		},
 		filepath.Join("..", "ai", "chat", "context_prefetch.go"): {
-			"tools.CanonicalDiscoveryResourceType(",
-			"tools.DiscoveryProviderResourceType(",
-			"tools.CanonicalDiscoveryTargetID(",
+			"tools.CanonicalToolResourceType(",
 			"unifiedresources.ResourcePolicyRequiresGovernedSummary(mention.Policy)",
 			"unifiedresources.FormatResourcePolicyGovernedSummary(mention.AISafeSummary, mention.Policy)",
 		},
-		filepath.Join("..", "ai", "tools", "tools_discovery.go"): {
-			"func CanonicalDiscoveryResourceType(raw string) string",
-			"func DiscoveryProviderResourceType(canonical string) string",
-			"func CanonicalDiscoveryTargetID(discovery *ResourceDiscoveryInfo, fallbackTargetID string) string",
+		filepath.Join("..", "ai", "tools", "executor.go"): {
+			"func CanonicalToolResourceType(raw string) string",
 		},
 		filepath.Join("..", "ai", "resource_export.go"): {
 			"unifiedresources.ResourceRedactionLabelsFromHints(redactionHints)",
@@ -2383,21 +2377,6 @@ func TestV6ReleaseFacingAPITestsCoverLegacyHostRejection(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_info_test.go"),
-			requiredSnippets: []string{
-				`/api/discovery/info/host`,
-				`unsupported resource type "host"`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
-			requiredSnippets: []string{
-				`/api/discovery/type/host`,
-				`/api/discovery/host/host-1/host-1`,
-				`unsupported resource type "host"`,
-			},
-		},
-		{
 			path: filepath.Join(repoRoot, "internal", "api", "docker_agents_routes_more_test.go"),
 			requiredSnippets: []string{
 				`legacy hosts alias status = %d, want 400`,
@@ -2458,13 +2437,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "api", "discovery_handlers_test.go"),
-			requiredSnippets: []string{
-				`TestParseDiscoveryResourceType_RejectsLegacyHostAlias`,
-				`legacy host rejected`,
-			},
-		},
-		{
 			path: filepath.Join(repoRoot, "internal", "ai", "resource_type_legacy_test.go"),
 			requiredSnippets: []string{
 				`TestIsUnsupportedLegacyAIResourceTypeToken`,
@@ -2478,14 +2450,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 				`TestHandlePatrolReportFinding_AcceptsPhysicalDiskResourceType`,
 				`"resource_type"] = "physical_disk"`,
 				`[]string{"host", "container", "docker"`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_discovery_test.go"),
-			requiredSnippets: []string{
-				`TestIsUnsupportedDiscoveryLegacyResourceTypeToken`,
-				`"host", "lxc"`,
-				`TestExecuteListDiscoveries_RejectsLegacyTypeAlias`,
 			},
 		},
 		{

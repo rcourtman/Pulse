@@ -47,7 +47,7 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 	if !ok {
 		t.Fatal("network-endpoint scope was not recognized")
 	}
-	for _, required := range []string{PulseQueryToolName, PulseDiscoveryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
+	for _, required := range []string{PulseQueryToolName, PatrolGetFindingsToolName, PatrolReportFindingToolName, PatrolAssessFindingToolName} {
 		if !slices.Contains(detection, required) {
 			t.Fatalf("detection surface missing %q: %v", required, detection)
 		}

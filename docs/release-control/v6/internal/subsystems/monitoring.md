@@ -2766,10 +2766,6 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 31a. `internal/availabilityprobe/probe.go`
 31b. `internal/config/availability.go`
 31c. `pkg/tlsutil/certificate.go`
-31d. `internal/servicediscovery/availability_suggestion.go`
-31e. `internal/servicediscovery/types.go`
-31f. `internal/servicediscovery/store.go`
-31g. `internal/servicediscovery/service.go`
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
@@ -3552,6 +3548,29 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 
 ## Current State
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
+
+The service-discovery availability-suggestion helpers under `internal/servicediscovery` were deleted with the package; availability probes are configured directly.
 
 ### Interface-associated guest address selection
 

@@ -1,17 +1,9 @@
 import type { Component } from 'solid-js';
 
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
-import {
-  WebInterfaceUrlField,
-  type WebInterfaceUrlFieldProps,
-} from '@/components/shared/WebInterfaceUrlField';
+import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { WorkloadGuest } from '@/types/workloads';
 import { isGuestDrawerVM, type GuestDrawerProps } from './guestDrawerModel';
-
-type GuestWebInterfaceSuggestion = Pick<
-  WebInterfaceUrlFieldProps,
-  'suggestedUrl' | 'suggestedUrlReasonText' | 'suggestedUrlReasonTitle' | 'suggestedUrlDiagnostic'
->;
 
 interface GuestDrawerManageProps {
   guest: WorkloadGuest;
@@ -20,7 +12,6 @@ interface GuestDrawerManageProps {
   targetLabel: string;
   customUrl?: string;
   onCustomUrlChange?: GuestDrawerProps['onCustomUrlChange'];
-  suggestion?: GuestWebInterfaceSuggestion;
 }
 
 export const GuestDrawerManage: Component<GuestDrawerManageProps> = (props) => (
@@ -36,10 +27,6 @@ export const GuestDrawerManage: Component<GuestDrawerManageProps> = (props) => (
       targetLabel={props.targetLabel}
       customUrl={props.customUrl}
       onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.metadataId, url)}
-      suggestedUrl={props.suggestion?.suggestedUrl}
-      suggestedUrlReasonText={props.suggestion?.suggestedUrlReasonText}
-      suggestedUrlReasonTitle={props.suggestion?.suggestedUrlReasonTitle}
-      suggestedUrlDiagnostic={props.suggestion?.suggestedUrlDiagnostic}
     />
   </div>
 );

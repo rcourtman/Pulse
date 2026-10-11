@@ -428,22 +428,6 @@ func TestBuildSystemPrompt_IncludesSharedPulseIntelligenceOperatingInstructions(
 	}
 }
 
-func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t *testing.T) {
-	svc := &Service{}
-
-	prompt := svc.buildToolGovernancePromptSection()
-
-	// Discovery's run subaction is read-only evidence collection that
-	// updates only the discovery cache, so the mutation-derived action
-	// mode is read (the pre-descriptor manifest declared it mixed).
-	if !strings.Contains(prompt, "pulse_discovery: mode=read") {
-		t.Fatalf("expected fallback governance to classify pulse_discovery as read, got %q", prompt)
-	}
-	if !strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
-		t.Fatalf("expected fallback governance to describe discovery refresh behavior, got %q", prompt)
-	}
-}
-
 func TestBuildToolGovernancePromptSection_FallbackUsesCanonicalRegistry(t *testing.T) {
 	fallback := fallbackAssistantToolGovernance()
 	canonical := tools.CanonicalToolGovernanceForManifestSurface(
@@ -494,10 +478,10 @@ func TestBuildToolGovernancePromptSection_FallbackOfferedNamesUseAssistantAfford
 func TestBuildToolGovernancePromptSection_OfferedToolsUseCanonicalFallback(t *testing.T) {
 	svc := &Service{}
 
-	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_discovery"}})
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_query"}})
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=read; approval=scope_only (no approval required; run uses read-only evidence collection and updates the discovery cache)") {
-		t.Fatalf("expected offered fallback prompt to use canonical discovery governance, got %q", prompt)
+	if !strings.Contains(prompt, "pulse_query: mode=read") {
+		t.Fatalf("expected offered fallback prompt to use canonical query governance, got %q", prompt)
 	}
 	if strings.Contains(prompt, "pulse_control:") {
 		t.Fatalf("expected offered fallback prompt to exclude non-offered control tools, got %q", prompt)
@@ -509,9 +493,9 @@ func TestBuildToolGovernancePromptSection_OfferedToolsUseProviderMetadata(t *tes
 
 	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{
 		{
-			Name: "pulse_discovery",
+			Name: "pulse_query",
 			PulseGovernance: &agentcapabilities.ToolGovernanceDescriptor{
-				Name:            "pulse_discovery",
+				Name:            "pulse_query",
 				Description:     "Discover infrastructure.",
 				ActionMode:      agentcapabilities.ActionModeMixed,
 				ApprovalPolicy:  agentcapabilities.ApprovalPolicyScopeOnly,
@@ -521,7 +505,7 @@ func TestBuildToolGovernancePromptSection_OfferedToolsUseProviderMetadata(t *tes
 		},
 	})
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=mixed; approval=scope_only (metadata-owned approval summary); metadata-owned discovery summary") {
+	if !strings.Contains(prompt, "pulse_query: mode=mixed; approval=scope_only (metadata-owned approval summary); metadata-owned discovery summary") {
 		t.Fatalf("expected offered tool metadata to drive governance prompt, got %q", prompt)
 	}
 	if strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {

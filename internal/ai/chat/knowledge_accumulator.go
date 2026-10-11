@@ -11,13 +11,12 @@ import (
 type FactCategory string
 
 const (
-	FactCategoryResource  FactCategory = "resource"
-	FactCategoryStorage   FactCategory = "storage"
-	FactCategoryAlert     FactCategory = "alert"
-	FactCategoryDiscovery FactCategory = "discovery"
-	FactCategoryExec      FactCategory = "exec"
-	FactCategoryMetrics   FactCategory = "metrics"
-	FactCategoryFinding   FactCategory = "finding"
+	FactCategoryResource FactCategory = "resource"
+	FactCategoryStorage  FactCategory = "storage"
+	FactCategoryAlert    FactCategory = "alert"
+	FactCategoryExec     FactCategory = "exec"
+	FactCategoryMetrics  FactCategory = "metrics"
+	FactCategoryFinding  FactCategory = "finding"
 )
 
 // isMarkerKey returns true if the fact key is a marker (ends with ":queried").
@@ -256,20 +255,18 @@ func (ka *KnowledgeAccumulator) Render() string {
 		FactCategoryResource,
 		FactCategoryStorage,
 		FactCategoryAlert,
-		FactCategoryDiscovery,
 		FactCategoryExec,
 		FactCategoryMetrics,
 		FactCategoryFinding,
 	}
 
 	categoryLabels := map[FactCategory]string{
-		FactCategoryResource:  "Resources",
-		FactCategoryStorage:   "Storage",
-		FactCategoryAlert:     "Alerts",
-		FactCategoryDiscovery: "Discovery",
-		FactCategoryExec:      "Exec",
-		FactCategoryMetrics:   "Metrics",
-		FactCategoryFinding:   "Findings",
+		FactCategoryResource: "Resources",
+		FactCategoryStorage:  "Storage",
+		FactCategoryAlert:    "Alerts",
+		FactCategoryExec:     "Exec",
+		FactCategoryMetrics:  "Metrics",
+		FactCategoryFinding:  "Findings",
 	}
 
 	grouped := make(map[FactCategory][]*Fact)

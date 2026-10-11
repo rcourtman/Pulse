@@ -252,7 +252,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertEqual(
             policy_ids,
             [
-                "service-discovery-assurance-runtime",
                 "maintenance-verification-runtime",
                 "availability-certificate-runtime",
                 "discovery-provider-runtime",

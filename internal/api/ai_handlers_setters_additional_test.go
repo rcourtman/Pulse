@@ -13,7 +13,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -146,23 +145,6 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 		t.Fatalf("expected tenant circuit breaker, got %#v", got)
 	}
 
-	defaultDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStore default: %v", err)
-	}
-	tenantDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStore tenant: %v", err)
-	}
-	handler.SetDiscoveryStoreForOrg("default", defaultDiscoveryStore)
-	handler.SetDiscoveryStoreForOrg("acme", tenantDiscoveryStore)
-	if got := handler.GetDiscoveryStore(); got != defaultDiscoveryStore {
-		t.Fatalf("expected default discovery store, got %#v", got)
-	}
-	if got := handler.GetDiscoveryStoreForOrg("acme"); got != tenantDiscoveryStore {
-		t.Fatalf("expected tenant discovery store, got %#v", got)
-	}
-
 	defaultUnifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
 	tenantUnifiedStore := unified.NewUnifiedStore(unified.DefaultAlertToFindingConfig())
 	handler.SetUnifiedStoreForOrg("default", defaultUnifiedStore)
@@ -188,9 +170,6 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 	}
 	if got := handler.GetCircuitBreakerForOrg("acme"); got != nil {
 		t.Fatalf("expected tenant circuit breaker removed on tenant cleanup, got %#v", got)
-	}
-	if got := handler.GetDiscoveryStoreForOrg("acme"); got != nil {
-		t.Fatalf("expected tenant discovery store removed on tenant cleanup, got %#v", got)
 	}
 	if got := handler.GetUnifiedStoreForOrg("acme"); got != nil {
 		t.Fatalf("expected tenant unified store removed on tenant cleanup, got %#v", got)

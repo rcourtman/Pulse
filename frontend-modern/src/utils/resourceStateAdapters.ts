@@ -231,14 +231,7 @@ const mergePlatformData = (
     delete merged.availabilityChecks;
   }
 
-  for (const key of [
-    'storage',
-    'physicalDisk',
-    'ceph',
-    'metrics',
-    'discoveryTarget',
-    'discoveryReadiness',
-  ]) {
+  for (const key of ['storage', 'physicalDisk', 'ceph', 'metrics', 'discoveryTarget']) {
     const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (nested) {
       merged[key] = nested;
@@ -766,26 +759,6 @@ const scopeStillSupported = (scope: string, incoming: Resource): boolean => {
   return incoming.type !== 'agent' && Boolean(facetKey && asRecord(record[facetKey]));
 };
 
-// Discovery readiness names the discovery target it was read for: `targetId`
-// is the target's reporter (`agentId`) and `resourceId` its resource. It stays
-// with the row unless the rebuilt row has a target and a coordinate the
-// readiness names differs from the same coordinate of that target. A rebuilt
-// row without a target (realtime carries one only for agent and Docker host
-// rows; the rest is REST enrichment) cannot be judged, so the readiness stays
-// unless the agent left.
-const keepDiscoveryReadiness = (
-  readiness: Resource['discoveryReadiness'],
-  replacement: Resource,
-  agentLeft: boolean,
-): Resource['discoveryReadiness'] => {
-  if (!readiness) return undefined;
-  const target = replacement.discoveryTarget;
-  if (!target) return agentLeft ? undefined : readiness;
-  if (readiness.targetId && readiness.targetId !== target.agentId) return undefined;
-  if (readiness.resourceId && readiness.resourceId !== target.resourceId) return undefined;
-  return readiness;
-};
-
 // A row whose sources shrank describes a different composition, and the
 // per-id merge would keep what the previous row carried for the departed
 // source wherever the incoming row omits it: flattened provider facts in
@@ -828,9 +801,6 @@ const replaceRecomposedResource = (
       keptScopes && keptScopes.length > 0
         ? normalizeSourcePlatformScopes(keptScopes, replacement.platformType)
         : replacement.platformScopes,
-    discoveryReadiness:
-      replacement.discoveryReadiness ??
-      keepDiscoveryReadiness(existingCanonical.discoveryReadiness, replacement, agentLeft),
     actionReadiness:
       replacement.actionReadiness ?? (agentLeft ? undefined : existingCanonical.actionReadiness),
   };
@@ -866,7 +836,6 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incoming.platformType ?? existingCanonical.platformType,
     ),
     discoveryTarget: incoming.discoveryTarget ?? existingCanonical.discoveryTarget,
-    discoveryReadiness: incoming.discoveryReadiness ?? existingCanonical.discoveryReadiness,
     metricsTarget: incoming.metricsTarget ?? existingCanonical.metricsTarget,
     canonicalIdentity: mergeCanonicalIdentity(
       incoming.canonicalIdentity,

@@ -4,11 +4,9 @@ import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 const [resource, setResource] = createSignal<Resource>({
   id: 'pbs-a',
   name: 'Recorded backup server',

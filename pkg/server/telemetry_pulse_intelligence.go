@@ -9,6 +9,22 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 )
 
+// applyAIConfigTelemetrySnapshot copies the AI feature flags from the stored
+// AI config. It never touches DiscoveryEnabled: that flag reports network
+// subnet discovery only, since AI Discovery was removed.
+func applyAIConfigTelemetrySnapshot(snap *telemetry.Snapshot, aiCfg *config.AIConfig) {
+	if snap == nil || aiCfg == nil {
+		return
+	}
+	snap.AIEnabled = aiCfg.Enabled
+	// Closed route class only; provider, model, endpoint, and account identity
+	// never enter the snapshot.
+	snap.AIProviderClass = telemetry.ClassifyAIProviderClass(aiCfg)
+	snap.PatrolEnabled = aiCfg.IsPatrolEnabled()
+	snap.AIActionsEnabled = aiCfg.IsControlEnabled()
+	snap.AlertAIEnabled = aiCfg.IsAlertTriggeredAnalysisEnabled()
+}
+
 func applyPulseIntelligenceTelemetrySnapshot(
 	snap *telemetry.Snapshot,
 	persistence *config.ConfigPersistence,

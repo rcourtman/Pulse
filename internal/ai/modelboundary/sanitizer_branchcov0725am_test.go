@@ -20,68 +20,6 @@ func (p branchcov0725amByTypeOnlyProvider) GetByType(t unifiedresources.Resource
 	return append([]unifiedresources.Resource(nil), p.byType[t]...)
 }
 
-// TestBranchcov0725amSortStringsByLengthDesc drives both arms of the sort comparator:
-// the equal-length tie branch (alphabetical ascending) and the length branch (descending by
-// length), plus the empty / single / already-sorted degenerate inputs.
-func TestBranchcov0725amSortStringsByLengthDesc(t *testing.T) {
-	cases := []struct {
-		name string
-		in   []string
-		want []string
-	}{
-		{
-			name: "nil slice unchanged",
-			in:   nil,
-			want: nil,
-		},
-		{
-			name: "empty non-nil slice unchanged",
-			in:   []string{},
-			want: []string{},
-		},
-		{
-			name: "single element unchanged",
-			in:   []string{"solo"},
-			want: []string{"solo"},
-		},
-		{
-			name: "ties broken alphabetically ascending",
-			in:   []string{"cat", "bat", "ant"},
-			want: []string{"ant", "bat", "cat"},
-		},
-		{
-			name: "distinct lengths sorted descending by length",
-			in:   []string{"a", "ccc", "bb"},
-			want: []string{"ccc", "bb", "a"},
-		},
-		{
-			name: "mixed distinct lengths and ties",
-			in:   []string{"z", "bbb", "aaa", "dddd"},
-			want: []string{"dddd", "aaa", "bbb", "z"},
-		},
-		{
-			name: "already sorted input is stable",
-			in:   []string{"dddd", "aaa", "bbb", "z"},
-			want: []string{"dddd", "aaa", "bbb", "z"},
-		},
-		{
-			name: "fully reverse input is sorted",
-			in:   []string{"z", "bbb", "aaa", "dddd"},
-			want: []string{"dddd", "aaa", "bbb", "z"},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.in
-			sortStringsByLengthDesc(got)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("sortStringsByLengthDesc(%v) = %v, want %v", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
 // TestBranchcov0725amResourcePolicySanitizerResources drives the per-type aggregation loop of
 // resourcePolicySanitizerResources (the branch taken when the provider does NOT implement
 // GetAll), including the Type+ID dedup continue and the final RefreshCanonicalMetadataSlice +

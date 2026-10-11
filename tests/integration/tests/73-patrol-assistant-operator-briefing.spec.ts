@@ -303,7 +303,6 @@ test.describe("Patrol Assistant operator briefing", () => {
           model: "openai:gpt-4o-mini",
           chat_model: "",
           control_level: "read_only",
-          discovery_enabled: true,
           patrol_enabled: true,
           patrol_interval_minutes: 360,
           patrol_model: "",

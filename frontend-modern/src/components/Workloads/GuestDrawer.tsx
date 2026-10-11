@@ -1,10 +1,7 @@
-import { Component, Show, Suspense, createMemo } from 'solid-js';
+import { Component, Show, createMemo } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
-import { DiscoveryTab } from '../Discovery/DiscoveryTab';
 import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
-import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -31,20 +28,9 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
     agentLabel,
     agentTitle,
     backupPresentation,
-    discoveryAgentId,
-    discoveryIdentifiedSummary,
-    discoveryPanelKey,
-    discoveryReadError,
-    discoveryReadLoading,
-    retryDiscoveryRead,
-    discoveryLoadingState,
-    discoveryReadinessPresentation,
-    discoveryResourceId,
-    discoveryResourceType,
     diskThresholds,
     guestId,
     hasAgentInfo,
-    hasDiscoverySupport,
     hasFilesystemDetails,
     hasHistorySupport,
     hasNetworkInterfaces,
@@ -98,30 +84,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           statusLabel={headerIndicator().label}
         />
       </ObjectDrawerHeader>
-      <Show when={discoveryReadinessPresentation()}>
-        {(presentation) => (
-          <div class="flex items-center gap-2 text-xs text-muted">
-            <DiscoveryReadinessBadge presentation={presentation()} />
-            <span class="truncate" title={presentation().detail || presentation().title}>
-              {presentation().detail || presentation().statusLabel}
-            </span>
-          </div>
-        )}
-      </Show>
-      <Show when={discoveryReadError()}>
-        {(message) => (
-          <InlineNotice
-            tone="warning"
-            role="status"
-            actionLabel={
-              discoveryReadLoading() ? 'Retrying service details...' : 'Retry service details'
-            }
-            actionOnClick={retryDiscoveryRead}
-          >
-            {message()}
-          </InlineNotice>
-        )}
-      </Show>
       <Show when={guestReadPrecaution()}>
         {(message) => (
           <InlineNotice
@@ -147,9 +109,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
             ? [{ value: 'history', label: 'History' } satisfies SubtabOption]
             : []),
           { value: 'manage', label: 'Manage' },
-          ...(hasDiscoverySupport()
-            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
-            : []),
         ]}
         trailing={
           <Show when={hasHistorySupport() && activeTab() === 'history'}>
@@ -177,7 +136,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           normalizedTags={normalizedTags()}
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
-          discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           workloadActionAgentTitle={workloadActionAgentTitle()}
@@ -198,31 +156,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
         </div>
       )}
 
-      {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
-                     so DiscoveryTab's createResource loading state doesn't bubble
-                     up to the app-level Suspense and replace the entire page. */}
-      <Show when={discoveryPanelKey()} keyed>
-        {(_targetKey) => (
-          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
-            <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
-              <DiscoveryTab
-                resourceType={discoveryResourceType()!}
-                agentId={discoveryAgentId()}
-                resourceId={discoveryResourceId()}
-                hostname={props.guest.name}
-                canonicalResourceId={props.guest.id}
-                showManualRunAction
-                runBlockReason={
-                  guestReadPrecaution()
-                    ? 'Discovery is paused during a backup or guest-read deferral. Saved results remain available. Clearing this pause does not prove thaw.'
-                    : null
-                }
-              />
-            </Suspense>
-          </div>
-        )}
-      </Show>
-
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <GuestDrawerManage
@@ -232,7 +165,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
             targetLabel={webInterfaceTargetLabel()}
             customUrl={props.customUrl}
             onCustomUrlChange={props.onCustomUrlChange}
-            suggestion={discoveryIdentifiedSummary() ?? undefined}
           />
         </Show>
       </div>

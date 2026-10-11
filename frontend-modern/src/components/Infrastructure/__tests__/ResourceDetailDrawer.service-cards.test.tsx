@@ -26,10 +26,6 @@ vi.mock('@/contexts/appRuntime', () => ({
   useDarkMode: () => () => false,
 }));
 
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
-}));
-
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
 }));
@@ -46,7 +42,7 @@ vi.mock('@/api/resources', () => ({
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
-    getSettings: vi.fn().mockResolvedValue({ discovery_enabled: false }),
+    getSettings: vi.fn().mockResolvedValue({}),
     getResourceIntelligence: vi.fn().mockResolvedValue({
       resource_id: 'resource-1',
       health: {

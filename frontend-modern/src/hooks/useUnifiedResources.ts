@@ -15,7 +15,6 @@ import type {
   ResourceCephMeta,
   ResourceChange,
   ResourceFacetCounts,
-  ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceDockerMeta,
   ResourceHealth,
@@ -507,7 +506,6 @@ type APIResource = {
     resourceId?: string;
     hostname?: string;
   };
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   metricsTarget?: {
     resourceType?: string;
     resourceId?: string;
@@ -967,7 +965,6 @@ const toResource = (v2: APIResource): Resource => {
       ips: v2.identity?.ipAddresses,
     },
     discoveryTarget,
-    discoveryReadiness: v2.discoveryReadiness,
     metricsTarget,
     canonicalIdentity: v2.canonicalIdentity,
     policy: v2.policy as Resource['policy'],
@@ -993,7 +990,6 @@ const toResource = (v2: APIResource): Resource => {
       ceph: v2.ceph,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
-      discoveryReadiness: v2.discoveryReadiness,
     },
   };
 };

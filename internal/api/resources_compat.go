@@ -32,7 +32,6 @@ type ResourceHandlers struct {
 	operatorStateChanged      func(orgID, resourceID string)
 }
 
-type ResourceDiscoveryReadinessProvider = resourceapi.ResourceDiscoveryReadinessProvider
 type SupplementalRecordsProvider = resourceapi.SupplementalRecordsProvider
 type TenantSupplementalRecordsProvider = resourceapi.TenantSupplementalRecordsProvider
 type SupplementalSnapshotSourceOwner = resourceapi.SupplementalSnapshotSourceOwner

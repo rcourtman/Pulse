@@ -5,11 +5,9 @@ import { Router, Route } from '@solidjs/router';
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
 import type { Resource } from '../src/types/resource';
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import '../src/index.css';
 
 // Explicit offline context, not a live WebSocket or automatic discovery probe.
-syncAIRuntimeSettings({ discovery_enabled: false });
 const server = (id: string, name: string, customUrl?: string): Resource => ({
   id,
   type: 'pbs',

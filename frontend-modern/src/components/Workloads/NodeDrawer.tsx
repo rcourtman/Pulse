@@ -1,13 +1,10 @@
-import { Show, Suspense, createEffect, createMemo, createSignal, type Component } from 'solid-js';
+import { Show, createMemo, createSignal, type Component } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
-import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Alert, Disk, Node } from '@/types/api';
@@ -24,21 +21,15 @@ import {
   getNodeDrawerHistoryTarget,
 } from './nodeDrawerModel';
 
-export interface NodeDrawerDiscoveryTarget {
-  agentId: string;
-  hostname?: string;
-}
-
 interface NodeDrawerProps {
   node: Node;
   disks?: Disk[];
-  discoveryTarget?: NodeDrawerDiscoveryTarget;
   temperatureThresholds?: MetricDisplayThresholds | null;
   alerts?: Alert[];
   onClose?: () => void;
 }
 
-type NodeDrawerTab = 'overview' | 'history' | 'manage' | 'discovery';
+type NodeDrawerTab = 'overview' | 'history' | 'manage';
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<NodeDrawerTab>('overview');
@@ -46,7 +37,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
   const alertsActivation = useAlertsActivation();
-  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
 
   const headingId = () => `node-drawer-heading-${props.node.id}`;
   const displayName = createMemo(() => getNodeDisplayName(props.node));
@@ -54,10 +44,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const historyGroups = createMemo(() => getNodeDrawerHistoryGroups(props.node));
   const currentMetrics = createMemo(() => getNodeDrawerCurrentMetrics(props.node));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
-  const enabledDiscoveryTarget = createMemo(() =>
-    discoveryFeatureEnabled() && props.discoveryTarget?.agentId ? props.discoveryTarget : null,
-  );
-  const hasDiscoverySupport = createMemo(() => Boolean(enabledDiscoveryTarget()));
   const temperatureThresholds = createMemo(() =>
     props.temperatureThresholds !== undefined
       ? props.temperatureThresholds
@@ -67,12 +53,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           nodeOverrideIdCandidates(props.node),
         ),
   );
-
-  createEffect(() => {
-    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
-      setActiveTab('overview');
-    }
-  });
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="node-drawer">
@@ -111,9 +91,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
-          ...(hasDiscoverySupport()
-            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
-            : []),
         ]}
         trailing={
           <Show when={activeTab() === 'history'}>
@@ -153,23 +130,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           </div>
         </Show>
       </div>
-
-      <Show when={enabledDiscoveryTarget()}>
-        {(target) => (
-          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
-            <Suspense fallback={<DiscoveryLoadingFallback />}>
-              <DiscoveryTab
-                resourceType="agent"
-                agentId={target().agentId}
-                resourceId={target().agentId}
-                hostname={target().hostname || displayName()}
-                canonicalResourceId={props.node.id}
-                showManualRunAction
-              />
-            </Suspense>
-          </div>
-        )}
-      </Show>
     </section>
   );
 };

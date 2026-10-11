@@ -89,7 +89,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Availability probe agents | `1` | Understand how many distinct probe agents installs deploy; counts only |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
 | Patrol enabled | `true`/`false` | See whether proactive AI health patrol is used |
-| Discovery enabled | `true`/`false` | See whether network or model-backed discovery is used |
+| Discovery enabled | `true`/`false` | See whether network subnet discovery is used |
 | Notifications enabled | `true`/`false` | See whether alert notification delivery is configured |
 | AI actions enabled | `true`/`false` | See whether AI control tools are enabled without sending action history or command content |
 | Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |

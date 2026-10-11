@@ -4,7 +4,6 @@ import type {
   WorkloadType,
   ViewMode,
 } from '@/types/workloads';
-import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
@@ -343,44 +342,6 @@ export const resolveDiscoveryTargetForWorkload = (
   }
   return null;
 };
-
-export const getDiscoveryResourceTypeForWorkload = (
-  guest: Pick<
-    WorkloadGuest,
-    | 'discoveryTarget'
-    | 'workloadType'
-    | 'type'
-    | 'platformType'
-    | 'containerRuntime'
-    | 'dockerHostId'
-    | 'kubernetesAgentId'
-    | 'instance'
-    | 'node'
-    | 'vmid'
-    | 'id'
-    | 'containerId'
-  >,
-): DiscoveryResourceType | null =>
-  (resolveDiscoveryTargetForWorkload(guest)?.resourceType as DiscoveryResourceType | undefined) ??
-  null;
-
-export const hasDiscoverySupportForWorkload = (
-  guest: Pick<
-    WorkloadGuest,
-    | 'discoveryTarget'
-    | 'workloadType'
-    | 'type'
-    | 'platformType'
-    | 'containerRuntime'
-    | 'dockerHostId'
-    | 'kubernetesAgentId'
-    | 'instance'
-    | 'node'
-    | 'vmid'
-    | 'id'
-    | 'containerId'
-  >,
-): boolean => Boolean(resolveDiscoveryTargetForWorkload(guest));
 
 export const getWebInterfaceTargetLabelForWorkload = (
   guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,

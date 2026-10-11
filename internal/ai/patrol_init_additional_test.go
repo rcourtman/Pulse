@@ -2,15 +2,12 @@ package ai
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type mockLearningProvider struct{}
@@ -78,22 +75,13 @@ func TestApplyPatrolAutonomyConfigPublishesInvestigationExecutionLimits(t *testi
 	}
 }
 
-func TestPatrolService_SettersAndScopeHints(t *testing.T) {
+func TestPatrolService_Setters(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
 	ks := &knowledge.Store{}
 	ps.SetKnowledgeStore(ks)
 	if ps.GetKnowledgeStore() != ks {
 		t.Fatalf("expected knowledge store to be set")
-	}
-
-	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to create discovery store: %v", err)
-	}
-	ps.SetDiscoveryStore(discoveryStore)
-	if ps.GetDiscoveryStore() == nil {
-		t.Fatalf("expected discovery store to be set")
 	}
 
 	lp := mockLearningProvider{}
@@ -118,73 +106,6 @@ func TestPatrolService_SettersAndScopeHints(t *testing.T) {
 	ps.SetTriggerManager(tm)
 	if ps.GetTriggerManager() == nil {
 		t.Fatalf("expected trigger manager to be set")
-	}
-
-	discovery := &servicediscovery.ResourceDiscovery{
-		ID:           "vm:node1:101",
-		ResourceType: servicediscovery.ResourceTypeVM,
-		ResourceID:   "101",
-		TargetID:     "node1",
-		Hostname:     "node1",
-		ServiceName:  "nginx",
-		ServiceType:  "nginx",
-	}
-	if err := discoveryStore.Save(discovery); err != nil {
-		t.Fatalf("failed to save discovery: %v", err)
-	}
-
-	scope := PatrolScope{ResourceIDs: []string{"101"}}
-	updated := ps.addDiscoveryScopeHint(scope)
-	if updated.Context == "" || !strings.Contains(updated.Context, "Discovery:") {
-		t.Fatalf("expected discovery hint in scope context")
-	}
-}
-
-func TestTruncateScopeContext(t *testing.T) {
-	if truncateScopeContext("short", 10) != "short" {
-		t.Fatalf("expected short string to remain unchanged")
-	}
-	if truncateScopeContext("long-value", 3) != "lon" {
-		t.Fatalf("expected hard truncation for small max")
-	}
-	if !strings.HasSuffix(truncateScopeContext("long-value", 6), "...") {
-		t.Fatalf("expected ellipsis for truncated context")
-	}
-}
-
-func TestSeedObjectiveCredentialReferencesExposesNamesWithoutValues(t *testing.T) {
-	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("create discovery store: %v", err)
-	}
-	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
-		ID:           "system-container:node1:101",
-		ResourceType: servicediscovery.ResourceTypeSystemContainer,
-		ResourceID:   "101",
-		TargetID:     "node1",
-		UserSecrets: map[string]string{
-			"jellyfin_api_key": "must-never-reach-the-model",
-			"session_token":    "also-private",
-		},
-	}); err != nil {
-		t.Fatalf("save discovery: %v", err)
-	}
-
-	ps := NewPatrolService(nil, nil)
-	ps.SetDiscoveryStore(discoveryStore)
-	seed := ps.seedObjectiveCredentialReferences(&PatrolScope{
-		ResourceIDs:      []string{"101"},
-		ObjectiveContext: &aicontracts.PatrolObjectiveContext{ObjectiveID: "objective-1"},
-	})
-	for _, expected := range []string{"system-container:node1:101", "jellyfin_api_key", "session_token", "Values are never model-visible"} {
-		if !strings.Contains(seed, expected) {
-			t.Fatalf("credential reference seed missing %q: %s", expected, seed)
-		}
-	}
-	for _, secretValue := range []string{"must-never-reach-the-model", "also-private"} {
-		if strings.Contains(seed, secretValue) {
-			t.Fatalf("credential value leaked into seed: %q", secretValue)
-		}
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -294,12 +293,6 @@ func TestAISettingsHandler_GetAIService_MultiTenantProviders(t *testing.T) {
 	handler.SetPatternDetector(ai.NewPatternDetector(ai.DefaultPatternConfig()))
 	handler.SetCorrelationDetector(ai.NewCorrelationDetector(ai.DefaultCorrelationConfig()))
 
-	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	handler.SetDiscoveryStore(discoveryStore)
-
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
 	svc := handler.GetAIService(ctx)
 	if svc == nil {
@@ -312,7 +305,7 @@ func TestAISettingsHandler_GetAIService_MultiTenantProviders(t *testing.T) {
 
 // Report GETs read Patrol findings through ExistingAIService, so it must never
 // construct a tenant service: construction can list provider models and start
-// background discovery.
+// background workers.
 func TestAISettingsHandler_ExistingAIServiceNeverConstructs(t *testing.T) {
 	handler := NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil)
 	t.Cleanup(handler.StopServices)
@@ -510,54 +503,6 @@ func TestAISettingsHandler_GetAIService_TenantUsesCanonicalReadStateWithoutSnaps
 	}
 }
 
-func TestAISettingsHandler_GetAIService_NonDefaultDoesNotInheritDefaultDiscoveryStore(t *testing.T) {
-	tmp := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(tmp)
-	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
-	t.Cleanup(mtm.Stop)
-
-	handler := NewAISettingsHandler(mtp, mtm, nil)
-	defaultDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("default NewStore: %v", err)
-	}
-	handler.SetDiscoveryStore(defaultDiscoveryStore)
-
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
-	svc := handler.GetAIService(ctx)
-	if svc == nil {
-		t.Fatalf("expected tenant AI service")
-	}
-	if got := svc.GetDiscoveryStore(); got == nil {
-		t.Fatalf("expected tenant service to initialize its own discovery store")
-	} else if got == defaultDiscoveryStore {
-		t.Fatalf("expected tenant service discovery store to differ from default store")
-	}
-
-	tenantDiscoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("tenant NewStore: %v", err)
-	}
-	handler.SetDiscoveryStoreForOrg("tenant-1", tenantDiscoveryStore)
-	if got := svc.GetDiscoveryStore(); got != tenantDiscoveryStore {
-		t.Fatalf("expected tenant-specific discovery store, got %#v", got)
-	}
-}
-
-func TestAISettingsHandler_DiscoveryStoreAccessors(t *testing.T) {
-	handler := newTestAISettingsHandler(&config.Config{DataPath: t.TempDir()}, config.NewConfigPersistence(t.TempDir()), nil)
-
-	store, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	handler.SetDiscoveryStore(store)
-
-	if got := handler.GetDiscoveryStore(); got != store {
-		t.Fatalf("expected discovery store to match")
-	}
-}
-
 // In DEMO_MODE the demo middleware admits every GET and HEAD as a read, and
 // the CSRF check skips them, so a mutating handler reachable by a safe method
 // is a write any demo visitor can make. These routes dispatch without a mux
@@ -579,10 +524,6 @@ func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
 	cleanupTestRouter(t, router)
 	handler := router.Handler()
 
-	discovery := servicediscovery.NewService(nil, nil, servicediscovery.DefaultConfig())
-	router.SetDiscoveryService(discovery)
-	ageBefore := discovery.GetMaxDiscoveryAge()
-
 	router.samlManager.services["okta"] = newTestSAMLService(t, "okta", `<?xml version="1.0"?>
 <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="idp">
   <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -602,7 +543,6 @@ func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
 		body  string
 		allow string
 	}{
-		{path: "/api/discovery/settings", body: `{"max_discovery_age_days":10}`, allow: "PUT, POST"},
 		{path: "/api/saml/okta/logout", allow: http.MethodPost},
 	}
 	for _, tc := range cases {
@@ -622,9 +562,6 @@ func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
 		}
 	}
 
-	if got := discovery.GetMaxDiscoveryAge(); got != ageBefore {
-		t.Fatalf("safe methods changed the max discovery age: %s -> %s", ageBefore, got)
-	}
 	if !ValidateSession(samlSession) {
 		t.Fatal("safe methods cleared the SAML session")
 	}

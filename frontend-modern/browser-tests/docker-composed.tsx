@@ -4,11 +4,9 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { DockerContainersTable } from '../src/features/docker/DockerContainersTable';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 const container = (name: string, host: string, cpu: number, engine = 'docker'): Resource => ({
   id: name,
   type: 'app-container',

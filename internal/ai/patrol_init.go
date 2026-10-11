@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
@@ -573,22 +572,6 @@ func (p *PatrolService) SetStateProvider(sp StateProvider) {
 	}
 }
 
-// SetDiscoveryStore sets the discovery store for infrastructure context
-// This enables the patrol service to include discovered service info in prompts
-func (p *PatrolService) SetDiscoveryStore(store *servicediscovery.Store) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.discoveryStore = store
-	log.Info().Msg("AI Patrol: Discovery store set for infrastructure context")
-}
-
-// GetDiscoveryStore returns the discovery store for external access
-func (p *PatrolService) GetDiscoveryStore() *servicediscovery.Store {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.discoveryStore
-}
-
 // SetGuestProber sets the guest prober for pre-patrol reachability checks.
 // This enables the patrol service to ping guests via connected host agents.
 func (p *PatrolService) SetGuestProber(prober GuestProber) {
@@ -811,8 +794,6 @@ func (p *PatrolService) TriggerScopedPatrol(ctx context.Context, scope PatrolSco
 		return
 	}
 
-	scope = p.addDiscoveryScopeHint(scope)
-
 	// Log the scoped patrol
 	log.Info().
 		Str("reason", string(scope.Reason)).
@@ -824,64 +805,6 @@ func (p *PatrolService) TriggerScopedPatrol(ctx context.Context, scope PatrolSco
 
 	// Run scoped patrol with filtered resources
 	p.runScopedPatrol(ctx, scope)
-}
-
-func (p *PatrolService) addDiscoveryScopeHint(scope PatrolScope) PatrolScope {
-	if len(scope.ResourceIDs) == 0 {
-		return scope
-	}
-
-	if strings.Contains(strings.ToLower(scope.Context), "discovery:") {
-		return scope
-	}
-
-	p.mu.RLock()
-	discoveryStore := p.discoveryStore
-	p.mu.RUnlock()
-
-	if discoveryStore == nil {
-		return scope
-	}
-
-	discoveries, err := discoveryStore.List()
-	if err != nil || len(discoveries) == 0 {
-		if err != nil {
-			log.Debug().Err(err).Msg("AI Patrol: Failed to load discovery data for scope hints")
-		}
-		return scope
-	}
-
-	filtered := servicediscovery.FilterDiscoveriesByResourceIDs(discoveries, scope.ResourceIDs)
-	hint := servicediscovery.FormatScopeHint(filtered)
-	if hint == "" {
-		return scope
-	}
-	if strings.Contains(scope.Context, hint) {
-		return scope
-	}
-
-	const maxScopeContextLen = 240
-	if scope.Context == "" {
-		scope.Context = truncateScopeContext(hint, maxScopeContextLen)
-		return scope
-	}
-	if len(scope.Context) >= maxScopeContextLen {
-		return scope
-	}
-
-	scope.Context = truncateScopeContext(scope.Context+" | "+hint, maxScopeContextLen)
-
-	return scope
-}
-
-func truncateScopeContext(value string, max int) string {
-	if max <= 0 || len(value) <= max {
-		return value
-	}
-	if max <= 3 {
-		return value[:max]
-	}
-	return value[:max-3] + "..."
 }
 
 // GetChangeDetector returns the change detector

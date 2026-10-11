@@ -170,14 +170,6 @@ export const getWorkloadHostHintCandidates = (guest: WorkloadGuest): string[] =>
   return dedupeTrimmed([guest.node, guest.instance, guest.contextLabel]);
 };
 
-export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
-  return resolveDiscoveryTargetForWorkload(guest)?.agentId || '';
-};
-
-export const getDiscoveryResourceIdForWorkload = (guest: WorkloadGuest): string => {
-  return resolveDiscoveryTargetForWorkload(guest)?.resourceId || '';
-};
-
 export const buildNodeByInstance = (nodes: Node[]): Record<string, Node> => {
   const map: Record<string, Node> = Object.create(null);
   const ambiguous = new Set<string>();

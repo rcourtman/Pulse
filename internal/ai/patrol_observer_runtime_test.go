@@ -1,14 +1,11 @@
 package ai
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -375,137 +372,6 @@ func TestValidatePatrolResourceMetricObserverRejectsUnsafeBounds(t *testing.T) {
 	_, validationErr := validatePatrolObserverArtifact(objective, artifact)
 	if validationErr == nil || validationErr.code != "observer_threshold_out_of_bounds" {
 		t.Fatalf("threshold validation error = %v", validationErr)
-	}
-}
-
-func TestPatrolHTTPJSONObserverUsesScopedDiscoveryOriginSecretReferenceAndWakes(t *testing.T) {
-	requestObserved := make(chan struct{}, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/stats" || r.URL.Query().Get("window") != "active" {
-			t.Errorf("request target = %s", r.URL.String())
-		}
-		if r.Header.Get("X-Api-Key") != "stored-secret" {
-			t.Errorf("resolved auth header = %q", r.Header.Get("X-Api-Key"))
-		}
-		requestObserved <- struct{}{}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"playback":{"buffering_sessions":1}}`))
-	}))
-	defer server.Close()
-
-	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("create discovery store: %v", err)
-	}
-	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
-		ID: "system-container:node1:101", ResourceType: servicediscovery.ResourceTypeSystemContainer,
-		ResourceID: "101", TargetID: "node1", SuggestedURL: server.URL + "/ignored-base",
-		UserSecrets: map[string]string{"jellyfin_api_key": "stored-secret"},
-	}); err != nil {
-		t.Fatalf("save discovery: %v", err)
-	}
-
-	now := time.Now().UTC()
-	store := NewInMemoryPatrolObjectiveStore()
-	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep Jellyfin playback from buffering", ResourceIDs: []string{"101"}}, now)
-	if err != nil {
-		t.Fatalf("create objective: %v", err)
-	}
-	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
-		ExpectedRevision: objective.Revision, Interpretation: "No active playback session is buffering.",
-		EvidenceFit:  PatrolObserverEvidenceFitDirect,
-		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
-		ProbeJSON:    `{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:101","request_path":"/api/stats?window=active","json_pointer":"/playback/buffering_sessions","operator":"less_than","expected":1,"auth":{"header_name":"X-Api-Key","secret_ref":"jellyfin_api_key"},"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`,
-		WakeEvidence: "The local service API reports one or more buffering sessions.", RequirementsJSON: `{}`,
-	}, now)
-	if err != nil {
-		t.Fatalf("propose HTTP JSON observer: %v", err)
-	}
-	patrol := NewPatrolService(nil, nil)
-	patrol.SetObjectiveStore(store)
-	patrol.SetDiscoveryStore(discoveryStore)
-	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 10})
-	patrol.SetTriggerManager(tm)
-	patrol.processObjectiveObservers(now.Add(time.Second))
-
-	select {
-	case <-requestObserved:
-	case <-time.After(3 * time.Second):
-		t.Fatal("HTTP JSON observer did not execute")
-	}
-	// The HTTP sample runs on its own goroutine and persists the health lease
-	// strictly after it queues the wake, so the lease is the one side effect
-	// that orders the whole sample against these assertions. Gating on the wake
-	// instead let a loaded runner read a half-applied sample: a queued trigger
-	// with a still-nil lease, reported as degraded/observer_health_unknown.
-	// Coverage is evaluated at a fixed instant derived from the sample time so
-	// the verdict never depends on how long the goroutine took to get there.
-	evaluatedAt := now.Add(2 * time.Second)
-	deadline := time.Now().Add(10 * time.Second)
-	var installed PatrolObjective
-	for {
-		installed, _ = store.Get(objective.ID, evaluatedAt)
-		if installed.Observer != nil && installed.Observer.ValidUntil != nil {
-			break
-		}
-		if !time.Now().Before(deadline) {
-			t.Fatalf("HTTP JSON observer never persisted a health lease: %+v", installed.Observer)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if tm.GetPendingCount() != 1 {
-		t.Fatalf("HTTP JSON breach did not wake Patrol; pending=%d", tm.GetPendingCount())
-	}
-	queued := tm.pendingTriggers[0]
-	if queued.ObjectiveContext == nil || !strings.Contains(queued.ObjectiveContext.Evidence, "buffering_sessions") || !strings.Contains(queued.ObjectiveContext.Evidence, "actual_1") {
-		t.Fatalf("HTTP JSON objective evidence = %+v", queued.ObjectiveContext)
-	}
-	if installed.Observer.State != PatrolObserverInstalled || installed.Coverage.State != PatrolObjectiveCovered || installed.Coverage.ReasonCode != "observer_healthy" {
-		t.Fatalf("HTTP observer coverage = %+v / %+v", installed.Observer, installed.Coverage)
-	}
-}
-
-func TestValidatePatrolHTTPJSONObserverRejectsNetworkAuthorityAndScopeEscapes(t *testing.T) {
-	now := time.Now().UTC()
-	store := NewInMemoryPatrolObjectiveStore()
-	objective, err := store.Create(CreatePatrolObjectiveInput{Brief: "Keep service healthy", ResourceIDs: []string{"101"}}, now)
-	if err != nil {
-		t.Fatalf("create objective: %v", err)
-	}
-	objective, err = store.ProposeObserver(objective.ID, ProposePatrolObserverInput{
-		ExpectedRevision: objective.Revision, Interpretation: "Service health is true.",
-		TriggerKinds: []PatrolObserverTriggerKind{PatrolObserverTriggerInterval},
-		ProbeJSON:    `{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:102","request_path":"//169.254.169.254/latest/meta-data","json_pointer":"/healthy","operator":"equals","expected":true,"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`,
-		WakeEvidence: "Health is false.", RequirementsJSON: `{}`,
-	}, now)
-	if err != nil {
-		t.Fatalf("propose observer: %v", err)
-	}
-	artifact, _ := store.GetObserverArtifact(objective.ID)
-	_, validationErr := validatePatrolObserverArtifact(objective, artifact)
-	if validationErr == nil || validationErr.code != "observer_http_path_invalid" {
-		t.Fatalf("model-supplied network authority validation = %v", validationErr)
-	}
-
-	artifact.Probe = []byte(`{"runtime":"pulse-http-json/v1","discovery_id":"system-container:node1:102","request_path":"/api/health","json_pointer":"/healthy","operator":"equals","expected":true,"timeout_seconds":2,"sample_interval_seconds":10,"wake_after_consecutive_failures":1}`)
-	probe, validationErr := validatePatrolObserverArtifact(objective, artifact)
-	if validationErr != nil {
-		t.Fatalf("valid HTTP artifact rejected before binding: %v", validationErr)
-	}
-	discoveryStore, err := servicediscovery.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("create discovery store: %v", err)
-	}
-	if err := discoveryStore.Save(&servicediscovery.ResourceDiscovery{
-		ID: "system-container:node1:102", ResourceType: servicediscovery.ResourceTypeSystemContainer,
-		ResourceID: "102", TargetID: "node1", SuggestedURL: "http://127.0.0.1:8080",
-	}); err != nil {
-		t.Fatalf("save discovery: %v", err)
-	}
-	patrol := NewPatrolService(nil, nil)
-	patrol.SetDiscoveryStore(discoveryStore)
-	if bindingErr := patrol.validatePatrolObserverBinding(objective, probe, patrolRuntimeState{}); bindingErr == nil || bindingErr.code != "observer_discovery_out_of_scope" {
-		t.Fatalf("out-of-scope discovery binding = %v", bindingErr)
 	}
 }
 

@@ -145,6 +145,27 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('ignores retired AI Discovery progress frames without touching resources', async () => {
+    const { store, dispose } = await createStoreHarness();
+    const { eventBus } = await import('@/stores/events');
+    const emitSpy = vi.spyOn(eventBus, 'emit');
+    try {
+      await waitForOpenTick();
+      emitMessage({ type: 'rawData', data: { resources: [] } });
+      emitMessage({
+        type: 'ai_discovery_progress',
+        data: { resource_id: 'vm:101', status: 'running' },
+      });
+      expect(store.state.resources).toEqual([]);
+      expect(emitSpy.mock.calls.map(([type]) => String(type))).not.toContain(
+        'ai_discovery_progress',
+      );
+    } finally {
+      emitSpy.mockRestore();
+      dispose();
+    }
+  });
+
   it('initializes with empty resources array only', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

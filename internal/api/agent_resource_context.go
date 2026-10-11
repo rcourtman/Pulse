@@ -250,10 +250,6 @@ type AgentResourceContextRedaction = agentcontext.Redaction
 // older clients that parse the original top-level fields.
 type AgentResourceContextSection = agentcontext.Section
 
-// AgentResourceDiscoveryReadiness is the agent-stable projection of
-// service-discovery freshness already carried on resource API payloads.
-type AgentResourceDiscoveryReadiness = unified.ResourceDiscoveryReadiness
-
 // AgentResourceContext is the bundled, agent-consumable situated
 // picture of a resource. One read returns:
 //   - core identity (canonical id, type, name)
@@ -270,17 +266,16 @@ type AgentResourceDiscoveryReadiness = unified.ResourceDiscoveryReadiness
 // detail (full finding records, full audit history) remains available
 // via the existing per-finding / per-audit endpoints.
 type AgentResourceContext struct {
-	CanonicalID        string                           `json:"canonicalId"`
-	ResourceType       string                           `json:"resourceType"`
-	ResourceName       string                           `json:"resourceName"`
-	Technology         string                           `json:"technology,omitempty"`
-	OperatorState      *AgentResourceOperatorState      `json:"operatorState,omitempty"`
-	DiscoveryReadiness *AgentResourceDiscoveryReadiness `json:"discoveryReadiness,omitempty"`
-	ActiveFindings     []AgentResourceFindingSnapshot   `json:"activeFindings"`
-	PendingApprovals   []AgentResourceApprovalSummary   `json:"pendingApprovals"`
-	RecentActions      []AgentResourceActionSummary     `json:"recentActions"`
-	ContextSections    []AgentResourceContextSection    `json:"contextSections"`
-	GeneratedAt        time.Time                        `json:"generatedAt"`
+	CanonicalID      string                         `json:"canonicalId"`
+	ResourceType     string                         `json:"resourceType"`
+	ResourceName     string                         `json:"resourceName"`
+	Technology       string                         `json:"technology,omitempty"`
+	OperatorState    *AgentResourceOperatorState    `json:"operatorState,omitempty"`
+	ActiveFindings   []AgentResourceFindingSnapshot `json:"activeFindings"`
+	PendingApprovals []AgentResourceApprovalSummary `json:"pendingApprovals"`
+	RecentActions    []AgentResourceActionSummary   `json:"recentActions"`
+	ContextSections  []AgentResourceContextSection  `json:"contextSections"`
+	GeneratedAt      time.Time                      `json:"generatedAt"`
 }
 
 // AgentResourceCapabilities is the structured capability surface for a single
@@ -511,19 +506,17 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 	generatedAt := time.Now().UTC()
 	resourceCopy := *resource
 	resourceapi.AttachDiscoveryTarget(&resourceCopy)
-	h.resources.AttachDiscoveryReadiness(&resourceCopy, generatedAt)
 
 	bundle := AgentResourceContext{
-		CanonicalID:        resourceID,
-		ResourceType:       string(resourceCopy.Type),
-		ResourceName:       resourceCopy.Name,
-		Technology:         resourceCopy.Technology,
-		DiscoveryReadiness: resourceCopy.DiscoveryReadiness,
-		ActiveFindings:     []AgentResourceFindingSnapshot{},
-		PendingApprovals:   []AgentResourceApprovalSummary{},
-		RecentActions:      []AgentResourceActionSummary{},
-		ContextSections:    []AgentResourceContextSection{},
-		GeneratedAt:        generatedAt,
+		CanonicalID:      resourceID,
+		ResourceType:     string(resourceCopy.Type),
+		ResourceName:     resourceCopy.Name,
+		Technology:       resourceCopy.Technology,
+		ActiveFindings:   []AgentResourceFindingSnapshot{},
+		PendingApprovals: []AgentResourceApprovalSummary{},
+		RecentActions:    []AgentResourceActionSummary{},
+		ContextSections:  []AgentResourceContextSection{},
+		GeneratedAt:      generatedAt,
 	}
 
 	// Operator-set state — single point lookup.

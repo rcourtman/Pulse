@@ -491,9 +491,6 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.header.systemAiAssistant.description':
     'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
   'settings.header.systemAiAssistant.title': 'Assistant',
-  'settings.header.systemAiDiscovery.description':
-    'Konfigurieren Sie den KI-gestuetzten Service-Kontext fuer Assistant und Patrol. Infrastruktur-Erkennung und Onboarding bleiben unter Infrastruktur.',
-  'settings.header.systemAiDiscovery.title': 'Service-Kontext',
   'settings.header.systemAiPatrol.description':
     'Legen Sie fest, wann Patrol laeuft, was Patrol startet und welches Modell verwendet wird.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -540,7 +537,6 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.nav.item.dataReports': 'Daten & Berichte',
   'settings.nav.item.diagnosticsHealth': 'Diagnose & Zustand',
   'settings.nav.item.assistant': 'Assistant',
-  'settings.nav.item.discovery': 'Service-Kontext',
   'settings.nav.item.general': 'Allgemein',
   'settings.nav.item.infrastructure': 'Infrastruktur',
   'settings.nav.item.network': 'Netzwerk',

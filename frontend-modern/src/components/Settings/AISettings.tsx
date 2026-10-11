@@ -9,7 +9,6 @@ import {
 } from '@/components/Settings/AIModelSelectionSection';
 import {
   AIAssistantCommandAccessSection,
-  AIDiscoveryControlsSection,
   AIProviderRuntimeControlsSection,
 } from '@/components/Settings/AIRuntimeControlsSection';
 import { AISettingsStatusAndActions } from '@/components/Settings/AISettingsStatusAndActions';
@@ -42,7 +41,7 @@ import {
   getAISettingsRetryLabel,
 } from '@/utils/aiSettingsPresentation';
 
-type AISettingsPage = 'provider' | 'patrol' | 'assistant' | 'discovery';
+type AISettingsPage = 'provider' | 'patrol' | 'assistant';
 
 const AI_SETTINGS_PAGE_META: Record<
   AISettingsPage,
@@ -78,14 +77,6 @@ const AI_SETTINGS_PAGE_META: Record<
     saveLabel: 'Save Assistant settings',
     savingLabel: 'Saving Assistant settings...',
     title: 'Assistant',
-  },
-  discovery: {
-    resetLabel: 'Reset service context settings',
-    saveErrorFallback: 'Unable to save service context settings.',
-    savedLabel: 'Service context settings saved',
-    saveLabel: 'Save service context settings',
-    savingLabel: 'Saving service context settings...',
-    title: 'Service Context',
   },
 };
 
@@ -382,38 +373,6 @@ const AssistantSettingsContent: Component<{ state: ReturnType<typeof useAISettin
     <AIModelOverrideField state={props.state} kind="assistant" />
     <AIAssistantCommandAccessSection state={props.state} />
     <AIChatMaintenanceSection state={props.state} />
-    <details class="overflow-hidden rounded-md border border-border">
-      <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-base-content hover:bg-surface-hover">
-        Service identification
-        <span class="ml-2 font-normal text-muted">
-          Model-backed context used by Assistant and Patrol
-        </span>
-      </summary>
-      <div class="space-y-4 border-t border-border bg-surface p-4">
-        <p class="text-xs leading-5 text-muted">
-          Identify service facts that help Assistant and Patrol explain monitored resources.
-          Infrastructure discovery and onboarding remain under Infrastructure.
-        </p>
-        <AIModelOverrideField state={props.state} kind="discovery" />
-        <AIDiscoveryControlsSection state={props.state} />
-      </div>
-    </details>
-  </div>
-);
-
-const DiscoverySettingsContent: Component<{ state: ReturnType<typeof useAISettingsState> }> = (
-  props,
-) => (
-  <div class="space-y-6 p-4 sm:p-6">
-    <div class="rounded-md border border-border bg-surface-alt p-4">
-      <h3 class="text-sm font-semibold text-base-content">Service context</h3>
-      <p class="mt-1 text-xs text-muted">
-        These settings control the service facts Assistant and Patrol can use. Normal infrastructure
-        discovery and onboarding stay under Infrastructure.
-      </p>
-    </div>
-    <AIModelOverrideField state={props.state} kind="discovery" />
-    <AIDiscoveryControlsSection state={props.state} />
   </div>
 );
 
@@ -426,14 +385,7 @@ const AISettingsPageContent: Component<{
     fallback={
       <Show
         when={props.page === 'patrol'}
-        fallback={
-          <Show
-            when={props.page === 'assistant'}
-            fallback={<DiscoverySettingsContent state={props.state} />}
-          >
-            <AssistantSettingsContent state={props.state} />
-          </Show>
-        }
+        fallback={<AssistantSettingsContent state={props.state} />}
       >
         <PatrolSettingsContent state={props.state} />
       </Show>
@@ -560,6 +512,5 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
 
 export const AIPatrolSettings: Component = () => <AISettings page="patrol" />;
 export const AIAssistantSettings: Component = () => <AISettings page="assistant" />;
-export const AIDiscoverySettings: Component = () => <AISettings page="discovery" />;
 
 export default AISettings;

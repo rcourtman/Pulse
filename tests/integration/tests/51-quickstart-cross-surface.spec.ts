@@ -29,7 +29,6 @@ type AISettingsPayload = {
   ollama_password_set: boolean;
   configured_providers: string[];
   control_level: string;
-  discovery_enabled: boolean;
 };
 
 type PatrolStatusPayload = {
@@ -83,7 +82,6 @@ const baseAISettings = (): AISettingsPayload => ({
   ollama_password_set: false,
   configured_providers: [],
   control_level: "read_only",
-  discovery_enabled: false,
 });
 
 const basePatrolStatus = (): PatrolStatusPayload => ({

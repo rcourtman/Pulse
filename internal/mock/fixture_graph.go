@@ -19,7 +19,6 @@ type FixtureGraph struct {
 	AlertIncidents       []*memory.Incident
 	PlatformFixtures     PlatformFixtures
 	AvailabilityFixtures []AvailabilityFixture
-	DiscoveryFixtures    []*DiscoveryFixture
 	ActionFixtures       []ActionFixture
 }
 
@@ -54,7 +53,6 @@ func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 		AlertIncidents:       cloneMockIncidents(in.AlertIncidents),
 		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
 		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
-		DiscoveryFixtures:    cloneDiscoveryFixtures(in.DiscoveryFixtures),
 		ActionFixtures:       cloneActionFixtures(in.ActionFixtures),
 	}
 }
@@ -72,7 +70,6 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 	applyDemoScenarioGraph(g, cfg, now)
-	g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
 	syncMetricFixtureRegistriesFromGraph(*g)
 }
 
@@ -129,7 +126,6 @@ func (g *FixtureGraph) UpdateMetricCohort(
 		rebaseMockReplicationJobs(g.State.ReplicationJobs, now)
 		g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 		g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
-		g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
 	}
 	syncMetricFixtureRegistriesFromGraph(*g)
 }

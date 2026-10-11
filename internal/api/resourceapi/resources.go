@@ -42,7 +42,6 @@ type QueryService struct {
 	stateProvider       SnapshotProvider
 	tenantStateProvider TenantStateProvider
 	actionAvailability  actionlifecycle.AvailabilityChecker
-	discoveryReadiness  ResourceDiscoveryReadinessProvider
 }
 
 // SnapshotProvider supplies the legacy monitoring snapshot used while callers
@@ -81,12 +80,6 @@ type UnifiedResourceSnapshotWithStaleThresholdsProvider interface {
 // tenant-scoped form of UnifiedResourceSnapshotWithStaleThresholdsProvider.
 type TenantUnifiedResourceSnapshotWithStaleThresholdsProvider interface {
 	UnifiedResourceSnapshotWithStaleThresholdsForTenant(orgID string) ([]unified.Resource, time.Time, map[unified.DataSource]time.Duration)
-}
-
-// ResourceDiscoveryReadinessProvider projects service-discovery state onto a
-// unified resource without coupling the resource API to discovery storage.
-type ResourceDiscoveryReadinessProvider interface {
-	DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness
 }
 
 type registrySeed struct {
@@ -154,12 +147,6 @@ func (h *QueryService) SetActionAvailabilityChecker(checker actionlifecycle.Avai
 	h.actionAvailability = checker
 }
 
-// SetDiscoveryReadinessProvider wires the canonical discovery-readiness
-// projection onto resource responses and Assistant context packs.
-func (h *QueryService) SetDiscoveryReadinessProvider(provider ResourceDiscoveryReadinessProvider) {
-	h.discoveryReadiness = provider
-}
-
 // SetSupplementalRecordsProvider configures additional records for a source.
 func (h *QueryService) SetSupplementalRecordsProvider(source unified.DataSource, provider SupplementalRecordsProvider) {
 	h.supplementalMu.Lock()
@@ -217,7 +204,6 @@ func (h *QueryService) HandleListResources(w http.ResponseWriter, r *http.Reques
 
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
-	h.attachDiscoveryReadinesses(paged, time.Now().UTC())
 	attachMetricsTargets(paged, registry)
 	paged = unified.RefreshCanonicalMetadataSlice(paged)
 	pruneResourcesForListResponse(paged)
@@ -380,7 +366,6 @@ func (h *QueryService) HandleGetResource(w http.ResponseWriter, r *http.Request)
 	h.applyActionAvailability(r.Context(), resourceCopies)
 	resourceCopy = resourceCopies[0]
 	attachDiscoveryTarget(&resourceCopy)
-	h.attachDiscoveryReadiness(&resourceCopy, time.Now().UTC())
 	attachMetricsTarget(&resourceCopy, registry)
 	unified.RefreshCanonicalMetadata(&resourceCopy)
 	resourceCopy.Type = resourceContractType(resourceCopy)
@@ -664,7 +649,6 @@ func (h *QueryService) HandleGetChildren(w http.ResponseWriter, r *http.Request)
 
 	children := registry.GetChildren(path)
 	attachDiscoveryTargets(children)
-	h.attachDiscoveryReadinesses(children, time.Now().UTC())
 	children = unified.RefreshCanonicalMetadataSlice(children)
 	applyResourceContractTypes(children)
 	w.Header().Set("Content-Type", "application/json")
@@ -2517,32 +2501,6 @@ func attachDiscoveryTarget(resource *unified.Resource) {
 	if target := buildDiscoveryTarget(*resource); target != nil {
 		resource.DiscoveryTarget = target
 	}
-}
-
-func (h *QueryService) attachDiscoveryReadinesses(resources []unified.Resource, now time.Time) {
-	if h == nil || h.discoveryReadiness == nil {
-		return
-	}
-	for i := range resources {
-		h.attachDiscoveryReadiness(&resources[i], now)
-	}
-}
-
-func (h *QueryService) attachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
-	if h == nil || h.discoveryReadiness == nil || resource == nil {
-		return
-	}
-	readiness := h.discoveryReadiness.DiscoveryReadinessForResource(*resource, now)
-	if readiness.State == "" {
-		return
-	}
-	resource.DiscoveryReadiness = &readiness
-}
-
-// AttachDiscoveryReadiness projects current discovery state onto a resource
-// used by another API domain.
-func (h *QueryService) AttachDiscoveryReadiness(resource *unified.Resource, now time.Time) {
-	h.attachDiscoveryReadiness(resource, now)
 }
 
 func attachMetricsTargets(resources []unified.Resource, registry *unified.ResourceRegistry) {

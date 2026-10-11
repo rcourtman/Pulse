@@ -633,14 +633,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 			// Feature flags from persisted config (using pre-created persistence).
 			snap.AIProviderClass = telemetry.AIProviderClassNone
 			if aiCfg, err := telemetryPersistence.LoadAIConfig(); err == nil && aiCfg != nil {
-				snap.AIEnabled = aiCfg.Enabled
-				// Closed route class only; provider, model, endpoint, and
-				// account identity never enter the snapshot.
-				snap.AIProviderClass = telemetry.ClassifyAIProviderClass(aiCfg)
-				snap.PatrolEnabled = aiCfg.IsPatrolEnabled()
-				snap.DiscoveryEnabled = snap.DiscoveryEnabled || aiCfg.IsDiscoveryEnabled()
-				snap.AIActionsEnabled = aiCfg.IsControlEnabled()
-				snap.AlertAIEnabled = aiCfg.IsAlertTriggeredAnalysisEnabled()
+				applyAIConfigTelemetrySnapshot(&snap, aiCfg)
 			}
 			if relayCfg, err := telemetryPersistence.LoadRelayConfig(); err == nil {
 				snap.RelayEnabled = relayCfg.Enabled

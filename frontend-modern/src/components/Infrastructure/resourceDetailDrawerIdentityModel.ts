@@ -6,8 +6,6 @@ import {
   shouldShowResourcePlatformId,
   type ResourceIdentityRow,
 } from '@/utils/resourceIdentity';
-import { formatIdentifierLabel } from '@/utils/textPresentation';
-import type { DiscoveryConfig } from './resourceDetailDiscoveryModel';
 import type { PlatformData } from './resourceDetailMappers';
 
 export type ResourceDetailDrawerSourceSection = {
@@ -60,19 +58,6 @@ export const buildResourceIdentityView = (resource: Resource): ResourceDetailDra
     aliasPreviewValues: identityAliasValues.slice(0, ALIAS_COLLAPSE_THRESHOLD),
     hasAliasOverflow: identityAliasValues.length > ALIAS_COLLAPSE_THRESHOLD,
   };
-};
-
-export const buildDiscoveryContextSummary = (
-  discoveryConfig: DiscoveryConfig | null,
-): string | null => {
-  if (!discoveryConfig || discoveryConfig.resourceType === 'agent') {
-    return null;
-  }
-
-  const discoveryMode = `${formatIdentifierLabel(discoveryConfig.resourceType)} analysis`;
-  return discoveryConfig.hostname
-    ? `${discoveryMode} via ${discoveryConfig.hostname}`
-    : discoveryMode;
 };
 
 export const buildSourceSections = (

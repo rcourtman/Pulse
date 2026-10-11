@@ -445,3 +445,40 @@ func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[s
 
 	return NewTextResult(fmt.Sprintf("Docker host '%s' not found.", hostArg)), nil
 }
+
+// isTransientError checks whether an error is a transient API/infrastructure error
+// (rate limit, timeout, temporary unavailability) rather than a genuine "not found".
+// When true, the caller should return IsError:true so the model doesn't retry.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+
+	transientPatterns := []string{
+		"429",
+		"503",
+		"rate_limit",
+		"rate limit",
+		"ratelimit",
+		"too many requests",
+		"timeout",
+		"context deadline exceeded",
+		"failed after", // "failed after N retries"
+		"temporarily",  // "temporarily unavailable"
+		"server overloaded",
+		"service unavailable",
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"i/o timeout",
+		"network unreachable",
+	}
+
+	for _, pattern := range transientPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	return false
+}

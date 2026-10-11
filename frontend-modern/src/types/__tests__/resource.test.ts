@@ -117,6 +117,20 @@ describe('Resource Type Guards', () => {
     });
   });
 
+  it('keeps agent discovery coordinates without the removed AI Discovery readiness', () => {
+    const resource = createResource({
+      discoveryTarget: { resourceType: 'vm', agentId: 'agent-pve1', resourceId: '101' },
+    });
+
+    expect(resource.discoveryTarget).toEqual({
+      resourceType: 'vm',
+      agentId: 'agent-pve1',
+      resourceId: '101',
+    });
+    // @ts-expect-error AI Discovery readiness left the resource contract with AI Discovery.
+    expect(resource.discoveryReadiness).toBeUndefined();
+  });
+
   it('retains three-state UDP availability evidence on canonical resources', () => {
     const resource = createResource({
       type: 'network-endpoint',

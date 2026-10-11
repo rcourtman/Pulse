@@ -109,46 +109,6 @@ func TestRequestSanitizerForModelRedactsExternalModelRequest(t *testing.T) {
 	}
 }
 
-func TestRequestSanitizerForModelAllowsPulseGeneratedInventoryExportOnly(t *testing.T) {
-	resource := unifiedresources.Resource{
-		ID:   "vm-100",
-		Type: unifiedresources.ResourceTypeVM,
-		Name: "vm1",
-		Tags: []string{"secret"}, // Restricted -> local-only -> identity redacted in free text
-		Identity: unifiedresources.ResourceIdentity{
-			Hostnames: []string{"vm1"},
-		},
-		Proxmox: &unifiedresources.ProxmoxData{VMID: 100, NodeName: "node1"},
-	}
-	allowedInventoryContext := `Pulse-generated inventory context:
-{"answer_label":"VM 100 vm1","name":"vm1","status":"running"}`
-	sanitizer := RequestSanitizerForModel(
-		"openai:gpt-4o",
-		policySanitizerProvider{resources: []unifiedresources.Resource{resource}},
-		AllowResourcePolicyText(allowedInventoryContext),
-	)
-	if sanitizer == nil {
-		t.Fatal("expected external model sanitizer")
-	}
-
-	got := sanitizer(providers.ChatRequest{
-		Messages: []providers.Message{{
-			Role:    "user",
-			Content: allowedInventoryContext + "\n\n---\nUser message: vm1 should still be governed in free text",
-		}},
-	})
-	content := got.Messages[0].Content
-	if !strings.Contains(content, `"answer_label":"VM 100 vm1"`) {
-		t.Fatalf("Pulse-generated inventory label was redacted: %q", content)
-	}
-	if strings.Contains(content, "User message: vm1 should still be governed") {
-		t.Fatalf("user-authored resource identity bypassed sanitizer: %q", content)
-	}
-	if !strings.Contains(content, "User message: redacted by policy should still be governed") {
-		t.Fatalf("user-authored resource identity was not redacted: %q", content)
-	}
-}
-
 func TestRequestSanitizerForModel_FloorsLocalOnlyAndStripsSecrets(t *testing.T) {
 	// Pulse shares real infrastructure detail with cloud models, with two always-on
 	// invariants: a Sensitive (local-first) resource's identifiers flow, a Restricted

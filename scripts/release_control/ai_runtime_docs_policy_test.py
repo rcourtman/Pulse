@@ -155,6 +155,9 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("### Available Tools", content)
         self.assertNotIn("| Tool | Classification | Purpose |", content)
         self.assertNotIn("| `pulse_query`, `pulse_discovery` |", content)
+        # AI Discovery and its pulse_discovery tool were removed on 2026-10-11.
+        self.assertNotIn("pulse_discovery", content)
+        self.assertNotIn("Discovery Before Action", content)
         self.assertNotIn("| `patrol_report_finding` | Patrol |", content)
         self.assertNotIn("active_alert", content)
         self.assertNotIn("auto-recovery", content)

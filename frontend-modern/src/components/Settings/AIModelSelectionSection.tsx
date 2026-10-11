@@ -24,12 +24,12 @@ interface AIModelSelectionSectionProps {
   state: AISettingsState;
 }
 
-type AIModelOverrideKind = 'assistant' | 'patrol' | 'discovery';
+type AIModelOverrideKind = 'assistant' | 'patrol';
 
 const MODEL_OVERRIDE_CONFIG: Record<
   AIModelOverrideKind,
   {
-    formKey: 'chatModel' | 'patrolModel' | 'discoveryModel';
+    formKey: 'chatModel' | 'patrolModel';
     label: string;
     description: string;
     ariaLabel: string;
@@ -49,14 +49,6 @@ const MODEL_OVERRIDE_CONFIG: Record<
     description: 'Used when Patrol checks, investigates, and verifies work.',
     ariaLabel: 'Patrol model identifier',
     title: 'Select Patrol model',
-  },
-  discovery: {
-    formKey: 'discoveryModel',
-    label: 'Service context model',
-    description:
-      'Used for model-backed service identification and scheduled context refreshes. Follows the Patrol model unless set.',
-    ariaLabel: 'Service context model identifier',
-    title: 'Select service context model',
   },
 };
 
@@ -727,8 +719,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           </p>
         </Show>
         <p class="text-[11px] text-muted mt-1">
-          Used by Pulse Assistant and Patrol unless you set a section-specific override. Service
-          context discovery follows the Patrol model when one is set.
+          Used by Pulse Assistant and Patrol unless you set a section-specific override.
         </p>
         <Show when={sharedDrivesPatrol()}>
           <PatrolCostPreview state={state} />

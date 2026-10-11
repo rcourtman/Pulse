@@ -374,18 +374,6 @@ type AppContainerReadProvider interface {
 	ReadLogs(ctx context.Context, req AppContainerReadRequest) (*AppContainerReadResult, error)
 }
 
-// DiscoveryProvider provides AI-powered infrastructure discovery
-type DiscoveryProvider interface {
-	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
-	GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error)
-	ListDiscoveries() ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error)
-	ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error)
-	FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string
-	// TriggerDiscovery initiates discovery for a resource and returns the result
-	TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error)
-}
-
 // ResolvedResourceInfo contains the minimal information needed for tool validation.
 // This is an interface to avoid import cycles with the chat package.
 type ResolvedResourceInfo interface {
@@ -475,57 +463,17 @@ type ResolvedContextProvider interface {
 // Resources accessed within this window are considered to be from the current turn/exchange.
 const RecentAccessWindow = 30 * time.Second
 
-// ResourceDiscoveryInfo represents discovered information about a resource
-type ResourceDiscoveryInfo struct {
-	ID             string              `json:"id"`
-	ResourceType   string              `json:"resource_type"`
-	ResourceID     string              `json:"resource_id"`
-	TargetID       string              `json:"target_id,omitempty"`
-	AgentID        string              `json:"agent_id,omitempty"`
-	Hostname       string              `json:"hostname"`
-	ServiceType    string              `json:"service_type"`
-	ServiceName    string              `json:"service_name"`
-	ServiceVersion string              `json:"service_version"`
-	Category       string              `json:"category"`
-	CLIAccess      string              `json:"cli_access"`
-	Facts          []DiscoveryFact     `json:"facts"`
-	ConfigPaths    []string            `json:"config_paths"`
-	DataPaths      []string            `json:"data_paths"`
-	LogPaths       []string            `json:"log_paths,omitempty"` // Log file paths or commands (e.g., journalctl)
-	Ports          []DiscoveryPortInfo `json:"ports"`
-	BindMounts     []DiscoveryMount    `json:"bind_mounts,omitempty"` // For Docker: host->container path mappings
-	SuggestedURL   string              `json:"suggested_url,omitempty"`
-	UserNotes      string              `json:"user_notes,omitempty"`
-	Confidence     float64             `json:"confidence"`
-	AIReasoning    string              `json:"ai_reasoning,omitempty"`
-	DiscoveredAt   time.Time           `json:"discovered_at"`
-	UpdatedAt      time.Time           `json:"updated_at"`
-}
-
-// DiscoveryPortInfo represents a listening port discovered on a resource
-type DiscoveryPortInfo struct {
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
-	Process  string `json:"process,omitempty"`
-	Address  string `json:"address,omitempty"`
-}
-
-// DiscoveryMount represents a bind mount (host path -> container path)
-type DiscoveryMount struct {
-	ContainerName string `json:"container_name,omitempty"` // Docker container name (for Docker inside LXC/VM)
-	Source        string `json:"source"`                   // Host path (where to actually write files)
-	Destination   string `json:"destination"`              // Container path (what the service sees)
-	Type          string `json:"type,omitempty"`           // Mount type: bind, volume, tmpfs
-	ReadOnly      bool   `json:"read_only,omitempty"`
-}
-
-// DiscoveryFact represents a discovered fact about a resource
-type DiscoveryFact struct {
-	Category   string  `json:"category"`
-	Key        string  `json:"key"`
-	Value      string  `json:"value"`
-	Source     string  `json:"source,omitempty"`
-	Confidence float64 `json:"confidence,omitempty"` // 0-1 confidence for this fact
+// CanonicalToolResourceType returns the canonical resource type the AI tools
+// layer routes on: Docker containers are "app-container", everything else is
+// its lowercased, trimmed type.
+func CanonicalToolResourceType(raw string) string {
+	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	switch resourceType {
+	case "docker", "app-container":
+		return "app-container"
+	default:
+		return resourceType
+	}
 }
 
 // ExecutorConfig holds all dependencies for the tool executor
@@ -562,9 +510,6 @@ type ExecutorConfig struct {
 	IncidentArchiveProvider IncidentArchiveProvider
 	EventCorrelatorProvider EventCorrelatorProvider
 	KnowledgeStoreProvider  KnowledgeStoreProvider
-
-	// Optional providers - discovery
-	DiscoveryProvider DiscoveryProvider
 
 	// Optional providers - unified resources
 	UnifiedResourceProvider    UnifiedResourceProvider
@@ -629,9 +574,6 @@ type PulseToolExecutor struct {
 	incidentArchiveProvider IncidentArchiveProvider
 	eventCorrelatorProvider EventCorrelatorProvider
 	knowledgeStoreProvider  KnowledgeStoreProvider
-
-	// Discovery provider
-	discoveryProvider DiscoveryProvider
 
 	// Unified resources provider
 	unifiedResourceProvider    UnifiedResourceProvider
@@ -744,7 +686,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		incidentArchiveProvider:    cfg.IncidentArchiveProvider,
 		eventCorrelatorProvider:    cfg.EventCorrelatorProvider,
 		knowledgeStoreProvider:     cfg.KnowledgeStoreProvider,
-		discoveryProvider:          cfg.DiscoveryProvider,
 		unifiedResourceProvider:    cfg.UnifiedResourceProvider,
 		appContainerActionProvider: cfg.AppContainerActionProvider,
 		appContainerReadProvider:   cfg.AppContainerReadProvider,
@@ -820,7 +761,6 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		incidentArchiveProvider:     e.incidentArchiveProvider,
 		eventCorrelatorProvider:     e.eventCorrelatorProvider,
 		knowledgeStoreProvider:      e.knowledgeStoreProvider,
-		discoveryProvider:           e.discoveryProvider,
 		unifiedResourceProvider:     e.unifiedResourceProvider,
 		appContainerActionProvider:  e.appContainerActionProvider,
 		appContainerReadProvider:    e.appContainerReadProvider,
@@ -1010,11 +950,6 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 	e.knowledgeStoreProvider = provider
 }
 
-// SetDiscoveryProvider sets the discovery provider for infrastructure discovery
-func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
-	e.discoveryProvider = provider
-}
-
 // SetUnifiedResourceProvider sets the unified resource provider
 func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceProvider) {
 	e.unifiedResourceProvider = provider
@@ -1194,8 +1129,6 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.typedActionPlanner != nil && e.hasReadState()
 	case agentcapabilities.PulseFileEditToolName:
 		return e.agentServer != nil
-	case agentcapabilities.PulseDiscoveryToolName:
-		return e.discoveryProvider != nil
 	case agentcapabilities.PulseKnowledgeToolName:
 		return e.actionAuditStore != nil || e.knowledgeStoreProvider != nil || e.incidentArchiveProvider != nil || e.eventCorrelatorProvider != nil
 	case agentcapabilities.PulsePMGToolName:
@@ -1263,9 +1196,6 @@ func (e *PulseToolExecutor) registerTools() {
 
 	// pulse_control - plan typed resource capabilities only
 	e.registerControlTools()
-
-	// pulse_discovery - get, run, list discoveries
-	e.registerDiscoveryTools()
 
 	// pulse_knowledge - remember, recall, incidents, correlate, relationships
 	e.registerKnowledgeTools()

@@ -140,7 +140,6 @@ describe('resource drawer summary relative ages', () => {
           },
         } as Partial<Resource> & Pick<Resource, 'id' | 'type'>),
         debugEnabled: () => false,
-        discoveryFeatureEnabled: () => false,
         resourceIntelligence: () => null,
       }),
       dispose,

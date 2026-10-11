@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAppContainerMetadataId,
   getWorkloadPlatformScopes,
-  hasDiscoverySupportForWorkload,
   isContainerWorkloadType,
   isContainerWorkloadViewMode,
   resolveDiscoveryTargetForWorkload,
@@ -600,109 +599,5 @@ describe('resolveDiscoveryTargetForWorkload', () => {
       };
       expect(resolveDiscoveryTargetForWorkload(guest)?.agentId).toBe('override-agent');
     });
-  });
-});
-
-describe('hasDiscoverySupportForWorkload', () => {
-  it('returns true when an explicit discovery target resolves', () => {
-    const guest = {
-      id: 'vm:pve1:101',
-      workloadType: 'vm' as const,
-      type: 'vm',
-      instance: 'cluster-a',
-      node: 'pve1',
-      vmid: 101,
-      discoveryTarget: {
-        resourceType: 'vm' as const,
-        agentId: 'agent-pve1',
-        resourceId: '101',
-      },
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(true);
-  });
-
-  it('returns true for a docker-managed app-container with host and container ids', () => {
-    const guest = {
-      id: 'app-container:docker-host-1:grafana',
-      workloadType: 'app-container' as const,
-      type: 'docker',
-      platformType: 'docker',
-      dockerHostId: 'docker-host-1',
-      containerId: 'container-grafana-abc',
-      instance: 'docker-host-1',
-      node: 'docker-host-1',
-      vmid: 0,
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(true);
-  });
-
-  it('returns true for a pod with a kubernetes agent id', () => {
-    const guest = {
-      id: 'k8s:cluster-a:pod:pod-uid-1',
-      workloadType: 'pod' as const,
-      type: 'k8s',
-      kubernetesAgentId: 'k8s-agent-1',
-      instance: 'cluster-a',
-      node: 'cluster-a',
-      vmid: 0,
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(true);
-  });
-
-  it('returns false for a vm without an explicit discovery target', () => {
-    const guest = {
-      id: 'vm:pve1:101',
-      workloadType: 'vm' as const,
-      type: 'vm',
-      instance: 'cluster-a',
-      node: 'pve1',
-      vmid: 101,
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(false);
-  });
-
-  it('returns false for a TrueNAS app-container', () => {
-    const guest = {
-      id: 'app-container:truenas-main:nextcloud',
-      workloadType: 'app-container' as const,
-      type: 'app-container',
-      platformType: 'truenas',
-      dockerHostId: 'truenas-main',
-      containerId: 'nextcloud',
-      instance: 'truenas-main',
-      node: 'truenas-main',
-      vmid: 0,
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(false);
-  });
-
-  it('returns false for a pod missing every agent id source', () => {
-    const guest = {
-      id: 'k8s:cluster-a:pod:pod-uid-1',
-      workloadType: 'pod' as const,
-      type: 'pod',
-      kubernetesAgentId: '',
-      instance: '',
-      node: '',
-      vmid: 0,
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(false);
-  });
-
-  it('returns false when an explicit discovery target is missing required parts', () => {
-    const guest = {
-      id: 'vm:pve1:101',
-      workloadType: 'vm' as const,
-      type: 'vm',
-      instance: 'cluster-a',
-      node: 'pve1',
-      vmid: 101,
-      discoveryTarget: {
-        resourceType: 'vm' as const,
-        agentId: '',
-        resourceId: '101',
-      },
-    };
-    expect(hasDiscoverySupportForWorkload(guest)).toBe(false);
   });
 });

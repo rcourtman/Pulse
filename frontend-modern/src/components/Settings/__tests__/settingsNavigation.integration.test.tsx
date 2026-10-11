@@ -15,7 +15,6 @@ const canonicalTabPaths = {
   'system-ai': '/settings/pulse-intelligence/provider',
   'system-ai-patrol': '/settings/pulse-intelligence/patrol',
   'system-ai-assistant': '/settings/pulse-intelligence/assistant',
-  'system-ai-discovery': '/settings/pulse-intelligence/discovery',
   'system-relay': '/settings/system-relay',
   'system-billing': '/settings/pulse-intelligence/billing/plan',
   'support-diagnostics': '/settings/support/diagnostics',
@@ -430,17 +429,13 @@ describe('settingsNavigation integration scaffold', () => {
     for (const [tab, path] of Object.entries(dispatchableCanonicalTabPaths) as Array<
       [SettingsTab, string]
     >) {
-      expect(deriveTabFromPath(path)).toBe(
-        tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab,
-      );
+      expect(deriveTabFromPath(path)).toBe(tab);
     }
   });
 
   it('round-trips settingsTabPath through deriveTabFromPath', () => {
     for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
-      expect(deriveTabFromPath(settingsTabPath(tab))).toBe(
-        tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab,
-      );
+      expect(deriveTabFromPath(settingsTabPath(tab))).toBe(tab);
     }
   });
 
@@ -454,7 +449,7 @@ describe('settingsNavigation integration scaffold', () => {
     for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
       const path = settingsTabPath(tab);
       const derived = deriveTabFromPath(path);
-      expect(derived).toBe(tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab);
+      expect(derived).toBe(tab);
     }
   });
 

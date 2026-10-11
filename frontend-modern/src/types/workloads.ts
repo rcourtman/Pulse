@@ -2,7 +2,6 @@ import type { VM, Container, DockerContainerUpdateStatus, HostRAIDArray } from '
 import type {
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
-  ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
 } from './resource';
@@ -85,10 +84,8 @@ export type WorkloadGuest = (VM | Container) & {
   // Stable Kubernetes cluster identity used with namespace, kind, and name
   // for persisted workload metadata. Runtime pod UIDs remain separate.
   kubernetesClusterId?: string;
-  // Canonical discovery ownership. API-backed platforms such as TrueNAS should
-  // only expose Discovery when the unified resource contract supplies a target.
+  // Canonical agent coordinates the unified resource contract supplies.
   discoveryTarget?: ResourceDiscoveryTarget;
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   // vSphere placement context surfaced in the workload drawer's vSphere
   // card. Only populated for resources with platformScopes containing
   // `vmware-vsphere`. Kept narrow on purpose — operational state like

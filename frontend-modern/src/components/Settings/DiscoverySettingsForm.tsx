@@ -7,13 +7,11 @@ import type { ToggleChangeEvent } from '@/components/shared/Toggle';
 import {
   getDiscoverySubnetInvalidFormatMessage,
   getDiscoverySubnetRequiredMessage,
-} from '@/utils/infrastructureSettingsPresentation';
-import {
   getNetworkDiscoveryModePresentation,
   getNetworkDiscoveryPriorityNotice,
   getNetworkDiscoverySectionPresentation,
   getNetworkDiscoverySubnetPresentation,
-} from '@/utils/discoveryPresentation';
+} from '@/utils/infrastructureSettingsPresentation';
 import { COMMON_DISCOVERY_SUBNETS } from '@/utils/systemSettingsPresentation';
 import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 

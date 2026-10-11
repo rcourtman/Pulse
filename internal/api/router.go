@@ -51,7 +51,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -100,7 +99,6 @@ type Router struct {
 	aiSettingsHandler               *AISettingsHandler
 	attentionHandlers               *AttentionHandlers
 	aiHandler                       *AIHandler // AI chat handler
-	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
 	maintenanceVerificationHandlers *MaintenanceVerificationHandlers
 	maintenanceSentinel             *maintenancesentinel.Sentinel
@@ -802,7 +800,7 @@ func (r *Router) setupRoutes() {
 	} else {
 		log.Warn().Msg("[Router] unified resource provider is nil, cannot inject unified resource provider")
 	}
-	// Inject tenant-scoped metadata providers for AI URL discovery. Existing
+	// Inject tenant-scoped metadata providers for Assistant URL saves. Existing
 	// tenant services are refreshed when Router.SetMonitor replaces a monitor.
 	r.configureMetadataProviderFactory()
 
@@ -865,8 +863,7 @@ func (r *Router) setupRoutes() {
 	})
 	// Wire the per-tenant cost store into chat sessions so user-chat
 	// token usage flows into the same operator-facing dashboard the
-	// rest of the AI runtime uses (patrol, discovery,
-	// report-narrative). No Enabled gate — even when chat ran briefly
+	// rest of the AI runtime uses (patrol, report-narrative). No Enabled gate — even when chat ran briefly
 	// while AI was being configured, those tokens were billed and
 	// should be visible.
 	r.aiHandler.SetCostStoreResolver(func(ctx context.Context) *cost.Store {
@@ -882,13 +879,6 @@ func (r *Router) setupRoutes() {
 	// Mobile polls approvals as part of its normal paired runtime. Keep the
 	// approval store available even when AI chat is disabled or not configured.
 	r.aiHandler.ensureApprovalStore(r.config.DataPath)
-
-	// AI-powered infrastructure discovery handlers
-	// Note: The actual service is wired up later via SetDiscoveryService
-	r.discoveryHandlers = NewDiscoveryHandlers(nil, r.config)
-	if r.resourceHandlers != nil {
-		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
-	}
 
 	// Wire license checker for Pro feature gating (AI Patrol, Alert Analysis, Auto-Fix)
 	r.aiSettingsHandler.SetLicenseHandlers(r.licenseHandlers)
@@ -2055,45 +2045,6 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 }
 
-// SetDiscoveryService sets the discovery service for the router.
-func (r *Router) SetDiscoveryService(svc *servicediscovery.Service) {
-	if r.discoveryHandlers != nil {
-		r.discoveryHandlers.SetService(svc)
-	}
-	if r.resourceHandlers != nil && r.discoveryHandlers != nil {
-		r.resourceHandlers.SetDiscoveryReadinessProvider(r.discoveryHandlers)
-	}
-
-	// Wire up WebSocket hub for progress broadcasting
-	if svc != nil && r.wsHub != nil {
-		svc.SetWSHub(&wsHubAdapter{hub: r.wsHub})
-		log.Info().Msg("Discovery: WebSocket hub wired for progress broadcasting")
-	}
-}
-
-// SetDiscoveryAIConfigProvider sets the AI config provider for showing AI provider info in discovery.
-func (r *Router) SetDiscoveryAIConfigProvider(provider AIConfigProvider) {
-	if r.discoveryHandlers != nil {
-		r.discoveryHandlers.SetAIConfigProvider(provider)
-	}
-}
-
-// wsHubAdapter adapts websocket.Hub to the servicediscovery.WSBroadcaster interface.
-type wsHubAdapter struct {
-	hub *websocket.Hub
-}
-
-// BroadcastDiscoveryProgress broadcasts discovery progress to all WebSocket clients.
-func (a *wsHubAdapter) BroadcastDiscoveryProgress(progress *servicediscovery.DiscoveryProgress) {
-	if a.hub == nil || progress == nil {
-		return
-	}
-	a.hub.BroadcastMessage(websocket.Message{
-		Type: "ai_discovery_progress",
-		Data: progress,
-	})
-}
-
 func normalizePatrolOrgID(orgID string) string {
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
@@ -2614,18 +2565,6 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 
 	// Finally start the actual patrol loop
 	r.aiSettingsHandler.StartPatrol(ctx)
-
-	// Wire up discovery service to the handlers
-	// This enables the /api/discovery endpoints to trigger discovery scans
-	aiService = r.aiSettingsHandler.GetAIService(ctx)
-	if aiService != nil {
-		if discoveryService := aiService.GetDiscoveryService(); discoveryService != nil {
-			r.SetDiscoveryService(discoveryService)
-			log.Info().Msg("Discovery: Service wired to API handlers")
-		}
-		// Wire up AI config provider for showing AI provider info in discovery UI
-		r.SetDiscoveryAIConfigProvider(aiService)
-	}
 
 	return true
 }
@@ -3396,17 +3335,6 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 			if knowledgeStore := patrolSvc.GetKnowledgeStore(); knowledgeStore != nil {
 				service.SetKnowledgeStoreProvider(&knowledgeStoreProviderWrapper{store: knowledgeStore})
 				log.Debug().Msg("AI chat: Knowledge store provider wired")
-			}
-		}
-	}
-
-	// Wire discovery provider for AI-powered infrastructure discovery (pulse_get_discovery, pulse_list_discoveries).
-	if aiService != nil {
-		if discoverySvc := aiService.GetDiscoveryService(); discoverySvc != nil {
-			adapter := servicediscovery.NewToolsAdapter(discoverySvc)
-			if adapter != nil {
-				service.SetDiscoveryProvider(tools.NewDiscoveryToolAdapter(adapter))
-				log.Debug().Msg("AI chat: Discovery provider wired")
 			}
 		}
 	}
