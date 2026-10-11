@@ -52,7 +52,18 @@ func TestIncidentMaterializationPreservesSnapshotCheckpointAndReadRepair(t *test
 			if canonical {
 				reloaded.SetResourceTimelineStore(history)
 			}
-			require.Equal(t, first, reloaded.GetTimelineByAlertAt(alert.ID, start))
+			restored := reloaded.GetTimelineByAlertAt(alert.ID, start)
+			require.NotNil(t, restored)
+			require.Equal(t, first.ID, restored.ID)
+			require.Equal(t, first.Events, restored.Events)
+			require.Equal(t, first.OpenedAt, restored.OpenedAt)
+			require.Equal(t, first.ClosedAt, restored.ClosedAt)
+			require.Equal(t, first.Status, restored.Status)
+			require.Equal(t, first.Acknowledged, restored.Acknowledged)
+			require.Equal(t, first.AckUser, restored.AckUser)
+			require.Equal(t, first.AckTime, restored.AckTime)
+			// Query coverage windows belong to each read, not the checkpoint.
+			require.Equal(t, first.History.Source, restored.History.Source)
 
 			// Eviction is still bounded and the existing read-facing method can
 			// repair a requested retained occurrence beyond that cache.
