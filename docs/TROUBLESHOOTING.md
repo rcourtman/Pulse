@@ -667,6 +667,22 @@ own cache accounting. Neither is interchangeable with Pulse's resident memory
 (RSS), a Go heap size, or virtual address space (`VSZ` / `VmSize`). A large
 container reading alone does not establish a Pulse memory leak.
 
+**A higher steady baseline is also worth reporting; continuing growth is not
+required.** First distinguish what your existing readings show:
+
+| Observation | What it establishes |
+| --- | --- |
+| Comparable Pulse process RSS settles at a higher level than before with an unchanged workload | A possible baseline regression, even if usage then stays flat. Keep the old and new versions, uptime and measurement scope; a plateau does not dismiss the increased requirement. |
+| Comparable samples rise during one uninterrupted process run | Growth during that interval, not by itself a leak or its cause. Keep the same PID/start time, units, workload and collection settings. |
+| A new process uses less memory shortly after an upgrade than an older process did after days | Different runs at different ages, not verified recovery or growth within one run. Startup and long-lived usage can differ. |
+
+For example, **510 MiB after a week** and **420 MiB ten minutes into a new
+process** cannot establish that steady-state memory improved. Use already
+available readings at comparable uptimes and workloads if you have them;
+otherwise keep the mismatch explicit. Do not restart, downgrade or change
+retention, polling or enabled features to manufacture a comparison. A startup
+CPU improvement is not evidence that the resident-memory baseline fell.
+
 For a responsive **Linux systemd / Proxmox LXC** install, take this small,
 read-only sample at a normally occurring high point. Run it **inside the Pulse
 container** for LXC, not on the Proxmox host. Substitute the actual service name
@@ -738,7 +754,8 @@ values. If it fails or Pulse stops, retain that fact; do not loosen access
 controls or keep retrying against an unresponsive installation.
 
 Keep the sample time, PID/start time, running version, container memory limit,
-fleet size, polling interval and whether dashboards were open. If safe, compare
+fleet size, polling interval, enabled collectors/features and whether dashboards
+were open. If safe, compare
 another naturally occurring point with the **same PID and process start time**;
 record any restart or upgrade as a different run, not evidence that the cause
 was fixed. For Docker, the [bounded container statistics below](#excessive-cpu-writes-or-database-growth)

@@ -321,6 +321,28 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
                             r"(?<!-)\b(?:sudo|restart|kill|rm|truncate|sqlite3|curl|printenv|cat)\b"
                             r"|--follow|--token|cmdline|environ|smaps")
 
+    def test_baseline_and_growth_are_distinct_without_manufactured_comparisons(self):
+        guide = " ".join(section().split())
+        for distinction in (
+            "A higher steady baseline is also worth reporting",
+            "continuing growth is not required",
+            "a plateau does not dismiss the increased requirement",
+            "not by itself a leak or its cause",
+            "Different runs at different ages, not verified recovery",
+            "comparable uptimes and workloads",
+            "otherwise keep the mismatch explicit",
+            "Do not restart, downgrade or change retention, polling or enabled features",
+            "CPU improvement is not evidence that the resident-memory baseline fell",
+        ):
+            self.assertIn(distinction, guide)
+        faq = " ".join((ROOT / "docs/FAQ.md").read_text().split())
+        self.assertIn("higher steady baseline is worth reporting", faq)
+        self.assertIn("not a like-for-like comparison", faq)
+        self.assertIn("do not restart to create a comparison", faq)
+        self.assertIn("TROUBLESHOOTING.md#memory-use-keeps-growing", faq)
+        self.assertEqual((ROOT / "docs/FAQ.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/FAQ.md").read_bytes())
+
 
 class GuestMemoryInterpretationDocsTest(unittest.TestCase):
     HEADING = "#### Guest memory is high but available memory is plentiful\n"
