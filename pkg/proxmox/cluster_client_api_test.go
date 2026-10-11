@@ -634,3 +634,31 @@ func TestClusterClient_TOFURefresh_IgnoresNonTLSMismatch(t *testing.T) {
 func TestClusterClientFingerprintTrustContract(t *testing.T) {
 	testClusterClientFingerprintTrust(t)
 }
+
+// Guest admission equivalence must not broaden the existing certificate trust scope.
+func TestGuestAgentIPv4MappedTrustScope(t *testing.T) {
+	const ipv4 = "https://192.0.2.10:8006/tenant"
+	const mapped = "https://[::ffff:192.0.2.10]:8006/tenant"
+	for _, pair := range [][2]string{{ipv4, mapped}, {mapped, ipv4}} {
+		cc := &ClusterClient{
+			config:               ClientConfig{Host: pair[0], Fingerprint: "primary-pin"},
+			endpoints:            []string{pair[0], pair[1]},
+			endpointFingerprints: map[string]string{pair[0]: "saved-pin"},
+		}
+		a, okA := clusterEndpointKey(pair[0])
+		b, okB := clusterEndpointKey(pair[1])
+		if !okA || !okB || a == b {
+			t.Error("admission equivalence broadened the existing TLS trust identity")
+		}
+		if _, known := cc.knownEndpointFingerprintLocked(pair[1]); known || cc.getEndpointFingerprint(pair[1]) != "primary-pin" {
+			t.Error("coordination shared another configured authority's saved pin")
+		}
+		if !cc.canTrustMemberOnFirstUseLocked(pair[1]) {
+			t.Error("unchanged declared-member first-use policy lost its distinct origin")
+		}
+		cc.endpointFingerprints[pair[1]] = "other-saved-pin"
+		if cc.getEndpointFingerprint(pair[0]) != "saved-pin" || cc.getEndpointFingerprint(pair[1]) != "other-saved-pin" || cc.canTrustMemberOnFirstUseLocked(pair[1]) {
+			t.Error("distinct established pins or no-replacement policy changed")
+		}
+	}
+}
