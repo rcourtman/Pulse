@@ -1138,7 +1138,6 @@ describe('Agent Doctor Unix credential handoffs', () => {
       expect(command).not.toContain(privateInstallState.token);
       expect(command).not.toContain('old-alias');
       expect(command).not.toContain('| bash');
-      expect(command).toContain('--token-file "$token_file"');
       expect(command).toContain('--agent-id');
       expect(command).toContain('canonical-id-42');
       expect(command).toContain('--hostname');
@@ -1148,6 +1147,9 @@ describe('Agent Doctor Unix credential handoffs', () => {
       expect(command).not.toContain('--enable-commands');
       execFileSync('sh', ['-n', '-c', command]);
     }
+    expect(repair).toContain('--token-file "$token_file"');
+    expect(uninstall).not.toContain('--token');
+    expect(uninstall).not.toContain('Pulse agent token');
     expect(repair).toContain('--update');
     expect(repair).toContain('--enable-docker');
     expect(repair).toContain('--preflight-only');
@@ -1172,4 +1174,46 @@ describe('Agent Doctor Unix credential handoffs', () => {
       operations.getAgentConnectionUpgradeCommandRequiresToken(connectionFixture(), 'linux'),
     ).toBe(false);
   });
+});
+
+describe('removed-agent handoff uses saved credentials, not installation state', () => {
+  it.each(['debian', 'Windows Server 2022', undefined])(
+    'carries canonical identity into every offered %s command',
+    (platform) => {
+      const [target] = collectInfrastructureAgentDoctorTargets({
+        rows: [],
+        diagnosticsAvailable: true,
+        diagnostics: [
+          diagnosticFixture({
+            connectionId: 'agent:removed-host',
+            rowKey: 'removed-host',
+            id: 'removed-host',
+            agentId: 'canonical-removed',
+            name: 'removed-host',
+            hostname: 'removed.example',
+            status: 'removed',
+            platform,
+          }),
+        ],
+      });
+      const handoff = getInfrastructureAgentDoctorUninstallHandoff(target)!;
+      const operations = useInfrastructureOperationsState();
+      for (const entry of handoff.commands) {
+        const command = operations.getPlatformUninstallCommand(entry.platform, handoff.identity);
+        expect(command).toContain('canonical-removed');
+        expect(command).toContain('removed.example');
+        expect(command).not.toContain(operations.currentToken());
+        expect(command).not.toContain('<api-token>');
+        expect(command).not.toContain('Pulse agent token');
+        if (entry.platform === 'windows') {
+          expect(command).toContain("-Uninstall $true -Url '' -Token '' -TokenFile ''");
+          expect(command).not.toContain('$env:');
+        } else {
+          expect(command).toContain('--uninstall');
+          expect(command).not.toContain('--url');
+          expect(command).not.toContain('--token');
+        }
+      }
+    },
+  );
 });

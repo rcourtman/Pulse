@@ -1071,6 +1071,33 @@ Unified Agent installer command. The choice must remain off by default, be
 visible at the point where the command is generated, and affect both the
 installer download and the agent's subsequent Pulse TLS connection.
 
+### Copied removal uses the installed credential, not installation input
+
+Every existing uninstall copy surface (installer, source management and removed
+Agent Doctor handoff) must work without minting or revealing an install token.
+Unix `--uninstall` skips preflight, private token input and token-file bootstrap;
+it clears inherited lifecycle credentials/identity/trust in its child only and
+lets the installed connection recover its own server, credential and pin.
+Explicit canonical identity and selected CA/insecure settings remain supported;
+an HTTP download alone must not weaken the saved HTTPS connection.
+
+Windows removal invokes the downloaded script with typed uninstall and empty
+credential/connection parameters, so ambient install variables cannot shadow
+saved state. Its download uses only selected trust, restores the TLS callback
+and does not assign shell environment variables. Identity and paths are quoted
+as literals. Installation's private-input/preflight path remains separate.
+`agentInstallCommand.test.ts` executes a terminal-free Unix recorder and retains
+its success/failure exit and inherited-state boundaries; the real composed hook
+and Doctor model prove all token/platform/identity branches. The parent/final
+`agent-uninstall.cjs` browser matrix checks real copy callers, displayed/copy
+parity, no issuance on removal and unchanged install gating.
+
+These are command-generation/controlled-browser proofs, not native uninstall.
+Unix's existing durable authenticated deregistration-before-teardown boundary
+is unchanged. Windows installer confirmation/failure retention remains owned
+by Delivery: its current suppressed unregister failure is not made safe by a
+token-free command. No copy receipt establishes installed removal or a release.
+
 ## Canonical Files
 
 - `internal/agentexec/guest_exec_safety.go`

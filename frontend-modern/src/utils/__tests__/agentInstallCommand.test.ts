@@ -12,9 +12,11 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { unixBootstrapTestSource } from './unixBootstrapTestSource';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
+  buildWindowsAgentUninstallCommand,
   normalizeInstallerBaseUrl,
   resolveAgentCommandPlatform,
   resolveInstallerBaseUrl,
@@ -749,4 +751,150 @@ describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => 
       }
     },
   );
+});
+
+describe('saved-credential uninstall commands', () => {
+  it.each(['unused-new-install-token', null])(
+    'never asks for installation credentials (%s)',
+    (token) => {
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://download.invalid',
+        token,
+        tokenFilePath: 'unused-relative-file',
+        extraArgs: ['--uninstall'],
+      });
+      const child = unixBootstrapTestSource(command);
+      expect(command).not.toContain('unused-new-install-token');
+      expect(command).not.toContain('unused-relative-file');
+      expect(command).not.toContain('Pulse agent token');
+      expect(command).not.toContain('--token');
+      expect(command).not.toContain('--url');
+      expect(command).not.toContain('--preflight-only');
+      expect(child).toContain(
+        'unset PULSE_TOKEN PULSE_TOKEN_FILE PULSE_URL PULSE_AGENT_ID PULSE_HOSTNAME',
+      );
+      expect(command).toContain('https://download.invalid/install.sh');
+    },
+  );
+
+  it.each([0, 17])(
+    'executes the actual Unix command without a terminal and retains installer exit %s',
+    (exit) => {
+      const dir = mkdtempSync(join(tmpdir(), 'pulse-uninstall-command-'));
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      try {
+        writeFileSync(join(bin, 'id'), '#!/bin/sh\nprintf 0\n', { mode: 0o700 });
+        writeFileSync(
+          join(bin, 'curl'),
+          `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -o ]; then cp "$RECORDER" "$2"; exit 0; fi
+  shift
+done
+exit 31
+`,
+          { mode: 0o700 },
+        );
+        // Only a recorder is downloaded. No production installer or sudo runs.
+        const recorder = join(dir, 'recorder');
+        writeFileSync(
+          recorder,
+          `#!/bin/bash
+printf '%s\\n' "$@" > "$ARGV"
+printf '%s:%s:%s:%s:%s:%s:%s:%s' "\${PULSE_TOKEN-}" "\${PULSE_TOKEN_FILE-}" "\${PULSE_URL-}" "\${PULSE_AGENT_ID-}" "\${PULSE_HOSTNAME-}" "\${PULSE_INSECURE_SKIP_VERIFY-}" "\${PULSE_CACERT-}" "\${PULSE_SERVER_FINGERPRINT-}" > "$ENV_CAPTURE"
+exit "$EXPECTED_EXIT"
+`,
+        );
+        const command = buildUnixAgentInstallCommand({
+          baseUrl: 'https://download.invalid',
+          token: 'not-an-uninstall-credential',
+          caCertPath: '/explicit/ca.pem',
+          extraArgs: ['--uninstall', "--agent-id 'saved-id'", "--hostname 'saved.example'"],
+        });
+        const result = spawnSync('bash', ['-c', command], {
+          encoding: 'utf8',
+          timeout: 5000,
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            RECORDER: recorder,
+            ARGV: join(dir, 'argv'),
+            ENV_CAPTURE: join(dir, 'environment'),
+            EXPECTED_EXIT: String(exit),
+            PULSE_TOKEN: 'ambient-install-secret',
+            PULSE_TOKEN_FILE: '/wrong/file',
+            PULSE_URL: 'https://wrong.invalid',
+            PULSE_AGENT_ID: 'wrong-id',
+            PULSE_HOSTNAME: 'wrong-host',
+            PULSE_INSECURE_SKIP_VERIFY: 'true',
+            PULSE_CACERT: '/wrong/ca',
+            PULSE_SERVER_FINGERPRINT: 'wrong-pin',
+          },
+        });
+        expect(result.status, result.stdout + result.stderr).toBe(exit);
+        expect(result.stdout + result.stderr).not.toContain('ambient-install-secret');
+        expect(readFileSync(join(dir, 'environment'), 'utf8')).toBe(':::::::');
+        expect(readFileSync(join(dir, 'argv'), 'utf8').trim().split('\n')).toEqual([
+          '--uninstall',
+          '--agent-id',
+          'saved-id',
+          '--hostname',
+          'saved.example',
+          '--non-interactive',
+          '--cacert',
+          '/explicit/ca.pem',
+        ]);
+        // The parent shell retains its inherited value; clearing is child-only.
+        const sentinel = execFileSync('bash', ['-c', command + '; printf %s "$PULSE_TOKEN"'], {
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            RECORDER: recorder,
+            ARGV: join(dir, 'argv'),
+            ENV_CAPTURE: join(dir, 'environment'),
+            EXPECTED_EXIT: '0',
+            PULSE_TOKEN: 'parent-sentinel',
+          },
+          encoding: 'utf8',
+          timeout: 5000,
+        });
+        expect(sentinel).toBe('parent-sentinel');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('Windows binds empty credential parameters and escaped identity without mutating environment', () => {
+    const command = buildWindowsAgentUninstallCommand({
+      baseUrl: 'https://download.invalid/',
+      agentId: "agent'$()",
+      hostname: "host'$name",
+      caCertPath: "C:\\trust\\host's.pem",
+    });
+    expect(command).toContain('https://download.invalid/install.ps1');
+    expect(command).toContain("-Uninstall $true -Url '' -Token '' -TokenFile ''");
+    expect(command).toContain("-AgentId 'agent''$()' -Hostname 'host''$name'");
+    expect(command).toContain(
+      "-Insecure $false -CACertPath 'C:\\trust\\host''s.pem' -ServerFingerprint ''",
+    );
+    expect(command).toContain("LoadCertificate('C:\\trust\\host''s.pem')");
+    expect(command).toContain('-PreflightOnly $false');
+    expect(command).not.toContain('$env:');
+    expect(command).not.toContain('\n');
+    expect(command).toContain('ForEach-Object { & ([scriptblock]::Create($_))');
+  });
+
+  it('HTTP download does not grant an insecure saved-server uninstall', () => {
+    expect(
+      buildUnixAgentInstallCommand({
+        baseUrl: 'http://download.invalid',
+        extraArgs: ['--uninstall'],
+      }),
+    ).not.toContain(' --insecure');
+    expect(buildWindowsAgentUninstallCommand({ baseUrl: 'http://download.invalid' })).toContain(
+      '-Insecure $false',
+    );
+  });
 });

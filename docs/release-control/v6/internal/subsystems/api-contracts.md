@@ -657,6 +657,19 @@ report request and response shapes are unchanged.
 `TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport`
 in `internal/api/contract_test.go` pins report, then reduction.
 
+### Saved-credential uninstall copy handoffs
+
+Existing installer, source-manager and removed Agent Doctor copy actions do not
+request an install token for removal. The composed operations hook carries
+canonical ID/hostname into the appropriate saved-state command family; no
+endpoint, payload, API-token scope, server removal authentication or identity
+matching changes. `infrastructureAgentDoctorModel.test.ts` composes every
+removed-platform handoff with the real command closure, preserving exact
+identity and keeping installation credentials out. The shared command proof
+executes a terminal-free Unix recorder and inspects explicit Windows parameter
+binding. Browser evidence is UI-only; server/native deregistration and Windows
+failure retention require their own owner result, not source acceptance.
+
 ## Canonical Files
 
 1a. `docs/API.md`
