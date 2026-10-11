@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b1239bd6108d85facc2ec91345c532923d41a6e0",
+  "verified_at": "2026-10-11T21:27:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "decaec733aec0080cb186d6168eb7112c9234e32fcb46e581d41c5c4d1b3e1fb"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock stack (PULSE_MOCK_MODE, 4 nodes, 34 guests) built from origin/main with Vite HMR on the edited file",
+    "375px phone, guest workloads table with the Backup column hidden: name-cell backup indicator is 24x24 (was 44x44), every guest row is 43.5px tall (was 63.5px)",
+    "375px phone: the expand chevron stays screen-reader only (position absolute, clip-path inset(50%)); with keyboard focus it becomes visible and does not overlap the indicator",
+    "768px: chevron 24px and indicator 14px in the name cell, no overlap, elementFromPoint at every chevron centre returns that chevron",
+    "1280px desktop: Backup column badge in its own cell (52x20), chevron 24px, row 32px, unchanged"
+  ],
+  "interactions": [
+    "375px: real tap at (60,418) inside the old 44px indicator zone opens the auth-service-01 guest drawer (aria-expanded true) and no backup dialog",
+    "375px: real tap on the shield at (37,415) opens \"Backup status details for auth-service-01\" and leaves the row collapsed",
+    "375px: Close button dismisses the backup dialog",
+    "hit-zone grid scan of the name cell before/after: backup zone shrank from 44x44 to 24x24"
+  ]
+}
