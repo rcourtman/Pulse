@@ -73,7 +73,7 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('text')} alert-history-timestamp-column text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                     >
-                      Timestamp
+                      Time
                     </TableHead>
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}

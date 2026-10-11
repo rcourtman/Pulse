@@ -1182,4 +1182,98 @@ describe('Alert History column widths', () => {
       expect(Number(block[2])).toBeCloseTo(allSum, 6);
     });
   });
+
+  // Each density is sized for the narrowest card it serves, from the natural
+  // widths measured in a real browser (padding included): "08:27 AM" in a 14px
+  // monospace, the Severity/Duration/Resource headers, a 119px "acknowledged"
+  // badge, and the three row actions on one line (177px). Below 800px the
+  // actions stack, so the base density only needs the widest single button.
+  // Message, the column that says what happened, takes what is left and may
+  // never fall under 18% of the card: equal shares had held it to the width
+  // of the timestamp. Type and Node, which appear from 1024px, get a floor too.
+  const wideNeeds = {
+    timestamp: 84,
+    resource: 93,
+    severity: 86,
+    duration: 91,
+    status: 119,
+    actions: 177,
+  } as const;
+  const pixelNeeds: Array<{
+    name: string;
+    cardWidth: number;
+    needs: Partial<Record<(typeof columns)[number], number>>;
+  }> = [
+    {
+      name: 'base',
+      cardWidth: 600,
+      needs: { timestamp: 84, resource: 93, severity: 86, status: 119, actions: 80 },
+    },
+    { name: '50rem', cardWidth: 800, needs: wideNeeds },
+    { name: '64rem', cardWidth: 1024, needs: { ...wideNeeds, type: 108, node: 68 } },
+    { name: '80rem', cardWidth: 1280, needs: { ...wideNeeds, type: 108, node: 68 } },
+  ];
+
+  it('declares each density block inside its 50rem, 64rem and 80rem container query', () => {
+    const enclosing = blocks.slice(1).map((block) => {
+      const start = block.index as number;
+      const queries = [
+        ...appStylesSource.slice(0, start).matchAll(/@container \(min-width: ([\d.]+)rem\) \{/g),
+      ];
+      const query = queries[queries.length - 1];
+      // Walk the braces from the query to the end of its body: the density
+      // block only counts if it sits before that closing brace.
+      let depth = 0;
+      let close = -1;
+      for (
+        let index = (query.index as number) + query[0].length - 1;
+        index < appStylesSource.length;
+        index += 1
+      ) {
+        const char = appStylesSource[index];
+        if (char === '{') depth += 1;
+        if (char === '}') depth -= 1;
+        if (depth === 0) {
+          close = index;
+          break;
+        }
+      }
+      return { rem: Number(query[1]), enclosed: start + block[0].length <= close };
+    });
+    expect(enclosing).toEqual([
+      { rem: 50, enclosed: true },
+      { rem: 64, enclosed: true },
+      { rem: 80, enclosed: true },
+    ]);
+  });
+
+  it('gives every column the pixels its content needs at the narrowest card of each density', () => {
+    blocks.forEach((block, index) => {
+      const widths = Object.fromEntries(
+        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
+          match[1],
+          Number(match[2]),
+        ]),
+      );
+      const { name, cardWidth, needs } = pixelNeeds[index];
+      for (const [column, need] of Object.entries(needs)) {
+        const pixels = (widths[column] / 100) * cardWidth;
+        expect(pixels, `${name}: ${column} track at ${cardWidth}px`).toBeGreaterThanOrEqual(
+          need - 0.5,
+        );
+      }
+    });
+  });
+
+  it('keeps Message at least 18% of the card at every density', () => {
+    blocks.forEach((block, index) => {
+      const widths = Object.fromEntries(
+        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
+          match[1],
+          Number(match[2]),
+        ]),
+      );
+      expect(widths.message, `${densities[index].name}: message share`).toBeGreaterThanOrEqual(18);
+    });
+  });
 });

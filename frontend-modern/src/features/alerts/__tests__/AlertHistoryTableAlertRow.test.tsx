@@ -119,4 +119,45 @@ describe('AlertHistoryTableAlertRow', () => {
       'Resolved: Node temperature at 74.0°C',
     );
   });
+
+  // Alert History 2026-10-11: at a 1024px window the table card is 600px wide and
+  // the message track about 110px, so rows read "Docker servi…" and nobody could
+  // tell which alert they were looking at. The row has no disclosure of its own, so
+  // the message and the resource name wrap instead of truncating; the global
+  // `.table-fixed td` nowrap forces the wrapper inside the cell to opt back in.
+  // Message always holds two lines so every row has one height (the windowing hook
+  // sizes its spacers from a single measured row).
+  it('wraps the message and resource name instead of ending in an ellipsis', () => {
+    renderRow(
+      historyItem({
+        resourceName: 'standalone2-iso-library',
+        description: "Docker service 'frontend-database' is running 1 of 2 desired tasks",
+      }),
+    );
+
+    const message = screen.getByText(
+      "Docker service 'frontend-database' is running 1 of 2 desired tasks",
+    );
+    expect(message.dataset.alertHistoryCell).toBe('message');
+    expect(message.className).toContain('line-clamp-2');
+    expect(message.className).toContain('min-h-[2lh]');
+    // From an 80rem card both cells return to one line at the old row height.
+    expect(message.className).toContain('@min-[80rem]:line-clamp-1');
+    expect(message.className).toContain('@min-[80rem]:min-h-0');
+    expect(message.className).toContain('whitespace-normal');
+    expect(message.className).toContain('wrap-break-word');
+    expect(message.className).not.toContain('truncate');
+    expect(message.closest('td')?.className).not.toContain('truncate');
+    expect(message.closest('td')?.className).not.toMatch(/max-w-\[/);
+
+    const resource = screen.getByText('standalone2-iso-library');
+    expect(resource.dataset.alertHistoryCell).toBe('resource');
+    expect(resource.className).toContain('line-clamp-2');
+    expect(resource.className).toContain('@min-[80rem]:line-clamp-1');
+    expect(resource.className).toContain('whitespace-normal');
+    expect(resource.className).toContain('wrap-break-word');
+    expect(resource.className).not.toContain('truncate');
+    expect(resource).toHaveAttribute('title', 'standalone2-iso-library');
+    expect(resource.closest('td')?.className).not.toMatch(/max-w-\[/);
+  });
 });
