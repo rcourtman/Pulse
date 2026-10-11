@@ -452,7 +452,10 @@ const iso = (n) => new Date(n).toISOString();
             );
             assert.equal(draftNumber, 2, 'no extra suggestion');
           }
-          record.checks.push({ replacementOrOriginalDraftAcceptance: true });
+          // Operator coverage is the unchanged held policy above, not a
+          // replacement. Only the other four cases exercise a second action.
+          if (surface !== 'operator')
+            record.checks.push({ replacementOrOriginalDraftAcceptance: true });
         }
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
