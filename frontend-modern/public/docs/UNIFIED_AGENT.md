@@ -1007,14 +1007,31 @@ contact Pulse, a container runtime or a guest agent.
 
 ```bash
 (
-command -v timeout >/dev/null 2>&1 || {
-  printf 'Agent log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+umask 077
+for tool in timeout bash head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Agent log read unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! agent_log_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Agent log read unavailable: private temporary file could not be created.\n' >&2
   exit 1
-}
-if agent_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse-agent.service --since '15 minutes ago' --lines 200 --no-pager --output=cat 2>&1); then
-  if [ -n "$agent_logs" ]; then
-    printf '%s\n' "$agent_logs"
+fi
+trap 'rm -- "$agent_log_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$agent_log_file" 2>/dev/null <<'PULSE_LOG_READ'
+journalctl -u pulse-agent.service --since '15 minutes ago' --lines 200 --no-pager --output=cat 2>&1 | head -c 262145
+PULSE_LOG_READ
+then
+  if ! agent_log_bytes=$(wc -c < "$agent_log_file" 2>/dev/null); then
+    printf 'Agent log read unavailable: excerpt size could not be checked.\n' >&2
+    exit 1
   fi
+  if [ "$agent_log_bytes" -gt 262144 ]; then
+    printf 'Agent log read unavailable: excerpt exceeds 256 KiB; no partial excerpt shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$agent_log_file"
 else
   agent_log_status=$?
   printf 'Agent log read unavailable (exit %s); no partial excerpt shown.\n' "$agent_log_status" >&2
@@ -1023,14 +1040,22 @@ fi
 )
 ```
 
-This requires **GNU `timeout`**, reads at most 200 records from the default
-15-minute window, and allows eight seconds plus a one-second termination grace.
-A failed or timed-out read is unavailable, not an empty search; partial output
-is withheld. Stop if the utility, service journal or existing access is
+This requires **GNU `timeout`** and the listed local utilities, reads at most
+200 records from the default 15-minute window, and limits the excerpt to
+**256 KiB**: a record limit alone does not bound bytes. The eight-second hard
+deadline kills only the read-only collection group, including the reader and
+byte limiter, not the agent. A failed, oversized or timed-out read is
+unavailable, not an empty search; partial output is withheld. Stop if a
+utility, service journal or existing access is
 unavailable; do not follow the journal indefinitely, remove the deadline or
 broaden permissions to collect it. A successful empty read is inconclusive:
 the event may be outside the window or absent at the configured log level.
 Do not restart, re-enrol or enable debug logging just to obtain an entry.
+
+Both streams are buffered in an owner-only temporary file, capped at 256 KiB
+plus one overflow-detection byte and removed when the subshell exits. If the
+shell is forcibly interrupted, a private `pulse-log.*` file may remain in its
+temporary directory; remove that exact file locally, not saved agent state.
 
 The excerpt is **not sanitised**. Review it locally before searching for the
 relevant error or sharing a manually redacted timestamp and failure stage.

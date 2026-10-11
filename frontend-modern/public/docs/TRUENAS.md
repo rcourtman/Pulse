@@ -302,10 +302,12 @@ actual service or container name (`pulse-backend` on some older systemd
 installs), and adjust the time window to the original incident.
 
 Those Bash recipes read at most 200 records from the last 15 minutes and
-require **GNU `timeout`**, with an eight-second deadline and one-second
-termination grace. A record limit alone does not bound a hung reader. If
-`timeout` is unavailable, stop; do not use an unbounded substitute. They do
-not follow logs, make API requests or change logging.
+require **GNU `timeout`** and the listed local utilities, with an eight-second
+hard deadline and a **256 KiB** byte limit. A record limit alone does not bound
+a hung reader or a large record. If a required utility is unavailable, stop;
+do not use an unbounded substitute. They do not follow logs, make API requests
+or change logging. The linked reader explains its owner-only temporary file
+and cleanup precautions.
 
 Both output streams are captured because Docker can write application logs
 to stderr. An excerpt is shown only after a successful read; failure or

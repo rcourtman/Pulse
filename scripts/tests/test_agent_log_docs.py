@@ -51,7 +51,7 @@ class AgentLogDocsTest(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         self.assertEqual(argv, ["-u", "pulse-agent.service", "--since", "15 minutes ago",
                                 "--lines", "200", "--no-pager", "--output=cat"])
-        self.assertIn("timeout --signal=TERM --kill-after=1s 8s", copied)
+        self.assertIn("timeout --signal=KILL 8s", copied)
         self.assertIn("2>&1", copied)
         self.assertNotRegex(copied, r"\b(?:grep|curl|docker|systemctl|printenv|sudo)\b|--follow|--token")
 
@@ -73,12 +73,12 @@ class AgentLogDocsTest(unittest.TestCase):
 
     def test_hung_reader_is_stopped_by_the_documented_deadline(self):
         result, _ = self.exercise(stdout=LOG, stderr=PRIVATE_ERROR, hang="term")
-        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertEqual(result.returncode, 137, result.stderr)
         self.assertEqual(result.stdout, "")
-        self.assertIn("Agent log read unavailable (exit 124)", result.stderr)
+        self.assertIn("Agent log read unavailable (exit 137)", result.stderr)
         self.assertNotIn(PRIVATE_ERROR.strip(), result.stderr)
 
-    def test_reader_ignoring_term_is_killed_after_the_documented_grace(self):
+    def test_reader_ignoring_term_is_killed_at_the_hard_deadline(self):
         result, _ = self.exercise(stdout=LOG, hang="ignore-term")
         self.assertEqual(result.returncode, 137, result.stderr)
         self.assertEqual(result.stdout, "")
