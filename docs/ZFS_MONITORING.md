@@ -27,7 +27,8 @@ it appear in Pulse. For a pool you intentionally keep unregistered:
 
 * A **Unified Agent on the Proxmox host**, with a locally mounted ZFS dataset
   and access to `zpool`, can report capacity and usage in the node's
-  **Overview details → Disks** panel, under the selected mount point. Without
+  **Overview** tab, in the **Storage** section of the technical details, which
+  lists each mount point once the agent reports two or more. Without
   usable `zpool` output, the agent falls back to mounted-dataset counters;
   those are not necessarily whole-pool capacity.
 * That capacity view and physical-disk SMART data do **not** provide

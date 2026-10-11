@@ -38,7 +38,7 @@ user merely because no local administrator is configured.
 ## Quick Start
 
 1. Activate a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license in **Settings → Plans & Billing**.
-2. Go to **Settings → Security → Access Control**.
+2. Go to **Settings → Security → Roles**.
 3. Create roles with the permissions you need.
 4. Assign roles to users.
 
@@ -48,7 +48,7 @@ user merely because no local administrator is configured.
 
 ### Before Using the API
 
-Prefer **Settings → Security → Access Control** for one-off administration.
+Prefer **Settings → Security → Roles** and **Settings → Security → Users** for one-off administration.
 The API examples require the licensed `rbac` capability and permission to
 administer users. With RBAC enabled, role and user administration requires a
 full-access (`*`) API token bound to an authorised administrator; a monitoring
@@ -81,7 +81,7 @@ alone does not establish the intended access or disable an upstream IdP account.
 
 ### Creating a Role
 
-**UI:** Settings → Security → Access Control → Create Role
+**UI:** Settings → Security → Roles → New Role
 
 Use a new custom role ID. Built-in roles (`admin`, `operator`, `viewer`,
 `auditor`) cannot be modified or deleted. These examples use `alert-manager`.
@@ -201,7 +201,7 @@ How it works:
 - Matching groups are mapped to Pulse roles.
 - A user can receive multiple roles from multiple group mappings.
 - Once a provider has any group role mappings configured, the mapping is authoritative: on every login the user's role assignments are replaced with whatever the mapping resolves to. A login that matches no mapped group resolves to an empty set, which clears the user's existing role assignments. Watch for identity providers that silently drop the groups claim (see the Entra ID group overage warning in [OIDC.md](OIDC.md#microsoft-entra-id-formerly-azure-ad)) — to Pulse that looks the same as losing every group.
-- Role changes are logged to the [audit log](AUDIT_LOGGING.md) as `oidc_role_assignment` events.
+- Logins that assign at least one role are logged to the [audit log](AUDIT_LOGGING.md) as `sso_oidc_role_assignment` events. A login that clears a user's roles does not write this event.
 
 See [OIDC documentation](OIDC.md#group-to-role-mapping) for full configuration details.
 

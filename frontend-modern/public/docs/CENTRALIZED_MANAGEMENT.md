@@ -42,8 +42,9 @@ below also support live refresh when the host module is running:
 | `report_ip` | string | Reported host IP override; also refreshed live for the host module |
 | `disable_ceph` | boolean | Disable local Ceph polling; also refreshed live for the host module |
 
-`interval` accepts a positive duration string; JSON numbers are interpreted as
-seconds. Do not enable Debug, shorten intervals or change monitoring scope just
+`interval` must be a positive duration string such as `30s` or `1m`. Numeric
+values are rejected when a profile is validated or saved; an agent still reads a
+numeric interval in an older saved profile as seconds. Do not enable Debug, shorten intervals or change monitoring scope just
 to collect a report. Use the [bounded agent log readers](UNIFIED_AGENT.md#collect-agent-logs-safely)
 and evidence already available.
 
@@ -140,8 +141,9 @@ These paths describe existing operations; do not run every operation as a
 diagnostic checklist. Replace `{id}`, `{agent_id}` and `{version}` with values
 from the current instance. Use the UI or an authenticated client that reads
 credentials and request bodies from private files, preserves CSRF protection
-for session writes and verifies HTTPS. The example `pulse_api` helper supports
-GET and POST only, not PUT or DELETE.
+for session writes and verifies HTTPS. The example `pulse_api` helper from API.md
+accepts GET, POST, PUT and DELETE, but this guide's examples are read-only and
+use GET only.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -167,7 +169,7 @@ Example **request bodies**, not credential-bearing HTTP commands:
 }
 ```
 
-For validation, send only `{"config": {...}}`. For assignment, use the actual
+For validation, send only the configuration keys as the top-level JSON object, with no `config` wrapper, for example `{"interval": "60s", "enable_docker": true}`; a `config` wrapper is treated as one unknown key and the settings are not checked. For assignment, use the actual
 `id` returned by creation or the profile list, not `prod-servers`:
 
 ```json

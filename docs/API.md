@@ -159,7 +159,7 @@ State-changing session requests also require Pulse's CSRF protection, which
 the UI handles.
 
 Session endpoints:
-- `POST /api/login` (sets `pulse_session` + `pulse_csrf`)
+- `POST /api/login` (sets the session cookie, `pulse_session` over plain HTTP or `__Host-pulse_session` over HTTPS, plus `pulse_csrf`)
 - `POST /api/logout` (clears session)
 
 Login body:
@@ -260,7 +260,7 @@ Lightweight HTML status page for quick checks.
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
 
 Query params:
-- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
+- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
 - `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
 - `excludeSource`: comma-separated list of sources that must not be present on a matching resource
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
@@ -795,7 +795,7 @@ node identity as the bootstrap response. The optional `backup_perms=true`
 query is supported only for `type=pve`.
 
 ### Setup Script URL
-`POST /api/setup-script-url` (auth)
+`POST /api/setup-script-url` (admin, `settings:write`)
 Generates a one-time setup token and URL for `/api/setup-script`.
 Canonical callers must send a supported `type` of `pve` or `pbs` plus a
 non-empty `host`; the backend normalizes that host before minting the setup
@@ -849,12 +849,15 @@ back to the installer or runtime-side Unified Agent:
 `{"status":"success","action":"use_token","type":"pve|pbs","source":"agent|script","host":"https://...","nodeId":"<stored-name>","nodeName":"<stored-name>",...}`.
 
 ### Agent Install Command
-`POST /api/agent-install-command` (auth)
+`POST /api/agent-install-command` (admin, `settings:write`)
 Generates an API token and install command for agent-based Proxmox setup.
 
 ### Discovery
-`GET /api/discover` (auth)
-Runs network discovery.
+`GET /api/discover` (admin, `settings:write`)
+Returns the last cached network discovery result from the background discovery service. It does not scan.
+
+`POST /api/discover` (admin, `settings:write`)
+Runs a manual network scan. JSON body: `{"subnet": "...", "use_cache": false}`. `subnet` defaults to `auto`; `use_cache: true` returns the cached result instead of scanning.
 
 ### AI Discovery (Service Discovery)
 Service discovery is used by Pulse Assistant and the UI to inventory web services and enrich links.
@@ -871,7 +874,7 @@ Service discovery is used by Pulse Assistant and the UI to inventory web service
 - `PUT /api/discovery/{type}/{targetId}/{resourceId}/notes`
 
 ### Test Notification
-`POST /api/test-notification` (auth)
+`POST /api/test-notification` (admin, `settings:write`)
 Broadcasts a WebSocket test event.
 
 ---
@@ -1050,7 +1053,7 @@ it, use the snooze and unsnooze endpoints below.
 - `POST /api/alerts/unacknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
 - `POST /api/alerts/snooze` (body: `{ "alertIdentifier": "alert-id", "until": "RFC3339 timestamp" }`; pauses delivery and escalation for up to 30 days while monitoring continues)
 - `POST /api/alerts/unsnooze` (body: `{ "alertIdentifier": "alert-id" }`; resumes normal policy without resolving the incident)
-- `POST /api/alerts/clear` (body: `{ "id": "alert-id" }`)
+- `POST /api/alerts/clear` (body: `{ "alertIdentifier": "alert-id" }`)
 
 ---
 
@@ -1124,7 +1127,7 @@ Returns a new raw token (shown once) and updates stored hashes:
 
 ## 🧾 Audit Log (Pro)
 
-These endpoints require admin access and the `settings:read` scope. On Community, the list endpoint returns an empty set and `persistentLogging: false`.
+These endpoints require admin access and the `audit:read` scope. On Community (no `audit_logging` license), these endpoints return HTTP 402 Payment Required with `error: "license_required"` and `feature: "audit_logging"` before any events are read.
 
 ### List Audit Events
 `GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
@@ -1235,7 +1238,7 @@ Tests SSH connectivity for temperature collection (requires setup token or auth)
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`
-Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
+Returns scheduler health, DLQ, and breaker status. Requires authentication (session or API token); no specific scope is enforced.
 
 ### Updates (Admin)
 - `GET /api/updates/check`
@@ -1254,7 +1257,7 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/infra-updates/{resourceId}` (requires `monitoring:read`)
 
 ### Diagnostics
-- `GET /api/diagnostics` (auth)
+- `GET /api/diagnostics` (admin, `settings:read`)
 - `POST /api/diagnostics/docker/prepare-token` (admin, `settings:write`)
 
 The Docker migration token request accepts `agentId`, optional `tokenName`, and
@@ -1292,7 +1295,7 @@ OIDC and SAML configuration is managed via SSO providers.
 
 Provider mutation request contract:
 - Max request body: 1MB.
-- Strict JSON contract: unknown fields and trailing payload are rejected.
+- Unknown JSON fields are ignored. A trailing payload after the JSON object is rejected with `invalid_json`.
 - Provider IDs must match server validation.
 - OIDC and SAML providers are included with the Community SSO entitlement.
 
@@ -1302,8 +1305,8 @@ Provider mutation request contract:
 
 Test/preview request contract:
 - Max request body: 32KB.
-- Strict JSON contract: unknown fields and trailing payload are rejected.
-- Common errors include `invalid_json`, `validation_error`, `rate_limited`, `body_too_large`.
+- Unknown JSON fields are ignored. A trailing payload after the JSON object is rejected with `invalid_json`.
+- Common errors include `invalid_json`, `validation_error`, `rate_limited`. A body over the 32KB limit is silently truncated, so it fails as `invalid_json` (these endpoints do not return `body_too_large`).
 
 ---
 
@@ -1619,7 +1622,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `GET /api/ai/approvals/{id}`
 - `POST /api/ai/approvals/{id}/approve`
 - `POST /api/ai/approvals/{id}/deny`
-- `POST /api/ai/run-command` (execute an approved command)
+- `POST /api/ai/run-command` (retired: always returns `410 Gone` with error code `raw_command_retired`; raw command execution is no longer supported, so use advertised typed resource actions instead)
 - `GET /api/ai/agents` (connected agents via `/api/agent/ws`)
 
 ### Remediation Plans (Pro)
@@ -1744,15 +1747,15 @@ Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 `POST /api/agents/agent/uninstall`  
 Agent self-unregister during uninstall. Requires `agent:report`.
 
-`POST /api/agents/agent/unlink` (admin, `agent:manage`)  
+`POST /api/agents/agent/unlink` (admin, `settings:write`)  
 Unlinks an agent from a node.
 
-`DELETE /api/agents/agent/{agent_id}` (admin, `agent:manage`)  
+`DELETE /api/agents/agent/{agent_id}` (admin, `settings:write`)  
 Removes an agent from state.
 
 ### Agent Linking (Admin)
-- `POST /api/agents/agent/link` (admin, `agent:manage`)
-- `POST /api/agents/agent/unlink` (admin, `agent:manage`)
+- `POST /api/agents/agent/link` (admin, `settings:write`)
+- `POST /api/agents/agent/unlink` (admin, `settings:write`)
 
 ### Agent Remote Config
 `GET /api/agents/agent/{agent_id}/config`  
@@ -1802,7 +1805,7 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 - `POST /api/agents/docker/containers/update` (`docker:manage`) — retired, returns `410 Gone`; use the `/api/actions` plan/decision/execute flow instead
 
 ### Kubernetes Agent Management (Admin)
-- `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`, supports `?hide=true` or `?force=true`)
+- `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`) — removes the cluster and blocks re-enrollment until `allow-reenroll`; takes no `hide` or `force` query parameters
 - `POST /api/agents/kubernetes/clusters/{clusterId}/allow-reenroll` (`kubernetes:manage`)
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/unhide` (`kubernetes:manage`)
 - `PUT /api/agents/kubernetes/clusters/{clusterId}/pending-uninstall` (`kubernetes:manage`)

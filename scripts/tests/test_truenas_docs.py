@@ -85,7 +85,7 @@ class TrueNASDocsTest(unittest.TestCase):
         for boundary in (
             "Heat, native SMART faults and stale or missing readings are separate evidence",
             "last known** temperature is not a current reading", "no temperature is not zero",
-            "Alerts → Thresholds → TrueNAS → TrueNAS Disks", "own temperature override",
+            "Alerts → Thresholds → TrueNAS → Disks", "own temperature override",
             "takes precedence", "inherits **Disk temperature by type**",
             "agent **Disk Temp** default is off", "explicit TrueNAS temperature rule",
             "Thresholds are in **°C**", "**Save Changes**", "unsaved edit is not the running rule",

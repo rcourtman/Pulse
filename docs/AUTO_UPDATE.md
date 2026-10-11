@@ -32,9 +32,11 @@ For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
 3. Click the button to open the confirmation dialog
 4. Review the update details:
    - Current version → New version
-   - Estimated time
-   - Changelog highlights
-5. Click **"Install Update"** to begin
+   - Major-version or pre-release warning, when the update carries one
+   - Estimated time and prerequisites, when listed
+   - Root-access notice, when the update requires root
+   - Automatic backup notice, when rollback is supported
+5. Click **"Start Update"** in the confirmation dialog to begin
 
 ### Update Process
 
@@ -61,7 +63,7 @@ In **Settings → System → Updates**:
 
 | Setting | Description |
 |---------|-------------|
-| **Update Channel** | Stable (recommended for production) or Pre-release (opt-in preview) |
+| **Update Channel** | Stable (recommended for production) or Preview (opt-in beta builds and release candidates) |
 | **Automatic Stable Updates** | Allow unattended stable updates on supported host installations with an installed update timer |
 
 The update timer must already be installed and enabled for unattended updates.

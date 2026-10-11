@@ -23,9 +23,9 @@ Every monitored entity is a `Resource` with:
 |---|---|
 | `id` | Globally unique identifier |
 | `name` | Display name |
-| `type` | `host`, `vm`, `container`, `storage`, `pool`, `dataset`, `disk`, `service`, `cluster`, `pod`, `deployment` |
-| `status` | `online`, `warning`, `critical`, `offline`, `unknown` |
-| `sources` | Array of contributing data sources (e.g., `["pve", "agent"]`) |
+| `type` | `agent` (Proxmox node, host agent or other host-class parent; `docker-host` when it carries only Docker data), `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `ceph`, `physical_disk`, `pbs`, `pmg`, `network-share`, `network-endpoint`, `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, plus further `docker-*` and `k8s-*` types |
+| `status` | `online`, `warning`, `offline`, `unknown` (critical severity is reported separately as `critical` in the `health` object's verdict) |
+| `sources` | Array of contributing data sources (e.g., `["proxmox", "agent"]`) |
 | `sourceStatus` | Per-source health status |
 | `metrics` | CPU, memory, disk, network (when available) |
 | Platform extensions | `.kubernetes`, `.truenas`, `.docker`, etc. |
@@ -35,9 +35,9 @@ Every monitored entity is a `Resource` with:
 A single resource can be reported by **multiple sources**. For example, a Proxmox node might have data from both the PVE API and a host agent:
 
 ```
-sources: ["pve", "agent"]
+sources: ["proxmox", "agent"]
 sourceStatus:
-  pve: { status: "online", lastSeen: "..." }
+  proxmox: { status: "online", lastSeen: "..." }
   agent: { status: "online", lastSeen: "..." }
 ```
 
@@ -47,7 +47,7 @@ The aggregate `status` is computed from all contributing sources.
 
 | Source | What it feeds |
 |---|---|
-| `pve` | Proxmox VE API — nodes, VMs, containers, storage |
+| `proxmox` | Proxmox VE API — nodes, VMs, containers, storage |
 | `pbs` | Proxmox Backup Server — datastores, backups, sync jobs |
 | `pmg` | Proxmox Mail Gateway — mail stats, cluster health |
 | `agent` | Unified agent — host metrics, temperatures, S.M.A.R.T. |
@@ -57,32 +57,21 @@ The aggregate `status` is computed from all contributing sources.
 
 ## Unified Navigation
 
-The v6 UI organises pages by **task** instead of **platform**:
+The v6 UI keeps platform-shaped top-level navigation. The unified resource model sits behind it, but there are no separate Dashboard, Workloads, Storage or Recovery pages.
 
 | Page | What it shows |
 |---|---|
-| **Dashboard** | Overview panels aggregating all sources |
-| **Infrastructure** | All hosts: Proxmox nodes, Docker hosts, K8s nodes, TrueNAS systems, agent-only hosts |
-| **Workloads** | All workloads: VMs, LXC containers, Docker containers, Kubernetes pods |
-| **Storage** | All storage: Proxmox storage, PBS datastores, ZFS pools/datasets, Ceph |
-| **Recovery** | All backup/snapshot artifacts: PBS backups, PVE local dumps, ZFS snapshots, replication |
-| **Alerts** | Unified alert view across all platforms |
+| **Proxmox**, **Docker**, **Kubernetes**, **TrueNAS**, **vSphere**, **Machines** | One page per platform, shown only when Pulse has resources for that platform |
+| **Alerts** | Alerts across all platforms |
+| **Patrol** | Patrol checks, shown only when AI is enabled |
+| **Actions** | Approvals, ready work and recorded outcomes |
+| **Settings** | Pulse configuration, shown only to users with settings access |
 
-Every page supports **source filtering** — click a source badge to see only resources from that platform.
+`/infrastructure` is not a page of its own. It redirects to the first available platform page, or to Settings (or Alerts when the user has no settings access) when no platform has resources.
 
-### Legacy Route Compatibility
+### Unified Routes
 
-Legacy URLs redirect automatically with toast notifications:
-
-| Legacy Route | Redirects To |
-|---|---|
-| `/proxmox/overview` | `/infrastructure` |
-| `/hosts` | `/infrastructure?source=agent` |
-| `/docker` | `/workloads?source=docker` |
-| `/kubernetes` | `/infrastructure?source=kubernetes` |
-| `/services`, `/mail` | `/infrastructure?source=pmg` |
-
-See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the full mapping.
+The unified `/workloads`, `/storage` and `/recovery` routes that briefly shipped in earlier release candidates were reverted in `v6.0.0-rc.6` and do not exist. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the platform-shaped equivalents.
 
 ## API
 
@@ -96,10 +85,11 @@ Returns all unified resources. Supports query parameters:
 
 | Parameter | Description |
 |---|---|
-| `type` | Filter by resource type (`host`, `vm`, `container`, etc.) |
-| `source` | Filter by data source (`pve`, `docker`, `kubernetes`, etc.) |
-| `status` | Filter by status (`online`, `warning`, `critical`, `offline`) |
-| `search` | Full-text search across name, ID, tags |
+| `type` | Filter by resource type, comma-separated (`agent`, `vm`, `system-container`, `app-container`, `storage`, `pod`, etc.). Unknown tokens return HTTP 400. |
+| `source` | Filter by data source (`proxmox`, `docker`, `kubernetes`, etc.) |
+| `status` | Filter by status (`online`, `warning`, `offline`, `unknown`) |
+| `q` | Case-insensitive substring match on resource name |
+| `tags` | Filter by resource tag |
 
 ### Resource Details
 
@@ -109,13 +99,9 @@ Individual resource details are available via the unified state WebSocket connec
 
 The frontend uses SolidJS reactive selectors to derive views from the unified store:
 
-- `useResources()` — access the full unified resource list
-- `useInfrastructureResources()` — hosts filtered for the Infrastructure page
-- `useWorkloadResources()` — VMs/containers/pods for the Workloads page
-- `useStorageResources()` — storage pools/datasets for the Storage page
-- `useRecoveryResources()` — backup/snapshot data for the Recovery page
+- `useResources()` — access the full unified resource list, plus derived views such as `infra()` (nodes, agents, docker-hosts), `workloads()` (VMs, containers, docker-containers), `byType()`, `filtered()` and `children()`
 
-These selectors read from a single SolidJS store that is updated in real-time via WebSocket.
+The hook hydrates from the WebSocket state when available and falls back to the REST API.
 
 ## See Also
 

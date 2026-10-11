@@ -131,7 +131,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         pulse_pro_doc = read("docs/PULSE_PRO.md")
 
         self.assertIn(
-            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
+            "| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             ai_doc,
         )
         self.assertIn(
@@ -148,11 +148,11 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         )
         self.assertNotIn("Upgrade to Assisted", autonomy_doc)
         self.assertIn(
-            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
+            "| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             pulse_pro_doc,
         )
         self.assertNotIn(
-            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community / Relay |",
+            "| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community / Relay |",
             pulse_pro_doc,
         )
         for rel in ("docs/AI.md", "docs/PULSE_PRO.md", "docs/FAQ.md", "docs/README.md"):

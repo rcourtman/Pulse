@@ -16,9 +16,9 @@ Go to **Settings → Infrastructure → Install on a host** for systems that sho
 run the unified agent directly.
 
 - **Recommended (agent setup)**: copy the generated install command and run it on the target host.
-- **Manual/API-backed platforms**: use **Settings → Infrastructure → Platform connections** for systems such as Proxmox, PBS, PMG, or TrueNAS that connect over an API instead of running the agent locally.
+- **Manual/API-backed platforms**: use **Settings → Infrastructure** (**Add infrastructure**) for systems such as Proxmox, PBS, PMG, or TrueNAS that connect over an API instead of running the agent locally.
 
-If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
+If you want Pulse to find servers automatically, open **Settings → Infrastructure**, select **Configure discovery** (it reads **Settings** once discovery is on), turn on **Automatic scanning** in the Discovery settings dialog, and then review discovered servers in the same section.
 
 ### How do I change the port?
 
@@ -127,7 +127,7 @@ Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD
 
 ### Does Pulse monitor TrueNAS?
 Yes. Pulse includes first-class TrueNAS SCALE/CORE integration. Add your
-TrueNAS server under **Settings → Infrastructure → Platform connections** with
+TrueNAS server under **Settings → Infrastructure** (**Add infrastructure**) with
 the URL and API key. Pulse monitors the appliance, native VMs, apps, pools,
 datasets, disks, ZFS snapshots, replication tasks, and alerts. Those resources
 appear on the dedicated TrueNAS page.
@@ -202,7 +202,7 @@ steps; do not reset a working installation to retrieve that token.
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#-https--tls).
 
 ### Can I use Single Sign-On (SSO)?
-Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → SSO Providers**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
+Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → Single Sign-On**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
 
 ---
 
