@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tarfile
 import time
@@ -211,7 +212,8 @@ class NativeLab:
         for tag, binary in self.binaries.items():
             if self.run(str(binary), "--version").stdout.decode().splitlines()[0] != "Pulse " + tag:
                 raise ValueError("synthetic binary identity mismatch")
-        self.run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(self.root / "signer/key"))
+        self.signer_command("generate-ephemeral-key", "-q", "-t", "ed25519", "-N", "", "-f",
+                            str(self.root / "signer/key"))
         for tag, binary in self.binaries.items():
             version = self.root / "VERSION"
             version.write_text(tag + "\n")
@@ -245,9 +247,56 @@ class NativeLab:
         self.baseline_data = {p: digest(data / p) for p in files}
         self.baseline_mode = (self.root / "install/bin/pulse").stat().st_mode & 0o777
 
+    def signer_command(self, operation, *arguments):
+        """Retain non-secret facts about a failed, fixed ephemeral-signer step.
+
+        Do not publish command output or key bytes. In particular, an exit and
+        digest alone cannot distinguish generation from signing, or establish
+        why a hosted OpenSSH invocation failed before the first native phase.
+        Diagnostic labels below mean observed text, not a causal diagnosis.
+        """
+        try:
+            return self.run("ssh-keygen", *arguments)
+        except RuntimeError:
+            failure = self.receipt.get("command_failure")
+            if failure is None:
+                # A confined control may stop before command execution. Do
+                # not manufacture an executed-command observation for it.
+                raise
+            failure["operation"] = operation
+            try:
+                info = (self.root / "signer/key").lstat()
+                failure["signer_key_metadata"] = {
+                    "present": True, "regular_file": stat.S_ISREG(info.st_mode),
+                    "mode": format(stat.S_IMODE(info.st_mode), "04o"),
+                    "owned_by_executor": info.st_uid == os.geteuid(),
+                }
+            except FileNotFoundError:
+                failure["signer_key_metadata"] = {"present": False}
+            except OSError:
+                failure["signer_key_metadata"] = {"observation": "unavailable"}
+            output = getattr(self, "_last_output", b"")
+            # A timeout has no completed output. Never label an earlier
+            # command's output as this command's diagnostic.
+            if failure.get("output_sha256") == hashlib.sha256(output).hexdigest():
+                markers = {
+                    "private-key-permissions": (b"UNPROTECTED PRIVATE KEY FILE", b"bad permissions"),
+                    "key-load-failure": (b"Load key", b"Couldn't load public key"),
+                    "missing-file": (b"No such file or directory",),
+                    "unsupported-operation": (b"Unsupported operation", b"unknown option"),
+                }
+                failure["observed_diagnostics"] = [
+                    label for label, texts in markers.items() if any(text in output for text in texts)
+                ]
+            raise
+
     def sign(self, path):
-        self.run("ssh-keygen", "-Y", "sign", "-f", str(self.root / "signer/key"),
-                 "-n", "pulse-install", str(path))
+        name = Path(path).name
+        operation = {"installer": "sign-installer",
+                     **{f"pulse-{tag}-linux-amd64.tar.gz": "sign-archive-" + tag
+                        for tag in TAGS}}.get(name, "sign-confined-fixture")
+        self.signer_command(operation, "-Y", "sign", "-f", str(self.root / "signer/key"),
+                            "-n", "pulse-install", str(path))
         Path(str(path) + ".sig").rename(str(path) + ".sshsig")
 
     def assert_runtime(self, tag, active):
