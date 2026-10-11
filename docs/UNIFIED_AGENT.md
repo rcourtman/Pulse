@@ -1112,6 +1112,24 @@ service is presenting the same token. Last-used metadata is not a token-use
 audit and does not identify which consumer authenticated. These observations
 do not prove that the running service is using that record.
 
+**If the intended record is absent:** separate server registration from the
+agent's credential hand-off before another installation. On that same instance,
+open **Settings → Infrastructure → Install on a host**, give one new install
+token a distinct name and choose **Generate token**. Leave command execution
+disabled for a monitoring-only host. Before running any install command, reopen
+**Settings → API Access** and refresh the page: does that named record appear
+and remain? Generating the record alone does not change the Pi or any other
+agent's saved credential.
+
+If the new record is missing or disappears, stop there; do not generate more
+tokens, rerun the installer or restart Pulse to test it. Report only whether
+generation showed an error and whether the named record appeared after the page
+refresh, with any error manually redacted. If it remains, that establishes
+current registration, not persistence across a server restart, successful
+credential hand-off or accepted host reports. Retain the existing installation
+while those remaining distinctions are investigated. A listed record with
+`Never` is not, by itself, a reason to mint a replacement.
+
 If asked about the inventory, report only whether the record exists and the
 relevant metadata; do not share the token or its hint. Keep service environments,
 token files and connection files private; do not paste a credential into a

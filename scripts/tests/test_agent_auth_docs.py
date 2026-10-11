@@ -106,6 +106,31 @@ class AgentAuthDocsTest(unittest.TestCase):
                      "missing record", "service is presenting the same token"):
             self.assertIn(fact, text)
 
+    def test_missing_record_check_registers_once_before_touching_the_agent(self):
+        text = " ".join(section().split())
+        install = (ROOT / "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx").read_text()
+        generation = install.split("const generateInstallToken = async (", 1)[1].split(
+            "const handleGenerateToken = async", 1)[0]
+        self.assertIn("NodesAPI.createHostAgentInstallToken", generation)
+        self.assertIn("enableCommands: withCommands", generation)
+        self.assertNotIn("deleteToken", generation)
+        ui = (ROOT / "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx").read_text()
+        self.assertIn("Generate token", ui)
+        inventory = (ROOT / "internal/api/security_tokens.go").read_text()
+        listing = inventory.split("func (r *Router) handleListAPITokens(", 1)[1].split(
+            "// handleGetAPIToken", 1)[0]
+        self.assertIn("range r.config.APITokens", listing)
+        self.assertIn("toAPITokenDTO(record)", listing)
+        for fact in ("If the intended record is absent", "server registration",
+                     "one new install token a distinct name", "Before running any install command",
+                     "refresh the page", "does not change the Pi or any other agent's saved credential",
+                     "Leave command execution disabled", "missing or disappears, stop there",
+                     "do not generate more tokens", "generation showed an error",
+                     "not persistence across a server restart", "successful credential hand-off",
+                     "accepted host reports", "Retain the existing installation",
+                     "not, by itself, a reason to mint a replacement"):
+            self.assertIn(fact, text)
+
 
 if __name__ == "__main__":
     unittest.main()
