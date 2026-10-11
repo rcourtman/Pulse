@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   buildStandalonePageModel,
@@ -21,6 +21,31 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('standalonePageModel', () => {
+  it('classifies each resource once per attention sort and reclassifies on the next call', () => {
+    const now = 1_700_000_030_000;
+    let firstStatus: Resource['status'] = 'online';
+    const reads = Array.from({ length: 120 }, (_, index) =>
+      vi.fn(() => (index === 0 ? firstStatus : 'online')),
+    );
+    const resources = reads.map((read, index) => {
+      const value = resource({ id: `host-${index}`, displayName: `Host ${119 - index}` });
+      Object.defineProperty(value, 'status', { get: read });
+      return value;
+    });
+    const original = [...resources];
+    const sorted = sortStandaloneResourcesByAttention(resources, now);
+    expect(sorted.map((value) => value.displayName)).toEqual(
+      Array.from({ length: 120 }, (_, index) => `Host ${index}`),
+    );
+    for (const read of reads) expect(read).toHaveBeenCalledTimes(1);
+    expect(resources).toEqual(original);
+
+    firstStatus = 'offline';
+    expect(sortStandaloneResourcesByAttention(resources, now)[0]).toBe(resources[0]);
+    for (const read of reads) expect(read).toHaveBeenCalledTimes(2);
+    expect(sortStandaloneResourcesByAttention([], now)).toEqual([]);
+  });
+
   it('summarizes normal, attention, unknown, and freshness posture from canonical status', () => {
     const summary = buildStandalonePostureSummary(
       [
