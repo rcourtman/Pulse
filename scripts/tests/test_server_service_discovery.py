@@ -73,7 +73,16 @@ sys.exit(97)
 
 HARNESS = r'''
 source "$INSTALLER"
-if [[ "$PRODUCER" == updater ]]; then source "$UPDATER"; fi
+if [[ "$PRODUCER" == updater ]]; then
+    source "$UPDATER"
+    # Discovery/handoff uses a manager double and fake script executables,
+    # not a managed process. Check the callback's selected service here;
+    # real process identity is mandatory in the separate updater controls.
+    verify_update_running_executable() {
+        printf '%s\n' "$1" > "$FIXTURE/process-readback-service"
+        [[ "$1" == pulse-backend ]]
+    }
+fi
 print_header() { :; }
 print_info() { echo "$*" >&2; }
 print_warn() { echo "$*" >&2; }
@@ -234,6 +243,8 @@ class ServiceDiscovery(unittest.TestCase):
                         units=[p.name for p in (f / "units").iterdir()],
                         installer_service=(f / "installer-service").read_text()
                         if (f / "installer-service").exists() else None,
+                        process_readback_service=(f / "process-readback-service").read_text()
+                        if (f / "process-readback-service").exists() else None,
                         broken_pipe=(f / "broken-pipe").exists())
 
     def assert_refused(self, e):
@@ -345,6 +356,7 @@ class ServiceDiscovery(unittest.TestCase):
         e = self.run_fixture(producer="updater", mode="large", flow="automatic")
         self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
         self.assertEqual(e["installer_service"], "pulse-backend\n")
+        self.assertEqual(e["process_readback_service"], "pulse-backend\n")
         self.assertEqual(e["binary"], e["new"])
         self.assertEqual(e["calls"][0], QUERY)
         self.assertFalse(e["broken_pipe"])
