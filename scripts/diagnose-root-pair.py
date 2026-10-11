@@ -71,8 +71,8 @@ def telemetry():
 def execute(repo, output):
     output.mkdir(parents=True, exist_ok=False)  # never overwrite a previous attempt
     os.environ.update(GOTOOLCHAIN='local', GOMAXPROCS='4', GOFLAGS='-mod=readonly', GOENV='off', GOAMD64='v1', CGO_ENABLED='1')
-    if run(['go', 'version']).strip() != 'go version go1.26.8 linux/amd64':
-        raise ValueError('requires exact hosted experiment toolchain go1.26.8 linux/amd64')
+    if run(['go', 'version']).strip() != 'go version go1.26.9 linux/amd64':
+        raise ValueError('requires exact hosted experiment toolchain go1.26.9 linux/amd64')
     metadata = {
         'purpose': 'diagnostic-only; no gate disposition or release candidate',
         'rounds': ROUNDS, 'gomaxprocs': 4, 'benchtime': '1s',

@@ -1,4 +1,4 @@
-FROM golang:1.26.8@sha256:0f063af2d465d8dcae54cce04278ada488b96f77b42449c8d071e47d016cc65a
+FROM golang:1.26.9@sha256:d7722066f0b60ceccb6c0643cbed1f5f9e15506ac237146c95333504d7805d89
 
 # Set bash as default shell for features
 SHELL ["/bin/bash", "-c"]
