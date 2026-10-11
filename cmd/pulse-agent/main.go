@@ -1336,7 +1336,9 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// Flags
 	fs := flag.NewFlagSet("pulse-agent", flag.ContinueOnError)
 	urlFlag := fs.String("url", envURL, "Pulse server URL")
-	tokenFlag := fs.String("token", envToken, "Pulse API token (prefer --token-file for security)")
+	// Keep the environment fallback separate from an explicit flag, otherwise
+	// PULSE_TOKEN would masquerade as --token and shadow --token-file.
+	tokenFlag := fs.String("token", "", "Pulse API token (prefer --token-file for security)")
 	tokenFileFlag := fs.String("token-file", "", "Path to file containing Pulse API token (more secure than --token)")
 	intervalFlag := fs.Duration("interval", defaultInterval, "Reporting interval")
 	hostnameFlag := fs.String("hostname", envHostname, "Override hostname")
@@ -1419,16 +1421,11 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		agentIDFile = filepath.Join(stateDir, "agent-id")
 	}
 
-	// Resolve token with priority: --token > --token-file > env > state-dir file.
-	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken, stateDir)
-	observers, err := agenttarget.LoadObservers(strings.TrimSpace(*observersFileFlag), pulseURL)
-	if err != nil {
-		return Config{}, fmt.Errorf("load observer destinations: %w", err)
-	}
-
 	// When --enroll is set and a runtime token already exists from a previous
 	// enrollment, use it instead of the bootstrap token embedded in the service
-	// config. This ensures the agent survives process and server restarts.
+	// config. Resolve it first so a removed bootstrap file does not prevent a
+	// previously enrolled agent from restarting.
+	var token string
 	if *enrollFlag {
 		runtimeTokenPath := filepath.Join(stateDir, "runtime.token")
 		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
@@ -1436,6 +1433,18 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 				token = t
 			}
 		}
+	}
+	if token == "" {
+		// Resolve token with priority: --token > --token-file > env > state-dir file.
+		var err error
+		token, err = resolveToken(*tokenFlag, *tokenFileFlag, envToken, stateDir)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+	observers, err := agenttarget.LoadObservers(strings.TrimSpace(*observersFileFlag), pulseURL)
+	if err != nil {
+		return Config{}, fmt.Errorf("load observer destinations: %w", err)
 	}
 
 	if token == "" && *enrollFlag && !*selfTest {
@@ -1668,7 +1677,7 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 // 4. Token file under the resolved state directory
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
-func resolveToken(tokenFlag, tokenFileFlag, envToken, stateDir string) string {
+func resolveToken(tokenFlag, tokenFileFlag, envToken, stateDir string) (string, error) {
 	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir, os.ReadFile)
 }
 
@@ -1689,24 +1698,29 @@ func defaultTokenFilePath() string {
 	return filepath.Join(defaultAgentStateDir(), "token")
 }
 
-func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, readFile func(string) ([]byte, error)) string {
+func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, readFile func(string) ([]byte, error)) (string, error) {
 	// 1. Direct token from --token flag
 	if t := strings.TrimSpace(tokenFlag); t != "" {
-		return t
+		return t, nil
 	}
 
 	// 2. Token from --token-file flag
 	if tokenFileFlag != "" {
-		if content, err := readFile(tokenFileFlag); err == nil {
-			if t := strings.TrimSpace(string(content)); t != "" {
-				return t
-			}
+		content, err := readFile(tokenFileFlag)
+		if err != nil {
+			// A selected source must not silently become some other credential
+			// (or an unauthenticated agent). Do not include path or file contents.
+			return "", fmt.Errorf("cannot read --token-file; check that the configured file exists and is readable by the agent service")
 		}
+		if t := strings.TrimSpace(string(content)); t != "" {
+			return t, nil
+		}
+		return "", fmt.Errorf("--token-file is empty; provide a file containing only the API token")
 	}
 
 	// 3. PULSE_TOKEN environment variable
 	if t := strings.TrimSpace(envToken); t != "" {
-		return t
+		return t, nil
 	}
 
 	// 4. Token file in the resolved state directory. When stateDir is custom,
@@ -1717,11 +1731,11 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, r
 	}
 	if content, err := readFile(tokenFile); err == nil {
 		if t := strings.TrimSpace(string(content)); t != "" {
-			return t
+			return t, nil
 		}
 	}
 
-	return ""
+	return "", nil
 }
 
 // initModuleWithRetry attempts to initialize an agent module with exponential
