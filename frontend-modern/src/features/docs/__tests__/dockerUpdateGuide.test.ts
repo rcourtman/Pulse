@@ -25,6 +25,37 @@ function section(article: HTMLElement, id: string): string {
 }
 
 describe('shipped monitored-container update guide', () => {
+  it('separates a legacy monitoring credential from independent runner posture and operator intent', () => {
+    const text = section(renderGuide(), 'command-agent-is-not-connected');
+    for (const phrase of [
+      "root identifies the collector's OS user, not its server-side permission",
+      'commands legacy identifies an older, unmarked compatibility profile',
+      'cannot authenticate the legacy command channel',
+      'Do not add execution rights to that token as a repair',
+      'Credential not issued and Runner not connected',
+      'An absent runner alone does not rule out an authorised legacy command connection',
+      'not proof of a broken collector',
+      'your usual Docker or Podman administration tool',
+      'Neither is a diagnostic prerequisite',
+      'unknown is valid',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+  });
+
+  it('links deliberate command-profile choices to shipped security guidance rather than a forced conversion', () => {
+    const article = renderGuide();
+    const security = document.createElement('article');
+    security.innerHTML = renderDocMarkdown(
+      readFileSync(path.join(repoRoot, 'docs/AGENT_SECURITY.md'), 'utf8'),
+      'AGENT_SECURITY',
+    );
+    for (const id of ['agent-privilege-model', 'least-privilege-agent-profile']) {
+      expect(article.querySelector(`a[href="/docs/AGENT_SECURITY#${id}"]`)).not.toBeNull();
+      expect(security.querySelector(`#${id}`)).not.toBeNull();
+    }
+  });
+
   it('separates a refused plan from a sent or unknown action before any shell check', () => {
     const article = renderGuide();
     const checks = section(article, 'check-a-failed-or-pending-workload-update');

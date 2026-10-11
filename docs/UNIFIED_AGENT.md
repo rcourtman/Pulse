@@ -1385,8 +1385,23 @@ monitoring report or **Automatic updates ready** also does not prove that this
 separate WebSocket channel is working. Changing Proxmox API permissions cannot
 repair a Pulse command-channel connection.
 
+Before treating this as a connection failure, read the existing **Privilege**
+and **Action runner** lines. `root` is the collector's OS user; `commands legacy`
+is a compatibility profile, not proof that commands are enabled. A
+`monitoring credential` cannot authenticate the legacy command channel.
+`Credential not issued` or `Runner not connected` concerns the separate typed
+runner, not collector health; an absent runner alone does not exclude an
+authorised legacy command connection. Use the
+[workload-update authority guidance](DOCKER.md#command-agent-is-not-connected)
+to distinguish these cases without widening a token or converting the collector.
+Keep an intentionally monitoring-only installation unchanged. Choosing an
+execution-capable installation is a separate trust decision, not a connection
+test; remember whether that choice was made, or say it is unknown.
+
 For a systemd agent, inspect the recent journal **locally on the affected node**
-with the [bounded agent log reader](#collect-agent-logs-safely).
+with the [bounded agent log reader](#collect-agent-logs-safely) only when an
+authorised command connection was intended and its failure stage is still
+unknown. Do not collect more logs just to confirm the known monitoring scope.
 
 Look for **Connected and registered with Pulse command server**, or
 **WebSocket connection failed repeatedly, reconnecting** and its error. A
