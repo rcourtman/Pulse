@@ -1515,6 +1515,16 @@ router, customer data, production Docker socket, licence service or release
 publisher. The offline process transport verifies the daemon but is not proof of
 the native Compose mount or a full provider installation/tenant lifecycle.
 
+The startup acceptance helper treats only command stdout as machine readback.
+Successful Compose stderr warnings remain in the test log, never in container
+identities, published loopback ports, mount hashes, bootstrap facts or teardown
+inventories. Failed commands still fail acceptance and retain both output streams.
+`TestProviderMSPStartupCommandReadbackSeparatesStderr` exercises all six readback
+shapes with a real child process that emits an unset-variable warning;
+`TestProviderMSPStartupCommandFailureRetainsBothStreams` verifies non-zero exit
+and diagnostic retention. These offline controls do not establish hosted Compose
+readiness, mounted-secret identity, persisted restart or clean owned teardown.
+
 ## Canonical Files
 
 1. `internal/updates/`
