@@ -107,8 +107,12 @@ describe('shipped TrueNAS error diagnosis', () => {
     const commands = [...target.querySelectorAll('pre code')].map((node) => node.textContent!);
     expect(commands).toHaveLength(2);
     for (const command of commands) {
-      expect(command).toContain('--signal=KILL 8s');
+      // The deadline covers the entire reader/byte-limiter pipeline, including
+      // readers that ignore TERM. Do not restore the old termination grace.
+      expect(command).toContain('timeout --signal=KILL 8s bash -o pipefail');
+      expect(command).not.toMatch(/--signal=TERM|--kill-after/);
       expect(command).toContain('head -c 262145');
+      expect(command).toContain('"$pulse_log_bytes" -gt 262144');
       expect(command).toContain('excerpt exceeds 256 KiB');
       expect(command).toContain('no partial excerpt shown');
       expect(command).toContain('no unbounded fallback');
@@ -126,7 +130,8 @@ describe('shipped TrueNAS error diagnosis', () => {
       'no request ID is required',
       'inside the Pulse container',
       'not on the Proxmox host or the TrueNAS appliance',
-      'eight-second hard deadline and a 256 KiB byte limit',
+      'eight-second hard deadline',
+      '256 KiB byte limit',
       'record limit alone does not bound a hung reader',
       'do not use an unbounded substitute',
       'only after a successful read',
