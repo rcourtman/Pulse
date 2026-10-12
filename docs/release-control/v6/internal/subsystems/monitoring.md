@@ -666,10 +666,18 @@ required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
 
-A completed OS-info outcome keeps its existing suppression semantics even when
+A completed OS-info outcome keeps its suppression semantics even when
 the later agent-version read is deferred. Unsupported OS-info still disables
-that optional command; ordinary completed failures still accumulate towards
-the existing three-failure limit, and a supported reply resets that count.
+that optional command; ordinary completed command failures still accumulate
+towards the existing three-failure limit, and a supported reply resets that count.
+Actual HTTP 401/403 or exact command-bound stopped-agent rejections did not
+exercise OS-info and therefore do not accumulate towards permanent suppression.
+They preserve prior command failures and normal refresh/backoff timing; they
+neither renew retained identity nor establish a Windows observation. Once ordinary
+access/agent availability returns, an eligible accepted OS reply can recover
+the identity and cross-platform memory classification without a Pulse restart.
+Quoted status/diagnosis text does not grant this distinction. Unsupported,
+repeated completed-failure and uncertain-command safety suppression is retained.
 Only these safety fields are retained on version deferral: partial network/OS
 metadata is not published, old identity is not made fresh, and the shared pause
 and configured retry backoff remain in force. A network or OS-info deferral
@@ -682,6 +690,15 @@ version request, then ordinary disk/network/version resumption without another
 suppressed OS-info request and with fresh disk History. It changes no native
 guest, backup policy, lock admission, cooldown, retry or single-attempt rule.
 These source controls do not establish native recovery or a reported cause.
+
+`TestGuestMetadataRejectionRecoveryContract` verifies typed rejections with cold
+and retained caches, prior genuine failures, unchanged backoff and fresh OS
+receipt requirements. Both ordinary collectors and single/cluster HTTP clients
+recover Windows OS, individual NTFS volumes and disk History after a stopped-agent
+fixture, without dispatching Linux-only memory reads on the recovered Windows
+guest. Existing suppression, backup-lock and shared uncertainty contracts remain
+required. These synthetic source controls do not establish native restart/thaw,
+the cause of #2822/#2619, or installed/released recovery.
 
 The process-local admission table remains capped at 4,096 endpoint/VMID
 entries. Expired entries replaced by a new admission consume no extra slot;
