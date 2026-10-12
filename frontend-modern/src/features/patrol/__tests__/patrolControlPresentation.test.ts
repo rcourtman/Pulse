@@ -17,6 +17,8 @@ import {
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   PATROL_WORKSPACE_BUDGET_PAUSED_DESCRIPTION,
   PATROL_WORKSPACE_QUEUE_TITLE,
+  PATROL_WORKSPACE_CONNECT_DESCRIPTION,
+  PATROL_WORKSPACE_RECONNECT_DESCRIPTION,
   PATROL_WORKSPACE_SETUP_DESCRIPTION,
 } from '../patrolControlPresentation';
 
@@ -29,6 +31,16 @@ describe('patrolControlPresentation', () => {
     for (const cause of ['model_unsupported_tools', 'none', undefined, null]) {
       expect(getPatrolWorkspaceSetupDescription(cause)).toBe(PATROL_WORKSPACE_SETUP_DESCRIPTION);
     }
+  });
+
+  it('asks for a model, not a model check, when no provider is connected or AI is off', () => {
+    for (const cause of ['provider_not_configured', 'assistant_disabled']) {
+      expect(getPatrolWorkspaceSetupDescription(cause)).toBe(PATROL_WORKSPACE_CONNECT_DESCRIPTION);
+    }
+    expect(PATROL_WORKSPACE_CONNECT_DESCRIPTION).not.toMatch(/tool check/);
+    expect(getPatrolWorkspaceSetupDescription('provider_auth')).toBe(
+      PATROL_WORKSPACE_RECONNECT_DESCRIPTION,
+    );
   });
 
   it.each([
