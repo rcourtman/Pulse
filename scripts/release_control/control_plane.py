@@ -375,9 +375,6 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
             "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
             "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
             "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean",
-            "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
-            "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
-            "python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty",
         ]
     )
     if active_target_id == "v6-product-lane-expansion":
@@ -413,9 +410,6 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         "subsystem_lookup": "scripts/release_control/subsystem_lookup.py",
         "status_lookup": "scripts/release_control/status_lookup.py",
         "work_claim": "scripts/release_control/work_claim.py",
-        "worktree_base": "scripts/release_control/worktree_base.py",
-        "worktree_claim": "scripts/release_control/worktree_claim.py",
-        "worktree_finish": "scripts/release_control/worktree_finish.py",
     }
 
 

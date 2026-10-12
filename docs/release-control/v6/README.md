@@ -84,12 +84,6 @@ Useful helper tools:
   Omit `--lean` when you explicitly need the full decision, release-gate, and status-summary payload.
 - `python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`
   Reserve or renew exactly one governed slice in a shared checkout before mutation without hand-editing `status.json`.
-- `python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty`
-  Ensures the canonical clean landing worktree exists for the base branch before an isolated mutating slice begins.
-- `python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`
-  Reserves a governed mutating slice and creates a dedicated git worktree for it, isolating hooks, staged scope, and dirty state to that slice.
-- `python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty`
-  Lands a finished isolated slice back onto the canonical clean landing worktree for the base branch.
 
 For governed runtime changes, the completion guard also requires any staged
 contract update to touch a substantive contract section such as `Purpose`,

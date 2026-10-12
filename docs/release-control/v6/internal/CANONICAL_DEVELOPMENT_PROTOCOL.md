@@ -557,15 +557,11 @@ rather than hand-editing `status.json`.
 Support-only slices are not exempt from this rule: claim the owning lane or
 the narrower governed item they unblock, and say in the claim summary why the
 plumbing is necessary for that governed surface.
-When the slice is mutating and another mutating agent is already active,
-prefer `scripts/release_control/worktree_base.py` first so the canonical clean
-landing worktree for the base branch exists,
-then prefer `scripts/release_control/worktree_claim.py` so the claim is reserved
-and the branch/worktree are isolated in one step.
-When an isolated mutating slice is finished and the base branch worktree is
-clean, prefer `scripts/release_control/worktree_finish.py` to land the scoped
-commit(s) back onto the base branch worktree instead of leaving manual merge
-cleanup for later.
+Checkout isolation and landing follow the repository's current branch policy.
+When isolation is needed, use the available Git worktree tools and reserve the
+governed slice with the same public work_claim.py command in the checkout
+where the work will run. An uncommitted claim in another checkout is not
+transferred by Git worktree creation.
 If you are continuing straight from one governed slice to another, replace the old claim with the new claim in the same `status.json` edit so the live claim
 set never passes through a temporary unclaimed window.
 If you are stopping without finishing the lane, record the remaining same-lane
