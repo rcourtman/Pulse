@@ -322,7 +322,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-sm font-semibold text-base-content">
-                  {state.patrolEnabledLocal() ? 'Watching your infrastructure' : 'Patrol is off'}
+                  {state.patrolEnabledLocal()
+                    ? state.shouldShowPatrolSetupOnly()
+                      ? 'Patrol is not running yet'
+                      : 'Watching your infrastructure'
+                    : 'Patrol is off'}
                 </h2>
                 <span class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
                   {selectedAutonomyExperience().label}
@@ -402,6 +406,41 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               })}
             </div>
           </details>
+        </Show>
+        <Show when={state.defaultModeApplied() && !state.autoFixLocked()}>
+          <div
+            role="status"
+            data-testid="patrol-default-mode-notice"
+            class="flex flex-col gap-3 border-t border-border-subtle px-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-2"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-base-content">
+                Pro investigates new warning and critical findings by default.
+              </p>
+              <p class="mt-1 max-w-3xl text-xs leading-5 text-muted">
+                Patrol works out the cause and proposes a fix. Nothing changes without your
+                approval. Investigations use your AI provider and count toward your 30-day budget.
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={state.isUpdatingAutonomy()}
+                onClick={() => void state.handleAutonomyChange('approval')}
+              >
+                Keep Ask first
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={state.isUpdatingAutonomy()}
+                onClick={() => void state.handleAutonomyChange('monitor')}
+              >
+                Switch to Watch only
+              </Button>
+            </div>
+          </div>
         </Show>
       </section>
     </div>

@@ -27,6 +27,12 @@ legacy command-approval selection. `TestAssistantProjectedModeEchoPreservesLegac
 uses actual encrypted GET/PUT persistence with and without the entitlement,
 then checks explicit read-only opt-out and later opt-in remain possible.
 
+### Pro Patrol default adds no recovery execution
+
+The Patrol autonomy handler now reports the Pro Ask first default for installs
+that never chose a mode. Investigations propose fixes for approval; the change
+adds no recovery endpoint, execution route or recovery-point access.
+
 ### Assistant planning mode grants no recovery execution
 
 The AI settings control projection describes read/query or plans for review in
