@@ -7180,11 +7180,10 @@ links" below).
   folded ID as they were. The resources API's snapshot-seeded fallback,
   used only while the monitor has published no unified listing, still
   ingests the snapshot and each supplemental source with a pass per call.
-  The mock-mode fixture build (`internal/mock`) draws the rebuild's boundary
-  (`DeferManualLinks`, `ApplyDeferredManualLinks`; see "Mock-mode unified
-  view applies operator links"), so a chain whose answer depends on the
-  order its members' sources arrive in settles there as it does in the
-  monitor's rebuild.
+  The mock-mode fixture build (`internal/mock`) delegates to
+  `MonitorAdapter.PopulateSnapshotAndSupplemental` (see "Mock-mode unified
+  view applies operator links"), so it shares the monitor's rebuild boundary
+  rather than reproducing source-order and link policy.
 - Rows fold along the chain's links, deepest first, so each fold record
   names a stored link's pair. The links form a spanning tree from the root
   that follows the fold records the rows already carry before any other
@@ -7401,102 +7400,64 @@ resources API's write and Patrol's read on the same store.
 
 ### Mock-mode unified view applies operator links
 
-In mock mode the websocket broadcast, `/api/state`, and the monitor's
-`GetUnifiedReadStateOrSnapshot` and `UnifiedResourceSnapshot` readers serve a
-view of the fixture graph, not the monitor's resource store, and the fixture
-graph was built without the link store. The resources API seeds its registry
-from that same list through a registry backed by the link store, so a manual
-link showed merged there while the broadcast kept both rows. The fixture graph
-is now built with the links the monitor adapter's current registry generation
-loaded from its store (`MonitorAdapter.ManualLinks`), in a registry that has
-no store at all (`NewRegistryWithManualLinks`,
-`mock.UnifiedResourceSnapshotWithLinks`). Nothing that build ingests can write
-identity pins, canonical-ID successions or change records, and the view's read
-state forwards no history to the operator's store, so fixture data stays out
-of durable state through it.
+The mock fixture graph uses MonitorAdapter.PopulateSnapshotAndSupplemental for
+the same resource generation boundary as the live monitor. It ingests snapshot
+and supplemental records, applies operator links over the assembled estate,
+ingests availability last, and makes the final freshness verdict. Supplemental
+sightings age under the monitor's source thresholds, including TrueNAS-only VMs.
+Fixtures still synthesize provider data. This shared generation does not exercise
+provider collection or every poller merge/rebase.
 
-- The links apply at the live rebuild's boundary (the monitor's rebuild
-  holds the link pass back, above): the build holds the pass back
-  (`DeferManualLinks`), ingests the snapshot and the TrueNAS and vSphere
-  records, runs it once over that estate (`ApplyDeferredManualLinks`, which
-  takes the stale thresholds the ingests were given, nil for the registry's
-  own), and only then ingests availability. A chain of links is judged over
-  every member's source at once, as the rebuild judges it, so the row that
-  survives does not depend on which source arrives first: a Proxmox storage,
-  a TrueNAS VM and a vSphere VM linked in a cycle keep the TrueNAS VM whose
-  link is the oldest, where a pass after the TrueNAS records had already
-  folded it into the storage and kept the vSphere VM. A registry with no
-  links defers nothing, so the shared memoized snapshot is built exactly as
-  before. An availability check that names the folded resource by source
-  reference resolves through the fold and projects onto the primary, and so
-  does one that names it by canonical ID, which the registry resolves through
-  the fold history (`TestAvailabilityLinkToALinkFoldedResourceFollowsItsPrimary`
-  in `internal/unifiedresources/availability_link_test.go`). Folding the
-  finished list instead dropped the check with the folded row.
-- A link reaches the view when the adapter's next rebuild loads it, the same
-  point at which the live broadcast picks it up. The view's cache is keyed on
-  the fixture data version and on each link's resource pair, primary and
-  creation time, so a link change rebuilds it without waiting for a fixture
-  tick. The creation time is part of the key because, among otherwise equal
-  candidates, a chain folds into the primary of its earliest-created link
-  (the "Links apply as chains" bullet of "Operator links reach
-  record-ingested resources"): link lists that differ only in a creation
-  time can leave a different row standing. In the storage, TrueNAS VM and
-  vSphere VM cycle above both VMs outrank the storage, so the TrueNAS VM
-  keeps its row while its link is older than the vSphere VM's and the
-  vSphere VM keeps it once the TrueNAS VM's link is newer. A key that
-  compared pairs and primaries alone kept serving the row the old times
-  chose with the fixture data version unchanged, while the live rebuild,
-  which reloads the links from the store, served the new one. The structure
-  view that serves
-  callers reading identity and topology only keys on the fixture structure
-  revision and the same link comparison, so a creation time change rebuilds
-  it too. Freshness is
-  assigned in publication order: a view built from the same fixture
-  freshness and links as the one it replaces keeps its freshness, and any
-  other view gets a later one than every view published before it, even when
-  a slower build publishes after a newer one. The resources API reuses its
-  registry while that freshness is unchanged, so it follows the published
-  view and does not keep a list other links folded, for example after a
-  link's primary is reversed. Fixture freshness stands in for the fixture
-  data, as it already did for that cache.
-- Without links the view is built from the shared memoized fixture snapshot,
-  as before. With links each monitor builds its own linked snapshot whenever
-  the fixture data or links change (concurrent cache misses can each build
-  one).
-- Exclusions are not carried by the fixture registry, as before. The
-  broadcast's presentation coalescing consults the monitor adapter's
-  exclusions, while the resources API's `ListForPresentation` consults its
-  own store-backed registry's exclusions. Neither can undo an automatic
-  identity merge already made inside the store-free fixture graph.
-- An agent linked into a guest leaves the agent listings (`Hosts()` lists
-  agent-type rows only) and the guest carries its facet, as in live mode.
+The fixture registry has no store. NewRegistryWithManualLinks supplies the links
+from the monitor adapter's current generation. Rebuilding a storeless registry
+carries explicit links and exclusions from its previous generation. It carries
+no previous resource data and cannot persist identity pins, canonical-ID
+successions or change records. A store-backed rebuild uses freshly loaded
+decisions when its store is readable and retains previous decisions when
+loading fails.
 
-`TestMockUnifiedViewAppliesOperatorManualLinks` in
-`internal/monitoring/monitor_host_agents_test.go` pins the broadcast payload,
-the rebuild and freshness advance on a link change with the fixture data
-version held, the cached build afterwards, the same rows as a store-backed
-registry seeded through resource ingest the way the resources API seeds, and
-no change rows reaching the store through the view.
-`TestMockUnifiedViewFollowsALinkCreationTimeChange` in the same file pins the
-creation time in the cache key: the cycle above, with only the TrueNAS VM's
-link time moved and the fixture data version held, swaps the surviving VM in
-the structure view and in the data-version view, each matching the row a
-linked mock build keeps.
-`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` and
-`TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
-`internal/mock/platform_fixtures_test.go` pin the rebuild's boundary (the
-cycle above settling on the row the monitor's rebuild keeps, which a pass per
-source does not, and the availability projection after the pass) and the
-untouched shared snapshot,
-`TestRegistryHoldsManualLinksBackUntilTheDeferredPass` and
-`TestRegistryDeferredLinkPassJudgesFreshnessByTheCallersThresholds` in
-`internal/unifiedresources/registry_merge_policy_test.go` pin the exported
-pair (the snapshot and record ingests wait, the pass runs once, and it judges
-freshness by the thresholds it is given), and
-`TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry` in
-`internal/unifiedresources/registry_test.go` pins the store-less registry
-against the store-backed one and the per-generation `ManualLinks` snapshot.
+Links are judged across all non-availability sources, so a chain sees every
+member before choosing its primary. Availability references to folded resources
+project onto that primary, whether expressed through source references or
+canonical IDs. An agent linked into a guest leaves the agent listing and the
+guest carries its facet. GetAllWithMetricsTargets captures metrics targets with
+the resources and indexes source mappings once for the view.
+
+The broadcast, /api/state, GetUnifiedReadStateOrSnapshot and
+UnifiedResourceSnapshot read this fixture view. Links reach it when the
+monitor's next rebuild loads them, as in live mode. The data view cache compares
+fixture freshness and each link's pair, primary and creation time. The structure
+view compares the fixture structure revision and the same link fields. Creation
+time matters because changing the oldest link in a chain can change its primary.
+Link changes rebuild both views without a fixture tick. No-link readers use the
+shared memoized snapshot. Linked readers build their monitor's own view when
+fixture data or links change. Concurrent cache misses can each build a view.
+
+Freshness is assigned in publication order. A view with identical fixture
+freshness and links retains its predecessor's value. Every different view gets
+a later value than all previous publications, including a slow build that
+finishes after a newer one. The resources API reuses its registry only while
+that published freshness is unchanged.
+
+The fixture factory supplies links but no exclusions. Presentation readers
+consult their monitor or store-backed registry exclusions, but cannot undo an
+automatic merge already made within the fixture graph. This existing limitation
+remains at the fixture input boundary.
+
+Proof in internal/mock/platform_fixtures_test.go:
+TestFixtureGraphMatchesMonitorSupplementalFreshness compares fresh and aged
+TrueNAS sightings with the live generation. TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary
+checks cross-source chains and availability projection.
+TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked checks
+memo isolation. TestMonitorAdapterKeepsInMemoryManualLinksAcrossGenerations in
+internal/unifiedresources/monitor_adapter_generation_test.go checks storeless
+rebuilds. TestMonitorGenerationAppliesManualLinksAcrossSources and
+TestMonitorGenerationJudgesLinkedReadingsWithConfiguredThresholds in
+internal/unifiedresources/registry_merge_policy_test.go exercise the canonical
+boundary. TestMockUnifiedViewAppliesOperatorManualLinks and
+TestMockUnifiedViewFollowsALinkCreationTimeChange in
+internal/monitoring/monitor_host_agents_test.go preserve broadcast, API, cache,
+creation-time and no-durable-history behavior.
 
 ### Provider link network corroboration
 

@@ -402,10 +402,16 @@ export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type === 'vm' || type === 'system-container') {
     const scope = workloadNodeScopeId(guest);
-    return guest.platformScopes?.includes('vmware-vsphere') &&
+    if (
+      guest.platformScopes?.includes('vmware-vsphere') &&
       !guest.platformScopes.includes('proxmox-pve')
-      ? `vsphere|${scope}`
-      : scope;
+    ) {
+      // Cluster, connection and host labels can arrive after the first snapshot.
+      // Group ownership follows the server parent so enrichment keeps rows mounted.
+      const parentId = guest.parentResourceId?.trim();
+      return parentId ? `vsphere|parent|${encodeURIComponent(parentId)}` : `vsphere|${scope}`;
+    }
+    return scope;
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
   return `${type}:${context}`;

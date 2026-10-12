@@ -4,7 +4,7 @@ import useWorkloadsSource from '../useWorkloads.ts?raw';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import type { VM } from '@/types/api';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
-import { getDiskUsagePercent } from '@/components/Workloads/workloadSelectors';
+import { getDiskUsagePercent, getWorkloadGroupKey } from '@/components/Workloads/workloadSelectors';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
@@ -1478,6 +1478,52 @@ describe('useWorkloads', () => {
     expect(result!.workloads()[0]?.kubernetesClusterId).toBe('cluster-id-a');
 
     dispose();
+  });
+
+  it('retains canonical vSphere parent grouping through snapshot enrichment', async () => {
+    const resource = {
+      ...sampleResource,
+      id: 'vm-warehouse-api',
+      name: 'warehouse-api',
+      sources: ['vmware'],
+      parentId: 'host-vcenter-a:esxi-01',
+      parentName: 'esxi-01',
+      vmid: 0,
+      node: undefined,
+      instance: undefined,
+      proxmox: undefined,
+    };
+    const [snapshot, setSnapshot] = createSignal([resource] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      const first = result!.workloads()[0]!;
+      expect(first.parentResourceId).toBe(resource.parentId);
+      expect(first.instance).toBe('');
+      const group = getWorkloadGroupKey(first);
+      setSnapshot([
+        {
+          ...resource,
+          vmware: {
+            runtimeHostName: 'esxi-01',
+            clusterName: 'Production Cluster',
+            connectionName: 'Lab vCenter',
+          },
+        },
+      ]);
+      await flushAsync();
+      const enriched = result!.workloads()[0]!;
+      expect(enriched.id).toBe(first.id);
+      expect(enriched.instance).toBe('Production Cluster');
+      expect(getWorkloadGroupKey(enriched)).toBe(group);
+    } finally {
+      dispose();
+    }
   });
 
   it('never labels a vSphere or standalone Proxmox workload as its own cluster', async () => {

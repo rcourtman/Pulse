@@ -898,6 +898,41 @@ describe('workloadSelectors', () => {
   });
 
   describe('getWorkloadGroupKey', () => {
+    it('keeps vSphere parent groups stable while display metadata changes', () => {
+      const guest = makeGuest(1, {
+        workloadType: 'vm',
+        platformScopes: ['vmware-vsphere'],
+        parentResourceId: 'host-vcenter-a:esxi-01',
+        node: 'esxi-01',
+        instance: '',
+      });
+      const key = getWorkloadGroupKey(guest);
+      const enriched = {
+        ...guest,
+        node: 'esxi-01.lab',
+        instance: 'Production Cluster',
+        clusterName: 'Production Cluster',
+      };
+      expect(getWorkloadGroupKey(enriched)).toBe(key);
+      expect(getWorkloadGroupLabel(key, [enriched])).toEqual({
+        name: 'esxi-01.lab',
+        type: 'Production Cluster',
+      });
+    });
+
+    it('keeps equal vSphere labels on different canonical parents separate', () => {
+      const guest = makeGuest(1, {
+        workloadType: 'vm',
+        platformScopes: ['vmware-vsphere'],
+        parentResourceId: 'host-vcenter-a:esxi-01',
+        node: 'esxi-01',
+        instance: 'Production Cluster',
+      });
+      expect(
+        getWorkloadGroupKey({ ...guest, parentResourceId: 'host-vcenter-b:esxi-01' }),
+      ).not.toBe(getWorkloadGroupKey(guest));
+    });
+
     it('uses instance-node for vm/lxc, and type:context for app-container/pod', () => {
       const vm = makeGuest(1, {
         type: 'vm',

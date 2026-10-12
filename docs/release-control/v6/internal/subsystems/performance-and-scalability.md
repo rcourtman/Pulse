@@ -3748,21 +3748,36 @@ nonempty machine and agent IDs and canonical identity across fixture rebuilds.
 This changes fixture generation only, without relaxing production identity
 resolution or adding work to the recurring update path.
 
-### Mock linked fixture builds use the rebuild's link boundary
+### Mock linked fixture builds use the live resource generation
 
-The mock fixture build holds the operator-link pass back until the snapshot and
-every supplemental source but availability are ingested, then runs one deferred
-pass before availability (`DeferManualLinks`, `ApplyDeferredManualLinks`), as
-the monitor's rebuild does; the availability ingest runs its own pass after it,
-as in the rebuild. The shared memoized snapshot has no links, so it defers
-nothing and builds as before (about 52 ms and 65 MB on the default fixture
-estate, with or without the change). A linked build, which runs only when the
-fixture data version or the link list changes, pays one extra refresh round
-after the deferred pass: about 3 ms and 5 MB more on that estate, the same
-round the rebuild runs.
-`TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary` in
-`internal/mock/platform_fixtures_test.go` pins the result a pass per source
-does not reach.
+The fixture graph delegates snapshot and supplemental resource assembly to
+MonitorAdapter.PopulateSnapshotAndSupplemental. It shares the live monitor's
+source ordering, deferred operator-link boundary, availability projection and
+final freshness verdict. Storeless generations retain explicit links without
+adding persistence. The fixture data and link cache boundaries remain unchanged.
+
+The graph obtains resources and metrics targets together through
+GetAllWithMetricsTargets, which indexes source mappings once. It does not
+materialize an unrelated VM view to warm a cache or scan all mappings for each
+resource. Generation cost is paid when a fixture view rebuilds, not on every
+alert target lookup. No performance measurement is claimed for this change.
+TestFixtureGraphAppliesManualLinksAtTheRebuildsBoundary and
+TestFixtureGraphMatchesMonitorSupplementalFreshness in
+internal/mock/platform_fixtures_test.go pin the generation behavior.
+
+### vSphere workload groups follow canonical parent identity
+
+The workload adapter copies resource.parentId into parentResourceId. vSphere
+workload groups use that server parent identity while cluster, connection and
+host display labels are enriched. A metadata update therefore keeps the row
+and its drawer mounted, including its selected History tab. The workload
+instance fallback uses an explicit cluster and never the workload's own name.
+Legacy rows without a canonical parent retain the existing scoped fallback.
+
+The snapshot-enrichment case in hooks/__tests__/useWorkloads.test.ts and the
+parent-identity cases in Workloads/__tests__/workloadSelectors.test.ts preserve
+group stability, updated display labels and separation of equal host labels
+belonging to different canonical parents.
 
 ### Alert passes resolve metrics targets without materializing the estate
 

@@ -215,26 +215,15 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 }
 
 func (g FixtureGraph) unifiedResourceSnapshot(registry *unifiedresources.ResourceRegistry) ([]unifiedresources.Resource, time.Time) {
-	// The links apply at the monitor rebuild's boundary
-	// (MonitorAdapter.replaceRegistryLocked): after the snapshot and every
-	// source but availability, so a chain is judged over the assembled estate
-	// instead of folded as its members' sources arrive, and before
-	// availability, so a check linked to a folded resource projects onto its
-	// primary.
-	registry.DeferManualLinks()
-	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, SupplementalOwnedSources()))
-
-	for _, source := range SupplementalOwnedSources() {
-		if source == unifiedresources.SourceAvailability {
-			registry.ApplyDeferredManualLinks(nil)
-		}
-		records := g.SupplementalRecords(source)
-		if len(records) == 0 {
-			continue
-		}
-		registry.IngestRecords(source, records)
+	// The demo uses the live generation builder for source ordering, operator
+	// links, availability projection and the final freshness verdict.
+	owned := SupplementalOwnedSources()
+	records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+	for _, source := range owned {
+		records[source] = g.SupplementalRecords(source)
 	}
-	registry.ApplyDeferredManualLinks(nil)
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	adapter.PopulateSnapshotAndSupplemental(unifiedresources.SnapshotWithoutSources(g.State, owned), records)
 
 	freshness := g.State.LastUpdate
 	for _, candidate := range []time.Time{
@@ -250,15 +239,10 @@ func (g FixtureGraph) unifiedResourceSnapshot(registry *unifiedresources.Resourc
 		}
 	}
 
-	resources := registry.List()
-	// Force one view-cache build before resolving targets: on a freshly
-	// ingested registry the caches are dirty and every MetricsTarget call
-	// would fall back to a scan over all source mappings, which at demo
-	// scale turns this loop quadratic.
-	registry.VMs()
+	resources, targets := adapter.GetAllWithMetricsTargets()
 	for i := range resources {
-		if target := registry.MetricsTarget(resources[i].ID); target != nil {
-			resources[i].MetricsTarget = target
+		if target, ok := targets[resources[i].ID]; ok {
+			resources[i].MetricsTarget = &target
 		}
 	}
 

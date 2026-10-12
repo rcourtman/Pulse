@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "16072f4a869a8eb3f3c50ab366aa23acdd8bcfc5",
+  "verified_at": "2026-10-12T10:26:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "4a3a704cdccff0afb43feaf0f0701d237a5124b17d5a49083301477254afe99d",
+    "frontend-modern/src/hooks/useWorkloads.ts": "5c51dd331558621ee0e43bd61912e3b2dabbf9c1015abba36d940be4a2898faf",
+    "frontend-modern/src/types/workloads.ts": "4ab896c526f1b270d04258288c4b6734e16269237599d279324f56c941d0e8ed"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview",
+    "/truenas/overview",
+    "/truenas/vms",
+    "/standalone/machines",
+    "/standalone/availability",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 900,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Loaded platform tables and initial loading states",
+    "vSphere drawer Overview and cold first History selection across fixture updates",
+    "TrueNAS VM and availability check expanded details",
+    "Empty TrueNAS search and cleared filter",
+    "Linked agent and VM across three fixture refreshes and reload",
+    "Unlinked agent restored under its original ID with a separate VM",
+    "History 12-hour range and pointer/keyboard chart inspection after page scrolling",
+    "Drawer reopened with default Overview and 24-hour range",
+    "Different canonical guest opens its own Overview",
+    "Desktop and narrow alert thresholds with inherited policy controls",
+    "Actual pixels, focus rings, table/toolbar wrapping and no page overflow"
+  ],
+  "interactions": [
+    "Log in with synthetic demo credentials",
+    "Expand drawers with Enter and pointer",
+    "Press Escape on inline details, then close with header control",
+    "Select History and retain selection through refreshes",
+    "Change History range from 24h to 12h",
+    "Scroll deep charts, click the inspection slider and press ArrowLeft",
+    "Close and reopen warehouse-api-01, then open warehouse-db-01",
+    "Type an empty search and clear it",
+    "Link and unlink through authenticated resource APIs, observe publication and reload linked view"
+  ]
+}
