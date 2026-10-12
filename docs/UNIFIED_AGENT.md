@@ -1209,11 +1209,19 @@ this does not identify the cause of a particular installation's failure.
 **Bare does not mean intact.** For a token from the current **Infrastructure →
 Install on a host** generator, privately check the 64-character lowercase
 hexadecimal shape described in [private-file installation](#private-file-installation-linux-macos-and-nas).
+
+A matching token hint confirms only the visible ends, not the whole token.
 The inventory's **Hint** shows only the first six and last four characters:
-duplicated or changed middle characters can leave both ends matching. Even an
-intact shape and matching hint do not prove full equality, the intended Pulse
-instance or accepted reporting. Do not apply this shape check to other token
-families or rotate a working credential because it looks different.
+duplicated or changed middle characters can leave both ends matching.
+Pulse authenticates the whole token: duplicated or missing characters in the
+middle can still cause rejection. Finding such a difference does not establish
+which step introduced the error. Even an intact shape and matching hint
+do not prove full equality, the intended Pulse instance or accepted reporting.
+
+Legacy token formats remain supported; do not replace a token merely because
+its length or format differs from a newly generated one. Do not apply this
+shape check to other token families or rotate a working credential because it
+looks different.
 
 Use how the file was saved or an existing private observation. If you cannot
 safely tell, say **unknown**. If asked, report only **bare**, **quoted**,
