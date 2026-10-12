@@ -4,6 +4,12 @@ This changelog describes the changes since `v6.5.0`. Stable `v6.5.0` remains the
 
 ## Changes since v6.5.0
 
+- Treat no matching unit files as an empty service inventory (#2859)
+- Remove AI Discovery (#2848)
+- Let backup health counts filter Coverage to their workloads (#2857)
+- Keep phone alert rows to one action row (#2856)
+- Read staged governance inputs from the Git index (#2852)
+- Release v6.6.0-beta.1 (#2853)
 - Advance the Go toolchain to 1.26.9 and x/net to v0.60.0 (#2849)
 - Keep the phone backup indicator from taking over guest rows (#2850)
 - Wait for reporting hook loads instead of counting ticks (#2847)
