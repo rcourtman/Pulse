@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -701,7 +702,10 @@ func TestEnrollAndReportUseDebianOSReleaseIdentity(t *testing.T) {
 	}
 	var enrollment enrollPayload
 	var received agentshost.Report
+	var receiptMu sync.Mutex
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receiptMu.Lock()
+		defer receiptMu.Unlock()
 		switch r.URL.Path {
 		case enrollEndpoint:
 			if r.Header.Get("Authorization") != "Bearer synthetic-bootstrap" {
@@ -763,6 +767,8 @@ func TestEnrollAndReportUseDebianOSReleaseIdentity(t *testing.T) {
 	if err := agent.sendReport(context.Background(), report); err != nil {
 		t.Fatal(err)
 	}
+	receiptMu.Lock()
+	defer receiptMu.Unlock()
 	if received.Host.OSName != "debian" || received.Host.OSVersion != "13.7" {
 		t.Fatalf("received OS = %q %q, want debian 13.7", received.Host.OSName, received.Host.OSVersion)
 	}
