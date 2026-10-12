@@ -79,6 +79,30 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       ageClass: props.backupPresentation?.ageClass,
     });
   const guestReadPresentation = () => getGuestDrawerGuestReadPresentation(props.guest);
+  const guestReadRow = () => {
+    const read = guestReadPresentation();
+    if (!read) return null;
+    return makeDetailRow('Guest-agent reads', read.label, {
+      title: read.detail,
+      tone: read.tone,
+      wrap: true,
+      // A title alone is not available to touch users. Deferred reads already
+      // have a visible safety notice above the drawer; do not repeat it here.
+      layout: read.precaution ? undefined : 'stacked',
+      valueContent: (
+        <>
+          <span class="block whitespace-normal wrap-break-word text-left leading-snug">
+            {read.label}
+          </span>
+          <Show when={!read.precaution}>
+            <span class="mt-1 block whitespace-normal text-left font-normal leading-snug text-muted wrap-break-word">
+              {read.detail}
+            </span>
+          </Show>
+        </>
+      ),
+    });
+  };
   const memoryReading = () => getGuestDrawerMemoryReading(props.guest);
   // A linked Pulse agent past its reporting lease leaves its last report on
   // the guest, so its RAID, network and filesystem rows read as last known.
@@ -104,11 +128,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 : undefined,
             wrap: true,
           }),
-          makeDetailRow('Guest-agent reads', guestReadPresentation()?.label, {
-            title: guestReadPresentation()?.detail,
-            tone: guestReadPresentation()?.tone,
-            wrap: true,
-          }),
+          guestReadRow(),
           makeDetailRow('Memory reading', memoryReading()?.summary, {
             wrap: true,
           }),
