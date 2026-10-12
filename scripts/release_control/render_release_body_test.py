@@ -33,6 +33,56 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_beta_two_notes_describe_included_outcomes_not_the_fallback(self) -> None:
+        notes = (_REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.6.0-beta.2.md").read_text()
+        render_release_body.validate_release_notes_shape(notes, "6.6.0-beta.2")
+        improvements = notes.split("## What's improved\n", 1)[1].split("\n## ", 1)[0]
+        bullets = [line for line in improvements.splitlines() if line.startswith("- ")]
+        self.assertGreaterEqual(len(bullets), 33)
+        self.assertNotIn("**Fixes and improvements since v6.5.0.**", improvements)
+        for outcome in (
+            "**Debian identity**", "**Off stays off**", "**Redirect privacy**",
+            "**Removal recovery**", "**Unattended updates**", "**Token scope**",
+        ):
+            with self.subTest(outcome=outcome):
+                self.assertIn(outcome, improvements)
+        self.assertIn("not a confirmed fix for every reported guest freeze", notes)
+        self.assertIn("not a confirmed fix for a higher resident-memory baseline", notes)
+
+    def test_beta_two_notes_and_changelog_use_the_same_stable_based_range(self) -> None:
+        notes = (_REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.6.0-beta.2.md").read_text()
+        changelog = (_REPO_ROOT / "docs/releases/V6_CHANGELOG_v6.6.0-beta.2.md").read_text()
+        self.assertIn(
+            "https://github.com/rcourtman/Pulse/blob/v6.6.0-beta.2/"
+            "docs/releases/V6_CHANGELOG_v6.6.0-beta.2.md#changes-since-v650", notes,
+        )
+        self.assertIn("covers changes since `v6.5.0`, not just the previous beta", notes)
+        self.assertIn("since stable `v6.5.0`, not just", changelog)
+        self.assertIn("## Changes since v6.5.0\n", changelog)
+        self.assertNotIn("This changelog describes the changes since `v6.6.0-beta.1`.", changelog)
+        self.assertIn("This beta follows `v6.6.0-beta.1`", notes)
+
+    def test_beta_two_corrected_notes_keep_safe_install_and_rollback_rendering(self) -> None:
+        notes = (_REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.6.0-beta.2.md").read_text()
+        args = type("Args", (), {
+            "version": "6.6.0-beta.2", "rollback_target": "v6.5.0",
+            "rollback_command": "sudo /bin/update --version v6.5.0",
+        })()
+        body = "\n\n".join((
+            render_release_body.sanitize_release_notes(notes, args.version).rstrip("\n"),
+            render_release_body.build_installation_section(args.version),
+            render_release_body.build_rollback_section(args),
+        )) + "\n"
+        self.assertEqual(render_release_body.validate_release_body_shape(body, args.version), body)
+        self.assertIn("not Authenticode-signed", body)
+        self.assertIn("Unknown Publisher warning", body)
+        self.assertIn("does not require a companion mobile release", body)
+        self.assertIn("rollback target is stable `v6.5.0`", body)
+        self.assertIn("PULSE_VERSION=v6.6.0-beta.2", body)
+        self.assertIn("PULSE_VERSION=v6.5.0", body)
+        self.assertIn("docker pull rcourtman/pulse:6.6.0-beta.2", body)
+        self.assertIn("The community-scripts updater can ignore `--version`", body)
+
     def grouped_notes(self, version: str = "6.4.6-rc.1") -> str:
         return f"""# Pulse v{version} Release Notes
 
