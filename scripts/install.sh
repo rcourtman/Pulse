@@ -5533,7 +5533,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # A credential-bearing install must durably remove its exact server record
     # through the same CA/fingerprint/no-proxy transport used by lifecycle
     # migration before any local credential or service state is deleted.
-    if [[ -n "$PULSE_URL" ]] && collector_credential_state_present; then
+    if collector_credential_state_present; then
+        if [[ -z "$PULSE_URL" ]]; then
+            fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
+        fi
         log_info "Authenticating Pulse server removal before local teardown..."
         if ! uninstall_collector_registration; then
             fail "Pulse did not durably confirm collector removal; local credentials and services were retained. Restore trusted server connectivity and retry uninstall." "$EXIT_GENERAL"

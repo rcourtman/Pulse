@@ -8259,3 +8259,30 @@ func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
 		})
 	}
 }
+
+// Run the production Unix removal gate through private state/service/transport
+// doubles. Native platform installation and actual transport remain separate.
+func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_uninstall_state.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Unix removal state controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_missing_url_retains_every_credential_representation_without_a_request",
+		"test_server_refusal_unknown_or_other_identity_retains_service_and_state",
+		"test_exact_confirmation_precedes_process_service_and_state_teardown",
+		"test_credential_free_local_only_removal_needs_no_url_or_request",
+		"test_server_confirmation_does_not_grant_unknown_path_removal",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.UnixUninstallState."+name+") ... ok") {
+			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 5 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}

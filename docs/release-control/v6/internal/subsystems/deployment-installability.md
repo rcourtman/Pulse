@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Unix removal retains credentials when connection recovery is incomplete
+
+After existing installed-state recovery, the unified Unix installer checks for
+collector credentials before considering whether a Pulse URL was recovered.
+Any inline credential or selected/runtime/legacy/helper token-file entry,
+including an empty or unreadable file, broken symlink or FIFO, requires
+an authenticated exact-record removal confirmation before local teardown.
+A missing URL fails with a credential-safe same-instance recovery message;
+it cannot turn credential-bearing removal into the local-only path. No
+transport request, process stop, service stop or state deletion follows that
+refusal. Server refusal, unknown confirmation and identity mismatch retain
+state as before; confirmation does not widen trusted path-removal authority.
+Credential-free removal remains local-only, with or without a saved URL.
+
+`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing` runs the
+production admission, credential-presence, record-confirmation and initial
+state-directory cleanup functions through `agent_uninstall_state.py`. Its
+seventeen confined cases use private files and service/transport doubles,
+not a privileged installer or native service manager. These checks do not
+establish Windows, actual TLS, saved-state discovery, a published fix or
+whole-issue installed removal acceptance.
+
+
 ### Docker server update plans preserve the saved deployment
 
 The existing update-plan API and banner's copyable instructions must not guess
