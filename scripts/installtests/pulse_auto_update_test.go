@@ -116,7 +116,11 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 		"ServiceDiscovery.test_automatic_helper_preserves_exact_names_and_explicit_instances",
 		"ServiceDiscovery.test_automatic_helper_cannot_short_read_the_installer_handoff",
 		"ServiceDiscovery.test_automatic_helper_refuses_before_backup_or_installer_even_in_or_list",
-		"ServiceDiscovery.test_automatic_helper_timeout_stops_before_service_observation")
+		"ServiceDiscovery.test_automatic_helper_timeout_stops_before_service_observation",
+		// A fresh host has no Pulse unit files and systemd then exits 1 with no output; the
+		// updater's own discovery must read that as absence, not as a failed inventory.
+		"ServiceDiscovery.test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"ServiceDiscovery.test_real_systemctl_on_a_host_without_pulse_units_selects_the_default")
 	cmd.Env = append(os.Environ(),
 		"PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
 		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))

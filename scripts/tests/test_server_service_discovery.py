@@ -24,6 +24,8 @@ UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/p
 REAL_SYSTEMCTL = shutil.which("systemctl")
 QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
          "pulse-backend.service", "pulse.service"]
+# What systemctl prints when the listing itself fails, as opposed to matching nothing.
+FAILED_LISTING = "Failed to get unit file list: No such file or directory\n"
 
 SYSTEMCTL = r'''#!/usr/bin/env python3
 import json, os, sys, time
@@ -53,6 +55,8 @@ if args[0] == "list-unit-files":
                 os._exit(1)
         sys.exit(0)
     os.write(1, os.environ["ROWS"].encode())
+    if os.environ.get("ERR"):
+        os.write(2, os.environ["ERR"].encode())
     sys.exit(int(os.environ["QUERY_EXIT"]))
 if args[0] == "show":
     state = "inactive" if (f / "stopped").exists() else "active"
@@ -183,7 +187,7 @@ exit "$status"
 
 class ServiceDiscovery(unittest.TestCase):
     def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
-                    producer="installer"):
+                    producer="installer", err="", units_present=True):
         with tempfile.TemporaryDirectory(prefix="pulse-service-discovery-") as directory:
             f = Path(directory)
             for name in ["bin", "install/bin", "config", "units", "root/etc/systemd/system"]:
@@ -212,12 +216,14 @@ class ServiceDiscovery(unittest.TestCase):
             body = source[start:end].replace("/etc/systemd/system/", str(f / "units") + "/")
             (f / "unit-writer.sh").write_text(body)
             unit = "[Unit]\nDescription=Fixture only\n[Service]\nExecStart=/bin/true\n"
-            (f / "root/etc/systemd/system/pulse-backend.service").write_text(unit)
-            (f / "root/etc/systemd/system/pulse.service").write_text(unit)
+            if units_present:
+                (f / "root/etc/systemd/system/pulse-backend.service").write_text(unit)
+                (f / "root/etc/systemd/system/pulse.service").write_text(unit)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), UPDATER=str(UPDATER),
                        PRODUCER=producer, FLOW=flow, MODE=mode,
-                       ROWS=rows, QUERY_EXIT=str(query_exit), REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
+                       ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err,
+                       REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
                        PATH=str(f / "bin") + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
                        PULSE_BINARY_LINK_PATH=str(f / "pulse-link"))
@@ -279,9 +285,23 @@ class ServiceDiscovery(unittest.TestCase):
         self.assertEqual(e["calls"], [])
 
     def test_partial_failed_inventory_is_not_absence(self):
-        for rows in ["", "pulse-backend.service enabled enabled\n", "pulse.service disabled enabled\n"]:
-            with self.subTest(rows=rows):
-                self.assert_refused(self.run_fixture(rows=rows, query_exit=1))
+        failure = "Failed to get unit file list: No such file or directory\n"
+        for rows, err in [("", failure), ("pulse-backend.service enabled enabled\n", ""),
+                          ("pulse.service disabled enabled\n", ""),
+                          ("pulse-backend.service enabled enabled\n", failure)]:
+            with self.subTest(rows=rows, err=err):
+                self.assert_refused(self.run_fixture(rows=rows, err=err, query_exit=1))
+
+    def test_fresh_host_no_matching_unit_files_is_an_empty_inventory(self):
+        # systemd exits 1 and prints nothing when none of the named unit files exist, which is
+        # every fresh host. The installer and the update helper must both select the default.
+        for producer in ("installer", "updater"):
+            with self.subTest(producer=producer):
+                e = self.run_fixture(producer=producer, query_exit=1)
+                self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
+                self.assertEqual(e["result"].stdout, "SERVICE=pulse\n")
+                # The second read is what tells a silent absence from a failure with a message.
+                self.assertEqual(e["calls"], [QUERY, QUERY])
 
     def test_malformed_duplicate_impostor_and_unknown_inventory_stop(self):
         for rows in ["pulse-backendXservice enabled\n", "pulse-backend.service.extra enabled\n",
@@ -304,14 +324,15 @@ class ServiceDiscovery(unittest.TestCase):
         self.assertEqual(e["result"].stdout, "SERVICE=pulse-backend\n")
 
     def test_failed_discovery_is_distinct_from_no_installation(self):
-        e = self.run_fixture(flow="existing", query_exit=1)
+        e = self.run_fixture(flow="existing", query_exit=1,
+                             err="Failed to get unit file list: No such file or directory\n")
         self.assert_refused(e)
         self.assertEqual(e["result"].returncode, 2)
 
     def test_all_mutating_callers_refuse_when_errexit_is_disabled(self):
         for flow in ["main", "late-main", "archive", "build", "uninstall", "reset", "unit", "ensure-unit"]:
             with self.subTest(flow=flow):
-                self.assert_refused(self.run_fixture(flow=flow, query_exit=1))
+                self.assert_refused(self.run_fixture(flow=flow, query_exit=1, err=FAILED_LISTING))
 
     def test_archive_and_source_paths_stop_only_the_selected_legacy_unit(self):
         for flow in ["archive", "build"]:
@@ -322,6 +343,15 @@ class ServiceDiscovery(unittest.TestCase):
                 self.assertIn(["stop", "pulse-backend"], e["calls"])
                 self.assertNotIn(["stop", "pulse"], e["calls"])
                 self.assertFalse(e["broken_pipe"])
+
+    @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
+    def test_real_systemctl_on_a_host_without_pulse_units_selects_the_default(self):
+        # Real systemctl, empty unit root: the genuine exit status for "nothing matched".
+        for producer in ("installer", "updater"):
+            with self.subTest(producer=producer):
+                e = self.run_fixture(mode="real", producer=producer, units_present=False)
+                self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
+                self.assertEqual(e["result"].stdout, "SERVICE=pulse\n")
 
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
     def test_real_systemctl_fixture_inventory_has_compatible_rows(self):
@@ -356,7 +386,8 @@ class ServiceDiscovery(unittest.TestCase):
                              ("pulse-backendXservice enabled\n", 0),
                              ("pulse.service enabled enabled extra\n", 0)]:
             with self.subTest(rows=rows, status=status):
-                e = self.run_fixture(producer="updater", rows=rows, query_exit=status, flow="automatic")
+                e = self.run_fixture(producer="updater", rows=rows, query_exit=status, flow="automatic",
+                                     err=FAILED_LISTING if (rows, status) == ("", 1) else "")
                 self.assert_refused(e)
                 self.assertIsNone(e["installer_service"])
 
