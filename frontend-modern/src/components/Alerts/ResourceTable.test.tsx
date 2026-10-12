@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSignal } from 'solid-js';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { waitFor, cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
 import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
+import alertResourceMetricEditorSource from '@/components/Alerts/AlertResourceMetricEditor.tsx?raw';
 import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import {
@@ -78,7 +79,11 @@ vi.mock('@/components/shared/Table', () => ({
   ),
   TableHeader: (props: any) => <thead>{props.children}</thead>,
   TableBody: (props: any) => <tbody class={props.class}>{props.children}</tbody>,
-  TableRow: (props: any) => <tr class={props.class}>{props.children}</tr>,
+  TableRow: (props: any) => (
+    <tr class={props.class} onFocusOut={props.onFocusOut} onFocusIn={props.onFocusIn}>
+      {props.children}
+    </tr>
+  ),
   TableHead: (props: any) => (
     <th class={props.class} title={props.title}>
       {props.children}
@@ -374,7 +379,7 @@ describe('ResourceTable', () => {
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('FormTextarea');
       expect(alertResourceTableMobileSource).toContain('ActionIconButton');
-      expect(alertResourceTableMobileSource).toContain(
+      expect(alertResourceMetricEditorSource).toContain(
         'min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0',
       );
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
@@ -916,6 +921,41 @@ describe('ResourceTable', () => {
     });
   });
 
+  it.each([false, true])(
+    'preserves host cluster context in threshold layouts (mobile=%s)',
+    (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: [makeResource({ type: 'agent', name: 'A', clusterName: 'Analytics' })],
+          })}
+        />
+      ));
+      expect(screen.getByText('Analytics')).toBeInTheDocument();
+    },
+  );
+
+  it.each([false, true])(
+    'keeps backup and snapshot configs out of numeric defaults (mobile=%s)',
+    (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: [],
+            columns: ['CPU %', 'Backup', 'Snapshot'],
+            globalDefaults: { cpu: 80 },
+            setGlobalDefaults: vi.fn(),
+            setHasUnsavedChanges: vi.fn(),
+          })}
+        />
+      ));
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+      expect(screen.getAllByTestId('status-badge')).toHaveLength(1);
+    },
+  );
+
   describe('metric off toggles', () => {
     // The alert engine disables a metric whenever its trigger is <= 0, so every
     // editor here has to agree on that reading and has to write a value the
@@ -928,73 +968,138 @@ describe('ResourceTable', () => {
       });
     }
 
-    it('reads a stored 0 override as Off in the row editor', () => {
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 0 }),
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'reads a stored 0 override as Off in the row editor (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 0 }),
+        });
+        render(() => <ResourceTable {...props} />);
 
-      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
-    });
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+      },
+    );
 
-    it('does not stage 0 through the row numeric input', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 80 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'does not stage 0 through the row numeric input (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 80 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
 
-      expect(setEditingThresholds).not.toHaveBeenCalled();
-    });
+        expect(setEditingThresholds).not.toHaveBeenCalled();
+      },
+    );
 
-    it('stages an explicit threshold when the inherited default is itself off', () => {
-      // Clearing the override would only re-inherit the disabled default, so
-      // the save path would drop the change and the metric would stay off.
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
-        editingThresholds: () => ({ cpu: -1 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'stages an explicit threshold when the inherited default is itself off (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        // Clearing the override would only re-inherit the disabled default, so
+        // the save path would drop the change and the metric would stay off.
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
+          editingThresholds: () => ({ cpu: -1 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
+      },
+    );
 
-    it('clears the override when the inherited default is already enabled', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: -1 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: -1 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'clears the override when the inherited default is already enabled (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: -1 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: -1 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
+      },
+    );
 
-    it('turns a metric off with the canonical -1 sentinel', () => {
-      const setEditingThresholds = vi.fn();
-      const props = editorProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
-        editingThresholds: () => ({ cpu: 80 }),
-        setEditingThresholds,
-      });
-      render(() => <ResourceTable {...props} />);
+    it.each([false, true])(
+      'turns a metric off with the canonical -1 sentinel (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 80 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
 
-      fireEvent.click(screen.getByTestId('status-badge'));
+        fireEvent.click(screen.getByTestId('status-badge'));
 
-      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: -1 });
-    });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: -1 });
+      },
+    );
+
+    it.each([false, true])(
+      'clears an override to inherit without disabling (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const setEditingThresholds = vi.fn();
+        const props = editorProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 90 }, defaults: { cpu: 80 } })],
+          editingThresholds: () => ({ cpu: 90 }),
+          setEditingThresholds,
+        });
+        render(() => <ResourceTable {...props} />);
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '' } });
+        expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
+      },
+    );
+
+    it.each([false, true])(
+      'clearing an override inherits Off and enables in one toggle (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [editingThresholds, setEditingThresholds] = createSignal<
+          Record<string, number | undefined>
+        >({ cpu: 81 });
+        render(() => (
+          <ResourceTable
+            {...editorProps({
+              editingThresholds,
+              setEditingThresholds,
+              resources: [
+                makeResource({ id: 'vm-1', thresholds: { cpu: 81 }, defaults: { cpu: 0 } }),
+              ],
+            })}
+          />
+        ));
+        fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '' } });
+        expect(editingThresholds().cpu).toBeUndefined();
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+        if (!mobile) expect(screen.getByRole('slider')).toBeDisabled();
+        fireEvent.click(screen.getByTestId('status-badge'));
+        expect(editingThresholds().cpu).toBe(80);
+        expect(screen.getByRole('spinbutton')).toHaveValue(80);
+        expect(screen.getByTestId('status-badge')).toHaveTextContent('On');
+      },
+    );
 
     it('keeps the editor open when focus moves from the input to the off toggle', () => {
       // Tabbing to the toggle must not save and close the row before the toggle
@@ -1008,8 +1113,142 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       const input = screen.getByRole('spinbutton');
-      fireEvent.blur(input, { relatedTarget: screen.getByTestId('status-badge') });
+      fireEvent.focusOut(input, { relatedTarget: screen.getByTestId('status-badge') });
 
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+      'opens from the focused edit button and focuses the first input (mobile=%s)',
+      async (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [editingId, setEditingId] = createSignal<string | null>(null);
+        const onSaveEdit = vi.fn();
+        render(() => (
+          <>
+            <button data-testid="outside-entry">Other action</button>
+            <ResourceTable
+              {...editorProps({
+                editingId,
+                onSaveEdit,
+                onEdit: () => setEditingId('vm-1'),
+                resources: [makeResource({ id: 'vm-1' })],
+              })}
+            />
+          </>
+        ));
+        const edit = screen.getByLabelText('Edit thresholds for Test VM');
+        edit.focus();
+        fireEvent.click(edit);
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('spinbutton')));
+        expect(onSaveEdit).not.toHaveBeenCalled();
+        screen.getByTestId('outside-entry').focus();
+        if (mobile) {
+          expect(onSaveEdit).not.toHaveBeenCalled();
+          fireEvent.click(screen.getByLabelText('Save threshold edits for Test VM'));
+        }
+        expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+      },
+    );
+
+    it.each([false, true])(
+      'transfers the current metric focus and draft between layouts (mobile=%s)',
+      async (initialMobile) => {
+        const [mobile, setMobile] = createSignal(initialMobile);
+        mockIsMobile.mockImplementation(mobile);
+        const onSaveEdit = vi.fn();
+        const [editingThresholds, setEditingThresholds] = createSignal({ cpu: 80, memory: 85 });
+        render(() => (
+          <ResourceTable
+            {...editorProps({
+              columns: ['CPU %', 'Memory %'],
+              editingThresholds,
+              setEditingThresholds,
+              onSaveEdit,
+              resources: [makeResource({ id: 'vm-1', defaults: { cpu: 80, memory: 85 } })],
+            })}
+          />
+        ));
+        const memory = screen.getAllByRole('spinbutton')[1];
+        memory.focus();
+        fireEvent.input(memory, { target: { value: '93' } });
+        setMobile(!initialMobile);
+        await waitFor(() =>
+          expect(document.activeElement).toBe(screen.getAllByRole('spinbutton')[1]),
+        );
+        expect(screen.getAllByRole('spinbutton')[1]).toHaveValue(93);
+        expect(onSaveEdit).not.toHaveBeenCalled();
+        setMobile(initialMobile);
+        await waitFor(() =>
+          expect(document.activeElement).toBe(screen.getAllByRole('spinbutton')[1]),
+        );
+        expect(screen.getAllByRole('spinbutton')[1]).toHaveValue(93);
+        expect(onSaveEdit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps the editor open when focus moves from the number to its slider', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({ onSaveEdit, resources: [makeResource({ id: 'vm-1' })] })}
+        />
+      ));
+      screen.getByRole('spinbutton').focus();
+      screen.getByRole('slider').focus();
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it('saves when focus leaves the edited row after the Off toggle', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <>
+          <button data-testid="outside-row">Other action</button>
+          <ResourceTable
+            {...editorProps({ onSaveEdit, resources: [makeResource({ id: 'vm-1' })] })}
+          />
+        </>
+      ));
+      screen.getByRole('spinbutton').focus();
+      screen.getByTestId('status-badge').focus();
+      screen.getByTestId('outside-row').focus();
+      expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+    });
+
+    it('lets Cancel discard a focused threshold without saving', () => {
+      const onSaveEdit = vi.fn();
+      const onCancelEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({
+            onSaveEdit,
+            onCancelEdit,
+            resources: [makeResource({ id: 'vm-1' })],
+          })}
+        />
+      ));
+      screen.getByRole('spinbutton').focus();
+      const cancel = screen.getByLabelText('Cancel editing');
+      cancel.focus();
+      fireEvent.click(cancel);
+      expect(onCancelEdit).toHaveBeenCalledOnce();
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it('keeps editing when keyboard focus moves to another metric in the row', () => {
+      const onSaveEdit = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...editorProps({
+            onSaveEdit,
+            columns: ['CPU %', 'Memory %'],
+            resources: [makeResource({ id: 'vm-1' })],
+          })}
+        />
+      ));
+      const inputs = screen.getAllByRole('spinbutton');
+      inputs[0].focus();
+      inputs[1].focus();
       expect(onSaveEdit).not.toHaveBeenCalled();
     });
 
@@ -1022,7 +1261,8 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      fireEvent.blur(screen.getByRole('spinbutton'), { relatedTarget: null });
+      screen.getByRole('spinbutton').focus();
+      fireEvent.focusOut(screen.getByRole('spinbutton'), { relatedTarget: null });
 
       expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
     });
@@ -1935,7 +2175,7 @@ describe('ResourceTable', () => {
       expect(setEditingThresholds).toHaveBeenCalledWith(expect.objectContaining({ cpu: 95 }));
     });
 
-    it('calls onSaveEdit on input blur', () => {
+    it('calls onSaveEdit when focus leaves the edited row', () => {
       const onSaveEdit = vi.fn();
       const props = makeProps({
         resources: undefined,
@@ -1953,7 +2193,8 @@ describe('ResourceTable', () => {
         'input[type="number"][title="Use the Off control to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
-      fireEvent.blur(editInputs[0]);
+      (editInputs[0] as HTMLInputElement).focus();
+      fireEvent.focusOut(editInputs[0]);
 
       expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
     });

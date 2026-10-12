@@ -710,6 +710,27 @@ threshold row keeps the live `guestID-disk-*` alert resource identity for
 active-state and intent-policy linkage while persisting through the stable
 `guest-disk:*` override identity.
 
+Numeric threshold editing is owned by
+`frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx`.
+The table and card layouts delegate global defaults and resource overrides to
+that control, so input bounds, empty-input handling and Off/inherit transitions
+cannot diverge by layout. Table rows save when focus leaves the owning row.
+Focus movement between sliders, inputs, toggles and Cancel stays inside that
+edit, so Cancel cannot commit the value before its click runs. Cards retain
+explicit Save. The responsive table owner identifies the active layout.
+Retiring a row during a resize transfers the draft and metric focus instead
+of saving it. Both layouts focus the first supported numeric metric when
+editing starts from the resource action.
+Clearing an override shows the inherited metric state. When that default is
+Off, the badge remains Off and the table slider stays disabled. Enabling
+from that state stages the factory value in one toggle and leaves the group
+default unchanged. Existing Off/inherit serialization remains compatible.
+Table sliders sit above the numeric control so editing does not widen the table
+and hide the resource identity. Backup, snapshot and offline controls keep their
+separate configuration contracts. Global default cells never route backup or
+snapshot into numeric thresholds. Host cards preserve the canonical cluster
+context shown by table rows, so identically named hosts remain distinguishable.
+
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
 `internal/alerts/config_runtime.go`), not a display convention: `-1` is the
