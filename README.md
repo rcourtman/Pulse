@@ -202,12 +202,11 @@ unsolicited pull requests.
 ## Community and support
 
 - Ask questions in [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions).
-- Report reproducible bugs through [GitHub Issues](https://github.com/rcourtman/Pulse/issues).
-- Home Assistant users can use the community-maintained
-  [Pulse add-ons](https://github.com/Kosztyk/homeassistant-addons).
-- If Pulse is useful to you, support its development through
-  [GitHub Sponsors](https://github.com/sponsors/rcourtman) or
-  [Ko-fi](https://ko-fi.com/rcourtman).
+- Report bugs and unexpected outcomes through [GitHub Issues](https://github.com/rcourtman/Pulse/issues).
+- Home Assistant users can use the community-maintained [Pulse add-ons](https://github.com/Kosztyk/homeassistant-addons).
+- If Pulse is useful to you, support its development through [GitHub Sponsors](https://github.com/sponsors/rcourtman) or [Ko-fi](https://ko-fi.com/rcourtman).
+
+Read the [safe reporting guidance](docs/TROUBLESHOOTING.md#-getting-help) before sharing original evidence. A second reproduction or diagnostics export is not required; do not repeat an attempt that could interrupt workloads or send duplicate notifications. GitHub reports and attachments are public: review them locally and keep credentials and private details out.
 
 ## License
 
