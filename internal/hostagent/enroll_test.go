@@ -1,8 +1,10 @@
 package hostagent
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,10 +13,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -655,4 +660,130 @@ func TestEnrollPresentsTheIdentityNewReports(t *testing.T) {
 	if agent.hostname != "pve-host" || agent.osName != proxmoxPVEOSName || agent.architecture != runtime.GOARCH {
 		t.Fatalf("New identity = %q/%q/%q, want the trimmed hostname, Proxmox VE, and the runtime architecture", agent.hostname, agent.osName, agent.architecture)
 	}
+}
+
+// #2854: inject gopsutil's raspi-config heuristic, but read Debian's actual
+// metadata through a real synthetic /etc -> /usr/lib symlink. Neither the
+// reporter's Pi nor gopsutil's absolute-file heuristic is executed here.
+func TestEnrollAndReportUseDebianOSReleaseIdentity(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"etc", "usr/lib"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const release = "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nDEBIAN_VERSION_FULL=13.7\nID=debian\n"
+	if err := os.WriteFile(filepath.Join(root, "usr/lib/os-release"), []byte(release), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../usr/lib/os-release", filepath.Join(root, "etc/os-release")); err != nil {
+		t.Fatal(err)
+	}
+	collector := realFSCollector()
+	collector.goos = "linux"
+	collector.hostInfoFn = func(context.Context) (*gohost.InfoStat, error) {
+		return &gohost.InfoStat{
+			Hostname: "pi-host", HostID: "synthetic-machine-id",
+			Platform: "raspbian", PlatformFamily: "debian", PlatformVersion: "13.7",
+			KernelArch: "aarch64",
+		}, nil
+	}
+	collector.readFileFn = func(path string) ([]byte, error) {
+		if path == "/etc/os-release" {
+			return os.ReadFile(filepath.Join(root, "etc/os-release"))
+		}
+		if strings.HasPrefix(path, root+string(os.PathSeparator)) {
+			return os.ReadFile(path)
+		}
+		return nil, os.ErrNotExist
+	}
+	collector.metricsFn = func(context.Context, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{CPUCount: 4, CPUUsagePercent: 7.5}, nil
+	}
+	var enrollment enrollPayload
+	var received agentshost.Report
+	var receiptMu sync.Mutex
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receiptMu.Lock()
+		defer receiptMu.Unlock()
+		switch r.URL.Path {
+		case enrollEndpoint:
+			if r.Header.Get("Authorization") != "Bearer synthetic-bootstrap" {
+				t.Error("enrollment credential changed")
+			}
+			if err := json.NewDecoder(r.Body).Decode(&enrollment); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(enrollResponse{AgentID: "canonical-agent", RuntimeToken: "synthetic-runtime"})
+		case agentReportEndpoint:
+			if r.Header.Get("Authorization") != "Bearer synthetic-runtime" {
+				t.Error("report credential changed")
+			}
+			reader, err := gzip.NewReader(r.Body)
+			if err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			defer reader.Close()
+			if err := json.NewDecoder(reader).Decode(&received); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	caPath := filepath.Join(root, "test-ca.pem")
+	if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(root, "state")
+	result, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL: server.URL, APIToken: "synthetic-bootstrap", StateDir: stateDir,
+		HostnameOverride: " pi-label ", Collector: collector, CACertPath: caPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := New(Config{
+		PulseURL: server.URL, APIToken: result.APIToken, AgentID: result.AgentID,
+		StateDir: stateDir, HostnameOverride: " pi-label ", Collector: collector,
+		CACertPath: caPath, LogLevel: zerolog.Disabled, DisableCeph: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.sendReport(context.Background(), report); err != nil {
+		t.Fatal(err)
+	}
+	receiptMu.Lock()
+	defer receiptMu.Unlock()
+	if received.Host.OSName != "debian" || received.Host.OSVersion != "13.7" {
+		t.Fatalf("received OS = %q %q, want debian 13.7", received.Host.OSName, received.Host.OSVersion)
+	}
+	if received.Host.Hostname != "pi-label" || received.Host.MachineID != "synthetic-machine-id" || received.Host.Architecture != "aarch64" || received.Agent.ID != "canonical-agent" {
+		t.Fatalf("host/agent identity changed: %+v / %q", received.Host, received.Agent.ID)
+	}
+	if enrollment.Hostname != received.Host.Hostname || enrollment.OS != received.Host.OSName || enrollment.Arch != received.Host.Architecture || enrollment.CommandsEnabled || received.Agent.CommandsEnabled {
+		t.Fatalf("enrollment/report identity or commands-off control changed: %+v / %+v", enrollment, received.Agent)
+	}
+	if received.Host.CPUCount != 4 || received.Metrics.CPUUsagePercent != 7.5 {
+		t.Fatal("OS identity correction changed collected metrics")
+	}
+	if saved, err := os.ReadFile(filepath.Join(stateDir, runtimeTokenFile)); err != nil || string(saved) != "synthetic-runtime" {
+		t.Fatalf("saved synthetic credential changed: %q / %v", saved, err)
+	}
+	t.Logf("trusted synthetic enrollment/report: %s %s, hostname=%s, machine=%s, agent=%s, arch=%s, commands=false, CPU=7.5",
+		received.Host.OSName, received.Host.OSVersion, received.Host.Hostname, received.Host.MachineID, received.Agent.ID, received.Host.Architecture)
 }
