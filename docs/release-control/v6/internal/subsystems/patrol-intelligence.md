@@ -49,6 +49,11 @@ and `frontend-modern/src/utils/__tests__/patrolRuntimeActions.test.ts`.
 The workspace loads `PatrolSetupPanel.tsx` lazily, passing the readiness
 provider as `readinessProvider`, so the panel's AI settings, provider and cost
 code stays out of the `AIIntelligence` chunk and its bundle budget.
+An unreachable provider (`provider_connection`: wrong URL, server down,
+network) also routes the setup action to Provider & Models, with the subtitle
+`PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION` and no model-check hint, but it does
+not open the setup panel: a passing network blip must not ask a cloud user to
+re-enter a key that works.
 
 ### Pro default notice and the not-running header
 

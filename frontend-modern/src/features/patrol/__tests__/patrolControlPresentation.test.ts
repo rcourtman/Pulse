@@ -19,6 +19,7 @@ import {
   PATROL_WORKSPACE_QUEUE_TITLE,
   PATROL_WORKSPACE_CONNECT_DESCRIPTION,
   PATROL_WORKSPACE_RECONNECT_DESCRIPTION,
+  PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION,
   PATROL_WORKSPACE_SETUP_DESCRIPTION,
 } from '../patrolControlPresentation';
 
@@ -41,6 +42,10 @@ describe('patrolControlPresentation', () => {
     expect(getPatrolWorkspaceSetupDescription('provider_auth')).toBe(
       PATROL_WORKSPACE_RECONNECT_DESCRIPTION,
     );
+    expect(getPatrolWorkspaceSetupDescription('provider_connection')).toBe(
+      PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION,
+    );
+    expect(PATROL_WORKSPACE_UNREACHABLE_DESCRIPTION).not.toMatch(/tool check/);
   });
 
   it.each([
