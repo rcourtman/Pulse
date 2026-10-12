@@ -3091,9 +3091,11 @@ describe('GuestRow backup evidence disclosure', () => {
   it.each([{ columns: ['name', 'backup'] }, { columns: ['name'] }])(
     'opens read-only evidence without triggering the enclosing row for columns %j',
     ({ columns }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-12T02:00:00Z'));
       const onClick = vi.fn();
       renderGuestRow({
-        guest: makeGuest({ lastBackup: Date.now() - 3600000 }),
+        guest: makeGuest({ lastBackup: Date.parse('2026-10-12T00:30:00Z') }),
         visibleColumnIds: columns,
         onClick,
       });
@@ -3101,9 +3103,11 @@ describe('GuestRow backup evidence disclosure', () => {
         name: columns.includes('backup') ? /^Backup status:/ : /^Last backup:/,
       });
       fireEvent.click(trigger);
-      expect(
-        screen.getByRole('dialog', { name: 'Backup status details for test-vm' }),
-      ).toHaveTextContent('Last completed backup');
+      const dialog = screen.getByRole('dialog', { name: 'Backup status details for test-vm' });
+      expect(dialog).toHaveTextContent('Last completed backup');
+      const completedTime = dialog.querySelector('time')!;
+      expect(completedTime).toHaveAttribute('datetime', '2026-10-12T00:30:00.000Z');
+      expect(completedTime.textContent).toBe('2026-10-12 00:30:00 UTC');
       expect(onClick).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
       expect(screen.queryByRole('dialog')).toBeNull();

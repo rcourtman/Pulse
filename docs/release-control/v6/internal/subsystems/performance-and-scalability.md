@@ -4100,3 +4100,21 @@ future/backwards-clock uncertainty and timer disposal. Connected
 backup-activity, configured policy and caution/absence controls. Browser proof
 uses the real read-only AlertsAPI/store and existing drawer/table badge with
 synthetic timestamps, not native backup safety, guest recovery or availability.
+
+### Backup time formatting stays disclosure-local (12 October 2026)
+
+The existing Workloads backup evidence uses a shared, explicit UTC completion
+formatter instead of reparsing the timestamp separately for the ISO attribute,
+local date and unlabelled local time. A closed row does not call the formatter;
+it is an accessor consumed only by mounted hover/dialog evidence. The drawer
+uses the same formatter after existing completed-evidence admission. No new
+poll, per-row timer, history read, retained cache, alert evaluation or guest
+operation is introduced, and saved freshness thresholds remain unchanged.
+
+`BackupCompletionTime.test.tsx` checks mounted same-guest updates, activity,
+shared-clock ticks and disposed timers; existing backup-clock tests retain
+policy-boundary coverage. `backupCompletionTime.test.ts` checks equivalent
+offset/numeric/Date inputs and unusable timestamp safety. Browser proof checks
+that disclosures and passive ticks add no API requests while production
+table/drawer times agree in opposing non-UTC contexts. This is not whole-fleet
+CPU/RSS relief or native guest/backup recovery.
