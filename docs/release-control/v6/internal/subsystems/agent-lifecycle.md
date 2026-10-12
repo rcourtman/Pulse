@@ -15,6 +15,35 @@
 
 ## Purpose
 
+### Systemd agent removal retains recovery material until quiescence is observed
+
+Unix agent removal must confirm the collector, action runner and privileged
+helper socket/service are inactive and not enabled before server deregistration,
+process termination or local erasure. Missing saved connection information still
+refuses before stopping a working installation. Each systemd read is one bounded,
+combined stdout/stderr observation with exactly LoadState, ActiveState and
+UnitFileState, including a completion sentinel so trailing blank diagnostics
+cannot be discarded. Failed, incomplete, diagnostic-bearing, duplicate, unknown
+or transitional observations refuse removal. Known absent/inactive units are
+no-ops; stop and disable success require independent state readback.
+
+The complete affected set is read again after the stop sequence. Shared collector,
+helper and runner teardown functions enforce the same boundary for their other
+callers. Helper service and socket are reconciled together; runner credential
+revocation follows confirmed quiescence and still precedes local deletion.
+An unavailable manager cannot authorise deleting an existing runner. No partial
+stop is automatically restarted, no new mask is installed, and no trust, credential
+scope, non-systemd teardown or Windows behaviour changes.
+
+`TestInstallSHSystemdTeardownRequiresObservedQuiescence` executes the actual shell
+functions with closed systemd doubles and only owned temporary deletion targets.
+It covers failed/ignored stop and disable, malformed/refused reads, socket and
+batch reactivation, authorised teardown and retained failed-revocation material;
+the real timeout control confirms its owned child terminates. The existing
+saved-state removal controls also require refusal before remote or local mutation.
+These are exact-source controls, not native systemd installation, TLS, published
+availability or resolution of Linux/PowerShell #1099.
+
 ### Unix removal retains credentials when connection recovery is incomplete
 
 After existing installed-state recovery, the unified Unix installer checks for

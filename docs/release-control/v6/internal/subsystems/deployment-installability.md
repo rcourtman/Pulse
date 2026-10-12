@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Agent systemd teardown refuses unobserved stops and activation sources
+
+`scripts/install.sh` must not discard unit files, helper credentials or runner
+recovery state merely because stop/disable was attempted. It uses a five-second
+read/stop/disable deadline with a one-second kill bound, requires complete
+diagnostic-free combined property reads, and independently confirms inactive,
+non-enabled units. Genuine absent/inactive units require no stop or disable.
+Known masks remain masks; unknown/transitional/refused or still-enabled state
+blocks deletion. The completion sentinel preserves trailing blank diagnostics.
+
+Full uninstall reconciles collector, runner and both helper activation units
+before server removal or process mutation, then each shared teardown function
+checks its own complete affected set before erasure. Runner revocation still
+requires the exact saved credential and a successful durable server result.
+Failure retains local recovery files and reports the service-state reconciliation
+needed next, without claiming a partial stop was restored or automatically
+starting anything. Missing-URL refusal, caller-owned token-file retention,
+signature/TLS policy and non-systemd platforms are unchanged.
+
+The registered `scripts/installtests/install_sh_test.go` removal-state artifact
+executes `agent_systemd_teardown.py` production-function refusal/ordering controls
+and `agent_uninstall_state.py` caller controls. A hanging private systemctl double
+also exercises the actual timeout and verifies its child is gone. Native service
+and installed/removal acceptance remain separate from these confined controls.
+
 ### Unix removal retains credentials when connection recovery is incomplete
 
 After existing installed-state recovery, the unified Unix installer checks for
