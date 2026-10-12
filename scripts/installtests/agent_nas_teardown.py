@@ -33,7 +33,14 @@ def definitions(source, names=FUNCTIONS):
             continue
         if source.count(marker) != 1:
             raise ValueError("ambiguous production function " + name)
-        result.append(marker + source.split(marker, 1)[1].split("\n}\n", 1)[0] + "\n}\n")
+        if name == "write_qnap_wrapper_script":
+            # Its heredoc contains shell functions: their braces do not close
+            # the renderer. Bind the actual outer EOF/function boundary.
+            start = source.index(marker)
+            end = source.index("\n}\n", source.index("\nEOF\n", start)) + 3
+            result.append(source[start:end] + "\n")
+        else:
+            result.append(marker + source.split(marker, 1)[1].split("\n}\n", 1)[0] + "\n}\n")
     return "\n".join(result)
 
 
@@ -394,13 +401,15 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                     end = self.source.index('\nEOF\n', start) + 5
                     render = setup + self.source[start:end].replace('/var/log/${AGENT_NAME}-watchdog.log', str(root / 'logs/watchdog.log'))
                 render_file = root / 'render.sh'; render_file.write_text(render)
-                subprocess.run(['bash', str(render_file)], env=env, check=True, capture_output=True, text=True)
+                rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
+                self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
                 bootfile = root / 'flash/autorun.sh' if platform == 'QNAP' else root / 'go'
                 if platform == 'QNAP':
                     bootfile.write_text('#!/bin/sh\n')
                     emitter = definitions(self.source, ('portable_sed_in_place', 'remove_qnap_autorun_block', 'render_qnap_autorun_block', 'append_qnap_autorun_block'))
                     render_file.write_text(setup + emitter + '\nappend_qnap_autorun_block ' + shlex.quote(str(bootfile)) + ' "$WRAPPER_SCRIPT" "$STATE_DIR"\n')
-                    subprocess.run(['bash', str(render_file)], env=env, check=True, capture_output=True, text=True)
+                    rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
+                    self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
                 else: bootfile.write_text('#!/bin/bash\n# Pulse Agent\nbash ' + str(watchdog) + '\n')
                 functions = definitions(self.source)
                 functions = functions.replace('/boot/config/go', str(bootfile))
