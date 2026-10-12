@@ -339,7 +339,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -362,7 +362,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -637,7 +637,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -661,7 +661,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -902,11 +902,10 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'Pulse Pro plan',
-          body: 'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+          body: 'Patrol investigates issues, proposes fixes you approve, and verifies the result, with 90-day metric history and team controls.',
           highlights: [
-            'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
             'Patrol investigates issues and explains the root cause',
-            'Patrol applies safe fixes and verifies the result',
+            'Patrol proposes fixes you approve, then verifies the result',
             '90-day metric history',
             'Team controls: RBAC, audit logging, reporting, and agent profiles',
           ],

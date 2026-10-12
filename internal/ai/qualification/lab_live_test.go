@@ -21,7 +21,6 @@ func TestDockerDependencyAndRestartOraclesLive(t *testing.T) {
 		"investigation.docker-dependency",
 		"remediation.docker-unhealthy-restart-approved",
 		"remediation.docker-unhealthy-restart-rejected",
-		"remediation.docker-unhealthy-restart-autonomous",
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			manifest, err := LoadManifest(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "scenarios", scenario+".json"))

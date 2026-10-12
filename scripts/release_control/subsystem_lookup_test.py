@@ -1260,7 +1260,6 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/config/ai_config_test.go",
-                "internal/config/patrol_autopilot_persistence_test.go",
             ],
         )
 
@@ -1283,14 +1282,8 @@ class SubsystemLookupTest(unittest.TestCase):
             requirement["exact_files"],
         )
 
-    def test_lookup_paths_selects_dedicated_patrol_autopilot_proof(self) -> None:
-        result = lookup_paths(
-            [
-                "internal/api/ai_handlers.go",
-                "internal/config/patrol_autopilot_persistence.go",
-                "internal/unifiedresources/patrol_autopilot.go",
-            ]
-        )
+    def test_lookup_paths_keeps_retired_patrol_autopilot_proofs_out_of_requirements(self) -> None:
+        result = lookup_paths(["internal/api/ai_handlers.go", "internal/config/ai.go"])
         self.assertEqual(result["unowned_runtime_files"], [])
 
         api_matches = {
@@ -1300,33 +1293,13 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(set(api_matches), {"ai-runtime", "api-contracts"})
         self.assertEqual(api_matches["ai-runtime"]["id"], "ai-api-surface")
         self.assertEqual(api_matches["api-contracts"]["id"], "backend-payload-contracts")
-        self.assertIn(
-            "internal/api/patrol_autopilot_test.go",
-            api_matches["ai-runtime"]["exact_files"],
-        )
-        self.assertIn(
-            "internal/api/patrol_autopilot_test.go",
-            api_matches["api-contracts"]["exact_files"],
-        )
 
         config_match = result["files"][1]["matches"][0]
         self.assertEqual(config_match["subsystem"], "ai-runtime")
         self.assertEqual(config_match["verification_requirement"]["id"], "ai-runtime-config")
-        self.assertIn(
-            "internal/config/patrol_autopilot_persistence_test.go",
-            config_match["verification_requirement"]["exact_files"],
-        )
-
-        unified_match = result["files"][2]["matches"][0]
-        self.assertEqual(unified_match["subsystem"], "unified-resources")
-        self.assertEqual(
-            unified_match["verification_requirement"]["id"],
-            "patrol-autopilot-runtime",
-        )
-        self.assertEqual(
-            unified_match["verification_requirement"]["exact_files"],
-            ["internal/unifiedresources/patrol_autopilot_test.go"],
-        )
+        for requirement in (*api_matches.values(), config_match["verification_requirement"]):
+            for proof in requirement["exact_files"]:
+                self.assertNotIn("patrol_autopilot", proof)
 
     def test_lookup_paths_reports_notification_client_as_shared_boundary(self) -> None:
         result = lookup_paths(["frontend-modern/src/api/notifications.ts"])
@@ -4499,7 +4472,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/registry_test.go",
                 "internal/unifiedresources/resolve_test.go",
                 "internal/unifiedresources/resolved_host_set_test.go",
-                "internal/unifiedresources/resource_operator_state_policy_test.go",
                 "internal/unifiedresources/snapshot_source_filter_test.go",
                 "internal/unifiedresources/store_history_index_test.go",
                 "internal/unifiedresources/store_test.go",
@@ -4533,7 +4505,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/registry_test.go",
                 "internal/unifiedresources/resolve_test.go",
                 "internal/unifiedresources/resolved_host_set_test.go",
-                "internal/unifiedresources/resource_operator_state_policy_test.go",
                 "internal/unifiedresources/snapshot_source_filter_test.go",
                 "internal/unifiedresources/store_history_index_test.go",
                 "internal/unifiedresources/store_test.go",

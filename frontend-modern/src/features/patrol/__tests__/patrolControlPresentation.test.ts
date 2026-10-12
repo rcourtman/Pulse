@@ -108,7 +108,7 @@ describe('patrolControlPresentation', () => {
     ).toEqual({ job: 'Job: Success', history: 'History unavailable' });
   });
 
-  it('keeps the four Patrol mode options in user-facing language', () => {
+  it('keeps the two Patrol mode options in user-facing language', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
@@ -119,18 +119,6 @@ describe('patrolControlPresentation', () => {
         label: 'Ask first',
         detail: 'Patrol investigates and prepares fixes, but every change waits for your approval.',
         compactLabel: 'Ask first',
-      },
-      assisted: {
-        label: 'Safe auto-fix',
-        detail:
-          'Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first.',
-        compactLabel: 'Safe auto-fix',
-      },
-      full: {
-        label: 'Autopilot',
-        detail:
-          'Patrol can act automatically within policy and still asks when approval is required.',
-        compactLabel: 'Autopilot',
       },
     });
   });
@@ -146,16 +134,6 @@ describe('patrolControlPresentation', () => {
       'Patrol is ready to check, investigate, and ask before any change.',
       'Current issues, investigations, and approvals appear here.',
     ],
-    [
-      'assisted',
-      'Patrol is ready to check, investigate, and fix safe issues when policy allows it.',
-      'Current issues, fixes, and approvals appear here.',
-    ],
-    [
-      'full',
-      'Patrol is ready to check, investigate, and act automatically within your policy.',
-      'Current issues, automatic work, and approvals appear here.',
-    ],
   ] satisfies Array<[PatrolAutonomyLevel, string, string]>)(
     'describes %s mode without generic control-level wording',
     (autonomyLevel, currentWorkDetail, workspaceDescription) => {
@@ -166,12 +144,12 @@ describe('patrolControlPresentation', () => {
   );
 
   it('does not advertise investigation or fixes while Patrol mode is locked', () => {
-    expect(getPatrolReadyWorkDetail({ autonomyLevel: 'full', autonomyLocked: true })).toBe(
+    expect(getPatrolReadyWorkDetail({ autonomyLevel: 'approval', autonomyLocked: true })).toBe(
       'Patrol is ready to check infrastructure and list current issues.',
     );
     expect(
       getPatrolQueueWorkspaceDescription({
-        autonomyLevel: 'full',
+        autonomyLevel: 'approval',
         autonomyLocked: true,
       }),
     ).toBe('Current Patrol issues appear here.');
@@ -195,24 +173,6 @@ describe('patrolControlPresentation', () => {
       }),
     ).toBe(
       'Patrol found 1 issue on 1 affected resource. Open a row to review evidence, approve any change, and verify the outcome.',
-    );
-    expect(
-      getPatrolQueueWorkspaceDescription({
-        autonomyLevel: 'assisted',
-        findingCount: 2,
-        affectedResourceCount: 2,
-      }),
-    ).toBe(
-      'Patrol found 2 issues on 2 affected resources. Open a row to see safe fixes, approval requests, and verification.',
-    );
-    expect(
-      getPatrolQueueWorkspaceDescription({
-        autonomyLevel: 'full',
-        findingCount: 3,
-        affectedResourceCount: 2,
-      }),
-    ).toBe(
-      'Patrol found 3 issues on 2 affected resources. Open a row to see automatic actions, policy approvals, and verification.',
     );
   });
 

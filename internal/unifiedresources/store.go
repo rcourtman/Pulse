@@ -67,9 +67,7 @@ type ResourceStore interface {
 	RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExpiry(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error
-	RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error
 	RecordActionExecutionAdmission(record ActionAuditRecord, event ActionLifecycleEvent, attempt ActionDispatchAttempt) error
-	RecordActionPolicyExecutionAdmission(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent, attempt ActionDispatchAttempt) error
 	RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionRefusal(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -3037,68 +3035,6 @@ func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecor
 	return s.recordActionTransition(normalizedRecord, normalizedEvent, nil, expected, ErrActionNotApproved, nil)
 }
 
-// RecordActionPolicyExecutionStart is the single automatic-admission CAS. It
-// persists the server-owned policy approval and executing transition together,
-// so no reusable approved policy state can escape the transaction.
-func (s *SQLiteResourceStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error {
-	record, err := NormalizeActionAuditRecord(record)
-	if err != nil {
-		return err
-	}
-	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
-	if err != nil {
-		return err
-	}
-	executionEvent, err = NormalizeActionLifecycleEvent(executionEvent)
-	if err != nil {
-		return err
-	}
-	if record.State != ActionStateExecuting || approvalEvent.State != ActionStateApproved || executionEvent.State != ActionStateExecuting || approvalEvent.ActionID != record.ID || executionEvent.ActionID != record.ID {
-		return errors.New("policy admission must persist matching approved and executing events")
-	}
-	if len(record.Approvals) == 0 || record.Approvals[len(record.Approvals)-1].Method != MethodPolicy || record.Approvals[len(record.Approvals)-1].PolicyLease == nil {
-		return ErrActionPolicyAuthorizationInvalid
-	}
-	record = RedactAuditRecord(record)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("begin policy admission transaction: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-	updated, err := updateActionAuditSQL(tx, record, ActionStatePlanned, ActionStatePending)
-	if err != nil {
-		return err
-	}
-	if !updated {
-		current, found, queryErr := getActionAuditFrom(tx, record.ID)
-		if queryErr != nil {
-			return queryErr
-		}
-		if !found {
-			return fmt.Errorf("action audit %q not found", record.ID)
-		}
-		return actionTransitionConflict(current, record, ErrActionNotApproved)
-	}
-	if err := recordActionLifecycleEventSQL(tx, approvalEvent); err != nil {
-		return err
-	}
-	if err := recordActionLifecycleEventSQL(tx, executionEvent); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit policy admission transaction: %w", err)
-	}
-	committed = true
-	return nil
-}
-
 func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {
 	normalizedRecord, err := NormalizeActionAuditRecord(record)
 	if err != nil {
@@ -3352,7 +3288,6 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 	row := queryer.QueryRow(`
 		SELECT canonical_id, monitoring_mode, lifecycle_state,
 		       intentionally_offline, never_auto_remediate,
-		       auto_remediation_policy_json,
 		       maintenance_start_at, maintenance_end_at,
 		       maintenance_recurrence_json, maintenance_scope, maintenance_reason,
 		       criticality, note, set_at, set_by
@@ -3374,7 +3309,6 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 		lifecycleState   string
 		intentional      int
 		neverRemediate   int
-		autoPolicyJSON   sql.NullString
 		recurrenceJSON   sql.NullString
 		maintenanceScope string
 		startAt, endAt   sql.NullTime
@@ -3389,7 +3323,6 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 		&lifecycleState,
 		&intentional,
 		&neverRemediate,
-		&autoPolicyJSON,
 		&startAt,
 		&endAt,
 		&recurrenceJSON,
@@ -3407,15 +3340,6 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	state.IntentionallyOffline = intentional != 0
 	state.NeverAutoRemediate = neverRemediate != 0
 	state.MaintenanceScope = MaintenanceScope(maintenanceScope)
-	if autoPolicyJSON.Valid && strings.TrimSpace(autoPolicyJSON.String) != "" {
-		if err := json.Unmarshal([]byte(autoPolicyJSON.String), &state.AutoRemediationPolicy); err != nil {
-			return ResourceOperatorState{}, fmt.Errorf("unmarshal auto remediation policy: %w", err)
-		}
-	}
-	// Normalize even when the column was NULL (row saved with an empty
-	// policy) so CapabilityNames is never nil and the wire carries [],
-	// not null (issue #1621).
-	state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
 	if startAt.Valid {
 		t := startAt.Time
 		state.MaintenanceStartAt = &t
@@ -3476,17 +3400,8 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		criticality    sql.NullString
 		note           sql.NullString
 		setBy          sql.NullString
-		autoPolicyJSON sql.NullString
 		recurrenceJSON sql.NullString
 	)
-	if policy := NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy); policy.Enabled || len(policy.CapabilityNames) > 0 || policy.Window != nil {
-		encoded, err := json.Marshal(policy)
-		if err != nil {
-			return fmt.Errorf("marshal auto remediation policy: %w", err)
-		}
-		autoPolicyJSON.String = string(encoded)
-		autoPolicyJSON.Valid = true
-	}
 	if recurrence := NormalizeRecurringMaintenanceWindow(state.MaintenanceRecurrence); recurrence != nil {
 		encoded, err := json.Marshal(recurrence)
 		if err != nil {
@@ -3548,7 +3463,7 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		state.LifecycleState,
 		intentional,
 		neverRemediate,
-		autoPolicyJSON,
+		nil, // retired per-resource automatic-action allowlist; a save clears it
 		startAt,
 		endAt,
 		recurrenceJSON,
@@ -4492,46 +4407,6 @@ func (m *MemoryStore) RecordActionExecutionStart(record ActionAuditRecord, event
 	}
 	m.actionLifecycleEvents = append(m.actionLifecycleEvents, normalizedEvent)
 	return nil
-}
-
-func (m *MemoryStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error {
-	record, err := NormalizeActionAuditRecord(record)
-	if err != nil {
-		return err
-	}
-	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
-	if err != nil {
-		return err
-	}
-	executionEvent, err = NormalizeActionLifecycleEvent(executionEvent)
-	if err != nil {
-		return err
-	}
-	if record.State != ActionStateExecuting || approvalEvent.State != ActionStateApproved || executionEvent.State != ActionStateExecuting || approvalEvent.ActionID != record.ID || executionEvent.ActionID != record.ID {
-		return errors.New("policy admission must persist matching approved and executing events")
-	}
-	if len(record.Approvals) == 0 || record.Approvals[len(record.Approvals)-1].Method != MethodPolicy || record.Approvals[len(record.Approvals)-1].PolicyLease == nil {
-		return ErrActionPolicyAuthorizationInvalid
-	}
-	record = RedactAuditRecord(record)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for i := range m.actionAudits {
-		if m.actionAudits[i].ID != record.ID {
-			continue
-		}
-		current := m.actionAudits[i]
-		if !ActionAuditIdentityMatches(current, record) {
-			return ErrActionIdentityConflict
-		}
-		if current.State != ActionStatePlanned && current.State != ActionStatePending {
-			return actionTransitionConflict(current, record, ErrActionNotApproved)
-		}
-		m.actionAudits[i] = record
-		m.actionLifecycleEvents = append(m.actionLifecycleEvents, approvalEvent, executionEvent)
-		return nil
-	}
-	return fmt.Errorf("action audit %q not found", record.ID)
 }
 
 func (m *MemoryStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {

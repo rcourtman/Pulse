@@ -199,10 +199,6 @@ func patrolDigestModeSentence(mode string) string {
 	switch mode {
 	case config.PatrolAutonomyApproval:
 		return "Ask first. Patrol investigates and prepares fixes, but every change waits for your approval."
-	case config.PatrolAutonomyAssisted:
-		return "Safe auto-fix. Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first."
-	case config.PatrolAutonomyFull:
-		return "Autopilot. Patrol can act automatically within policy and still asks when approval is required."
 	default:
 		return "Watch only. Patrol checks infrastructure and reports issues only. It does not start fixes."
 	}

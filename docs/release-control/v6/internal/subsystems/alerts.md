@@ -1239,6 +1239,13 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Monitoring-policy saves drop the retired allowlist (2026-10-12)
+
+`ResourceMonitoringPolicyAction.tsx` no longer copies `autoRemediationPolicy`
+into the operator-state save, because the per-resource automatic-action
+allowlist was retired with Patrol's self-executing modes. The save still
+preserves Never auto-remediate, maintenance, priority, and note.
+
 ### Retired AI Discovery progress frames (2026-10-11)
 
 The websocket store no longer handles `ai_discovery_progress` frames or emits

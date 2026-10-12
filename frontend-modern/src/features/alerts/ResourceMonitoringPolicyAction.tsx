@@ -125,10 +125,6 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
         lifecycleState,
         intentionallyOffline: monitoringMode === 'expected_offline',
         neverAutoRemediate: current?.neverAutoRemediate ?? false,
-        autoRemediationPolicy: current?.autoRemediationPolicy ?? {
-          enabled: false,
-          capabilityNames: [],
-        },
         maintenanceStartAt: current?.maintenanceStartAt,
         maintenanceEndAt: current?.maintenanceEndAt,
         maintenanceRecurrence: current?.maintenanceRecurrence,

@@ -83,7 +83,7 @@ export function getSelfHostedPlanEntitlementSummary(
     case 'relay':
       return `${planLabel} is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.`;
     case 'pro':
-      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.`;
+      return `${planLabel} is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.`;
   }
 }
 
@@ -152,11 +152,10 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+      'Patrol investigates issues, proposes fixes you approve, and verifies the result, with 90-day metric history and team controls.',
     highlights: [
-      'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
       'Patrol investigates issues and explains the root cause',
-      'Patrol applies safe fixes and verifies the result',
+      'Patrol proposes fixes you approve, then verifies the result',
       '90-day metric history',
       'Team controls: RBAC, audit logging, reporting, and agent profiles',
     ],

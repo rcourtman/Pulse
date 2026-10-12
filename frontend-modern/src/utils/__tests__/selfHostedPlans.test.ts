@@ -135,10 +135,10 @@ describe('selfHostedPlans', () => {
       'Patrol modes, history, and team controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      'Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
-      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
+      'Patrol investigates issues, proposes fixes you approve, and verifies the result, with 90-day metric history and team controls.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
@@ -179,7 +179,7 @@ describe('selfHostedPlans', () => {
       getSelfHostedPlanEntitlementSummary('pro'),
     );
     expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
-      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+      'Legacy Pulse Pro+ is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
 
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(

@@ -2710,8 +2710,8 @@ The frontend action wire mirror in `frontend-modern/src/types/actionAudit.ts`
 tracks the durable inbox/detail, policy provenance, dispatch, and
 `ActionResultV2` objects. `frontend-modern/src/api/resourceActions.ts` owns
 `GET /api/actions?view=pending|settled` and `GET /api/actions/{id}` consumption;
-`frontend-modern/src/api/patrol.ts` owns Autopilot acknowledgement create,
-activation, effective-mode, and revocation consumption. These mirrors must use
+`frontend-modern/src/api/patrol.ts` owns Patrol mode and effective-mode
+consumption (the Autopilot acknowledgement calls were retired on 2026-10-12). These mirrors must use
 backend JSON names and closed enums rather than frontend authority dialects.
 The same client owns the retained-objective list/create/update/delete mirror for
 `/api/ai/patrol/objectives`. Objective writes carry optimistic revisions and
@@ -2961,21 +2961,11 @@ a new API state machine, queue contract, or verification-accounting field.
    service's internal `PlanWithOptions`; the public plan
    endpoint keeps calling plain `Plan`, so an HTTP request body can never
    claim a first-party origin. Enterprise still has no decision or execution
-   method. After planning, core may auto-authorize only when the capability's
-   declared eligibility and the tenant's effective Patrol mode allow it, the
-   resource is not locked by `NeverAutoRemediate`, and any persisted resource
-   capability limit or recurring window admits it. Absence of a resource
-   policy inherits those tenant and capability bounds; an enabled per-resource
-   capability/window policy may only narrow them, and `NeverAutoRemediate`
-   remains the explicit opt-out. Assisted mode admits only `low_risk`; unlocked full
-   mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, and a
-   missing or unknown tenant policy fail closed. Automatic admission is
-   lifecycle-owned:
-   `ExecuteUnderPolicy` re-reads the complete tenant, capability, resource,
-   window, unlock, license, and emergency-stop posture under the shared policy
-   admission coordinator, binds it to a typed versioned lease, then persists
-   the `pulse_patrol_policy` / `policy` approval and `executing` transition in
-   one store CAS transaction. No reusable policy-approved state exists.
+   method. Since the 2026-10-12 retirement of Patrol's self-executing modes,
+   core never auto-authorizes a Patrol plan either: `Plan` and `Submit` persist
+   the plan and return, `ExecuteUnderPolicy` and the policy authorization lease
+   are gone, and every Patrol action waits for a human decision and execution.
+   `NeverAutoRemediate` remains the per-resource lock for every actor.
    Lazy initialization of that shared coordinator must be concurrency-safe:
    simultaneous first policy writers on one lifecycle service must converge on
    one coordinator and cannot enter parallel admission or mutation sections.
@@ -3012,7 +3002,7 @@ a new API state machine, queue contract, or verification-accounting field.
    treating either as operator-authored data. Consumers may build an exact
    Patrol return route from `operationalRecordId` only for a recognized Patrol
    surface; absence of that field remains an unavailable return route.
-   Authority proof: `TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned` in
+   Authority proof: `TestContract_PatrolActionBrokerOnlyPlans` in
    `internal/api/contract_test.go`.
    The proposal enters that broker from the investigation-only
    `patrol_propose_action` capture (canonical name and descriptor in
@@ -3336,9 +3326,8 @@ a new API state machine, queue contract, or verification-accounting field.
    findings, with its upgrade action gated by the upgrade-prompt policy, and the
    selector must still avoid Limits
    controls, hard-limit matrices, or absent-feature explainers.
-   Compact control labels remain understandable decisions such as `Ask first`,
-   `Safe auto-fix`, and
-   `Autopilot` rather than transport shorthand or Pro-matrix labels, the Patrol
+   Compact control labels remain understandable decisions such as `Watch only`
+   and `Ask first` rather than transport shorthand or Pro-matrix labels, the Patrol
    header description derives from the same
    effective control state, and Settings > Pulse Intelligence > Patrol, which
    replaced the retired header settings drawer, stays limited to model,
@@ -3378,9 +3367,8 @@ a new API state machine, queue contract, or verification-accounting field.
    subject, and action label (`Patrol mode save failure`, `Patrol mode`,
    `Review Patrol mode issue`) describe saving and reviewing Patrol mode rather
    than a generic configuration/apply flow. The Patrol header has no Patrol
-   control or configuration dialog: choosing `Watch only`, `Ask first`, or
-   `Safe auto-fix` in its mode selector saves that mode directly, and its one
-   dialog is the Autopilot acknowledgement opened by choosing `Autopilot`
+   control or configuration dialog: choosing `Watch only` or `Ask first` in its
+   mode selector saves that mode directly
    and the Patrol main-surface treatment itself, so the same governed summary contract lands inside the existing workspace and Current work surfaces while severity travels through compact header accents and icon badges instead of a page-local full-width verdict strip
    and the Patrol workspace badge treatment, so the API-owned finding,
    runtime, and run-history counts remain semantic input only while visible
@@ -3444,10 +3432,10 @@ a new API state machine, queue contract, or verification-accounting field.
    bounded request metadata while leaving tool selection and remediation
    reasoning to the configured LLM instead of serializing a frontend-authored
    tool route or fix plan into the API request
-   and the Patrol control presentation boundary, so frontend copy may summarize
-   assisted mode as low or medium-risk automatic fixes allowed by policy, but
-   the risk threshold itself remains backend-owned and must not be inferred from
-   warning severity, UI labels, or page-local finding state
+   and the Patrol control presentation boundary, so frontend copy must not
+   describe any Patrol mode as running fixes automatically; risk remains
+   backend-owned and must not be inferred from warning severity, UI labels, or
+   page-local finding state
    and the Patrol control route target, so the frontend-owned
    `/patrol#patrol-control` anchor remains the canonical navigation affordance,
    while `/patrol#operations-loop` remains inbound compatibility only, rather
@@ -3519,10 +3507,9 @@ a new API state machine, queue contract, or verification-accounting field.
    and the Patrol mode selector boundary, so the header's `Mode and automation`
    disclosure composes the shared
    `frontend-modern/src/components/shared/FilterButtonGroup.tsx` primitive for
-   the visible `Watch only` / `Ask first` / `Safe auto-fix` /
-   `Autopilot` presentation while the API contract remains the sole owner of
-   accepted autonomy values, `full_mode_unlocked` persistence,
-   license-required rejection shape, and the monitor-only clamp; when the
+   the visible `Watch only` / `Ask first` presentation while the API contract
+   remains the sole owner of accepted autonomy values, the retired-level
+   refusal, license-required rejection shape, and the monitor-only clamp; when the
    API/license state clamps Patrol to monitor for plan reasons, frontend
    consumers must present watch-only as the effective capability without paid
    level badges, disabled paid choices, default Pro-absence explainers, or a
@@ -3530,9 +3517,9 @@ a new API state machine, queue contract, or verification-accounting field.
    the missing runtime; provider model, schedule, trigger tuning, and readiness
    validation must remain advanced settings plumbing alongside that inline
    Patrol mode boundary. API-adjacent frontend and docs projections may keep
-   legacy wire values such as `monitor`, `assisted`, and `full`, but
-   customer-facing copy must name the visible choices as `Watch only`, `Ask first`,
-   `Safe auto-fix`, and `Autopilot` rather than leaking compatibility terminology.
+   wire values such as `monitor` and `approval`, but customer-facing copy must
+   name the visible choices as `Watch only` and `Ask first` rather than leaking
+   compatibility terminology.
    policy rather than changing the compatibility API boundary; setup-only
    readiness may hide those run/configuration affordances, but the Patrol mode
    selector stays in the header's `Mode and automation` disclosure as the
@@ -4221,20 +4208,14 @@ the authoritative analysis outcome.
    self-hosted v6 GA UI
    and the Patrol autonomy save contract, so Community/free runtime payloads
    may persist only `monitor` autonomy settings through
-   `/api/ai/patrol/autonomy`, while `approval`, `assisted`, and an
-   acknowledged `full` return the canonical license-required response instead
-   of a generic save failure (the shared acknowledgement gate refuses a `full`
-   request without a current Autopilot acknowledgement first, for example with
-   `409 acknowledgement_required` when it carries none), and the Patrol
-   frontend state owner must
-   refuse any level other than `monitor` when a save starts while the
-   safe-remediation entitlement is not effective; its payload carries only
-   `autonomy_level`, the investigation budget and timeout, and (for Autopilot)
-   `acknowledgement_id`, never `full_mode_unlocked`. The monitor-only backend
-   path owns the unlock clamp:
-   it must clear stale full-mode unlock and Autopilot activation state in its
-   response and persistence layer instead of preserving paid remediation state
-   through a free configuration save
+   `/api/ai/patrol/autonomy`, while `approval` returns the canonical
+   license-required response instead of a generic save failure and the retired
+   `assisted`, `full`, and `autonomous` levels return `400
+   invalid_autonomy_level` (`GatePatrolAutonomyUpdate` refuses them before the
+   paid handler runs), and the Patrol frontend state owner must refuse any
+   level other than `monitor` when a save starts while the safe-remediation
+   entitlement is not effective; its payload carries only `autonomy_level` and
+   the investigation budget and timeout
    and the Patrol settings-save readiness contract, so
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
@@ -4959,6 +4940,20 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Patrol fix modes retired (2026-10-12)
+
+`/api/ai/patrol/autonomy` accepts and reports only `monitor` and `approval`.
+`GatePatrolAutonomyUpdate` refuses `assisted`, `full`, and `autonomous` with
+`400 invalid_autonomy_level` before the paid handler runs, and the
+monitor-only handler refuses them the same way. The response drops
+`full_mode_unlocked` and `autopilot_acknowledgement`; the acknowledgement
+routes are gone. The core Patrol action broker only plans (`Plan` and `Submit`
+persist and return; `TestContract_PatrolActionBrokerOnlyPlans` forbids
+execution calls in its source), the lifecycle's `ExecuteUnderPolicy`, policy
+admission store methods and authorization lease validation were removed, and
+operator-state no longer carries `autoRemediationPolicy`. Historical action
+records keep their `policyLease` and tenant/resource reason codes decodable.
+
 ### AI Discovery removed (2026-10-11)
 
 AI Discovery, the model-backed service-identification layer, is gone. The
@@ -5349,21 +5344,20 @@ transport fails closed when the connected agent cannot answer it. Registry or
 readiness-check infrastructure failures remain
 nonterminal internal errors rather than false permanent refusals.
 
-Human `Execute` admits through the same policy admission coordinator as
-`ExecuteUnderPolicy`. It holds the admission read lock from the live-readiness
+Human `Execute` admits through the policy admission coordinator (the
+automatic `ExecuteUnderPolicy` path was retired on 2026-10-12). It holds the admission read lock from the live-readiness
 gates, including the operator remediation lock (`NeverAutoRemediate`) and the
 Retired lifecycle state, through the committed `executing` transition, and
 releases it before the executor's `ExecuteAction` is called, so a slow
 dispatch never blocks a policy save. Executor readiness and binding calls and
 the admission hooks still run under the lock, so they can delay a save and must
-never request a policy write or re-enter `Execute`/`ExecuteUnderPolicy`. An
+never request a policy write or re-enter `Execute`. An
 operator lock saved through `WithPolicyMutation` therefore either lands before
 the readiness check and refuses the approved action with a persisted
 refused-before-dispatch failure, or queues behind the committed admission. A
 save that has been acknowledged to the operator is never followed by a new
-lifecycle admission (`Execute` or `ExecuteUnderPolicy`) for that resource.
-The committed `executing` transition is the policy linearization point for both
-paths: a lock refuses new admissions and does not recall an admitted
+lifecycle admission (`Execute`) for that resource.
+The committed `executing` transition is the policy linearization point: a lock refuses new admissions and does not recall an admitted
 dispatch. That includes an attempt that was admitted but never sent (a crash
 between admission and send), which `RecoverExecutingActions` resumes without
 re-reading the lock. Recalling known-unsent work would need an atomic,
@@ -6416,12 +6410,12 @@ operator_state_not_set` response into `null` during rolling updates;
 non-404 errors propagate. The PUT path
 percent-encodes the canonical resource id segment so colon-bearing
 ids round-trip safely through URL routing.
-Operator-state reads must keep `autoRemediationPolicy.capabilityNames`
-iterable. SQLite rows whose policy column is `NULL` normalize to an empty
-capability list before JSON serialization, while the TS compatibility type and
-rendering path continue to tolerate `null` from pre-fix or cached payloads.
-Saving only `intentionallyOffline`, `neverAutoRemediate`, priority, or note
-must therefore never produce a drawer-breaking operator-state response.
+Operator-state reads no longer carry `autoRemediationPolicy`: the
+per-resource automatic-action allowlist was retired on 2026-10-12, the store
+no longer reads its column and writes NULL to it on save, and the request
+decoder ignores the field from older clients. The drawer must still render a
+cached or older-server payload that carries `"capabilityNames": null` as a
+clean record.
 The same read/write shape carries either the legacy one-shot start/end pair or
 `maintenanceRecurrence` (`timezone`, canonical weekdays, start/end minutes),
 never both, plus `maintenanceScope` (`resource` by default or
@@ -10719,9 +10713,16 @@ telemetry, dispositions, and relay wording. Producer migration remains Task 05;
 receipt/verification-attempt recovery remains Task 07; browser presentation
 remains Task 11; final-SHA certification remains Task 12.
 
-### Patrol Autopilot acknowledgement API
+### Patrol Autopilot acknowledgement API (retired 2026-10-12)
 
-`POST /api/ai/patrol/autonomy/acknowledgements` creates immutable
+The acknowledgement routes, the `full_mode_unlocked` and
+`autopilot_acknowledgement` response fields, and the `acknowledgement_id`
+request field were removed with Patrol's self-executing modes. `GET` and `PUT
+/api/ai/patrol/autonomy` now carry only `monitor` and `approval`; a retired
+level is refused with `400 invalid_autonomy_level`. The record below describes
+the removed API.
+
+`POST /api/ai/patrol/autonomy/acknowledgements` created immutable
 server-stamped acknowledgement evidence and
 `DELETE /api/ai/patrol/autonomy/acknowledgements/{id}` appends an exact,
 actor-and-reason-bound revocation. Public JSON may supply only the
@@ -10744,11 +10745,9 @@ fields as omitted; a mode-only activation cannot reset existing controls.
 Paid adapters may return a compact mutation acknowledgement from `PUT`; it is
 not the canonical effective-state projection. First-party clients must follow
 every successful autonomy write with `GET /api/ai/patrol/autonomy` and render
-that read, including license clamps, unlock state, acknowledgement status, and
-server-derived compatibility fields. They must never dereference optional
-fields from the compact write response or optimistically claim Autopilot is
-active. Consumers treat an absent, malformed, or Go zero-time acknowledgement
-`expiresAt` as unbounded/no expiry rather than displaying a year-one date.
+that read, including license clamps. They must never dereference optional
+fields from the compact write response or optimistically claim a mode is
+active.
 
 Task 09 APT executors consume Task 10 `ActionResultV2` without local truth
 enums. Host-update `MutationStarted` means the fixed install command began;

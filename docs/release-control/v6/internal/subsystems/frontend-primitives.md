@@ -4522,6 +4522,12 @@ resolves late` in
 
 ## Current State
 
+### Patrol readiness rows cover two modes (2026-10-12)
+
+`AIModelSelectionSection.tsx` lists Watch only and Ask first suitability only,
+and the `useAISettingsState.ts` failure fallback carries only those two modes,
+because the Safe auto-fix and Autopilot Patrol modes were retired.
+
 ### Retained monitoring status remains reactive (11 October 2026)
 
 The existing Machines status dot subscribes to the shared relative-time clock

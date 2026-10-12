@@ -84,9 +84,8 @@ describe('usePatrolIntelligenceState', () => {
     expect(patrolIntelligenceStateSource).toContain(
       "if (controlLocked && level !== 'monitor') return;",
     );
-    expect(patrolIntelligenceStateSource).toContain(
-      'if (isUpdatingAutonomy() || autoFixLocked()) return;',
-    );
+    expect(patrolIntelligenceStateSource).toContain('if (isUpdatingAutonomy()) return;');
+    expect(patrolIntelligenceStateSource).not.toContain('Autopilot');
   });
 
   it('keeps browser/network start failures distinct from backend rejections', () => {

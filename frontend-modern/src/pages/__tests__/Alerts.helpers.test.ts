@@ -1222,6 +1222,9 @@ describe('Unified selector parity', () => {
     expect(resourceMonitoringPolicyActionSource).toContain(
       "maintenanceScope: current?.maintenanceScope ?? 'resource'",
     );
+    // The per-resource automatic-action allowlist was retired with Patrol's
+    // self-executing modes, so a policy change no longer carries it.
+    expect(resourceMonitoringPolicyActionSource).not.toContain('autoRemediationPolicy');
   });
 
   it('maps all unified resource types to display types', () => {

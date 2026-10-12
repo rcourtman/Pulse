@@ -6,7 +6,6 @@ export interface PatrolAutonomyExperience {
   label: string;
   summary: string;
   needsYouDescription: string;
-  quietWorkDescription: string;
 }
 
 export const PATROL_AUTONOMY_EXPERIENCE: Record<PatrolAutonomyLevel, PatrolAutonomyExperience> = {
@@ -14,30 +13,12 @@ export const PATROL_AUTONOMY_EXPERIENCE: Record<PatrolAutonomyLevel, PatrolAuton
     label: 'Watch only',
     summary: 'Patrol checks continuously and keeps every infrastructure decision with you.',
     needsYouDescription: 'Every current issue stays in your queue for review in Watch only mode.',
-    quietWorkDescription: 'Patrol continues watching these issues without making changes.',
   },
   approval: {
     label: 'Ask first',
     summary: 'Patrol investigates and prepares fixes, then waits for your approval.',
     needsYouDescription:
       'These issues are waiting for a decision or approval before work can continue.',
-    quietWorkDescription: 'Patrol continues investigating while it waits for the decisions above.',
-  },
-  assisted: {
-    label: 'Safe auto-fix',
-    summary: 'Patrol handles policy-allowed safe work and asks when risk or evidence needs you.',
-    needsYouDescription:
-      'This queue contains only work blocked by policy, risk, missing evidence, or verification.',
-    quietWorkDescription:
-      'Other current issues can proceed within the safe auto-fix policy without a decision from you.',
-  },
-  full: {
-    label: 'Autopilot',
-    summary:
-      'Patrol handles allowed work in the background and interrupts only when it cannot proceed safely.',
-    needsYouDescription: 'This queue contains only work Patrol cannot complete safely without you.',
-    quietWorkDescription:
-      'Other current issues do not require a decision under Autopilot and remain visible in Alerts.',
   },
 };
 
@@ -46,76 +27,30 @@ export interface PatrolAttentionDecision {
   reason: string;
 }
 
-const itemHasTrustGap = (item: AttentionItem): boolean =>
-  item.state === 'unknown' ||
-  item.evidenceFreshness !== 'fresh' ||
-  item.evidenceCompleteness !== 'complete' ||
-  item.verificationState === 'failed' ||
-  item.verificationState === 'unknown';
-
 export function getPatrolAttentionDecisionReason(
   item: AttentionItem,
   autonomyLevel: PatrolAutonomyLevel,
   autonomyLocked = false,
-): string | null {
-  const effectiveLevel = autonomyLocked ? 'monitor' : autonomyLevel;
-
-  if (effectiveLevel === 'monitor') {
-    return 'Watch only will not make changes. Review this issue and decide what should happen.';
-  }
-
-  if (effectiveLevel === 'approval') {
+): string {
+  if (!autonomyLocked && autonomyLevel === 'approval') {
     return item.availableActions.length > 0
       ? 'Patrol has an action to review, but Ask first requires your approval.'
       : 'Patrol cannot complete this issue without your decision.';
   }
-
-  if (itemHasTrustGap(item)) {
-    return item.verificationState === 'failed' || item.verificationState === 'unknown'
-      ? 'Patrol could not verify the outcome and needs you to review the evidence.'
-      : 'Patrol does not have trustworthy enough evidence to proceed automatically.';
-  }
-
-  const eligibleActions = item.availableActions.filter(
-    (action) => action.eligibility === 'eligible',
-  );
-  if (eligibleActions.length === 0) {
-    return item.availableActions.length > 0
-      ? 'Available actions are blocked or ineligible, so Patrol needs your decision.'
-      : 'Patrol has no governed action for this issue and needs you to decide what happens next.';
-  }
-
-  const canProceedWithoutAnotherDecision = eligibleActions.some(
-    (action) =>
-      action.approval === 'not-required' ||
-      action.approval === 'granted' ||
-      (!action.requiresApproval && action.approval !== 'denied'),
-  );
-  if (!canProceedWithoutAnotherDecision) {
-    return 'A governed action still requires your approval or a policy decision.';
-  }
-
-  return null;
+  return 'Watch only will not make changes. Review this issue and decide what should happen.';
 }
 
-export function partitionPatrolAttention(
+// Patrol never acts on its own, so every current issue is a decision for the
+// operator; the reason says what kind.
+export function getPatrolAttentionDecisions(
   items: AttentionItem[],
   autonomyLevel: PatrolAutonomyLevel,
   autonomyLocked = false,
-): { needsUser: PatrolAttentionDecision[]; quiet: AttentionItem[] } {
-  const needsUser: PatrolAttentionDecision[] = [];
-  const quiet: AttentionItem[] = [];
-
-  for (const item of items) {
-    const reason = getPatrolAttentionDecisionReason(item, autonomyLevel, autonomyLocked);
-    if (reason) {
-      needsUser.push({ item, reason });
-    } else {
-      quiet.push(item);
-    }
-  }
-
-  return { needsUser, quiet };
+): PatrolAttentionDecision[] {
+  return items.map((item) => ({
+    item,
+    reason: getPatrolAttentionDecisionReason(item, autonomyLevel, autonomyLocked),
+  }));
 }
 
 export interface PatrolObjectiveProtectionSummary {

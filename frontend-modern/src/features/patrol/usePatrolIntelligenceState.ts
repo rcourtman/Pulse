@@ -1,15 +1,12 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import {
-  createPatrolAutopilotAcknowledgement,
   getPatrolAutonomySettings,
   getPatrolRunHistory,
   getPatrolStatus,
-  revokePatrolAutopilotAcknowledgement,
   triggerPatrolRun,
   updatePatrolAutonomySettings,
   type PatrolAutonomyLevel,
-  type PatrolAutopilotStatus,
   type PatrolRunRecord,
   type PatrolRuntimeState,
   type PatrolStatus,
@@ -121,10 +118,6 @@ export function usePatrolIntelligenceState() {
   >(undefined);
   const [isManualRefreshRunning, setIsManualRefreshRunning] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
-  const [requestedAutonomyLevel, setRequestedAutonomyLevel] =
-    createSignal<PatrolAutonomyLevel>('monitor');
-  const [autopilotStatus, setAutopilotStatus] = createSignal<PatrolAutopilotStatus | null>(null);
-  const [autopilotDialogOpen, setAutopilotDialogOpen] = createSignal(false);
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
@@ -465,9 +458,7 @@ export function usePatrolIntelligenceState() {
     try {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
-      setRequestedAutonomyLevel(settings.requested_autonomy_level);
       setAutonomyLevel(settings.effective_autonomy_level);
-      setAutopilotStatus(settings.autopilot_acknowledgement);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
     } catch (err) {
@@ -479,11 +470,6 @@ export function usePatrolIntelligenceState() {
     if (isUpdatingAutonomy()) return;
     const controlLocked = autoFixLocked();
     if (controlLocked && level !== 'monitor') return;
-
-    if (level === 'full') {
-      setAutopilotDialogOpen(true);
-      return;
-    }
     const previousLevel = autonomyLevel();
     const shouldRecordPatrolControlStarter = !controlLocked && level !== previousLevel;
     setIsUpdatingAutonomy(true);
@@ -495,9 +481,9 @@ export function usePatrolIntelligenceState() {
         investigation_timeout_sec: investigationTimeout(),
       });
       // The paid runtime intentionally returns a compact mutation receipt,
-      // while GET is the authoritative projection of effective mode and the
-      // server-owned Autopilot acknowledgement. Reconcile after every write
-      // instead of assuming both runtime editions return the same envelope.
+      // while GET is the authoritative projection of effective mode.
+      // Reconcile after every write instead of assuming both runtime
+      // editions return the same envelope.
       await loadAutonomySettings();
       if (shouldRecordPatrolControlStarter) {
         await recordPatrolControlStarterActivity();
@@ -507,51 +493,6 @@ export function usePatrolIntelligenceState() {
       console.error('Failed to update autonomy:', err);
       setAutonomyLevel(previousLevel);
       notificationStore.error((err as Error).message || 'Failed to update Patrol mode');
-    } finally {
-      setIsUpdatingAutonomy(false);
-    }
-  }
-
-  async function acknowledgeAndActivateAutopilot() {
-    if (isUpdatingAutonomy() || autoFixLocked()) return;
-    setIsUpdatingAutonomy(true);
-    const acknowledgementId =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `patrol-autopilot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    try {
-      const acknowledgement = await createPatrolAutopilotAcknowledgement(acknowledgementId);
-      await updatePatrolAutonomySettings({
-        autonomy_level: 'full',
-        acknowledgement_id: acknowledgement.acknowledgement.acknowledgementId || acknowledgementId,
-        investigation_budget: investigationBudget(),
-        investigation_timeout_sec: investigationTimeout(),
-      });
-      await loadAutonomySettings();
-      setAutopilotDialogOpen(false);
-      await recordPatrolControlStarterActivity();
-      await loadVisiblePatrolData();
-      notificationStore.success('Autopilot acknowledgement recorded and mode activated.');
-    } catch (err) {
-      await loadAutonomySettings();
-      notificationStore.error((err as Error).message || 'Autopilot could not be activated.');
-    } finally {
-      setIsUpdatingAutonomy(false);
-    }
-  }
-
-  async function revokeAutopilot() {
-    const acknowledgementId = autopilotStatus()?.acknowledgementId;
-    if (!acknowledgementId || isUpdatingAutonomy()) return;
-    setIsUpdatingAutonomy(true);
-    try {
-      await revokePatrolAutopilotAcknowledgement(acknowledgementId);
-      await loadAutonomySettings();
-      notificationStore.success('Autopilot acknowledgement revoked. Effective mode refreshed.');
-    } catch (err) {
-      notificationStore.error(
-        (err as Error).message || 'Autopilot acknowledgement could not be revoked.',
-      );
     } finally {
       setIsUpdatingAutonomy(false);
     }
@@ -738,10 +679,6 @@ export function usePatrolIntelligenceState() {
   return {
     activeTab,
     autonomyLevel,
-    requestedAutonomyLevel,
-    autopilotStatus,
-    autopilotDialogOpen,
-    acknowledgeAndActivateAutopilot,
     autoFixCapabilityBlock,
     autoFixLocked,
     blockedAt,
@@ -762,7 +699,6 @@ export function usePatrolIntelligenceState() {
     isTogglingPatrol,
     isTriggeringPatrol,
     isUpdatingAutonomy,
-    revokeAutopilot,
     licenseRequired,
     licenseRuntimeIdentity,
     manualRunRequested,
@@ -781,7 +717,6 @@ export function usePatrolIntelligenceState() {
     selectedRunScopeResourceIds,
     setActiveTab,
     setFindingsFilterOverride,
-    setAutopilotDialogOpen,
     setSelectedRun,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;

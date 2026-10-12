@@ -33,7 +33,7 @@ const snapshot = (
     context_quality: dimension('not_assessed'),
     latency: dimension('not_assessed'),
   },
-  modes: { monitor: mode(), approval: mode(), assisted: mode(), full: mode() },
+  modes: { monitor: mode(), approval: mode() },
   recorded_at: '2026-07-28T10:00:00Z',
   recorded_at_unix: 1_785_232_800,
   ...overrides,

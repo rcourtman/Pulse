@@ -1391,7 +1391,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/issue1640_readiness_gate_test.go",
                         "internal/api/issue1640_readiness_transport_test.go",
                         "internal/api/metadata_handlers_test.go",
-                        "internal/api/patrol_autopilot_test.go",
                         "internal/api/runtime_inventory_sources_test.go",
                         "internal/api/truenas_disk_history_integration_test.go",
                         "pulse-enterprise:test/extensions_contract_test.go",
@@ -2638,38 +2637,26 @@ None yet.
         self.assertEqual(blocked, 1)
         self.assertIn("same-subsystem test/spec files are also accepted", stderr.getvalue())
 
-    def test_patrol_autopilot_runtime_accepts_only_dedicated_verification(self):
+    def test_patrol_mode_runtime_accepts_dedicated_verification(self):
         rules = {rule["id"]: rule for rule in load_subsystem_rules()}
         cases = [
             (
                 "ai-runtime",
                 "internal/api/ai_handlers.go",
                 "ai-api-surface",
-                "internal/api/patrol_autopilot_test.go",
+                "internal/api/ai_handlers_test.go",
             ),
             (
                 "api-contracts",
                 "internal/api/ai_handlers.go",
                 "backend-payload-contracts",
-                "internal/api/patrol_autopilot_test.go",
+                "internal/api/contract_test.go",
             ),
             (
                 "ai-runtime",
                 "internal/config/ai.go",
                 "ai-runtime-config",
-                "internal/config/patrol_autopilot_persistence_test.go",
-            ),
-            (
-                "ai-runtime",
-                "internal/config/patrol_autopilot_persistence.go",
-                "ai-runtime-config",
-                "internal/config/patrol_autopilot_persistence_test.go",
-            ),
-            (
-                "unified-resources",
-                "internal/unifiedresources/patrol_autopilot.go",
-                "patrol-autopilot-runtime",
-                "internal/unifiedresources/patrol_autopilot_test.go",
+                "internal/config/ai_config_test.go",
             ),
         ]
 
