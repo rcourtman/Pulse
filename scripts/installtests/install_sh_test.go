@@ -7947,11 +7947,40 @@ ACTION_RUNNER_TOKEN_FILE="` + paths[3] + `"
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(paths[3]) + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Dir(paths[4]) + `"
 EXIT_GENERAL=1
-systemctl() { printf '%s\n' "$*" >> "` + serviceLog + `"; return 0; }
+runner_stopped=false runner_disabled=false
+timeout() {
+    [[ "$1 $2 $3 $4" == '-k 1 5 systemctl' ]] || return 90
+    shift 4
+    systemctl "$@"
+}
+systemctl() {
+    printf '%s\n' "$*" >> "` + serviceLog + `"
+    case "$1" in
+        show)
+            if [[ "$runner_stopped" == true ]]; then
+                printf 'ActiveState=inactive\n'
+            else
+                printf 'ActiveState=active\n'
+            fi
+            if [[ "$runner_disabled" == true ]]; then
+                printf 'UnitFileState=disabled\n'
+            else
+                printf 'UnitFileState=enabled\n'
+            fi
+            printf 'LoadState=loaded\n'
+            ;;
+        stop) runner_stopped=true ;;
+        disable) runner_disabled=true ;;
+        *) return 91 ;;
+    esac
+}
 revoke_action_runner_credential() { return 1; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "read_agent_removal_unit_state") + `
+` + extractInstallShellFunction(t, "confirm_agent_unit_quiescent") + `
+` + extractInstallShellFunction(t, "quiesce_agent_units_for_removal") + `
 ` + extractInstallShellFunction(t, "teardown_action_runner_service") + `
 teardown_action_runner_service
 `
