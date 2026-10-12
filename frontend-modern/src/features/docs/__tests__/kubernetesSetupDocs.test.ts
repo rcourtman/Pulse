@@ -38,7 +38,7 @@ describe('Kubernetes credential setup and diagnosis', () => {
 
   it('shows four failure paths without promoting pods or tokens for diagnosis', () => {
     const article = articleFor('KUBERNETES');
-    const heading = article.querySelector('#4-troubleshooting')!;
+    const heading = article.querySelector('[id="4-troubleshooting"]')!;
     expect(heading).not.toBeNull();
     let table = heading.nextElementSibling;
     while (table && table.tagName !== 'TABLE') table = table.nextElementSibling;
