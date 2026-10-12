@@ -105,9 +105,9 @@ func TestLargePVEClusterPublishesCompleteGenerationWhenEnrichmentBudgetExpires(t
 		resources:     largeClusterResources(),
 	}
 	monitor.replacePVEClient("large-cluster", client)
-	// Expire only deep enrichment. The parent still owns the authoritative
-	// inventory and its reserved publication tail, unlike explicit cancellation.
-	ctx, cancel := context.WithTimeout(context.Background(), pvePollTailReserve-time.Second)
+	// Deadline exhaustion must not lose completed authoritative inventory.
+	// It is distinct from explicit cancellation or a retired connection.
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 
 	started := time.Now()
@@ -187,9 +187,7 @@ func TestLargePVEClusterCoreSuccessKeepsConnectionHealthy(t *testing.T) {
 	monitor.config.PVEInstances[0].MonitorContainers = true
 	monitor.replacePVEClient("large-cluster", client)
 
-	// This models an already exhausted detail budget, not cancellation of the
-	// entire connection cycle. Leave its authoritative publication tail alive.
-	ctx, cancel := context.WithTimeout(context.Background(), pvePollTailReserve-time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	monitor.pollPVEInstance(ctx, "large-cluster", client)
 

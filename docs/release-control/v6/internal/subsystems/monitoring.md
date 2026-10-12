@@ -7296,8 +7296,10 @@ replacement's guest readings. An interrupted inventory does not grant fallback.
 One cycle per live binding owns collection until it completes, including when
 its caller is cancelled. Another connection can still advance independently.
 
-Deep-enrichment expiry is distinct from parent-cycle cancellation: a complete
-authoritative inventory still publishes within the reserved parent tail. An
+Deep-enrichment/caller-deadline expiry is distinct from explicit parent-cycle
+cancellation: already collected authoritative inventory still publishes even
+when local assembly outlasts the caller budget. No new read or fallback is
+admitted after deadline expiry. An
 accepted collection retains existing failed-node/grace rules, empty-inventory
 handling and metric/source/age policy. Focused builder and collector entry points
 retain their existing immediate effects. No guest operation lock, consumed-read

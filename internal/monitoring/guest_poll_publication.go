@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -10,7 +11,8 @@ import (
 // A guest cycle collects outside publication locks. Its effects are staged
 // until both guest kinds are ready and the registered connection still owns
 // this cycle. Child enrichment deadlines do not invalidate an authoritative
-// inventory; cancellation of the parent cycle does.
+// inventory. An expired caller budget also keeps completed inventory usable;
+// explicit cancellation of the parent cycle does not.
 type pveGuestPoll struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -87,7 +89,12 @@ func (m *Monitor) publishPVEGuests(ctx context.Context, instance string, vms []m
 	m.pveGuestPublicationMu.RLock()
 	defer m.pveGuestPublicationMu.RUnlock()
 	m.mu.RLock()
-	current := owner.ctx.Err() == nil && m.pveGuestPolls[instance] == owner && m.pveClients[instance] == owner.client && (m.runtimeCtx == nil || m.runtimeCtx.Err() == nil)
+	cycleErr := owner.ctx.Err()
+	// A caller deadline bounds remote enrichment, not the lifetime of the
+	// configured connection. Keep the existing authoritative-inventory tail
+	// even if local assembly outlasts that budget. Explicit cancellation, an
+	// ended runtime or a changed binding still withdraws the entire cycle.
+	current := (cycleErr == nil || errors.Is(cycleErr, context.DeadlineExceeded)) && m.pveGuestPolls[instance] == owner && m.pveClients[instance] == owner.client && (m.runtimeCtx == nil || m.runtimeCtx.Err() == nil)
 	m.mu.RUnlock()
 	if !current {
 		return
