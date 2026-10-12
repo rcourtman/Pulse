@@ -680,6 +680,11 @@ same units and memory allocation. The Proxmox node's available memory is not the
 VM's available memory, and a single application's RSS is not total guest usage.
 Do not sum process RSS to infer guest pressure: processes can share pages.
 
+For History comparisons, keep each panel's stored time and qualification with
+the value; a range endpoint, page refresh or today's live source does not date
+a past reading. Use [History panel interpretation](METRICS_HISTORY.md#read-a-history-panel)
+to distinguish a missing observation from zero, and stored data from fallback.
+
 | Reading | What it describes | What it does not establish |
 | --- | --- | --- |
 | Linux `available` / `MemAvailable` | An estimate of memory usable for new allocations without swapping, including some reclaimable cache. | It is not just `free`, a guarantee of every allocation succeeding, or a reading for another guest. |
