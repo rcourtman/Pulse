@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"os"
@@ -96,7 +97,13 @@ func TestAutoImportRetainsDestinationState(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Inert sentinels, including .db: no database or executable is opened.
-			if err := os.WriteFile(path, []byte("synthetic-retained-state"), 0600); err != nil {
+			state := []byte("synthetic-retained-state")
+			if name == ".encryption.key" {
+				// A valid synthetic key keeps the adverse control about admission,
+				// rather than terminating in the constructor's key validation.
+				state = []byte(base64.StdEncoding.EncodeToString(make([]byte, 32)))
+			}
+			if err := os.WriteFile(path, state, 0600); err != nil {
 				t.Fatal(err)
 			}
 			setAutoImportInputs(t, dir, payload, passphrase)
@@ -253,6 +260,10 @@ func TestAutoImportRejectsUncertainDestination(t *testing.T) {
 			t.Setenv("PULSE_DATA_DIR", dir)
 			if ShouldAutoImport() {
 				t.Error("unknown or nonempty destination was admitted")
+				// The unchanged constructor can terminate the process on an
+				// invalid directory. The gate failure already proves that fault;
+				// exercise the direct refusal only after safe admission exists.
+				return
 			}
 			if err := PerformAutoImport(); err == nil {
 				t.Error("unknown or nonempty destination allowed direct startup import")

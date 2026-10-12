@@ -18,6 +18,27 @@
 
 ## Purpose
 
+### Startup provisioning cannot replace retained access
+
+`pkg/server/server.go` admits environment-selected startup import only into an
+absent or empty resolved data directory; a regular deployment `.env` is the
+only allowed pre-start entry. Existing non-Proxmox settings, token/session
+records, encryption keys, tenant directories and unknown contents all block it.
+Directory inspection errors, non-directories and symlinks are not absence.
+Admission reads no file contents and creates no persistence/key. The importer
+rechecks before creating persistence or writing and audits a classified refusal
+without a path, archive or passphrase. This is not cross-process exclusion:
+provision an isolated destination and keep the source archive outside it.
+
+`TestStartupImportRetainsNonProxmoxAccess` exercises ordinary configuration
+loading, retained agent-token validation and session/key bytes through both
+production startup helpers. It also proves that deliberate `ImportConfig`
+transfer still replaces the included records while keeping excluded local state.
+`auto_import_destination_test.go` covers blank provisioning, `.env`, all
+observed/unknown destination types, uncertain access, pre-write recheck and
+file precedence/refusal. Encrypted export scope and authenticated Recovery
+authorisation are unchanged; source proof is not installed transfer acceptance.
+
 ### Explicit agent credential-file failure does not borrow authority
 
 The `cmd/pulse-agent/main.go` flag loader keeps `PULSE_TOKEN` separate from an

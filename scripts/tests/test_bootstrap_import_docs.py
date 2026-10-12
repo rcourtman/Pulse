@@ -24,13 +24,18 @@ class BootstrapImportDocsTest(unittest.TestCase):
         return bootstrap((ROOT / "docs/CONFIGURATION.md").read_text())
 
     def assert_gate_and_result(self, text):
-        for boundary in ("`nodes.enc`", "`PULSE_DATA_DIR`", "file-presence check",
-                         "not a record of the first run", "Other existing settings",
-                         "do not prevent", "Do not delete `nodes.enc`",
+        for boundary in ("`nodes.enc`", "`PULSE_DATA_DIR`", "empty data directory",
+                         "only exception", "API-token records", "encryption keys",
+                         "unknown contents", "all prevent startup import",
+                         "Unreadable directories and symbolic links",
+                         "checks the destination again before writing",
+                         "lock against another running Pulse process",
+                         "Do not delete `nodes.enc`",
                          "not proof that import succeeded", "startup continues",
                          "normal configuration loading", "can itself fail"):
             self.assertIn(boundary, text)
         self.assertNotIn("auto-imports on first start", text)
+        self.assertNotIn("do not prevent an import attempt", text)
 
     def assert_transfer_scope(self, text):
         for boundary in ("MIGRATION.md#configuration-transfer", "not a full-state backup",
@@ -59,7 +64,9 @@ class BootstrapImportDocsTest(unittest.TestCase):
                          "owner-only", "private credential source", "separate from the backup",
                          "command arguments, URLs, shared Compose files, logs or issue reports",
                          "base64 is not redaction", "no passphrase-file variable",
-                         "authenticated Recovery form"):
+                         "authenticated Recovery form",
+                         "outside the destination data directory",
+                         "archive placed inside it", "retains those contents"):
             self.assertIn(boundary, text)
         self.assertNotRegex(text, r"PULSE_INIT_CONFIG_(?:PASSPHRASE_FILE|FORCE)")
         self.assertNotRegex(text, r"```(?:bash|sh|shell|yaml|dotenv)\b")
@@ -81,7 +88,7 @@ class BootstrapImportDocsTest(unittest.TestCase):
         # Removing either boundary restores a real misleading interpretation.
         text = self.guide()
         for changed in (
-            text.replace("not a record of the first run", "a record of the first run"),
+            text.replace("all prevent startup import", "do not prevent startup import"),
             text.replace("not proof that import succeeded", "proof that import succeeded"),
         ):
             with self.assertRaises(AssertionError):

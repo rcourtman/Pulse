@@ -50,8 +50,17 @@ func TestStartupImportRetainsNonProxmoxAccess(t *testing.T) {
 	if ShouldAutoImport() {
 		t.Error("ordinary restart was admitted as fresh provisioning")
 	}
+	capture := setCaptureAuditLogger(t)
 	if err := PerformAutoImport(); err == nil {
 		t.Error("startup import replaced existing access")
+	}
+	if len(capture.events) != 1 || capture.events[0].Success ||
+		!strings.Contains(capture.events[0].Details, "reason=destination_not_empty") {
+		t.Error("ordinary restart refusal lost its classified audit result")
+	} else if strings.Contains(capture.events[0].Details, dir) ||
+		strings.Contains(capture.events[0].Details, payload) ||
+		strings.Contains(capture.events[0].Details, passphrase) {
+		t.Error("ordinary restart audit disclosed private import inputs")
 	}
 	if after := snapshotAutoImportDestination(t, dir); !reflect.DeepEqual(before, after) {
 		t.Error("startup import changed the retained installation")

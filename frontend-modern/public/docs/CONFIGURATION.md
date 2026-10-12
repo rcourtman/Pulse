@@ -510,12 +510,16 @@ not resetting an existing installation. It uses the same encrypted
 Recovery settings form, not a full-state backup. Included settings and API-token
 records are **replaced, not merged**; imported SSO settings can also change access.
 
-The startup gate checks for `nodes.enc` in the effective data directory
-(`PULSE_DATA_DIR`, or the deployment default). If that file exists, startup
-skips import. **This is a file-presence check, not a record of the first run.**
-Other existing settings, API-token records or session files alone do not prevent
-an import attempt. Do not delete `nodes.enc`, change the data path or remove
-credentials to force one; resolve an unexpected path or access failure first.
+The startup gate requires an **empty data directory** (`PULSE_DATA_DIR`, or
+the deployment default), or a destination that does not yet exist. A regular
+`.env` file for destination-local deployment overrides is the only exception.
+Existing settings, API-token records, sessions, encryption keys, organisation
+directories and unknown contents all prevent startup import, even without
+`nodes.enc`. Unreadable directories and symbolic links are not treated as empty.
+The importer checks the destination again before writing, but this is **not a
+lock against another running Pulse process**. Do not delete `nodes.enc` or
+other state, change the data path or remove credentials to force an import;
+resolve an unexpected path or access failure first.
 For an existing installation, use the
 [reviewed transfer procedure](MIGRATION.md#transfer-the-included-configuration)
 instead, with a private backup of the destination before replacing settings.
@@ -529,6 +533,10 @@ instead, with a private backup of the destination before replacing settings.
 An unreadable or invalid file fails the attempt; it does **not** fall back to
 the data variable. `PULSE_INIT_CONFIG_URL` is not supported by server startup;
 the separate hidden `pulse config auto-import` command has a different path.
+Keep the input archive **outside the destination data directory**. An archive
+placed inside it also makes the destination nonempty; startup skips import
+and retains those contents. Use a separate private file or read-only mount,
+not deletion of useful destination state.
 
 Keep the export owner-only and its passphrase in the deployment's private
 credential source, separate from the backup. Do not put a passphrase or bundle

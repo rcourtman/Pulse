@@ -5,7 +5,9 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -166,7 +168,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 		return err
 	}
 
-	// Check for auto-import on first startup
+	// Bootstrap only a blank destination, before ordinary loading creates state.
 	if ShouldAutoImport() {
 		if err := PerformAutoImport(); err != nil {
 			log.Error().Err(err).Msg("Auto-import failed, continuing with normal startup")
@@ -1070,14 +1072,59 @@ func startMetricsServer(ctx context.Context, addr string, metricsToken string, a
 }
 
 func ShouldAutoImport() bool {
-	configPath := config.ResolveRuntimeDataDir("")
-
-	if _, err := os.Stat(filepath.Join(configPath, "nodes.enc")); err == nil {
+	if os.Getenv("PULSE_INIT_CONFIG_DATA") == "" && os.Getenv("PULSE_INIT_CONFIG_FILE") == "" {
 		return false
 	}
 
-	return os.Getenv("PULSE_INIT_CONFIG_DATA") != "" ||
-		os.Getenv("PULSE_INIT_CONFIG_FILE") != ""
+	if err := checkAutoImportDestination(config.ResolveRuntimeDataDir("")); err != nil {
+		log.Warn().Err(err).Msg("Startup auto-import skipped; destination state is retained")
+		return false
+	}
+	return true
+}
+
+var (
+	errAutoImportDestinationNotEmpty = errors.New("startup import requires an empty data directory; use authenticated Recovery for an existing installation")
+	errAutoImportDestinationUnknown  = errors.New("cannot inspect the startup import destination; resolve its path and access before importing")
+)
+
+// checkAutoImportDestination must not construct persistence: doing so creates
+// an encryption key before admission. nodes.enc is not a first-run marker for
+// agent-only, TrueNAS or vSphere installations. Retain every unknown entry too,
+// so new persistence stores cannot silently fall outside the bootstrap guard.
+// A regular .env is the only exception for pre-start deployment overrides;
+// keep the input archive outside the destination, not alongside retained state.
+func checkAutoImportDestination(dataDir string) error {
+	info, err := os.Lstat(dataDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil || !info.IsDir() {
+		return errAutoImportDestinationUnknown
+	}
+	dir, err := os.Open(dataDir)
+	if err != nil {
+		return errAutoImportDestinationUnknown
+	}
+	defer dir.Close()
+
+	// Read one entry at a time: admission does not need an unbounded listing,
+	// file contents, decryption or an attempt to repair the destination.
+	for {
+		entries, err := dir.ReadDir(1)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return errAutoImportDestinationUnknown
+		}
+		for _, entry := range entries {
+			if entry.Name() == ".env" && entry.Type().IsRegular() {
+				continue
+			}
+			return errAutoImportDestinationNotEmpty
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+	}
 }
 
 func PerformAutoImport() error {
@@ -1131,6 +1178,17 @@ func PerformAutoImport() error {
 	}
 
 	configPath := config.ResolveRuntimeDataDir("")
+	// Do not rely on an earlier ShouldAutoImport result or a caller using it.
+	// This is a pre-write recheck, not a lock against another Pulse process;
+	// provisioning still requires an isolated destination.
+	if err := checkAutoImportDestination(configPath); err != nil {
+		reason := "destination_unavailable"
+		if errors.Is(err, errAutoImportDestinationNotEmpty) {
+			reason = "destination_not_empty"
+		}
+		logAudit(false, reason)
+		return err
+	}
 
 	persistence := config.NewConfigPersistence(configPath)
 	if err := persistence.ImportConfig(encryptedData, configPass); err != nil {
