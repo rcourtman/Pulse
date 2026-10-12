@@ -136,9 +136,16 @@ func TestGuestMemoryLifecycleRestartPublishesNewSample(t *testing.T) {
 						t.Fatal(err)
 					}
 					var served []struct{ Proxmox unifiedresources.ProxmoxData }
-					if err := json.Unmarshal(data, &served); err != nil || len(served) != 1 || served[0].Proxmox.Memory.Used != resumed.Memory.Used || served[0].Proxmox.Memory.Observation != resumed.Memory.Observation {
-						t.Errorf("served memory lost the new sample: %s / %v", data, err)
+					if err := json.Unmarshal(data, &served); err != nil || len(served) != 1 || served[0].Proxmox.Memory == nil {
+						t.Fatalf("served memory missing: %s / %v", data, err)
 					}
+					wire := served[0].Proxmox.Memory
+					if wire.Total != resumed.Memory.Total || wire.Used != resumed.Memory.Used || wire.Free != resumed.Memory.Free || wire.Cache != resumed.Memory.Cache || wire.Usage != resumed.Memory.Usage || wire.UsageUnavailable != resumed.Memory.UsageUnavailable {
+						t.Errorf("served memory lost the numeric/availability tuple: %+v", wire)
+					}
+					// JSON preserves the instant, not Go's process-local monotonic
+					// clock component. Compare the exact wall-clock origin by Equal.
+					assertGuestMemoryObservation(t, *wire, "current", "guest-agent-meminfo", resumed.Memory.Observation.ObservedAt)
 					points := m.metricsHistory.GetGuestMetrics(initial.ID, "memory", time.Hour)
 					if len(points) != 2 || points[0].Value != 25 || points[1].Value != 50 {
 						t.Errorf("restart History retained old numeric memory: %+v", points)

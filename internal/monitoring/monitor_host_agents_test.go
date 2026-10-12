@@ -8468,11 +8468,12 @@ func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
 		guestMemoryCacheKey("site-other", "node", 105): entry,
 	}}
 	m.state.UpsertHost(host)
+	before := m.state.GetSnapshot().Hosts // Compare stored, cloned telemetry, not its pre-normalisation input.
 	m.retirePVEInstanceRuntime(instance)
 	if len(m.vmAgentMemCache) != 2 || m.vmAgentMemCache[guestMemoryCacheKey("site/other", "node", 105)] != entry || m.vmAgentMemCache[guestMemoryCacheKey("site-other", "node", 105)] != entry {
 		t.Error("connection retirement retained its own QGA memory or erased a different connection")
 	}
-	if got := m.state.GetSnapshot().Hosts; !reflect.DeepEqual(got, []models.Host{host}) {
+	if got := m.state.GetSnapshot().Hosts; !reflect.DeepEqual(got, before) {
 		t.Error("QGA memory retirement changed independent Pulse-agent reports")
 	}
 	id := makeGuestID(instance, "node", 105)
