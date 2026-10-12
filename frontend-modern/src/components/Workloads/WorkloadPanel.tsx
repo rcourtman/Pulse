@@ -38,6 +38,7 @@ type WorkloadPanelProps = Pick<
   | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
+  | 'selectedGuestDrawerState'
   | 'selectedGuestId'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
@@ -197,6 +198,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           data-inline-detail-for={guestId()}
                         >
                           <GuestDrawer
+                            viewState={props.selectedGuestDrawerState}
                             guest={guest()}
                             onClose={() => props.setSelectedGuestId(null)}
                             metadataId={metadataIdCandidates()[0] || guestId()}

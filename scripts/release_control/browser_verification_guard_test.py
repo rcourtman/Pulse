@@ -598,7 +598,7 @@ class IntegrationRangeTest(GuardRepoTestCase):
         step = workflow.split("      - name: Validate final frontend browser evidence\n", 1)[1]
         step = step.split("\n      - name:", 1)[0]
         command = textwrap.dedent(step.split("        run: |\n", 1)[1])
-        for name in ("browser_verification_guard.py", "format_staged_frontend.py"):
+        for name in ("browser_verification_guard.py", "format_staged_frontend.py", "repo_file_io.py"):
             self.write("scripts/release_control/" + name,
                        (REPO_ROOT / "scripts/release_control" / name).read_text())
         return subprocess.run(

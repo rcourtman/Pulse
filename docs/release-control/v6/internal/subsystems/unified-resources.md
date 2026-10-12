@@ -5202,12 +5202,19 @@ Docker-only semantics when host telemetry is also present. Runtime-local
 filters like `agent` or cluster context may still be added as secondary scope,
 but the canonical platform query must remain the first-class route-state
 boundary for shared workload navigation.
-That same shared workload-route contract also owns exact guest selection for
-node-scoped workloads. Proxmox VM and system-container links must emit the
-canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
-`resource` query rather than an opaque unified-resource id, so direct route
-loads and cross-surface drill-downs reopen the correct workload drawer instead
-of landing on an unselected table state.
+Shared workload routes, rows and selection use the exact unified `Resource.id`
+for every workload kind. Moving a Proxmox guest to another node does not create
+a new selection identity. Existing node-scoped bookmarks resolve through the
+registry's current/declared-succession/unique-alias boundary, with ambiguity
+refused. Provider coordinates remain explicit compatibility inputs for guest
+metadata, native collection and History targets. They must not be rebuilt into
+primary row identity or used to merge independent instance clones.
+History uses an explicit backend metrics target when present. Its legacy
+Proxmox fallback formats the current instance, node and VMID through the shared
+native guest formatter, independently of the canonical selection ID. A guest
+move changes that native target while retaining the selected canonical row.
+The workload target tests and current-source desktop, intermediate and phone
+browser matrix cover both supplied targets and missing-target fallback.
 Unified resources carry no recovery route-state vocabulary. The recovery
 query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
 `buildRecoveryRouteSearch`) was deleted from

@@ -22,7 +22,7 @@ import {
   getWorkloadsLoadingState,
   getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -136,13 +136,20 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
 
-  const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState();
-
   const workloads = useWorkloads(undefined, {
     resourceSnapshot: props.resourceSnapshot,
     resourceSnapshotChange: props.resourceSnapshotChange,
     refetchSnapshot: props.resourceSnapshotRefetch,
   });
+  const metadataIds = createMemo<ReadonlySet<string>>(
+    () => new Set(workloads.workloads().map(getWorkloadMetadataId)),
+    new Set<string>(),
+    {
+      equals: (previous, next) =>
+        previous.size === next.size && [...next].every((id) => previous.has(id)),
+    },
+  );
+  const { guestMetadata, handleCustomUrlUpdate } = useWorkloadGuestMetadataState(metadataIds);
   const infrastructureSources = useUnifiedResources({
     query: WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY,
     cacheKey: 'workloads-infrastructure-sources',
@@ -447,6 +454,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
     clearPinnedSummaryScope,
     hoveredWorkloadId,
     revealedGuestId,
+    selectedGuestDrawerState,
     selectedGuestId,
     setClearSurfaceRootRef,
     setHoveredWorkloadId,
@@ -599,6 +607,7 @@ export function useWorkloadsState(props: WorkloadsStateOptions) {
     search,
     scrollToTop,
     selectedCluster,
+    selectedGuestDrawerState,
     selectedGuestId,
     selectedHostHint,
     selectedPlatform,

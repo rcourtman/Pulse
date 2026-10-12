@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "a4d2cdc2b8b6f8e667d86501473b14fc0e1844ca",
+  "verified_at": "2026-10-12T21:56:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
+    "frontend-modern/src/utils/workloadMetricHistoryTarget.ts",
+    "frontend-modern/src/utils/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts": "b9897665cbb498c843d4e1e4c69c2f776c1cb6711308726937918588e05cd5af",
+    "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts": "436d5cdbcd730ba5bc971f462b274cd240c6db39401901abe2f859c15162bdd7",
+    "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts": "53015e33663b2fea41dd39a1b4c5137220d1c645a395fb32feecc24a1e5aa4a5",
+    "frontend-modern/src/utils/workloadMetricHistoryTarget.ts": "24bc9eff087e426cf08cdb4c11e48ff3c70d89c0a6c09b0530dbd07e3e056ef0",
+    "frontend-modern/src/utils/workloads.ts": "779b5fec276546bb499df800f0eeb4709169dfe725aa3f5727231da981c62179"
+  },
+  "routes": [
+    "/proxmox/overview?type=vm&resource=vm-b62864e1d6f16ad4",
+    "/proxmox/overview?type=vm&resource=Production%20West%3Apve1%3A100",
+    "/proxmox/overview?type=system-container&resource=system-container-5f29a7a3f4732690",
+    "/proxmox/overview?type=system-container&resource=Production%20West%3Apve1%3A113",
+    "/proxmox/overview?resource=missing-identity-fixture"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 900,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "VM and LXC Overview, History and Manage at all three widths",
+    "Canonical and legacy links on cold load and reload",
+    "Selected resource after controlled node and parent move",
+    "History with backend targets and native fallback before and after node move",
+    "Persisted manual link, operator note and never-auto-remediate policy",
+    "Recurring maintenance editor, cancelled editor and metadata write failure",
+    "Pending legacy lookup, superseded lookup and denied lookup",
+    "Unknown reference with no unrelated drawer"
+  ],
+  "interactions": [
+    "Pointer and keyboard row expansion and re-expansion",
+    "History tab and 12-hour range retained through node move",
+    "Manage manual URL save, reload and metadata refetch",
+    "Escape close and filter reset, search, reselect and focus return",
+    "Collapse and reopen, then different resource resets to Overview",
+    "Policy save and reload, recurring maintenance editor open and cancel",
+    "Manual selection, Escape and newer route each cancel held legacy lookup",
+    "403 lookup refusal and 503 metadata write failure",
+    "Scroll through the full phone drawer and inspect desktop, intermediate and phone pixels"
+  ]
+}

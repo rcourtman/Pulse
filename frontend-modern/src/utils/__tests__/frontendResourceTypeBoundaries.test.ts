@@ -762,10 +762,8 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsSelectionStateSource).toContain(
       'const [hoveredWorkloadId, setHoveredWorkloadId]',
     );
-    expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
     expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
     expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-    expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
     expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
     expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
     expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
@@ -951,7 +949,7 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
     expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
     expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
-    expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
+    expect(workloadsWorkloadTableSource).not.toMatch(/from\s+['"]\.\/GuestDrawer['"]/);
     expect(workloadTableHeaderSource).toContain('TableHead');
     expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
     expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');

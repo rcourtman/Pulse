@@ -20,7 +20,7 @@ from typing import Dict, List, Sequence, Set
 
 import browser_verification_guard
 from control_plane import DEFAULT_CONTROL_PLANE
-from repo_file_io import load_repo_json
+from repo_file_io import git_env, load_repo_json, merged_in_paths
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 
 
@@ -165,8 +165,11 @@ def git_staged_files() -> List[str]:
         check=True,
         capture_output=True,
         text=True,
+        env=git_env(REPO_ROOT),
     )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    paths = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    inherited = merged_in_paths(paths, commit=None, repo_root=REPO_ROOT)
+    return [path for path in paths if path not in inherited]
 
 
 def stdin_files(stdin: Sequence[str]) -> List[str]:
