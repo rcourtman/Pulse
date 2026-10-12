@@ -74,6 +74,7 @@ if role == 'ps':
     if fault == 'foreign-process': print('102 1 pulse-agent /other/instance/pulse-agent --token-file /synthetic/private-only')
     if fault == 'relative-wrapper': print('103 1 sh sh start-pulse-agent.sh')
     if fault == 'deferred-bootstrap': print('104 1 sh /bin/sh /tmp/nasconfig_tmp/autorun.sh')
+    if fault == 'live-go': print('105 1 bash /bin/bash ' + str(root / 'go'))
     print('200 1 vi vi ' + wrapper)  # Editor is not a watchdog or signal target.
     print('201 1 sh /bin/sh ' + wrapper + '.bak')
     print('202 1 pulse-agent-prod /other/pulse-agent-prod')
@@ -365,6 +366,10 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         self.assertIn('100 1 watchdog\n', r[0].stdout); self.assertIn('101 100 collector\n', r[0].stdout)
         self.assertNotIn('/synthetic/private-only', r[0].stdout); self.assertIn('200 1 other\n', r[0].stdout)
         r = self.exercise('QNAP', 'timeout-process'); self.retained(r); self.assertTrue(r[9])
+
+    def test_live_unraid_boot_shell_is_unknown_not_a_signal_target(self):
+        r = self.exercise('Unraid', 'live-go'); events = self.retained(r)
+        self.assertEqual(r[6], r[7]); self.assertFalse(any(e.startswith('signal:') for e in events))
 
     def test_recovered_ordinary_linux_state_is_not_qnap_platform_authority(self):
         r = self.exercise('QNAP', appliance=False)

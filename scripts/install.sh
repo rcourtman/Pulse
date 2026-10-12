@@ -4068,6 +4068,7 @@ read_nas_agent_removal_processes() {
                 if [[ "$args" == "$wrapper" || "$args" == "$wrapper "* ]]; then role=watchdog; fi
                 if [[ "$role" != watchdog && "$args" =~ start-pulse-agent\.sh([[:space:]]|$) ]]; then role=unknown; fi
                 if [[ "$platform" == QNAP && "$args" == *'/nasconfig_tmp/autorun.sh'* ]]; then role=unknown; fi
+                if [[ "$platform" == Unraid && "$args" == *'/boot/config/go'* ]]; then role=unknown; fi
                 ;;
         esac
         rows+=("$pid $parent $role"); count=$((count + 1))

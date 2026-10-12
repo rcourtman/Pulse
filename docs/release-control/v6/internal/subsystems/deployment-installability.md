@@ -42,8 +42,9 @@ Complete bounded kernel evidence returns only numeric IDs and roles. Only exact
 selected watchdog/collector processes receive checked TERM, watchdog first,
 with independent absence observations. Editor sessions, backup wrappers and
 co-installed names are not targets. Relative/foreign same-name processes or
-unattributable QNAP deferred autorun shells refuse instead of signalling another
-boot owner. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
+unattributable QNAP deferred autorun or live Unraid go shells refuse instead
+of signalling another boot owner. A live go shell may already hold later boot
+commands in memory; editing its file cannot establish quiescence. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
 retain identity, credentials, trust and recoverable files. QNAP mount and
 unmount each have checked bounded results, including cleanup after partial mount.
 
@@ -55,7 +56,7 @@ Unraid directories. Successful/absent/repeated removal still requires complete
 fresh observations. No automatic restart, credential churn or transport-policy
 change follows a partial operation.
 
-`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all seventeen
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
 actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
 boot filesystem transformations are real private user operations; flash/kernel
 faults are closed models. Two generated watchdog/child controls use real private
