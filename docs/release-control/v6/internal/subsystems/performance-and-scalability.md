@@ -4082,3 +4082,21 @@ notification is introduced. Current snapshot/delta fast paths retain their
 existing scope; only availability complete-record replacement changes, never
 other partial provider facets or independent metric updates. This is truthful
 presentation and scoped invalidation, not a measured whole-fleet CPU saving.
+
+### Open guest drawers age completed backups passively (12 October 2026)
+
+`useGuestDrawerState` derives completed-backup age and policy tone from the
+existing shared 30-second clock, not just a new guest snapshot. This adds a
+clock subscription for the mounted drawer, not a timer per row, network read,
+refresh, guest probe or alert evaluation. Disposal releases the subscription.
+The supplied completed timestamp is immutable under ticks and backup activity;
+only replacement completion evidence changes it. Configured fresh/stale hours
+retain their existing inclusive boundaries and unknown/absent distinctions.
+
+`GuestDrawer.backup-clock.test.tsx` covers passive default/custom policy
+crossings, unchanged completion time, tab round trips, later completion,
+future/backwards-clock uncertainty and timer disposal. Connected
+`GuestDrawer.test.tsx` and `guestDrawerModel.branchcov2.test.ts` retain existing
+backup-activity, configured policy and caution/absence controls. Browser proof
+uses the real read-only AlertsAPI/store and existing drawer/table badge with
+synthetic timestamps, not native backup safety, guest recovery or availability.
