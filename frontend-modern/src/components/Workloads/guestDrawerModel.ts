@@ -83,6 +83,7 @@ export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
   dateLabel: string;
+  completedAt?: string;
 }
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
@@ -632,7 +633,7 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 export const getGuestDrawerBackupPresentation = (
   lastBackup: string | number | Date | null | undefined,
   thresholds?: BackupThresholds,
-  now: Date = new Date(),
+  now: number | Date = Date.now(),
 ): GuestDrawerBackupPresentation => {
   const timestamp = lastBackup instanceof Date ? lastBackup.getTime() : lastBackup;
   const info = getBackupInfo(timestamp, thresholds, now);
@@ -644,12 +645,15 @@ export const getGuestDrawerBackupPresentation = (
       dateLabel: 'Unknown',
     };
   }
-  const backupDate = new Date(timestamp!);
+  const completedAt = new Date(timestamp!).toISOString();
   const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
     ageClass: statusPresentation.color,
-    ageLabel: daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
-    dateLabel: backupDate.toLocaleDateString(),
+    // Elapsed age, not a rolling-day calendar claim: a 23-hour-old backup
+    // need not have completed today. Keep older ages in days, like the table.
+    ageLabel: daysSince === 0 ? info.ageFormatted : `${daysSince}d ago`,
+    dateLabel: completedAt.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+    completedAt,
   };
 };

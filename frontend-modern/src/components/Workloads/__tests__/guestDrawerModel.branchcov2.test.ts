@@ -686,21 +686,25 @@ describe('guestDrawerModel (branch coverage)', () => {
     const expectPresentation = (days: number) => {
       const lastBackup = backupNDaysAgo(days);
       const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
-      expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
+      expect(result.dateLabel).toBe(
+        new Date(lastBackup).toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+      );
+      expect(result.completedAt).toBe(new Date(lastBackup).toISOString());
       return result;
     };
 
-    it('labels day 0 as Today and uses the green (fresh) class', () => {
+    it('labels a just-completed backup with elapsed time and the green (fresh) class', () => {
       expect(expectPresentation(0)).toStrictEqual({
         ageClass: 'text-green-600 dark:text-green-400',
-        ageLabel: 'Today',
-        dateLabel: new Date(backupNDaysAgo(0)).toLocaleDateString(),
+        ageLabel: '0s ago',
+        dateLabel: now.toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+        completedAt: now.toISOString(),
       });
     });
 
-    it('labels day 1 as Yesterday', () => {
+    it('labels day 1 as elapsed days', () => {
       const result = expectPresentation(1);
-      expect(result.ageLabel).toBe('Yesterday');
+      expect(result.ageLabel).toBe('1d ago');
       expect(result.ageClass).toBe('text-green-600 dark:text-green-400');
     });
 
@@ -733,7 +737,10 @@ describe('guestDrawerModel (branch coverage)', () => {
       const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
       expect(result.ageLabel).toBe('10d ago');
       expect(result.ageClass).toBe('text-yellow-600 dark:text-yellow-400');
-      expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
+      expect(result.dateLabel).toBe(
+        new Date(lastBackup).toISOString().replace('T', ' ').replace('.000Z', ' UTC'),
+      );
+      expect(result.completedAt).toBe(new Date(lastBackup).toISOString());
     });
   });
 });
