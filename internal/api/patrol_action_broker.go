@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -20,34 +22,72 @@ const patrolActionBrokerActor = "pulse_patrol"
 // decisions and terminal outcomes can be reconciled onto the finding.
 const patrolActionOriginSurface = "patrol"
 
+const patrolActionPolicyActor = "pulse_patrol_policy"
+
+// PatrolActionPolicySnapshot is core-owned authorization posture. Enterprise
+// code and model output cannot populate it.
+type PatrolActionPolicySnapshot struct {
+	EffectiveAutonomyLevel string
+	FullModeUnlocked       bool
+	EmergencyStop          bool
+	PolicyVersion          string
+}
+
+type PatrolActionPolicyProvider func(ctx context.Context, orgID string) (PatrolActionPolicySnapshot, error)
+
+type patrolActionPolicyInputs struct {
+	snapshot      PatrolActionPolicySnapshot
+	tenantLoaded  bool
+	tenantErr     error
+	capability    *unified.ResourceCapability
+	capabilityErr error
+	resourceState unified.ResourceOperatorState
+	resourceFound bool
+	resourceErr   error
+}
+
+type patrolActionPolicyEvaluation struct {
+	factors        []unified.ActionPolicyAuthorityFactor
+	autoAuthorized bool
+	reason         string
+	err            error
+}
+
 // patrolActionBroker is the org-bound core adapter behind
 // aicontracts.OrchestratorActionBroker. It routes every Patrol proposal
 // through the shared action lifecycle service: identical registry lookup,
 // capability validation, availability checks, plan hashing, and audit
-// persistence as the REST plan endpoint. Patrol never executes a plan
-// itself: every proposal waits for an operator decision, and the enterprise
+// persistence as the REST plan endpoint. Core may authorize and execute an
+// eligible proposal under stored tenant/resource policy; the enterprise
 // investigation side stays a proposer, never a dispatcher.
 type patrolActionBroker struct {
 	orgID string
 	// lifecycle resolves the shared service per call so late-bound
 	// executor and publisher wiring on ResourceHandlers stays current.
 	lifecycle func() *actionlifecycle.Service
+	policy    PatrolActionPolicyProvider
+	now       func() time.Time
 }
 
 // NewPatrolActionBroker builds the tenant-bound Patrol proposal broker over
 // the shared action lifecycle service.
-func NewPatrolActionBroker(orgID string, resources *ResourceHandlers) aicontracts.OrchestratorActionBroker {
-	return &patrolActionBroker{
+func NewPatrolActionBroker(orgID string, resources *ResourceHandlers, policy ...PatrolActionPolicyProvider) aicontracts.OrchestratorActionBroker {
+	broker := &patrolActionBroker{
 		orgID:     strings.TrimSpace(orgID),
 		lifecycle: resources.ActionLifecycle,
 	}
+	if len(policy) > 0 {
+		broker.policy = policy[0]
+	}
+	return broker
 }
 
 // NewActionRefreshPlanner reconstructs trusted planning inputs for both
 // operator-originated and broker-originated replacement plans. Patrol plans
-// are rebound to the service actor; the authenticated operator only requests
-// the refresh and cannot author that identity.
-func NewActionRefreshPlanner() actionlifecycle.RefreshPlanner {
+// are rebound to the service actor and freshly evaluated policy authorities;
+// the authenticated operator only requests the refresh and cannot author
+// those fields.
+func NewActionRefreshPlanner(resources *ResourceHandlers, policy PatrolActionPolicyProvider) actionlifecycle.RefreshPlanner {
 	return func(ctx context.Context, orgID string, previous unified.ActionAuditRecord, actor unified.ActionActor, requestID string) (unified.ActionRequest, actionlifecycle.PlanOptions, error) {
 		req := previous.Request
 		req.RequestID = requestID
@@ -57,19 +97,29 @@ func NewActionRefreshPlanner() actionlifecycle.RefreshPlanner {
 		if !isPatrolActionOrigin(previous.Origin) {
 			return req, opts, nil
 		}
-		opts.RequireOperatorSensitiveParams = true
-		req.RequestedBy = patrolActionBrokerActor
-		opts.Actor = patrolActionBrokerServiceActor(orgID)
-		return req, opts, nil
-	}
-}
+		proposal := aicontracts.ActionProposal{
+			ProposalID:      requestID,
+			FindingID:       previous.Origin.FindingID,
+			InvestigationID: previous.Origin.InvestigationID,
+			ResourceID:      previous.Request.ResourceID,
+			CapabilityName:  previous.Request.CapabilityName,
+			Params:          previous.Request.Params,
+			Reason:          previous.Request.Reason,
+			EvidenceIDs:     append([]string(nil), previous.Origin.EvidenceIDs...),
+		}
+		broker := &patrolActionBroker{orgID: orgID, lifecycle: resources.ActionLifecycle, policy: policy}
 
-func patrolActionBrokerServiceActor(orgID string) unified.ActionActor {
-	return unified.ActionActor{
-		SubjectID:    patrolActionBrokerActor,
-		Kind:         unified.ActionActorService,
-		CredentialID: "service:patrol-action-broker",
-		OrgID:        orgID,
+		opts.RequireOperatorSensitiveParams = true
+		factors, _ := broker.planPolicyFactors(ctx, proposal, broker.currentTime())
+		req.RequestedBy = patrolActionBrokerActor
+		opts.Actor = unified.ActionActor{
+			SubjectID:    patrolActionBrokerActor,
+			Kind:         unified.ActionActorService,
+			CredentialID: "service:patrol-action-broker",
+			OrgID:        orgID,
+		}
+		opts.PolicyFactors = factors
+		return req, opts, nil
 	}
 }
 
@@ -108,19 +158,18 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 	return catalog, nil
 }
 
-// Plan persists the canonical plan. Every Patrol plan waits for an operator
-// decision; Patrol never requests execution.
+// Plan persists the canonical plan without requesting approval or execution.
+// It lets an investigation observe real planning acceptance or refusal during
+// its model turn. Only the core caller may separately request policy progression.
 func (b *patrolActionBroker) Plan(ctx context.Context, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
-	return b.submit(ctx, proposal)
+	return b.submit(ctx, proposal, false)
 }
 
-// Submit is the extension contract's proposal entry point. It is the same
-// plan-only operation as Plan.
 func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
-	return b.submit(ctx, proposal)
+	return b.submit(ctx, proposal, true)
 }
 
-func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
+func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.ActionProposal, progressPolicy bool) (aicontracts.ActionDisposition, error) {
 	proposal.ProposalID = strings.TrimSpace(proposal.ProposalID)
 	if proposal.ProposalID == "" {
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires a request identity")
@@ -150,6 +199,8 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
 	}
 
+	policyFactors, planningAutoAuthorized := b.planPolicyFactors(ctx, proposal, b.currentTime())
+
 	plan, err := b.lifecycle().PlanWithOptions(ctx, b.orgID, unified.ActionRequest{
 		RequestID:      proposal.ProposalID,
 		ResourceID:     proposal.ResourceID,
@@ -159,7 +210,12 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 		RequestedBy:    patrolActionBrokerActor,
 	}, actionlifecycle.PlanOptions{
 		RequireOperatorSensitiveParams: true,
-		Actor:                          patrolActionBrokerServiceActor(b.orgID),
+		Actor: unified.ActionActor{
+			SubjectID:    patrolActionBrokerActor,
+			Kind:         unified.ActionActorService,
+			CredentialID: "service:patrol-action-broker",
+			OrgID:        b.orgID,
+		},
 		Origin: &unified.ActionOrigin{
 			Surface:         patrolActionOriginSurface,
 			FindingID:       proposal.FindingID,
@@ -167,6 +223,7 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 			ProposalID:      proposal.ProposalID,
 			EvidenceIDs:     append([]string(nil), proposal.EvidenceIDs...),
 		},
+		PolicyFactors: policyFactors,
 	})
 	if err != nil {
 		return aicontracts.ActionDisposition{}, err
@@ -178,7 +235,207 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 		// failure into the false claim that no action exists.
 		return aicontracts.ActionDisposition{ActionID: plan.ActionID}, fmt.Errorf("planned action %q could not be read", plan.ActionID)
 	}
+	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed || record.State == unified.ActionStateRejected {
+		return dispositionFromRecord(record), nil
+	}
+
+	if progressPolicy && planningAutoAuthorized {
+		record, err = b.lifecycle().ExecuteUnderPolicy(ctx, b.orgID, plan.ActionID, patrolActionPolicyActor, func(ctx context.Context, current unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+			return b.policyAuthorizationLease(ctx, proposal, current, now)
+		})
+		if err != nil {
+			if record.State == unified.ActionStateFailed {
+				return dispositionFromRecord(record), nil
+			}
+			return dispositionFromRecord(record), err
+		}
+	}
+
 	return dispositionFromRecord(record), nil
+}
+
+func (b *patrolActionBroker) planPolicyFactors(ctx context.Context, proposal aicontracts.ActionProposal, now time.Time) ([]unified.ActionPolicyAuthorityFactor, bool) {
+	evaluation := evaluatePatrolActionPolicy(b.loadPatrolActionPolicyInputs(ctx, proposal), b.orgID, proposal, now)
+	return evaluation.factors, evaluation.autoAuthorized
+}
+
+func (b *patrolActionBroker) loadPatrolActionPolicyInputs(ctx context.Context, proposal aicontracts.ActionProposal) patrolActionPolicyInputs {
+	inputs := patrolActionPolicyInputs{}
+	if b.policy != nil {
+		inputs.snapshot, inputs.tenantErr = b.policy(ctx, b.orgID)
+		inputs.tenantLoaded = inputs.tenantErr == nil
+	}
+	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, proposal.ResourceID)
+	if err != nil {
+		inputs.capabilityErr = err
+	} else {
+		for i := range capabilities {
+			if strings.TrimSpace(capabilities[i].Name) == proposal.CapabilityName {
+				capability := capabilities[i]
+				inputs.capability = &capability
+				break
+			}
+		}
+	}
+	inputs.resourceState, inputs.resourceFound, inputs.resourceErr = b.lifecycle().ResourceOperatorState(b.orgID, proposal.ResourceID)
+	inputs.resourceState = unified.NormalizeResourceOperatorState(inputs.resourceState)
+	return inputs
+}
+
+func evaluatePatrolActionPolicy(inputs patrolActionPolicyInputs, orgID string, proposal aicontracts.ActionProposal, now time.Time) patrolActionPolicyEvaluation {
+	scope := unified.ActionPolicyDecisionScope{OrgID: orgID, ResourceID: proposal.ResourceID, CapabilityName: proposal.CapabilityName}
+	tenant := unified.ActionPolicyAuthorityFactor{
+		Kind: unified.ActionPolicyAuthorityTenant, SourceID: "patrol-tenant-policy", Scope: scope,
+		Status: unified.ActionPolicyAuthorityUnavailable, ReasonCodes: []unified.ActionPolicyReasonCode{unified.PolicyReasonTenantUnavailable},
+	}
+	if inputs.tenantLoaded {
+		tenant.Status = unified.ActionPolicyAuthorityConsulted
+		tenant.Revision = policySnapshotVersion(inputs.snapshot)
+		tenant.ReasonCodes = tenantPolicyReasonCodes(inputs.snapshot)
+	}
+	resource := unified.ActionPolicyAuthorityFactor{
+		Kind: unified.ActionPolicyAuthorityResource, SourceID: "resource-operator-policy:" + proposal.ResourceID, Scope: scope,
+		Status: unified.ActionPolicyAuthorityUnavailable, ReasonCodes: []unified.ActionPolicyReasonCode{unified.PolicyReasonResourceUnavailable},
+	}
+	if inputs.resourceErr == nil {
+		if !inputs.resourceFound {
+			resource.Status = unified.ActionPolicyAuthorityNotFound
+			resource.ReasonCodes = []unified.ActionPolicyReasonCode{unified.PolicyReasonResourceMissing}
+		} else {
+			resource.Status = unified.ActionPolicyAuthorityConsulted
+			resource.Revision = resourcePolicyVersion(inputs.resourceState)
+			resource.ReasonCodes = resourcePolicyReasonCodes(inputs.resourceState, proposal.CapabilityName, now)
+		}
+	}
+	evaluation := patrolActionPolicyEvaluation{factors: []unified.ActionPolicyAuthorityFactor{tenant, resource}}
+	if inputs.tenantErr != nil {
+		evaluation.err = inputs.tenantErr
+		return evaluation
+	}
+	if inputs.capabilityErr != nil {
+		evaluation.err = inputs.capabilityErr
+		return evaluation
+	}
+	if inputs.resourceErr != nil {
+		evaluation.err = inputs.resourceErr
+		return evaluation
+	}
+	if !inputs.tenantLoaded || inputs.capability == nil || inputs.snapshot.EmergencyStop {
+		return evaluation
+	}
+	capability := *inputs.capability
+	class := unified.NormalizeActionAutoAuthorizationClass(capability.AutoAuthorization)
+	eligible := class != unified.AutoAuthorizeNever && capability.MinimumApprovalLevel != unified.ApprovalDryRun && capability.MinimumApprovalLevel != unified.ApprovalMultiFactor
+	switch strings.TrimSpace(inputs.snapshot.EffectiveAutonomyLevel) {
+	case "assisted":
+		eligible = eligible && class == unified.AutoAuthorizeLowRisk
+	case "full":
+		eligible = eligible && inputs.snapshot.FullModeUnlocked
+	default:
+		eligible = false
+	}
+	evaluation.autoAuthorized = eligible && inputs.resourceState.AllowsAutoRemediationAt(proposal.CapabilityName, now)
+	if evaluation.autoAuthorized {
+		evaluation.reason = fmt.Sprintf("Patrol %s policy authorized %s capability %s for resource %s", inputs.snapshot.EffectiveAutonomyLevel, class, proposal.CapabilityName, proposal.ResourceID)
+	}
+	return evaluation
+}
+
+func tenantPolicyReasonCodes(snapshot PatrolActionPolicySnapshot) []unified.ActionPolicyReasonCode {
+	reasons := make([]unified.ActionPolicyReasonCode, 0, 3)
+	if snapshot.EmergencyStop {
+		reasons = append(reasons, unified.PolicyReasonTenantEmergencyStop)
+	}
+	switch strings.TrimSpace(snapshot.EffectiveAutonomyLevel) {
+	case "monitor":
+		reasons = append(reasons, unified.PolicyReasonTenantModeMonitor)
+	case "assisted":
+		reasons = append(reasons, unified.PolicyReasonTenantModeAssisted)
+	case "full":
+		reasons = append(reasons, unified.PolicyReasonTenantModeFull)
+	default:
+		reasons = append(reasons, unified.PolicyReasonTenantModeUnknown)
+	}
+	if snapshot.FullModeUnlocked {
+		reasons = append(reasons, unified.PolicyReasonTenantFullUnlocked)
+	} else {
+		reasons = append(reasons, unified.PolicyReasonTenantFullLocked)
+	}
+	return reasons
+}
+
+func resourcePolicyReasonCodes(state unified.ResourceOperatorState, capabilityName string, now time.Time) []unified.ActionPolicyReasonCode {
+	reasons := make([]unified.ActionPolicyReasonCode, 0, 3)
+	if state.BlocksRemediation() {
+		reasons = append(reasons, unified.PolicyReasonResourceNeverAuto)
+	}
+	policy := unified.NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
+	allowed := !policy.Enabled && len(policy.CapabilityNames) == 0 && policy.Window == nil
+	for _, name := range policy.CapabilityNames {
+		if name == strings.TrimSpace(capabilityName) {
+			allowed = policy.Enabled
+			break
+		}
+	}
+	if allowed {
+		reasons = append(reasons, unified.PolicyReasonResourceCapabilityAllow)
+	} else {
+		reasons = append(reasons, unified.PolicyReasonResourceCapabilityDeny)
+	}
+	if policy.Window != nil && allowed {
+		windowState := state
+		windowState.NeverAutoRemediate = false
+		if allowed && windowState.AllowsAutoRemediationAt(capabilityName, now) {
+			reasons = append(reasons, unified.PolicyReasonResourceWindowOpen)
+		} else {
+			reasons = append(reasons, unified.PolicyReasonResourceWindowClosed)
+		}
+	}
+	return reasons
+}
+
+func resourcePolicyVersion(state unified.ResourceOperatorState) string {
+	payload, _ := json.Marshal(unified.NormalizeResourceOperatorState(state))
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("resource-policy:sha256:%x", sum[:12])
+}
+
+func (b *patrolActionBroker) policyAuthorizationLease(ctx context.Context, proposal aicontracts.ActionProposal, record unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+	inputs := b.loadPatrolActionPolicyInputs(ctx, proposal)
+	evaluation := evaluatePatrolActionPolicy(inputs, b.orgID, proposal, now)
+	if evaluation.err != nil {
+		return unified.ActionPolicyAuthorizationLease{}, "", evaluation.err
+	}
+	if !evaluation.autoAuthorized {
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
+	}
+	if inputs.capability == nil {
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
+	}
+	capability := *inputs.capability
+	state := inputs.resourceState
+	tenantVersion := policySnapshotVersion(inputs.snapshot)
+	expiresAt := record.Plan.ExpiresAt
+	if expiresAt.IsZero() || expiresAt.After(now.Add(time.Minute)) {
+		expiresAt = now.Add(time.Minute)
+	}
+	lease := unified.ActionPolicyAuthorizationLease{
+		Version: 1, OrgID: b.orgID, ActionID: record.ID, ResourceID: proposal.ResourceID, CapabilityName: proposal.CapabilityName,
+		PlanHash: record.Plan.PlanHash, CapabilityPolicyVersion: record.Plan.PolicyVersion,
+		AutoAuthorization: unified.NormalizeActionAutoAuthorizationClass(capability.AutoAuthorization), ApprovalPolicy: capability.MinimumApprovalLevel,
+		TenantPolicyVersion: tenantVersion, EffectiveAutonomyLevel: strings.TrimSpace(inputs.snapshot.EffectiveAutonomyLevel), LicenseAllowsAutoFix: true,
+		FullModeUnlocked: inputs.snapshot.FullModeUnlocked, EmergencyStop: inputs.snapshot.EmergencyStop,
+		ResourcePolicyVersion: resourcePolicyVersion(state), CapabilityNames: append([]string(nil), state.AutoRemediationPolicy.CapabilityNames...),
+		Window: state.AutoRemediationPolicy.Window, NeverAutoRemediate: state.NeverAutoRemediate, IssuedAt: now.UTC(), ExpiresAt: expiresAt.UTC(),
+	}
+	lease.Digest = unified.ActionPolicyAuthorizationDigest(lease)
+	return lease, evaluation.reason, nil
+}
+
+func policySnapshotVersion(snapshot PatrolActionPolicySnapshot) string {
+	payload, _ := json.Marshal(snapshot)
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("tenant-policy:sha256:%x", sum[:12])
 }
 
 func dispositionFromRecord(record unified.ActionAuditRecord) aicontracts.ActionDisposition {
@@ -192,6 +449,22 @@ func dispositionFromRecord(record unified.ActionAuditRecord) aicontracts.ActionD
 		VerificationStatus: string(legacyVerification.Status),
 		Plan:               *approvalPlanRequestToInfo(&record.Plan),
 	}
+}
+
+func (b *patrolActionBroker) autoAuthorizationDecision(ctx context.Context, proposal aicontracts.ActionProposal) (bool, string, error) {
+	return b.autoAuthorizationDecisionAt(ctx, proposal, b.currentTime())
+}
+
+func (b *patrolActionBroker) autoAuthorizationDecisionAt(ctx context.Context, proposal aicontracts.ActionProposal, now time.Time) (bool, string, error) {
+	evaluation := evaluatePatrolActionPolicy(b.loadPatrolActionPolicyInputs(ctx, proposal), b.orgID, proposal, now)
+	return evaluation.autoAuthorized, evaluation.reason, evaluation.err
+}
+
+func (b *patrolActionBroker) currentTime() time.Time {
+	if b.now != nil {
+		return b.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // investigationPlannerFor exposes only plan persistence to the model tool.

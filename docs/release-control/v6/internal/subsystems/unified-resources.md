@@ -3096,19 +3096,6 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
-### Patrol fix modes retired (2026-10-12)
-
-Patrol no longer runs fixes on its own, so this subsystem dropped the pieces
-that existed only for automatic admission: `patrol_autopilot.go`, the
-per-resource `AutoRemediationPolicy` allowlist (type, validation, store column
-reads, API field and the resource drawer's "Automatic action limits" editor),
-`BeginPolicyActionExecution`, lease validation and the policy execution
-start/admission store methods. Patrol plans now carry only the capability
-authority in `policyDecision`; tenant and resource reason codes and the
-historical `policyLease` stay decodable, and the action review labels the
-retired mode codes in the past tense. Never auto-remediate is unchanged and
-remains the per-resource lock for every actor.
-
 ### Retained Machines and Debug status (11 October 2026)
 
 The Machines row status, health chip counts and selected filter membership
@@ -3480,8 +3467,8 @@ fields (`IntentionallyOffline`, `NeverAutoRemediate`, maintenance
 window via one-shot `MaintenanceStartAt` / `MaintenanceEndAt` or a mutually
 exclusive weekly `MaintenanceRecurrence`, shared `MaintenanceReason`, and
 explicit `MaintenanceScope`,
-canonical `Criticality` hint of `high|medium|low|""`; the
-`AutoRemediationPolicy` allowlist was retired on 2026-10-12) plus
+canonical `Criticality` hint of `high|medium|low|""`, and an explicit
+`AutoRemediationPolicy`) plus
 operator-attribution metadata (`Note`, `SetAt`, `SetBy`). The shape is
 intentionally fixed-field rather than a freeform metadata bag so
 downstream finding-suppression and severity-weighting logic has a stable
@@ -3522,20 +3509,26 @@ publication. Mounted operator-state regressions cover active and scheduled
 copy, while the monitoring restore regression covers SQLite policy and native
 aliases before the first observation.
 
-`NormalizeResourceOperatorState` trims whitespace and lower-cases the
-criticality value before persistence. Reads no longer select the retired
-`auto_remediation_policy_json` column, and writes store NULL in it, so a save
-clears any allowlist an older release recorded. The
+`NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
+names, guarantees a non-nil empty capability list, and lower-cases the
+criticality value before persistence. SQLite reads must apply that
+normalization even when `auto_remediation_policy_json` is `NULL`, so an
+operator state containing only intentionally-offline or another independent
+override serializes `capabilityNames: []` rather than `null`. The
 `ResourceStore` interface now exposes
 `GetResourceOperatorState`, `SetResourceOperatorState`, and
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
 implement the same upsert + idempotent-clear contract. The same
-store no longer offers an automatic-admission path: the policy execution
-start and admission CAS methods, `BeginPolicyActionExecution`, and lease
-validation were removed with Patrol's self-executing modes on 2026-10-12. The
-`ActionPolicyAuthorizationLease` type and `PolicyLease` field stay only so
-historical records decode; a policy approval cannot admit a nonterminal action.
+store also owns `RecordActionPolicyExecutionStart`, the automatic-admission
+CAS that moves a planned or pending action directly to `executing` while
+persisting the server-owned policy approval and typed
+`ActionPolicyAuthorizationLease` in the same transaction. Memory and SQLite
+implement identical semantics. The lease binds org/action/resource/capability,
+plan and capability-policy hashes, safety and approval floors, tenant
+mode/license/unlock version, optional resource limit/window/Never version, expiry,
+and digest. A policy approval without that lease is historical-only and cannot
+admit a nonterminal action after restart.
 The same
 store powers the agent-consumable bundled context endpoint at
 `/api/agent/resource-context/{id}` (handler in
@@ -4317,12 +4310,9 @@ SHA-256 validation rules. A retransmitted old agent observation stays stale
 when freshly received, future/skewed clocks fail closed, and capability removal
 cannot be bypassed by duplicated telemetry predicates.
 
-### Patrol Autopilot authority evidence (retired 2026-10-12)
+### Patrol Autopilot authority evidence
 
-`internal/unifiedresources/patrol_autopilot.go` was removed with Patrol's
-self-executing modes; the record below describes the removed behaviour.
-
-`internal/unifiedresources/patrol_autopilot.go` owned the versioned immutable
+`internal/unifiedresources/patrol_autopilot.go` owns the versioned immutable
 acknowledgement, revocation, activation, accepted-scope/limits, digest, status,
 and evaluation contracts. A static server-owned registry binds every supported
 acknowledgement version to its exact immutable scope, limits, and optional

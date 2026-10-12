@@ -121,8 +121,8 @@ the finding's own state. `Finding.ShouldInvestigate` in
 `internal/ai/findings.go` is the gate, and it refuses in every one of these
 cases.
 
-- Autonomy is unset or `monitor`. Investigation only runs at `approval`
-  (a saved retired `assisted` or `full` value reads as `approval`).
+- Autonomy is unset or `monitor`. Investigation only runs at `approval`,
+  `assisted`, or `full`.
 - The finding is resolved, dismissed, suppressed, or snoozed.
 - The severity is not warning or critical. Info and watch findings are not
   investigated.

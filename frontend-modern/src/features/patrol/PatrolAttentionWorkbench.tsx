@@ -73,7 +73,7 @@ import {
   getAttentionHandoverClose,
   getLinkedPatrolFindings,
   getPatrolRememberedDecisionPresentation,
-  getPatrolAttentionDecisions,
+  partitionPatrolAttention,
   PATROL_AUTONOMY_EXPERIENCE,
   PATROL_LASTING_DECISIONS,
   type PatrolAttentionDecision,
@@ -221,13 +221,13 @@ export function PatrolAttentionWorkbench(
       attentionView() === 'handled'
         ? items.filter((item) => item.state === 'acknowledged' || item.state === 'suppressed')
         : items;
-    return getPatrolAttentionDecisions(
+    return partitionPatrolAttention(
       Array.isArray(visibleItems) ? visibleItems : [],
       attentionView() === 'handled' ? 'monitor' : (props.autonomyLevel ?? 'monitor'),
       attentionView() === 'handled' ? true : (props.autonomyLocked ?? false),
     );
   });
-  const sortedDecisions = createMemo(() => sortPatrolAttentionDecisions(attention()));
+  const sortedDecisions = createMemo(() => sortPatrolAttentionDecisions(attention().needsUser));
   const orderedDecisions = createMemo(() => {
     const current = sortedDecisions();
     const order = reviewOrder();
@@ -260,7 +260,7 @@ export function PatrolAttentionWorkbench(
   });
   const briefingHeadline = createMemo(() => {
     if (patrolAttentionStore.loading() && !summary()) return 'Building your current briefing';
-    const count = attention().length;
+    const count = attention().needsUser.length;
     if (attentionView() === 'handled') {
       if (count === 0) return 'No reviewed or suppressed issues';
       return `${count} reviewed or suppressed ${count === 1 ? 'issue' : 'issues'}`;
@@ -432,7 +432,7 @@ export function PatrolAttentionWorkbench(
             <h2 class="text-xl font-semibold tracking-tight text-base-content sm:text-2xl">
               {briefingHeadline()}
             </h2>
-            <Show when={attention().length === 0}>
+            <Show when={attention().needsUser.length === 0}>
               <p class="mt-1 text-sm leading-5 text-muted">
                 {attentionView() === 'handled'
                   ? 'Issues stay here until they return to the inbox or resolve.'
@@ -499,6 +499,13 @@ export function PatrolAttentionWorkbench(
             </Button>
           </div>
         </div>
+        <Show when={attentionView() === 'inbox' && attention().quiet.length > 0}>
+          <p class="mt-3 text-xs leading-5 text-muted">
+            {attention().quiet.length} other current{' '}
+            {attention().quiet.length === 1 ? 'issue is' : 'issues are'} continuing without a
+            decision under {autonomyExperience().label}.
+          </p>
+        </Show>
       </div>
 
       <Show when={reviewNotice()}>
@@ -535,7 +542,7 @@ export function PatrolAttentionWorkbench(
             onSelect={selectItem}
             view={attentionView()}
           />
-          <Show when={attention().length > PRIMARY_DECISION_LIMIT}>
+          <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
             <div class="border-t border-border px-4 py-3 text-center sm:px-5">
               <Button
                 variant="secondary"
@@ -544,7 +551,7 @@ export function PatrolAttentionWorkbench(
               >
                 {showAllDecisions()
                   ? 'Show fewer decisions'
-                  : `Show all ${attention().length} decisions`}
+                  : `Show all ${attention().needsUser.length} decisions`}
               </Button>
             </div>
           </Show>

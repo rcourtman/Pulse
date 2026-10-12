@@ -15,7 +15,7 @@ import (
 func (s *SQLiteResourceStore) ListResourceOperatorStates() ([]ResourceOperatorState, error) {
 	rows, err := s.db.Query(`
 		SELECT canonical_id, monitoring_mode, lifecycle_state,
-			intentionally_offline, never_auto_remediate,
+			intentionally_offline, never_auto_remediate, auto_remediation_policy_json,
 			maintenance_start_at, maintenance_end_at,
 			maintenance_recurrence_json, maintenance_scope, maintenance_reason,
 			criticality, note, set_at, set_by

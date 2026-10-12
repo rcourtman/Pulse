@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -202,15 +203,14 @@ type ActionApprovalRecord struct {
 	Reason       string            `json:"reason,omitempty"`
 	ActorBinding ActionActor       `json:"actorBinding,omitempty"`
 	Evidence     *ApprovalEvidence `json:"evidence,omitempty"`
-	// PolicyLease is present only on historical server-owned policy
-	// authorizations from Patrol's retired self-executing modes. Human
-	// decisions never carry this field.
+	// PolicyLease is present only for a server-owned policy authorization.
+	// Human decisions never carry this field. Policy approval and execution
+	// admission are persisted atomically, so the lease cannot become reusable.
 	PolicyLease *ActionPolicyAuthorizationLease `json:"policyLease,omitempty"`
 }
 
-// ActionPolicyAuthorizationLease is the automatic authorization that Patrol's
-// retired self-executing modes attached to a policy approval. Nothing issues
-// leases any more; the type remains so historical audit records decode.
+// ActionPolicyAuthorizationLease binds automatic authorization to every
+// policy input that was current at the executing transition.
 type ActionPolicyAuthorizationLease struct {
 	Version                 int                          `json:"version"`
 	OrgID                   string                       `json:"orgId"`
@@ -233,6 +233,37 @@ type ActionPolicyAuthorizationLease struct {
 	IssuedAt                time.Time                    `json:"issuedAt"`
 	ExpiresAt               time.Time                    `json:"expiresAt"`
 	Digest                  string                       `json:"digest"`
+}
+
+// ActionPolicyAuthorizationDigest returns the canonical SHA-256 binding for
+// a lease. Digest itself is excluded from the encoded payload.
+func ActionPolicyAuthorizationDigest(lease ActionPolicyAuthorizationLease) string {
+	lease.Digest = ""
+	payload, _ := json.Marshal(lease)
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:])
+}
+
+// ValidateActionPolicyAuthorizationLease fails closed on incomplete,
+// malformed, expired, or tampered automatic authority.
+func ValidateActionPolicyAuthorizationLease(lease ActionPolicyAuthorizationLease, record ActionAuditRecord, now time.Time) error {
+	if lease.Version != 1 || strings.TrimSpace(lease.OrgID) == "" ||
+		lease.ActionID != record.ID || lease.ResourceID != CanonicalResourceID(record.Request.ResourceID) ||
+		lease.CapabilityName != strings.TrimSpace(record.Request.CapabilityName) ||
+		lease.PlanHash != record.Plan.PlanHash || lease.CapabilityPolicyVersion != record.Plan.PolicyVersion ||
+		strings.TrimSpace(lease.TenantPolicyVersion) == "" || strings.TrimSpace(lease.ResourcePolicyVersion) == "" {
+		return ErrActionPolicyAuthorizationInvalid
+	}
+	if lease.EmergencyStop || lease.NeverAutoRemediate || !lease.LicenseAllowsAutoFix {
+		return ErrActionPolicyAuthorizationRevoked
+	}
+	if lease.IssuedAt.IsZero() || lease.ExpiresAt.IsZero() || !now.Before(lease.ExpiresAt) {
+		return ErrActionPolicyAuthorizationExpired
+	}
+	if lease.Digest == "" || lease.Digest != ActionPolicyAuthorizationDigest(lease) {
+		return ErrActionPolicyAuthorizationInvalid
+	}
+	return nil
 }
 
 // ActionPreflight is the deterministic pre-execution readout shown before an
@@ -533,23 +564,60 @@ var (
 	// outranks the per-action approval. Persists a Failed audit
 	// record with `resource_remediation_locked:` prefix on the
 	// ErrorMessage so the audit timeline shows every refused dispatch.
-	ErrResourceRemediationLocked      = errors.New("resource is operator-locked against automated remediation")
-	ErrActionNotExecuting             = errors.New("action is not executing")
-	ErrActionAlreadyExecuting         = errors.New("action is already executing")
-	ErrActionExecutionFinal           = errors.New("action execution is already final")
-	ErrActionPlanExpired              = errors.New("action plan expired")
-	ErrActionPlanNotExpired           = errors.New("action plan has not expired")
-	ErrActionDryRunOnly               = errors.New("action plan is dry-run only")
-	ErrActionExecutionUnavailable     = errors.New("action execution unavailable")
-	ErrActionExecutionRefusal         = errors.New("action execution refusal is not a permanent terminal refusal")
-	ErrInvalidApprovalOutcome         = errors.New("invalid approval outcome")
-	ErrActionAuditAlreadyExists       = errors.New("action audit already exists")
-	ErrActionIdentityConflict         = errors.New("action audit identity conflicts with the persisted record")
-	ErrActionDecisionRevisionConflict = errors.New("action decision revision conflicts with the persisted record")
-	ErrActionEmergencyStop            = errors.New("action_emergency_stop")
-	ErrActionReplanRequired           = errors.New("action_replan_required")
-	ErrDuplicateApprovalActor         = errors.New("duplicate approval actor")
+	ErrResourceRemediationLocked        = errors.New("resource is operator-locked against automated remediation")
+	ErrActionNotExecuting               = errors.New("action is not executing")
+	ErrActionAlreadyExecuting           = errors.New("action is already executing")
+	ErrActionExecutionFinal             = errors.New("action execution is already final")
+	ErrActionPlanExpired                = errors.New("action plan expired")
+	ErrActionPlanNotExpired             = errors.New("action plan has not expired")
+	ErrActionDryRunOnly                 = errors.New("action plan is dry-run only")
+	ErrActionExecutionUnavailable       = errors.New("action execution unavailable")
+	ErrActionExecutionRefusal           = errors.New("action execution refusal is not a permanent terminal refusal")
+	ErrInvalidApprovalOutcome           = errors.New("invalid approval outcome")
+	ErrActionAuditAlreadyExists         = errors.New("action audit already exists")
+	ErrActionIdentityConflict           = errors.New("action audit identity conflicts with the persisted record")
+	ErrActionDecisionRevisionConflict   = errors.New("action decision revision conflicts with the persisted record")
+	ErrActionPolicyAuthorizationInvalid = errors.New("policy_authorization_invalid")
+	ErrActionPolicyAuthorizationExpired = errors.New("policy_authorization_expired")
+	ErrActionPolicyAuthorizationRevoked = errors.New("policy_authorization_revoked")
+	ErrActionEmergencyStop              = errors.New("action_emergency_stop")
+	ErrActionReplanRequired             = errors.New("action_replan_required")
+	ErrDuplicateApprovalActor           = errors.New("duplicate approval actor")
 )
+
+// BeginPolicyActionExecution atomically composes the policy approval and
+// executing record. Stores persist both lifecycle events in one CAS write.
+func BeginPolicyActionExecution(record ActionAuditRecord, approval ActionApprovalRecord, lease ActionPolicyAuthorizationLease, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if record.State != ActionStatePending && record.State != ActionStatePlanned {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ActionLifecycleEvent{}, ErrActionNotApproved
+	}
+	if err := ValidateActionExecutionStart(record, now); err != nil && !errors.Is(err, ErrActionNotApproved) {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ActionLifecycleEvent{}, err
+	}
+	if err := ValidateActionPolicyAuthorizationLease(lease, record, now); err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ActionLifecycleEvent{}, err
+	}
+	approval.Actor = strings.TrimSpace(approval.Actor)
+	approval.Method = MethodPolicy
+	approval.Outcome = OutcomeApproved
+	approval.Timestamp = now
+	approval.PolicyLease = &lease
+	record.Approvals = append(record.Approvals, approval)
+	record.State = ActionStateExecuting
+	record.UpdatedAt = now
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ActionLifecycleEvent{}, err
+	}
+	approvedEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now, State: ActionStateApproved, Actor: approval.Actor, Message: "Action authorized by current Patrol policy."}
+	startedEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now, State: ActionStateExecuting, Actor: approval.Actor, Message: "Policy-authorized action execution started."}
+	return normalized, approvedEvent, startedEvent, nil
+}
 
 // ActionAuditIdentityMatches reports whether a replay addresses the same
 // immutable governed action. Lifecycle state, timestamps, approvals, results,
@@ -1005,6 +1073,12 @@ func permanentActionExecutionRefusalMessage(reason error) (string, string, bool)
 		return "action_execution_unavailable", "action_execution_unavailable: " + message, true
 	case errors.Is(reason, ErrResourceRemediationLocked):
 		return "resource_remediation_locked", "resource_remediation_locked: resource is operator-locked against automated remediation", true
+	case errors.Is(reason, ErrActionPolicyAuthorizationExpired):
+		return "policy_authorization_expired", "policy_authorization_expired: automatic authority expired before dispatch", true
+	case errors.Is(reason, ErrActionPolicyAuthorizationInvalid):
+		return "policy_authorization_invalid", "policy_authorization_invalid: automatic authority is missing, unreadable, or malformed", true
+	case errors.Is(reason, ErrActionPolicyAuthorizationRevoked):
+		return "policy_authorization_revoked", "policy_authorization_revoked: automatic authority changed before dispatch", true
 	case errors.Is(reason, ErrActionEmergencyStop):
 		return "action_emergency_stop", "action_emergency_stop: action dispatch is stopped by the operator", true
 	case errors.Is(reason, ErrActionReplanRequired):

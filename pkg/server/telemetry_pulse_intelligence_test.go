@@ -134,15 +134,15 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		ApprovedActionRefusalsContract30d:      9,
 		ApprovedActionRefusalsOther30d:         10,
 		VerifiedFindingResolutions30d:          1,
-		PatrolAutonomyLevel:                    "approval",
+		PatrolAutonomyLevel:                    "assisted",
 	}
 	applyPulseIntelligenceTelemetrySnapshot(&snap, persistence, cfg, actions, now)
 
 	if snap.PulseIntelligenceAssistantAICalls30d != 3 {
 		t.Fatalf("assistant AI calls = %d, want 3", snap.PulseIntelligenceAssistantAICalls30d)
 	}
-	if snap.PulseIntelligencePatrolAutonomyLevel != "approval" {
-		t.Fatalf("patrol autonomy level = %q, want approval", snap.PulseIntelligencePatrolAutonomyLevel)
+	if snap.PulseIntelligencePatrolAutonomyLevel != "assisted" {
+		t.Fatalf("patrol autonomy level = %q, want assisted", snap.PulseIntelligencePatrolAutonomyLevel)
 	}
 	if snap.AIProviderClass != telemetry.AIProviderClassNone {
 		t.Fatalf("provider class default = %q, want none", snap.AIProviderClass)

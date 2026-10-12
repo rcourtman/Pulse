@@ -5,7 +5,7 @@ import {
   getAttentionHandoverClose,
   getPatrolAttentionDecisionReason,
   getPatrolObjectiveProtectionSummary,
-  getPatrolAttentionDecisions,
+  partitionPatrolAttention,
 } from '../patrolHomePresentation';
 
 const attentionItem = (overrides: Partial<AttentionItem> = {}): AttentionItem => ({
@@ -66,22 +66,51 @@ describe('patrol home presentation', () => {
 
     expect(getPatrolAttentionDecisionReason(item, 'monitor')).toMatch(/will not make changes/i);
     expect(getPatrolAttentionDecisionReason(item, 'approval')).toMatch(/requires your approval/i);
-    expect(getPatrolAttentionDecisionReason(item, 'approval', true)).toMatch(
-      /will not make changes/i,
-    );
-    expect(
-      getPatrolAttentionDecisionReason(attentionItem({ availableActions: [] }), 'approval'),
-    ).toMatch(/without your decision/i);
+    expect(getPatrolAttentionDecisionReason(item, 'full', true)).toMatch(/will not make changes/i);
   });
 
-  it('never leaves an issue continuing without an operator decision', () => {
-    const items = [attentionItem(), attentionItem({ availableActions: [] })];
+  it('keeps safe eligible work quiet in assisted and full modes', () => {
+    const item = attentionItem();
 
-    for (const level of ['monitor', 'approval'] as const) {
-      const decisions = getPatrolAttentionDecisions(items, level);
-      expect(decisions.map((decision) => decision.item)).toEqual(items);
-      expect(decisions.every((decision) => decision.reason.length > 0)).toBe(true);
+    expect(getPatrolAttentionDecisionReason(item, 'assisted')).toBeNull();
+    expect(getPatrolAttentionDecisionReason(item, 'full')).toBeNull();
+    expect(partitionPatrolAttention([item], 'full')).toEqual({ needsUser: [], quiet: [item] });
+  });
+
+  it('interrupts for approval, trust gaps, failed verification, and missing actions', () => {
+    const approvalRequired = attentionItem({
+      availableActions: [
+        {
+          ...attentionItem().availableActions[0],
+          approval: 'required',
+          requiresApproval: true,
+        },
+      ],
+    });
+    const staleEvidence = attentionItem({ evidenceFreshness: 'stale' });
+    const failedVerification = attentionItem({ verificationState: 'failed' });
+    const noAction = attentionItem({ availableActions: [] });
+
+    for (const item of [approvalRequired, staleEvidence, failedVerification, noAction]) {
+      expect(getPatrolAttentionDecisionReason(item, 'full')).not.toBeNull();
     }
+  });
+
+  it('does not interrupt when at least one eligible governed path can proceed', () => {
+    const safeAction = attentionItem().availableActions[0];
+    const item = attentionItem({
+      availableActions: [
+        { ...safeAction, capability: 'safe_cleanup' },
+        {
+          ...safeAction,
+          capability: 'expand_disk',
+          approval: 'required',
+          requiresApproval: true,
+        },
+      ],
+    });
+
+    expect(getPatrolAttentionDecisionReason(item, 'assisted')).toBeNull();
   });
 
   it('summarizes protected, uncovered, and paused objectives without overstating health', () => {

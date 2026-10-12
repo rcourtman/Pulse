@@ -363,18 +363,16 @@ privacy-allowlisted community evidence export, and publication command.
 
 ## Patrol Modes
 
-Patrol supports two modes that decide how far Pulse can go after it finds an issue:
+Patrol supports four modes that decide how far Pulse can go after it finds an issue:
 
 | Mode | Behavior | Plan |
 |-------|----------|------|
 | **Watch only** | Detect issues only. No investigation or fixes. | Community (BYOK) |
-| **Ask first** | Investigates findings and proposes fixes. Every fix waits in **Actions** until an operator approves and runs it. | Pro / hosted Cloud |
+| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Safe auto-fix** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+| **Autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
 
-Patrol never runs a fix on its own. The earlier **Safe auto-fix** and
-**Autopilot** modes have been retired; a saved value from either now behaves as
-**Ask first**.
-
-Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation and proposed fixes are paid AI-operations capabilities rather than a core monitoring limit.
+Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit.
 
 ### Investigation Flow
 
@@ -398,7 +396,7 @@ MaybeInvestigateFinding()
       │   AI analysis (with tools)
       │        │
       │        ▼
-      │   [Fix proposed?] ──Yes──► Queue for operator approval
+      │   [Fix proposed?] ──Yes──► Queue approval (or auto-execute in full mode)
       │        │
       │        No
       │        ▼
@@ -483,8 +481,8 @@ The assistant enforces multiple safety gates:
 | **Read-only** | Assistant queries and explains; no infrastructure action planning | Community |
 | **Ask first** (`controlled`) | Assistant saves infrastructure action plans to **Actions** for your review | Community |
 
-Assistant chat does not execute these plans. Patrol's own mode is separate;
-changing Chat action mode grants no Patrol authority.
+Assistant chat does not execute these plans. Patrol's own mode and Autopilot
+policy are separate; changing Chat action mode grants no Patrol authority.
 Older saved `autonomous` preferences display as **Ask first**, not as permission
 to execute without approval. The stored preference and its existing entitlement
 checks are preserved for older clients.
@@ -787,7 +785,9 @@ evaluation detail (probe and validator errors, including the provider's stop
 reason such as `done_reason=length`) so the failure is diagnosable from the
 UI and the API snapshot.
 
-Results are reported separately for **Watch only** and **Ask first**.
+Results are reported separately for **Watch only** and **Ask first**. A short
+synthetic evaluation never certifies **Safe auto-fix** or **Autopilot**; those
+modes remain `not_assessed` until an extended governed canary is available.
 Changing the selected model, provider credentials or endpoint, or relevant
 timeout settings invalidates the cached result. Slow evaluations can be
 cancelled from the UI without replacing the last completed evidence.
@@ -913,9 +913,10 @@ go run ./cmd/eval -scenario resource-context -url http://127.0.0.1:7655 -user ad
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Patrol modes (Pro and above)**: Lets you choose whether Patrol only watches or investigates and asks before any change
-- **Governed fixes (Pro and above)**: Patrol proposes fixes; an operator approves and runs each one, and Pulse verifies and records the result
+- **Patrol modes (Pro and above)**: Lets you choose whether Patrol only watches, asks before changes, handles safe fixes, or uses policy autopilot
+- **Governed fixes (Pro and above)**: Allows Patrol to propose, approve, run, verify, and record fixes under the Patrol mode you choose
 - **Issue investigation (Pro and above)**: Lets Patrol investigate findings with surrounding infrastructure context
+- **Policy autopilot unlock (Pro and above)**: Permits eligible critical fixes without per-fix approval after an explicit opt-in
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 

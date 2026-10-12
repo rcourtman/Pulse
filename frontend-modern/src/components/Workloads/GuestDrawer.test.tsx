@@ -16,8 +16,6 @@ import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
-import nodeDrawerSource from './NodeDrawer.tsx?raw';
-import dockerHostDrawerSource from '@/features/docker/DockerHostDrawer.tsx?raw';
 import { getGuestDrawerAlertAttention, getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -446,15 +444,6 @@ describe('GuestDrawer', () => {
     expect(guestDrawerManageSource).toContain('<ResourceOperatorStateSection');
     expect(guestDrawerSource).toContain("activeTab() === 'manage'");
     expect(guestDrawerManageSource).toContain('data-testid="guest-manage-tab"');
-  });
-
-  it('mounts operator overrides without the retired automatic-action capability list', () => {
-    // The per-resource automatic-action allowlist was retired with Patrol's
-    // self-executing modes, so no drawer hands its capabilities to the section.
-    for (const source of [guestDrawerManageSource, nodeDrawerSource, dockerHostDrawerSource]) {
-      expect(source).toContain('<ResourceOperatorStateSection');
-      expect(source).not.toMatch(/<ResourceOperatorStateSection[^>]*capabilities=/);
-    }
   });
 
   it('opens with additive context and the active problem before technical inventory', () => {

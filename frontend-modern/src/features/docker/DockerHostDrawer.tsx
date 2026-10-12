@@ -105,6 +105,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
               resourceId={props.host.id}
               resourceType="docker-host"
               platformType={props.host.platformType || 'docker'}
+              capabilities={props.host.capabilities}
             />
             <WebInterfaceUrlField
               metadataKind="docker-host"

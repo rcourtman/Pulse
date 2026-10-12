@@ -200,6 +200,10 @@ func normalizePatrolDigestMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case config.PatrolAutonomyApproval:
 		return config.PatrolAutonomyApproval
+	case config.PatrolAutonomyAssisted:
+		return config.PatrolAutonomyAssisted
+	case config.PatrolAutonomyFull:
+		return config.PatrolAutonomyFull
 	default:
 		return config.PatrolAutonomyMonitor
 	}

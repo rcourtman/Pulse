@@ -19,6 +19,23 @@ export interface RecurringMaintenanceWindow {
   endMinute: number;
 }
 
+export interface AutoRemediationWindow {
+  timezone: string;
+  startMinute: number;
+  endMinute: number;
+}
+
+export interface AutoRemediationPolicy {
+  enabled: boolean;
+  /**
+   * Nullable on the wire: rows persisted before the store normalized the
+   * policy on read carry `"capabilityNames": null` (issue #1621). Treat
+   * null the same as [].
+   */
+  capabilityNames: string[] | null;
+  window?: AutoRemediationWindow;
+}
+
 export interface ResourceOperatorState {
   canonicalId: string;
   monitoringMode?: ResourceMonitoringMode;
@@ -38,6 +55,8 @@ export interface ResourceOperatorState {
    * record with `resource_remediation_locked:` prefix on the error.
    */
   neverAutoRemediate: boolean;
+  /** Optional narrowing policy; an empty policy inherits the tenant Patrol mode. */
+  autoRemediationPolicy?: AutoRemediationPolicy;
   /**
    * Maintenance window — when present and `now` falls within it, all
    * new findings on this resource get auto-acknowledged with

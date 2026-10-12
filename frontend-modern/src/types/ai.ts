@@ -209,6 +209,8 @@ export interface PatrolModelReadinessSnapshot {
   modes: {
     monitor: PatrolModeSuitability;
     approval: PatrolModeSuitability;
+    assisted: PatrolModeSuitability;
+    full: PatrolModeSuitability;
   };
   recorded_at: string;
   recorded_at_unix: number;

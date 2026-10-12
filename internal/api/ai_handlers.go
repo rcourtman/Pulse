@@ -68,6 +68,7 @@ type AISettingsHandler struct {
 	actionBrokerFactory     func(orgID string) aicontracts.OrchestratorActionBroker
 	proposalCatalogFactory  func(orgID string) tools.ProposalCatalog
 	policyMutation          func(func() error) error
+	patrolAutopilotPolicy   func() unifiedresources.PatrolAutopilotServerPolicy
 	metadataProvider        ai.MetadataProvider
 	metadataProviderFactory func(orgID string) ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
@@ -137,6 +138,31 @@ func (h *AISettingsHandler) SetPolicyMutationCoordinator(coordinator func(func()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.policyMutation = coordinator
+}
+
+func (h *AISettingsHandler) SetPatrolAutopilotServerPolicyProvider(provider func() unifiedresources.PatrolAutopilotServerPolicy) {
+	h.stateMu.Lock()
+	h.patrolAutopilotPolicy = provider
+	defaultService := h.defaultAIService
+	h.stateMu.Unlock()
+	if defaultService != nil {
+		defaultService.SetPatrolAutopilotServerPolicyProvider(provider)
+	}
+	h.aiServicesMu.RLock()
+	defer h.aiServicesMu.RUnlock()
+	for _, service := range h.aiServices {
+		service.SetPatrolAutopilotServerPolicyProvider(provider)
+	}
+}
+
+func (h *AISettingsHandler) currentPatrolAutopilotServerPolicy() unifiedresources.PatrolAutopilotServerPolicy {
+	h.stateMu.RLock()
+	provider := h.patrolAutopilotPolicy
+	h.stateMu.RUnlock()
+	if provider != nil {
+		return provider()
+	}
+	return unifiedresources.CurrentPatrolAutopilotServerPolicy(time.Now().UTC())
 }
 
 // SetActionBrokerFactory installs the per-org typed action proposal broker
@@ -255,6 +281,10 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 func (h *AISettingsHandler) newFailClosedTenantService(orgID string) *ai.Service {
 	svc := ai.NewService(nil, tenantAgentServerForOrganization(h.agentServer, orgID))
 	svc.SetOrgID(orgID)
+	h.stateMu.RLock()
+	patrolAutopilotPolicy := h.patrolAutopilotPolicy
+	h.stateMu.RUnlock()
+	svc.SetPatrolAutopilotServerPolicyProvider(patrolAutopilotPolicy)
 	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	svc.SetLicenseChecker(failClosedLicenseChecker{})
 	return svc
@@ -416,6 +446,10 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 
 	svc = ai.NewService(persistence, tenantAgentServerForOrganization(h.agentServer, orgID))
 	svc.SetOrgID(orgID)
+	h.stateMu.RLock()
+	patrolAutopilotPolicy := h.patrolAutopilotPolicy
+	h.stateMu.RUnlock()
+	svc.SetPatrolAutopilotServerPolicyProvider(patrolAutopilotPolicy)
 	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	if _, err := h.loadAIConfigForPersistence(context.Background(), orgID, persistence); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to bootstrap Pulse Assistant config for tenant")
@@ -7715,28 +7749,84 @@ func truncateForLog(s string, maxLen int) string {
 }
 
 // PatrolAutonomySettings represents the patrol autonomy configuration for API requests.
+// FullModeUnlocked is a legacy compatibility field only; it is never acknowledgement authority.
 type PatrolAutonomySettings struct {
-	AutonomyLevel           string `json:"autonomy_level"`            // "monitor" or "approval"
+	AutonomyLevel           string `json:"autonomy_level"`               // "monitor", "approval", "assisted", "full"
+	FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"` // Deprecated compatibility label (nil = preserve existing)
+	AcknowledgementID       string `json:"acknowledgement_id,omitempty"`
 	InvestigationBudget     int    `json:"investigation_budget"`      // Max evidence calls per investigation (5-30)
 	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"` // Max seconds per investigation (60-1800)
 }
 
-// PatrolAutonomyResponse represents the patrol autonomy configuration for API responses.
-type PatrolAutonomyResponse struct {
+// patrolAutonomyGateSettings preserves whether optional investigation controls
+// were present while the full-mode gate consumes acknowledgement_id. The paid
+// handler owns partial-update semantics and must not receive fabricated zeroes
+// for fields the caller omitted.
+type patrolAutonomyGateSettings struct {
 	AutonomyLevel           string `json:"autonomy_level"`
-	RequestedAutonomyLevel  string `json:"requested_autonomy_level"`
-	EffectiveAutonomyLevel  string `json:"effective_autonomy_level"`
-	InvestigationBudget     int    `json:"investigation_budget"`
-	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"`
+	FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"`
+	AcknowledgementID       string `json:"acknowledgement_id,omitempty"`
+	InvestigationBudget     *int   `json:"investigation_budget,omitempty"`
+	InvestigationTimeoutSec *int   `json:"investigation_timeout_sec,omitempty"`
 }
 
-// retiredPatrolAutonomyLevels are the self-executing modes Patrol no longer
-// offers. Stored values resolve to "approval"; new requests are refused.
-var retiredPatrolAutonomyLevels = map[string]bool{"assisted": true, "full": true, "autonomous": true}
+// PatrolAutonomyResponse represents the patrol autonomy configuration for API responses
+// Uses plain bool for FullModeUnlocked since responses always include the actual value
+type PatrolAutonomyResponse struct {
+	AutonomyLevel           string                                 `json:"autonomy_level"`
+	RequestedAutonomyLevel  string                                 `json:"requested_autonomy_level"`
+	EffectiveAutonomyLevel  string                                 `json:"effective_autonomy_level"`
+	FullModeUnlocked        bool                                   `json:"full_mode_unlocked"`
+	AutopilotStatus         unifiedresources.PatrolAutopilotStatus `json:"autopilot_acknowledgement"`
+	InvestigationBudget     int                                    `json:"investigation_budget"`
+	InvestigationTimeoutSec int                                    `json:"investigation_timeout_sec"`
+}
 
-const retiredPatrolAutonomyMessage = "Patrol no longer runs fixes on its own. Choose 'monitor' (watch only) or 'approval' (investigate and ask before any fix)."
+type patrolAutopilotAcknowledgementRequest struct {
+	AcknowledgementID string `json:"acknowledgement_id"`
+}
 
-func cloneAIConfigForPatrolAutonomy(cfg *config.AIConfig) (*config.AIConfig, error) {
+type patrolAutopilotRevocationRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+type patrolAutopilotActivationRequest struct {
+	AcknowledgementID string
+	Actor             unifiedresources.ActionActor
+}
+
+type patrolAutopilotActivationContextKey struct{}
+
+func patrolAutopilotActivationFromContext(ctx context.Context) (patrolAutopilotActivationRequest, bool) {
+	request, ok := ctx.Value(patrolAutopilotActivationContextKey{}).(patrolAutopilotActivationRequest)
+	return request, ok
+}
+
+func decodeStrictPatrolAutopilotJSONBody(w http.ResponseWriter, r *http.Request, target any, maxBytes int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	return decodeStrictPatrolAutopilotJSONBytes(data, target)
+}
+
+func decodeStrictPatrolAutopilotJSONBytes(data []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values are not allowed")
+		}
+		return err
+	}
+	return nil
+}
+
+func cloneAIConfigForPatrolAutopilot(cfg *config.AIConfig) (*config.AIConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("Pulse Patrol config not configured")
 	}
@@ -7751,9 +7841,7 @@ func cloneAIConfigForPatrolAutonomy(cfg *config.AIConfig) (*config.AIConfig, err
 	return &cloned, nil
 }
 
-// mutatePatrolAutonomyConfig persists one Patrol autonomy mutation and
-// publishes it to the running service under the policy-mutation coordinator.
-func (h *AISettingsHandler) mutatePatrolAutonomyConfig(ctx context.Context, mutate func(*config.AIConfig) (bool, error)) error {
+func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mutate func(*config.AIConfig, unifiedresources.PatrolAutopilotServerPolicy) (bool, error)) error {
 	if h == nil {
 		return fmt.Errorf("Pulse Patrol service not available")
 	}
@@ -7768,23 +7856,28 @@ func (h *AISettingsHandler) mutatePatrolAutonomyConfig(ctx context.Context, muta
 		if err != nil {
 			return err
 		}
-		next, err := cloneAIConfigForPatrolAutonomy(current)
+		next, err := cloneAIConfigForPatrolAutopilot(current)
 		if err != nil {
 			return err
 		}
-		changed, err := mutate(next)
+		changed, err := mutate(next, h.currentPatrolAutopilotServerPolicy())
 		if err != nil || !changed {
 			return err
 		}
-		previousLevel := current.GetPatrolAutonomyLevel()
-		nextLevel := next.GetPatrolAutonomyLevel()
+		policy := h.currentPatrolAutopilotServerPolicy()
+		orgID := strings.TrimSpace(GetOrgID(ctx))
+		if orgID == "" {
+			orgID = "default"
+		}
+		previousEffective, _ := current.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
+		nextEffective, _ := next.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
 		if err := persistence.SaveAIConfig(*next); err != nil {
 			return err
 		}
 		if err := service.ApplyPatrolAutonomyConfig(next); err != nil {
 			return err
 		}
-		activationTransition = previousLevel == config.PatrolAutonomyMonitor && nextLevel != config.PatrolAutonomyMonitor
+		activationTransition = previousEffective == config.PatrolAutonomyMonitor && nextEffective != config.PatrolAutonomyMonitor
 		return nil
 	}
 	h.stateMu.RLock()
@@ -7807,16 +7900,20 @@ func (h *AISettingsHandler) mutatePatrolAutonomyConfig(ctx context.Context, muta
 	return nil
 }
 
-func patrolAutonomyResponseForConfig(cfg *config.AIConfig, hasAutoFix bool) PatrolAutonomyResponse {
+func patrolAutonomyResponseForConfig(cfg *config.AIConfig, orgID string, policy unifiedresources.PatrolAutopilotServerPolicy, hasAutoFix bool) PatrolAutonomyResponse {
 	requested := cfg.GetPatrolAutonomyLevel()
-	effective := requested
+	effective, status := cfg.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
 	if !hasAutoFix {
 		effective = config.PatrolAutonomyMonitor
+		status.Active = false
+		status.Code = unifiedresources.PatrolAutopilotStatusLicenseRequired
 	}
 	return PatrolAutonomyResponse{
 		AutonomyLevel:           effective,
 		RequestedAutonomyLevel:  requested,
 		EffectiveAutonomyLevel:  effective,
+		FullModeUnlocked:        effective == config.PatrolAutonomyFull && status.Active,
+		AutopilotStatus:         status,
 		InvestigationBudget:     cfg.GetPatrolInvestigationBudget(),
 		InvestigationTimeoutSec: int(cfg.GetPatrolInvestigationTimeout().Seconds()),
 	}
@@ -7840,15 +7937,127 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 		return
 	}
 
-	settings := patrolAutonomyResponseForConfig(cfg, aiService.HasLicenseFeature(featureAIAutoFixValue))
+	hasAutoFix := aiService.HasLicenseFeature(featureAIAutoFixValue)
+	settings := patrolAutonomyResponseForConfig(cfg, GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), hasAutoFix)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
 }
 
-// GatePatrolAutonomyUpdate refuses the retired self-executing Patrol modes
-// before the request reaches the edition-specific update handler, so every
-// build answers with the same explanation.
+func (h *AISettingsHandler) HandleCreatePatrolAutopilotAcknowledgement(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var request patrolAutopilotAcknowledgementRequest
+	if err := decodeStrictPatrolAutopilotJSONBody(w, r, &request, 16*1024); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid acknowledgement request", nil)
+		return
+	}
+	orgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if orgID == "" {
+		orgID = "default"
+	}
+	actor, err := actionActorForRequest(h.defaultConfig, r, orgID)
+	if err != nil || actor.Kind != unifiedresources.ActionActorUser {
+		writeErrorResponse(w, http.StatusForbidden, unifiedresources.PatrolAutopilotStatusUserRequired, "Autopilot acknowledgement requires an authenticated human session", nil)
+		return
+	}
+	var acknowledgement unifiedresources.PatrolAutopilotAcknowledgement
+	created := false
+	err = h.mutatePatrolAutopilotConfig(r.Context(), func(cfg *config.AIConfig, policy unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		var issueErr error
+		acknowledgement, created, issueErr = unifiedresources.IssuePatrolAutopilotAcknowledgement(cfg.PatrolAutopilotAcknowledgements, request.AcknowledgementID, actor, policy)
+		if issueErr != nil || !created {
+			return false, issueErr
+		}
+		cfg.PatrolAutopilotAcknowledgements = append(cfg.PatrolAutopilotAcknowledgements, acknowledgement)
+		return true, nil
+	})
+	if err != nil {
+		code := unifiedresources.PatrolAutopilotErrorCode(err)
+		if code == "" {
+			code = unifiedresources.PatrolAutopilotStatusStoreUnavailable
+		}
+		status := http.StatusConflict
+		if code == unifiedresources.PatrolAutopilotStatusStoreUnavailable {
+			status = http.StatusServiceUnavailable
+		}
+		writeErrorResponse(w, status, code, "Autopilot acknowledgement was not recorded", nil)
+		return
+	}
+	_, acknowledgementStatus := unifiedresources.ValidatePatrolAutopilotAcknowledgement(
+		[]unifiedresources.PatrolAutopilotAcknowledgement{acknowledgement}, nil, acknowledgement.ID, orgID, &actor, h.currentPatrolAutopilotServerPolicy(),
+	)
+	statusCode := http.StatusOK
+	if created {
+		statusCode = http.StatusCreated
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]any{"created": created, "acknowledgement": acknowledgementStatus})
+}
+
+func (h *AISettingsHandler) HandleRevokePatrolAutopilotAcknowledgement(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	acknowledgementID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/ai/patrol/autonomy/acknowledgements/"))
+	if acknowledgementID == "" || strings.Contains(acknowledgementID, "/") {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Acknowledgement id is required", nil)
+		return
+	}
+	var request patrolAutopilotRevocationRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid revocation request", nil)
+		return
+	}
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := decodeStrictPatrolAutopilotJSONBytes(body, &request); err != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid revocation request", nil)
+			return
+		}
+	}
+	orgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if orgID == "" {
+		orgID = "default"
+	}
+	actor, err := actionActorForRequest(h.defaultConfig, r, orgID)
+	if err != nil || actor.Kind != unifiedresources.ActionActorUser {
+		writeErrorResponse(w, http.StatusForbidden, unifiedresources.PatrolAutopilotStatusUserRequired, "Autopilot revocation requires an authenticated human session", nil)
+		return
+	}
+	created := false
+	err = h.mutatePatrolAutopilotConfig(r.Context(), func(cfg *config.AIConfig, policy unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		revocation, wasCreated, revokeErr := unifiedresources.RevokePatrolAutopilotAcknowledgement(cfg.PatrolAutopilotAcknowledgements, cfg.PatrolAutopilotRevocations, acknowledgementID, actor, request.Reason, policy)
+		if revokeErr != nil || !wasCreated {
+			created = false
+			return false, revokeErr
+		}
+		created = true
+		cfg.PatrolAutopilotRevocations = append(cfg.PatrolAutopilotRevocations, revocation)
+		cfg.PatrolFullModeUnlocked = false
+		return true, nil
+	})
+	if err != nil {
+		code := unifiedresources.PatrolAutopilotErrorCode(err)
+		if code == "" {
+			code = unifiedresources.PatrolAutopilotStatusStoreUnavailable
+		}
+		status := http.StatusConflict
+		if code == unifiedresources.PatrolAutopilotStatusStoreUnavailable {
+			status = http.StatusServiceUnavailable
+		}
+		writeErrorResponse(w, status, code, "Autopilot acknowledgement was not revoked", nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"revoked": true, "created": created, "acknowledgement_id": acknowledgementID})
+}
+
 func (h *AISettingsHandler) GatePatrolAutonomyUpdate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -7861,25 +8070,69 @@ func (h *AISettingsHandler) GatePatrolAutonomyUpdate(next http.HandlerFunc) http
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid Patrol autonomy request", nil)
 			return
 		}
-		var settings struct {
-			AutonomyLevel string `json:"autonomy_level"`
-		}
-		if err := json.Unmarshal(body, &settings); err != nil {
+		var settings patrolAutonomyGateSettings
+		if err := decodeStrictPatrolAutopilotJSONBytes(body, &settings); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid Patrol autonomy request", nil)
 			return
 		}
-		if retiredPatrolAutonomyLevels[strings.ToLower(strings.TrimSpace(settings.AutonomyLevel))] {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level", retiredPatrolAutonomyMessage, nil)
+		settings.AcknowledgementID = strings.TrimSpace(settings.AcknowledgementID)
+		if settings.AutonomyLevel != config.PatrolAutonomyFull {
+			if settings.AcknowledgementID != "" {
+				writeErrorResponse(w, http.StatusConflict, unifiedresources.PatrolAutopilotStatusNotRequested, "Acknowledgement is only valid for an explicit Autopilot activation", nil)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			r.ContentLength = int64(len(body))
+			next(w, r)
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		r.ContentLength = int64(len(body))
-		next(w, r)
+		if settings.AcknowledgementID == "" {
+			writeErrorResponse(w, http.StatusConflict, unifiedresources.PatrolAutopilotStatusAcknowledgementRequired, "Autopilot activation requires a current acknowledgement", nil)
+			return
+		}
+		orgID := strings.TrimSpace(GetOrgID(r.Context()))
+		if orgID == "" {
+			orgID = "default"
+		}
+		actor, err := actionActorForRequest(h.defaultConfig, r, orgID)
+		if err != nil || actor.Kind != unifiedresources.ActionActorUser {
+			writeErrorResponse(w, http.StatusForbidden, unifiedresources.PatrolAutopilotStatusUserRequired, "Autopilot activation requires the human session that owns the acknowledgement", nil)
+			return
+		}
+		cfg, err := h.loadAIConfig(r.Context())
+		if err != nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, unifiedresources.PatrolAutopilotStatusStoreUnavailable, "Autopilot acknowledgement store is unavailable", nil)
+			return
+		}
+		_, status := unifiedresources.ValidatePatrolAutopilotAcknowledgement(cfg.PatrolAutopilotAcknowledgements, cfg.PatrolAutopilotRevocations, settings.AcknowledgementID, orgID, &actor, h.currentPatrolAutopilotServerPolicy())
+		if !status.Active {
+			writeErrorResponse(w, http.StatusConflict, status.Code, "Autopilot acknowledgement is not eligible for activation", nil)
+			return
+		}
+		compatUnlocked := true
+		settings.FullModeUnlocked = &compatUnlocked
+		// The acknowledgement is consumed by this gate and handed to the
+		// downstream handler via context. It must not survive into the
+		// normalized body: the Pro autonomy handler decodes the body
+		// strictly and rejects unknown fields, so forwarding
+		// acknowledgement_id made every Autopilot activation fail with
+		// "Invalid request body" on Pro builds.
+		consumedAcknowledgementID := settings.AcknowledgementID
+		settings.AcknowledgementID = ""
+		normalizedBody, err := json.Marshal(settings)
+		if err != nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "encoding_failed", "Failed to prepare Patrol autonomy request", nil)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(normalizedBody))
+		r.ContentLength = int64(len(normalizedBody))
+		activationRequest := patrolAutopilotActivationRequest{AcknowledgementID: consumedAcknowledgementID, Actor: actor}
+		next(w, r.WithContext(context.WithValue(r.Context(), patrolAutopilotActivationContextKey{}, activationRequest)))
 	}
 }
 
 // HandleUpdatePatrolAutonomyMonitorOnly persists findings-only Patrol autonomy
-// settings for builds without the investigation extension.
+// settings for builds without the safe remediation extension.
 func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -7904,11 +8157,11 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 	}
 	if !config.IsValidPatrolAutonomyLevel(req.AutonomyLevel) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_autonomy_level",
-			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor' or 'approval'", req.AutonomyLevel), nil)
+			fmt.Sprintf("Invalid autonomy level: %s. Must be 'monitor', 'approval', 'assisted', or 'full'", req.AutonomyLevel), nil)
 		return
 	}
 	if req.AutonomyLevel != config.PatrolAutonomyMonitor {
-		WriteLicenseRequired(w, featureAIAutoFixKey, "Patrol investigation requires Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
+		WriteLicenseRequired(w, featureAIAutoFixKey, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
 		return
 	}
 
@@ -7925,10 +8178,12 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		req.InvestigationTimeoutSec = 1800
 	}
 
-	if err := h.mutatePatrolAutonomyConfig(r.Context(), func(current *config.AIConfig) (bool, error) {
-		changed := current.PatrolAutonomyLevel != config.PatrolAutonomyMonitor ||
+	if err := h.mutatePatrolAutopilotConfig(r.Context(), func(current *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		changed := current.PatrolAutonomyLevel != config.PatrolAutonomyMonitor || current.PatrolFullModeUnlocked || current.PatrolAutopilotActivation != nil ||
 			current.PatrolInvestigationBudget != req.InvestigationBudget || current.PatrolInvestigationTimeoutSec != req.InvestigationTimeoutSec
 		current.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		current.PatrolFullModeUnlocked = false
+		current.PatrolAutopilotActivation = nil
 		current.PatrolInvestigationBudget = req.InvestigationBudget
 		current.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
 		return changed, nil
@@ -7936,7 +8191,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}
-	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), aiService.HasLicenseFeature(featureAIAutoFixValue))
+	settings := patrolAutonomyResponseForConfig(aiService.GetConfig(), GetOrgID(r.Context()), h.currentPatrolAutopilotServerPolicy(), aiService.HasLicenseFeature(featureAIAutoFixValue))
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"success":  true,
 		"settings": settings,

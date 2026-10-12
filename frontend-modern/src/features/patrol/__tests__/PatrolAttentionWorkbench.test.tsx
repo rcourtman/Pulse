@@ -395,7 +395,7 @@ describe('PatrolAttentionWorkbench', () => {
     expect(screen.getByRole('button', { name: 'Refresh Patrol attention' })).toBeInTheDocument();
   });
 
-  it('keeps safe eligible work in the Ask first decision queue', async () => {
+  it('does not interrupt assisted mode for safe eligible work', async () => {
     const safeWork = item({
       availableActions: [
         {
@@ -425,15 +425,21 @@ describe('PatrolAttentionWorkbench', () => {
         <Route
           path="/patrol"
           component={() => (
-            <PatrolAttentionWorkbench autonomyLevel="approval" autonomyLocked={false} />
+            <PatrolAttentionWorkbench autonomyLevel="assisted" autonomyLocked={false} />
           )}
         />
       </Router>
     ));
 
-    expect(await screen.findByRole('button', { name: /Open Database VM/ })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Nothing needs you right now' })).toBeNull();
-    expect(screen.queryByText(/continuing without a decision/i)).toBeNull();
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing needs you right now' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /1 other current issue is continuing without a decision under Safe auto-fix/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Database VM/ })).not.toBeInTheDocument();
   });
 
   it('keeps a long decision queue compact until the operator asks for all of it', async () => {

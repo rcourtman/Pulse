@@ -1458,6 +1458,19 @@
             ]
           },
           {
+            "id": "patrol-autonomy-colima-real-lab",
+            "label": "RG-06 server-owned limited-unattended-autonomy Colima proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/intelligence_lab/patrol_autonomy_colima.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/patrol_autonomy_colima_real_lab_test.go"
+            ]
+          },
+          {
             "id": "docker-restart-intelligence-lab",
             "label": "Docker restart managed-runtime and artifact-backed browser proof",
             "match_prefixes": [
@@ -2020,6 +2033,7 @@
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go",
         "internal/config/ai.go",
+        "internal/config/patrol_autopilot_persistence.go",
         "internal/metrics/incident_archive.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
@@ -2155,7 +2169,8 @@
               "internal/api/ai_intelligence_handlers_remediation_additional_test.go",
               "internal/api/ai_intelligence_handlers_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
-              "internal/api/issue1640_readiness_transport_test.go"
+              "internal/api/issue1640_readiness_transport_test.go",
+              "internal/api/patrol_autopilot_test.go"
             ]
           },
           {
@@ -2315,12 +2330,14 @@
             "label": "AI runtime config proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/config/ai.go"
+              "internal/config/ai.go",
+              "internal/config/patrol_autopilot_persistence.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/config/ai_config_test.go"
+              "internal/config/ai_config_test.go",
+              "internal/config/patrol_autopilot_persistence_test.go"
             ]
           },
           {
@@ -3215,6 +3232,7 @@
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
               "internal/api/metadata_handlers_test.go",
+              "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
               "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
@@ -8564,9 +8582,23 @@
               "internal/unifiedresources/registry_test.go",
               "internal/unifiedresources/resolve_test.go",
               "internal/unifiedresources/resolved_host_set_test.go",
+              "internal/unifiedresources/resource_operator_state_policy_test.go",
               "internal/unifiedresources/snapshot_source_filter_test.go",
               "internal/unifiedresources/store_history_index_test.go",
               "internal/unifiedresources/store_test.go"
+            ]
+          },
+          {
+            "id": "patrol-autopilot-runtime",
+            "label": "Patrol Autopilot authority runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/patrol_autopilot.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/patrol_autopilot_test.go"
             ]
           },
           {
@@ -8623,6 +8655,7 @@
               "internal/unifiedresources/registry_test.go",
               "internal/unifiedresources/resolve_test.go",
               "internal/unifiedresources/resolved_host_set_test.go",
+              "internal/unifiedresources/resource_operator_state_policy_test.go",
               "internal/unifiedresources/snapshot_source_filter_test.go",
               "internal/unifiedresources/store_history_index_test.go",
               "internal/unifiedresources/store_test.go"

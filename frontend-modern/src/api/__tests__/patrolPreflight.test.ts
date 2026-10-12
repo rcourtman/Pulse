@@ -205,6 +205,8 @@ describe('runPatrolModelReadiness', () => {
       modes: {
         monitor: { status: 'verified', summary: 'Verified.' },
         approval: { status: 'not_suitable', summary: 'Continuation failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
       },
       recorded_at: '2026-07-13T08:00:00Z',
       recorded_at_unix: 1783929600,

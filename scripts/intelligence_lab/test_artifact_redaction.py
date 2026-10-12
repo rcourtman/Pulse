@@ -49,18 +49,5 @@ class ArtifactRedactionTest(unittest.TestCase):
             verify_checksums(root)
 
 
-
-class RetiredAutonomyLabTest(unittest.TestCase):
-    """Patrol's self-executing modes were retired, so the RG-06 unattended
-    autonomy Colima harness is gone and the lab README no longer offers it."""
-
-    def test_autonomy_harness_stays_removed(self) -> None:
-        lab = Path(__file__).resolve().parent
-        self.assertFalse((lab / "patrol_autonomy_colima.py").exists())
-        readme = (lab / "README.md").read_text(encoding="utf-8")
-        self.assertNotIn("patrol_autonomy_colima", readme)
-        self.assertNotIn("RG-06", readme)
-
-
 if __name__ == "__main__":
     unittest.main()

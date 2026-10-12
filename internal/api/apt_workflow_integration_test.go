@@ -80,27 +80,34 @@ func TestAPTUpdateEmptyExecutionPhaseCannotVerifyResolveOrReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: resource.ID,
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled: true, CapabilityNames: []string{hostPackageUpdateCapability},
+		},
+		SetAt: now, SetBy: "operator@example.com",
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	proposal := aicontracts.ActionProposal{
 		ProposalID: "proposal-invalid-host-update", FindingID: finding.ID, InvestigationID: investigation.ID,
 		ResourceID: finding.ResourceID, CapabilityName: hostPackageUpdateCapability, Params: map[string]any{},
 		Reason: "Reject a malformed typed host update result without replay.",
 	}
-	disposition, err := NewPatrolActionBroker("default", resources).Submit(context.Background(), proposal)
-	if err != nil || disposition.State != string(unified.ActionStatePending) {
+	broker := NewPatrolActionBroker("default", resources, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}, nil
+	})
+	disposition, err := broker.Submit(context.Background(), proposal)
+	if err == nil || !strings.Contains(err.Error(), `unsupported host update execution phase ""`) {
 		t.Fatalf("Submit disposition=%#v err=%v", disposition, err)
 	}
-	if decision := postActionOperatorRequest(resources, disposition.ActionID, "decision", `{"outcome":"approved","reason":"controlled fake-only proof"}`); decision.Code != http.StatusOK {
-		t.Fatalf("decision status=%d body=%s", decision.Code, decision.Body.String())
+	duplicate, duplicateErr := broker.Submit(context.Background(), proposal)
+	if duplicateErr != nil {
+		t.Fatalf("duplicate Submit disposition=%#v err=%v", duplicate, duplicateErr)
 	}
-	execution := postActionOperatorRequest(resources, disposition.ActionID, "execute", `{"reason":"execute approved typed APT action"}`)
-	if execution.Code != http.StatusInternalServerError || !strings.Contains(execution.Body.String(), `action_execution_failed`) || len(agents.requests) != 1 {
-		t.Fatalf("execution status=%d body=%s", execution.Code, execution.Body.String())
-	}
-	replay := postActionOperatorRequest(resources, disposition.ActionID, "execute", `{"reason":"execute approved typed APT action"}`)
-	// A repeated execute returns the in-flight disposition and never resends.
-	if replay.Code != http.StatusOK || !strings.Contains(replay.Body.String(), `"state":"executing"`) || len(agents.requests) != 1 {
-		t.Fatalf("replay status=%d body=%s requests=%d queries=%d", replay.Code, replay.Body.String(), len(agents.requests), len(agents.queries))
+	if duplicate.State != string(unified.ActionStateExecuting) || duplicate.VerificationStatus == string(unified.VerificationVerified) || len(agents.requests) != 1 || len(agents.queries) != 1 {
+		t.Fatalf("duplicate disposition=%#v requests=%d queries=%d", duplicate, len(agents.requests), len(agents.queries))
 	}
 	reader, ok := store.(unified.ActionAuditOriginReader)
 	if !ok {
@@ -219,21 +226,6 @@ func assertBoundedAPTWorkflowEvidence(t *testing.T, finding *ai.Finding) {
 			t.Fatalf("finding evidence exposes command/path/package/reboot authority: %q", finding.Evidence)
 		}
 	}
-}
-
-// postActionOperatorRequest posts an operator decision or execution request
-// for actionID the way the Actions page does.
-func postActionOperatorRequest(resources *ResourceHandlers, actionID, verb, body string) *httptest.ResponseRecorder {
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/actions/"+actionID+"/"+verb, bytes.NewBufferString(body))
-	request.SetPathValue("id", actionID)
-	request = request.WithContext(auth.WithUser(request.Context(), "operator@example.com"))
-	if verb == "decision" {
-		resources.HandleDecideAction(recorder, actionHandlerTestRequest(request, ""))
-	} else {
-		resources.HandleExecuteAction(recorder, actionHandlerTestRequest(request, ""))
-	}
-	return recorder
 }
 
 func runAPTWorkflowFindingJourney(t *testing.T, resources *ResourceHandlers, finding *ai.Finding, capability string) {

@@ -998,6 +998,8 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// honest: per-resource lock refusal cannot silently turn into
 			// another error kind that callers fail to detect.
 			"ErrResourceRemediationLocked",
+			"type ActionPolicyAuthorizationLease struct",
+			"func BeginPolicyActionExecution(",
 			// ActionVerificationResult is the canonical post-execution
 			// read-after-write outcome carrier. The broker writes it onto
 			// ExecutionResult.Verification; pinning the type here keeps the
@@ -1008,8 +1010,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"func (s *SQLiteResourceStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			// Audit-log secret redaction must run at every persistence
 			// boundary so operator-authored reasons and command output do
@@ -1049,6 +1053,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
 			"func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord) error",
 			"ErrActionExecutionUnavailable",
+			"func (s *Service) ExecuteUnderPolicy(",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
 			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
 			// The persisted-state transition hook is org-scoped so

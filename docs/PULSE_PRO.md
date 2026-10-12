@@ -106,7 +106,7 @@ capability key is a primary v6 product pillar.
 These are the current self-hosted Pro pillars that Pulse should keep
 investing in, surfacing, and marketing:
 - Patrol investigates issues.
-- Patrol proposes fixes that run only after operator approval, then verifies them.
+- Patrol handles safe fixes through approval-backed execution and Patrol mode.
 - 90-day history.
 - Included team/admin extras: RBAC, audit logging, reporting, and agent
   profiles. SSO is included with Community and higher tiers.
@@ -156,10 +156,10 @@ keys and old 14-day limit remain in code without changing that policy.
 
 | Constant | Capability Key | Display Name | Community | Relay (legacy) | Pro | Cloud | Primary Gating Mechanism / Notes |
 |---|---|---|:---:|:---:|:---:|:---:|---|
-| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Investigation and fix execution are separately gated. |
+| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Pulse Relay (Mobile Connection) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
 | `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues and Explains the Root Cause | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
-| `FeatureAIAutoFix` | `ai_autofix` | Patrol Applies Safe Fixes and Verifies the Result | N | N | Y | Y | Required for Patrol investigation and approval-backed fix execution. |
+| `FeatureAIAutoFix` | `ai_autofix` | Patrol Applies Safe Fixes and Verifies the Result | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
@@ -181,10 +181,9 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 | Mode | Behavior | Plan |
 |---|---|---|
 | **Watch only** | Detect issues only. No investigation or fix execution. | Community / legacy Relay payload |
-| **Ask first** | Investigates findings and proposes fixes. Every fix waits for operator approval before it runs. | Pro / hosted Cloud |
-
-Patrol never runs a fix on its own. The earlier **Safe auto-fix** and
-**Autopilot** modes have been retired.
+| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Safe auto-fix** | Runs approved safe fixes and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
+| **Autopilot** | Runs eligible policy-approved fixes without approval when explicitly enabled. | Pro / hosted Cloud |
 
 ## What You Get (By Plan)
 
@@ -203,7 +202,7 @@ Patrol never runs a fix on its own. The earlier **Safe auto-fix** and
 ### Pro
 - Everything in Community, plus:
 - Patrol investigates issues.
-- Patrol proposes fixes you approve, then verifies the result.
+- Patrol handles safe fixes through Patrol mode.
 - Centralized agent profiles.
 - RBAC, audit logging, and advanced reporting.
 - 90-day history.

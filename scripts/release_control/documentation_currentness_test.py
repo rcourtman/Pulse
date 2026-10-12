@@ -131,7 +131,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         pulse_pro_doc = read("docs/PULSE_PRO.md")
 
         self.assertIn(
-            "| **Ask first** | Investigates findings and proposes fixes. Every fix waits in **Actions** until an operator approves and runs it. | Pro / hosted Cloud |",
+            "| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             ai_doc,
         )
         self.assertIn(
@@ -143,12 +143,12 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             ai_doc,
         )
         self.assertIn(
-            "`approval`: Requires the `ai_autofix` capability",
+            "`approval`, `assisted`, and `full`: Require the `ai_autofix` capability",
             normalize_prose(autonomy_doc),
         )
         self.assertNotIn("Upgrade to Assisted", autonomy_doc)
         self.assertIn(
-            "| **Ask first** | Investigates findings and proposes fixes. Every fix waits for operator approval before it runs. | Pro / hosted Cloud |",
+            "| **Ask first** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             pulse_pro_doc,
         )
         self.assertNotIn(

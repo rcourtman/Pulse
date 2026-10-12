@@ -20,13 +20,16 @@ interface HeaderStateOptions {
   autonomyLevel?: PatrolAutonomyLevel;
   autoFixLocked?: boolean | (() => boolean);
   setupOnly?: boolean;
+  autopilotDialogOpen?: boolean;
 }
 
 const createState = (options: HeaderStateOptions = {}) => {
   const autonomyLevel = options.autonomyLevel ?? 'approval';
   const handleAutonomyChange = vi.fn();
   const state = {
+    autopilotStatus: () => null,
     autonomyLevel: () => autonomyLevel,
+    requestedAutonomyLevel: () => autonomyLevel,
     autoFixLocked: () => {
       const locked = options.autoFixLocked ?? false;
       return typeof locked === 'function' ? locked() : locked;
@@ -47,6 +50,10 @@ const createState = (options: HeaderStateOptions = {}) => {
     isTogglingPatrol: () => false,
     isUpdatingAutonomy: () => false,
     shouldShowPatrolSetupOnly: () => options.setupOnly ?? false,
+    autopilotDialogOpen: () => options.autopilotDialogOpen ?? false,
+    setAutopilotDialogOpen: vi.fn(),
+    acknowledgeAndActivateAutopilot: vi.fn(),
+    revokeAutopilot: vi.fn(),
     handleRunPatrol: vi.fn(),
     handleTogglePatrol: vi.fn(),
     handleAutonomyChange,
@@ -89,10 +96,10 @@ describe('PatrolIntelligenceHeader Patrol mode placement', () => {
       within(selector)
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label')),
-    ).toEqual(['Watch only', 'Ask first']);
+    ).toEqual(['Watch only', 'Ask first', 'Safe auto-fix', 'Autopilot']);
 
-    fireEvent.click(within(selector).getByRole('button', { name: 'Watch only' }));
-    expect(handleAutonomyChange).toHaveBeenCalledWith('monitor');
+    fireEvent.click(within(selector).getByRole('button', { name: 'Safe auto-fix' }));
+    expect(handleAutonomyChange).toHaveBeenCalledWith('assisted');
   });
 
   it('shows plan-locked installs one inline Patrol mode line instead of a selector', () => {
@@ -119,10 +126,17 @@ describe('PatrolIntelligenceHeader Patrol mode placement', () => {
     expect(details.contains(screen.getByRole('group', { name: 'Patrol mode' }))).toBe(true);
   });
 
-  it('opens no Patrol control dialog', () => {
-    const { state } = createState();
-    renderHeader(state);
+  it('opens no Patrol control dialog; the Autopilot acknowledgement is its only dialog', () => {
+    const closed = createState();
+    renderHeader(closed.state);
     expect(screen.queryAllByRole('dialog')).toHaveLength(0);
+    cleanup();
+
+    const opened = createState({ autopilotDialogOpen: true });
+    renderHeader(opened.state);
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toHaveAccessibleName('Activate Autopilot');
   });
 });
 

@@ -1113,13 +1113,6 @@ tokens, and path-normalization variants.
 
 ## Current State
 
-### Patrol autonomy telemetry reports two levels (2026-10-12)
-
-With Safe auto-fix and Autopilot retired, the effective Patrol autonomy level an
-install reports is `monitor` or `approval`; `docs/PRIVACY.md` says so and notes
-that older installs may still send `assisted` or `full`. No acknowledgement
-actor or timestamp data exists to send.
-
 ### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
 
 With AI Discovery removed, the telemetry snapshot's `discovery_enabled` flag
@@ -2573,12 +2566,9 @@ refusal reason codes such as `resource_remediation_locked:` and `plan_drift:`
 may remain visible so authorized consumers can branch without receiving raw
 provider output.
 
-### Patrol Autopilot acknowledgement authority (retired 2026-10-12)
+### Patrol Autopilot acknowledgement authority
 
-Autopilot and its acknowledgement were removed with Patrol's self-executing
-modes; the record below describes the removed behaviour.
-
-Autopilot acknowledgement and activation stamped the authenticated human session
+Autopilot acknowledgement and activation stamp the authenticated human session
 as an immutable `ActionActor` binding with organization and credential. Public
 actor, organization, version, scope, limits, time, and digest fields are
 rejected; owner-bound and detached API tokens are both ineligible. Cross-org,
@@ -2855,9 +2845,8 @@ model route (`none`, `local`, `cloud_byok`, `cloud_subscription`,
 operator-supplied OpenAI-compatible endpoints; it never resolves DNS and never
 carries the provider ID, model name, endpoint, or account.
 `pulse_intelligence_patrol_autonomy_level` is the effective level after
-licence gating, bounded to `monitor` or `approval` since the 2026-10-12
-retirement of the self-executing modes; older installs may still report
-`assisted` or `full`, which the receiver keeps in its vocabulary. The two token fields are closed buckets of the existing local usage
+licence and Autopilot gating, bounded to `monitor`, `approval`, `assisted`, or
+`full`. The two token fields are closed buckets of the existing local usage
 ledger's Patrol events; exact token counts, prices, providers, and models stay
 on the install. The outcome counts partition the same findings already counted
 as investigated, one bucket per finding, and add no finding, resource,

@@ -1440,9 +1440,13 @@ registry `RepoDigest`. A tag that resolves to neither digest fails before the
 rename boundary; comparing only a registry digest to a daemon-local image ID is
 not sufficient proof and must not reject an otherwise matching pull.
 
-Automatic Patrol action admission was retired on 2026-10-12: Patrol only plans,
-so agent command transport runs only after a human decision and the lifecycle's
-committed `executing` transition. Human approvals are lifecycle evidence. Emergency stop blocks admission before
+Automatic Patrol action admission wired through `internal/api/` is API/action-
+lifecycle authority, not agent enrollment or command authority. Agent command
+transport may run only after the lifecycle-owned policy lease has been
+revalidated and the policy approval plus `executing` transition have committed
+atomically; a policy-approved intermediate state is never reusable by an agent.
+Human approvals remain separate lifecycle evidence and are not invalidated by
+later automatic-policy revocation. Emergency stop blocks admission before
 `executing`; cancellation after that boundary is best effort and is not
 rollback proof.
 
@@ -1457,8 +1461,8 @@ actually consulted, their source revisions and scope, the resulting approval
 requirement, and stable reason codes into the plan hash and immutable audit.
 This is descriptive plan-time evidence for pending-action consumers, not a
 decision or dispatch token. Lifecycle freshness may detect provenance drift,
-but execution still requires current actor/RBAC/scope checks and a human
-decision. Legacy rows without provenance remain explicit
+but execution still requires current actor/RBAC/scope checks and the Task 04
+authorization lease. Legacy rows without provenance remain explicit
 `legacy_unknown` and cannot resume nonterminal authority by implication.
 Each accepted approval increments a durable decision revision through an exact
 prior-prefix CAS, appends one typed decision fact, and atomically appends the
@@ -2946,11 +2950,32 @@ agent inventory, registration state, or command-channel readiness.
    Timeout, persistent unhealthy state, unsupported health vocabulary, or a
    missing health fact remains contradicted or inconclusive rather than
    manufacturing a successful postcondition from running state alone.
-   The RG-06 limited-unattended-autonomy Colima harness
-   (`scripts/intelligence_lab/patrol_autonomy_colima.py` and its real-lab
-   test) was removed when Patrol's self-executing modes were retired on
-   2026-10-12; RG-06 now proves at the integration tier that Patrol never
-   executes without an operator decision.
+   RG-06 has a separate mutation harness at
+   `scripts/intelligence_lab/patrol_autonomy_colima.py` and
+   `internal/api/patrol_autonomy_colima_real_lab_test.go`. It must run from a
+   clean archive of the audited SHA, build the pinned `cmd/pulse-agent`, and
+   execute both the agent and certification test from that same extracted
+   source directory with an artifact SHA binding. It must refuse to pull or
+   mutate a non-disposable image. The disposable Debian
+   agent creates bounded APT cache pressure, reports through the production
+   WebSocket, and is converted with `unifiedresources.HostIngestRecord`; the
+   production `clean_package_cache` capability and
+   `hostStorageCleanupActionExecutor` therefore remain the sole eligibility and
+   execution path. The proof binds every action to the persisted current-version
+   human acknowledgement and activation, records server actor/org/resource/
+   capability and policy-plan bindings, proves one command, one transport
+   attempt, one receipt, independent cache before/after readback, terminal
+   ActionResultV2 truth, and finding reconciliation. Each revoked, downgraded,
+   emergency-stop, stale-resource, and Never barrier first creates a valid
+   finding/investigation and measures cache/daemon state, agent command count,
+   transport attempt/receipt, audit/event state, authority/config digest, and
+   finding resolution before and after, including cache bytes/fingerprints and
+   container identity/running/start state. Every barrier must produce the
+   expected canonical refusal reason and never reach completed state. Negative
+   triple-zero means measured unauthorized mutation, transport dispatch, and
+   authority writes are all zero; expected lifecycle refusal event deltas are
+   recorded separately and do not get mislabelled as zero activity. The one authorized dispatch is recorded
+   separately and never disguised as triple-zero evidence.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
    Runtime-side PVE token setup must also keep the same permission shape as the
    generated setup script: Pulse-managed PVE monitor tokens are
@@ -7568,12 +7593,9 @@ when the canonical evidence identifies a distinct trust domain. Agent-side
 producer migration and UI wording are downstream governed work, not permission
 to add an agent-local truth model.
 
-### Autopilot activation is not action approval (retired 2026-10-12)
+### Autopilot activation is not action approval
 
-Autopilot and its acknowledgement were removed; the record below describes the
-removed behaviour.
-
-The server-owned Patrol Autopilot acknowledgement authorized only the effective
+The server-owned Patrol Autopilot acknowledgement authorizes only the effective
 tenant Patrol mode. It does not approve an action, weaken capability policy,
 satisfy an MFA floor, manufacture dispatch authority, or alter agent receipt
 and result semantics. Every resulting action still enters the canonical
@@ -7682,7 +7704,7 @@ is implemented; both claims and workflow scorecards remain below operational
 completion until browser proof, disposable Debian/Ubuntu lab proof, and Task 12
 certification are complete.
 
-RG-09 keeps the executing agent's fresh typed readback classified as
+RG-06 and RG-09 keep the executing agent's fresh typed readback classified as
 `agent_attested`. A separate Colima control-plane observation proves the lab
 fixture changed, but it does not enter the authenticated product action result
 and therefore cannot upgrade the product finding to `fix_verified`. Until a

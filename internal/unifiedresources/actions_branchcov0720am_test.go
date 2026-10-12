@@ -12,6 +12,11 @@ import (
 //     sentinels, unrelated error)
 //   - ValidateHumanActionBinding          (validation; each rejection arm +
 //     the valid path)
+//
+// ActionPolicyAuthorizationDigest is intentionally NOT exercised here: its
+// body is straight-line (zero Digest, json.Marshal, sha256.Sum256, Sprintf)
+// with no conditional logic to drive, so it has no branches to cover. See
+// GLM_REPORT.md for the skip rationale.
 
 // ---------------------------------------------------------------------------
 // IsPermanentActionExecutionRefusal
@@ -30,6 +35,9 @@ func TestBranchcov0720am_IsPermanentActionExecutionRefusal(t *testing.T) {
 		{"plan expired", ErrActionPlanExpired},
 		{"dry run only", ErrActionDryRunOnly},
 		{"resource remediation locked", ErrResourceRemediationLocked},
+		{"policy authorization expired", ErrActionPolicyAuthorizationExpired},
+		{"policy authorization invalid", ErrActionPolicyAuthorizationInvalid},
+		{"policy authorization revoked", ErrActionPolicyAuthorizationRevoked},
 		{"emergency stop", ErrActionEmergencyStop},
 		{"replan required", ErrActionReplanRequired},
 	}
