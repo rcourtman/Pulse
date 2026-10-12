@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -8369,6 +8370,41 @@ func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
 	if quiesce < 0 || quiesce >= strings.Index(uninstall, "if ! uninstall_collector_registration;") ||
 		quiesce >= strings.Index(uninstall, "pkill -f") {
 		t.Fatal("full removal must quiesce every affected systemd unit before remote removal or process mutation")
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_openrc_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("OpenRC teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_stop_and_disable_refusals_retain_every_local_file",
+		"test_failed_partial_or_diagnostic_observations_are_not_replaced_by_another_read",
+		"test_independent_post_stop_and_runlevel_reads_are_mandatory",
+		"test_refused_manager_cannot_start_remote_or_local_removal",
+		"test_quiescence_precedes_server_process_and_state_mutation",
+		"test_server_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_keeps_recovery_after_confirmed_remote_removal",
+		"test_known_stopped_state_and_every_runlevel_allow_only_selected_teardown",
+		"test_absent_and_repeated_removal_need_manager_and_process_absence",
+		"test_unexpected_service_paths_refuse_before_stop_or_deletion",
+		"test_source_selection_and_caller_order_have_one_bounded_observation_per_operation",
+		"test_real_status_timeout_stops_its_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentOpenRCTeardown."+name+") ... ok") {
+			t.Fatalf("OpenRC teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete OpenRC teardown verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
 }

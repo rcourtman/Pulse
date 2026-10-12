@@ -16,6 +16,27 @@
 
 ## Purpose
 
+### OpenRC removal retains recovery on an unconfirmed manager result
+
+The OpenRC agent-removal path must finish stop and all-runlevel disable with
+independent status/inventory readback before server deregistration or local
+mutation. A failed, partial, diagnostic-bearing or unknown observation cannot
+be treated as absence or retried for a more favourable sample. Teardown rechecks
+after the remote operation, before any recovery directory is deleted, so a late
+manager refusal retains local recovery even if remote removal completed.
+Known absent/repeated removal requires manager and process-absence evidence;
+no unrelated init file, service or runlevel is removed. No failed partial stop
+is restarted automatically and no credential or transport authority changes.
+
+The registered `scripts/installtests/install_sh_test.go` artifact requires all
+twelve `agent_openrc_teardown.py` production-function/caller controls, including
+custom runlevels, stopped/refused/unknown states, post-remote refusal, exact
+cleanup ordering, path exclusions, and real bounded timeout-child termination.
+The manager and transport are closed models, with deletion confined to owned
+private files. Required containing CI, native OpenRC compatibility, real saved
+install/TLS, Windows and other-manager acceptance remain separate; this does
+not establish published or installed Linux/PowerShell #1099 recovery.
+
 ### Linux agent removal native boundary
 
 The existing Unified Agent Native Verification job now runs the unchanged Unix

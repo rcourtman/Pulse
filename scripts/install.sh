@@ -1237,10 +1237,104 @@ teardown_action_runner_service() {
 	rm -rf "$ACTION_RUNNER_CONFIG_DIR" "$ACTION_RUNNER_STATE_DIR"
 }
 
+# OpenRC's status command uses 3 for a stopped service. Neither that exit
+# alone nor a failed manager read proves quiescence: retain the complete,
+# colour-free response and require the matching status line as well.
+read_openrc_agent_removal_status() {
+    local observation="" line="" status="" result="" status_count=0 result_count=0
+    observation=$(LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-service "${AGENT_NAME}" status 2>&1 &&
+        printf '%s' '__pulse_openrc_status_exit__=0' || printf '%s' "__pulse_openrc_status_exit__=$?") || return 1
+    while IFS= read -r line; do
+        [[ $result_count -eq 0 ]] || return 1
+        if [[ "$line" =~ ^[[:space:]]*\*[[:space:]]+status:[[:space:]]+(started|stopped)[[:space:]]*$ ]]; then
+            status="${BASH_REMATCH[1]}"
+            status_count=$((status_count + 1))
+        elif [[ "$line" =~ ^__pulse_openrc_status_exit__=([0-9]+)$ ]]; then
+            result="${BASH_REMATCH[1]}"
+            result_count=$((result_count + 1))
+        else
+            return 1
+        fi
+    done <<< "$observation"
+    [[ $status_count -eq 1 && $result_count -eq 1 ]] || return 1
+    if [[ "$status" == started ]]; then
+        [[ "$result" == 0 ]] || return 1
+    else
+        [[ "$result" == 0 || "$result" == 3 ]] || return 1
+    fi
+    printf '%s\n' "$status"
+}
+
+read_openrc_agent_removal_runlevels() {
+    local observation="" line="" name="" levels="" level="" seen=" " count=0 complete="false"
+    local IFS=$' \t\n'
+    local -a row_levels=()
+    observation=$(LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-update show -v 2>&1 &&
+        printf '%s' '__pulse_openrc_runlevels_complete__') || return 1
+    while IFS= read -r line; do
+        [[ "$complete" == false ]] || return 1
+        if [[ "$line" == __pulse_openrc_runlevels_complete__ ]]; then
+            complete="true"
+        elif [[ "$line" =~ ^[[:space:]]*([A-Za-z0-9][A-Za-z0-9_.-]*)[[:space:]]+\|[[:space:]]*(.*)$ ]]; then
+            name="${BASH_REMATCH[1]}"
+            levels="${BASH_REMATCH[2]}"
+            read -r -a row_levels <<< "$levels"
+            # Validate every row, not just a matching substring of diagnostics.
+            for level in "${row_levels[@]}"; do
+                [[ "$level" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && ${#level} -le 64 ]] || return 1
+            done
+            if [[ "$name" == "$AGENT_NAME" ]]; then
+                count=$((count + 1))
+                [[ $count -eq 1 ]] || return 1
+                for level in "${row_levels[@]}"; do
+                    [[ "$seen" != *" $level "* ]] || return 1
+                    seen+="$level "
+                done
+            fi
+        else
+            return 1
+        fi
+    done <<< "$observation"
+    [[ "$complete" == true ]] || return 1
+    if [[ $count -eq 0 ]]; then
+        printf 'absent\n'
+    else
+        printf 'present%s\n' "${seen% }"
+    fi
+}
+
+quiesce_openrc_agent_for_removal() {
+    local init_path="${1:-/etc/init.d/${AGENT_NAME}}" status="" levels="" observation=""
+    # A missing script is a no-op only with a complete manager inventory and
+    # an independent, successful process-absence read. Unknown is not absent.
+    levels=$(read_openrc_agent_removal_runlevels) || return 1
+    if [[ ! -e "$init_path" && ! -L "$init_path" ]]; then
+        [[ "$levels" == absent ]] || return 1
+        observation=$(timeout -k 1 5 pgrep -x "${AGENT_NAME}" 2>&1 &&
+            printf '%s' '__pulse_openrc_process_exit__=0' || printf '%s' "__pulse_openrc_process_exit__=$?") || return 1
+        [[ "$observation" == __pulse_openrc_process_exit__=1 ]] || return 1
+        return 0
+    fi
+    [[ -f "$init_path" && ! -L "$init_path" && -x "$init_path" && "$levels" == present* ]] || return 1
+    status=$(read_openrc_agent_removal_status) || return 1
+    if [[ "$status" != stopped ]]; then
+        LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-service "${AGENT_NAME}" stop >/dev/null 2>&1 || return 1
+    fi
+    if [[ "$levels" != present ]]; then
+        # Custom runlevels can restart an installation too; deleting only the
+        # installer's default link is not sufficient for destructive removal.
+        LC_ALL=C RC_NOCOLOR=yes timeout -k 1 5 rc-update del "${AGENT_NAME}" --all >/dev/null 2>&1 || return 1
+    fi
+    levels=$(read_openrc_agent_removal_runlevels) || return 1
+    [[ "$levels" == present ]] || return 1
+    status=$(read_openrc_agent_removal_status) || return 1
+    [[ "$status" == stopped ]]
+}
+
 teardown_openrc_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
-    rc-service "${AGENT_NAME}" stop 2>/dev/null || true
-    rc-update del "${AGENT_NAME}" default 2>/dev/null || true
+    quiesce_openrc_agent_for_removal "$init_path" ||
+        fail "OpenRC removal could not confirm a stopped service with no runlevel activation; credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     rm -f "$init_path"
 }
 
@@ -5609,6 +5703,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
             "${PRIVILEGED_HELPER_NAME}.socket" "${PRIVILEGED_HELPER_NAME}.service" "${AGENT_NAME}.service" ||
             fail "Agent removal could not confirm every systemd unit stopped and disabled; local credentials and files were retained. Reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
+    if command -v rc-service >/dev/null 2>&1; then
+        quiesce_openrc_agent_for_removal ||
+            fail "Agent removal could not confirm OpenRC stopped with no runlevel activation; local credentials and files were retained. A preceding stop or disable may have succeeded: reconcile service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
 
     # A credential-bearing install must durably remove its exact server record
     # through the same CA/fingerprint/no-proxy transport used by lifecycle
@@ -5621,6 +5719,12 @@ if [[ "$UNINSTALL" == "true" ]]; then
         log_info "Pulse durably removed agent ID: ${AGENT_ID}."
     elif [[ -n "$PULSE_URL" ]]; then
         log_warn "No local collector credential exists; continuing with local-only removal."
+    fi
+    # Reconcile OpenRC once more after the remote operation, while all local
+    # recovery state still exists. A late refusal must not happen only after
+    # remove_agent_state_dir has already erased that state.
+    if command -v rc-service >/dev/null 2>&1; then
+        teardown_openrc_agent_service
     fi
 
     # Kill wrapper scripts first: they are watchdogs, so stopping the agent
@@ -5757,11 +5861,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
         # Remove state directory
         rm -rf "$TRUENAS_STATE_DIR"
-    fi
-
-    # OpenRC (Alpine, Gentoo, Artix, etc.)
-    if command -v rc-service >/dev/null 2>&1; then
-        teardown_openrc_agent_service
     fi
 
     # Vanilla FreeBSD, OPNsense, and pfSense all use the rc.d service rendered
