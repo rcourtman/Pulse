@@ -138,6 +138,7 @@ class AgentLegacyTeardown(unittest.TestCase):
             for name in ("primary.pid", "child.pid", "sysv.pid"):
                 (root / name).write_text(("100" if name == "primary.pid" else "101") + "\n")
             if pid == "malformed": (root / "child.pid" if platform == "FreeBSD" else root / "sysv.pid").write_text("101\n42\n")
+            if pid == "overlong": (root / "child.pid" if platform == "FreeBSD" else root / "sysv.pid").write_text("1" * 40 + "\n")
             if pid == "linked":
                 p = root / "child.pid" if platform == "FreeBSD" else root / "sysv.pid"
                 p.unlink(); p.symlink_to(unrelated)
@@ -164,7 +165,7 @@ class AgentLegacyTeardown(unittest.TestCase):
                 return s
             values = dict(INIT_PATH=init, STATE_DIR=root / "state", PRIVILEGED_HELPER_STATE_DIR=root / "helper",
                           SAFE_PROFILE_STATE_DIR=root / "profile", EVENTS=root / "events", REPLY=reply,
-                          TRUENAS_BOOTSTRAP_SCRIPT=root / "bootstrap", FIXTURE=root, PLATFORM=platform, MANAGER=manager)
+                          TRUENAS_BOOTSTRAP_SCRIPT=root / "bootstrap", FIXTURE=root, PLATFORM=platform, MANAGER=manager, TEST_FAULT=fault)
             prefix = "\n".join(k + "=" + shlex.quote(str(v)) for k, v in values.items()) + "\n"
             shell = r'''
 set -euo pipefail
@@ -182,6 +183,8 @@ command() {
     esac
     builtin command "$@"
 }
+if [[ "$TEST_FAULT" == missing-timeout ]]; then timeout() { return 127; }; fi
+if [[ "$TEST_FAULT" == missing-sysrc ]]; then sysrc() { return 127; }; fi
 collector_credential_state_present() { return 0; }
 uninstall_collector_registration() {
     printf 'remote:remove\n' >> "$EVENTS"
@@ -278,6 +281,15 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 self.assertEqual(after, before)
                 self.assertNotIn("init:remove", events)
 
+    def test_missing_required_tools_refuse_without_losing_recovery(self):
+        for platform, fault in (("FreeBSD", "missing-timeout"), ("SysV", "missing-timeout"), ("FreeBSD", "missing-sysrc")):
+            with self.subTest(platform=platform, fault=fault):
+                r, events, before, after, _ = self.exercise(platform, fault=fault, flow="caller")
+                self.assertNotEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(after, before)
+                self.assertNotIn("remote:remove", events)
+                self.assertNotIn("service:stop", events)
+
     def test_final_process_read_and_orphan_supervisor_are_required(self):
         for platform, fault in (("SysV", "failed-final-process"), ("FreeBSD", "failed-final-process"), ("FreeBSD", "orphan-supervisor")):
             with self.subTest(platform=platform, fault=fault):
@@ -288,7 +300,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
 
     def test_pid_ownership_and_unexpected_paths_refuse_before_signals(self):
         for platform in ("FreeBSD", "SysV"):
-            for args in (dict(fault="pid-reused"), dict(pid="malformed"), dict(pid="linked"), dict(path="linked"),
+            for args in (dict(fault="pid-reused"), dict(pid="malformed"), dict(pid="linked"), dict(pid="overlong"), dict(path="linked"),
                          dict(path="directory"), dict(path="not-executable")):
                 with self.subTest(platform=platform, args=args):
                     r, events, before, after, _ = self.exercise(platform, **args)

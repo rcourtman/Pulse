@@ -1382,12 +1382,16 @@ legacy_agent_processes_absent() {
 }
 
 validate_legacy_agent_removal_pidfiles() {
-    local inventory="$1" path="" pid="" row="" observed="" parent="" role=""
+    local inventory="$1" path="" pid="" size="" observed="" parent="" role=""
     shift
     for path in "$@"; do
         [[ -e "$path" || -L "$path" ]] || continue
         [[ -f "$path" && ! -L "$path" && -r "$path" ]] || return 1
-        # Preserve trailing diagnostics/extra lines; do not evaluate a PID file.
+        # Numeric PID records are tiny; refuse oversized files before reading
+        # them into shell memory. Never evaluate their contents.
+        size=$(wc -c < "$path") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 32 ]] || return 1
+        # Preserve trailing diagnostics/extra lines.
         pid=$(cat "$path" && printf '%s' '__pulse_pid_complete__') || return 1
         [[ "$pid" =~ ^([1-9][0-9]*)($'\n')?__pulse_pid_complete__$ ]] || return 1
         pid="${BASH_REMATCH[1]}"

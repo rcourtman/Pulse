@@ -2656,7 +2656,8 @@ func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
 		`parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')`,
 		`daemon:*)`,
 		`/usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}`,
-		`kill -KILL "\${supervisor_pid}" 2>/dev/null || true`,
+		`kill -KILL "\${supervisor_pid}" 2>/dev/null || return 1`,
+		`pulse_agent_wait_stopped "\${supervisor_pid}" || return 1`,
 		`rm -f \${pidfile} \${child_pidfile}`,
 		`legacy child pid \${legacy_pid} supervised by pid \${legacy_supervisor}`,
 	}
@@ -8428,6 +8429,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_ignored_stop_disable_and_reactivation_are_not_success",
 		"test_failed_empty_diagnostic_or_duplicate_reads_are_not_absence",
 		"test_enablement_refusals_and_unknown_values_retain_recovery",
+		"test_missing_required_tools_refuse_without_losing_recovery",
 		"test_final_process_read_and_orphan_supervisor_are_required",
 		"test_pid_ownership_and_unexpected_paths_refuse_before_signals",
 		"test_every_owned_runlevel_link_and_both_layouts_are_removed",
@@ -8444,7 +8446,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 			t.Fatalf("legacy manager control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete legacy manager verdict:\n%s", output)
 	}
 	t.Logf("%s", output)

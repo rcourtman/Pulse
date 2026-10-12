@@ -21,7 +21,8 @@ Before server deregistration or local erasure, Unix uninstall selects its
 FreeBSD rc.d or SysV manager and requires observed quiescence. Bounded combined
 reads reject failed, incomplete, empty, duplicate or diagnostic-bearing state.
 The kernel process inventory checks both collector and daemon supervisor, while
-PID files must be regular numeric records that cannot identify another process.
+PID files must be regular numeric records of at most 32 bytes that cannot
+identify another process.
 Process arguments are never returned from the reader. Rendered rc.d/SysV stops
 retain PID files after refused signals or when termination remains unconfirmed.
 
@@ -40,7 +41,7 @@ A linked rc.d service or existing appliance bootstrap therefore refuses *before*
 remote removal or erasure until its owning activation task can be reconciled;
 this step does not claim appliance task, launchd, Windows or native acceptance.
 Missing timeout/sysrc or unrecognised manager output also remains a safe refusal.
-`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all sixteen
+`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all seventeen
 production-function/caller/rendered-stop methods in `agent_legacy_teardown.py`,
 using closed ordinary-user models and private deletion/signal targets, plus a
 real timeout-child termination control. Source models are not installed signed
