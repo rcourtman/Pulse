@@ -80,7 +80,6 @@ function DebugFixture() {
   const derived = useResourceDetailDrawerDerivedState({
     resource: debugResource,
     debugEnabled: () => true,
-    discoveryFeatureEnabled: () => false,
     resourceIntelligence: () => null,
   });
   const sections = derived.sourceSections();

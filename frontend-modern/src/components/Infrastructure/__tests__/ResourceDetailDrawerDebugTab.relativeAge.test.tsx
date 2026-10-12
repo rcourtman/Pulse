@@ -39,7 +39,6 @@ function Fixture(props: { resource: Resource; onCopy?: (json: string) => void })
       return props.resource;
     },
     debugEnabled: () => true,
-    discoveryFeatureEnabled: () => false,
     resourceIntelligence: () => null,
   });
   const drawer = {
