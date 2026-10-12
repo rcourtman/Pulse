@@ -85,10 +85,11 @@ Useful helper tools:
 - `python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`
   Reserve or renew exactly one governed slice in a shared checkout before mutation without hand-editing `status.json`.
 
-For governed runtime changes, the completion guard also requires any staged
-contract update to touch a substantive contract section such as `Purpose`,
-`Canonical Files`, `Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
-`Completion Obligations`, or `Current State`, not just metadata.
+Contract-update policy is defined in `internal/CANONICAL_DEVELOPMENT_PROTOCOL.md`.
+Update current contract meaning at its owner, keep validation receipts in proof
+artifacts or delivery history, and use the established explicit `Contract-Neutral`
+declaration when no contract changes. The declaration is carried into CI and
+does not waive the other checks or gates.
 Local pre-commit formatting is intentionally scoped to staged files so unrelated
 dirty worktree files are not mutated during commit.
 The staged Go formatter and the staged frontend prettier formatter both

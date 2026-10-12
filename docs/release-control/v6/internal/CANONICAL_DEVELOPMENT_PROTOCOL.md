@@ -613,16 +613,39 @@ the git index rather than rewriting the whole repo or restaging whole files.
 Formatters must run before any staged-content audit that hashes or otherwise
 binds evidence to exact bytes, including the browser verification guard.
 
-For runtime subsystem changes, the same commit must now include:
+For runtime changes that alter a declared subsystem contract, the same commit
+must include:
 
 1. the matching subsystem contract update
 2. any dependent subsystem contract whose `Canonical Files`, `Shared Boundaries`, or `Extension Points` explicitly reference a touched runtime path
 3. at least one matching verification artifact update
 
-A staged contract file only counts when the staged diff changes a substantive
-contract section such as `Purpose`, `Canonical Files`, `Shared Boundaries`, `Extension Points`,
-`Forbidden Paths`, `Completion Obligations`, or `Current State`. Metadata-only
-edits are not sufficient completion proof for runtime changes.
+A staged contract file only counts when its diff changes a substantive contract
+section. Update the owning statement of current behavior, responsibility, shared
+boundary, extension point, invariant or unresolved gap. Replace superseded text
+rather than appending another account of the task. Metadata-only edits do not
+qualify.
+
+Subsystem contracts describe the current system. Test output, pass counts,
+browser receipts, benchmark runs and implementation chronology belong in the
+existing verification artifacts or commit and delivery history. Keep one
+authoritative rule at its boundary owner and use a scoped reference from its
+consumers. Do not add a receipt paragraph or change an unrelated test merely to
+satisfy the staged-file shape.
+
+The completion guard infers affected contracts from paths. It cannot determine
+whether an implementation changes their meaning. When a change is contract
+neutral, use the established explicit declaration with a concrete reason:
+
+`PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT='<reason>' git commit ...`
+
+The prepare-commit-msg hook records the reason as a `Contract-Neutral` trailer.
+Canonical governance CI reads that trailer and applies the same declaration to
+the completion guard for the candidate commit. This avoids artificial contract
+and verification-artifact diffs. It does not waive execution of appropriate
+checks, current-source browser verification, ownership, security or release
+gates. A real contract change still requires the owning and dependent contract
+updates and meaningful verification above.
 
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/internal/subsystems/registry.json` and may include
@@ -632,10 +655,11 @@ test elsewhere in the same subsystem is never proof on its own: the registry
 audit keeps `allow_same_subsystem_tests` false, because it would accept any
 test the subsystem owns rather than the ones a path policy names.
 
-Cross-subsystem contract dependencies are not advisory. If a touched runtime
-path is named in another subsystem contract's `Canonical Files`,
-`Shared Boundaries`, or `Extension Points`, the canonical completion guard now requires that dependent
-contract to be staged in the same slice.
+For changes to a declared contract, cross-subsystem dependencies are not
+advisory. If a touched runtime path is named in another subsystem contract's
+`Canonical Files`, `Shared Boundaries`, or `Extension Points`, include the
+dependent contract update in the same slice. The completion guard requires it
+by default, subject to the explicit contract neutral declaration above.
 
 `status.json` evidence references must use repo-qualified relative paths.
 Absolute machine-local paths are forbidden.

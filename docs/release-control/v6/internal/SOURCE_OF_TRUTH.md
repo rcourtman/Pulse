@@ -125,10 +125,14 @@ partial staging for hook-sensitive governance files under
 those checks still execute or structurally read the working-tree versions
 locally.
 
-For governed runtime changes, a staged subsystem contract only counts if its
-diff updates a substantive contract section such as `Purpose`,
-`Canonical Files`, `Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
-`Completion Obligations`, or `Current State`, rather than metadata alone.
+The development protocol owns contract-update policy. Subsystem contracts
+describe current responsibilities, boundaries and invariants. Update changed
+meaning at its owner and replace obsolete text. Keep task receipts in existing
+verification artifacts or delivery history. Contract neutral changes use the
+established explicit `Contract-Neutral` declaration carried from the local
+commit hook into CI, rather than artificial documentation or test diffs.
+Appropriate checks, browser verification, ownership, security and release gates
+still apply. See `CANONICAL_DEVELOPMENT_PROTOCOL.md`.
 
 All other documents are supporting references unless explicitly required for
 evidence.
