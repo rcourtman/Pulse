@@ -1405,7 +1405,8 @@ type Monitor struct {
 	guestMetadataCache         map[string]guestMetadataCacheEntry
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
-	guestMetadataInFlight      map[string]bool // Guarded by guestMetadataLimiterMu; released only on fetch completion.
+	guestMetadataInFlight      map[string]bool      // Guarded by guestMetadataLimiterMu; released only on fetch completion.
+	guestMetadataLastAccess    map[string]time.Time // Guarded by guestMetadataLimiterMu; cache activity, never guest evidence.
 	guestMetadataSlots         chan struct{}
 	guestMetadataMinRefresh    time.Duration
 	guestMetadataRefreshJitter time.Duration
@@ -2021,6 +2022,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),
 		guestMetadataLimiter:       make(map[string]time.Time),
+		guestMetadataLastAccess:    make(map[string]time.Time),
 		guestMetadataMinRefresh:    minRefresh,
 		guestMetadataRefreshJitter: jitter,
 		guestMetadataRetryBackoff:  retryBackoff,

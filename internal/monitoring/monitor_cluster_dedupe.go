@@ -152,6 +152,11 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 			delete(m.guestMetadataLimiter, key)
 		}
 	}
+	for key := range m.guestMetadataLastAccess {
+		if strings.HasPrefix(key, instanceName+"|") {
+			delete(m.guestMetadataLastAccess, key)
+		}
+	}
 	m.guestMetadataLimiterMu.Unlock()
 
 	if m.state != nil {

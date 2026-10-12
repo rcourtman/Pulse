@@ -139,6 +139,18 @@ func (m *Monitor) releaseGuestMetadataFetch(key string) {
 	m.guestMetadataLimiterMu.Unlock()
 }
 
+// Activity keeps an actively monitored guest's command-safety state alive even
+// when it supplies no useful metadata. It cannot renew any observation or make
+// an otherwise ineligible guest command queryable.
+func (m *Monitor) recordGuestMetadataAccess(key string, now time.Time) {
+	m.guestMetadataLimiterMu.Lock()
+	if m.guestMetadataLastAccess == nil {
+		m.guestMetadataLastAccess = make(map[string]time.Time)
+	}
+	m.guestMetadataLastAccess[key] = now
+	m.guestMetadataLimiterMu.Unlock()
+}
+
 func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
 	if m == nil {
 		return
@@ -262,6 +274,7 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string, bool) {
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
 	now := time.Now()
+	m.recordGuestMetadataAccess(key, now)
 
 	m.guestMetadataMu.RLock()
 	cached, ok := m.guestMetadataCache[key]
@@ -527,6 +540,7 @@ func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid in
 	// into a later available poll, or discard an outstanding fetch's ownership.
 	m.guestMetadataLimiterMu.Lock()
 	delete(m.guestMetadataLimiter, key)
+	delete(m.guestMetadataLastAccess, key)
 	m.guestMetadataLimiterMu.Unlock()
 }
 

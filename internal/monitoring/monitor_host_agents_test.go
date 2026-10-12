@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -8317,5 +8318,141 @@ func TestMonitorPBSInstancesSnapshotCarriesReportedNodeName(t *testing.T) {
 	}
 	if instances[0].NodeName != "pbs01" {
 		t.Fatalf("PBSInstancesSnapshot()[0].NodeName = %q, want the reported node name %q", instances[0].NodeName, "pbs01")
+	}
+}
+
+func TestGuestMetadataIdleCleanupContract(t *testing.T) {
+	now := time.Now()
+	stale := now.Add(-3 * guestMetadataCacheTTL)
+	suppressed := guestMetadataCacheEntry{osInfoFailureCount: guestAgentOSInfoFailureThreshold, osInfoSkip: true}
+	retained := suppressed
+	retained.osName, retained.windowsGuest = "Microsoft Windows", true
+	retained.fetchedAt, retained.osInfoObservedAt = stale, stale
+	m := &Monitor{
+		guestMetadataCache: map[string]guestMetadataCacheEntry{
+			"active-empty":    suppressed,
+			"active-retained": retained,
+			"inactive":        suppressed,
+			"legacy-fresh":    metadataObservationFixture(now),
+			"legacy-stale":    metadataObservationFixture(stale),
+			"inflight":        suppressed,
+		},
+		guestMetadataLastAccess: map[string]time.Time{"active-empty": now, "active-retained": now, "inactive": stale, "only-active": now, "only-idle": stale, "inflight": stale},
+		guestMetadataLimiter:    map[string]time.Time{"active-empty": now.Add(time.Minute), "inactive": stale, "inflight": stale},
+		guestMetadataInFlight:   map[string]bool{"inflight": true},
+	}
+	m.cleanupGuestMetadataCache(now)
+	for _, key := range []string{"active-empty", "active-retained", "legacy-fresh", "inflight"} {
+		if _, exists := m.guestMetadataCache[key]; !exists {
+			t.Errorf("live cache %s pruned", key)
+		}
+	}
+	for _, key := range []string{"inactive", "legacy-stale"} {
+		if _, exists := m.guestMetadataCache[key]; exists {
+			t.Errorf("idle cache %s retained", key)
+		}
+	}
+	for _, key := range []string{"inactive", "only-idle"} {
+		if _, exists := m.guestMetadataLastAccess[key]; exists {
+			t.Errorf("idle bookkeeping %s retained", key)
+		}
+	}
+	if !m.guestMetadataLastAccess["only-active"].Equal(now) || !m.guestMetadataLimiter["active-empty"].Equal(now.Add(time.Minute)) || !m.guestMetadataLimiter["inflight"].Equal(stale) || !m.guestMetadataInFlight["inflight"] {
+		t.Error("janitor changed current activity, backoff or in-flight ownership")
+	}
+	empty := m.guestMetadataCache["active-empty"]
+	old := m.guestMetadataCache["active-retained"]
+	if !reflect.DeepEqual(empty, suppressed) || !reflect.DeepEqual(old, retained) {
+		t.Error("retention changed safety or observation state")
+	}
+	// Evidence consumers use actual observation age, never the activity clock.
+	key := guestMetadataCacheKey("activity", "node", 105)
+	m.guestMetadataCache[key] = retained
+	m.guestMetadataLastAccess[key] = now
+	m.cleanupGuestMetadataCache(now)
+	if m.hasRecentGuestMetadataEvidence("activity", "node", 105, now) || m.guestWindowsMeminfoUnsupported("activity", "node", 105, now) || !m.guestMetadataEvidenceTime("activity", "node", 105).Equal(stale) {
+		t.Error("activity invented a useful/Windows OS observation")
+	}
+	delete(m.guestMetadataInFlight, "inflight")
+	m.cleanupGuestMetadataCache(now)
+	if _, exists := m.guestMetadataCache["inflight"]; exists {
+		t.Error("completed idle owner retained cache")
+	}
+	if _, exists := m.guestMetadataLastAccess["inflight"]; exists {
+		t.Error("completed idle owner retained bookkeeping")
+	}
+	if _, exists := m.guestMetadataLimiter["inflight"]; exists {
+		t.Error("completed idle owner retained obsolete deadline")
+	}
+}
+
+func TestGuestMetadataActivityInvalidationContract(t *testing.T) {
+	key := guestMetadataCacheKey("activity", "node", 105)
+	sibling := guestMetadataCacheKey("activity-elsewhere", "node", 105)
+	m := &Monitor{
+		guestMetadataCache:      map[string]guestMetadataCacheEntry{key: {osInfoSkip: true}, sibling: {osInfoSkip: true}},
+		guestMetadataLimiter:    map[string]time.Time{key: time.Now().Add(time.Hour), sibling: time.Now().Add(time.Hour)},
+		guestMetadataLastAccess: map[string]time.Time{key: time.Now(), sibling: time.Now()},
+		guestMetadataInFlight:   map[string]bool{key: true},
+	}
+	m.clearGuestMetadataCache("activity", "node", 105)
+	if _, exists := m.guestMetadataCache[key]; exists {
+		t.Error("explicit invalidation retained metadata")
+	}
+	if _, exists := m.guestMetadataLimiter[key]; exists {
+		t.Error("explicit invalidation retained deadline")
+	}
+	if _, exists := m.guestMetadataLastAccess[key]; exists {
+		t.Error("explicit invalidation retained activity")
+	}
+	if !m.guestMetadataInFlight[key] || !m.guestMetadataCache[sibling].osInfoSkip || m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataLimiter[sibling].IsZero() {
+		t.Error("invalidation discarded ownership or another instance")
+	}
+	m.guestMetadataLastAccess[key] = time.Now()
+	m.guestMetadataLastAccess[guestMetadataCacheKey("activity", "node", 106)] = time.Now()
+	m.retirePVEInstanceRuntime("activity")
+	for remaining := range m.guestMetadataLastAccess {
+		if strings.HasPrefix(remaining, "activity|") {
+			t.Error("retired instance retained activity bookkeeping")
+		}
+	}
+	if m.guestMetadataLastAccess[sibling].IsZero() || !m.guestMetadataInFlight[key] {
+		t.Error("retirement crossed instance scope or discarded active ownership")
+	}
+}
+
+func TestGuestMetadataActivityConcurrentCleanupContract(t *testing.T) {
+	const instance = "activity"
+	key := guestMetadataCacheKey(instance, "node", 105)
+	old := metadataObservationFixture(time.Now().Add(-3 * guestMetadataCacheTTL))
+	old.osInfoFailureCount, old.osInfoSkip = guestAgentOSInfoFailureThreshold, true
+	m := &Monitor{guestMetadataCache: map[string]guestMetadataCacheEntry{key: old}}
+	m.recordGuestMetadataAccess(key, time.Now())
+	// An active backup blocks commands, not cache use. Touches and the janitor
+	// must coordinate without extending the old useful/OS observation timestamps.
+	status := &proxmox.VMStatus{Lock: "backup"}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			_, _, name, version, agent, deferred := m.fetchGuestAgentMetadata(context.Background(), nil, instance, "node", "guest", 105, status, false)
+			if name != old.osName || version != old.osVersion || agent != old.agentVersion || deferred {
+				t.Error("locked activity changed retained identity or invented a command deferral")
+			}
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		m.cleanupGuestMetadataCache(time.Now())
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cache activity and cleanup did not finish")
+	}
+	m.guestMetadataMu.RLock()
+	retained := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if retained.osName != old.osName || retained.osInfoSkip != old.osInfoSkip || retained.osInfoFailureCount != old.osInfoFailureCount || !retained.fetchedAt.Equal(old.fetchedAt) || !retained.osInfoObservedAt.Equal(old.osInfoObservedAt) || m.hasRecentGuestMetadataEvidence(instance, "node", 105, time.Now()) {
+		t.Error("concurrent cleanup lost suppression or renewed stale useful evidence")
 	}
 }
