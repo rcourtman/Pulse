@@ -2813,11 +2813,12 @@ func TestInstallSHUsesCanonicalFreeBSDAgentTeardown(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`teardown_freebsd_agent_service() {`,
-		`"$service_path" stop 2>/dev/null || true`,
-		`sysrc -x pulse_agent_enable >/dev/null 2>&1 || true`,
+		`quiesce_freebsd_agent_for_removal "$service_path" ||`,
+		`timeout -k 1 15 "$service_path" onestop >/dev/null 2>&1 || return 1`,
+		`timeout -k 1 5 sysrc pulse_agent_enable=NO >/dev/null 2>&1 || return 1`,
 		`rm -f /usr/local/etc/rc.d/pulse_agent.sh`,
 		`rm -f /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid`,
-		`log_info "Removing FreeBSD rc.d installation..."`,
+		`uninstall_legacy_manager=FreeBSD`,
 		`teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"`,
 	}
 	for _, needle := range required {
@@ -8406,6 +8407,45 @@ func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete OpenRC teardown verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix rc.d/SysV controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_legacy_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("legacy manager removal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_stop_refusal_retains_all_local_recovery",
+		"test_manager_refusal_precedes_remote_and_state_erasure",
+		"test_ignored_stop_disable_and_reactivation_are_not_success",
+		"test_failed_empty_diagnostic_or_duplicate_reads_are_not_absence",
+		"test_enablement_refusals_and_unknown_values_retain_recovery",
+		"test_final_process_read_and_orphan_supervisor_are_required",
+		"test_pid_ownership_and_unexpected_paths_refuse_before_signals",
+		"test_every_owned_runlevel_link_and_both_layouts_are_removed",
+		"test_foreign_malformed_or_unobservable_runlevels_are_not_deleted",
+		"test_confirmed_manager_then_server_then_recheck_then_erasure",
+		"test_remote_refusal_keeps_stopped_install_and_all_recovery_files",
+		"test_late_refusal_keeps_local_recovery_after_remote_confirmation",
+		"test_known_stopped_missing_and_repeated_removal_are_safe",
+		"test_process_inventory_does_not_return_arguments_or_secrets",
+		"test_real_process_timeout_stops_owned_child_without_erasure",
+		"test_rendered_stop_retains_pidfiles_on_refused_or_ignored_signals",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentLegacyTeardown."+name+") ... ok") {
+			t.Fatalf("legacy manager control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete legacy manager verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
 }

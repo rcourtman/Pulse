@@ -15,6 +15,38 @@
 
 ## Purpose
 
+### FreeBSD rc.d and SysV removal retains recovery on unknown or live state
+
+Before server deregistration or local erasure, Unix uninstall selects its
+FreeBSD rc.d or SysV manager and requires observed quiescence. Bounded combined
+reads reject failed, incomplete, empty, duplicate or diagnostic-bearing state.
+The kernel process inventory checks both collector and daemon supervisor, while
+PID files must be regular numeric records that cannot identify another process.
+Process arguments are never returned from the reader. Rendered rc.d/SysV stops
+retain PID files after refused signals or when termination remains unconfirmed.
+
+FreeBSD requires effective `pulse_agent_enable=NO` readback plus matching stopped
+status and supervisor/child absence. SysV removes every owned activation link
+across both rc*.d layouts, including custom runlevels and priorities, with checked
+manager commands or exact owned-link removal. Foreign, malformed or inaccessible
+paths refuse, rather than deleting another service. Both paths recheck after
+remote confirmation and before script, PID or credential erasure. Remote refusal
+keeps the stopped installation's recovery material; no automatic restart occurs.
+Missing/repeated removal still requires known disabled activation and process
+absence. Existing systemd/OpenRC gates and credential/transport ownership remain.
+
+TrueNAS bootstrap re-enables rc.conf and recreates the service link independently.
+A linked rc.d service or existing appliance bootstrap therefore refuses *before*
+remote removal or erasure until its owning activation task can be reconciled;
+this step does not claim appliance task, launchd, Windows or native acceptance.
+Missing timeout/sysrc or unrecognised manager output also remains a safe refusal.
+`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all sixteen
+production-function/caller/rendered-stop methods in `agent_legacy_teardown.py`,
+using closed ordinary-user models and private deletion/signal targets, plus a
+real timeout-child termination control. Source models are not installed signed
+agent, real TLS, native manager, published availability or whole #1099 resolution.
+
+
 ### OpenRC removal confirms stopped and unlinked state before erasure
 
 OpenRC removal must observe a complete, diagnostic-free runlevel inventory and
