@@ -1,4 +1,5 @@
 import io
+import canonical_completion_guard
 import json
 import os
 import subprocess
@@ -158,6 +159,45 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
 
 
 class CanonicalCompletionGuardTest(unittest.TestCase):
+    def test_staged_scope_keeps_resolutions_and_modes_but_not_inherited_merge_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = os.environ.copy()
+            strip_local_git_env(env)
+            env["GIT_CONFIG_GLOBAL"] = os.devnull
+            env["GIT_CONFIG_SYSTEM"] = os.devnull
+
+            def git(*args: str) -> None:
+                subprocess.run(
+                    ["git", "-c", "user.name=Proof Fixture", "-c", "user.email=proof@example.invalid", *args],
+                    cwd=root, env=env, check=True, capture_output=True, text=True,
+                )
+
+            git("init", "-b", "main")
+            for name in ("resolved.go", "mode.go", "removed.go", "old name.go"):
+                (root / name).write_text("base\n", encoding="utf-8")
+            git("add", "resolved.go", "mode.go", "removed.go", "old name.go")
+            git("commit", "-m", "Base fixture")
+            git("checkout", "-b", "reviewed")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            (root / "inherited.go").write_text("reviewed\n", encoding="utf-8")
+            git("rm", "removed.go")
+            git("mv", "old name.go", "new name.go")
+            git("add", "resolved.go", "inherited.go")
+            git("commit", "-m", "Reviewed fixture")
+            git("checkout", "main")
+            git("merge", "--no-commit", "--no-ff", "reviewed")
+            (root / "resolved.go").write_text("combined resolution\n", encoding="utf-8")
+            git("add", "resolved.go")
+            git("update-index", "--chmod=+x", "mode.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["mode.go", "resolved.go"])
+            git("reset", "--hard", "HEAD")
+            (root / "resolved.go").write_text("reviewed\n", encoding="utf-8")
+            git("add", "resolved.go")
+            with patch("canonical_completion_guard.REPO_ROOT", root):
+                self.assertEqual(canonical_completion_guard.git_staged_files(), ["resolved.go"])
+
     def test_registry_exists_and_contains_required_subsystems(self):
         self.assertTrue(SUBSYSTEM_REGISTRY.exists())
         rules = load_subsystem_rules()
@@ -249,39 +289,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(monitoring["verification"]["exact_files"], [])
         policy_ids = [policy["id"] for policy in monitoring["verification"]["path_policies"]]
+        self.assertIn("monitoring-runtime", policy_ids)
+        requirements = monitoring["verification_requirements"]
         self.assertEqual(
-            policy_ids,
             [
-                "maintenance-verification-runtime",
-                "availability-certificate-runtime",
-                "discovery-provider-runtime",
-                "host-agent-ingest-runtime",
-                "truenas-runtime",
-                "metrics-hot-path",
-                "metrics-history-runtime",
-                "storage-risk-runtime",
-                "memory-source-runtime",
-                "docker-collect-runtime",
-                "docker-swarm-runtime",
-                "kubernetes-native-agent-runtime",
-                "runtime-report-model",
-                "proxmox-guest-counter-runtime",
-                "proxmox-zfs-runtime",
-                "proxmox-cluster-client-runtime",
-                "proxmox-ceph-runtime",
-                "proxmox-backup-identity-monitoring",
-                "container-entrypoint-runtime",
-                "mock-runtime-fixtures",
-                "pbs-client-runtime",
-                "pbs-protection-evidence-runtime",
-                "diskinventory-collection-trust",
-                "agent-fleet-diagnostics-runtime",
-                "monitoring-runtime",
-                "filesystem-observations",
+                {key: value for key, value in requirement.items() if key != "exact_files"}
+                for requirement in requirements
             ],
-        )
-        self.assertEqual(
-            monitoring["verification_requirements"],
             [
                 {
                     "id": "monitoring-runtime",
@@ -289,43 +303,20 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "touched_runtime_files": ["internal/monitoring/monitor.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "internal/config/docker_metadata_test.go",
-                        "internal/config/guest_metadata_test.go",
-                        "internal/monitoring/availability_poller_test.go",
-                        "internal/monitoring/availability_probe_agent_test.go",
-                        "internal/monitoring/availability_udp_test.go",
-                        "internal/monitoring/canonical_guardrails_test.go",
-                        "internal/monitoring/ceph_test.go",
-                        "internal/monitoring/deadman_test.go",
-                        "internal/monitoring/issue1485_unraid_lifecycle_test.go",
-                        "internal/monitoring/issue1595_collection_trust_test.go",
-                        "internal/monitoring/issue1613_contract_test.go",
-                        "internal/monitoring/issue1638_dns_cache_test.go",
-                        "internal/monitoring/issue1913_host_continuity_test.go",
-                        "internal/monitoring/metric_window_provider_test.go",
-                        "internal/monitoring/monitor_additional_test.go",
-                        "internal/monitoring/monitor_alert_handling_test.go",
-                        "internal/monitoring/monitor_alert_intent_test.go",
-                        "internal/monitoring/monitor_alert_override_migration_test.go",
-                        "internal/monitoring/monitor_backups_readstate_test.go",
-                        "internal/monitoring/monitor_docker_test.go",
-                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
-                        "internal/monitoring/monitor_host_agents_test.go",
-                        "internal/monitoring/monitor_mock_alerts_test.go",
-                        "internal/monitoring/monitor_notification_startup_test.go",
-                        "internal/monitoring/monitor_pve_cluster_refresh_test.go",
-                        "internal/monitoring/monitor_pve_guest_lxc_test.go",
-                        "internal/monitoring/physical_disk_roundtrip_test.go",
-                        "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
-                        "internal/monitoring/pve_protection_observation_test.go",
-                        "internal/monitoring/ratetracker_test.go",
-                        "internal/monitoring/reload_test.go",
-                        "internal/monitoring/truenas_poller_test.go",
-                        "internal/unifiedresources/code_standards_test.go",
-                    ],
                 }
             ],
+        )
+        proofs = [
+            "internal/config/guest_metadata_writer_test.go",
+            "internal/monitoring/guest_poll_ownership_test.go",
+        ]
+        self.assertEqual(
+            staged_verification_files_for_requirement(
+                monitoring,
+                requirements[0],
+                proofs + ["internal/api/action_runner_credentials_test.go"],
+            ),
+            proofs,
         )
 
     def test_docker_collect_runtime_change_requires_monitoring_contract(self):

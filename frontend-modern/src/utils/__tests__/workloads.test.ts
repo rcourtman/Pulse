@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildKubernetesWorkloadMetadataId,
-  buildCanonicalNodeScopedWorkloadId,
+  buildProxmoxGuestNativeId,
   canonicalizeWorkloadFilterType,
   getWorkloadCPUFraction,
   getWorkloadCPUPercent,
@@ -10,7 +10,7 @@ import {
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
-  getCanonicalWorkloadIdForResource,
+  getWorkloadMetadataIdForResource,
   getWorkloadMetadataId,
   getWorkloadMetadataIdCandidates,
   isDockerManagedAppContainer,
@@ -177,12 +177,12 @@ describe('getWorkloadMetricsKind', () => {
 });
 
 describe('getCanonicalWorkloadId', () => {
-  it('returns composite id for vm with instance, node, vmid', () => {
+  it('preserves the supplied VM identity when provider coordinates exist', () => {
     const guest = { id: 'orig', type: 'vm', instance: 'homelab', node: 'node1', vmid: 100 };
-    expect(getCanonicalWorkloadId(guest)).toBe('homelab:node1:100');
+    expect(getCanonicalWorkloadId(guest)).toBe('orig');
   });
 
-  it('returns composite id for system-container with instance, node, vmid', () => {
+  it('preserves the supplied container identity when provider coordinates exist', () => {
     const guest = {
       id: 'orig',
       type: 'system-container',
@@ -190,7 +190,7 @@ describe('getCanonicalWorkloadId', () => {
       node: 'node2',
       vmid: 200,
     };
-    expect(getCanonicalWorkloadId(guest)).toBe('homelab:node2:200');
+    expect(getCanonicalWorkloadId(guest)).toBe('orig');
   });
 
   it('returns id for app-container workloads (no instance/node/vmid)', () => {
@@ -233,10 +233,10 @@ describe('getCanonicalWorkloadId', () => {
   });
 });
 
-describe('buildCanonicalNodeScopedWorkloadId', () => {
-  it('builds canonical ids from instance, node, and vmid', () => {
+describe('buildProxmoxGuestNativeId', () => {
+  it('builds legacy metadata keys from instance, node, and vmid', () => {
     expect(
-      buildCanonicalNodeScopedWorkloadId({
+      buildProxmoxGuestNativeId({
         instance: 'Core Fabric',
         node: 'pve2',
         vmid: 112,
@@ -244,15 +244,11 @@ describe('buildCanonicalNodeScopedWorkloadId', () => {
     ).toBe('Core Fabric:pve2:112');
   });
 
-  it('returns null when any canonical part is missing', () => {
+  it('returns null when any provider coordinate is missing', () => {
+    expect(buildProxmoxGuestNativeId({ instance: 'Core Fabric', node: '', vmid: 112 })).toBeNull();
+    expect(buildProxmoxGuestNativeId({ instance: '', node: 'pve2', vmid: 112 })).toBeNull();
     expect(
-      buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: '', vmid: 112 }),
-    ).toBeNull();
-    expect(
-      buildCanonicalNodeScopedWorkloadId({ instance: '', node: 'pve2', vmid: 112 }),
-    ).toBeNull();
-    expect(
-      buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
+      buildProxmoxGuestNativeId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
     ).toBeNull();
   });
 });
@@ -349,10 +345,10 @@ describe('getWorkloadMetadataId', () => {
   });
 });
 
-describe('getCanonicalWorkloadIdForResource', () => {
+describe('getWorkloadMetadataIdForResource', () => {
   it('uses proxmox guest identity for vm and system-container resources', () => {
     expect(
-      getCanonicalWorkloadIdForResource({
+      getWorkloadMetadataIdForResource({
         id: 'system-container-45cf61f16a6e2c16',
         type: 'system-container',
         clusterId: 'Core Fabric',
@@ -364,9 +360,9 @@ describe('getCanonicalWorkloadIdForResource', () => {
     ).toBe('Core Fabric:pve2:112');
   });
 
-  it('falls back to the resource id when canonical guest identity is incomplete', () => {
+  it('falls back to the resource id when provider metadata coordinates are incomplete', () => {
     expect(
-      getCanonicalWorkloadIdForResource({
+      getWorkloadMetadataIdForResource({
         id: 'vm-123',
         type: 'vm',
         clusterId: '',
@@ -436,5 +432,59 @@ describe('normalizeWorkloadViewModeParam', () => {
   it('rejects unsupported dashboard view mode aliases', () => {
     expect(normalizeWorkloadViewModeParam('host')).toBeNull();
     expect(normalizeWorkloadViewModeParam('')).toBeNull();
+  });
+});
+
+describe('canonical workload identity across placement changes', () => {
+  it.each(['vm', 'system-container'] as const)(
+    'keeps the %s resource identity across node migration',
+    (workloadType) => {
+      const guest = {
+        id: 'legacy-row-key',
+        canonicalResourceId: 'stable-resource',
+        workloadType,
+        type: workloadType,
+        instance: 'cluster-a',
+        node: 'node-1',
+        vmid: 101,
+      };
+      expect(getCanonicalWorkloadId(guest)).toBe('stable-resource');
+      expect(getCanonicalWorkloadId({ ...guest, node: 'node-2' })).toBe('stable-resource');
+      expect(getCanonicalWorkloadId({ ...guest, canonicalResourceId: 'independent-clone' })).toBe(
+        'independent-clone',
+      );
+    },
+  );
+
+  it('uses the supplied resource ID rather than deriving an identity from provider coordinates', () => {
+    const guest = {
+      id: 'stable-resource',
+      type: 'vm',
+      instance: 'cluster-a',
+      node: 'node-1',
+      vmid: 101,
+    };
+    expect(getCanonicalWorkloadId(guest)).toBe('stable-resource');
+  });
+});
+
+describe('Proxmox metadata compatibility boundary', () => {
+  it('retains provider metadata keys while the row uses stable resource identity', () => {
+    const guest = {
+      id: 'stable-resource',
+      canonicalResourceId: 'stable-resource',
+      name: 'guest-101',
+      type: 'vm',
+      instance: 'cluster-a',
+      node: 'node-1',
+      vmid: 101,
+    };
+    expect(getWorkloadMetadataId(guest)).toBe('cluster-a:node-1:101');
+    expect(getWorkloadMetadataIdCandidates(guest)).toEqual([
+      'cluster-a:node-1:101',
+      'stable-resource',
+    ]);
+    expect(getWorkloadMetadataId({ ...guest, node: 'node-2' })).toBe('cluster-a:node-2:101');
+    expect(getCanonicalWorkloadId({ ...guest, node: 'node-2' })).toBe('stable-resource');
   });
 });

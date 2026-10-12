@@ -369,7 +369,10 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({
-            id: 'cluster-a:pve1:101',
+            id: 'vm-stable-id',
+            instance: 'cluster-a',
+            node: 'pve2',
+            vmid: 101,
             type: 'qemu',
             workloadType: 'vm',
             metricsTarget: { resourceType: 'vm', resourceId: 'mock-cluster-a-pve1-101' },
@@ -386,7 +389,7 @@ describe('guestDrawerModel (branch coverage)', () => {
       ).toBeNull();
     });
 
-    it('maps a vm to the canonical node-scoped id', () => {
+    it('maps a vm to its native metric key', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({ type: 'qemu', workloadType: 'vm', instance: 'c', node: 'pve', vmid: 101 }),
@@ -394,7 +397,7 @@ describe('guestDrawerModel (branch coverage)', () => {
       ).toStrictEqual({ resourceType: 'vm', resourceId: 'c:pve:101' });
     });
 
-    it('maps a system-container to the canonical node-scoped id', () => {
+    it('maps a system-container to its native metric key', () => {
       expect(
         getGuestDrawerHistoryTarget(
           makeGuest({
@@ -407,6 +410,34 @@ describe('guestDrawerModel (branch coverage)', () => {
         ),
       ).toStrictEqual({ resourceType: 'system-container', resourceId: 'c:pve:102' });
     });
+
+    it.each([
+      ['vm', 'qemu', 101],
+      ['system-container', 'lxc', 102],
+    ] as const)(
+      'keeps %s selection stable while legacy History follows a node move',
+      (workloadType, type, vmid) => {
+        const original = makeGuest({
+          id: 'opaque-resource-id',
+          canonicalResourceId: 'opaque-resource-id',
+          workloadType,
+          type,
+          vmid,
+          instance: 'cluster-a',
+          node: 'pve1',
+        });
+        const moved = { ...original, node: 'pve2' };
+        expect(original.id).toBe(moved.id);
+        expect(getGuestDrawerHistoryTarget(original)).toStrictEqual({
+          resourceType: workloadType,
+          resourceId: 'cluster-a:pve1:' + vmid,
+        });
+        expect(getGuestDrawerHistoryTarget(moved)).toStrictEqual({
+          resourceType: workloadType,
+          resourceId: 'cluster-a:pve2:' + vmid,
+        });
+      },
+    );
 
     it('maps an app-container to its plain id', () => {
       expect(

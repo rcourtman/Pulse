@@ -11,7 +11,7 @@ import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
+import { getWorkloadMetadataId } from '@/utils/workloads';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
@@ -103,6 +103,7 @@ function makeGuest(overrides: Partial<WorkloadGuest> = {}): WorkloadGuest {
     instance: 'inst1',
     status: 'running',
     type: 'qemu',
+    metricsTarget: { resourceType: 'vm', resourceId: 'inst1:node1:100' },
     cpu: 0.25,
     cpus: 4,
     memory: { total: 4294967296, used: 2147483648, free: 2147483648, usage: 0.5 },
@@ -1408,10 +1409,10 @@ describe('GuestDrawer', () => {
   // ── WebInterfaceUrlField ──
 
   describe('WebInterfaceUrlField', () => {
-    it('passes canonical metadataId using shared workload identity', () => {
+    it('keeps the guest metadata key separate from canonical row identity', () => {
       render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: 'my-guest-id' })),
+        getWorkloadMetadataId(makeGuest({ id: 'my-guest-id' })),
       );
     });
 
@@ -1434,16 +1435,14 @@ describe('GuestDrawer', () => {
       );
     });
 
-    it('builds canonical id from instance:node:vmid when id is empty', () => {
+    it('does not invent a resource identity for a guest with no ID', () => {
       render(() => (
         <GuestDrawer
           guest={makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })}
           onClose={vi.fn()}
         />
       ));
-      expect(screen.getByTestId('url-id').textContent).toBe(
-        getCanonicalWorkloadId(makeGuest({ id: '', instance: 'pve', node: 'n1', vmid: 200 })),
-      );
+      expect(screen.queryByTestId('url-id')).not.toBeInTheDocument();
     });
 
     it('labels app-container guests as "container"', () => {

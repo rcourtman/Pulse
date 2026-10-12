@@ -1095,7 +1095,13 @@ describe('Workloads performance contract', () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = [
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }),
-        makeGuest(2, { id: 'raw-b', instance: 'shared', node: 'node-x', vmid: 42 }),
+        makeGuest(2, {
+          id: 'raw-b',
+          canonicalResourceId: 'raw-a',
+          instance: 'shared',
+          node: 'node-x',
+          vmid: 42,
+        }),
       ];
       const canonicalId = getCanonicalWorkloadId(
         makeGuest(1, { id: 'raw-a', instance: 'shared', node: 'node-x', vmid: 42 }) as any,
@@ -1109,7 +1115,17 @@ describe('Workloads performance contract', () => {
       await waitFor(() => {
         expect(getGuestRowCount(container)).toBe(1);
       });
-      expect(canonicalId).toBe('shared:node-x:42');
+      expect(canonicalId).toBe('raw-a');
+    });
+
+    it('keeps distinct canonical resources even when their native coordinates coincide', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [
+        makeGuest(1, { id: 'vm-distinct-a', instance: 'shared', node: 'node-x', vmid: 42 }),
+        makeGuest(2, { id: 'vm-distinct-b', instance: 'shared', node: 'node-x', vmid: 42 }),
+      ];
+      const { container } = render(() => <PageOwnedWorkloadsSurface />);
+      await waitFor(() => expect(getGuestRowCount(container)).toBe(2));
     });
 
     it('applies page-owned workload type exclusions before derived row state', async () => {
@@ -1350,7 +1366,6 @@ describe('Workloads performance contract', () => {
       expect(workloadsSelectionStateSource).toContain(
         'const [hoveredWorkloadId, setHoveredWorkloadId]',
       );
-      expect(workloadsSelectionStateSource).toContain('setHandledResourceId(null)');
       expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
       expect(workloadsSelectionStateSource).not.toContain('useNavigate');
       expect(workloadsSelectionStateSource).not.toContain('createRouteStateNavigateScheduler');
@@ -1358,7 +1373,6 @@ describe('Workloads performance contract', () => {
         'resolveWorkloadsSelectionNavigateTarget',
       );
       expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
       expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
@@ -1749,7 +1763,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('<colgroup>');
       expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
       expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
-      expect(workloadsWorkloadTableSource).not.toContain('GuestDrawer');
+      expect(workloadsWorkloadTableSource).not.toMatch(/from\s+['"]\.\/GuestDrawer['"]/);
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
       expect(workloadTableHeaderSource).toContain('getTableSortIndicator');

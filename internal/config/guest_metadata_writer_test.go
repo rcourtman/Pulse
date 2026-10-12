@@ -13,6 +13,57 @@ import (
 	"time"
 )
 
+func TestGuestMetadataMigrationPersistenceFailureRetainsAcceptedRecord(t *testing.T) {
+	for _, failure := range []string{"write", "rename"} {
+		t.Run(failure, func(t *testing.T) {
+			fs := &guestWriterFaultFS{FileSystem: defaultFileSystem{}}
+			path := t.TempDir()
+			store := NewGuestMetadataStore(path, fs)
+			t.Cleanup(func() { _ = store.Close(time.Second) })
+			oldID, newID := "pve:old-node:100", "pve:new-node:100"
+			operator := &GuestMetadata{
+				CustomURL: "https://guest.example", Tags: []string{"production"},
+				Notes: []string{"operator note"}, LastKnownName: "guest-100", LastKnownType: "qemu",
+			}
+			if err := store.Set(oldID, operator); err != nil {
+				t.Fatal(err)
+			}
+			writes := fs.writes.Load()
+			fs.failWrite.Store(failure == "write")
+			fs.failRename.Store(failure == "rename")
+			store.GetWithLegacyMigration(newID, "pve", "new-node", 100)
+			migrated := store.Get(newID)
+			if migrated == nil || migrated.ID != newID || migrated.CustomURL != operator.CustomURL ||
+				!reflect.DeepEqual(migrated.Tags, operator.Tags) || !reflect.DeepEqual(migrated.Notes, operator.Notes) ||
+				store.Get(oldID) != nil {
+				t.Fatal("persistence failure discarded the accepted in-memory metadata migration")
+			}
+			if !store.WaitForPendingWrites(time.Second) || fs.writes.Load() != writes+1 {
+				t.Fatal("failed synchronous migration started a retry loop")
+			}
+			lastGood := NewGuestMetadataStore(path, nil)
+			if lastGood.Get(oldID) == nil || lastGood.Get(newID) != nil {
+				t.Fatal("failed migration damaged the last successful persisted snapshot")
+			}
+			_ = lastGood.Close(time.Second)
+			fs.failWrite.Store(false)
+			fs.failRename.Store(false)
+			store.RememberIdentity(newID, operator.LastKnownName, operator.LastKnownType)
+			if err := store.Close(time.Second); err != nil {
+				t.Fatal(err)
+			}
+			reloaded := NewGuestMetadataStore(path, nil)
+			t.Cleanup(func() { _ = reloaded.Close(time.Second) })
+			got := reloaded.Get(newID)
+			if got == nil || got.CustomURL != operator.CustomURL ||
+				!reflect.DeepEqual(got.Tags, operator.Tags) || !reflect.DeepEqual(got.Notes, operator.Notes) ||
+				reloaded.Get(oldID) != nil {
+				t.Fatal("ordinary identity refresh did not persist the retained migration")
+			}
+		})
+	}
+}
+
 func guestWriterTestStore(t *testing.T) (*GuestMetadataStore, *controlledGuestWriterFS) {
 	t.Helper()
 	fs := &controlledGuestWriterFS{FileSystem: defaultFileSystem{}, entered: make(chan struct{}), release: make(chan struct{})}

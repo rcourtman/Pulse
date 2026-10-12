@@ -80,6 +80,7 @@ func stagePVEGuestEffect(ctx context.Context, effect func()) {
 func (m *Monitor) publishPVEGuests(ctx context.Context, instance string, vms []models.VM, containers []models.Container) {
 	owner, _ := ctx.Value(pveGuestPollContextKey{}).(*pveGuestPoll)
 	if owner == nil {
+		m.migratePVEGuestMetadata(instance, vms, containers)
 		m.state.UpdateGuestsForInstance(instance, vms, containers)
 		return
 	}
@@ -99,6 +100,9 @@ func (m *Monitor) publishPVEGuests(ctx context.Context, instance string, vms []m
 	if !current {
 		return
 	}
+	// Readers can observe the new node as soon as state is published. Move
+	// operator metadata first, under the same accepted connection ownership.
+	m.migratePVEGuestMetadata(instance, vms, containers)
 	m.state.UpdateGuestsForInstance(instance, vms, containers)
 	owner.mu.Lock()
 	effects := owner.effects
@@ -106,6 +110,22 @@ func (m *Monitor) publishPVEGuests(ctx context.Context, instance string, vms []m
 	owner.mu.Unlock()
 	for _, effect := range effects {
 		effect()
+	}
+}
+
+func (m *Monitor) migratePVEGuestMetadata(instance string, vms []models.VM, containers []models.Container) {
+	if m.guestMetadataStore == nil {
+		return
+	}
+	for _, vm := range vms {
+		if vm.ID != "" && vm.Node != "" && vm.VMID > 0 {
+			m.guestMetadataStore.GetWithLegacyMigration(vm.ID, instance, vm.Node, vm.VMID)
+		}
+	}
+	for _, container := range containers {
+		if container.ID != "" && container.Node != "" && container.VMID > 0 {
+			m.guestMetadataStore.GetWithLegacyMigration(container.ID, instance, container.Node, container.VMID)
+		}
 	}
 }
 

@@ -148,22 +148,9 @@ export const isDockerManagedAppContainer = (
   return runtime === 'docker' || runtime === 'podman';
 };
 
-export const getCanonicalWorkloadId = (
-  guest: Pick<WorkloadGuest, 'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid'>,
-): string => {
-  const type = resolveWorkloadType(guest);
-  if (type === 'vm' || type === 'system-container') {
-    const canonicalId = buildCanonicalNodeScopedWorkloadId({
-      instance: guest.instance,
-      node: guest.node,
-      vmid: guest.vmid,
-    });
-    if (canonicalId) {
-      return canonicalId;
-    }
-  }
-  return guest.id;
-};
+export const getCanonicalWorkloadId = <T extends Pick<WorkloadGuest, 'id' | 'canonicalResourceId'>>(
+  guest: T,
+): string => guest.canonicalResourceId?.trim() || guest.id;
 
 export const buildAppContainerMetadataId = ({
   dockerHostId,
@@ -222,6 +209,12 @@ export const getWorkloadMetadataIdCandidates = (
   const canonicalId = getCanonicalWorkloadId(guest);
   const candidates: string[] = [];
 
+  const workloadType = resolveWorkloadType(guest);
+  if (workloadType === 'vm' || workloadType === 'system-container') {
+    const metadataId = buildProxmoxGuestNativeId(guest);
+    if (metadataId) candidates.push(metadataId);
+  }
+
   if (isDockerManagedAppContainer(guest)) {
     const appContainerId = buildAppContainerMetadataId(guest);
     if (appContainerId) candidates.push(appContainerId);
@@ -252,21 +245,23 @@ export const getWorkloadMetadataId = (
   >,
 ): string => getWorkloadMetadataIdCandidates(guest)[0] || getCanonicalWorkloadId(guest);
 
-type NodeScopedWorkloadIdentity = {
+type ProxmoxGuestNativeIdentity = {
   instance?: string | null;
   node?: string | null;
   vmid?: number | null;
 };
 
-const normalizeNodeScopedWorkloadKeyPart = (value?: string | null): string => (value || '').trim();
+const normalizeProxmoxNativeKeyPart = (value?: string | null): string => (value || '').trim();
 
-export const buildCanonicalNodeScopedWorkloadId = ({
+// Guest metadata and legacy History requests use this native provider key.
+// Backend metrics targets take precedence. This key is never row identity.
+export const buildProxmoxGuestNativeId = ({
   instance,
   node,
   vmid,
-}: NodeScopedWorkloadIdentity): string | null => {
-  const normalizedInstance = normalizeNodeScopedWorkloadKeyPart(instance);
-  const normalizedNode = normalizeNodeScopedWorkloadKeyPart(node);
+}: ProxmoxGuestNativeIdentity): string | null => {
+  const normalizedInstance = normalizeProxmoxNativeKeyPart(instance);
+  const normalizedNode = normalizeProxmoxNativeKeyPart(node);
   const normalizedVmid = Number.isFinite(vmid) ? Number(vmid) : 0;
   if (!normalizedInstance || !normalizedNode || normalizedVmid <= 0) {
     return null;
@@ -274,18 +269,18 @@ export const buildCanonicalNodeScopedWorkloadId = ({
   return `${normalizedInstance}:${normalizedNode}:${normalizedVmid}`;
 };
 
-export const getCanonicalWorkloadIdForResource = (
+export const getWorkloadMetadataIdForResource = (
   resource: Pick<Resource, 'id' | 'type' | 'clusterId' | 'proxmox'>,
 ): string => {
   const workloadType = resolveWorkloadTypeFromString(resource.type);
   if (workloadType === 'vm' || workloadType === 'system-container') {
-    const canonicalId = buildCanonicalNodeScopedWorkloadId({
+    const metadataId = buildProxmoxGuestNativeId({
       instance: resource.proxmox?.instance || resource.clusterId,
       node: resource.proxmox?.node || resource.proxmox?.nodeName,
       vmid: resource.proxmox?.vmid,
     });
-    if (canonicalId) {
-      return canonicalId;
+    if (metadataId) {
+      return metadataId;
     }
   }
   return resource.id;

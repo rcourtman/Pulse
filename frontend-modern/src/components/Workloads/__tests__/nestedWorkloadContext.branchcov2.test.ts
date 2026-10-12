@@ -89,7 +89,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']).toStrictEqual({
+      expect(result['lxc-141']).toStrictEqual({
         type: 'app-container',
         label: 'Podman',
         title: 'Nested Podman',
@@ -113,8 +113,8 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']?.items[0]?.runtimeLabel).toBe('Docker');
-      expect(result['pve-a:node-a:141']?.label).toBe('Docker');
+      expect(result['lxc-141']?.items[0]?.runtimeLabel).toBe('Docker');
+      expect(result['lxc-141']?.label).toBe('Docker');
     });
   });
 
@@ -145,7 +145,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
         visibleGuests: [parent],
       });
 
-      expect(result['pve-a:node-a:141']?.items.map((item) => item.status)).toEqual([
+      expect(result['lxc-141']?.items.map((item) => item.status)).toEqual([
         'exited',
         'unknown',
         'unknown',
@@ -165,7 +165,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']?.items[0]?.name).toBe('cid-7');
+      expect(result['lxc-141']?.items[0]?.name).toBe('cid-7');
     });
 
     it('falls back to the canonical workload id when both name and containerId are empty', () => {
@@ -179,7 +179,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']?.items[0]?.name).toBe('app-container:orphan');
+      expect(result['lxc-141']?.items[0]?.name).toBe('app-container:orphan');
     });
 
     it('uses contextLabel for the host facet when dockerHostName is empty', () => {
@@ -194,7 +194,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']?.href).toBe('/docker/overview?host=ctx-host');
+      expect(result['lxc-141']?.href).toBe('/docker/overview?host=ctx-host');
     });
   });
 
@@ -218,9 +218,9 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [dockerOne, podmanOne], visibleGuests: [parent] });
 
-      expect(result['pve-a:node-a:141']?.label).toBe('Containers');
-      expect(result['pve-a:node-a:141']?.title).toBe('Nested containers');
-      expect(result['pve-a:node-a:141']?.count).toBe(2);
+      expect(result['lxc-141']?.label).toBe('Containers');
+      expect(result['lxc-141']?.title).toBe('Nested containers');
+      expect(result['lxc-141']?.count).toBe(2);
     });
   });
 
@@ -235,8 +235,8 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(Object.keys(result)).toEqual(['pve-a:node-a:141']);
-      expect(result['pve-a:node-a:141']?.items[0]?.name).toBe('two');
+      expect(Object.keys(result)).toEqual(['lxc-141']);
+      expect(result['lxc-141']?.items[0]?.name).toBe('two');
     });
 
     it('matches a parent via an unprefixed 1-segment host id (>=3/>=2 false, >=1 true)', () => {
@@ -249,7 +249,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(Object.keys(result)).toEqual(['pve-a:node-a:141']);
+      expect(Object.keys(result)).toEqual(['lxc-141']);
     });
 
     it('yields no parent match when only the lxc docker prefix is present (all segment arms false)', () => {
@@ -276,8 +276,8 @@ describe('nestedWorkloadContext (branch coverage)', () => {
 
       const result = run({ guests: [container], visibleGuests: [parent] });
 
-      expect(Object.keys(result)).toEqual(['pve-a:node-a:141']);
-      expect(result['pve-a:node-a:141']?.items[0]?.name).toBe('echo');
+      expect(Object.keys(result)).toEqual(['lxc-141']);
+      expect(result['lxc-141']?.items[0]?.name).toBe('echo');
     });
   });
 
@@ -383,7 +383,7 @@ describe('nestedWorkloadContext (branch coverage)', () => {
       const result = run({ guests: [container], visibleGuests: [parent] });
 
       expect(result).toStrictEqual({
-        'pve-a:node-a:141': {
+        'lxc-141': {
           type: 'app-container',
           label: 'Docker',
           title: 'Nested Docker',
@@ -437,8 +437,8 @@ describe('nestedWorkloadContext (branch coverage)', () => {
         visibleGuests: [vmParent, strayContainer, pod],
       });
 
-      expect(Object.keys(result)).toEqual(['pve-f:node-f:500']);
-      expect(result['pve-f:node-f:500']?.items.map((item) => item.name)).toEqual(['svc']);
+      expect(Object.keys(result)).toEqual(['vm-500']);
+      expect(result['vm-500']?.items.map((item) => item.name)).toEqual(['svc']);
     });
 
     it('skips app containers that do not match the requested platform scope', () => {

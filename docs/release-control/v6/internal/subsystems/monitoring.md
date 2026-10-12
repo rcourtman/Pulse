@@ -6517,6 +6517,11 @@ snapshot cannot resurrect a deleted or migrated entry or overwrite an operator
 edit. The existing tenant-local JSON shape, private file permissions and atomic
 temporary-file/rename path stay unchanged. A failed write is reported and not
 spin-retried; a later ordinary identity poll can retry the unpersisted state.
+An accepted guest-key migration retains its operator fields under the new key
+in memory even when persistence fails. Atomic persistence keeps the previous
+successful disk snapshot, and the existing writer records and retries the
+retained state on an ordinary update. A failed write cannot restore an obsolete
+in-memory key after the guest's new coordinates have been admitted.
 
 `WaitForPendingWrites` reports quiescence, not durable success. `Close` seals
 mutation admission and observes the background writer and any admitted
@@ -7285,6 +7290,11 @@ admitted publication; late inventories/details cannot recreate or erase the
 replacement's guest readings. An interrupted inventory does not grant fallback.
 One cycle per live binding owns collection until it completes, including when
 its caller is cancelled. Another connection can still advance independently.
+Before publishing accepted VM/container coordinates, that same owner migrates
+their persisted guest metadata keys. Readers cannot observe a new node ahead
+of its saved web URL, tags and notes. Rejected or replaced cycles do not migrate
+metadata. Collector-local post-publication callbacks own diagnostics and alerts,
+while metadata migration belongs to the complete accepted publication.
 
 Deep-enrichment/caller-deadline expiry is distinct from explicit parent-cycle
 cancellation: already collected authoritative inventory still publishes even

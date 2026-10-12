@@ -2,6 +2,8 @@ import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ResourceAPI } from '@/api/resources';
+import type { Resource } from '@/types/resource';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
   clearPendingAppShellRestoreTop,
@@ -16,13 +18,15 @@ import { resolveWorkloadResourceSelection } from '../workloadSelectionModel';
 import { useWorkloadSelectionState } from '../useWorkloadSelectionState';
 
 let locationSearch = '?resource=cluster-a:node-1:101';
+let readLocationSearch = () => locationSearch;
+vi.mock('@/api/resources', () => ({ ResourceAPI: { getResource: vi.fn() } }));
 const navigateSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
     pathname: '/proxmox/overview',
     get search() {
-      return locationSearch;
+      return readLocationSearch();
     },
   }),
   useNavigate: () => navigateSpy,
@@ -31,6 +35,10 @@ vi.mock('@solidjs/router', () => ({
 describe('useWorkloadSelectionState', () => {
   beforeEach(() => {
     locationSearch = '?resource=cluster-a:node-1:101';
+    readLocationSearch = () => locationSearch;
+    vi.mocked(ResourceAPI.getResource)
+      .mockReset()
+      .mockImplementation(async (id) => ({ id }) as Resource);
     navigateSpy.mockReset();
     vi.useFakeTimers();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
@@ -155,6 +163,60 @@ describe('useWorkloadSelectionState', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
+  it('does not restore the old viewport when a route selects a known canonical resource', () => {
+    const [search, setSearch] = createSignal('?resource=vm-first');
+    readLocationSearch = search;
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      { id: 'vm-first' } as WorkloadGuest,
+      { id: 'vm-second' } as WorkloadGuest,
+    ]);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests }));
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800 });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    const writes: number[] = [];
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => 175,
+      set: (value) => writes.push(value),
+    });
+    const wrapper = document.createElement('div');
+    scroller.append(wrapper);
+    document.body.append(scroller);
+    result.setTableWrapperRef(wrapper);
+    setSearch('?resource=vm-second');
+    expect(result.selectedGuestId()).toBe('vm-second');
+    expect(ResourceAPI.getResource).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+  });
+
+  it('does not restore the old viewport when a legacy route resolves to its canonical resource', async () => {
+    let resolve!: (resource: Resource) => void;
+    vi.mocked(ResourceAPI.getResource).mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([{ id: 'vm-current' } as WorkloadGuest]);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests }));
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800 });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    const writes: number[] = [];
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => 175,
+      set: (value) => writes.push(value),
+    });
+    const wrapper = document.createElement('div');
+    scroller.append(wrapper);
+    document.body.append(scroller);
+    result.setTableWrapperRef(wrapper);
+    resolve({ id: 'vm-current' } as Resource);
+    await Promise.resolve();
+    expect(result.selectedGuestId()).toBe('vm-current');
+    expect(writes).toEqual([]);
+  });
   it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
@@ -347,5 +409,140 @@ describe('useWorkloadSelectionState', () => {
     expect(navigate).toHaveBeenCalledWith('/proxmox/overview?type=vm', ROUTE_STATE_REPLACE_OPTIONS);
     expect(readPendingAppShellRestoreTop()).toBeNull();
     expect(navigateSpy).not.toHaveBeenCalled();
+  });
+  it('resolves an old node-scoped link through backend identity ownership', async () => {
+    vi.mocked(ResourceAPI.getResource).mockResolvedValueOnce({ id: 'stable-resource' } as Resource);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: () => [] }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(result.selectedGuestId()).toBe('stable-resource');
+    expect(ResourceAPI.getResource).toHaveBeenCalledWith('cluster-a:node-1:101', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps exact current identity local without an alias lookup', () => {
+    locationSearch = '?resource=stable-resource';
+    const guest = {
+      id: 'stable-resource',
+      canonicalResourceId: 'stable-resource',
+    } as WorkloadGuest;
+    const { result } = renderHook(() =>
+      useWorkloadSelectionState({ filteredGuests: () => [guest] }),
+    );
+    expect(result.selectedGuestId()).toBe('stable-resource');
+    expect(ResourceAPI.getResource).not.toHaveBeenCalled();
+  });
+
+  it.each(['close', 'reselect', 'escape'] as const)(
+    'does not replay a pending link after %s',
+    async (interaction) => {
+      let finish!: (resource: Resource) => void;
+      vi.mocked(ResourceAPI.getResource).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: () => [] }));
+      const signal = vi.mocked(ResourceAPI.getResource).mock.calls[0]![1]!.signal!;
+      if (interaction === 'close') result.clearPinnedSummaryScope();
+      else if (interaction === 'reselect') result.setSelectedGuestId('independent-clone');
+      else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(signal.aborted).toBe(true);
+      finish({ id: 'stable-resource' } as Resource);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(result.selectedGuestId()).toBe(
+        interaction === 'reselect' ? 'independent-clone' : null,
+      );
+    },
+  );
+
+  it('aborts a superseded route lookup and accepts only its current reference', async () => {
+    const [search, setSearch] = createSignal('?resource=old-reference');
+    readLocationSearch = search;
+    let finishOld!: (resource: Resource) => void;
+    vi.mocked(ResourceAPI.getResource)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ id: 'new-resource' } as Resource);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: () => [] }));
+    const oldSignal = vi.mocked(ResourceAPI.getResource).mock.calls[0]![1]!.signal!;
+    setSearch('?resource=new-reference');
+    await Promise.resolve();
+    await Promise.resolve();
+    finishOld({ id: 'old-resource' } as Resource);
+    await Promise.resolve();
+    expect(oldSignal.aborted).toBe(true);
+    expect(result.selectedGuestId()).toBe('new-resource');
+  });
+
+  it('does not resolve references while route state is disabled', () => {
+    const { result } = renderHook(() =>
+      useWorkloadSelectionState({ filteredGuests: () => [], routeStateEnabled: () => false }),
+    );
+    expect(result.selectedGuestId()).toBeNull();
+    expect(ResourceAPI.getResource).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ambiguous or refused reference unresolved', async () => {
+    vi.mocked(ResourceAPI.getResource).mockRejectedValueOnce(new Error('not found'));
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: () => [] }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps a pending reference lookup and local dismissal through unrelated filter changes', async () => {
+    const [search, setSearch] = createSignal('?resource=old-reference');
+    readLocationSearch = search;
+    let finish!: (resource: Resource) => void;
+    vi.mocked(ResourceAPI.getResource).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: () => [] }));
+    const signal = vi.mocked(ResourceAPI.getResource).mock.calls[0]![1]!.signal!;
+    setSearch('?resource=old-reference&type=vm');
+    expect(signal.aborted).toBe(false);
+    expect(ResourceAPI.getResource).toHaveBeenCalledTimes(1);
+    finish({ id: 'stable-resource' } as Resource);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(result.selectedGuestId()).toBe('stable-resource');
+    result.clearPinnedSummaryScope();
+    setSearch('?resource=old-reference&type=vm&node=node-2');
+    expect(result.selectedGuestId()).toBeNull();
+    expect(ResourceAPI.getResource).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the selected resource drawer state through regrouping and resets it on another selection', () => {
+    locationSearch = '';
+    const [guests, setGuests] = createSignal([
+      { id: 'stable-resource', node: 'node-1' },
+    ] as WorkloadGuest[]);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests: guests }));
+    result.setSelectedGuestId('stable-resource');
+    result.selectedGuestDrawerState.setActiveTab('history');
+    result.selectedGuestDrawerState.setHistoryRange('12h');
+    setGuests([{ id: 'stable-resource', node: 'node-2' }] as WorkloadGuest[]);
+    result.setSelectedGuestId('stable-resource');
+    expect(result.selectedGuestDrawerState.activeTab()).toBe('history');
+    expect(result.selectedGuestDrawerState.historyRange()).toBe('12h');
+    result.setSelectedGuestId('independent-clone');
+    expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');
+    expect(result.selectedGuestDrawerState.historyRange()).toBe('24h');
+    result.selectedGuestDrawerState.setActiveTab('manage');
+    result.clearPinnedSummaryScope();
+    expect(result.selectedGuestDrawerState.activeTab()).toBe('overview');
   });
 });

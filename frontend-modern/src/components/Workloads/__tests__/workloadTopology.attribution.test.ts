@@ -7,7 +7,7 @@ import { buildWorkloadNodeOptions } from '../workloadRouteModel';
 
 const guests = [
   {
-    id: 'lab-east-pve1-101',
+    id: 'vm-instance-a',
     vmid: 101,
     node: 'pve1',
     instance: 'lab-east',
@@ -16,7 +16,7 @@ const guests = [
     platformScopes: ['proxmox-pve'],
   },
   {
-    id: 'lab-east-pve1-101',
+    id: 'vm-instance-b',
     vmid: 101,
     node: 'east-pve1',
     instance: 'lab',
@@ -55,17 +55,17 @@ describe('Supplied node attribution (existing API regression controls)', () => {
     'preserves each supplied parent regardless of inventory order',
     (...inventory) => {
       const parents = buildGuestParentNodeMapFromNodes(guests, inventory);
-      expect(parents['lab-east:pve1:101']).toBe(nodes[0]);
-      expect(parents['lab:east-pve1:101']).toBe(nodes[1]);
+      expect(parents[guests[0].id]).toBe(nodes[0]);
+      expect(parents[guests[1].id]).toBe(nodes[1]);
     },
   );
   it('does not substitute an inferred guest-ID parent when its explicit source fields disagree', () => {
     const contradictory = { ...guests[1], id: 'native-a-101' };
     const parents = buildGuestParentNodeMapFromNodes([contradictory], nodes);
-    expect(parents['lab:east-pve1:101']).toBe(nodes[1]);
+    expect(parents[contradictory.id]).toBe(nodes[1]);
   });
   it('cannot give a vSphere VM Proxmox parent state from matching labels', () => {
     const vm = { ...guests[0], platformScopes: ['vmware-vsphere'] };
-    expect(buildGuestParentNodeMapFromNodes([vm], nodes)['lab-east:pve1:101']).toBeUndefined();
+    expect(buildGuestParentNodeMapFromNodes([vm], nodes)[vm.id]).toBeUndefined();
   });
 });

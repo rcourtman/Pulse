@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,129 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+type guestPublicationMetadataFS struct {
+	blocked atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (fs *guestPublicationMetadataFS) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+func (fs *guestPublicationMetadataFS) WriteFile(path string, data []byte, mode os.FileMode) error {
+	if fs.blocked.Load() {
+		fs.once.Do(func() { close(fs.entered) })
+		<-fs.release
+	}
+	return os.WriteFile(path, data, mode)
+}
+func (fs *guestPublicationMetadataFS) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+func (fs *guestPublicationMetadataFS) Remove(path string) error { return os.Remove(path) }
+func (fs *guestPublicationMetadataFS) Stat(path string) (os.FileInfo, error) {
+	return os.Stat(path)
+}
+func (fs *guestPublicationMetadataFS) MkdirAll(path string, mode os.FileMode) error {
+	return os.MkdirAll(path, mode)
+}
+
+func TestGuestPollPublicationMigratesMetadataBeforeNewCoordinates(t *testing.T) {
+	client := &guestPollOwnershipClient{}
+	m := guestPollOwnershipMonitor(t, client)
+	fs := &guestPublicationMetadataFS{entered: make(chan struct{}), release: make(chan struct{})}
+	store := config.NewGuestMetadataStore(t.TempDir(), fs)
+	m.guestMetadataStore = store
+	for _, id := range []string{"site-a:old-node:105", "site-a:old-node:106"} {
+		if err := store.Set(id, &config.GuestMetadata{
+			CustomURL: "https://guest.example", Tags: []string{"production"}, Notes: []string{"operator note"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.state.UpdateGuestsForInstance("site-a",
+		[]models.VM{{ID: "site-a:old-node:105", Instance: "site-a", Node: "old-node", VMID: 105}},
+		[]models.Container{{ID: "site-a:old-node:106", Instance: "site-a", Node: "old-node", VMID: 106}})
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", client)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	// Exercise the former collector effect as well as the publication owner.
+	// Both versions reach the same persistence barrier, so the observation
+	// proves ordering rather than merely requiring a new helper to be called.
+	stagePVEGuestEffect(ctx, func() {
+		store.GetWithLegacyMigration("site-a:new-node:105", "site-a", "new-node", 105)
+	})
+	fs.blocked.Store(true)
+	done := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(fs.release) }) }
+	t.Cleanup(func() {
+		unblock()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("publication did not exit")
+		}
+		if err := store.Close(time.Second); err != nil {
+			t.Error(err)
+		}
+	})
+	go func() {
+		m.publishPVEGuests(ctx, "site-a",
+			[]models.VM{{ID: "site-a:new-node:105", Instance: "site-a", Node: "new-node", VMID: 105}},
+			[]models.Container{{ID: "site-a:new-node:106", Instance: "site-a", Node: "new-node", VMID: 106}})
+		close(done)
+	}()
+	select {
+	case <-fs.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("metadata persistence did not start")
+	}
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.VMs) != 1 || snapshot.VMs[0].Node != "old-node" ||
+		len(snapshot.Containers) != 1 || snapshot.Containers[0].Node != "old-node" {
+		t.Error("new guest coordinates became visible before metadata migration completed")
+	}
+	unblock()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("publication did not complete")
+	}
+	for _, id := range []string{"site-a:new-node:105", "site-a:new-node:106"} {
+		meta := store.Get(id)
+		if meta == nil || meta.CustomURL != "https://guest.example" ||
+			!reflect.DeepEqual(meta.Tags, []string{"production"}) || !reflect.DeepEqual(meta.Notes, []string{"operator note"}) {
+			t.Errorf("published guest lost operator metadata: %s %+v", id, meta)
+		}
+	}
+}
+
+func TestGuestPollRejectedPublicationDoesNotMigrateMetadata(t *testing.T) {
+	client := &guestPollOwnershipClient{}
+	m := guestPollOwnershipMonitor(t, client)
+	store := config.NewGuestMetadataStore(t.TempDir(), nil)
+	m.guestMetadataStore = store
+	if err := store.Set("site-a:old-node:105", &config.GuestMetadata{CustomURL: "https://guest.example"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close(time.Second) })
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", client)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	m.replacePVEClient("site-a", &guestPollOwnershipClient{})
+	m.publishPVEGuests(ctx, "site-a",
+		[]models.VM{{ID: "site-a:new-node:105", Instance: "site-a", Node: "new-node", VMID: 105}}, nil)
+	if store.Get("site-a:old-node:105") == nil || store.Get("site-a:new-node:105") != nil {
+		t.Fatal("replaced poll owner migrated metadata")
+	}
+}
 
 // Ignore cancellation deliberately: a late inventory reply cannot prove that
 // its connection/runtime still owns publication. No native guest is involved.

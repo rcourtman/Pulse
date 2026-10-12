@@ -89,6 +89,80 @@ describe('useWorkloadViewportSync', () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
+  it('measures an active selection without replacing its initial window, then follows scroll and resize', async () => {
+    const onScroll = vi.fn();
+    const onRowGeometryChange = vi.fn();
+    const groupedWindowing: UseGroupedTableWindowingResult = {
+      startIndex: () => 330,
+      endIndex: () => 366,
+      mountedCount: () => 36,
+      getVisibleSlice: (_groupKey, guests) => guests,
+      isWindowed: () => true,
+      onScroll,
+      revealIndex: vi.fn(),
+    };
+    const rect = (height: number, top = 0): DOMRect => ({
+      bottom: top + height,
+      height,
+      left: 0,
+      right: 800,
+      top,
+      width: 800,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    });
+    const Harness = () => {
+      const [bodyRef, setBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+      useWorkloadViewportSync({
+        filteredGuestCount: () => 640,
+        expandedDetailActive: () => true,
+        groupedWindowing,
+        onRowGeometryChange,
+        rowHeight: () => 32,
+        tableBodyRef: bodyRef,
+      });
+      return (
+        <table>
+          <tbody
+            ref={(element) => {
+              vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect(320, -96));
+              setBodyRef(element);
+            }}
+          >
+            <tr
+              data-summary-group-id="group"
+              ref={(element) => {
+                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect(24));
+              }}
+            >
+              <td>Group</td>
+            </tr>
+            <tr
+              class="workload-row"
+              ref={(element) => {
+                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(rect(32));
+              }}
+            >
+              <td>Selected workload</td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    };
+    render(() => <Harness />);
+    await waitFor(() =>
+      expect(onRowGeometryChange).toHaveBeenCalledWith({
+        groupHeaderHeight: 24,
+        rowHeight: 32,
+      }),
+    );
+    expect(onScroll).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(onScroll).toHaveBeenCalledTimes(1));
+    window.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(onScroll).toHaveBeenCalledTimes(2));
+  });
   it('captures expanded detail geometry when the drawer mounts before scrolling', async () => {
     const onExpandedDetailHeightChange = vi.fn();
     const groupedWindowing: UseGroupedTableWindowingResult = {
