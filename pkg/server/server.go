@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 
@@ -1094,6 +1095,13 @@ var (
 // A regular .env is the only exception for pre-start deployment overrides;
 // keep the input archive outside the destination, not alongside retained state.
 func checkAutoImportDestination(dataDir string) error {
+	// Inspect the exact path persistence will use. Raw symlink/.. traversal or
+	// trailing separators can otherwise inspect a different directory, or hide
+	// the final directory link from Lstat.
+	dataDir, err := securityutil.NormalizeStorageDir(dataDir)
+	if err != nil {
+		return errAutoImportDestinationUnknown
+	}
 	info, err := os.Lstat(dataDir)
 	if os.IsNotExist(err) {
 		return nil

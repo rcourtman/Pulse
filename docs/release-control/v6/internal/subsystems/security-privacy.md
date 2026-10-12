@@ -24,6 +24,11 @@
 absent or empty resolved data directory; a regular deployment `.env` is the
 only allowed pre-start entry. Existing non-Proxmox settings, token/session
 records, encryption keys, tenant directories and unknown contents all block it.
+Admission uses the same `NormalizeStorageDir` path as persistence before any
+filesystem probe: raw symlink/`..` traversal must not inspect an empty peer while
+the importer writes a different existing destination, and a trailing separator
+must not hide a final directory link. Canonical destination credential validation
+and live/dangling link spellings have explicit regression controls.
 Directory inspection errors, non-directories and symlinks are not absence.
 Admission reads no file contents and creates no persistence/key. The importer
 rechecks before creating persistence or writing and audits a classified refusal

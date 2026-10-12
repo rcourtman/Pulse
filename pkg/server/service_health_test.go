@@ -95,7 +95,7 @@ func TestStartupImportUsesPersistenceDestination(t *testing.T) {
 	canonical := filepath.Join(base, "destination")
 	target := config.NewConfigPersistence(canonical)
 	if err := target.SaveAPITokens([]config.APITokenRecord{{
-		ID: "synthetic-existing-record", Hash: "synthetic-existing-digest",
+		ID: "synthetic-existing-record", Hash: auth.HashAPIToken("synthetic-existing-credential"),
 		Scopes: []string{config.ScopeAgentReport},
 	}}); err != nil {
 		t.Fatal(err)
@@ -121,6 +121,14 @@ func TestStartupImportUsesPersistenceDestination(t *testing.T) {
 	}
 	if after := snapshotAutoImportDestination(t, canonical); !reflect.DeepEqual(before, after) {
 		t.Error("canonical destination was modified")
+	}
+	records, err := target.LoadAPITokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := &config.Config{APITokens: records}
+	if record, ok := loaded.ValidateAPIToken("synthetic-existing-credential"); !ok || record.ID != "synthetic-existing-record" {
+		t.Error("canonical destination credential no longer validates")
 	}
 	if entries, err := os.ReadDir(filepath.Join(peer, "destination")); err != nil || len(entries) != 0 {
 		t.Error("the peer used by raw traversal was modified")
