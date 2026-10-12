@@ -63,16 +63,16 @@ def lookup_status_entry(report: dict[str, Any], *, kind: str, entry_id: str) -> 
                     "summary": report.get("summary", {}),
                 }
                 if kind == "candidate_lane":
-                    queue_item = next(
+                    candidate_option = next(
                         (
                             item
-                            for item in report.get("candidate_lane_queue", [])
+                            for item in report.get("candidate_lane_options", [])
                             if isinstance(item, dict) and str(item.get("candidate_lane_id")) == entry_id
                         ),
                         None,
                     )
-                    if queue_item is not None:
-                        result["queue_item"] = queue_item
+                    if candidate_option is not None:
+                        result["candidate_option"] = candidate_option
                 if kind == "coverage_gap":
                     linked_candidates = [
                         str(candidate.get("id"))
@@ -114,7 +114,7 @@ def _render_collection_specific(lines: list[str], kind: str, entry: dict[str, An
     if kind == "coverage_gap":
         lines.extend(
             [
-                f"status={entry.get('status')} resolution={entry.get('proposed_resolution')} impact={entry.get('coverage_impact')}",
+                f"status={entry.get('status')} resolution={entry.get('proposed_resolution')}",
                 f"lanes={','.join(entry.get('lane_ids', [])) or '-'} repos={','.join(entry.get('repo_ids', [])) or '-'} subsystems={','.join(entry.get('subsystem_ids', [])) or '-'}",
             ]
         )
@@ -130,7 +130,7 @@ def _render_collection_specific(lines: list[str], kind: str, entry: dict[str, An
     if kind == "lane":
         lines.extend(
             [
-                f"gap={entry.get('gap')} status={entry.get('status')} completion={entry.get('completion_state')} derived={entry.get('derived_status')}",
+                f"status={entry.get('status')} completion={entry.get('completion_state')}",
                 f"repos={','.join(entry.get('repo_ids', [])) or '-'} subsystems={','.join(entry.get('subsystem_ids', [])) or '-'} evidence_count={entry.get('evidence_count')}",
             ]
         )
@@ -204,10 +204,10 @@ def render_pretty(result: dict[str, Any]) -> str:
     ]
     _render_collection_specific(lines, result["kind"], entry)
     if result["kind"] == "candidate_lane":
-        queue_item = result.get("queue_item", {})
-        if queue_item:
+        candidate_option = result.get("candidate_option", {})
+        if candidate_option:
             lines.append(
-                f"queue: rank={queue_item.get('rank')} available={queue_item.get('available')} available_rank={queue_item.get('available_rank')}"
+                f"availability: available={candidate_option.get('available')} claims={','.join(candidate_option.get('claim_ids', [])) or '-'} agents={','.join(candidate_option.get('claim_agent_ids', [])) or '-'}"
             )
     if result["kind"] == "coverage_gap":
         linked = result.get("linked_candidate_lane_ids", [])
