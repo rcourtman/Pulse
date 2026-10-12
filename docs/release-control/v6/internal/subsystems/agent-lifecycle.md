@@ -34,7 +34,9 @@ reload, exact unknown-job status and independent process absence establish
 retirement. On unconfirmed retirement it is restored only if the original path
 is still absent, leaving the manual override and all local recovery state;
 atomic non-replacement links refuse concurrently created files or directories,
-including during restore; the staged recovery copy is retained on conflict. Only confirmed retirement removes the staged config and manual
+including during restore; the staged recovery copy is retained on conflict.
+Override write, permission and link operations each have explicit checked
+failure handling and remove only their owned non-credential temporary file. Only confirmed retirement removes the staged config and manual
 before credential/state erasure. No credentials, arguments or config contents
 are returned by these observations. Existing same-instance URL, exact record,
 TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.

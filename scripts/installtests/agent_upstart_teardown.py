@@ -212,8 +212,7 @@ ln() {
         race_restore_config "$target"
     fi
     printf 'file:link\n' >> "$EVENTS"
-    # Capture the external exit explicitly: builtin command under errexit
-    # can otherwise terminate the wrapper before production handles failure.
+    # Preserve the actual external command exit for the production handler.
     if builtin command ln "$@"; then return 0; else return $?; fi
 }
 mv() {

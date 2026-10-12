@@ -1622,7 +1622,15 @@ quiesce_upstart_agent_for_removal() {
         pending=$(mktemp "${override}.XXXXXX") || return 1
         # Link without replacement: an override created concurrently is not
         # ours to overwrite. The temporary file contains no credential.
-        if ! { printf 'manual\n' > "$pending" && chmod 644 "$pending" && ln -T -- "$pending" "$override"; }; then
+        if ! printf 'manual\n' > "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! chmod 644 "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! ln -T -- "$pending" "$override"; then
             rm -f -- "$pending"
             return 1
         fi

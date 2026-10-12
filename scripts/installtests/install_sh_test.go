@@ -8473,7 +8473,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_upstart_teardown.py"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("DSM Upstart removal controls: %v\n%s", err, output)
+		t.Fatalf("DSM Upstart retirement and owned temporary cleanup controls: %v\n%s", err, output)
 	}
 	for _, name := range []string{
 		"test_refused_manager_precedes_remote_and_state_erasure",
