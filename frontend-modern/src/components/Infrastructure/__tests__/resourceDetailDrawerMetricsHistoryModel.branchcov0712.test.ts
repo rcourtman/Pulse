@@ -223,7 +223,7 @@ describe('canonical drawer History honours selected guest observation provenance
     expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
   });
 
-  it.each(['system-container', 'storage', 'disk', 'agent'] as const)(
+  it.each(['system-container', 'storage', 'physical_disk', 'agent'] as const)(
     'does not apply VM filesystem power/read rules to independent %s metrics',
     (type) => {
       const value = resource('current');
