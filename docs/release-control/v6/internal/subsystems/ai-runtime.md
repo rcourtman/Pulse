@@ -25,6 +25,28 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Pro Patrol defaults to Ask first until the operator chooses
+
+`AIConfig.PatrolAutonomyLevel` stays empty until an operator saves a Patrol
+mode, and only explicit saves write it. `AIConfig.PatrolAutonomyLevelChosen`
+reports that, and `AIConfig.ResolvedPatrolAutonomyLevel(entitled)` returns
+`approval` (Ask first) for a never-chosen install that is entitled to
+investigation, otherwise the stored or monitor level.
+`Service.GetEffectivePatrolAutonomyLevel` applies the same default, but only on
+a positive licence answer from `Service.PatrolInvestigationLicensed`, which
+treats a missing licence checker as unlicensed. `HasLicenseFeature` stays
+fail-open for its existing callers; the default must not, because a startup
+window without a checker would otherwise start spending provider budget on an
+install that may not be Pro. Unlicensed and unknown installs stay Watch only, an
+explicit choice always wins, and readiness reads the same resolved level. The
+default sends new and re-detected warning and critical findings to
+investigation through the existing dispatch path and budget checker; it adds no
+execution authority, because Ask first still waits for approval before any
+change. Proofs: `internal/ai/service_patrol_default_test.go`,
+`internal/config/ai_config_test.go`
+(`TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls`) and
+`internal/api/patrol_autopilot_test.go` (`TestPatrolAutonomyReportsTheProDefault`).
+
 ### Guest memory remains qualified through tools and local observers
 
 The existing guest get/list/topology tools and Assistant inventory context carry

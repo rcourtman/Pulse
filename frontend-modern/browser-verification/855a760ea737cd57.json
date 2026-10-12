@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "3c22e108bb5fb0af02abd6235be039d00cb2a2db",
+  "verified_at": "2026-10-12T19:49:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "f0dde1dcfbc330505b679161443b7b375faa9351225abe7247146a351e9ea75c",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "de3ca97e0f2a74ac0ab6784b9049d17f32654397bb0171f2d7ec622878353abd",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "de2730eda398094d9fc4b3020aaa42ddfa02f0e4d10819de4f11fb9fc96bfa9c"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Pro licence active, Patrol mode never saved: header chip Ask first, patrol-default-mode-notice shown with both actions; API default_mode_applied true",
+    "Patrol enabled but no AI provider configured: header reads 'Patrol is not running yet', not 'Watching your infrastructure'",
+    "Free licence (backend dev grant, frontend plan-locked): no notice, chip Watch only",
+    "Phone width: notice wraps, buttons 44px tall, no horizontal overflow",
+    "After a save and reload: notice stays gone"
+  ],
+  "interactions": [
+    "Keep Ask first saves approval: notice disappears, API requested/effective approval, default_mode_applied false",
+    "Switch to Watch only saves monitor at phone width: notice disappears, chip Watch only, API requested/effective monitor, default_mode_applied false"
+  ],
+  "browser": {
+    "client": "Claude desktop browser pane",
+    "engine": "Chromium"
+  },
+  "scope": "Private non-mock darwin enterprise build of this change on :7681 with a dev Pro licence; PULSE_DEV grants backend features, so the release-build unlicensed backend path is covered by unit tests, not this pass."
+}

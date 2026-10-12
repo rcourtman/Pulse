@@ -21,6 +21,7 @@ interface HeaderStateOptions {
   autoFixLocked?: boolean | (() => boolean);
   setupOnly?: boolean;
   autopilotDialogOpen?: boolean;
+  defaultModeApplied?: boolean;
 }
 
 const createState = (options: HeaderStateOptions = {}) => {
@@ -30,6 +31,7 @@ const createState = (options: HeaderStateOptions = {}) => {
     autopilotStatus: () => null,
     autonomyLevel: () => autonomyLevel,
     requestedAutonomyLevel: () => autonomyLevel,
+    defaultModeApplied: () => options.defaultModeApplied ?? false,
     autoFixLocked: () => {
       const locked = options.autoFixLocked ?? false;
       return typeof locked === 'function' ? locked() : locked;
@@ -232,5 +234,44 @@ describe('PatrolIntelligenceHeader Patrol mode anchors', () => {
     expect(screen.getByText('Patrol mode').closest('#patrol-control')).not.toBeNull();
     await nextFrame();
     expect(scrolled).toEqual([]);
+  });
+});
+
+describe('PatrolIntelligenceHeader Pro default mode', () => {
+  afterEach(cleanup);
+
+  it('tells a Pro install it investigates by default and lets it keep or leave Ask first', () => {
+    const { state, handleAutonomyChange } = createState({ defaultModeApplied: true });
+    renderHeader(state);
+
+    const notice = screen.getByTestId('patrol-default-mode-notice');
+    expect(notice).toHaveTextContent(
+      'Pro investigates new warning and critical findings by default.',
+    );
+    expect(notice).toHaveTextContent('Nothing changes without your approval.');
+    expect(notice).toHaveTextContent('count toward your 30-day budget');
+
+    fireEvent.click(within(notice).getByRole('button', { name: 'Keep Ask first' }));
+    expect(handleAutonomyChange).toHaveBeenLastCalledWith('approval');
+    fireEvent.click(within(notice).getByRole('button', { name: 'Switch to Watch only' }));
+    expect(handleAutonomyChange).toHaveBeenLastCalledWith('monitor');
+  });
+
+  it('shows no default notice once a mode was chosen or while Pro features are locked', () => {
+    const chosen = createState({ defaultModeApplied: false });
+    renderHeader(chosen.state);
+    expect(screen.queryByTestId('patrol-default-mode-notice')).toBeNull();
+    cleanup();
+
+    const locked = createState({ defaultModeApplied: true, autoFixLocked: true });
+    renderHeader(locked.state);
+    expect(screen.queryByTestId('patrol-default-mode-notice')).toBeNull();
+  });
+
+  it('does not claim Patrol is watching while it still needs setup', () => {
+    const { state } = createState({ setupOnly: true });
+    renderHeader(state);
+    expect(screen.getByText('Patrol is not running yet')).toBeInTheDocument();
+    expect(screen.queryByText('Watching your infrastructure')).toBeNull();
   });
 });

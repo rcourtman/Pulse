@@ -21,6 +21,7 @@ import {
   createPatrolAutopilotAcknowledgement,
   revokePatrolAutopilotAcknowledgement,
   updatePatrolAutonomySettings,
+  getPatrolAutonomySettings,
   getPatrolObjectives,
   createPatrolObjective,
   updatePatrolObjective,
@@ -114,6 +115,19 @@ describe('patrol api', () => {
       '/api/ai/patrol/objectives/objective%2Fone?revision=5',
       { method: 'DELETE' },
     );
+  });
+
+  it('reads Patrol mode settings with the Pro default flag unchanged', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      autonomy_level: 'approval',
+      requested_autonomy_level: 'approval',
+      effective_autonomy_level: 'approval',
+      default_mode_applied: true,
+    } as any);
+    const settings = await getPatrolAutonomySettings();
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/autonomy');
+    expect(settings.default_mode_applied).toBe(true);
+    expect(settings.effective_autonomy_level).toBe('approval');
   });
 
   it('uses server acknowledgement and activation endpoints for Autopilot', async () => {
