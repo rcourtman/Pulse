@@ -34,6 +34,12 @@ manager commands or exact owned-link removal. Foreign, malformed or inaccessible
 paths refuse, rather than deleting another service. Both paths recheck after
 remote confirmation and before script, PID or credential erasure. Remote refusal
 keeps the stopped installation's recovery material; no automatic restart occurs.
+Disabling may succeed before a later stop/status/process read fails; do not
+restore activation links or automatically restart. Earlier installed init scripts
+can still erase their own runtime PID files after failed signals. The independent
+gate then retains service/credential recovery and refuses remote removal; it
+does not recreate PIDs or rewrite those installed scripts. Renderer changes apply
+to newly generated scripts, not historical installed-script acceptance.
 Missing/repeated removal still requires known disabled activation and process
 absence. Existing systemd/OpenRC gates and credential/transport ownership remain.
 
@@ -42,7 +48,7 @@ A linked rc.d service or existing appliance bootstrap therefore refuses *before*
 remote removal or erasure until its owning activation task can be reconciled;
 this step does not claim appliance task, launchd, Windows or native acceptance.
 Missing timeout/sysrc or unrecognised manager output also remains a safe refusal.
-`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all seventeen
+`TestInstallSHLegacyTeardownRequiresObservedQuiescence` requires all eighteen
 production-function/caller/rendered-stop methods in `agent_legacy_teardown.py`,
 using closed ordinary-user models and private deletion/signal targets, plus a
 real timeout-child termination control. Source models are not installed signed

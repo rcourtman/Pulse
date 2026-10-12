@@ -8438,6 +8438,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_remote_refusal_keeps_stopped_install_and_all_recovery_files",
 		"test_late_refusal_keeps_local_recovery_after_remote_confirmation",
 		"test_known_stopped_missing_and_repeated_removal_are_safe",
+		"test_legacy_script_pid_erasure_cannot_authorise_credential_erasure",
 		"test_process_inventory_does_not_return_arguments_or_secrets",
 		"test_real_process_timeout_stops_owned_child_without_erasure",
 		"test_rendered_stop_retains_pidfiles_on_refused_or_ignored_signals",
@@ -8446,7 +8447,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 			t.Fatalf("legacy manager control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 18 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete legacy manager verdict:\n%s", output)
 	}
 	t.Logf("%s", output)

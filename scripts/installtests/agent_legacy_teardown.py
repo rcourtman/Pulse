@@ -73,7 +73,10 @@ elif role == 'init':
     if a[0] in ('stop', 'onestop'):
         event('service:stop')
         if fault == 'refused-stop' or (fault == 'refused-stop-after-remote' and remote): sys.exit(1)
-        if fault != 'ignored-stop': v['state'] = 'stopped'
+        if fault not in ('ignored-stop', 'legacy-erasing-stop'): v['state'] = 'stopped'
+        if fault == 'legacy-erasing-stop':
+            for name in ('primary.pid', 'child.pid', 'sysv.pid'):
+                (root / name).unlink(missing_ok=True)
         save(); sys.exit(0)
     event('status:read'); v['status_reads'] += 1; save()
     if fault == 'failed-status' or (fault == 'failed-status-after-remote' and remote): sys.exit(2)
@@ -237,6 +240,18 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
             result[str(p.relative_to(root))] = (info.st_mode, info.st_ino, data)
         return result
 
+    def assert_recovery_retained(self, before, after):
+        # Successful disabling may remove owned activation links before a later
+        # read fails. Never recreate those links (or automatically restart).
+        # Every non-activation file, and every surviving link, remains exact.
+        for name, value in before.items():
+            owned_activation = name.startswith("etc/") and name.rsplit("/", 1)[-1] in ("S20pulse-agent", "K01pulse-agent")
+            if owned_activation and name not in after:
+                continue
+            self.assertIn(name, after)
+            self.assertEqual(after[name], value)
+        self.assertFalse(set(after) - set(before))
+
     def test_stop_refusal_retains_all_local_recovery(self):
         for platform in ("FreeBSD", "SysV"):
             with self.subTest(platform=platform):
@@ -260,7 +275,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 with self.subTest(platform=platform, fault=fault):
                     r, events, before, after, _ = self.exercise(platform, fault=fault)
                     self.assertNotEqual(r.returncode, 0, r.stderr)
-                    self.assertEqual(after, before)
+                    self.assert_recovery_retained(before, after)
                     self.assertNotIn("init:remove", events)
 
     def test_failed_empty_diagnostic_or_duplicate_reads_are_not_absence(self):
@@ -296,7 +311,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
             with self.subTest(platform=platform, fault=fault):
                 r, events, before, after, _ = self.exercise(platform, fault=fault)
                 self.assertNotEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(after, before)
+                self.assert_recovery_retained(before, after)
                 self.assertIn("service:stop", events)
 
     def test_pid_ownership_and_unexpected_paths_refuse_before_signals(self):
@@ -366,6 +381,22 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                     self.assertIn("remote:remove", events)
                     self.assertNotIn("state:remove", events)
                     self.assertNotIn("service:start", events)
+
+    def test_legacy_script_pid_erasure_cannot_authorise_credential_erasure(self):
+        # Old deployed renderers can remove PID files even when signals fail.
+        # The independent process read must still prevent remote/credential
+        # removal. Do not pretend the installer recreated those ephemeral PIDs.
+        for platform in ("FreeBSD", "SysV"):
+            with self.subTest(platform=platform):
+                r, events, before, after, model = self.exercise(platform, fault="legacy-erasing-stop", flow="caller")
+                self.assertNotEqual(r.returncode, 0, r.stderr)
+                for k in ("init", "state/token", "helper/token", "profile/token", "unrelated"):
+                    self.assertEqual(after[k], before[k])
+                self.assertEqual(model["state"], "started")
+                self.assertNotIn("remote:remove", events)
+                self.assertNotIn("state:remove", events)
+                self.assertNotIn("service:start", events)
+                self.assertNotIn("primary.pid", after)
 
     def test_known_stopped_missing_and_repeated_removal_are_safe(self):
         for platform in ("FreeBSD", "SysV"):
