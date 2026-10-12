@@ -103,6 +103,17 @@ activity invalidation/concurrent-cleanup controls in
 `internal/monitoring/monitor_host_agents_test.go` verify this shared boundary;
 they are not installed agent or native guest-recovery proof.
 
+Explicit metadata invalidation and PVE instance retirement cancel an active
+enrichment context without releasing its owner early. Late replies cannot
+repopulate the old lifecycle's cache, OS-command safety state or retry timing;
+new polling and diagnostics still honour the shared consumed-command uncertainty
+fence. This remains an internal monitor lifecycle, with no change to agent
+identity, credentials or the command protocol.
+`internal/monitoring/guest_metadata_lifecycle_test.go` verifies cold/retained
+late replies, both invalidation routes, direct/cluster HTTP cancellation,
+independent keys and ordinary new-lifecycle recovery. It is not installed
+removal, native guest recovery or evidence that a cancelled guest command stopped.
+
 The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
 coordination, not agent input or a public field. It prevents retained guest
 identity from renewing fallback QGA eligibility. Agent enrollment, token and

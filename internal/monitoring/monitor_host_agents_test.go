@@ -8339,7 +8339,7 @@ func TestGuestMetadataIdleCleanupContract(t *testing.T) {
 		},
 		guestMetadataLastAccess: map[string]time.Time{"active-empty": now, "active-retained": now, "inactive": stale, "only-active": now, "only-idle": stale, "inflight": stale},
 		guestMetadataLimiter:    map[string]time.Time{"active-empty": now.Add(time.Minute), "inactive": stale, "inflight": stale},
-		guestMetadataInFlight:   map[string]bool{"inflight": true},
+		guestMetadataInFlight:   map[string]*guestMetadataFetch{"inflight": {}},
 	}
 	m.cleanupGuestMetadataCache(now)
 	for _, key := range []string{"active-empty", "active-retained", "legacy-fresh", "inflight"} {
@@ -8357,7 +8357,7 @@ func TestGuestMetadataIdleCleanupContract(t *testing.T) {
 			t.Errorf("idle bookkeeping %s retained", key)
 		}
 	}
-	if !m.guestMetadataLastAccess["only-active"].Equal(now) || !m.guestMetadataLimiter["active-empty"].Equal(now.Add(time.Minute)) || !m.guestMetadataLimiter["inflight"].Equal(stale) || !m.guestMetadataInFlight["inflight"] {
+	if !m.guestMetadataLastAccess["only-active"].Equal(now) || !m.guestMetadataLimiter["active-empty"].Equal(now.Add(time.Minute)) || !m.guestMetadataLimiter["inflight"].Equal(stale) || m.guestMetadataInFlight["inflight"] == nil {
 		t.Error("janitor changed current activity, backoff or in-flight ownership")
 	}
 	empty := m.guestMetadataCache["active-empty"]
@@ -8393,7 +8393,7 @@ func TestGuestMetadataActivityInvalidationContract(t *testing.T) {
 		guestMetadataCache:      map[string]guestMetadataCacheEntry{key: {osInfoSkip: true}, sibling: {osInfoSkip: true}},
 		guestMetadataLimiter:    map[string]time.Time{key: time.Now().Add(time.Hour), sibling: time.Now().Add(time.Hour)},
 		guestMetadataLastAccess: map[string]time.Time{key: time.Now(), sibling: time.Now()},
-		guestMetadataInFlight:   map[string]bool{key: true},
+		guestMetadataInFlight:   map[string]*guestMetadataFetch{key: {}},
 	}
 	m.clearGuestMetadataCache("activity", "node", 105)
 	if _, exists := m.guestMetadataCache[key]; exists {
@@ -8405,7 +8405,7 @@ func TestGuestMetadataActivityInvalidationContract(t *testing.T) {
 	if _, exists := m.guestMetadataLastAccess[key]; exists {
 		t.Error("explicit invalidation retained activity")
 	}
-	if !m.guestMetadataInFlight[key] || !m.guestMetadataCache[sibling].osInfoSkip || m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataLimiter[sibling].IsZero() {
+	if m.guestMetadataInFlight[key] == nil || !m.guestMetadataInFlight[key].invalidated || !m.guestMetadataCache[sibling].osInfoSkip || m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataLimiter[sibling].IsZero() {
 		t.Error("invalidation discarded ownership or another instance")
 	}
 	m.guestMetadataLastAccess[key] = time.Now()
@@ -8416,7 +8416,7 @@ func TestGuestMetadataActivityInvalidationContract(t *testing.T) {
 			t.Error("retired instance retained activity bookkeeping")
 		}
 	}
-	if m.guestMetadataLastAccess[sibling].IsZero() || !m.guestMetadataInFlight[key] {
+	if m.guestMetadataLastAccess[sibling].IsZero() || m.guestMetadataInFlight[key] == nil || !m.guestMetadataInFlight[key].invalidated {
 		t.Error("retirement crossed instance scope or discarded active ownership")
 	}
 }
