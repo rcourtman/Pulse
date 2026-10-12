@@ -116,6 +116,9 @@ if verb == 'initshutdownscript.query':
     if fault == 'string-enabled': tasks[0]['enabled'] = 'false'
     if fault == 'foreign-owner': tasks[0]['comment'] = 'not owned by Pulse'
     if fault == 'wrong-kind': tasks[0]['type'] = 'UNKNOWN'
+    if fault == 'missing-script': tasks[0].pop('script')
+    if fault == 'null-script': tasks[0]['script'] = None
+    if fault == 'empty-command': tasks[0].update(type='COMMAND', script='', command='')
     if fault == 'command-bootstrap': tasks[0].update(type='COMMAND', script='', command='/bin/bash ' + str(root / 'state/bootstrap-pulse-agent.sh'))
     if fault == 'other-bootstrap': tasks[0]['script'] = '/other-install/bootstrap-pulse-agent.sh'
     if fault == 'diagnostic-query': print('read unavailable', file=sys.stderr)
@@ -275,6 +278,13 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
 
     def test_foreign_or_indirect_bootstrap_is_not_mutated(self):
         for fault in ('foreign-owner', 'command-bootstrap', 'other-bootstrap'):
+            with self.subTest(fault=fault):
+                events = self.retained(self.exercise(fault))
+                self.assertNotIn('remote:remove', events)
+                self.assertFalse(any(e.startswith('task:disable:') or e.startswith('task:delete:') for e in events))
+
+    def test_missing_activation_target_cannot_hide_an_owned_task(self):
+        for fault in ('missing-script', 'null-script', 'empty-command'):
             with self.subTest(fault=fault):
                 events = self.retained(self.exercise(fault))
                 self.assertNotIn('remote:remove', events)

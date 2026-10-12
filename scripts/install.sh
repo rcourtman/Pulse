@@ -1754,6 +1754,8 @@ try:
         if script is None: script = ""
         if command is None: command = ""
         if not isinstance(script, str) or not isinstance(command, str): raise ValueError("invalid activation")
+        if (kind == "SCRIPT" and not script) or (kind == "COMMAND" and not command):
+            raise ValueError("missing activation target")
         if script == expected:
             if (kind != "SCRIPT" or command or task.get("when") != "POSTINIT" or
                     task.get("comment") != "Pulse Agent Bootstrap" or type(task.get("timeout")) is not int or

@@ -30,7 +30,9 @@ SCRIPT/POSTINIT task, including duplicates. Unknown ownership, indirect command
 activation or another-install bootstrap refuses without deleting unrelated
 tasks. The JSON reader rejects duplicate keys/IDs, invalid types, failed/empty/
 diagnostic/incomplete reads, over 512 tasks or over 1 MiB; it returns only owned
-numeric IDs and enablement, never task commands, names or credentials. All owned
+numeric IDs and enablement, never task commands, names or credentials. A
+missing/empty SCRIPT path or COMMAND target is unknown activation, not an
+unrelated task or evidence that the owned task is absent. All owned
 tasks are disabled with checked calls and independent exact-set readback before
 systemd stop. A partial stop/disable stays stopped/disabled: do not re-enable or
 automatically restart after a refusal.
@@ -47,7 +49,7 @@ succeeded. No favourable replacement observation, task recreation or credential
 churn is performed. Unrelated tasks survive unchanged.
 
 `TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure` requires all
-fifteen `agent_truenas_teardown.py` actual-function/full-caller controls,
+sixteen `agent_truenas_teardown.py` actual-function/full-caller controls,
 including multiple tasks, partial/refused/unknown operations, post-remote
 changes, ignored/recreated deletion, process privacy and a real timeout child.
 These run against closed middleware/systemd/process models and private ordinary-

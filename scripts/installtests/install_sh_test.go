@@ -8516,6 +8516,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	for _, name := range []string{
 		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
 		"test_foreign_or_indirect_bootstrap_is_not_mutated",
+		"test_missing_activation_target_cannot_hide_an_owned_task",
 		"test_bootstrap_symlink_directory_or_writable_file_refuses_before_mutation",
 		"test_missing_tools_are_not_local_only_removal_permission",
 		"test_every_matching_task_is_disabled_and_independently_observed_before_stop",
@@ -8534,7 +8535,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
