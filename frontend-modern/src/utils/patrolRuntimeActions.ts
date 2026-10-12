@@ -27,6 +27,15 @@ export const PATROL_PROVIDER_AUTH_CAUSE = 'provider_auth';
 export const isPatrolConnectCause = (cause?: string): boolean =>
   isPatrolConfigLevelCause(cause) || cause === PATROL_PROVIDER_AUTH_CAUSE;
 
+// Pulse could not reach the saved provider (wrong URL, server down, network).
+// The model check cannot fix that; the provider's URL and its test live on
+// Provider & Models. It is not a setup-panel cause, because a passing network
+// blip would ask a cloud user for a key that is fine.
+export const PATROL_PROVIDER_CONNECTION_CAUSE = 'provider_connection';
+
+const isPatrolProviderSettingsCause = (cause?: string): boolean =>
+  isPatrolConnectCause(cause) || cause === PATROL_PROVIDER_CONNECTION_CAUSE;
+
 export const getPatrolProviderSettingsAction = (): PatrolRuntimeActionPresentation => ({
   ...PATROL_PROVIDER_SETTINGS_ACTION,
 });
@@ -40,7 +49,7 @@ export const getPatrolSetupAction = (cause?: string): PatrolRuntimeActionPresent
   if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
     return { label: 'Raise the cost budget', href: settingsTabPath('system-ai') };
   }
-  if (isPatrolConnectCause(cause)) {
+  if (isPatrolProviderSettingsCause(cause)) {
     return { label: 'Open Provider & Models', href: settingsTabPath('system-ai') };
   }
   return { ...PATROL_PROVIDER_SETTINGS_ACTION };
@@ -52,7 +61,7 @@ export const getPatrolSetupHint = (cause?: string): string => {
   if (cause === PATROL_BUDGET_EXHAUSTED_CAUSE) {
     return '';
   }
-  if (isPatrolConnectCause(cause)) {
+  if (isPatrolProviderSettingsCause(cause)) {
     return '';
   }
   return 'Open Patrol settings and run the model check. Provider connectivity can be healthy even when the selected model cannot use Patrol tools.';

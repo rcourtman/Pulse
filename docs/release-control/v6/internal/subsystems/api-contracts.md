@@ -32,6 +32,8 @@ only when the cost model slows the untouched default), `POST
 Patrol settings rely on.
 The panel loads on demand, so none of these requests is made until Patrol is
 blocked and the operator starts setup.
+The `provider_connection` readiness cause is read as it is: it changes only
+where the Patrol page sends the operator, not any payload.
 
 ### Patrol autonomy reports the Pro default
 

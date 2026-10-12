@@ -17,6 +17,8 @@ describe('patrolRuntimeActions', () => {
     expect(isPatrolConnectCause('provider_auth')).toBe(true);
     expect(isPatrolConnectCause('provider_not_configured')).toBe(true);
     expect(isPatrolConnectCause('model_unsupported_tools')).toBe(false);
+    // Unreachable is not a reconnect: a network blip must not ask for a working key again.
+    expect(isPatrolConnectCause('provider_connection')).toBe(false);
     for (const cause of [
       'model_unsupported_tools',
       PATROL_BUDGET_EXHAUSTED_CAUSE,
@@ -41,7 +43,12 @@ describe('patrolRuntimeActions', () => {
 
   it('routes config-level causes to Provider & Models instead of the model check', () => {
     // A refused key is fixed where the key lives, not by re-running the model check.
-    for (const cause of ['assistant_disabled', 'provider_not_configured', 'provider_auth']) {
+    for (const cause of [
+      'assistant_disabled',
+      'provider_not_configured',
+      'provider_auth',
+      'provider_connection',
+    ]) {
       expect(getPatrolSetupAction(cause)).toEqual({
         label: 'Open Provider & Models',
         href: '/settings/pulse-intelligence/provider',
@@ -66,6 +73,8 @@ describe('patrolRuntimeActions', () => {
   it('suppresses the tool-check hint for config-level causes', () => {
     expect(getPatrolSetupHint('assistant_disabled')).toBe('');
     expect(getPatrolSetupHint('provider_not_configured')).toBe('');
+    // "Provider connectivity can be healthy" is false when the provider is unreachable.
+    expect(getPatrolSetupHint('provider_connection')).toBe('');
     expect(getPatrolSetupHint('model_not_selected')).toContain('run the model check');
     expect(getPatrolSetupHint(undefined)).toContain('run the model check');
   });
