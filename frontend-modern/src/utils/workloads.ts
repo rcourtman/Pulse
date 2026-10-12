@@ -211,7 +211,7 @@ export const getWorkloadMetadataIdCandidates = (
 
   const workloadType = resolveWorkloadType(guest);
   if (workloadType === 'vm' || workloadType === 'system-container') {
-    const metadataId = buildProxmoxGuestMetadataId(guest);
+    const metadataId = buildProxmoxGuestNativeId(guest);
     if (metadataId) candidates.push(metadataId);
   }
 
@@ -245,23 +245,23 @@ export const getWorkloadMetadataId = (
   >,
 ): string => getWorkloadMetadataIdCandidates(guest)[0] || getCanonicalWorkloadId(guest);
 
-type ProxmoxGuestMetadataIdentity = {
+type ProxmoxGuestNativeIdentity = {
   instance?: string | null;
   node?: string | null;
   vmid?: number | null;
 };
 
-const normalizeProxmoxMetadataKeyPart = (value?: string | null): string => (value || '').trim();
+const normalizeProxmoxNativeKeyPart = (value?: string | null): string => (value || '').trim();
 
-// Guest-metadata storage and legacy API clients use provider keys. Keep that
-// compatibility coordinate separate from resource identity and row selection.
-export const buildProxmoxGuestMetadataId = ({
+// Guest metadata and legacy History requests use this native provider key.
+// Backend metrics targets take precedence. This key is never row identity.
+export const buildProxmoxGuestNativeId = ({
   instance,
   node,
   vmid,
-}: ProxmoxGuestMetadataIdentity): string | null => {
-  const normalizedInstance = normalizeProxmoxMetadataKeyPart(instance);
-  const normalizedNode = normalizeProxmoxMetadataKeyPart(node);
+}: ProxmoxGuestNativeIdentity): string | null => {
+  const normalizedInstance = normalizeProxmoxNativeKeyPart(instance);
+  const normalizedNode = normalizeProxmoxNativeKeyPart(node);
   const normalizedVmid = Number.isFinite(vmid) ? Number(vmid) : 0;
   if (!normalizedInstance || !normalizedNode || normalizedVmid <= 0) {
     return null;
@@ -274,7 +274,7 @@ export const getWorkloadMetadataIdForResource = (
 ): string => {
   const workloadType = resolveWorkloadTypeFromString(resource.type);
   if (workloadType === 'vm' || workloadType === 'system-container') {
-    const metadataId = buildProxmoxGuestMetadataId({
+    const metadataId = buildProxmoxGuestNativeId({
       instance: resource.proxmox?.instance || resource.clusterId,
       node: resource.proxmox?.node || resource.proxmox?.nodeName,
       vmid: resource.proxmox?.vmid,

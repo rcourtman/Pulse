@@ -35,7 +35,10 @@ const node = (id: string, instance: string, name: string, total: number, status 
     uptime: status === 'online' ? 100 : 0,
     memory: { total, used: 0, free: total, usage: 0 },
   }) as Node;
-const guests = [guest('lab-east', 'pve1'), guest('lab', 'east-pve1')];
+const guests = [
+  guest('lab-east', 'pve1', { id: 'vm-instance-a' }),
+  guest('lab', 'east-pve1', { id: 'vm-instance-b' }),
+];
 const nodes = [
   node('native-a', 'lab-east', 'pve1', 8192, 'offline'),
   node('native-b', 'lab', 'east-pve1', 32768),
@@ -61,8 +64,7 @@ describe('Workloads node attribution', () => {
         const scope = workloadNodeScopeId(original);
         expect(groups[scope]).toEqual([original]);
         expect(filtered(inventory, scope)).toEqual([original]);
-        expect(original.id).toBe('lab-east-pve1-101');
-        expect(getCanonicalWorkloadId(original)).toBe(`${original.instance}:${original.node}:101`);
+        expect(getCanonicalWorkloadId(original)).toBe(original.id);
       }
       expect(filtered(inventory, 'lab-east-pve1')).toEqual([]);
       expect(filtered([inventory[0]], 'lab-east-pve1')).toEqual([inventory[0]]);
@@ -73,20 +75,18 @@ describe('Workloads node attribution', () => {
     'assigns status and host memory to the exact tuple, not the first legacy alias',
     (...inventory) => {
       const parents = buildGuestParentNodeMapFromNodes(guests, inventory);
-      expect(parents['lab-east:pve1:101']).toBe(nodes[0]);
-      expect(parents['lab:east-pve1:101']).toBe(nodes[1]);
-      expect(parents['lab-east:pve1:101']?.status).toBe('offline');
-      expect(parents['lab:east-pve1:101']?.memory.total).toBe(32768);
+      expect(parents[guests[0].id]).toBe(nodes[0]);
+      expect(parents[guests[1].id]).toBe(nodes[1]);
+      expect(parents[guests[0].id]?.status).toBe('offline');
+      expect(parents[guests[1].id]?.memory.total).toBe(32768);
     },
   );
 
   it('does not let a contradictory inferred ID override the supplied parent fields', () => {
     const wrongPrefix = guest('lab', 'east-pve1', { id: 'native-a-101' });
-    expect(buildGuestParentNodeMapFromNodes([wrongPrefix], nodes)['lab:east-pve1:101']).toBe(
-      nodes[1],
-    );
+    expect(buildGuestParentNodeMapFromNodes([wrongPrefix], nodes)[wrongPrefix.id]).toBe(nodes[1]);
     const missing = guest('other', 'absent', { id: 'native-a-101' });
-    expect(buildGuestParentNodeMapFromNodes([missing], nodes)['other:absent:101']).toBeUndefined();
+    expect(buildGuestParentNodeMapFromNodes([missing], nodes)[missing.id]).toBeUndefined();
   });
 
   it('retains a unique consistent legacy-ID fallback for missing parent fields', () => {
@@ -107,11 +107,11 @@ describe('Workloads node attribution', () => {
     const map = buildNodeByInstance([...nodes, duplicate]);
     expect(map[workloadNodeScopeId(guests[0])]).toBeUndefined();
     expect(
-      buildGuestParentNodeMapFromNodes([guests[0]], [...nodes, duplicate])['lab-east:pve1:101'],
+      buildGuestParentNodeMapFromNodes([guests[0]], [...nodes, duplicate])[guests[0].id],
     ).toBeUndefined();
     const shared = nodes.map((n) => ({ ...n, id: 'same-native-id' }));
     expect(buildNodeByInstance(shared)['same-native-id']).toBeUndefined();
-    expect(buildGuestParentNodeMapFromNodes(guests, shared)['lab:east-pve1:101']).toBe(shared[1]);
+    expect(buildGuestParentNodeMapFromNodes(guests, shared)[guests[1].id]).toBe(shared[1]);
   });
 
   it('cannot assign a Proxmox node to an unrelated platform or container by matching labels', () => {

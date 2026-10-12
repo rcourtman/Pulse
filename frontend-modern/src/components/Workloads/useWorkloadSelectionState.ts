@@ -75,12 +75,14 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
 
   // Row focus is local: it never navigates, so it must not stage an app-shell
   // restore that the next unrelated route change would replay.
+  const applySelectedGuestId = (id: string | null) => {
+    if (id !== selectedGuestId()) selectedGuestDrawerState.reset();
+    setSelectedGuestIdRaw(id);
+  };
+
   const setSelectedGuestId = (id: string | null) => {
     referenceLookup?.abort();
-    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
-      if (id !== selectedGuestId()) selectedGuestDrawerState.reset();
-      setSelectedGuestIdRaw(id);
-    });
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => applySelectedGuestId(id));
   };
 
   const routeReference = createMemo(() => resolveWorkloadResourceSelection(location.search));
@@ -89,7 +91,10 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
       [() => location.pathname, routeReference, () => options.routeStateEnabled?.() ?? true],
       ([, reference, enabled]) => {
         if (!enabled) return;
-        setSelectedGuestId(reference);
+        referenceLookup?.abort();
+        // A route selects a destination. The shared focus bridge reveals it;
+        // retaining the previous scroll offset would undo that reveal.
+        applySelectedGuestId(reference);
         if (!reference) return;
 
         // Exact current IDs need no translation. Historical/source references
@@ -110,7 +115,7 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
               selectedGuestId() === reference &&
               resource.id?.trim()
             ) {
-              setSelectedGuestId(resource.id);
+              applySelectedGuestId(resource.id);
             }
           })
           .catch(() => {

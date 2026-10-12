@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildKubernetesWorkloadMetadataId,
-  buildProxmoxGuestMetadataId,
+  buildProxmoxGuestNativeId,
   canonicalizeWorkloadFilterType,
   getWorkloadCPUFraction,
   getWorkloadCPUPercent,
@@ -233,10 +233,10 @@ describe('getCanonicalWorkloadId', () => {
   });
 });
 
-describe('buildProxmoxGuestMetadataId', () => {
+describe('buildProxmoxGuestNativeId', () => {
   it('builds legacy metadata keys from instance, node, and vmid', () => {
     expect(
-      buildProxmoxGuestMetadataId({
+      buildProxmoxGuestNativeId({
         instance: 'Core Fabric',
         node: 'pve2',
         vmid: 112,
@@ -245,12 +245,10 @@ describe('buildProxmoxGuestMetadataId', () => {
   });
 
   it('returns null when any provider coordinate is missing', () => {
+    expect(buildProxmoxGuestNativeId({ instance: 'Core Fabric', node: '', vmid: 112 })).toBeNull();
+    expect(buildProxmoxGuestNativeId({ instance: '', node: 'pve2', vmid: 112 })).toBeNull();
     expect(
-      buildProxmoxGuestMetadataId({ instance: 'Core Fabric', node: '', vmid: 112 }),
-    ).toBeNull();
-    expect(buildProxmoxGuestMetadataId({ instance: '', node: 'pve2', vmid: 112 })).toBeNull();
-    expect(
-      buildProxmoxGuestMetadataId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
+      buildProxmoxGuestNativeId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
     ).toBeNull();
   });
 });

@@ -98,8 +98,8 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
         type: 'qemu',
       });
       expect(getWorkloadChartKeyCandidates(guest)).toEqual([
-        'cluster-a:pve:101',
         'cluster-a-pve-101',
+        'cluster-a:pve:101',
         'pve-101',
         'pve:pve:101',
       ]);

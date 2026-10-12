@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildProxmoxGuestMetadataId,
+  buildProxmoxGuestNativeId,
   buildKubernetesWorkloadMetadataId,
   getWorkloadMetadataIdForResource,
   getWorkloadMetadataId,
@@ -171,13 +171,11 @@ describe('getWorkloadMetadataId empty-candidates fallback', () => {
 });
 
 // Covers the non-finite vmid arm (`Number.isFinite(vmid) ? Number(vmid) : 0`)
-// in buildProxmoxGuestMetadataId. The happy-path specs only pass numeric
+// in buildProxmoxGuestNativeId. The happy-path specs only pass numeric
 // vmids, so the `: 0` coercion (which then short-circuits to null) is cold.
-describe('buildProxmoxGuestMetadataId non-finite vmid coercion', () => {
+describe('buildProxmoxGuestNativeId non-finite vmid coercion', () => {
   it('coerces a null vmid to 0 and returns null', () => {
-    expect(
-      buildProxmoxGuestMetadataId({ instance: 'homelab', node: 'pve1', vmid: null }),
-    ).toBeNull();
+    expect(buildProxmoxGuestNativeId({ instance: 'homelab', node: 'pve1', vmid: null })).toBeNull();
   });
 });
 

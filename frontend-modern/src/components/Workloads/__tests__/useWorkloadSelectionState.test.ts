@@ -163,6 +163,60 @@ describe('useWorkloadSelectionState', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
+  it('does not restore the old viewport when a route selects a known canonical resource', () => {
+    const [search, setSearch] = createSignal('?resource=vm-first');
+    readLocationSearch = search;
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      { id: 'vm-first' } as WorkloadGuest,
+      { id: 'vm-second' } as WorkloadGuest,
+    ]);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests }));
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800 });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    const writes: number[] = [];
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => 175,
+      set: (value) => writes.push(value),
+    });
+    const wrapper = document.createElement('div');
+    scroller.append(wrapper);
+    document.body.append(scroller);
+    result.setTableWrapperRef(wrapper);
+    setSearch('?resource=vm-second');
+    expect(result.selectedGuestId()).toBe('vm-second');
+    expect(ResourceAPI.getResource).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+  });
+
+  it('does not restore the old viewport when a legacy route resolves to its canonical resource', async () => {
+    let resolve!: (resource: Resource) => void;
+    vi.mocked(ResourceAPI.getResource).mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([{ id: 'vm-current' } as WorkloadGuest]);
+    const { result } = renderHook(() => useWorkloadSelectionState({ filteredGuests }));
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800 });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    const writes: number[] = [];
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => 175,
+      set: (value) => writes.push(value),
+    });
+    const wrapper = document.createElement('div');
+    scroller.append(wrapper);
+    document.body.append(scroller);
+    result.setTableWrapperRef(wrapper);
+    resolve({ id: 'vm-current' } as Resource);
+    await Promise.resolve();
+    expect(result.selectedGuestId()).toBe('vm-current');
+    expect(writes).toEqual([]);
+  });
   it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);

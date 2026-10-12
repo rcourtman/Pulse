@@ -5209,6 +5209,12 @@ registry's current/declared-succession/unique-alias boundary, with ambiguity
 refused. Provider coordinates remain explicit compatibility inputs for guest
 metadata, native collection and History targets. They must not be rebuilt into
 primary row identity or used to merge independent instance clones.
+History uses an explicit backend metrics target when present. Its legacy
+Proxmox fallback formats the current instance, node and VMID through the shared
+native guest formatter, independently of the canonical selection ID. A guest
+move changes that native target while retaining the selected canonical row.
+The workload target tests and current-source desktop, intermediate and phone
+browser matrix cover both supplied targets and missing-target fallback.
 Unified resources carry no recovery route-state vocabulary. The recovery
 query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
 `buildRecoveryRouteSearch`) was deleted from
