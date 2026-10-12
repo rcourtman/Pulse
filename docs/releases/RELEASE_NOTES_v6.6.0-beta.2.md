@@ -41,7 +41,7 @@ This beta follows `v6.6.0-beta.1` on the way to stable `v6.6.0`. The changes bel
 - **Availability checks** - Machines and Settings agree on availability-check state, and a failing check no longer leaves its node labelled online.
 - **Cluster agent setup** - An authorised, covered sibling can install cluster member agents in one step, with the covered connection identified in setup.
 - **Bootstrap authentication** - Non-Windows agents exchange a bootstrap token before starting monitoring modules, rather than beginning collection with an unenrolled credential.
-- **Removal recovery** - Linux agent removal retains credentials and recovery files when it cannot confirm service and activation shutdown. It does not automatically restart after a partial stop.
+- **Removal recovery** - On systemd, OpenRC and SysV installs, agent removal retains credentials and recovery files when it cannot confirm shutdown. It does not automatically restart after a partial stop.
 - **Unattended updates** - Unattended updates preserve the recovery backup after a failed or incomplete rollback and verify the running executable before declaring success.
 - **Token scope** - Token callers cannot widen or bypass their scopes. Token management and diagnostic token listings stay within the caller's authority.
 - **Uninstall authority** - Non-token agent uninstall requires an administrator. Credential rotation by token requires instance-wide authority.
