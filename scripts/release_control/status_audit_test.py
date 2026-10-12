@@ -23,7 +23,7 @@ from status_audit import (
 )
 
 
-REPO_READY_RULE = "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+REPO_READY_RULE = "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed"
 RC_READY_RULE = (
     "repo_ready plus all rc-ready assertions passed plus zero rc-ready open_decisions plus all rc-ready release_gates passed"
 )
@@ -88,7 +88,6 @@ def coverage_gap(
     lane_ids: list[str] | None = None,
     subsystem_ids: list[str] | None = None,
     proposed_resolution: str = "new-lane",
-    coverage_impact: int = 5,
     evidence_path: str = "docs/coverage-gap.md",
     status: str = "triaged",
 ) -> dict[str, object]:
@@ -101,7 +100,6 @@ def coverage_gap(
         "lane_ids": list(lane_ids or ["L1"]),
         "subsystem_ids": list(subsystem_ids or []),
         "proposed_resolution": proposed_resolution,
-        "coverage_impact": coverage_impact,
         "evidence": [{"repo": "pulse", "path": evidence_path, "kind": "file"}],
     }
 
@@ -230,7 +228,6 @@ def non_completed_target_id(*preferred_ids: str) -> str:
 def base_payload(
     *,
     lane_status: str = "target-met",
-    current_score: int = 8,
     completion_state: str | None = None,
     completion_summary: str | None = None,
     completion_tracking: list[dict[str, str]] | None = None,
@@ -288,20 +285,6 @@ def base_payload(
             "docs/release-control/v6/internal/subsystems/registry.json",
             "docs/release-control/v6/internal/subsystems/registry.schema.json",
         ],
-        "priority_engine": {
-            "formula": "gap-first",
-            "floor_rule": {
-                "release_critical_lanes": ["L1"],
-                "minimum_score": 6,
-            },
-            "weights": {
-                "gap_multiplier": 4,
-                "blocker_bonus": 8,
-                "criticality_range": "0-5",
-                "staleness_range": "0-3",
-                "dependency_range": "0-3",
-            },
-        },
         "evidence_reference_policy": {
             "format": "repo-qualified-relative-paths",
             "allowed_kinds": ["dir", "file"],
@@ -312,8 +295,6 @@ def base_payload(
             {
                 "id": "L1",
                 "name": "Lane 1",
-                "target_score": 8,
-                "current_score": current_score,
                 "status": lane_status,
                 "completion": {
                     "state": resolved_completion_state,
@@ -573,7 +554,7 @@ class StatusAuditTest(unittest.TestCase):
                 {"assertions": [], "open_decisions": [], "release_gates": []},
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
-            self.assertEqual(report["lanes"][0]["derived_status"], "target-met")
+            self.assertEqual(report["lanes"][0]["status"], "target-met")
             self.assertEqual(report["lanes"][0]["completion_state"], "complete")
             self.assertEqual(report["readiness_assertions"][0]["proof_command_count"], 1)
 
@@ -1176,7 +1157,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("target_blocking_levels=repo-ready,rc-ready,release-ready", pretty)
             self.assertNotIn("active target proof scope could not be derived", pretty)
 
-    def test_coverage_gap_deduces_coverage_score_and_appears_in_pretty_output(self) -> None:
+    def test_coverage_gap_exposes_scope_without_grading_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1185,7 +1166,7 @@ class StatusAuditTest(unittest.TestCase):
             write_file(pulse, "docs/hybrid_test.go")
             write_file(pulse, "docs/coverage-gap.md")
 
-            payload = base_payload(coverage_gaps=[coverage_gap(coverage_impact=7)])
+            payload = base_payload(coverage_gaps=[coverage_gap()])
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
@@ -1195,23 +1176,14 @@ class StatusAuditTest(unittest.TestCase):
 
             self.assertEqual(report["errors"], [])
             self.assertEqual(report["summary"]["coverage_gap_count"], 1)
-            self.assertEqual(report["summary"]["coverage_gap_total_impact"], 7)
             self.assertEqual(report["summary"]["candidate_lane_count"], 0)
             self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 1)
-            self.assertEqual(report["summary"]["lane_coverage_score"], 93)
-            self.assertEqual(report["summary"]["coverage_planning_score"], 93)
-            self.assertEqual(report["summary"]["lane_completion_score"], 100)
-            self.assertEqual(report["summary"]["governed_surface_score"], 93)
             pretty = render_pretty(report)
             self.assertIn("coverage_gaps=1", pretty)
             self.assertIn("candidate_lanes=0", pretty)
             self.assertIn("unplanned_coverage_gaps=1", pretty)
-            self.assertIn("coverage_score=93", pretty)
-            self.assertIn("planning_score=93", pretty)
-            self.assertIn("completion_score=100", pretty)
-            self.assertIn("governed_surface_score=93", pretty)
             self.assertIn("coverage_gaps:", pretty)
-            self.assertIn("resolution=new-lane impact=7", pretty)
+            self.assertIn("resolution=new-lane", pretty)
 
     def test_candidate_lane_maps_coverage_gap_and_appears_in_pretty_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1251,11 +1223,9 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["summary"]["candidate_lane_count"], 1)
             self.assertEqual(report["summary"]["planned_coverage_gap_count"], 1)
             self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 0)
-            self.assertEqual(report["summary"]["coverage_planning_score"], 100)
             pretty = render_pretty(report)
             self.assertIn("candidate_lanes=1", pretty)
             self.assertIn("unplanned_coverage_gaps=0", pretty)
-            self.assertIn("planning_score=100", pretty)
             self.assertIn("candidate_lanes:", pretty)
             self.assertIn(
                 "target=v6-product-lane-expansion repos=pulse current_lanes=L1 coverage_gaps=core-monitoring-product-lane",
@@ -1266,13 +1236,13 @@ class StatusAuditTest(unittest.TestCase):
                 "demand_evidence=named-bet: promote the discovered surface into a governed lane",
                 pretty,
             )
-            self.assertIn("candidate_lane_queue:", pretty)
+            self.assertIn("candidate_lane_options:", pretty)
             self.assertIn(
-                "rank=1 candidate=core-monitoring-runtime impact=5 target=v6-product-lane-expansion",
+                "candidate=core-monitoring-runtime target=v6-product-lane-expansion",
                 pretty,
             )
 
-    def test_mixed_planned_and_unplanned_coverage_gaps_split_coverage_and_planning_scores(self) -> None:
+    def test_mixed_planned_and_unplanned_coverage_gaps_keep_distinct_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1286,13 +1256,11 @@ class StatusAuditTest(unittest.TestCase):
                 coverage_gaps=[
                     coverage_gap(
                         gap_id="planned-gap",
-                        coverage_impact=7,
                         evidence_path="docs/planned-gap.md",
                         status="planned",
                     ),
                     coverage_gap(
                         gap_id="unplanned-gap",
-                        coverage_impact=5,
                         evidence_path="docs/unplanned-gap.md",
                     ),
                 ],
@@ -1317,21 +1285,12 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["summary"]["candidate_lane_count"], 1)
             self.assertEqual(report["summary"]["planned_coverage_gap_count"], 1)
             self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 1)
-            self.assertEqual(report["summary"]["coverage_gap_total_impact"], 12)
-            self.assertEqual(report["summary"]["planned_coverage_gap_total_impact"], 7)
-            self.assertEqual(report["summary"]["unplanned_coverage_gap_total_impact"], 5)
-            self.assertEqual(report["summary"]["lane_coverage_score"], 88)
-            self.assertEqual(report["summary"]["coverage_planning_score"], 95)
-            self.assertEqual(report["summary"]["governed_surface_score"], 88)
             pretty = render_pretty(report)
             self.assertIn("coverage_gaps=2", pretty)
             self.assertIn("candidate_lanes=1", pretty)
             self.assertIn("unplanned_coverage_gaps=1", pretty)
-            self.assertIn("coverage_score=88", pretty)
-            self.assertIn("planning_score=95", pretty)
-            self.assertIn("governed_surface_score=88", pretty)
 
-    def test_candidate_lane_queue_orders_by_coverage_impact(self) -> None:
+    def test_candidate_lane_options_use_stable_identifier_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1343,8 +1302,8 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 coverage_gaps=[
-                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned"),
-                    coverage_gap(gap_id="gap-b", coverage_impact=9, evidence_path="docs/gap-b.md", status="planned"),
+                    coverage_gap(gap_id="gap-a", evidence_path="docs/gap-a.md", status="planned"),
+                    coverage_gap(gap_id="gap-b", evidence_path="docs/gap-b.md", status="planned"),
                 ],
                 candidate_lanes=[
                     candidate_lane(
@@ -1368,17 +1327,14 @@ class StatusAuditTest(unittest.TestCase):
 
             self.assertEqual(report["errors"], [])
             self.assertEqual(
-                [item["candidate_lane_id"] for item in report["candidate_lane_queue"]],
-                ["candidate-b", "candidate-a"],
+                [item["candidate_lane_id"] for item in report["candidate_lane_options"]],
+                ["candidate-a", "candidate-b"],
             )
-            self.assertEqual(
-                [item["coverage_impact_total"] for item in report["candidate_lane_queue"]],
-                [9, 4],
-            )
+            self.assertTrue(all("rank" not in item and "coverage_impact_total" not in item for item in report["candidate_lane_options"]))
             pretty = render_pretty(report)
-            self.assertIn("candidate_lane_queue:", pretty)
-            self.assertIn("rank=1 candidate=candidate-b impact=9", pretty)
-            self.assertIn("rank=2 candidate=candidate-a impact=4", pretty)
+            self.assertIn("candidate_lane_options:", pretty)
+            self.assertIn("candidate=candidate-b", pretty)
+            self.assertIn("candidate=candidate-a", pretty)
 
     def test_active_work_claim_marks_candidate_lane_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1392,8 +1348,8 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 coverage_gaps=[
-                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned"),
-                    coverage_gap(gap_id="gap-b", coverage_impact=9, evidence_path="docs/gap-b.md", status="planned"),
+                    coverage_gap(gap_id="gap-a", evidence_path="docs/gap-a.md", status="planned"),
+                    coverage_gap(gap_id="gap-b", evidence_path="docs/gap-b.md", status="planned"),
                 ],
                 candidate_lanes=[
                     candidate_lane(
@@ -1431,11 +1387,11 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["summary"]["active_work_claim_count"], 1)
             self.assertEqual(report["summary"]["available_candidate_lane_count"], 1)
             self.assertEqual(
-                [item["candidate_lane_id"] for item in report["available_candidate_lane_queue"]],
+                [item["candidate_lane_id"] for item in report["available_candidate_lane_options"]],
                 ["candidate-a"],
             )
             claimed_candidate = next(
-                item for item in report["candidate_lane_queue"] if item["candidate_lane_id"] == "candidate-b"
+                item for item in report["candidate_lane_options"] if item["candidate_lane_id"] == "candidate-b"
             )
             self.assertFalse(claimed_candidate["available"])
             self.assertEqual(claimed_candidate["claim_ids"], ["claim-candidate-b"])
@@ -1444,10 +1400,10 @@ class StatusAuditTest(unittest.TestCase):
             self.assertIn("active_work_claims=1", pretty)
             self.assertIn("available_candidate_lanes=1", pretty)
             self.assertIn("work_claims:", pretty)
-            self.assertIn("available_candidate_lane_queue:", pretty)
+            self.assertIn("available_candidate_lane_options:", pretty)
             self.assertIn("claims=claim-candidate-b agents=agent-2", pretty)
 
-    def test_expired_work_claim_does_not_block_candidate_lane_queue(self) -> None:
+    def test_expired_work_claim_does_not_block_candidate_lane_options(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1458,7 +1414,7 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 coverage_gaps=[
-                    coverage_gap(gap_id="gap-a", coverage_impact=4, evidence_path="docs/gap-a.md", status="planned")
+                    coverage_gap(gap_id="gap-a", evidence_path="docs/gap-a.md", status="planned")
                 ],
                 candidate_lanes=[
                     candidate_lane(
@@ -1714,7 +1670,6 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["summary"]["candidate_lane_count"], 0)
             self.assertEqual(report["summary"]["planned_coverage_gap_count"], 0)
             self.assertEqual(report["summary"]["unplanned_coverage_gap_count"], 2)
-            self.assertEqual(report["summary"]["coverage_planning_score"], 90)
 
     def test_candidate_lane_requires_linked_coverage_gap_to_be_planned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1791,7 +1746,7 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
-    def test_coverage_gap_validates_resolution_and_impact(self) -> None:
+    def test_coverage_gap_validates_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1804,7 +1759,6 @@ class StatusAuditTest(unittest.TestCase):
                 coverage_gaps=[
                     coverage_gap(
                         proposed_resolution="invented",
-                        coverage_impact=0,
                     )
                 ]
             )
@@ -1817,10 +1771,6 @@ class StatusAuditTest(unittest.TestCase):
 
             self.assertIn(
                 "coverage_gaps[0] has invalid proposed_resolution 'invented'",
-                report["errors"],
-            )
-            self.assertIn(
-                "coverage_gaps[0].coverage_impact must stay within 1-100",
                 report["errors"],
             )
 
@@ -1920,7 +1870,7 @@ class StatusAuditTest(unittest.TestCase):
             self.assertEqual(report["open_decisions"][0]["repo_ids"], ["pulse", "pulse-pro"])
             self.assertEqual(report["release_gates"][0]["repo_ids"], ["pulse", "pulse-pro"])
 
-    def test_partial_lane_at_target_requires_bounded_residual_completion(self) -> None:
+    def test_open_partial_lane_keeps_repo_unqualified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -1935,15 +1885,14 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=8,
                         completion_state="open",
                     )
                 )
 
-            self.assertIn(
-                "lanes[0] partial lanes that already meet target_score must use completion.state='bounded-residual'",
-                report["errors"],
-            )
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["lanes"][0]["completion_state"], "open")
+            self.assertFalse(report["summary"]["repo_ready"])
+            self.assertNotIn("lane_completion_score", report["summary"])
 
     def test_bounded_residual_lane_requires_known_tracking_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1960,7 +1909,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=8,
                         completion_state="bounded-residual",
                         completion_tracking=[{"kind": "target", "id": "missing-target"}],
                     )
@@ -1986,7 +1934,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=6,
                         completion_state="open",
                         completion_tracking=[{"kind": "release-gate", "id": "g1"}],
                     )
@@ -2012,7 +1959,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="target-met",
-                        current_score=6,
                         completion_state="open",
                     )
                 )
@@ -2022,7 +1968,7 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
-    def test_not_started_lane_must_keep_zero_score(self) -> None:
+    def test_not_started_lane_keeps_repo_unqualified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -2037,17 +1983,15 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="not-started",
-                        current_score=1,
                         completion_state="open",
                     )
                 )
 
-            self.assertIn(
-                "lanes[0] not-started lanes must keep current_score at 0",
-                report["errors"],
-            )
+            self.assertEqual(report["errors"], [])
+            self.assertFalse(report["summary"]["repo_ready"])
+            self.assertEqual(report["summary"]["lanes_open"], 1)
 
-    def test_partial_lane_must_keep_non_zero_score(self) -> None:
+    def test_partial_lane_does_not_get_derived_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -2062,15 +2006,14 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=0,
                         completion_state="open",
                     )
                 )
 
-            self.assertIn(
-                "lanes[0] partial lanes must keep current_score above 0",
-                report["errors"],
-            )
+            self.assertEqual(report["errors"], [])
+            self.assertEqual(report["lanes"][0]["status"], "partial")
+            self.assertEqual(report["lanes"][0]["completion_state"], "open")
+            self.assertNotIn("derived_status", report["lanes"][0])
 
     def test_not_started_lane_must_use_open_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2087,7 +2030,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="not-started",
-                        current_score=0,
                         completion_state="complete",
                     )
                 )
@@ -2112,7 +2054,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="blocked",
-                        current_score=4,
                         completion_state="bounded-residual",
                         blockers=[{"kind": "release-gate", "id": "g1"}],
                     )
@@ -2123,7 +2064,7 @@ class StatusAuditTest(unittest.TestCase):
                 report["errors"],
             )
 
-    def test_blocked_lane_must_stay_below_target(self) -> None:
+    def test_blocked_lane_keeps_repo_unqualified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse = Path(tmp) / "pulse"
             pulse.mkdir()
@@ -2138,16 +2079,16 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="blocked",
-                        current_score=8,
                         completion_state="open",
                         blockers=[{"kind": "release-gate", "id": "g1"}],
+                        release_gate_status="pending",
                     )
                 )
 
-            self.assertIn(
-                "lanes[0] blocked lanes must stay below target_score",
-                report["errors"],
-            )
+            self.assertEqual(report["errors"], [])
+            self.assertFalse(report["summary"]["repo_ready"])
+            self.assertEqual(len(report["readiness"]["blocked_lanes"]), 1)
+            self.assertEqual(report["lanes"][0]["completion_state"], "open")
 
     def test_blocked_lane_must_declare_blocker_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2164,7 +2105,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="blocked",
-                        current_score=4,
                         completion_state="open",
                     )
                 )
@@ -2189,7 +2129,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=4,
                         completion_state="open",
                         blockers=[{"kind": "release-gate", "id": "g1"}],
                     )
@@ -2215,7 +2154,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="blocked",
-                        current_score=4,
                         completion_state="open",
                         blockers=[{"kind": "release-gate", "id": "g1"}],
                         release_gate_status="passed",
@@ -2237,7 +2175,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="blocked",
-                current_score=4,
                 completion_state="open",
                 blockers=[{"kind": "release-gate", "id": "g1"}],
                 release_gate_status="pending",
@@ -2246,8 +2183,6 @@ class StatusAuditTest(unittest.TestCase):
                 {
                     "id": "L2",
                     "name": "Lane 2",
-                    "target_score": 8,
-                    "current_score": 4,
                     "status": "blocked",
                     "completion": {
                         "state": "open",
@@ -2263,7 +2198,6 @@ class StatusAuditTest(unittest.TestCase):
             payload["release_gates"][0]["status"] = "pending"
             payload["release_gates"][1]["lane_ids"] = ["L2"]
             payload["release_gates"][1]["status"] = "passed"
-            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
@@ -2291,7 +2225,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="blocked",
-                        current_score=8,
                         completion_state="bounded-residual",
                         completion_tracking=[{"kind": "release-gate", "id": "g1"}],
                     )
@@ -2317,7 +2250,6 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(
                     base_payload(
                         lane_status="partial",
-                        current_score=8,
                         completion_state="complete",
                     )
                 )
@@ -2337,7 +2269,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "release-gate", "id": "g1"}],
             )
@@ -2345,8 +2276,6 @@ class StatusAuditTest(unittest.TestCase):
                 {
                     "id": "L2",
                     "name": "Lane 2",
-                    "target_score": 8,
-                    "current_score": 8,
                     "status": "partial",
                     "completion": {
                         "state": "bounded-residual",
@@ -2359,7 +2288,6 @@ class StatusAuditTest(unittest.TestCase):
             )
             payload["release_gates"][0]["lane_ids"] = ["L2"]
             payload["release_gates"][1]["lane_ids"] = ["L2"]
-            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
@@ -2382,7 +2310,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "open-decision", "id": "d1"}],
                 open_decisions=[
@@ -2402,8 +2329,6 @@ class StatusAuditTest(unittest.TestCase):
                 {
                     "id": "L2",
                     "name": "Lane 2",
-                    "target_score": 8,
-                    "current_score": 4,
                     "status": "partial",
                     "completion": {
                         "state": "open",
@@ -2414,7 +2339,6 @@ class StatusAuditTest(unittest.TestCase):
                     "evidence": [{"repo": "pulse", "path": "docs/lane-proof.md", "kind": "file"}],
                 }
             )
-            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
@@ -2437,7 +2361,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "readiness-assertion", "id": "RA2"}],
                 readiness_assertions=[
@@ -2450,8 +2373,6 @@ class StatusAuditTest(unittest.TestCase):
                 {
                     "id": "L2",
                     "name": "Lane 2",
-                    "target_score": 8,
-                    "current_score": 8,
                     "status": "partial",
                     "completion": {
                         "state": "bounded-residual",
@@ -2464,7 +2385,6 @@ class StatusAuditTest(unittest.TestCase):
             )
             payload["release_gates"][0]["lane_ids"] = ["L2"]
             payload["release_gates"][1]["lane_ids"] = ["L2"]
-            payload["priority_engine"]["floor_rule"]["release_critical_lanes"] = ["L1", "L2"]
 
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
@@ -2487,7 +2407,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "release-gate", "id": "g1"}],
                 release_gate_status="passed",
@@ -2514,7 +2433,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_summary="Lane still has a named non-blocking same-lane follow-up.",
                 completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
@@ -2538,6 +2456,11 @@ class StatusAuditTest(unittest.TestCase):
                 report = audit_status_payload(payload)
 
             self.assertEqual(report["errors"], [])
+            self.assertEqual(report["summary"]["lanes_complete"], 0)
+            self.assertEqual(report["summary"]["lanes_bounded_residual"], 1)
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(any("score" in key for key in report["summary"]))
+            self.assertNotIn("completion_score=", render_pretty(report))
             self.assertEqual(
                 report["readiness"]["lane_residuals"][0]["tracking"],
                 ["lane-followup:mobile-post-rc-hardening[planned]"],
@@ -2553,7 +2476,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "lane-followup", "id": "mobile-post-rc-hardening"}],
                 lane_followups=[
@@ -2594,7 +2516,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_tracking=[{"kind": "release-gate", "id": "g1"}],
                 lane_followups=[
@@ -2631,7 +2552,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_summary="Lane still has a governed residual.",
                 completion_tracking=[{"kind": "lane-followup", "id": "lane-1-followup"}],
@@ -2693,7 +2613,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="blocked",
-                current_score=4,
                 completion_state="open",
                 completion_summary="Lane is blocked on the hosted-tier verification gate.",
                 blockers=[{"kind": "release-gate", "id": "g1"}],
@@ -2745,7 +2664,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_summary="Lane is at floor but only broader GA work is currently tracked.",
                 completion_tracking=[{"kind": "target", "id": "v6-rc-stabilization"}],
@@ -2772,7 +2690,6 @@ class StatusAuditTest(unittest.TestCase):
 
             payload = base_payload(
                 lane_status="partial",
-                current_score=8,
                 completion_state="bounded-residual",
                 completion_summary="Lane is at floor and has both a concrete gate and a leftover broad target fallback.",
                 completion_tracking=[

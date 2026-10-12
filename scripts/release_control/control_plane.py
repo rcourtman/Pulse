@@ -378,9 +378,9 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
         ]
     )
     if active_target_id == "v6-product-lane-expansion":
-        default_pick_surface = "available_candidate_lane_queue"
+        default_pick_surface = "available_candidate_lane_options"
         selection_rule = (
-            "Pick from available candidate lanes and linked coverage gaps before local prerelease cleanup unless the user overrides the priority or a release-blocking surface needs immediate containment."
+            "Use current user direction and the evidence for available candidate lanes and linked coverage gaps to choose work. Options are listed by stable identifier, with ownership availability, and carry no priority ranking."
         )
     else:
         default_pick_surface = "lanes"

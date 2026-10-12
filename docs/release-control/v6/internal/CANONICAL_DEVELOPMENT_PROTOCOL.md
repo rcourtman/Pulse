@@ -108,10 +108,10 @@ completion records, the active readiness assertion catalog, readiness
 derivation rules, executable proof commands, structured evidence references,
 typed lane/subsystem decision records, active work claims, and the canonical machine-readable
 workspace repo catalog.
-Lane scores reaching target in `status.json` mean the tracked architecture and
-governance work for those lanes is at target; they are not, by themselves,
-approval to cut an RC or promote stable/GA if phase-blocking readiness
-assertions, `open_decisions`, or `release_gates` still remain.
+Lane `completion.state`, its evidence and typed residuals describe the tracked
+work. A `bounded-residual` lane remains distinct from `complete`. Neither state
+approves an RC or stable/GA promotion while phase-blocking readiness assertions,
+`open_decisions`, or `release_gates` remain.
 When the agent starts from a sibling repo or the shared workspace root, these
 same files are still authoritative; resolve them from `pulse/docs/release-control/v6/`
 rather than recreating release control in the current repo.
@@ -419,7 +419,7 @@ Every substantial task must finish by checking these questions:
     state, or scope boundary, keep it internal and continue the work.
 9. Did I learn that the current lane map is hiding a durable product surface?
    If yes: record a `coverage_gaps` entry with evidence, an explicit coverage
-   impact deduction, and the intended promotion path instead of burying the
+   scope evidence, and the intended promotion path instead of burying the
    discovery inside generic residual text.
    When the intended destination is already clear, also add or update the
    matching `candidate_lanes` record so the lane-expansion plan is typed,
@@ -453,10 +453,8 @@ Every substantial task must finish by checking these questions:
     If the lane state is being advanced in `status.json`, the same slice
     should normally also change an owned runtime or product surface for that
     lane unless the remaining lane gap is explicitly governance-only.
-10aa. Am I treating score or evidence deltas as the task instead of as
-    diagnostics?
-    Missing evidence items, current-vs-target score, and proof counts are
-    signals that help locate the real same-lane gap.
+10aa. Am I treating evidence counts as the task instead of checking the
+    actual remaining behavior and its proof?
 10ab. Have I checked real browser truth for a customer-facing surface?
     For customer-facing UI, code-level proof is not enough. Complete the
     Frontend Browser Verification Gate against the current build, exercise the
@@ -495,9 +493,8 @@ Every substantial task must finish by checking these questions:
     Pair lane `status` and `completion.state` coherently: `complete` goes with
     `target-met`, `bounded-residual` goes with `partial`, and `open` must not
     be paired with `target-met`.
-    `partial` means measurable progress, so it must not sit at zero score.
-    `not-started` means zero score and `open`. `blocked` remains an `open`
-    lane below target rather than a residual or complete state.
+    `not-started` and `blocked` remain `open`, rather than residual or complete
+    states. `partial` describes evidenced work that is still incomplete.
     Blocked lanes must declare typed same-lane blocker references to unresolved
     readiness assertions, release gates, or open decisions.
     `completion.tracking` is only for bounded residuals; if the lane is still
@@ -528,8 +525,8 @@ residual work, the same slice must record that residual in
 `status.json.lanes[*].completion` with a short rationale and explicit tracking
 references to the governing lane followup, readiness assertion, release gate,
 or open decision that owns the follow-up.
-When feature work fits an existing lane, reopen that lane's completion state or
-score instead of pretending the map is still complete.
+When feature work fits an existing lane, reopen that lane's completion state
+instead of pretending the map is still complete.
 Existing lanes are not grandfathered out of the modernization rules.
 If a previously touched lane still relies on a non-canonical v6 path, lower
 its claimed completeness and continue from the canonical model rather than
@@ -569,22 +566,13 @@ residual in `status.json.lanes[*].completion`, `status.json.lane_followups`,
 `status.json.coverage_gaps`, or another owning governed surface before you replace or release the claim.
 Treat a broad lane claim as blocking narrower same-lane blocker or follow-up
 claims until that broad claim is released or expires.
-Treat lane completion, lane coverage, and coverage planning as separate
-derived signals.
-`status_audit.py --pretty` may derive a lane-completion score from
-`current_score/target_score`, a lane-coverage score from unresolved
-`coverage_gaps`, a coverage-planning score from unresolved `coverage_gaps`
-that still lack explicit `candidate_lanes`, and a conservative
-governed-surface score as the lower of completion and coverage.
-Treat those scores and any missing evidence counts as diagnostic summaries,
-not as the task itself.
-Use them to choose the real remaining gap on the owned surface rather than
-optimizing directly for score movement or evidence-count closure unless the
-remaining work is explicitly governance-only.
-When lane-expansion work is the intended target, that same audit output may
-also derive a ranked `candidate_lane_queue` so agents can take the highest
-impact valid candidate lane first.
-That same audit output may also derive `available_candidate_lane_queue`,
+Keep declared completion, unresolved coverage gaps and proposed work distinct.
+`status_audit.py --pretty` exposes these records and their evidence without
+grading completion or assigning priority from proxy counts. Choose work from
+current user direction and the actual product, runtime and ownership evidence.
+For lane expansion, `candidate_lane_options` lists scope and demand evidence in
+stable identifier order. This order does not recommend one option over another.
+The audit also derives `available_candidate_lane_options`,
 active-versus-expired `work_claims`, and claim-conflict records so agents have
 an executable "do not overlap" surface instead of only prose.
 Those claim surfaces reduce logical overlap.

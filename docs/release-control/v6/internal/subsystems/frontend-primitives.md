@@ -362,7 +362,7 @@ page, API, alert policy or operator permission is introduced.
 
 The existing workload drawer distinguishes assigned Pulse Agent action ownership,
 observed agent version metadata and Proxmox-reported guest-read state. Neither a
-version string nor a parent-node Discovery target may be called **connected**.
+version string nor a parent-node execution target may be called **connected**.
 Reported available, deferred, expected-unreachable, not-running, disabled and
 unknown states remain visible even before a version or filesystem sample exists.
 A current operation lock/backup takes precedence over a cached available flag.
@@ -377,7 +377,8 @@ requires independent thaw and writes to covered filesystems. Running power
 state, an OK backup or reported agent availability establishes none of those.
 Fresh same-guest evidence withdraws the precaution without a new diagnostic or
 collector request. Existing filesystem provenance, metric values, History,
-Discovery/action permissions and monitoring policy are unchanged. Memory qualification uses its own authoritative observation; disk-read state
+action permissions and monitoring policy are unchanged. Memory qualification
+uses its own authoritative observation; disk-read state
 cannot qualify a different metric or renew its observation time.
 
 Verification: `GuestDrawerOverview.agent-state.test.tsx` covers each current state
@@ -1647,7 +1648,7 @@ The Backups surface passes its complete deduplicated route inventory to the PBS 
 
 One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no stored host series and renders the no-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
-A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Discovery and Metrics Target rows and its History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
+A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's linked host and History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
 
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
 merged guest targets, missing disks, duplicate guest/host representations of one
@@ -2602,7 +2603,7 @@ not a replacement status card, CTA band, or page-local nested card.
    This contract also covers secondary drawer facts in availability status and
    suggestion cards, resource change-history entries, Docker/PBS/PMG service
    support panels, Docker container-update management cards, action history,
-   Discovery summaries, and the specialized Proxmox Mail Gateway drawer.
+   and the specialized Proxmox Mail Gateway drawer.
    Headers, status summaries, actions, disk capacity summaries, and RAID state
    pairs may retain intentional endpoint alignment; ordinary label/value facts
    in those surfaces may not.
@@ -4399,13 +4400,8 @@ production table, router and styles; it does not qualify full-app scrolling.
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
-40. Keep AI Discovery retired. The model-backed service-identification layer
-    (Discovery tab, identified-service cards, readiness badges, provenance
-    markers, suggested web-interface URLs, and the AI Service Context settings
-    page) was removed on 2026-10-11. Do not reintroduce drawer, row, or
-    Assistant-briefing surfaces for AI-identified services without a new
-    evidence-backed `FEATURE_REQUESTS.md` entry; persisted/manual web-interface
-    metadata is the only row-link source.
+40. Follow the AI runtime contract for retired AI Discovery behavior.
+    Persisted/manual web-interface metadata remains the only row-link source.
 41. Keep settings sidebar search able to find pages by the vocabulary users
     actually type, not only by rendered copy. `SettingsNavItem.keywords` in
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts` is the
@@ -4598,28 +4594,11 @@ their per-suite fixture reuses only identical source/path renders, returns
 isolated clones and invalidates changed input. No renderer, guide bytes,
 assertions or test deadlines are weakened.
 
-### AI Discovery removed (2026-10-11)
+### Retired frontend ownership
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-`DiscoveryLoadingFallback`, `DiscoveryReadinessBadge`, `DiscoveryProvenanceMarker` and the now-orphaned `CopyableCodeRow` were deleted with their registry rules; the drawer spinner guard now names `LoadingSpinner` as its canonical owner.
+AI Discovery retirement and its compatibility boundaries are owned by
+`ai-runtime.md`. Deleted Discovery primitives have no current UI obligations.
+`LoadingSpinner` owns the remaining drawer loading boundary.
 
 ### Manual update freshness
 
@@ -4717,10 +4696,6 @@ by the shared-template registry rather than page-local discretion.
 Update progress status indicators are included in that loading boundary:
 progress-stage loading must compose `LoadingSpinner` rather than local spinner
 SVGs.
-`DiscoveryLoadingFallback` owns the discovery-tab Suspense fallback row for
-resource, workload, and Docker host drawers: centered row layout, status
-semantics, discovery loading copy, and canonical `LoadingSpinner` composition
-live there rather than in drawer-local fallback markup.
 `FilterButtonGroup` owns feature table view toggles as well as settings
 segmented selectors: page-specific labels and selected values stay in the
 owning feature model, but the visible segmented selector shell must come from
@@ -4886,11 +4861,6 @@ Patrol status payload. That text is page-owned operational metadata inside the
 existing header row, not a new shared primitive, nested status card, or
 secondary verdict band.
 
-`frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
-command guidance targets. Discovery surfaces that need to tell operators where
-to enable command execution or verify `agent:exec` scope must use that helper's
-canonical `Settings → Infrastructure` and `Settings → API Access` handoffs
-instead of hard-coding legacy settings labels or old route paths.
 Shared frontend empty states, thresholds empty states, and discovery guidance
 that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
@@ -5487,13 +5457,6 @@ automatic-action policy, saved access configuration, and action audit belong
 to a dedicated `Manage` tab and must not render inside Overview. Guest, node,
 Docker-host, and unified-resource drawers must compose these shared primitives
 instead of defining provider-local attention or technical disclosure shells.
-The same drawer family must consume the canonical
-`useDiscoveryFeatureAvailability` boundary before exposing Discovery chrome or
-content. Until the shared AI runtime settings explicitly report Discovery as
-enabled, drawers render no Discovery tab, readiness state, explanatory copy,
-analysis reveal, or identified-service suggestion and issue no passive
-discovery-record read. Provider-specific drawer shells must not reinterpret a
-technical discovery target as operator consent to enable the feature.
 Drawer headers reserve their limited space for the subject and the canonical
 full-row collapse control, plus a direct object-specific lifecycle action only
 where the object contract requires one. `ObjectDrawerHeader` owns that
@@ -5787,10 +5750,9 @@ Actions audit; the audit remains the authority before any later retry.
 The shared web interface URL field now follows that same owner split.
 `frontend-modern/src/components/shared/WebInterfaceUrlField.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useWebInterfaceUrlFieldState.ts`
-owns metadata fetch/save/remove lifecycle, success/error state, and suggested
-URL runtime, and `frontend-modern/src/components/shared/webInterfaceUrlFieldModel.ts`
-owns URL validation, target-label normalization, and suggested-URL presentation
-rules. The shared primitive now also supports an embedded mode with a caller-
+owns metadata fetch/save/remove lifecycle and success/error state.
+`frontend-modern/src/components/shared/webInterfaceUrlFieldModel.ts` owns URL
+validation and target-label normalization. The shared primitive now also supports an embedded mode with a caller-
 owned title so feature drawers can place web-interface controls inside a larger
 access surface without forking the save/remove/runtime behavior. Future
 web-interface URL work should extend those owners instead of pushing metadata
@@ -5800,12 +5762,8 @@ transport or validation back into the shared shell.
 metadata write gate: browser sessions always pass, while API-token sessions
 such as kiosk links need `monitoring:write` or the wildcard scope. Read-only
 sessions keep the saved URL with its open and copy controls and a one-line
-explanation, but get no input, Save, Remove, or suggested-URL adoption that the
+explanation, but get no input, Save, or Remove controls that the
 server would refuse.
-Missing-suggested-URL diagnostics remain useful only when the operator has no
-saved or entered URL; once a custom web-interface URL is present, the shared
-field must suppress "no suggested URL" warnings so Discovery does not make a
-valid manual endpoint look broken.
 Saved web-interface launch affordances must also stay on a shared primitive
 instead of page-local table columns or one-off external-link anchors.
 `frontend-modern/src/components/shared/WebInterfaceLink.tsx` owns URL
@@ -7681,7 +7639,7 @@ maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
 save/test actions route through `AISettingsStatusAndActions.tsx`.
 `AISettingsStatusAndActions.tsx` may expose provider connection status and
 test actions only for the Provider & Models page; section pages reuse the save
-bar without making Patrol, Assistant, or Discovery look like provider setup
+bar without making Patrol or Assistant look like provider setup
 screens. Future AI settings work must extend those section owners instead of
 re-inlining large runtime subsections into the shell.
 Provider-specific settings fields inside
@@ -7799,40 +7757,11 @@ skips its optional sign-in delivery. No frontend runtime file changes in this
 slice; the API proofs are
 `TestContract_HostedMagicLinkRequestValidatesOriginBeforeMutation` and
 `TestStripeWebhook_CheckoutMagicLinkValidatesOriginBeforeMutation`.
-`frontend-modern/src/utils/discoveryPresentation.ts` now owns the
-customer-facing discovery-section framing copy, scan-scope labels, subnet
-guidance, command-execution settings targets, API Access handoff labels, and
-environment-lock messaging so
-`frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx` stays a
-shared presentation shell instead of re-accumulating that wording inline.
-Resource discovery command guidance must use that same presentation owner for
-settings handoffs. `frontend-modern/src/utils/discoveryPresentation.ts` owns
-the shared command-execution and `agent:exec` token-scope links; discovery
-surfaces may explain those states, but the visible links must remain
-`Settings → Infrastructure` and `Settings → API Access` through that helper,
-not inline legacy labels or old settings paths.
-That same presentation owner also packages the identified-service summary
-consumed by surfaces outside the Discovery sub-tab.
-`getDiscoveryIdentifiedSummary` is the canonical reducer that turns a stored
-`ResourceDiscovery` into the compact card payload (service name, category,
-confidence percent, port and path counts, cli access hint, service version,
-observed timestamp, provenance label, and suggested web-interface URL
-metadata). New surfaces that want to label a workload with its identified
-service or offer a Discovery-sourced endpoint candidate must read through that
-helper rather than re-implementing the empty/low-signal gate, so the
-Discovery tab and out-of-tab surfaces collapse the same records and avoid
-surfacing "Unknown" rows or zero-confidence noise. Manual/persisted
-web-interface URLs still win: Discovery suggestions may be copied, opened, or
-adopted through the shared `WebInterfaceUrlField`, but they must not silently
-replace metadata or make row-name links active until the operator saves them.
-No-URL diagnostics and command access hints are not endpoint candidates; they
-can explain a Discovery result inside Discovery-owned surfaces, but they must
-not trigger out-of-tab identified-service cards or suggested-URL panels without
-another meaningful service signal.
-The visible provenance marker for those values is the shared
-`DiscoveryProvenanceMarker`; local surfaces may choose the labelled or
-icon-only variant, but must not invent alternate Discovery badges or hide the
-source on compact cards.
+`frontend-modern/src/utils/infrastructureSettingsPresentation.ts` owns network
+discovery framing, scan-scope labels, subnet guidance and environment-lock
+copy consumed by `DiscoverySettingsForm.tsx`. Network discovery remains an
+Infrastructure feature, separate from the retired AI service scanner.
+
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

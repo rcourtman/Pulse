@@ -139,8 +139,8 @@ model that active and future release profiles reuse.
     Reserve its governed claim in the checkout where the work will run.
 17. Lane-expansion targets must steer slice selection.
    When the active target is a lane-expansion or bridge-foundation target and
-   `status_audit.py --pretty` exposes an `available_candidate_lane_queue`,
-   agents should choose from that queue before local cleanup, bounded
+   `status_audit.py --pretty` exposes `available_candidate_lane_options`,
+   agents should assess those scope and ownership facts before local cleanup, bounded
    stabilization residue, or presentation-only polish unless the user
    explicitly overrides the priority or a release-blocking surface needs
    immediate containment.

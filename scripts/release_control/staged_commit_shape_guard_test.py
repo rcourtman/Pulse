@@ -80,13 +80,11 @@ class StagedGovernanceInputTest(unittest.TestCase):
 
 
 class StagedCommitShapeGuardTest(unittest.TestCase):
-    def test_advanced_lane_ids_detects_score_or_completion_progress(self) -> None:
+    def test_advanced_lane_ids_detects_declared_status_or_completion_progress(self) -> None:
         previous = {
             "lanes": [
                 {
                     "id": "L15",
-                    "current_score": 6,
-                    "target_score": 8,
                     "status": "partial",
                     "completion": {"state": "open"},
                 }
@@ -96,15 +94,11 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
             "lanes": [
                 {
                     "id": "L15",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
-                    "completion": {"state": "open"},
+                    "completion": {"state": "bounded-residual"},
                 },
                 {
                     "id": "L16",
-                    "current_score": 8,
-                    "target_score": 8,
                     "status": "target-met",
                     "completion": {"state": "complete"},
                 },
@@ -155,8 +149,6 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
@@ -168,9 +160,7 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 6,
-                    "target_score": 8,
-                    "status": "partial",
+                    "status": "not-started",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
                 }
@@ -210,8 +200,6 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 7,
-                    "target_score": 8,
                     "status": "partial",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
@@ -223,9 +211,7 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
                 {
                     "id": "L15",
                     "name": "Storage and recovery",
-                    "current_score": 6,
-                    "target_score": 8,
-                    "status": "partial",
+                    "status": "not-started",
                     "subsystems": ["storage-recovery"],
                     "completion": {"state": "open"},
                 }
