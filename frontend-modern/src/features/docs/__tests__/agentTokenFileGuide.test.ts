@@ -33,7 +33,7 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     );
   });
 
-  it('renders all four forms as a table with headers and keeps private, unknown evidence valid', () => {
+  it('renders every token-file form and keeps damaged bare values distinct from valid reporting', () => {
     const article = renderGuide();
     const heading = article.querySelector(`#${id}`)!;
     const parts: Element[] = [];
@@ -48,14 +48,22 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
       'What the agent reads',
     ]);
     const rows = [...table.querySelectorAll('tbody tr')];
-    expect(rows).toHaveLength(4);
-    for (const [index, phrase] of [
-      'does not prove it matches',
-      'The quotes remain part',
-      'The prefix remains part',
-      'format and cause remain unknown',
-    ].entries()) {
-      expect(rows[index].textContent).toContain(phrase);
+    const expectedForms = [
+      ['Bare token, possibly followed by a newline', 'does not prove it matches'],
+      ['Token surrounded by single or double quotes', 'The quotes remain part'],
+      ['Assignment prefix such as PULSE_TOKEN= or export', 'The prefix remains part'],
+      [
+        'Duplicated or missing characters, or whitespace inside a bare value',
+        "trimming the file's ends does not repair them",
+      ],
+      ['Unknown', 'format and cause remain unknown'],
+    ];
+    expect(rows.map((row) => row.querySelector('td')?.textContent)).toEqual(
+      expectedForms.map(([form]) => form),
+    );
+    for (const [form, phrase] of expectedForms) {
+      const row = rows.find((item) => item.querySelector('td')?.textContent === form)!;
+      expect(row.querySelectorAll('td')[1].textContent).toContain(phrase);
     }
     const text = parts
       .map((element) => element.textContent)
@@ -64,6 +72,10 @@ describe('agent token-file help in the shipped Markdown renderer', () => {
     expect(text).toContain('not the value, length, hint, screenshot or file');
     expect(text).toContain('Do not print, source, upload or edit the installed token file');
     expect(text).toContain('not proof of accepted reporting');
+    expect(text).toContain('duplicated or changed middle characters can leave both ends matching');
+    expect(text).toContain('matching hint do not prove full equality');
+    expect(text).toContain('Do not apply this shape check to other token families');
+    expect(text).toContain('rotate a working credential because it looks different');
     expect(parts.some((element) => element.matches('pre') || element.querySelector('pre'))).toBe(
       false,
     );
