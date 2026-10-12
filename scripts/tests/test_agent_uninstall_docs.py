@@ -49,11 +49,33 @@ class AgentUninstallDocsTest(unittest.TestCase):
         for operation in ('remove_agent_state_dir "$STATE_DIR"',
                           "teardown_action_runner_service", "teardown_privileged_helper_service",
                           "remove_privileged_helper_state_dir", "remove_safe_profile_state_dir",
-                          'rm -f /var/log/pulse-agent.log', 'GO_SCRIPT="/boot/config/go"',
-                          "remove_qnap_autorun_block"):
+                          'rm -f /var/log/pulse-agent.log'):
             self.assertIn(operation, self.removal)
+        self.assert_nas_boot_retirement_before_erasure(self.removal)
         self.assertIn('Remove-Item $StateDir -Recurse -Force',
                       (ROOT / "scripts/install.ps1").read_text())
+
+    def assert_nas_boot_retirement_before_erasure(self, removal):
+        # Removal no longer shares installation's best-effort boot-file edits.
+        # Bind the existing boot-entry warning to the checked NAS lifecycle.
+        quiesce = 'quiesce_nas_agent_for_removal "$uninstall_nas_platform"'
+        retire = 'teardown_nas_agent_boot_owner "$uninstall_nas_platform"'
+        for call in (quiesce, retire):
+            self.assertIn(call + ' ||\n            fail ', removal)
+        self.assertLess(removal.index(quiesce), removal.index('uninstall_collector_registration'))
+        self.assertLess(removal.index(retire), removal.index('remove_agent_state_dir "$STATE_DIR"'))
+        for old_edit in ('GO_SCRIPT="/boot/config/go"', 'remove_qnap_autorun_block'):
+            self.assertNotIn(old_edit, removal)
+
+    def test_nas_boot_guidance_rejects_missing_late_or_ignored_retirement(self):
+        call = 'teardown_nas_agent_boot_owner "$uninstall_nas_platform"'
+        late = self.removal.replace(call, ':').replace('remove_agent_state_dir "$STATE_DIR"',
+            'remove_agent_state_dir "$STATE_DIR"; ' + call + ' ||\n            fail "late" 1')
+        for changed in (self.removal.replace(call, ':'), late,
+                        self.removal.replace(call + ' ||', call + ' || true #')):
+            with self.subTest(mutation=changed):
+                with self.assertRaises(AssertionError):
+                    self.assert_nas_boot_retirement_before_erasure(changed)
 
     def test_saved_state_trust_and_explicit_path_authority_are_not_bypassed(self):
         for fact in ("same trusted Pulse instance", "on the affected agent host",
