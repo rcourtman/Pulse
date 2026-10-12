@@ -303,6 +303,39 @@ private keys. If help is needed, provide only the HTTP status, relevant redacted
 error and which expected reading is missing. Do not clear History or recreate a
 working connection to make missing data look resolved.
 
+### Backup age colours for a longer backup cycle
+
+The VM/LXC backup shield uses **hours**, separately from the backup-age alert
+thresholds in **days**. An amber age badge does not by itself mean that a
+backup failed or that a notification was sent.
+
+Open **Alerts → Thresholds → Proxmox**, then expand **Recovery**. In
+**Global Defaults**:
+
+| Control | What it changes |
+| --- | --- |
+| **Fresh Hours** | How long the latest completed backup keeps a green shield. The default is 24 hours. |
+| **Stale Hours** | The end of the next age band, after which the backup is classified as overdue. Keep it at least as large as Fresh Hours. |
+| **Warning Days** / **Critical Days** | Backup-age alert thresholds, not the shield's freshness window. Leave these unchanged unless you intend to change alert policy. |
+
+For a three-day cycle, **Fresh Hours = 72** keeps a completed backup fresh
+through 72 hours. **Stale Hours = 96**, for example, leaves a further day in
+the stale band. Choose any scheduling margin to match your existing backup
+policy; these are global display settings, not a change to the backup schedule.
+Review the alert-day values before saving, then check the same guest's badge.
+The completed backup's time does not change, and missing or unknown backup
+evidence is not made healthy by a longer freshness window.
+
+**v6.5.0 caution:** if **Critical Days** is Off while **Warning Days** is
+enabled, do not save threshold edits on that version: its editor can re-enable
+critical alerts at the warning age. Cancel rather than changing alert policy
+just to remove an amber badge.
+
+If the problem is missing backups or conflicting protection evidence rather
+than an expected longer cycle, use the [backup health checks](#backups-are-visible-but-coverage-says-unprotected)
+instead. Do not run another backup, change retention, disable alerts or clear
+History just to change a colour.
+
 ### Backups are visible but Coverage says Unprotected
 
 The **Backup health** strip and the backup list answer different questions.
