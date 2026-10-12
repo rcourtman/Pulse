@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "7df7f3563f9e30dfd0aa678d8be6b2f7e9a4cca4",
+  "verified_at": "2026-10-12T04:20:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "d496cdf324afac269828ef7ccc7d6fe18855fb49806dca0716a2869a7838a44d"
+  },
+  "routes": [
+    "/browser-tests/resource-stopped-filesystem.html (production canonical ResourceDetailDrawer History and CSS; synthetic sources/local API)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900,
+      "browser": "chromium-desktop-light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "webkit-phone-dark"
+    }
+  ],
+  "states": [
+    "Native stopped VM with canonical online and no read reason: no current or last-known disk carrier.",
+    "Stopped VM with previous-busy reason, normalized native power and refreshed Last seen remains unavailable.",
+    "Missing native state falls back to canonical offline; explicit native running takes precedence and displays accepted zero.",
+    "Running retained capacity is last known; running unavailable capacity has no live number.",
+    "Hybrid Proxmox-scoped VM retains native power admission; vSphere-only VM and LXC platform storage remain independent.",
+    "Genuine stored disk observations remain inspectable for stopped VM."
+  ],
+  "interactions": [
+    "Desktop trusted keyboard Enter opens History; phone trusted tap opens History.",
+    "Reactive same-ID synthetic source snapshots exercise native power/read/status transitions without extra History reads before target-type change.",
+    "Trusted refresh loads stored disk25% and50%; trusted Home/End slider keys inspect both samples.",
+    "Eight chart captures viewed; stopped explanation wraps, no horizontal overflow or page errors on either browser."
+  ],
+  "proof": {
+    "script": "frontend-modern/browser-tests/resource-stopped-filesystem.cjs",
+    "playwright": "1.56.1",
+    "checks": 14,
+    "captures": 8,
+    "runtime_hashes": {
+      "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "d496cdf324afac269828ef7ccc7d6fe18855fb49806dca0716a2869a7838a44d",
+      "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "94e4b364c744f204ff52e2d28cde6b80a5a66ac414c7ba702113e960a6a67e17",
+      "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "9e7ee3e3cbb5f8da38cf43e0aaecd105f43333d16df7338e849d3ccaf6804d8f",
+      "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "8b94c3d9409f46bedf812b00ff9f3156da9ace6885ec04456ea5fed59d842127",
+      "frontend-modern/src/utils/workloadGuestPresentation.ts": "71a2d2e62411c70c0eb609e68cd4963dac483be59a5be6afcf96c1ce2191436f"
+    },
+    "result_json_sha256": "bcab014213c55e7f17ddca9e513eee1ab3a3516571d4dfccc2c0862871446375",
+    "cleanup": {
+      "browsers": true,
+      "server": true
+    },
+    "limits": "Production ResourceDetailDrawer, History/client and CSS; synthetic snapshots and local endpoints. No native guest command, QGA, thaw, writes, restart, reporter, installed or release acceptance."
+  }
+}

@@ -20,6 +20,30 @@
 
 ## Purpose
 
+### Canonical VM History respects native filesystem power state (12 October 2026)
+
+The canonical resource drawer uses `getWorkloadGuestDiskRead`, the same VM
+filesystem admission as Workloads and Alerts. Proxmox `runtimeStatus` takes
+precedence over canonical status from a linked source; absent native state
+falls back to canonical status, with `offline` treated as stopped. A stopped
+VM exposes neither a current disk/usage fallback nor a last-known disk carrier,
+even with a `prev-` reason or refreshed Last seen. The stopped explanation is
+visible beside History. Running retained/unavailable reads keep their existing
+distinction; an accepted zero is still current.
+
+Stored history remains inspectable, and independent CPU/memory/network metrics,
+LXC platform storage and non-Proxmox resources do not inherit VM filesystem
+rules. Power/read snapshot changes do not initiate a History refresh or a guest
+operation. This does not establish thaw, writes, restart recovery or release
+availability.
+
+`resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts` covers native
+and fallback state, platform scopes, zero, reason precedence and independent
+resource types. `ResourceDetailDrawer.history.test.tsx` connects reactive
+same-ID snapshots to the production drawer and History client. The production
+desktop Chromium/phone WebKit fixture `browser-tests/resource-stopped-filesystem.cjs`
+also preserves stored observations and trusted keyboard inspection.
+
 ### Existing alert History distinguishes failed reads from empty results
 
 The History tab renders fixed non-provider error copy in a `role="alert"`
