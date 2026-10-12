@@ -1552,6 +1552,134 @@ teardown_sysv_agent_service() {
     rm -f "/var/run/${AGENT_NAME}.pid"
 }
 
+# DSM 6 uses Upstart, not SysV. A successful stop alone does not disable the
+# syno.network.ready event, and respawn/status errors must not lose recovery.
+read_upstart_agent_removal_status() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 initctl status "$AGENT_NAME" 2>&1 &&
+        printf '%s' '__pulse_upstart_exit__=0' || printf '%s' "__pulse_upstart_exit__=$?") || return 1
+    case "$observation" in
+        "$AGENT_NAME stop/waiting"$'\n__pulse_upstart_exit__=0') printf 'stopped\n' ;;
+        "initctl: Unknown job: $AGENT_NAME"$'\n__pulse_upstart_exit__=1') printf 'absent\n' ;;
+        *)
+            [[ "$observation" =~ ^pulse-agent\ start/running,\ process\ [1-9][0-9]*$'\n'__pulse_upstart_exit__=0$ ]] || return 1
+            printf 'started\n' ;;
+    esac
+}
+
+upstart_agent_removal_paths_safe() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local path="" mode="" size="" content="" line="" exec_count=0
+    # An interrupted config retirement belongs to its previous operation. Do
+    # not delete or overwrite its recovery copy on a later uninstall.
+    for path in "$conf".removal.*; do [[ ! -e "$path" && ! -L "$path" ]] || return 1; done
+    for path in "$conf" "$override"; do
+        [[ -e "$path" || -L "$path" ]] || continue
+        mode=$(portable_path_mode "$path") || return 1
+        [[ "$mode" == 600 || "$mode" == 644 ]] || return 1
+        trusted_lifecycle_regular_file "$path" "$mode" || return 1
+        size=$(wc -c < "$path") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+        content=$(cat "$path" && printf '%s' '__pulse_upstart_file_complete__') || return 1
+        if [[ "$path" == "$override" ]]; then
+            [[ "$content" == $'manual\n__pulse_upstart_file_complete__' ]] || return 1
+        else
+            [[ "$content" == *$'description "Pulse Unified Agent"\n'* && "$content" == *$'author "Pulse"\n'* ]] || return 1
+            while IFS= read -r line; do
+                if [[ "$line" == exec\ * ]]; then
+                    [[ "$line" == "exec ${INSTALL_DIR}/${BINARY_NAME} "* ]] || return 1
+                    exec_count=$((exec_count + 1))
+                fi
+            done <<< "$content"
+            [[ "$exec_count" == 1 ]] || return 1
+        fi
+    done
+}
+
+read_upstart_agent_removal_enablement() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 initctl show-config "$AGENT_NAME" 2>&1 &&
+        printf '%s' '__pulse_upstart_config_complete__') || return 1
+    # The installer renders this single-instance job with a stop condition.
+    # manual removes its start condition from Upstart's effective config.
+    [[ "$observation" == "$AGENT_NAME"$'\n  stop on runlevel [06]\n__pulse_upstart_config_complete__' ]]
+}
+
+quiesce_upstart_agent_for_removal() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local state="" inventory="" pending=""
+    upstart_agent_removal_paths_safe || return 1
+    state=$(read_upstart_agent_removal_status) || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    if [[ ! -e "$conf" ]]; then
+        [[ "$state" == absent ]] && legacy_agent_processes_absent "$inventory"
+        return
+    fi
+    [[ "$state" != absent ]] || return 1
+    if [[ "$state" == stopped ]]; then legacy_agent_processes_absent "$inventory" || return 1
+    else legacy_agent_processes_absent "$inventory" && return 1; fi
+    if [[ ! -e "$override" ]]; then
+        pending=$(mktemp "${override}.XXXXXX") || return 1
+        # The existing installer EXIT trap also owns this non-credential
+        # temporary if a command failure exits before inline cleanup.
+        TMP_FILES+=("$pending")
+        # Link without replacement: an override created concurrently is not
+        # ours to overwrite. The temporary file contains no credential.
+        if ! printf 'manual\n' > "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! chmod 644 "$pending"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        if ! ln -T -- "$pending" "$override"; then
+            rm -f -- "$pending"
+            return 1
+        fi
+        rm -f -- "$pending" || return 1
+    fi
+    LC_ALL=C timeout -k 1 5 initctl reload-configuration >/dev/null 2>&1 || return 1
+    read_upstart_agent_removal_enablement || return 1
+    if [[ "$state" == started ]]; then
+        LC_ALL=C timeout -k 1 15 initctl stop "$AGENT_NAME" >/dev/null 2>&1 || return 1
+    fi
+    state=$(read_upstart_agent_removal_status) || return 1
+    [[ "$state" == stopped ]] || return 1
+    inventory=$(read_legacy_agent_removal_processes) || return 1
+    legacy_agent_processes_absent "$inventory"
+}
+
+teardown_upstart_agent_service() {
+    local conf="/etc/init/${AGENT_NAME}.conf" override="/etc/init/${AGENT_NAME}.override"
+    local retired="" state="" inventory="" confirmed=false
+    quiesce_upstart_agent_for_removal ||
+        fail "DSM Upstart removal could not confirm stopped processes and disabled automatic activation; local recovery files were retained. A preceding stop or manual override may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
+    if [[ -e "$conf" ]]; then
+        # Keep the original inode/contents until the manager confirms the job
+        # absent. A failed reload/read restores it without removing manual or
+        # restarting; never clobber a configuration created in the meantime.
+        retired=$(mktemp "${conf}.removal.XXXXXX") || return 1
+        if ! mv -- "$conf" "$retired"; then rm -f -- "$retired"; return 1; fi
+        if LC_ALL=C timeout -k 1 5 initctl reload-configuration >/dev/null 2>&1 &&
+           state=$(read_upstart_agent_removal_status) && [[ "$state" == absent ]] &&
+           inventory=$(read_legacy_agent_removal_processes) && legacy_agent_processes_absent "$inventory"; then
+            confirmed=true
+        fi
+        if [[ "$confirmed" != true ]]; then
+            if [[ ! -e "$conf" && ! -L "$conf" ]]; then
+                # Atomic no-replacement restore, including a target that
+                # becomes a directory after the preceding pathname check.
+                ln -T -- "$retired" "$conf" || return 1
+                rm -f -- "$retired" || return 1
+            fi
+            return 1
+        fi
+        rm -f -- "$retired" || return 1
+    fi
+    rm -f -- "$override" || return 1
+}
+
 enable_sysv_agent_service() {
     local init_path="${1:-/etc/init.d/${AGENT_NAME}}"
     if command -v update-rc.d >/dev/null 2>&1; then
@@ -5870,6 +5998,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
     local qnap_state_dir=""
     local uninstall_has_credential="false"
     local uninstall_legacy_manager=""
+    local uninstall_upstart="false"
 
     # Validate saved connection availability before stopping a working install.
     # Stop every systemd activation source before remote removal, process kills
@@ -5879,6 +6008,15 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -z "$PULSE_URL" ]]; then
             fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
         fi
+    fi
+    # Detect stale DSM 6 jobs even on a DSM 7 host. Another init manager cannot
+    # establish their absence; missing initctl is an explicit safe refusal.
+    if [[ -d /usr/syno ]] && { command -v initctl >/dev/null 2>&1 ||
+        [[ -e "/etc/init/${AGENT_NAME}.conf" || -L "/etc/init/${AGENT_NAME}.conf" ||
+           -e "/etc/init/${AGENT_NAME}.override" || -L "/etc/init/${AGENT_NAME}.override" ]]; }; then
+        uninstall_upstart="true"
+        quiesce_upstart_agent_for_removal ||
+            fail "DSM Upstart removal could not confirm stopped processes and disabled automatic activation; credentials and service files were retained. Reconcile the job and any manual override before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
     if command -v systemctl >/dev/null 2>&1; then
         quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service" \
@@ -5894,7 +6032,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         uninstall_legacy_manager=FreeBSD
         quiesce_freebsd_agent_for_removal ||
             fail "FreeBSD removal could not confirm stopped rc.d, disabled boot activation and absent supervisor/child; local recovery files were retained. Reconcile linked/appliance boot tasks first when present; no automatic restart was attempted." "$EXIT_GENERAL"
-    elif ! command -v systemctl >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]]; then
+    elif [[ "$uninstall_upstart" != true ]] && ! command -v systemctl >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]]; then
         uninstall_legacy_manager=SysV
         quiesce_sysv_agent_for_removal ||
             fail "SysV removal could not confirm stopped process and disabled runlevels; local recovery files were retained. A preceding stop or disable may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
@@ -5925,6 +6063,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
         teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
     elif [[ "$uninstall_legacy_manager" == SysV ]]; then
         teardown_sysv_agent_service "/etc/init.d/${AGENT_NAME}"
+    fi
+    if [[ "$uninstall_upstart" == true ]]; then
+        teardown_upstart_agent_service ||
+            fail "DSM Upstart job retirement was not confirmed; local recovery state was retained. The manual override remains after a partial stop. Reconcile the original config or its .removal recovery copy before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # Kill wrapper scripts first: they are watchdogs, so stopping the agent
@@ -5984,11 +6126,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -f "/etc/systemd/system/${AGENT_NAME}.service" ]]; then
             teardown_systemd_agent_service
         fi
-        # DSM 6.x uses upstart
-        if [[ -f "/etc/init/${AGENT_NAME}.conf" ]]; then
-            initctl stop "${AGENT_NAME}" 2>/dev/null || true
-            rm -f "/etc/init/${AGENT_NAME}.conf"
-        fi
+        # DSM 6.x Upstart retirement was confirmed before recovery erasure.
     fi
 
     # Unraid
