@@ -59,7 +59,47 @@ function stripHTMLComments(value) {
   let previous;
   do {
     previous = stripped;
-    stripped = stripped.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+    let fence = null;
+    let inComment = false;
+    // Strip hidden template text, not literal markers in pasted code. In
+    // particular, an unfinished HTML response must not swallow the real form
+    // fields after its closing Markdown fence. Match the same fences and
+    // indentation that declarationLines excludes from metadata declarations.
+    stripped = stripped.split(/(\r?\n)/).map((text, index) => {
+      if (index % 2) return text;
+      const marker = text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (!inComment) {
+        if (fence) {
+          if (marker && marker[1][0] === fence.character &&
+              marker[1].length >= fence.length && !marker[2].trim()) {
+            fence = null;
+          }
+          return text;
+        }
+        if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+          fence = { character: marker[1][0], length: marker[1].length };
+          return text;
+        }
+        if (/^(?: {4}|\t)/.test(text)) return text;
+      }
+      let visible = "";
+      let offset = 0;
+      while (offset < text.length) {
+        if (inComment) {
+          const end = text.indexOf("-->", offset);
+          if (end === -1) break;
+          offset = end + 3;
+          inComment = false;
+        } else {
+          const start = text.indexOf("<!--", offset);
+          if (start === -1) return visible + text.slice(offset);
+          visible += text.slice(offset, start);
+          offset = start + 4;
+          inComment = true;
+        }
+      }
+      return visible;
+    }).join("");
   } while (stripped !== previous);
   return stripped;
 }

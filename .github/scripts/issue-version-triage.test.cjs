@@ -365,6 +365,73 @@ test("hidden template fields cannot declare topics or override feedback type", (
   ), "documentation");
 });
 
+test("literal HTML comments in pasted code cannot erase later visible form fields", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [open, close] of [["```html", "```"], ["~~~~html", "~~~~"],
+      ["   ````text", "   ````"]]) {
+      for (const marker of ["<!-- unfinished response", "<!-- closed response -->", "<!<!-- -->-->"]) {
+        const body = [open, marker, "### Pulse version", "6.4.1", close, "",
+          "### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+          "### Additional actionable topics", "Missing disk reading"].join(newline);
+        assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+        assert.equal(classifyV6FeedbackType(body), "documentation", body);
+        assert.equal(classifyAdditionalActionableTopics(body), true, body);
+      }
+    }
+    for (const indent of ["    ", "\t"]) {
+      const body = [`${indent}<!-- copied log delimiter`, `${indent}Pulse version: 6.4.1`, "",
+        "### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+        "### Additional actionable topics", "Missing disk reading"].join(newline);
+      assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0", body);
+      assert.equal(classifyV6FeedbackType(body), "documentation", body);
+      assert.equal(classifyAdditionalActionableTopics(body), true, body);
+    }
+  }
+});
+
+test("hidden comments still hide their contents even when they contain code fences", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
+  const hidden = ["<!-- hidden template", "```markdown", "### Pulse version", "6.4.1",
+    "### Feedback type", "Bug / regression", "### Additional actionable topics", "Copied topic", "```"];
+  const visible = ["### Pulse version", "6.5.0", "### Feedback type", "Documentation issue",
+    "### Additional actionable topics", "None"];
+  for (const newline of ["\n", "\r\n"]) {
+    const closed = [...hidden, "    -->", ...visible].join(newline);
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", closed), "6.5.0");
+    assert.equal(classifyV6FeedbackType(closed), "documentation");
+    assert.equal(classifyAdditionalActionableTopics(closed), false);
+    const unfinished = [...hidden, ...visible].join(newline);
+    assert.equal(extractPulseVersion("Bug", unfinished), null);
+    assert.equal(classifyV6FeedbackType(unfinished), null);
+    assert.equal(classifyAdditionalActionableTopics(unfinished), null);
+  }
+});
+
+test("pasted HTML keeps genuine topic values without turning copied headings into fields", () => {
+  const body = ["### Additional actionable topics", "```html", "<!-- unmatched response marker",
+    "### Pulse version", "6.4.1", "```", "### Pulse version", "6.5.0"].join("\n");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+  assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body), "6.5.0");
+});
+
+test("syncLabels consumes real fields after pasted HTML without contact or state changes", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2801, title: "Upgrade from v6.4.5",
+    body: ["```html", "<!-- incomplete response", "### Pulse version", "6.4.1", "```",
+      "### Pulse version", "6.5.0", "### Feedback type", "Bug / regression",
+      "### Additional actionable topics", "Missing disk reading"].join("\n"),
+    labels: ["needs-human", "needs-retest-on-latest", "operator-reviewed", "needs-version-info"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.flatMap(call => call.labels), ["affects-6.5.0", "bug", "needs-decomposition"]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801]);
+});
+
 test("a hidden hint or empty topic field is not an actionable declaration", () => {
   for (const value of ["", "<!-- A second bug. -->", "None\n\n<!-- Another topic. -->"]) {
     assert.equal(triage.internals.classifyAdditionalActionableTopics(
