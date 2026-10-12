@@ -196,16 +196,20 @@ race_restore_config() {
     fi
 }
 ln() {
-    local arg
+    local arg source target
     for arg in "$@"; do [[ "$arg" == -T || "$arg" == -- || "$arg" == "$FIXTURE/"* ]] || return 97; done
-    [[ "$1" == -T && "$2" == -- ]] || return 98
-    if [[ "$FAULT" == concurrent-override-file && "$4" == "$FIXTURE/init/pulse-agent.override" ]]; then
-        printf 'concurrent override retained\n' > "$4"
-    elif [[ "$FAULT" == concurrent-override-directory && "$4" == "$FIXTURE/init/pulse-agent.override" ]]; then
-        mkdir "$4"
+    if [[ "$1" == -T && "$2" == -- ]]; then source="$3"; target="$4"
+    elif [[ "$1" == -- ]]; then source="$2"; target="$3"
+    else return 98; fi
+    # Execute both old and new valid argv as-is; do not refuse the previous
+    # source before its filesystem race can actually be observed.
+    if [[ "$FAULT" == concurrent-override-file && "$target" == "$FIXTURE/init/pulse-agent.override" ]]; then
+        printf 'concurrent override retained\n' > "$target"
+    elif [[ "$FAULT" == concurrent-override-directory && "$target" == "$FIXTURE/init/pulse-agent.override" ]]; then
+        mkdir "$target"
     fi
-    if [[ "$3" == "$FIXTURE/init/pulse-agent.conf.removal."* && "$4" == "$FIXTURE/init/pulse-agent.conf" ]]; then
-        race_restore_config "$4"
+    if [[ "$source" == "$FIXTURE/init/pulse-agent.conf.removal."* && "$target" == "$FIXTURE/init/pulse-agent.conf" ]]; then
+        race_restore_config "$target"
     fi
     printf 'file:link\n' >> "$EVENTS"
     builtin command ln "$@"
