@@ -5003,6 +5003,13 @@ on the reviewed `golang:1.26.9-alpine` digest
 it does not pull the image, prove its registry contents, or qualify a deployed
 control plane. The release publisher's prebuilt control-plane target is a
 separate path and does not rebuild its binary from this stage.
+The release workflow locates an existing release for its tag with one listing
+of up to 100 releases and all their assets, about 25 MB, which GitHub answers
+with an HTTP 504 often enough to fail a release by itself (observed on the first
+beta). That read is retried up to five times with backoff and accepts only a
+complete listing of valid pages, so a failed or truncated read can never be
+mistaken for "no existing release" and stage a duplicate draft. Exhausting the
+attempts fails the job with an explicit error.
 As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
 `1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
 call paths reported by `govulncheck` after the 2026-10-08 advisories, including

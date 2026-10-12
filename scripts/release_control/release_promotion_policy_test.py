@@ -2787,6 +2787,77 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             normalize_ws(contract),
         )
 
+
+    def test_create_release_locates_its_release_through_a_bounded_complete_listing_retry(self) -> None:
+        """Run the real step script against doubles: GitHub 504s must be retried, never read as absence."""
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        step = next(s for s in workflow["jobs"]["create_release"]["steps"]
+                    if s.get("name") == "Locate existing release")
+        script = step["run"].replace("${{ github.repository }}", "owner/repo")
+        pages = (
+            '[{"id": 1, "tag_name": "v6.5.0", "draft": false, "assets": []}]\n'
+            '[{"id": 42, "tag_name": "v6.6.0-beta.1", "draft": true, "html_url": "https://example.test/42",'
+            ' "target_commitish": "abc", "published_at": null, "assets": [{"name": "checksums.txt"}]}]\n'
+        )
+        fake_gh = (
+            '#!/bin/bash\n'
+            'n=$(cat "$FIX/count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$FIX/count"\n'
+            'case "$MODE" in\n'
+            '  flaky) if [ "$n" -le 2 ]; then\n'
+            '      echo "gh: We could not respond to your request in time (HTTP 504)" >&2; exit 1; fi\n'
+            '      cat "$FIX/pages.json" ;;\n'
+            '  truncated) printf \'[{"id": 42, "tag_name": \' ; exit 0 ;;\n'
+            '  ok) cat "$FIX/pages.json" ;;\n'
+            'esac\n'
+        )
+        fake_sleep = '#!/bin/bash\necho "$1" >> "$FIX/sleeps"\n'
+
+        def outputs(text: str) -> dict:
+            # write_github_output.py writes name<<delimiter, value, delimiter blocks.
+            return {m.group(1): m.group(3)
+                    for m in re.finditer(r"^(\w+)<<(\S+)\n(.*?)\n\2$", text, re.MULTILINE | re.DOTALL)}
+
+        def run(mode: str, tag: str) -> dict:
+            with tempfile.TemporaryDirectory() as directory:
+                fix = Path(directory)
+                (fix / "bin").mkdir()
+                for name, body in (("gh", fake_gh), ("sleep", fake_sleep)):
+                    (fix / "bin" / name).write_text(body)
+                    (fix / "bin" / name).chmod(0o755)
+                (fix / "pages.json").write_text(pages)
+                output = fix / "github_output"
+                output.write_text("")
+                env = {**os.environ, "FIX": str(fix), "MODE": mode, "WORKFLOW_OUTPUT_1": tag,
+                       "GH_TOKEN": "unused", "GITHUB_OUTPUT": str(output),
+                       "PATH": f"{fix / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+                result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                                        cwd=REPO_ROOT, env=env, text=True, capture_output=True, timeout=60)
+                read_text = lambda name: (fix / name).read_text() if (fix / name).exists() else ""
+                return {"result": result, "output": output.read_text(),
+                        "calls": int(read_text("count").strip() or 0),
+                        "sleeps": read_text("sleeps").split()}
+
+        # Two GitHub 504s, then a complete listing: retried with backoff, then the draft is found.
+        flaky = run("flaky", "v6.6.0-beta.1")
+        self.assertEqual(flaky["result"].returncode, 0, flaky["result"].stderr)
+        self.assertEqual((flaky["calls"], flaky["sleeps"]), (3, ["15", "30"]))
+        self.assertEqual(outputs(flaky["output"]).get("release_id"), "42")
+        self.assertEqual(outputs(flaky["output"]).get("release_is_draft"), "true")
+
+        # A read that exits 0 but is truncated every time is never an empty answer: five attempts,
+        # capped backoff, an explicit error, and no outputs written.
+        truncated = run("truncated", "v6.6.0-beta.1")
+        self.assertNotEqual(truncated["result"].returncode, 0)
+        self.assertIn("releases listing failed after 5 attempts", truncated["result"].stdout)
+        self.assertEqual((truncated["calls"], truncated["sleeps"]), (5, ["15", "30", "60", "120"]))
+        self.assertEqual(truncated["output"], "")
+
+        # A complete listing that does not contain the tag still means "no existing release".
+        absent = run("ok", "v6.7.0")
+        self.assertEqual(absent["result"].returncode, 0, absent["result"].stderr)
+        self.assertEqual((absent["calls"], absent["sleeps"]), (1, []))
+        self.assertEqual(outputs(absent["output"]).get("release_id"), "")
+
     def test_v620_owner_soak_waiver_is_version_bound(self) -> None:
         policy = normalize_ws(
             read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
