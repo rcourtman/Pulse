@@ -18,7 +18,63 @@ def guide_section(start, end):
     return " ".join(text.split(start, 1)[1].split(end, 1)[0].split())
 
 
+def assert_callback_setup(case, guide):
+    setup = " ".join(guide.split("## 🚀 Quick Start", 1)[1].split("## ⚙️ Configuration", 1)[0].split())
+    markers = ("Keep a working, independent administrator login", "Prepare the IdP application",
+               "Configure access before saving", "Save, then register the actual callback",
+               "Verify without replacing the working login", "Only after verifying SSO")
+    positions = []
+    for marker in markers:
+        case.assertIn(marker, setup)
+        positions.append(setup.index(marker))
+    case.assertEqual(positions, sorted(positions))
+    for marker in ("Show access restrictions & role mapping", "New UI providers are enabled on save",
+                   "do not register a guessed ID", "not the callback, user claims",
+                   "does not create or restore local credentials"):
+        case.assertIn(marker, setup)
+
+
+def assert_group_claim_advice(case, guide):
+    case.assertNotIn("Requires the `groups` scope/claim", guide)
+    case.assertNotIn("Ensure your IdP includes the `groups` scope", guide)
+    for marker in ("a `groups` scope is not universally supported", "not a scope name",
+                   "Entra ID has no `groups` scope", "alone neither supplies group membership"):
+        case.assertIn(marker, " ".join(guide.split()))
+
+
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_setup_orders_callback_and_access_before_cutover(self):
+        assert_callback_setup(self, GUIDE.read_text())
+
+    def test_generic_group_advice_does_not_break_entra(self):
+        assert_group_claim_advice(self, GUIDE.read_text())
+
+    def test_provider_examples_copy_the_saved_callback(self):
+        text = guide_section("## 📚 Provider Examples", "## 🔧 Troubleshooting")
+        self.assertNotIn("Create the provider in Pulse first", text)
+        self.assertNotIn("<provider-id>", text)
+        self.assertIn("Prepare the Entra app registration and client credentials first", text)
+        self.assertIn("Complete the redirect registration before signing in", text)
+        self.assertIn("secret value from step 2", text)
+        self.assertIn("Do **not** add `groups`", text)
+        self.assertIn("compatibility path", text)
+
+    def test_setup_matches_existing_form_and_discovery_test(self):
+        panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        self.assertIn("URL is generated when the provider is saved", panel)
+        self.assertIn("access restrictions & role mapping", panel)
+        self.assertIn('label="Group Role Mappings"', panel)
+        model = (ROOT / "frontend-modern/src/components/Settings/ssoProvidersModel.ts").read_text()
+        defaults = model.split("export const createEmptyProviderForm", 1)[1].split("});", 1)[0]
+        self.assertIn("id: ''", defaults)
+        self.assertIn("enabled: true", defaults)
+        self.assertIn("oidcScopes: 'openid profile email'", defaults)
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        create = handlers.split("func (r *Router) handleCreateSSOProvider", 1)[1].split(
+            "func (r *Router) handleUpdateSSOProvider", 1)[0]
+        self.assertIn("provider.ID = uuid.NewString()", create)
+        self.assertIn('Message: "OIDC discovery successful"', handlers)
+
     def test_cookie_server_and_idp_lifetimes_are_distinct(self):
         text = guide_section("### Sessions and `offline_access`", "#### Changing or removing access")
         for expected in (
