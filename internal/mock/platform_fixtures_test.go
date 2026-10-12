@@ -1399,3 +1399,45 @@ func countCalls(fn *ast.FuncDecl, receiver, method string) int {
 	})
 	return count
 }
+
+func TestFixtureGraphMatchesMonitorSupplementalFreshness(t *testing.T) {
+	now := time.Now().UTC()
+	for _, age := range []time.Duration{0, 2 * time.Hour} {
+		t.Run(age.String(), func(t *testing.T) {
+			graph := buildFixtureGraph(DefaultConfig, now.Add(-age))
+			owned := SupplementalOwnedSources()
+			records := make(map[unifiedresources.DataSource][]unifiedresources.IngestRecord, len(owned))
+			for _, source := range owned {
+				records[source] = graph.SupplementalRecords(source)
+			}
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			adapter.PopulateSnapshotAndSupplemental(unifiedresources.SnapshotWithoutSources(graph.State, owned), records)
+			demo, _ := graph.UnifiedResourceSnapshot()
+			byID := make(map[string]unifiedresources.Resource, len(demo))
+			for _, resource := range demo {
+				byID[resource.ID] = resource
+			}
+			checked := 0
+			for _, live := range adapter.GetAll() {
+				if live.Type != unifiedresources.ResourceTypeVM || len(live.Sources) != 1 || live.Sources[0] != unifiedresources.SourceTrueNAS {
+					continue
+				}
+				checked++
+				wantStatus := "online"
+				if age > 0 {
+					wantStatus = "stale"
+				}
+				if live.SourceStatus[unifiedresources.SourceTrueNAS].Status != wantStatus {
+					t.Fatalf("live reference has no %s TrueNAS sighting: %+v", wantStatus, live)
+				}
+				got, ok := byID[live.ID]
+				if !ok || got.Status != live.Status || got.SourceStatus[unifiedresources.SourceTrueNAS].Status != wantStatus {
+					t.Fatalf("demo freshness differs from live for %s: demo=%+v live=%+v", live.ID, got, live)
+				}
+			}
+			if checked == 0 {
+				t.Fatal("fixture has no TrueNAS-only VM to compare")
+			}
+		})
+	}
+}

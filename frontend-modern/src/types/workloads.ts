@@ -25,6 +25,8 @@ export type WorkloadGuest = (VM | Container) & {
   alertResourceIds?: string[];
   /** Exact unified-resource ID; a Proxmox row ID can be a different VMID-based display key. */
   canonicalResourceId?: string;
+  /** Exact unified parent identity, independent of provider display labels. */
+  parentResourceId?: string;
   /** Backend-owned coordinates for metrics history; distinct from the stable workload row id. */
   metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */

@@ -16,10 +16,7 @@ import {
   isDockerManagedAppContainer,
   resolveWorkloadTypeFromString,
 } from '@/utils/workloads';
-import {
-  getPreferredResourceClusterName,
-  getPreferredResourceKubernetesContext,
-} from '@/utils/resourceIdentity';
+import { getPreferredResourceKubernetesContext } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { HostRAIDArray } from '@/types/api';
@@ -449,7 +446,6 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     resource.parentName ??
     '';
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
-  const preferredClusterName = getPreferredResourceClusterName(resource);
   // The preferred helper falls back to the resource's own name, which is the
   // right label for a cluster resource but not for a workload: a vSphere VM
   // or a standalone Proxmox guest would otherwise be labelled as its own
@@ -463,7 +459,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     resource.instance ??
     resource.proxmox?.instance ??
     kubernetesContext ??
-    preferredClusterName ??
+    workloadClusterName ??
     '';
   const vmid =
     typeof resource.vmid === 'number'
@@ -546,6 +542,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   return {
     id: guestId,
     canonicalResourceId: resource.id,
+    parentResourceId: resource.parentId?.trim() || undefined,
     alertResourceIds: buildAlertResourceIds(resource),
     metricsTarget: resource.metricsTarget,
     vmid: Number.isFinite(vmid) ? vmid : 0,

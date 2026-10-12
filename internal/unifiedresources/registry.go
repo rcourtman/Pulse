@@ -307,8 +307,10 @@ func (rr *ResourceRegistry) loadOverrides() {
 	}
 }
 
-// carryOverridesFrom keeps the operator's decisions across a rebuild that
-// could not read them. A registry whose store read for links or exclusions
+// carryOverridesFrom keeps in-memory operator decisions across a rebuild,
+// or stored decisions when the store could not be read. A registry without
+// a store carries the previous generation's explicit links and exclusions.
+// A registry whose store read for links or exclusions
 // failed lacks what that read held; with both lost it lists every pair the
 // operator split as one machine again, drops every manual link and answers
 // the monitor's node<->agent split decider (ProxmoxNodeAgentSplit)
@@ -320,7 +322,7 @@ func (rr *ResourceRegistry) loadOverrides() {
 // stale resource data is worse than stale decisions. A registry whose reads
 // succeeded keeps what it read.
 func (rr *ResourceRegistry) carryOverridesFrom(previous *ResourceRegistry) {
-	if previous == nil || previous == rr || !rr.overridesUnreadable {
+	if previous == nil || previous == rr || (rr.store != nil && !rr.overridesUnreadable) {
 		return
 	}
 	previous.mu.RLock()
