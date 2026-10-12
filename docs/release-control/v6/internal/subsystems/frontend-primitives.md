@@ -9403,3 +9403,28 @@ Verification connects `useThresholdsGuestData.test.ts`, both layouts in
 `ResourceTable.test.tsx`, and the production hook/table/editor browser fixture
 `guest-filesystem-thresholds.cjs`. Presentation proof is not native guest
 recovery, thaw/writes/liveness, alert delivery or installed/released acceptance.
+
+### Canonical History follows the filesystem producer (12 October 2026)
+
+On Proxmox VMs and system containers, canonical History uses the same
+filesystem-ownership rule as Workloads: Proxmox's filesystem list takes
+precedence (including an explicit empty list); the linked Pulse agent owns
+the fallback only when that list is absent and its own list is present.
+A current linked-agent reading is not deferred by an unrelated QEMU read
+failure, and a silent linked agent's retained aggregate is never current
+just because the platform keeps the resource online. Native stopped state
+still withdraws in-guest carriers from either producer; stopped LXC platform
+storage and unrelated platform metrics remain independent.
+
+The existing aggregate is qualified, not recalculated from filesystem rows.
+Missing aggregates remain absent, measured zero remains usable, and neither
+Last seen nor a QEMU recovery renews a silent agent's report. Stored History,
+memory/CPU/network/IO, collection and guest commands are unchanged.
+
+Verification: `resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts`
+and mounted `ResourceDetailDrawer.history.test.tsx` connect live/silent agents,
+provider precedence, stopping/recovery and zero. The local
+`linked-guest-history.cjs` browser fixture uses the production canonical drawer,
+Workloads snapshot adapter/drawer, History and CSS on desktop and phone, with
+synthetic GET responses. These controls do not establish native restart, thaw,
+covered-filesystem writes, installed recovery or containing software.

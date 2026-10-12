@@ -38,6 +38,26 @@ covered filesystem, guest liveness and only-prior-active restoration belong to
 the native safety owners. These presentation checks do not set a release gate,
 prove a safe guest or authorise a diagnostic/restart.
 
+## Canonical guest History filesystem ownership
+
+Automated: `resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts`,
+`ResourceDetailDrawer.history.test.tsx`, the existing workload mapper and
+source-admission controls. Use
+`frontend-modern/browser-tests/linked-guest-history.cjs` to inspect the real
+canonical and Workloads drawers on desktop Chromium and phone WebKit.
+A live linked agent remains current despite a QEMU-only read failure; its
+silent report is explicitly last known even while the platform stays online.
+Check provider-list precedence (including an empty list), source transitions
+on the same mounted drawer, native stopped withdrawal and fresh zero.
+LXC platform storage remains usable independently of in-guest agent state.
+Load stored observations, then change agent freshness and native power without
+removing, relabelling as current or fabricating chart samples.
+
+The fixture's controls and readings are synthetic, not installed guest
+recovery. Native thaw, writes to every covered filesystem, liveness, restart
+and prior-active restoration remain with the native owners; no release gate
+or safe-to-probe verdict follows from presentation proof.
+
 ## How To Use This Matrix
 
 1. Run the automated proof first.

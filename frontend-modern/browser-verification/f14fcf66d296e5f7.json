@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "base_sha": "f99c6f9e5c3aba2ad025bc24da7c6bd6c7e5a85a",
+  "verified_at": "2026-10-12T07:58:01.128408Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "257ccee974aeab51c6d35360117986e9f4aed92891cb2a153b656e57e71a584f"
+  },
+  "routes": [
+    "Existing canonical ResourceDetailDrawer / History",
+    "Existing Workloads snapshot adapter -> GuestDrawer / History (production components in local fixture)"
+  ],
+  "states": [
+    "Current linked-agent VM disk aggregate survives unrelated QGA read failures",
+    "Silent linked-agent VM/LXC aggregate is last known despite online platform; QGA recovery/Last seen do not renew it",
+    "Stopped in-guest VM/LXC reading is unavailable, no last-known fallback; native stopped still wins",
+    "Platform filesystem lists retain source precedence, including explicit empty lists; LXC platform storage stays independent",
+    "Measured zero remains current, missing aggregate is not fabricated; stored paths and observations survive source/power updates",
+    "Independent CPU/memory/network readings and same-mounted chart remain intact on desktop and phone"
+  ],
+  "interactions": [
+    "History and synthetic source controls activated with keyboard focus/Enter on desktop or touch on phone",
+    "Same-ID source, reporting lease, power and aggregate snapshots update without remount",
+    "Refresh history reads two actual synthetic stored points through production client; later source/power updates keep their path unchanged"
+  ],
+  "viewports": [
+    {
+      "name": "desktop-light",
+      "width": 1280,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "name": "phone-dark",
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0"
+    }
+  ],
+  "evidence": {
+    "command": "pulse-worker-browser frontend-modern/browser-tests/linked-guest-history.cjs",
+    "playwright": "1.56.1",
+    "integration_lock_version": "1.56.1",
+    "completed_checks": 88,
+    "cases": 8,
+    "fixture_sha256": {
+      "frontend-modern/browser-tests/linked-guest-history.cjs": "1767ebebd11d4db018b1f3bea7a89ad9fc7692e8cb084bd7c9d89fe87ef4ac0f",
+      "frontend-modern/browser-tests/linked-guest-history.tsx": "feb16a0b04a82ae722b53f9e71969be89e70344188c5f2b0deb2853a5f96309f",
+      "frontend-modern/browser-tests/linked-guest-history.html": "2a1bd63a32bc4be49d7ae9f0dc9c91932f11b3e4c3f0c8f38c7110fd0095ccae"
+    },
+    "runtime_sha256": {
+      "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "257ccee974aeab51c6d35360117986e9f4aed92891cb2a153b656e57e71a584f",
+      "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "9e7ee3e3cbb5f8da38cf43e0aaecd105f43333d16df7338e849d3ccaf6804d8f",
+      "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "604deee9674aa3d97e45ccf7bc5b8c5dda27017dee2f235c107750911d2981b7",
+      "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "8b94c3d9409f46bedf812b00ff9f3156da9ace6885ec04456ea5fed59d842127",
+      "frontend-modern/src/hooks/useWorkloads.ts": "1439f5bc51ad5e362eb21b65b9d95b870f84cdae823770f4ae41dd848905703d",
+      "frontend-modern/src/utils/workloadGuestPresentation.ts": "71a2d2e62411c70c0eb609e68cd4963dac483be59a5be6afcf96c1ce2191436f"
+    },
+    "captures": [
+      {
+        "file": "canonical-vm-desktop-light-silent.png",
+        "name": "canonical-vm-desktop-light",
+        "state": "silent",
+        "sha256": "1b9c34d68c8cf24be7114c06d9976188f5bd9419af9e5b461d8a8ba484d50b4f",
+        "viewed": true
+      },
+      {
+        "file": "canonical-vm-desktop-light-stopped.png",
+        "name": "canonical-vm-desktop-light",
+        "state": "stopped",
+        "sha256": "45fd35767c8246a298cd18957cdacf88396bce6c41327a6494bb94cd15567d7f",
+        "viewed": true
+      },
+      {
+        "file": "canonical-vm-desktop-light-stored-stopped.png",
+        "name": "canonical-vm-desktop-light",
+        "state": "stored-stopped",
+        "sha256": "c15788cb4d7f45b85c4644f6dd14578e863b0f1d7ebf507bd82e23ea3683a254",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-desktop-light-silent.png",
+        "name": "workloads-vm-desktop-light",
+        "state": "silent",
+        "sha256": "dea3ac6a77870247ae166a2f60ce3da4266b6e70f40f8b23dbef08d06d0bf2ad",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-desktop-light-stopped.png",
+        "name": "workloads-vm-desktop-light",
+        "state": "stopped",
+        "sha256": "876e1b63a462e7ff6bf9321f15c025b8709db3f101312a3f4dc8127ec8928aec",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-desktop-light-stored-stopped.png",
+        "name": "workloads-vm-desktop-light",
+        "state": "stored-stopped",
+        "sha256": "02bad262d41990992bcf008dfb5dbe4fbd97a7247fd4bbce48c2740ab8713dcc",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-desktop-light-silent.png",
+        "name": "canonical-lxc-desktop-light",
+        "state": "silent",
+        "sha256": "4858ed050197194789d58205bfe4fa3ab54ac3bbdc7f6e041d00adb6ec2f6634",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-desktop-light-stopped.png",
+        "name": "canonical-lxc-desktop-light",
+        "state": "stopped",
+        "sha256": "58cfcedff92ace012f61a0989ab7a0caba0a760736968da22485a6912320013d",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-desktop-light-stored-stopped.png",
+        "name": "canonical-lxc-desktop-light",
+        "state": "stored-stopped",
+        "sha256": "7d8eb01333adafbf4ab43dd5e5097dd39a42369dd0b0de9e9d3dfab4761bacd1",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-desktop-light-silent.png",
+        "name": "workloads-lxc-desktop-light",
+        "state": "silent",
+        "sha256": "ed66a394887732f81eb3fd0cec0e7e4e1775ad79d6a9d080c8d7bec373760bcc",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-desktop-light-stopped.png",
+        "name": "workloads-lxc-desktop-light",
+        "state": "stopped",
+        "sha256": "7acc180629fe474edd6126d7bd9fa4d5d133de46aaebbee32b1272ab1e1556e0",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-desktop-light-stored-stopped.png",
+        "name": "workloads-lxc-desktop-light",
+        "state": "stored-stopped",
+        "sha256": "19250fac504ee0811b84caeeea4acdc3dd4ced30d794d34c2d9a3a4b135e9189",
+        "viewed": true
+      },
+      {
+        "file": "canonical-vm-phone-dark-silent.png",
+        "name": "canonical-vm-phone-dark",
+        "state": "silent",
+        "sha256": "c519511e99e6e24208e4f05a2da121756d76edeb514f209306faa4d5de5f9a3a",
+        "viewed": true
+      },
+      {
+        "file": "canonical-vm-phone-dark-stopped.png",
+        "name": "canonical-vm-phone-dark",
+        "state": "stopped",
+        "sha256": "1085f3fb0a99654fcc807b3a5fb492704f2a3e150f0d996d8407c0ccd9fb173b",
+        "viewed": true
+      },
+      {
+        "file": "canonical-vm-phone-dark-stored-stopped.png",
+        "name": "canonical-vm-phone-dark",
+        "state": "stored-stopped",
+        "sha256": "4eedf5fcc6fb4c54c5a4be70d4ac24d18230b15b11ee9af8c8bbdd42d956d16a",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-phone-dark-silent.png",
+        "name": "workloads-vm-phone-dark",
+        "state": "silent",
+        "sha256": "84561a90090f3d945b944c4298b9a2961550fe59e945922aa2f89951e690af79",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-phone-dark-stopped.png",
+        "name": "workloads-vm-phone-dark",
+        "state": "stopped",
+        "sha256": "188c4e63560a61da7636165903e06e6733615c22042340ef852303d3128c7f79",
+        "viewed": true
+      },
+      {
+        "file": "workloads-vm-phone-dark-stored-stopped.png",
+        "name": "workloads-vm-phone-dark",
+        "state": "stored-stopped",
+        "sha256": "4899356a909fff6ffd12e2e4f1ac301e1e0fefa0f2032d61ddfa22a88459ca4c",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-phone-dark-silent.png",
+        "name": "canonical-lxc-phone-dark",
+        "state": "silent",
+        "sha256": "1a3503060ef8060fe1165fccec8190abca8fe2c55c1866d4652c156c7d413402",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-phone-dark-stopped.png",
+        "name": "canonical-lxc-phone-dark",
+        "state": "stopped",
+        "sha256": "6a0e50472158269e635c37c4151b63ccfd8cd4b8b8e351c2ae62c8abf420fd4a",
+        "viewed": true
+      },
+      {
+        "file": "canonical-lxc-phone-dark-stored-stopped.png",
+        "name": "canonical-lxc-phone-dark",
+        "state": "stored-stopped",
+        "sha256": "9bc76bcad4019b98a739d10a3e1ab1cc38aeae3e6bb2de01faa7f623c2ca5c20",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-phone-dark-silent.png",
+        "name": "workloads-lxc-phone-dark",
+        "state": "silent",
+        "sha256": "d6a324d28b2e2af6175bd8f09c9b1b17949e03e0e5519e9c294c90395302e5fa",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-phone-dark-stopped.png",
+        "name": "workloads-lxc-phone-dark",
+        "state": "stopped",
+        "sha256": "ae4204af814c04e9e8ffb49895edfe592e2e628f8fa85924b86044af682e7193",
+        "viewed": true
+      },
+      {
+        "file": "workloads-lxc-phone-dark-stored-stopped.png",
+        "name": "workloads-lxc-phone-dark",
+        "state": "stored-stopped",
+        "sha256": "88225624fbc638302a2f210c9421e5a12df7f99fb561b7875911a5e4d9072e13",
+        "viewed": true
+      }
+    ],
+    "cleanup": {
+      "browsers": true,
+      "server": true
+    },
+    "result_sha256": "8c6dc1162c9191540362d1516bfc9eed33c2ef4aaec92f899c162b4b7ebd3516",
+    "prior_attempt": "First browser attempt had a missing synthetic WebSocketContext.Provider; zero checks, client1, captured page error, browsers/server stopped. Fixture-only provider correction; runtime/deadlines/thresholds unchanged."
+  },
+  "limits": "Production canonical drawer and Workloads snapshot adapter/drawer, History, clients and CSS with synthetic snapshots/GET responses. No native filesystem, thaw, restart, guest action, installed or release acceptance."
+}
