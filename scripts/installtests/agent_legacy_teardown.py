@@ -89,6 +89,7 @@ elif role == 'init':
     if fault == 'wrong-status-exit': code = 3 if state == 'started' else 0
     sys.exit(code)
 elif role == 'sysrc':
+    if fault == 'missing-sysrc': sys.exit(127)
     if a == ['-n', 'pulse_agent_enable']:
         event('enable:read'); v['enable_reads'] += 1; save()
         if fault == 'failed-enable' or (fault == 'failed-final-enable' and v['enable_reads'] > 1): sys.exit(2)
@@ -403,7 +404,14 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
             primary, child = root / "primary.pid", root / "child.pid"
             primary.write_text("100\n"); child.write_text("101\n")
             if platform == "FreeBSD":
-                render = functions(self.source, ("render_freebsd_rc_agent_script",))
+                # This production function contains a heredoc with nested
+                # rc.d functions: the next top-level comment, not the first
+                # closing brace inside that heredoc, binds its complete body.
+                marker = "render_freebsd_rc_agent_script() {"
+                self.assertEqual(self.source.count(marker), 1)
+                start = self.source.index(marker)
+                end = self.source.index("\n# report_proxmox_registration_outcome", start)
+                render = self.source[start:end]
                 rendered = root / "rendered"
                 r = subprocess.run(["bash", "-c", 'SHELL_EXPORT_LINES=""\n' + render + '\nrender_freebsd_rc_agent_script "$1" /synthetic/pulse-agent ""', "proof", str(rendered)], text=True, capture_output=True)
                 self.assertEqual(r.returncode, 0, r.stderr)
