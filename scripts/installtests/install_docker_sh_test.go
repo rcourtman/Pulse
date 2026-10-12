@@ -283,16 +283,47 @@ func TestStablePatchPromotedPrereleaseDetectsSameVersionCandidate(t *testing.T) 
 	}
 }
 
+// previousPrereleaseVersion names the predecessor of a numbered pre-release in its own
+// stage, as the release metadata tool does: rc.2 follows rc.1 and beta.2 follows beta.1.
+// The first of a stage has none, even when an earlier stage shipped.
 func previousPrereleaseVersion(version string) (string, bool) {
-	base, suffix, ok := strings.Cut(version, "-rc.")
-	if !ok {
-		return "", false
+	for _, stage := range []string{"alpha", "beta", "rc"} {
+		base, suffix, ok := strings.Cut(version, "-"+stage+".")
+		if !ok {
+			continue
+		}
+		number, err := strconv.Atoi(suffix)
+		if err != nil || number <= 1 {
+			return "", false
+		}
+		return fmt.Sprintf("%s-%s.%d", base, stage, number-1), true
 	}
-	rc, err := strconv.Atoi(suffix)
-	if err != nil || rc <= 1 {
-		return "", false
+	return "", false
+}
+
+// The release train cuts several betas before its candidate. The second beta's changelog
+// is written as the changes since the first, so the checks that read it must expect that.
+func TestPreviousPrereleaseVersionFollowsItsOwnStage(t *testing.T) {
+	for _, tc := range []struct {
+		version, want string
+		ok            bool
+	}{
+		{"6.6.0-rc.2", "6.6.0-rc.1", true},
+		{"6.6.0-rc.12", "6.6.0-rc.11", true},
+		{"6.6.0-beta.2", "6.6.0-beta.1", true},
+		{"6.6.0-beta.7", "6.6.0-beta.6", true},
+		{"6.6.0-alpha.3", "6.6.0-alpha.2", true},
+		{"6.6.0-beta.1", "", false},
+		{"6.6.0-rc.1", "", false},
+		{"6.6.0-alpha.1", "", false},
+		{"6.6.0-beta.x", "", false},
+		{"6.6.0", "", false},
+	} {
+		got, ok := previousPrereleaseVersion(tc.version)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("previousPrereleaseVersion(%q) = %q, %v; want %q, %v", tc.version, got, ok, tc.want, tc.ok)
+		}
 	}
-	return fmt.Sprintf("%s-rc.%d", base, rc-1), true
 }
 
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
