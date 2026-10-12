@@ -9345,3 +9345,18 @@ This does not impose VM semantics on stopped LXC platform storage, alter
 collection, probe a guest, or establish thaw, covered-filesystem writes or native
 restart recovery. Regressions cover the helper, both row modes, details,
 History and the native-facet-to-workload mapping with an unaffected second site.
+
+### Filesystem read provenance reaches alert settings (12 October 2026)
+
+The Alerts Guest Filesystems projection now consumes the Workloads read
+admission instead of treating retained numeric fields as a current reading.
+Explicit native stopped-VM state and unavailable reads withdraw usage; retained
+reads are labelled Last known. The shared threshold row/card display a wrapping
+`readingMessage` next to the reading, including before a missing saved mount
+has another sample, while preserving threshold values and override identities.
+Independent LXC platform storage and fresh zero remain unchanged.
+
+Verification connects `useThresholdsGuestData.test.ts`, both layouts in
+`ResourceTable.test.tsx`, and the production hook/table/editor browser fixture
+`guest-filesystem-thresholds.cjs`. Presentation proof is not native guest
+recovery, thaw/writes/liveness, alert delivery or installed/released acceptance.

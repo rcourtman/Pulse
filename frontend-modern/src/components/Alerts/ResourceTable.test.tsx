@@ -218,6 +218,39 @@ describe('ResourceTable', () => {
   });
 
   describe('rendering basics', () => {
+    it.each([false, true])(
+      'keeps filesystem reading explanations visible and reactive (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const [resources, setResources] = createSignal([
+          makeResource({
+            id: 'disk-1',
+            name: '/data',
+            type: 'guestDisk',
+            subtitle: 'Last known 9.0 / 10.0 GB · 90.0%',
+            readingMessage: 'Guest reads paused while the backup lock is reported.',
+          }),
+        ]);
+        const props = makeProps({ columns: ['Disk %'] });
+        render(() => <ResourceTable {...props} resources={resources()} />);
+        expect(
+          screen.getByText('Guest reads paused while the backup lock is reported.'),
+        ).not.toHaveClass('truncate');
+        if (mobile)
+          expect(screen.getByText('Last known 9.0 / 10.0 GB · 90.0%')).not.toHaveClass('truncate');
+        setResources([
+          makeResource({
+            id: 'disk-1',
+            name: '/data',
+            type: 'guestDisk',
+            subtitle: '3.0 / 10.0 GB · 30.0%',
+          }),
+        ]);
+        expect(screen.queryByText(/Guest reads paused/)).not.toBeInTheDocument();
+        expect(screen.getByText('3.0 / 10.0 GB · 30.0%')).toBeInTheDocument();
+      },
+    );
+
     it('renders the section header with the provided title', () => {
       const props = makeProps({ title: 'Nodes' });
       render(() => <ResourceTable {...props} />);

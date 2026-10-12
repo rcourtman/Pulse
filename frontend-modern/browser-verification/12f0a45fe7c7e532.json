@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "f056c382c1e0f41b47c7275aaae7aabb17a2efe5",
+  "verified_at": "2026-10-12T02:59:43.557554Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts": "be020a06b2c6bb7521ef2fc0450368814da35c0ba27a5d180463b77c7e879faa",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "e2b384e4669b9f0c5eceb7b6af653e4b2ef9a4f0cf1c64f249b54708c9fb3f71",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "314b85d031372788b1e83e6ee8623e2d55c2a4dd4b8d43618650d972e14c686a",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "f03055f749c3c2a929fdbee416f1f983cb7ff3fb1d66d4706d1081d439c8d7ff"
+  },
+  "routes": [
+    "/browser-tests/guest-filesystem-thresholds.html"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "All eight fixed read deferrals with retained and unavailable numeric carriers",
+    "Native stopped VM while the canonical resource stays online",
+    "Same mount restart, retained read and fresh measured zero",
+    "Permission refusal and unknown/missing reading",
+    "Independent stopped LXC and identical mount/VMID in a second PVE connection"
+  ],
+  "interactions": [
+    "Production hook, desktop row and phone card with full wrapping read guidance",
+    "Trusted keyboard/touch edit and cancel preserve custom thresholds and intended identity",
+    "Reactive source replacement without page reload; no page error, page overflow, off-origin or mutating request",
+    "Inspected all ten desktop-light and phone-dark captures; browsers and preview server closed"
+  ],
+  "notes": "pulse-worker-browser frontend-modern/browser-tests/guest-filesystem-thresholds.cjs; Playwright 1.56.1 matches integration lock. Synthetic resources only, not native QGA/thaw/writes, alert delivery, installed/released/reporter acceptance. Original unqualified values reproduced in six separate captures. First candidate harness used the mobile Cancel label on desktop and timed out; that adverse result is retained. Corrected harness selector only, with unchanged runtime hashes."
+}
