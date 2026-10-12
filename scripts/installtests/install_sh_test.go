@@ -4575,6 +4575,7 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 	// platforms without it; the portable production-function controls do not.
 	for _, name := range []string{
 		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"test_partial_failed_inventory_is_not_absence",
 		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
 		"test_only_silent_exit_one_is_admitted_as_absence",
 		"test_blank_line_output_is_not_a_silent_failed_inventory",
@@ -4582,6 +4583,16 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
 			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
 		}
+	}
+	// The real-systemctl control needs systemctl: it must pass where systemctl exists
+	// and be skipped, not silently absent, where it does not (macOS).
+	realControl := "test_real_systemctl_on_a_host_without_pulse_units_selects_the_default"
+	outcome := `\.\.\. ok`
+	if _, lookErr := exec.LookPath("systemctl"); lookErr != nil {
+		outcome = `\.\.\. skipped`
+	}
+	if !regexp.MustCompile(regexp.QuoteMeta(realControl) + ` \(.*\) ` + outcome).Match(out) {
+		t.Fatalf("service discovery control %s did not report %q:\n%s", realControl, outcome, out)
 	}
 }
 
