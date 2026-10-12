@@ -16,7 +16,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_UPSTART_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
+FUNCTIONS = ("cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
              "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
              "read_upstart_agent_removal_status", "upstart_agent_removal_paths_safe",
              "read_upstart_agent_removal_enablement", "quiesce_upstart_agent_for_removal",
@@ -164,6 +164,7 @@ class AgentUpstartTeardown(unittest.TestCase):
             setup = "\n".join(k + "=" + shlex.quote(str(v)) for k, v in values.items()) + "\n"
             shell = r'''
 set -euo pipefail
+TMP_FILES=()
 UNINSTALL=true AGENT_NAME=pulse-agent BINARY_NAME=pulse-agent INSTALL_DIR=/usr/local/bin
 EXIT_GENERAL=1 EXIT_MISSING_ARGS=16 PULSE_URL=https://same-instance.example.invalid AGENT_ID=synthetic
 ACTION_RUNNER_NAME=pulse-agent-runner PRIVILEGED_HELPER_NAME=pulse-agent-helper
@@ -236,6 +237,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 invoke = "read_upstart_agent_removal_status\n"
             else:
                 invoke = ("teardown_upstart_agent_service\n") * (2 if repeat else 1)
+            invoke = "trap cleanup EXIT\n" + invoke
             env = dict(os.environ, PATH=str(tools) + ":" + os.environ["PATH"], FIXTURE=str(root))
             result = subprocess.run(["bash", "-c", setup + shell + redirect(definitions(self.source)) + invoke],
                                     cwd=root, env=env, text=True, capture_output=True, timeout=15)

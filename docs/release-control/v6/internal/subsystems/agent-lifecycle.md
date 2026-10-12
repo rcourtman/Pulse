@@ -36,7 +36,9 @@ is still absent, leaving the manual override and all local recovery state;
 atomic non-replacement links refuse concurrently created files or directories,
 including during restore; the staged recovery copy is retained on conflict.
 Override write, permission and link operations each have explicit checked
-failure handling and remove only their owned non-credential temporary file. Only confirmed retirement removes the staged config and manual
+failure handling. Their non-credential temporary is also registered with the
+existing installer EXIT cleanup, executed by the production-function controls.
+Credential-bearing staged job recovery is never registered for EXIT deletion. Only confirmed retirement removes the staged config and manual
 before credential/state erasure. No credentials, arguments or config contents
 are returned by these observations. Existing same-instance URL, exact record,
 TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.

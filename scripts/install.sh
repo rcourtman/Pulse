@@ -1620,6 +1620,9 @@ quiesce_upstart_agent_for_removal() {
     else legacy_agent_processes_absent "$inventory" && return 1; fi
     if [[ ! -e "$override" ]]; then
         pending=$(mktemp "${override}.XXXXXX") || return 1
+        # The existing installer EXIT trap also owns this non-credential
+        # temporary if a command failure exits before inline cleanup.
+        TMP_FILES+=("$pending")
         # Link without replacement: an override created concurrently is not
         # ours to overwrite. The temporary file contains no credential.
         if ! printf 'manual\n' > "$pending"; then
