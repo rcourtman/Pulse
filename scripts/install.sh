@@ -3872,6 +3872,262 @@ find_qnap_state_dir() {
     return 1
 }
 
+# Unraid/QNAP have boot-file and watchdog owners independent of init managers.
+# A recovered ordinary Linux state directory is not a QNAP installation.
+nas_agent_removal_platform() {
+    [[ "$(uname -s)" == Linux ]] || return 1
+    if [[ -f /etc/unraid-version || -d /boot/config/plugins/pulse-agent ]]; then
+        printf 'Unraid\n'
+    elif [[ -f /sbin/getcfg || -f /etc/config/qpkg.conf ]]; then
+        printf 'QNAP\n'
+    else
+        return 1
+    fi
+}
+
+nas_agent_removal_file_safe() {
+    local path="$1" parent="" uid=""
+    [[ "$path" == /* && -f "$path" && ! -L "$path" && -r "$path" ]] || return 1
+    parent=$(dirname "$path") || return 1
+    [[ -d "$parent" && ! -L "$parent" ]] || return 1
+    uid=$(id -u) || return 1
+    [[ "$(portable_path_uid "$path")" == "$uid" && "$(portable_path_uid "$parent")" == "$uid" ]]
+    # FAT boot volumes do not implement Unix chmod semantics. Exact ownership,
+    # regular-file and complete-content checks apply without inventing mode bits.
+}
+
+nas_agent_removal_paths_safe() {
+    local platform="$1" wrapper="$STATE_DIR/start-pulse-agent.sh" size=""
+    [[ "$STATE_DIR" == /* && "$STATE_DIR" != / &&
+       "$STATE_DIR" != *$'\n'* && "$STATE_DIR" != *$'\r'* &&
+       "${STATE_DIR_REMOVAL_AUTHORITY:-}" == "$STATE_DIR" && ! -L "$STATE_DIR" ]] || return 1
+    if [[ -e "$wrapper" || -L "$wrapper" ]]; then
+        nas_agent_removal_file_safe "$wrapper" || return 1
+        size=$(wc -c < "$wrapper") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+        grep -Fxq "# Pulse Agent startup script for $platform" "$wrapper" || return 1
+    fi
+}
+
+# Filter only exact generated entries. Never evaluate boot text or remove every
+# line containing pulse-agent; that also deletes unrelated tools and installs.
+# status returns one fixed word, never the source (which may contain secrets).
+filter_nas_agent_boot_file() {
+    local platform="$1" path="$2" mode="$3" size="" expected="" last=""
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+        [[ "$mode" != status ]] || printf 'absent\n'
+        return 0
+    fi
+    nas_agent_removal_file_safe "$path" || return 1
+    size=$(wc -c < "$path") || return 1
+    [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+    if (( ${BASH_REMATCH[1]} > 0 )); then
+        last=$(tail -c 1 "$path" && printf x) || return 1
+        [[ "$last" == $'\nx' ]] || return 1
+    fi
+    if [[ "$platform" == QNAP ]]; then
+        expected=$(render_qnap_autorun_block "$STATE_DIR/start-pulse-agent.sh") || return 1
+    fi
+    PULSE_NAS_BOOT_EXPECTED="$expected" LC_ALL=C awk -v platform="$platform" -v mode="$mode" \
+        -v wrapper="$STATE_DIR/start-pulse-agent.sh" -v runtime="$INSTALL_DIR/$BINARY_NAME" '
+        function launch(s) {
+            if (platform == "Unraid") return s == "bash " wrapper || s == "bash \"" wrapper "\""
+            return s == wrapper " &" || s == "\"" wrapper "\" &" ||
+                   s == "sh " wrapper " &" || s == "sh \"" wrapper "\" &"
+        }
+        function target(s, word,    i,c) {
+            i = index(s, word); if (!i) return 0
+            c = substr(s, i + length(word), 1)
+            return c == "" || c ~ /[[:space:]"\047;&|)]/
+        }
+        BEGIN { expected = ENVIRON["PULSE_NAS_BOOT_EXPECTED"]; owned = 0; block = ""; marker = 0; bad = 0 }
+        {
+            if ($0 ~ /[\000-\010\013-\037\177]/) { bad = 1; exit 1 }
+            if (block != "") {
+                block = block $0 "\n"
+                if ($0 == "# Pulse Agent bootstrap end") {
+                    if (block != expected "\n") { bad = 1; exit 1 }
+                    block = ""; owned++; next
+                }
+                next
+            }
+            if ($0 == "# Pulse Agent bootstrap begin") {
+                if (platform != "QNAP" || marker) { bad = 1; exit 1 }
+                block = $0 "\n"; next
+            }
+            if (marker) {
+                if (!launch($0)) { bad = 1; exit 1 }
+                marker = 0; owned++; next
+            }
+            if ($0 == "# Pulse Agent") { marker = 1; next }
+            if ($0 == "# Pulse Agent bootstrap end") { bad = 1; exit 1 }
+            if (launch($0)) { owned++; next }
+            if ($0 !~ /^[[:space:]]*#/ && (target($0, "start-pulse-agent.sh") || target($0, runtime))) {
+                bad = 1; exit 1
+            }
+            if (mode == "filter") print
+        }
+        END {
+            if (bad || marker || block != "") exit 1
+            if (mode == "status") print (owned ? "present" : "absent")
+        }
+    ' "$path"
+}
+
+# Keep a private original outside the active boot namespace through remote
+# confirmation. A partial edit remains disabled; never restore boot activation
+# automatically. No-clobber creation refuses concurrent files/directories even
+# on FAT, where hard links are unavailable. Failed staging stays for recovery.
+disable_nas_agent_boot_file() {
+    local platform="$1" path="$2" directory="" mode="" observed=""
+    for directory in "$path".pulse-removal.*; do
+        [[ ! -e "$directory" && ! -L "$directory" ]] || return 1
+    done
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == present || "$observed" == absent ]] || return 1
+    [[ "$observed" != absent ]] || return 0
+    directory=$(mktemp -d "$path.pulse-removal.XXXXXX") || return 1
+    chmod 700 "$directory" || return 1
+    cp "$path" "$directory/original" || return 1
+    filter_nas_agent_boot_file "$platform" "$directory/original" filter > "$directory/disabled" || return 1
+    mode=$(portable_path_mode "$path") || return 1
+    nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/original" || return 1
+    mv "$path" "$directory/retired" || return 1
+    # Catch a changed source during staging, retaining the actual retired bytes.
+    nas_agent_removal_file_safe "$directory/retired" && cmp -s "$directory/retired" "$directory/original" || return 1
+    (set -o noclobber; cat "$directory/disabled" > "$path") || return 1
+    chmod "$mode" "$path" || return 1
+    nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/disabled" || return 1
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == absent ]] || return 1
+    NAS_REMOVAL_BOOT_RECOVERY="$directory"
+}
+
+nas_agent_boot_operation() {
+    local platform="$1" operation="$2" observed="" code=0
+    local path=/boot/config/go
+    [[ -d /boot/config && ! -L /boot/config ]] || [[ "$platform" == QNAP ]] || return 1
+    if [[ "$platform" == QNAP ]]; then
+        [[ -x /etc/init.d/init_disk.sh ]] && command -v timeout >/dev/null 2>&1 || return 1
+        if ! timeout -k 1 10 /etc/init.d/init_disk.sh mount_flash_config >/dev/null 2>&1; then
+            # The mount may have partially succeeded; an owned unmount is still
+            # attempted and checked. Neither failure permits remote/local removal.
+            timeout -k 1 10 /etc/init.d/init_disk.sh umount_flash_config >/dev/null 2>&1 || return 1
+            return 1
+        fi
+        path=/tmp/nasconfig_tmp/autorun.sh
+        [[ -d /tmp/nasconfig_tmp && ! -L /tmp/nasconfig_tmp ]] || code=1
+    fi
+    if [[ "$code" == 0 ]]; then
+        if [[ "$operation" == disable ]]; then
+            disable_nas_agent_boot_file "$platform" "$path" || code=1
+        else
+            observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || code=1
+            [[ "$observed" == absent ]] || code=1
+            if [[ "$code" == 0 && "$operation" == retire && -n "${NAS_REMOVAL_BOOT_RECOVERY:-}" ]]; then
+                [[ "$NAS_REMOVAL_BOOT_RECOVERY" == "$path".pulse-removal.* &&
+                   -d "$NAS_REMOVAL_BOOT_RECOVERY" && ! -L "$NAS_REMOVAL_BOOT_RECOVERY" ]] &&
+                    rm -r -- "$NAS_REMOVAL_BOOT_RECOVERY" || code=1
+            fi
+        fi
+    fi
+    if [[ "$platform" == QNAP ]]; then
+        timeout -k 1 10 /etc/init.d/init_disk.sh umount_flash_config >/dev/null 2>&1 || code=1
+    fi
+    return "$code"
+}
+
+# Read complete kernel evidence before signalling; expose only numeric IDs and
+# roles. Relative/foreign wrappers and QNAP deferred autorun shells have unknown
+# ownership, so retain recovery instead of signalling an unrelated boot owner.
+read_nas_agent_removal_processes() {
+    local platform="$1" observation="" line="" pid="" parent="" comm="" args="" role=""
+    local wrapper="$STATE_DIR/start-pulse-agent.sh" runtime="$INSTALL_DIR/$BINARY_NAME"
+    local complete=false count=0 seen=" " shell=""
+    local -a rows=()
+    observation=$(LC_ALL=C timeout -k 1 5 ps -ax -o pid= -o ppid= -o comm= -o args= 2>&1 &&
+        printf '%s' '__pulse_nas_processes_complete__') || return 1
+    while IFS= read -r line; do
+        [[ "$complete" == false ]] || return 1
+        if [[ "$line" == __pulse_nas_processes_complete__ ]]; then complete=true; continue; fi
+        [[ "$line" =~ ^[[:space:]]*([1-9][0-9]*)[[:space:]]+([0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)$ ]] || return 1
+        pid="${BASH_REMATCH[1]}" parent="${BASH_REMATCH[2]}" comm="${BASH_REMATCH[3]}" args="${BASH_REMATCH[4]}"
+        [[ "$seen" != *" $pid "* ]] || return 1
+        seen+="$pid "; role=other
+        if [[ "$args" == "$runtime" || "$args" == "$runtime "* ]]; then
+            [[ "${comm##*/}" == "$BINARY_NAME" ]] || return 1
+            role=collector
+        elif [[ "${comm##*/}" == "$BINARY_NAME" ]]; then
+            role=unknown
+        fi
+        case "${comm##*/}" in
+            sh|bash|dash|ash|start-pulse-age|start-pulse-agent.sh)
+                for shell in sh bash dash ash /bin/sh /bin/bash /bin/dash /bin/ash /usr/bin/sh /usr/bin/bash; do
+                    if [[ "$args" == "$shell $wrapper" || "$args" == "$shell $wrapper "* ]]; then role=watchdog; fi
+                done
+                if [[ "$args" == "$wrapper" || "$args" == "$wrapper "* ]]; then role=watchdog; fi
+                if [[ "$role" != watchdog && "$args" =~ start-pulse-agent\.sh([[:space:]]|$) ]]; then role=unknown; fi
+                if [[ "$platform" == QNAP && "$args" == *'/nasconfig_tmp/autorun.sh'* ]]; then role=unknown; fi
+                ;;
+        esac
+        rows+=("$pid $parent $role"); count=$((count + 1))
+        [[ $count -le 65536 ]] || return 1
+    done <<< "$observation"
+    [[ "$complete" == true && $count -gt 0 ]] || return 1
+    printf '%s\n' "${rows[@]}"
+}
+
+nas_agent_processes_absent() {
+    [[ "$1" != *' watchdog'* && "$1" != *' collector'* && "$1" != *' unknown'* ]]
+}
+
+quiesce_nas_agent_for_removal() {
+    local platform="$1" inventory="" pid="" parent="" role=""
+    command -v timeout >/dev/null 2>&1 && command -v ps >/dev/null 2>&1 || return 1
+    nas_agent_removal_paths_safe "$platform" || return 1
+    inventory=$(read_nas_agent_removal_processes "$platform") || return 1
+    [[ "$inventory" != *' unknown'* ]] || return 1
+    nas_agent_boot_operation "$platform" disable || return 1
+    # Observe again after boot mutation; never signal PIDs from the old read.
+    inventory=$(read_nas_agent_removal_processes "$platform") || return 1
+    [[ "$inventory" != *' unknown'* ]] || return 1
+    while read -r pid parent role; do
+        [[ "$role" != watchdog ]] || kill -TERM "$pid" || return 1
+    done <<< "$inventory"
+    sleep 1
+    inventory=$(read_nas_agent_removal_processes "$platform") || return 1
+    [[ "$inventory" != *' watchdog'* && "$inventory" != *' unknown'* ]] || return 1
+    while read -r pid parent role; do
+        [[ "$role" != collector ]] || kill -TERM "$pid" || return 1
+    done <<< "$inventory"
+    sleep 1
+    nas_agent_boot_operation "$platform" observe || return 1
+    inventory=$(read_nas_agent_removal_processes "$platform") || return 1
+    nas_agent_processes_absent "$inventory"
+}
+
+confirm_nas_agent_removal_quiescent() {
+    local platform="$1" inventory="" unit=""
+    nas_agent_boot_operation "$platform" observe || return 1
+    inventory=$(read_nas_agent_removal_processes "$platform") || return 1
+    nas_agent_processes_absent "$inventory" || return 1
+    if command -v systemctl >/dev/null 2>&1; then
+        for unit in "${ACTION_RUNNER_NAME}.service" "${PRIVILEGED_HELPER_NAME}.socket" \
+            "${PRIVILEGED_HELPER_NAME}.service" "${AGENT_NAME}.service"; do
+            confirm_agent_unit_quiescent "$unit" || return 1
+        done
+    fi
+}
+
+teardown_nas_agent_boot_owner() {
+    local platform="$1"
+    confirm_nas_agent_removal_quiescent "$platform" || return 1
+    nas_agent_boot_operation "$platform" retire || return 1
+    # Close state once more after flash unmount/recovery retirement, while the
+    # credentials and wrapper still exist. No unchecked global pkill follows.
+    confirm_nas_agent_removal_quiescent "$platform"
+}
+
 remove_qnap_autorun_block() {
     local autorun_path="$1"
 
@@ -4024,18 +4280,9 @@ EOF
     chmod +x "$wrapper_script"
 }
 
-append_qnap_autorun_block() {
-    local autorun_path="$1"
-    local wrapper_script="$2"
-    local state_dir="$3"
-
-    remove_qnap_autorun_block "$autorun_path"
-    if [[ ! -f "$autorun_path" ]]; then
-        echo "#!/bin/sh" > "$autorun_path"
-    fi
-
-    cat >> "$autorun_path" <<EOF
-
+render_qnap_autorun_block() {
+    local wrapper_script="$1"
+    cat <<EOF
 # Pulse Agent bootstrap begin
 (
     _pulse_wrapper="${wrapper_script}"
@@ -4054,8 +4301,22 @@ append_qnap_autorun_block() {
     fi
 ) >> /var/log/${AGENT_NAME}.log 2>&1 &
 # Pulse Agent bootstrap end
-
 EOF
+}
+
+append_qnap_autorun_block() {
+    local autorun_path="$1"
+    local wrapper_script="$2"
+    local state_dir="$3"
+
+    remove_qnap_autorun_block "$autorun_path"
+    if [[ ! -f "$autorun_path" ]]; then
+        echo "#!/bin/sh" > "$autorun_path"
+    fi
+
+    printf '\n' >> "$autorun_path"
+    render_qnap_autorun_block "$wrapper_script" >> "$autorun_path"
+    printf '\n' >> "$autorun_path"
 
     chmod +x "$autorun_path"
 }
@@ -6129,6 +6390,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
     local uninstall_upstart="false"
     local uninstall_truenas_scale="false"
     local uninstall_truenas_tasks=""
+    local uninstall_nas_platform=""
+    NAS_REMOVAL_BOOT_RECOVERY=""
 
     # Validate saved connection availability before stopping a working install.
     # Stop every systemd activation source before remote removal, process kills
@@ -6138,6 +6401,11 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -z "$PULSE_URL" ]]; then
             fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
         fi
+    fi
+    uninstall_nas_platform=$(nas_agent_removal_platform || true)
+    if [[ -n "$uninstall_nas_platform" ]]; then
+        quiesce_nas_agent_for_removal "$uninstall_nas_platform" ||
+            fail "NAS removal could not confirm the owned boot entry disabled and watchdog/collector stopped; credentials, wrapper and recovery files were retained. Reconcile boot state and any .pulse-removal recovery directory before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
     # Middleware can recreate and enable the systemd unit at boot. Disable all
     # exact owned tasks before stopping services; a partial/refused observation
@@ -6170,7 +6438,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         uninstall_legacy_manager=FreeBSD
         quiesce_freebsd_agent_for_removal ||
             fail "FreeBSD removal could not confirm stopped rc.d, disabled boot activation and absent supervisor/child; local recovery files were retained. Reconcile linked/appliance boot tasks first when present; no automatic restart was attempted." "$EXIT_GENERAL"
-    elif [[ "$uninstall_upstart" != true ]] && ! command -v systemctl >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]]; then
+    elif [[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]] && ! command -v systemctl >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]]; then
         uninstall_legacy_manager=SysV
         quiesce_sysv_agent_for_removal ||
             fail "SysV removal could not confirm stopped process and disabled runlevels; local recovery files were retained. A preceding stop or disable may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
@@ -6178,6 +6446,11 @@ if [[ "$UNINSTALL" == "true" ]]; then
     if [[ "$uninstall_truenas_scale" == true ]]; then
         confirm_truenas_agent_removal_quiescent "$uninstall_truenas_tasks" ||
             fail "TrueNAS SCALE removal could not confirm stopped units, collector and bootstrap processes; local recovery was retained. Reconcile stopped/disabled state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+
+    if [[ -n "$uninstall_nas_platform" ]]; then
+        confirm_nas_agent_removal_quiescent "$uninstall_nas_platform" ||
+            fail "NAS boot or process state changed before server removal; local recovery was retained. Reconcile stopped and disabled state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # A credential-bearing install must durably remove its exact server record
@@ -6215,18 +6488,23 @@ if [[ "$UNINSTALL" == "true" ]]; then
             fail "TrueNAS SCALE boot-task retirement was not confirmed; local recovery was retained. A preceding task disable/delete or server removal may have succeeded. Reconcile middleware and stopped service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
-    # Kill wrapper scripts first: they are watchdogs, so stopping the agent
-    # while its wrapper still loops only races the respawn. No leading path
-    # separator here, unlike the install paths, so a wrapper invoked by a
-    # relative path or left at an older location is still caught. The dot is
-    # escaped and the far end bounded so an editor session or a .bak copy of
-    # the wrapper is not swept up with it.
-    pkill -f "start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
-    # Then the agent itself.
-    # Use -x (exact process name match) to avoid killing THIS uninstall script,
-    # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
-    pkill -x "pulse-agent" 2>/dev/null || true
-    sleep 1
+    if [[ -n "$uninstall_nas_platform" ]]; then
+        teardown_nas_agent_boot_owner "$uninstall_nas_platform" ||
+            fail "NAS boot retirement or final quiescence was not confirmed; local recovery was retained even if server removal succeeded. Reconcile boot/process state and any .pulse-removal directory before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    else
+        # Kill wrapper scripts first: they are watchdogs, so stopping the agent
+        # while its wrapper still loops only races the respawn. No leading path
+        # separator here, unlike the install paths, so a wrapper invoked by a
+        # relative path or left at an older location is still caught. The dot is
+        # escaped and the far end bounded so an editor session or a .bak copy of
+        # the wrapper is not swept up with it.
+        pkill -f "start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
+        # Then the agent itself.
+        # Use -x (exact process name match) to avoid killing THIS uninstall script,
+        # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
+        pkill -x "pulse-agent" 2>/dev/null || true
+        sleep 1
+    fi
 
     # Systemd - unified agent
     if command -v systemctl >/dev/null 2>&1; then
@@ -6275,57 +6553,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
         # DSM 6.x Upstart retirement was confirmed before recovery erasure.
     fi
 
-    # Unraid
-    if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
-        log_info "Removing Unraid installation..."
-        # Stop the wrapper watchdogs before the agents they supervise, and keep
-        # the match bounded so a .bak copy or an editor session on the wrapper
-        # is not swept up.
-        pkill -f "start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
-        pkill -x "pulse-agent" 2>/dev/null || true
-        sleep 1
-        
-        # Remove from /boot/config/go - all pulse-related entries
-        GO_SCRIPT="/boot/config/go"
-        if [[ -f "$GO_SCRIPT" ]]; then
-            # Remove unified agent entries (line-by-line, not range-based,
-            # to avoid consuming adjacent non-pulse entries when no trailing
-            # blank line separates them).
-            sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-            sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-        fi
-        
-        # Remove installation directories
-        rm -rf /boot/config/plugins/pulse-agent
-        rm -rf /boot/config/pulse  # Legacy pulse directory
-        
-        # Remove binaries from RAM disk
-        rm -f "${INSTALL_DIR}/${BINARY_NAME}"
-        
-        # Remove log directory
-        rm -rf /var/log/pulse
-    fi
-
-    # QNAP QTS/QuTS hero
-    qnap_state_dir=$(find_qnap_state_dir || true)
-    if [[ -n "$qnap_state_dir" ]] || [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
-        log_info "Removing QNAP installation..."
-        if [[ -x /etc/init.d/init_disk.sh ]]; then
-            if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
-                AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-                if [[ -f "$AUTORUN_PATH" ]]; then
-                    remove_qnap_autorun_block "$AUTORUN_PATH"
-                fi
-                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-            else
-                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
-                log_warn "Could not mount QNAP flash config to remove autorun.sh entry."
-            fi
-        fi
-        if [[ -n "$qnap_state_dir" ]]; then
-            rm -rf "$qnap_state_dir"
-        fi
-    fi
+    # NAS boot/watchdog retirement completed above. Erase only the selected
+    # authorised state directory through remove_agent_state_dir, never an entire
+    # legacy /boot/config/pulse tree (which can also contain unrelated tools).
+    # QNAP state discovery is not independent platform or deletion authority.
 
     # SCALE's task retirement was confirmed above, before authorised state
     # erasure. A recovered ordinary Linux directory is not a TrueNAS install.

@@ -15,6 +15,54 @@
 
 ## Purpose
 
+### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
+
+The Unix uninstall caller selects these platforms from their vendor/installed
+footprints, not from an ordinary recovered Linux state directory or QNAP state
+finder alone. Existing exact state-removal authority must select the wrapper's
+state directory. Regular root-owned files and parents are required; FAT boot
+volumes cannot be assumed to implement Unix chmod semantics. Unknown wrapper
+ownership and missing observation tools refuse before mutation.
+
+One complete bounded boot-file parse admits only the exact generated Unraid
+launch or canonical QNAP deferred block/legacy direct launch for that wrapper.
+All duplicates retire; unrelated entries (including co-installed names and
+legacy Telegraf) remain. Foreign/indirect targets, partial or changed blocks,
+linked/non-regular files, binary/incomplete content and over-1-MiB files refuse
+without evaluating or disclosing their text. The original remains in a private
+`.pulse-removal.*` recovery directory outside the active boot namespace through
+remote confirmation. A changed source during staging or a concurrently created
+file, directory or symlink refuses without clobbering it; interrupted staging
+retains the actual original and never restores automatic activation. New boot
+content uses no-clobber file creation, compatible with FAT without hard links;
+this is not an atomic whole-content swap or a lock against external root writers.
+
+Complete bounded kernel evidence returns only numeric IDs and roles. Only exact
+selected watchdog/collector processes receive checked TERM, watchdog first,
+with independent absence observations. Editor sessions, backup wrappers and
+co-installed names are not targets. Relative/foreign same-name processes or
+unattributable QNAP deferred autorun shells refuse instead of signalling another
+boot owner. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
+retain identity, credentials, trust and recoverable files. QNAP mount and
+unmount each have checked bounded results, including cleanup after partial mount.
+
+Whole boot/process and applicable init-manager quiescence closes again before
+same-instance server removal and before local erasure; late activation refuses,
+even after remote removal succeeded. NAS paths do not subsequently run the
+unchecked global pkill or delete arbitrary discovered QNAP state/whole legacy
+Unraid directories. Successful/absent/repeated removal still requires complete
+fresh observations. No automatic restart, credential churn or transport-policy
+change follows a partial operation.
+
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all seventeen
+actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+boot filesystem transformations are real private user operations; flash/kernel
+faults are closed models. Two generated watchdog/child controls use real private
+ordinary-user processes, not appliance mounts or root services. Native signed
+Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
+publication remain separate obligations; this source proof does not resolve
+#1099 or claim installed restoration.
+
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 
 TrueNAS SCALE has an independent activation owner: its Init/Shutdown bootstrap

@@ -8540,3 +8540,43 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	}
 	t.Logf("%s", output)
 }
+
+func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_nas_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("NAS boot-owner/watchdog production caller controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_complete_process_evidence_is_required_before_boot_or_remote_mutation",
+		"test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled",
+		"test_non_regular_foreign_wrapper_and_unselected_state_preserve_recovery",
+		"test_only_complete_owned_boot_entries_are_admitted",
+		"test_refused_edit_copy_or_prior_recovery_cannot_erase_credentials",
+		"test_concurrent_boot_file_directory_and_symlink_are_not_clobbered",
+		"test_flash_mount_and_unmount_failures_are_not_local_only_permission",
+		"test_watchdog_stops_before_collector_and_ignored_or_refused_signals_retain_state",
+		"test_all_owned_entries_disable_before_signalling_and_remote_erasure",
+		"test_remote_refusal_keeps_disabled_boot_and_exact_local_recovery",
+		"test_reactivation_before_remote_refuses_without_erasure",
+		"test_late_boot_or_process_activation_retains_recovery_after_remote",
+		"test_absent_missing_and_repeated_removal_require_fresh_quiescence",
+		"test_process_observation_returns_roles_not_arguments_and_stops_timeout_child",
+		"test_recovered_ordinary_linux_state_is_not_qnap_platform_authority",
+		"test_actual_generated_watchdogs_and_children_become_quiescent",
+		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentNASTeardown."+name+") ... ok") {
+			t.Fatalf("NAS removal control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete NAS removal verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
