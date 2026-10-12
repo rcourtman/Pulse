@@ -587,7 +587,7 @@ describe('patrolControlPresentation branch coverage (set 2)', () => {
       // Branch: `input.autonomyLocked` short-circuits before the autonomy switch.
       expect(
         getPatrolQueueWorkspaceDescription({
-          autonomyLevel: 'approval',
+          autonomyLevel: 'full',
           autonomyLocked: true,
           findingCount: 2,
           affectedResourceCount: 1,

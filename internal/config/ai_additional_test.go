@@ -38,20 +38,24 @@ func TestAIConfig_PatrolSettings(t *testing.T) {
 		t.Fatalf("patrol autonomy should be disabled by default")
 	}
 
-	cfg.PatrolAutonomyLevel = PatrolAutonomyApproval
-	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyApproval {
-		t.Fatalf("patrol autonomy = %q, want approval", got)
-	}
-	if !cfg.IsPatrolAutonomyEnabled() {
-		t.Fatalf("patrol autonomy should be enabled for approval mode")
+	// Test all valid levels
+	cfg.PatrolAutonomyLevel = PatrolAutonomyAssisted
+	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyAssisted {
+		t.Fatalf("patrol autonomy = %q, want assisted", got)
 	}
 
-	// The retired self-executing modes keep investigating but ask first.
-	for _, retired := range []string{"assisted", "full", "autonomous"} {
-		cfg.PatrolAutonomyLevel = retired
-		if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyApproval {
-			t.Fatalf("retired patrol autonomy %q = %q, want approval", retired, got)
-		}
+	cfg.PatrolAutonomyLevel = PatrolAutonomyFull
+	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyFull {
+		t.Fatalf("patrol autonomy = %q, want full", got)
+	}
+	if !cfg.IsPatrolAutonomyEnabled() {
+		t.Fatalf("patrol autonomy should be enabled for full mode")
+	}
+
+	// Test migration: old "autonomous" maps to new "full"
+	cfg.PatrolAutonomyLevel = "autonomous"
+	if got := cfg.GetPatrolAutonomyLevel(); got != PatrolAutonomyFull {
+		t.Fatalf("patrol autonomy = %q, want full (migrated from autonomous)", got)
 	}
 
 	cfg.PatrolAutonomyLevel = "invalid"
@@ -103,10 +107,11 @@ func TestAIConfig_ControlAndPatrolLevelValidation(t *testing.T) {
 	if !IsValidPatrolAutonomyLevel(PatrolAutonomyApproval) {
 		t.Fatalf("expected patrol approval to be valid")
 	}
-	for _, retired := range []string{"assisted", "full", "autonomous"} {
-		if IsValidPatrolAutonomyLevel(retired) {
-			t.Fatalf("retired patrol autonomy %q must not be accepted", retired)
-		}
+	if !IsValidPatrolAutonomyLevel(PatrolAutonomyAssisted) {
+		t.Fatalf("expected patrol assisted to be valid")
+	}
+	if !IsValidPatrolAutonomyLevel(PatrolAutonomyFull) {
+		t.Fatalf("expected patrol full to be valid")
 	}
 }
 

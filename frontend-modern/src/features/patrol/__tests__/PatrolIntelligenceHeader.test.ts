@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { PATROL_AUTONOMY_POLICY_PRESENTATION } from '../PatrolIntelligenceHeader';
+import {
+  PATROL_AUTONOMY_POLICY_PRESENTATION,
+  getPatrolAutopilotExpiry,
+} from '../PatrolIntelligenceHeader';
 import {
   getPatrolAlertAnalysisAvailabilityPresentation,
   getPatrolAutonomyAvailabilityPresentation,
@@ -23,6 +26,15 @@ const bannersSource = readFileSync(
 );
 
 describe('PatrolIntelligenceHeader', () => {
+  it('does not present the server zero-time sentinel as an Autopilot expiry', () => {
+    expect(getPatrolAutopilotExpiry('0001-01-01T00:00:00Z')).toBeNull();
+    expect(getPatrolAutopilotExpiry('not-a-date')).toBeNull();
+    expect(getPatrolAutopilotExpiry(undefined)).toBeNull();
+    expect(getPatrolAutopilotExpiry('2026-12-31T12:00:00Z')?.toISOString()).toBe(
+      '2026-12-31T12:00:00.000Z',
+    );
+  });
+
   it('keeps trigger runtime status in the header chrome after setup', () => {
     expect(headerSource).toContain('getPatrolTriggerStatusSummary');
     expect(headerSource).toContain('state.patrolStatus()?.trigger_status');
@@ -86,7 +98,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('sm:min-h-0');
   });
 
-  it('makes Patrol mode a simple two-level choice without rendering plan-locked paid modes', () => {
+  it('makes Patrol mode a simple four-level choice without rendering plan-locked paid modes', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
@@ -98,10 +110,20 @@ describe('PatrolIntelligenceHeader', () => {
         detail: 'Patrol investigates and prepares fixes, but every change waits for your approval.',
         compactLabel: 'Ask first',
       },
+      assisted: {
+        label: 'Safe auto-fix',
+        detail:
+          'Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first.',
+        compactLabel: 'Safe auto-fix',
+      },
+      full: {
+        label: 'Autopilot',
+        detail:
+          'Patrol can act automatically within policy and still asks when approval is required.',
+        compactLabel: 'Autopilot',
+      },
     });
-    expect(headerSource).toContain("['monitor', 'approval']");
-    expect(headerSource).not.toContain("'assisted'");
-    expect(headerSource).not.toContain('Autopilot');
+    expect(headerSource).toContain("['monitor', 'approval', 'assisted', 'full']");
     expect(headerSource).toContain("state.autoFixLocked() ? 'monitor' : state.autonomyLevel()");
     expect(headerSource).toContain('value={effectiveAutonomyLevel()}');
     expect(headerSource).toContain('canChooseAutonomyLevel');

@@ -15,6 +15,7 @@ import (
 //   - MemoryStore.ExpireActionAudits                  (action_dispatch_store.go)
 //   - MemoryStore.RecordActionExecutionRefusal        (store.go)
 //   - MemoryStore.RecordActionLifecycleEvent          (store.go)
+//   - MemoryStore.RecordActionPolicyExecutionAdmission (action_dispatch_store.go)
 //
 // Every subtest constructs its OWN MemoryStore so it passes when run alone via
 // -run. The constructor, record, and event helpers reused here
@@ -28,8 +29,8 @@ var branchcov0723amNow = time.Date(2026, 7, 23, 9, 0, 0, 0, time.UTC)
 
 // branchcov0723amFutureRecord returns an audit record whose Plan.ExpiresAt is
 // 2h AFTER branchcov0723amNow. This is required by helpers like
-// ApplyActionDecision, which calls
-// ValidateActionExecutionStart and rejects any record whose ExpiresAt is not
+// BeginPolicyActionExecution and ApplyActionDecision, which call
+// ValidateActionExecutionStart and reject any record whose ExpiresAt is not
 // strictly in the future relative to the "now" they are invoked with. Using a
 // record whose ExpiresAt equals branchcov0723amNow + 2h lets callers pass
 // branchcov0723amNow (or any value up to +2h) as the decision/admission time.
@@ -40,6 +41,29 @@ func branchcov0723amFutureRecord(id string, state ActionState) ActionAuditRecord
 	r.Plan.PlannedAt = branchcov0723amNow
 	r.Plan.ExpiresAt = branchcov0723amNow.Add(2 * time.Hour)
 	return r
+}
+
+// branchcov0723amLeaseFor builds a ValidateActionPolicyAuthorizationLease-valid
+// lease for record. Every field ValidateActionPolicyAuthorizationLease inspects
+// is sourced from the record (so BeginPolicyActionExecution accepts it); the
+// digest is recomputed last via the canonical helper.
+func branchcov0723amLeaseFor(record ActionAuditRecord, now time.Time) ActionPolicyAuthorizationLease {
+	lease := ActionPolicyAuthorizationLease{
+		Version:                 1,
+		OrgID:                   record.Request.Actor.OrgID,
+		ActionID:                record.ID,
+		ResourceID:              CanonicalResourceID(record.Request.ResourceID),
+		CapabilityName:          strings.TrimSpace(record.Request.CapabilityName),
+		PlanHash:                record.Plan.PlanHash,
+		CapabilityPolicyVersion: record.Plan.PolicyVersion,
+		TenantPolicyVersion:     "tenant:branchcov0723am",
+		ResourcePolicyVersion:   "resource:branchcov0723am",
+		LicenseAllowsAutoFix:    true,
+		IssuedAt:                now,
+		ExpiresAt:               now.Add(time.Hour),
+	}
+	lease.Digest = ActionPolicyAuthorizationDigest(lease)
+	return lease
 }
 
 // branchcov0723amAdmitToReceiptPending drives an action all the way through
@@ -1116,6 +1140,177 @@ func TestBranchcov0723Am_RecordActionLifecycleEvent(t *testing.T) {
 		err := store.RecordActionLifecycleEvent(bad)
 		if err == nil {
 			t.Fatal("expected normalization error for empty event action id")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// MemoryStore.RecordActionPolicyExecutionAdmission
+// ---------------------------------------------------------------------------
+
+func TestBranchcov0723Am_RecordActionPolicyExecutionAdmission(t *testing.T) {
+	now := branchcov0723amNow
+
+	// happyFromPending: audit currently Pending -> Executing after admission.
+	t.Run("happy_from_pending", func(t *testing.T) {
+		store := NewMemoryStore()
+		record := branchcov0723amFutureRecord("act-policy-pending", ActionStatePending)
+		if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+			t.Fatal(err)
+		}
+		lease := branchcov0723amLeaseFor(record, now.Add(time.Minute))
+		approval := ActionApprovalRecord{Actor: "policy:auto", Method: MethodPolicy}
+		execRecord, approvedEvent, startedEvent, err := BeginPolicyActionExecution(record, approval, lease, now.Add(time.Minute))
+		if err != nil {
+			t.Fatalf("BeginPolicyActionExecution: %v", err)
+		}
+		attempt, err := NewActionDispatchAttempt(record.ID, now.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.RecordActionPolicyExecutionAdmission(execRecord, approvedEvent, startedEvent, attempt); err != nil {
+			t.Fatalf("RecordActionPolicyExecutionAdmission: %v", err)
+		}
+		gotAudit, found, err := store.GetActionAudit(record.ID)
+		if err != nil || !found || gotAudit.State != ActionStateExecuting {
+			t.Fatalf("audit found=%v state=%q err=%v", found, gotAudit.State, err)
+		}
+		gotAttempt, found, err := store.GetActionDispatchAttempt(record.ID)
+		if err != nil || !found || gotAttempt.State != ActionDispatchQueued {
+			t.Fatalf("attempt found=%v state=%q err=%v", found, gotAttempt.State, err)
+		}
+		// Both the approval and the executing events must be persisted.
+		events, _ := store.GetActionLifecycleEvents(record.ID, time.Time{}, 10)
+		states := map[ActionState]bool{}
+		for _, e := range events {
+			states[e.State] = true
+		}
+		if !states[ActionStateApproved] || !states[ActionStateExecuting] {
+			t.Fatalf("missing approved/executing event: %#v", states)
+		}
+	})
+
+	// happyFromPlanned: audit currently Planned (approval-free path) ->
+	// Executing after admission.
+	t.Run("happy_from_planned", func(t *testing.T) {
+		store := NewMemoryStore()
+		record := branchcov0723amFutureRecord("act-policy-planned", ActionStatePlanned)
+		record.Plan.RequiresApproval = false
+		record.Plan.ApprovalPolicy = ApprovalNone
+		record.Plan.ApprovalRequirement = ApprovalRequirementForFloor(ApprovalNone)
+		if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+			t.Fatal(err)
+		}
+		lease := branchcov0723amLeaseFor(record, now.Add(time.Minute))
+		approval := ActionApprovalRecord{Actor: "policy:auto", Method: MethodPolicy}
+		execRecord, approvedEvent, startedEvent, err := BeginPolicyActionExecution(record, approval, lease, now.Add(time.Minute))
+		if err != nil {
+			t.Fatalf("BeginPolicyActionExecution: %v", err)
+		}
+		attempt, err := NewActionDispatchAttempt(record.ID, now.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.RecordActionPolicyExecutionAdmission(execRecord, approvedEvent, startedEvent, attempt); err != nil {
+			t.Fatalf("RecordActionPolicyExecutionAdmission: %v", err)
+		}
+		gotAudit, _, _ := store.GetActionAudit(record.ID)
+		if gotAudit.State != ActionStateExecuting {
+			t.Fatalf("state=%q want %q", gotAudit.State, ActionStateExecuting)
+		}
+	})
+
+	// failValidateAdmissionStatesMismatch: validateExecutionAdmission rejects
+	// an event with the wrong state.
+	t.Run("fail_validate_admission_event_state_mismatch", func(t *testing.T) {
+		store := NewMemoryStore()
+		record := branchcov0723amFutureRecord("act-policy-bad-event", ActionStateExecuting)
+		// event.State is Pending (not Executing).
+		badEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now, State: ActionStatePending, Actor: "operator"}
+		approvalEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now, State: ActionStateApproved, Actor: "operator"}
+		attempt, err := NewActionDispatchAttempt(record.ID, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = store.RecordActionPolicyExecutionAdmission(record, approvalEvent, badEvent, attempt)
+		if err == nil {
+			t.Fatal("expected validateExecutionAdmission to reject mismatched event state")
+		}
+	})
+
+	// failNormalizeApprovalEventEmptyActionID: approvalEvent fails normalization.
+	t.Run("fail_normalize_approval_event_empty_action_id", func(t *testing.T) {
+		store := NewMemoryStore()
+		// Build a valid Executing record + executionEvent + attempt first.
+		record := branchcov0723amFutureRecord("act-policy-bad-approval", ActionStatePending)
+		if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+			t.Fatal(err)
+		}
+		lease := branchcov0723amLeaseFor(record, now.Add(time.Minute))
+		approval := ActionApprovalRecord{Actor: "policy:auto", Method: MethodPolicy}
+		execRecord, _, startedEvent, err := BeginPolicyActionExecution(record, approval, lease, now.Add(time.Minute))
+		if err != nil {
+			t.Fatalf("BeginPolicyActionExecution: %v", err)
+		}
+		attempt, err := NewActionDispatchAttempt(record.ID, now.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// approvalEvent with empty ActionID cannot normalize.
+		badApprovalEvent := ActionLifecycleEvent{Timestamp: now, State: ActionStateApproved}
+		err = store.RecordActionPolicyExecutionAdmission(execRecord, badApprovalEvent, startedEvent, attempt)
+		if err == nil {
+			t.Fatal("expected normalization error for empty approvalEvent action id")
+		}
+	})
+
+	// failRecordNotFound: no audit was created for this action.
+	t.Run("fail_record_not_found", func(t *testing.T) {
+		store := NewMemoryStore()
+		record := branchcov0723amFutureRecord("act-policy-missing", ActionStatePending)
+		lease := branchcov0723amLeaseFor(record, now.Add(time.Minute))
+		approval := ActionApprovalRecord{Actor: "policy:auto", Method: MethodPolicy}
+		execRecord, approvedEvent, startedEvent, err := BeginPolicyActionExecution(record, approval, lease, now.Add(time.Minute))
+		if err != nil {
+			t.Fatalf("BeginPolicyActionExecution: %v", err)
+		}
+		attempt, err := NewActionDispatchAttempt(record.ID, now.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = store.RecordActionPolicyExecutionAdmission(execRecord, approvedEvent, startedEvent, attempt)
+		if err == nil || !strings.Contains(err.Error(), "not found") {
+			t.Fatalf("err=%v want 'not found'", err)
+		}
+	})
+
+	// failCurrentStateNotAdmissible: audit currently Executing (not Planned or
+	// Pending) -> actionTransitionConflict returns ErrActionAlreadyExecuting.
+	t.Run("fail_current_state_not_admissible", func(t *testing.T) {
+		store := NewMemoryStore()
+		record := branchcov0723amFutureRecord("act-policy-executing", ActionStateExecuting)
+		if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+			t.Fatal(err)
+		}
+		// Build the executing record/event pair directly. BeginPolicyActionExecution
+		// rejects records that are already Executing, so construct manually to
+		// exercise the MemoryStore-side state check.
+		execRecord := record
+		execRecord.State = ActionStateExecuting
+		startedEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now.Add(time.Minute), State: ActionStateExecuting, Actor: "policy:auto"}
+		approvedEvent := ActionLifecycleEvent{ActionID: record.ID, Timestamp: now.Add(time.Minute), State: ActionStateApproved, Actor: "policy:auto"}
+		attempt, err := NewActionDispatchAttempt(record.ID, now.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = store.RecordActionPolicyExecutionAdmission(execRecord, approvedEvent, startedEvent, attempt)
+		if !errors.Is(err, ErrActionAlreadyExecuting) {
+			t.Fatalf("err=%v want %v", err, ErrActionAlreadyExecuting)
+		}
+		// Audit must remain Executing.
+		got, _, _ := store.GetActionAudit(record.ID)
+		if got.State != ActionStateExecuting {
+			t.Fatalf("state=%q want %q (must be unchanged)", got.State, ActionStateExecuting)
 		}
 	})
 }

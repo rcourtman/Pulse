@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type fakeHostUpdateAgent struct {
@@ -235,6 +236,55 @@ func TestHostUpdateReconcileLegacyTerminalReceiptDowngradesUnknownHealthWithoutR
 	}
 	if len(agents.requests) != 0 || len(agents.queries) != 1 {
 		t.Fatalf("legacy receipt requests=%d queries=%d", len(agents.requests), len(agents.queries))
+	}
+}
+
+func TestPatrolFullModeRunsHostUpdateThroughCanonicalLifecycle(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostUpdateActionResource(now)}})
+	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
+		RequestID: "filled-by-executor", Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
+		Before:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
+		After:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, CheckedAt: now},
+		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
+	}}
+	h.SetActionExecutor(newRoutedActionExecutor(h, newHostUpdateActionExecutor(h, agents)))
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "agent:host-1",
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled: true, CapabilityNames: []string{hostPackageUpdateCapability},
+		},
+		SetAt: now, SetBy: "operator@example.com",
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}, nil
+	})
+	disposition, err := broker.Submit(context.Background(), aicontracts.ActionProposal{
+		ProposalID: "proposal-host-update", FindingID: "finding-host-update", InvestigationID: "investigation-host-update",
+		ResourceID: "agent:host-1", CapabilityName: hostPackageUpdateCapability, Reason: "Install three pending OS updates",
+	})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if disposition.State != string(unified.ActionStateCompleted) || disposition.VerificationStatus != string(unified.VerificationVerified) {
+		t.Fatalf("disposition = %#v", disposition)
+	}
+	if len(agents.requests) != 1 || agents.requests[0].Operation != agentexec.HostUpdateOperationInstall {
+		t.Fatalf("typed agent requests = %#v", agents.requests)
+	}
+	audit, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
+	}
+	if len(audit.Approvals) != 1 || audit.Approvals[0].Actor != patrolActionPolicyActor || audit.Approvals[0].Method != unified.MethodPolicy || audit.Result == nil || audit.VerificationOutcome.Status != unified.VerificationVerified {
+		t.Fatalf("audit = %#v", audit)
 	}
 }
 

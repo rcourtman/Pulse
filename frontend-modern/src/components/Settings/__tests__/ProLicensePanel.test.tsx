@@ -309,12 +309,14 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
     expect(screen.queryByText(/remote web access/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Safe auto-fix|Autopilot/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol modes: Ask first, Safe auto-fix, or Autopilot'),
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Patrol investigates issues and explains the root cause'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Patrol proposes fixes you approve, then verifies the result'),
+      screen.getByText('Patrol applies safe fixes and verifies the result'),
     ).toBeInTheDocument();
     expect(screen.getByText('90-day metric history')).toBeInTheDocument();
     expect(
@@ -827,7 +829,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. It includes Patrol Ask first mode (investigations and approved fixes), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
+        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();

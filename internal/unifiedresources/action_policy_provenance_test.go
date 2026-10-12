@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -245,5 +246,22 @@ func TestActionPolicyDecisionRoundTripsMemorySQLiteAndLegacyReopen(t *testing.T)
 	got, found, err = reopened.GetActionAudit(legacy.ID)
 	if err != nil || !found || got.Plan.PolicyDecision.Status != ActionPolicyDecisionLegacyUnknown || got.Plan.PolicyDecision.Version != 0 {
 		t.Fatalf("legacy reopen: found=%v err=%v provenance=%#v", found, err, got.Plan.PolicyDecision)
+	}
+}
+
+func TestActionPolicyDecisionCannotAuthorizeDispatch(t *testing.T) {
+	record := policyProvenanceTestRecord(t, "act_policy_not_authority")
+	record.State = ActionStatePlanned
+	record.Plan.RequiresApproval = false
+	record.Plan.ApprovalPolicy = ApprovalNone
+	record.Plan.ApprovalRequirement = ApprovalRequirementForFloor(ApprovalNone)
+	record.Plan.PolicyDecision.ApprovalRequirement = record.Plan.ApprovalRequirement
+	record.Plan.PolicyDecision.RequiresApproval = false
+	record.Plan.PolicyDecision.Authorities[0].ApprovalFloor = ApprovalNone
+	record.Plan.PolicyDecision.Authorities[0].ReasonCodes[0] = PolicyReasonCapabilityApprovalNone
+	resignPolicyDecision(&record)
+	approval := ActionApprovalRecord{Actor: "pulse_patrol_policy", Method: MethodPolicy, Outcome: OutcomeApproved, Timestamp: record.CreatedAt}
+	if _, _, _, err := BeginPolicyActionExecution(record, approval, ActionPolicyAuthorizationLease{}, record.CreatedAt); !errors.Is(err, ErrActionPolicyAuthorizationInvalid) {
+		t.Fatalf("plan-time provenance substituted for dispatch lease: %v", err)
 	}
 }

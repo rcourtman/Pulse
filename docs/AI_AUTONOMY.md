@@ -10,7 +10,7 @@ For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level
 
 Pulse separates AI permissions into two independent axes:
 
-1. **Patrol Mode** — How far Patrol goes after it finds an issue: watch only, or investigate and ask before any change.
+1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
 2. **Assistant Command Access** — Whether the interactive chat assistant can execute commands during a chat session.
 
 Patrol mode is configured on the **Patrol** page. Assistant command access is configured in **Settings → Pulse Intelligence → Assistant**.
@@ -21,19 +21,17 @@ Patrol mode is configured on the **Patrol** page. Assistant command access is co
 
 Patrol mode sets how far Pulse can go when Patrol finds something that needs attention.
 
-| Mode | Key | Detect | Investigate | Fixes | Plan |
-|-------|-----|:------:|:-----------:|:-----:|------|
-| **Watch only** | `monitor` | Yes | No | No | Community |
-| **Ask first** | `approval` | Yes | Yes | Every fix waits for your approval | Pro / legacy Pro+ / Cloud |
+| Mode | Key | Detect | Investigate | Fix warning-level issues | Fix critical issues | Plan |
+|-------|-----|:------:|:-----------:|:------------------------:|:-------------------:|------|
+| **Watch only** | `monitor` | Yes | No | No | No | Community |
+| **Ask first** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
+| **Safe auto-fix** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
+| **Autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
-- **Watch only** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation.
-- **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. Every fix queues in **Actions** and runs only after an operator approves and executes it.
-
-Patrol never runs a fix on its own. Earlier versions offered **Safe auto-fix**
-(`assisted`) and **Autopilot** (`full`) modes that could run some fixes
-without an operator decision; both have been retired. A saved `assisted`,
-`full` or `autonomous` value now behaves as **Ask first**, and the API refuses
-to save one.
+- **Watch only** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or fix execution.
+- **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
+- **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
+- **Autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
 
@@ -89,7 +87,7 @@ licence and policy enforcement still apply.
 ### License Requirements
 
 - `monitor`: Available on all plans. Community and Relay can run Patrol with BYOK.
-- `approval`: Requires the `ai_autofix` capability (Pro, legacy Pro+, or Cloud license).
+- `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, legacy Pro+, or Cloud license).
 
 Without the `ai_autofix` capability, the effective Patrol mode is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
 
@@ -109,7 +107,7 @@ Assistant chat does not execute the plans it saves. A legacy saved `autonomous`
 preference displays as **Ask first** and keeps its stored value and existing
 entitlement checks for older clients. It does not bypass approval. An unrelated
 settings save does not rewrite that preference. Unknown values fail closed to
-read-only. Patrol mode remains separate.
+read-only. Patrol mode and Autopilot acknowledgements remain separate.
 
 To keep Assistant away from a specific guest, lock it: open the guest, choose
 **Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
@@ -154,7 +152,7 @@ JSON
 
 ## Investigation Configuration
 
-When Patrol mode is `approval`, Patrol investigates findings. These parameters tune investigation behavior:
+When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findings. These parameters tune investigation behavior:
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
@@ -200,10 +198,12 @@ To stop Pulse acting on a specific guest, host or container, open its drawer, ch
 
 ## Recommended Progression
 
-For new deployments:
+For new deployments, gradually increase Patrol mode:
 
 1. **Start with Watch only** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
-2. **Move to Ask first where available** — Enable investigation. Review each proposed fix in **Actions** before approving it.
+2. **Move to Ask first where available** — Enable investigation. Review proposed fixes to build confidence.
+3. **Use Safe auto-fix when fix execution is enabled** — Let Patrol execute warning-level fixes while you approve critical fixes.
+4. **Consider Autopilot** — Only if your environment has comprehensive alerting and you trust the fix patterns.
 
 ---
 

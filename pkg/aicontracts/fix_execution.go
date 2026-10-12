@@ -127,8 +127,6 @@ type PatrolConfigAccessor interface {
 	HasLicenseFeature(feature string) bool
 	GetPatrolInvestigationBudget() int
 	GetPatrolInvestigationTimeout() time.Duration
-	// GetPatrolFullModeUnlocked always reports false: Patrol has no
-	// self-executing full mode. Kept so existing extensions still build.
 	GetPatrolFullModeUnlocked() bool
 	GetPatrolAutonomyLevel() string
 	IsValidPatrolAutonomyLevel(level string) bool

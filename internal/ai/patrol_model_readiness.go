@@ -92,6 +92,8 @@ type PatrolModeSuitability struct {
 type PatrolModelReadinessModes struct {
 	Monitor  PatrolModeSuitability `json:"monitor"`
 	Approval PatrolModeSuitability `json:"approval"`
+	Assisted PatrolModeSuitability `json:"assisted"`
+	Full     PatrolModeSuitability `json:"full"`
 }
 
 type PatrolModelReadinessMetadata struct {
@@ -171,6 +173,8 @@ func emptyPatrolModelReadinessResult() PatrolModelReadinessResult {
 		Modes: PatrolModelReadinessModes{
 			Monitor:  PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Not assessed."},
 			Approval: PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Not assessed."},
+			Assisted: PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Requires an extended remediation and verification canary."},
+			Full:     PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "Requires an extended governed Autopilot canary."},
 		},
 	}
 }
@@ -959,11 +963,10 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		result.PatrolCapable = true
 		result.MaxVerifiedMode = config.PatrolAutonomyMonitor
 		result.Summary = "Verified for Watch only on this install."
-		result.Recommendation = "Keep Patrol on Watch only until Ask first passes on this install."
+		result.Recommendation = "Keep Safe auto-fix and Autopilot disabled until an extended governed canary has passed."
 		if approvalVerified {
 			result.MaxVerifiedMode = config.PatrolAutonomyApproval
 			result.Summary = "Verified for Watch only and Ask first on this install."
-			result.Recommendation = ""
 		}
 	}
 	result.Details = details

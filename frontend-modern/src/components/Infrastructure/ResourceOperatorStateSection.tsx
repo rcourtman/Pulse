@@ -16,6 +16,7 @@ import {
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import type { ResourceCapability } from '@/types/resource';
 import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
 
 /**
@@ -38,6 +39,7 @@ interface ResourceOperatorStateSectionProps {
   resourceId: string;
   resourceType?: string;
   platformType?: string;
+  capabilities?: ResourceCapability[];
 }
 
 export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectionProps> = (
@@ -75,6 +77,18 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   const [note, setNote] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [confirmingLock, setConfirmingLock] = createSignal(false);
+  const [autoRemediationEnabled, setAutoRemediationEnabled] = createSignal(false);
+  const [autoCapabilities, setAutoCapabilities] = createSignal<string[]>([]);
+  const [autoWindowEnabled, setAutoWindowEnabled] = createSignal(false);
+  const [autoWindowStart, setAutoWindowStart] = createSignal('00:00');
+  const [autoWindowEnd, setAutoWindowEnd] = createSignal('23:59');
+  const [autoWindowTimezone, setAutoWindowTimezone] = createSignal('UTC');
+
+  const eligibleAutoCapabilities = createMemo(() =>
+    (props.capabilities ?? []).filter(
+      (capability) => capability.autoAuthorization && capability.autoAuthorization !== 'never',
+    ),
+  );
   const inventoryOwnership = createMemo(() =>
     describeResourceInventoryOwnership(props.resourceType, props.platformType),
   );
@@ -88,6 +102,13 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     const [hours, minutes] = value.split(':').map(Number);
     return hours * 60 + minutes;
   };
+
+  const capabilityDisplayName = (name: string): string =>
+    name
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
 
   // Maintenance-window scheduler state. The form is closed by default;
   // `Schedule maintenance window` opens it pre-filled with sensible
@@ -139,6 +160,15 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
     setCriticality(current?.criticality ?? '');
     setNote(current?.note ?? '');
+    const autoPolicy = current?.autoRemediationPolicy;
+    setAutoRemediationEnabled(autoPolicy?.enabled ?? false);
+    setAutoCapabilities(autoPolicy?.capabilityNames ?? []);
+    setAutoWindowEnabled(Boolean(autoPolicy?.window));
+    setAutoWindowStart(minuteToTime(autoPolicy?.window?.startMinute ?? 0));
+    setAutoWindowEnd(minuteToTime(autoPolicy?.window?.endMinute ?? 1439));
+    setAutoWindowTimezone(
+      autoPolicy?.window?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+    );
     setConfirmingLock(false);
   });
 
@@ -150,12 +180,29 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     const persistedLocked = current?.neverAutoRemediate ?? false;
     const persistedCriticality = current?.criticality ?? '';
     const persistedNote = current?.note ?? '';
+    const persistedAuto = current?.autoRemediationPolicy ?? {
+      enabled: false,
+      capabilityNames: [],
+    };
+    const selected = [...autoCapabilities()].sort();
+    // capabilityNames can arrive as null from rows persisted before the
+    // policy column was always written (issue #1621) — never assume [].
+    const persistedSelected = [...(persistedAuto.capabilityNames ?? [])].sort();
+    const windowChanged = autoWindowEnabled()
+      ? !persistedAuto.window ||
+        persistedAuto.window.timezone !== autoWindowTimezone() ||
+        persistedAuto.window.startMinute !== timeToMinute(autoWindowStart()) ||
+        persistedAuto.window.endMinute !== timeToMinute(autoWindowEnd())
+      : Boolean(persistedAuto.window);
     return (
       monitoringMode() !== persistedMonitoringMode ||
       lifecycleState() !== persistedLifecycleState ||
       neverAutoRemediate() !== persistedLocked ||
       criticality() !== persistedCriticality ||
-      note().trim() !== persistedNote
+      note().trim() !== persistedNote ||
+      autoRemediationEnabled() !== persistedAuto.enabled ||
+      JSON.stringify(selected) !== JSON.stringify(persistedSelected) ||
+      windowChanged
     );
   });
 
@@ -190,6 +237,19 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         lifecycleState: lifecycleState(),
         intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
+        autoRemediationPolicy: {
+          enabled: autoRemediationEnabled(),
+          capabilityNames: autoCapabilities(),
+          ...(autoWindowEnabled()
+            ? {
+                window: {
+                  timezone: autoWindowTimezone(),
+                  startMinute: timeToMinute(autoWindowStart()),
+                  endMinute: timeToMinute(autoWindowEnd()),
+                },
+              }
+            : {}),
+        },
         // Preserve any maintenance-window data the API currently holds
         // — window scheduling is a separate action and clobbering it
         // on save would surprise the operator.
@@ -224,6 +284,15 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
     setCriticality(current?.criticality ?? '');
     setNote(current?.note ?? '');
+    const autoPolicy = current?.autoRemediationPolicy;
+    setAutoRemediationEnabled(autoPolicy?.enabled ?? false);
+    setAutoCapabilities(autoPolicy?.capabilityNames ?? []);
+    setAutoWindowEnabled(Boolean(autoPolicy?.window));
+    setAutoWindowStart(minuteToTime(autoPolicy?.window?.startMinute ?? 0));
+    setAutoWindowEnd(minuteToTime(autoPolicy?.window?.endMinute ?? 1439));
+    setAutoWindowTimezone(
+      autoPolicy?.window?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+    );
     setConfirmingLock(false);
   };
 
@@ -240,6 +309,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       setNeverAutoRemediate(false);
       setCriticality('');
       setNote('');
+      setAutoRemediationEnabled(false);
+      setAutoCapabilities([]);
+      setAutoWindowEnabled(false);
       notificationStore.success('Operator overrides cleared');
     } catch (err) {
       notificationStore.error(
@@ -249,6 +321,21 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       setSaving(false);
     }
   };
+
+  const toggleAutoCapability = (name: string, checked: boolean) => {
+    setAutoCapabilities((current) =>
+      checked ? [...new Set([...current, name])] : current.filter((value) => value !== name),
+    );
+  };
+
+  const autoPolicyValidationError = createMemo(() => {
+    if (!autoRemediationEnabled()) return '';
+    if (autoCapabilities().length === 0) return 'Select at least one eligible capability.';
+    if (autoWindowEnabled() && autoWindowStart() === autoWindowEnd()) {
+      return 'The automatic-action window must have different start and end times.';
+    }
+    return '';
+  });
 
   // Compute whether a maintenance window covers `now` so the section
   // can badge it. Distinct from `scheduledMaintenanceWindow` — both
@@ -391,6 +478,19 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         lifecycleState: lifecycleState(),
         intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
+        autoRemediationPolicy: {
+          enabled: autoRemediationEnabled(),
+          capabilityNames: autoCapabilities(),
+          ...(autoWindowEnabled()
+            ? {
+                window: {
+                  timezone: autoWindowTimezone(),
+                  startMinute: timeToMinute(autoWindowStart()),
+                  endMinute: timeToMinute(autoWindowEnd()),
+                },
+              }
+            : {}),
+        },
         maintenanceStartAt: scheduleKind() === 'once' ? start!.toISOString() : undefined,
         maintenanceEndAt: scheduleKind() === 'once' ? end!.toISOString() : undefined,
         maintenanceRecurrence:
@@ -428,6 +528,19 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         lifecycleState: lifecycleState(),
         intentionallyOffline: monitoringMode() === 'expected_offline',
         neverAutoRemediate: neverAutoRemediate(),
+        autoRemediationPolicy: {
+          enabled: autoRemediationEnabled(),
+          capabilityNames: autoCapabilities(),
+          ...(autoWindowEnabled()
+            ? {
+                window: {
+                  timezone: autoWindowTimezone(),
+                  startMinute: timeToMinute(autoWindowStart()),
+                  endMinute: timeToMinute(autoWindowEnd()),
+                },
+              }
+            : {}),
+        },
         maintenanceStartAt: undefined,
         maintenanceEndAt: undefined,
         maintenanceRecurrence: undefined,
@@ -777,6 +890,120 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         </div>
       </Show>
 
+      <Show when={eligibleAutoCapabilities().length > 0}>
+        <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <span class="text-sm font-medium text-base-content">Automatic action limits</span>
+              <p class="mt-0.5 text-[11px] leading-tight text-muted">
+                This resource follows your Patrol mode by default. Turn this on only to limit
+                automatic work to selected actions or daily hours. Live safety checks and
+                verification always apply.
+              </p>
+            </div>
+            <Toggle
+              ariaLabel="Limit automatic actions for this resource"
+              checked={autoRemediationEnabled()}
+              onChange={(event) => setAutoRemediationEnabled(event.currentTarget.checked)}
+              disabled={saving() || neverAutoRemediate()}
+            />
+          </div>
+
+          <Show when={autoRemediationEnabled()}>
+            <fieldset class="space-y-2 rounded-sm border border-border px-3 py-2.5">
+              <legend class="px-1 text-xs font-semibold text-base-content">
+                Actions allowed by this limit
+              </legend>
+              <For each={eligibleAutoCapabilities()}>
+                {(capability) => (
+                  <label class="flex items-start gap-2 text-xs text-base-content">
+                    <input
+                      type="checkbox"
+                      checked={autoCapabilities().includes(capability.name)}
+                      onChange={(event) =>
+                        toggleAutoCapability(capability.name, event.currentTarget.checked)
+                      }
+                      disabled={saving()}
+                      class="mt-0.5"
+                    />
+                    <span class="min-w-0">
+                      <span class="block font-medium">
+                        {capabilityDisplayName(capability.name)}
+                      </span>
+                      <span class="block text-muted">
+                        {capability.description || 'Backend-governed resource action'}
+                      </span>
+                      <span class="mt-0.5 block text-muted">
+                        {capability.autoAuthorization === 'low_risk'
+                          ? 'Available in Safe auto-fix and Autopilot'
+                          : 'Available only in unlocked Autopilot'}
+                      </span>
+                    </span>
+                  </label>
+                )}
+              </For>
+
+              <div class="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
+                <span>
+                  <span class="block text-xs font-medium text-base-content">
+                    Restrict to daily hours
+                  </span>
+                  <span class="block text-[11px] text-muted">
+                    Leave off to allow the selected actions at any time.
+                  </span>
+                </span>
+                <Toggle
+                  ariaLabel="Restrict automatic actions to daily hours"
+                  checked={autoWindowEnabled()}
+                  onChange={(event) => setAutoWindowEnabled(event.currentTarget.checked)}
+                  disabled={saving()}
+                />
+              </div>
+
+              <Show when={autoWindowEnabled()}>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <label class="block text-[11px] text-muted">
+                    <span class="block">Start</span>
+                    <input
+                      type="time"
+                      value={autoWindowStart()}
+                      onInput={(event) => setAutoWindowStart(event.currentTarget.value)}
+                      disabled={saving()}
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                    />
+                  </label>
+                  <label class="block text-[11px] text-muted">
+                    <span class="block">End</span>
+                    <input
+                      type="time"
+                      value={autoWindowEnd()}
+                      onInput={(event) => setAutoWindowEnd(event.currentTarget.value)}
+                      disabled={saving()}
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                    />
+                  </label>
+                  <label class="block text-[11px] text-muted">
+                    <span class="block">Timezone</span>
+                    <input
+                      type="text"
+                      value={autoWindowTimezone()}
+                      onInput={(event) => setAutoWindowTimezone(event.currentTarget.value)}
+                      disabled={saving()}
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                    />
+                  </label>
+                </div>
+              </Show>
+              <Show when={autoPolicyValidationError()}>
+                <p class="text-[11px] text-red-700 dark:text-red-400">
+                  {autoPolicyValidationError()}
+                </p>
+              </Show>
+            </fieldset>
+          </Show>
+        </div>
+      </Show>
+
       <div class="grid grid-cols-1 gap-3 border-t border-border-subtle pt-3 sm:grid-cols-2">
         <FormSelect
           label="Monitoring"
@@ -886,7 +1113,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving()}
+            disabled={saving() || Boolean(autoPolicyValidationError())}
             class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors"
           >
             {saving() ? 'Saving…' : 'Save overrides'}

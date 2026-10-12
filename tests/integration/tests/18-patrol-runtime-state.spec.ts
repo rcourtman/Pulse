@@ -290,6 +290,16 @@ async function mockBlockedPatrolRuntimeState(
         autonomy_level: "monitor",
         requested_autonomy_level: "monitor",
         effective_autonomy_level: "monitor",
+        autopilot_acknowledgement: {
+          code: "license_required",
+          active: false,
+          currentVersion: 1,
+          acceptedAt: "0001-01-01T00:00:00Z",
+          expiresAt: "0001-01-01T00:00:00Z",
+          acceptedScope: [],
+          acceptedLimits: {},
+        },
+        full_mode_unlocked: false,
         investigation_budget: 15,
         investigation_timeout_sec: 300,
       }),
@@ -400,6 +410,16 @@ async function mockScopedTriggerPatrolRuntimeState(
         autonomy_level: "monitor",
         requested_autonomy_level: "monitor",
         effective_autonomy_level: "monitor",
+        autopilot_acknowledgement: {
+          code: "license_required",
+          active: false,
+          currentVersion: 1,
+          acceptedAt: "0001-01-01T00:00:00Z",
+          expiresAt: "0001-01-01T00:00:00Z",
+          acceptedScope: [],
+          acceptedLimits: {},
+        },
+        full_mode_unlocked: false,
         investigation_budget: 15,
         investigation_timeout_sec: 300,
       }),
@@ -612,14 +632,10 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
 
-    await page
-      .getByRole("combobox", { name: "Schedule" })
-      .selectOption("Every hour");
+    await page.getByRole("combobox", { name: "Schedule" }).selectOption("Every hour");
     await page.getByRole("button", { name: "Save Patrol settings" }).click();
 
-    await expect(
-      page.getByRole("alert").filter({ hasText: serverReason }),
-    ).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: serverReason })).toBeVisible();
   });
 
   test("surfaces the Patrol readiness blocker when a settings save returns not-ready", async ({
@@ -633,10 +649,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await ensureAuthenticated(page);
 
     const settingsRes = await apiRequest(page, "/api/settings/ai");
-    const currentSettings = (await settingsRes.json()) as Record<
-      string,
-      unknown
-    >;
+    const currentSettings = (await settingsRes.json()) as Record<string, unknown>;
 
     await page.route("**/api/settings/ai/update", async (route) => {
       if (route.request().method() !== "PUT") {
@@ -668,9 +681,7 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
 
-    await page
-      .getByRole("combobox", { name: "Schedule" })
-      .selectOption("Every hour");
+    await page.getByRole("combobox", { name: "Schedule" }).selectOption("Every hour");
     await page.getByRole("button", { name: "Save Patrol settings" }).click();
 
     const readinessAlert = page
@@ -730,9 +741,19 @@ test.describe("Patrol runtime-state browser contract", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          autonomy_level: "approval",
-          requested_autonomy_level: "approval",
-          effective_autonomy_level: "approval",
+          autonomy_level: "full",
+          requested_autonomy_level: "full",
+          effective_autonomy_level: "full",
+          autopilot_acknowledgement: {
+            code: "ok",
+            active: true,
+            currentVersion: 1,
+            acceptedAt: "2026-07-01T00:00:00Z",
+            expiresAt: "2027-07-01T00:00:00Z",
+            acceptedScope: [],
+            acceptedLimits: {},
+          },
+          full_mode_unlocked: true,
           investigation_budget: 15,
           investigation_timeout_sec: 300,
         }),
@@ -748,13 +769,16 @@ test.describe("Patrol runtime-state browser contract", () => {
       modeGroup.getByRole("button", { name: "Watch only" }),
     ).toHaveAttribute("aria-pressed", "true");
     await expect(
-      modeGroup.getByRole("button", { name: /Ask first/ }),
+      modeGroup.getByRole("button", { name: /Autopilot/ }),
     ).toBeDisabled();
-    await expect(modeGroup.getByRole("button")).toHaveCount(2);
     await expect(
-      page.getByText("Install the Pulse Pro runtime to use Patrol modes.", {
-        exact: false,
-      }),
+      modeGroup.getByRole("button", { name: /Safe auto-fix/ }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        "Install the Pulse Pro runtime to use Patrol modes.",
+        { exact: false },
+      ),
     ).toBeVisible();
   });
 });
