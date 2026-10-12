@@ -165,7 +165,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     },
   );
 
-  it('preserves interleaved lone observations and labels only the live fallback', async () => {
+  it('preserves interleaved lone observations without mixing in a live fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
       response({
         cpu: [point(start, 10), point(end, 20)],
@@ -177,10 +177,9 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     expect(group().querySelectorAll('path')).toHaveLength(0);
     expect(group().querySelectorAll('[data-history-observation="memory"]')).toHaveLength(1);
     expect(group().querySelectorAll('[data-history-observation="cpu"]')).toHaveLength(2);
-    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(1);
-    expect(group().querySelector('[data-history-current="disk"]')).toHaveTextContent(
-      'Disk88.0%current',
-    );
+    expect(group().querySelectorAll('[data-history-current]')).toHaveLength(0);
+    expect(group()).toHaveTextContent('Memory-');
+    expect(group()).toHaveTextContent('Disk-');
     expect(group()).not.toHaveTextContent('Single observation. No trend yet.');
     const slider = within(group()).getByRole('slider');
     slider.focus();
