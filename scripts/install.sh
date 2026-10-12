@@ -1622,7 +1622,7 @@ quiesce_upstart_agent_for_removal() {
         pending=$(mktemp "${override}.XXXXXX") || return 1
         # Link without replacement: an override created concurrently is not
         # ours to overwrite. The temporary file contains no credential.
-        if ! { printf 'manual\n' > "$pending" && chmod 644 "$pending" && ln -- "$pending" "$override"; }; then
+        if ! { printf 'manual\n' > "$pending" && chmod 644 "$pending" && ln -T -- "$pending" "$override"; }; then
             rm -f -- "$pending"
             return 1
         fi
@@ -1656,7 +1656,12 @@ teardown_upstart_agent_service() {
             confirmed=true
         fi
         if [[ "$confirmed" != true ]]; then
-            if [[ ! -e "$conf" && ! -L "$conf" ]]; then mv -- "$retired" "$conf" || return 1; fi
+            if [[ ! -e "$conf" && ! -L "$conf" ]]; then
+                # Atomic no-replacement restore, including a target that
+                # becomes a directory after the preceding pathname check.
+                ln -T -- "$retired" "$conf" || return 1
+                rm -f -- "$retired" || return 1
+            fi
             return 1
         fi
         rm -f -- "$retired" || return 1

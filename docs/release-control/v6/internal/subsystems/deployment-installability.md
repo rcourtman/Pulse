@@ -34,13 +34,13 @@ configuration inode is staged outside Upstart's `.conf` namespace until checked
 reload, exact unknown-job status and independent process absence establish
 retirement. On unconfirmed retirement it is restored only if the original path
 is still absent, leaving the manual override and all local recovery state;
-a concurrently created config is never overwritten and the staged recovery copy
-is retained. Only confirmed retirement removes the staged config and manual
+atomic non-replacement links refuse concurrently created files or directories,
+including during restore; the staged recovery copy is retained on conflict. Only confirmed retirement removes the staged config and manual
 before credential/state erasure. No credentials, arguments or config contents
 are returned by these observations. Existing same-instance URL, exact record,
 TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.
 
-The registered `scripts/installtests/install_sh_test.go` requires all fourteen
+The registered `scripts/installtests/install_sh_test.go` requires all fifteen
 `agent_upstart_teardown.py` production-function/caller controls, including exact
 file restoration, effective activation, late refusal, stopped/absent/repeated
 removal and real timeout-child termination. These are confined ordinary-user

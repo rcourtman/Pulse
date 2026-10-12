@@ -8481,6 +8481,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_effective_disabled_config_is_required_after_override_reload",
 		"test_independent_process_inventory_rejects_orphan_or_unavailable_read",
 		"test_untrusted_config_override_and_prior_retirement_refuse_without_changes",
+		"test_concurrent_override_file_or_directory_is_not_replaced_or_written_inside",
 		"test_missing_tools_refuse_without_remote_or_erasure",
 		"test_remote_refusal_keeps_stopped_disabled_recovery_without_restart",
 		"test_late_manager_refusal_retains_recovery_after_remote_confirmation",
@@ -8495,7 +8496,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 14 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
 	}
 	t.Logf("%s", output)

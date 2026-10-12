@@ -188,6 +188,18 @@ rm() {
     printf 'file:remove\n' >> "$EVENTS"
     builtin command rm "$@"
 }
+ln() {
+    local arg
+    for arg in "$@"; do [[ "$arg" == -T || "$arg" == -- || "$arg" == "$FIXTURE/"* ]] || return 97; done
+    [[ "$1" == -T && "$2" == -- ]] || return 98
+    if [[ "$FAULT" == concurrent-override-file && "$4" == "$FIXTURE/init/pulse-agent.override" ]]; then
+        printf 'concurrent override retained\n' > "$4"
+    elif [[ "$FAULT" == concurrent-override-directory && "$4" == "$FIXTURE/init/pulse-agent.override" ]]; then
+        mkdir "$4"
+    fi
+    printf 'file:link\n' >> "$EVENTS"
+    builtin command ln "$@"
+}
 mv() {
     local arg
     for arg in "$@"; do [[ "$arg" == -- || "$arg" == "$FIXTURE/"* ]] || return 97; done
@@ -282,6 +294,18 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 self.assertNotEqual(r.returncode, 0, r.stderr)
                 self.assertEqual(after, before)
                 self.assertEqual(events, [])
+
+    def test_concurrent_override_file_or_directory_is_not_replaced_or_written_inside(self):
+        for fault in ("concurrent-override-file", "concurrent-override-directory"):
+            with self.subTest(fault=fault):
+                r, events, before, after, _ = self.exercise(fault=fault)
+                self.assertNotEqual(r.returncode, 0, r.stderr)
+                self.assertNotIn("remote:remove", events)
+                self.assertNotIn("manager:reload", events)
+                for name in before: self.assertEqual(after[name], before[name])
+                self.assertEqual(set(after) - set(before), {"init/pulse-agent.override"})
+                payload = b"concurrent override retained\n" if fault.endswith("file") else None
+                self.assertEqual(after["init/pulse-agent.override"][2], payload)
 
     def test_missing_tools_refuse_without_remote_or_erasure(self):
         for fault in ("missing-initctl", "missing-timeout"):
