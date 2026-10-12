@@ -424,7 +424,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         self.assertLess(admission, remote)
         self.assertLess(remote, retirement)
         self.assertLess(retirement, erase)
-        self.assertIn('[[ "$uninstall_upstart" != true ]]', entry)
+        self.assertIn('[[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]]', entry)
         self.assertFalse('initctl stop' in entry)
         self.assertNotIn('initctl start', definitions(self.source))
 

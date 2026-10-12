@@ -1830,7 +1830,9 @@ func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
 		`qnap_state_dir=$(find_qnap_state_dir || true)`,
 		`aid_paths+=("$qnap_state_dir/agent-id")`,
 		`if [[ -n "$qnap_state_dir" ]] && trusted_connection_state_file "$qnap_state_dir/connection.env"; then`,
-		`remove_qnap_autorun_block "$AUTORUN_PATH"`,
+		`uninstall_nas_platform=$(nas_agent_removal_platform || true)`,
+		`teardown_nas_agent_boot_owner "$uninstall_nas_platform"`,
+		`nas_agent_boot_operation "$platform" observe`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
