@@ -3692,3 +3692,13 @@ Mobile settings gate and Alerts push panel carry no upgrade prompt. The
 `relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
 provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
 until then licensed instances keep pairing and push unchanged.
+
+The backend feature catalog follows the same boundary: `relay`, `mobile_app`
+and `push_notifications` have no generic upgrade reason. Both full entitlements
+and non-billing commercial posture omit those retired offers. Missing extended
+history advertises only Pro's 90 days, never Relay or remote web access. Catalog
+roles, capability grants, subscriber terms and the legacy `relay` runtime's
+14-day compatibility limit remain unchanged. The retirement HTTP regression
+checks both commercial projections and runtime capabilities for Community,
+legacy Relay and Pro; continuing Relay subscribers' Pro grants remain owned by
+the license server, not inferred from a legacy tier payload.

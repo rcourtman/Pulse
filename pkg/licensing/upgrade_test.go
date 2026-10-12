@@ -93,13 +93,13 @@ func TestResolvePulseAccountPortalURL_RejectsInvalidOverrides(t *testing.T) {
 
 func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
 	expected := map[string]string{
-		FeatureRelay:           "Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.",
-		FeatureLongTermMetrics: "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
+		FeatureLongTermMetrics: "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.",
 		FeatureAIAlerts:        "Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.",
 		FeatureAIAutoFix:       "Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.",
 		FeatureExternalProbe:   "Upgrade to Pro to run availability checks from an agent outside the monitored site and report the results back to Pulse for alerting.",
 	}
 
+	found := make(map[string]bool, len(expected))
 	for _, entry := range UpgradeReasonMatrix {
 		want, ok := expected[entry.Feature]
 		if !ok {
@@ -107,6 +107,12 @@ func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
 		}
 		if entry.Reason != want {
 			t.Fatalf("reason for %q = %q, want %q", entry.Feature, entry.Reason, want)
+		}
+		found[entry.Feature] = true
+	}
+	for feature := range expected {
+		if !found[feature] {
+			t.Errorf("missing current upgrade reason for %q", feature)
 		}
 	}
 }
@@ -140,9 +146,6 @@ func TestCompatibilityOnlyFeatureUpgradeURLsFallBackToGenericPricing(t *testing.
 
 func TestUpgradeReasonMatrixDerivesFromCanonicalFeatureMetadata(t *testing.T) {
 	expectedOrder := []string{
-		FeatureMobileApp,
-		FeaturePushNotifications,
-		FeatureRelay,
 		FeatureLongTermMetrics,
 		FeatureAIAutoFix,
 		FeatureAIAlerts,

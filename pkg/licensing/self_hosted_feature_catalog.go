@@ -101,8 +101,6 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.",
-		UpgradePriority: 1,
 	},
 	FeatureMobileApp: {
 		Key:                   FeatureMobileApp,
@@ -115,8 +113,6 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Get Relay so Pulse Mobile can pair with this instance for secure handoff and notifications.",
-		UpgradePriority: 1,
 	},
 	FeaturePushNotifications: {
 		Key:                   FeaturePushNotifications,
@@ -129,8 +125,6 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRoleIncluded,
 		},
-		UpgradeReason:   "Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.",
-		UpgradePriority: 1,
 	},
 	FeatureLongTermMetrics: {
 		Key:                   FeatureLongTermMetrics,
@@ -143,7 +137,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRolePrimaryPillar,
 			Pro:       SelfHostedFeatureRolePrimaryPillar,
 		},
-		UpgradeReason:   "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
+		UpgradeReason:   "Upgrade to Pro for 90 days of metric history, so you can see what changed before and after an incident.",
 		UpgradePriority: 2,
 	},
 	FeatureAIAlerts: {
