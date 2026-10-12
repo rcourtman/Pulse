@@ -589,6 +589,41 @@ def build_rollback_section(args: argparse.Namespace) -> str:
     )
 
 
+# ASCII digits only, bounded, and matched against the whole string: `$` would accept a final newline
+# (which would land inside the URL), `\d` accepts non-ASCII digits, and an unbounded number would make
+# the comparison below raise on conversion.
+_COMPARISON_HEAD = re.compile(r"v([0-9]{1,6})\.([0-9]{1,6})\.([0-9]{1,6})(?:-(?:alpha|beta|rc)\.[1-9][0-9]{0,5})?")
+_COMPARISON_BASE = re.compile(r"v([0-9]{1,6})\.([0-9]{1,6})\.([0-9]{1,6})")
+
+
+def build_source_comparison(args: argparse.Namespace) -> str | None:
+    """A pointer to GitHub's own comparison of this release with the stable rollback target it was given.
+
+    This is a pointer, not a complete list: GitHub shows at most 250 commits in a comparison, so a
+    release with more changes than that is only partly visible through it. It is also advisory. It
+    exists so a reader can look up a change the summary does not name, and it renders nothing, and
+    raises nothing, for a missing or malformed tag or for a base that is not a lower stable release.
+    """
+    head = _COMPARISON_HEAD.fullmatch(args.candidate_tag or "")
+    base = _COMPARISON_BASE.fullmatch(args.rollback_target or "")
+    if not head or not base:
+        return None
+    if tuple(map(int, base.groups())) >= tuple(map(int, head.groups())):
+        return None
+    return "\n".join(
+        [
+            "## Source comparison",
+            "",
+            f"[Browse source changes from `{args.rollback_target}` to `{args.candidate_tag}`]"
+            f"(https://github.com/rcourtman/Pulse/compare/{args.rollback_target}...{args.candidate_tag}) "
+            "on GitHub for more detail behind this summary.",
+            "",
+            "This comparison includes internal maintenance. GitHub shows at most 250 commits, "
+            "so larger comparisons may omit commits.",
+        ]
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
@@ -688,6 +723,9 @@ def main() -> int:
                 build_rollback_section(args),
             ]
         )
+        comparison = build_source_comparison(args)
+        if comparison:
+            sections.append(comparison)
         rendered = "\n\n".join(sections) + "\n"
         validate_release_body_shape(rendered, args.version)
         Path(args.output).write_text(rendered, encoding="utf-8")

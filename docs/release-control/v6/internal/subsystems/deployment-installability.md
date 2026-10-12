@@ -5148,6 +5148,32 @@ is about 250 CPU-seconds, so under the pin it fails at 180 seconds with
 `signal: killed` (reproduced; the first beta's release failed on it twice),
 while a warmed cache makes the same pinned run a 16-second test. The race
 build of the test binary does not warm that plain build.
+
+The release renderer appends a `## Source comparison` section after Roll back: a link to
+GitHub's comparison of the release tag with the stable rollback target it was given
+(`/compare/<rollback target>...<tag>`, from the candidate tag and rollback target the
+workflow already passes; the base is whatever lower stable target was supplied, not
+necessarily the immediately previous release). The link names bare refs, so a branch that shares
+a tag's name would win on GitHub; no such branch exists today. A `tags/` prefix, which
+GitHub's documentation describes for choosing the tag, returned HTTP 404 on the web
+comparison URL for tags that exist (checked on 2026-10-13 against v6.5.0 and
+v6.6.0-beta.2, with a nonexistent tag as a control), so the bare form is used. It is a pointer and not a
+complete list, because GitHub shows at most 250 commits in a comparison, so a larger release
+is only partly visible through it and the section says so. It is advisory. The comparison
+helper skips a missing or malformed tag or base, including a trailing newline, non-ASCII
+digits or numbers too large to convert, and raises nothing. The renderer's existing argument
+and body checks still apply to the whole render, so a rollback target that smuggles in a
+heading still fails the existing duplicate-Install check. A body that validated
+before still validates without the section, and an expected-body comparison still rejects a
+changed or deleted section when its expected body contains one. This does not establish that
+every historical published body meets today's other requirements. The post-update changelog
+dialog reads only recognised category headings, so a separate heading placed after Roll back
+is ignored by it; a `<details>` block placed inside a recognised category would be retained,
+and the sanitizer drops its collapse behaviour. Making the section required, and adding a
+generated row-level inventory that does prove completeness, needs a declarative contract
+record in the preparation snapshot: a marker in the body alone could be deleted to restore
+legacy acceptance, and a frozen in-flight release keeps its own renderer.
+
 As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
 `1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
 call paths reported by `govulncheck` after the 2026-10-08 advisories, including
