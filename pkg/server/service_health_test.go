@@ -5,14 +5,80 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog"
 )
+
+// Ordinary agent-only configuration has no nodes.enc. A later startup must not
+// mistake that installation for first provisioning and replace its access.
+func TestStartupImportRetainsNonProxmoxAccess(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	dir := t.TempDir()
+	setAutoImportInputs(t, dir, payload, passphrase)
+	target := config.NewConfigPersistence(dir)
+	if err := target.SaveAPITokens([]config.APITokenRecord{{
+		ID: "synthetic-existing-record", Hash: auth.HashAPIToken("synthetic-existing-credential"),
+		Scopes: []string{config.ScopeAgentReport},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sessions.json"), []byte("synthetic-existing-session"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Use the production loader without reinitialising the global test logger.
+	loaded, err := config.LoadWithoutLoggingInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.PVEInstances)+len(loaded.PBSInstances)+len(loaded.PMGInstances) != 0 {
+		t.Fatal("fixture is not an ordinary non-Proxmox installation")
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "nodes.enc")); !os.IsNotExist(err) {
+		t.Fatal("fixture unexpectedly has the old bootstrap sentinel")
+	}
+	before := snapshotAutoImportDestination(t, dir)
+	if ShouldAutoImport() {
+		t.Error("ordinary restart was admitted as fresh provisioning")
+	}
+	if err := PerformAutoImport(); err == nil {
+		t.Error("startup import replaced existing access")
+	}
+	if after := snapshotAutoImportDestination(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("startup import changed the retained installation")
+	}
+	loaded, err = config.LoadWithoutLoggingInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record, ok := loaded.ValidateAPIToken("synthetic-existing-credential"); !ok || record.ID != "synthetic-existing-record" {
+		t.Error("retained agent credential no longer validates")
+	}
+
+	// The authenticated Recovery path uses ImportConfig directly. Bootstrap
+	// admission must not disable an administrator's deliberate transfer.
+	if err := target.ImportConfig(payload, passphrase); err != nil {
+		t.Fatal(err)
+	}
+	records, err := target.LoadAPITokens()
+	if err != nil || len(records) != 1 || records[0].ID != "synthetic-import-record" {
+		t.Error("explicit configuration transfer no longer replaces included records")
+	}
+	for _, name := range []string{".encryption.key", "sessions.json"} {
+		if after := snapshotAutoImportDestination(t, dir); after[name] != before[name] {
+			t.Errorf("explicit transfer changed excluded local state %s", name)
+		}
+	}
+}
 
 func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
 	tests := []struct {
