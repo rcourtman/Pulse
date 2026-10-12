@@ -211,17 +211,13 @@ func PatrolOutputTokensBucket(total int64) string {
 }
 
 // NormalizePatrolAutonomyLevelForTelemetry bounds the effective Patrol
-// autonomy level to the four released modes. Anything else, including an empty
-// value from an install without an AI service, reports monitor, which is also
-// the runtime's own fallback.
+// autonomy level to the released modes, monitor and approval. Anything else,
+// including an empty value from an install without an AI service, reports
+// monitor, which is also the runtime's own fallback.
 func NormalizePatrolAutonomyLevelForTelemetry(level string) string {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case config.PatrolAutonomyApproval:
 		return config.PatrolAutonomyApproval
-	case config.PatrolAutonomyAssisted:
-		return config.PatrolAutonomyAssisted
-	case config.PatrolAutonomyFull:
-		return config.PatrolAutonomyFull
 	default:
 		return config.PatrolAutonomyMonitor
 	}

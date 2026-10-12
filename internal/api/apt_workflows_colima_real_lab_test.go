@@ -162,7 +162,7 @@ func runRG09Distro(t *testing.T, runID, distro, image, agentBinary, scratchDir s
 		}
 		stopRG09Agent(containerID, cacheVolume)
 	}()
-	waitForRG06Agent(t, server.Server, agentID)
+	waitForColimaLabAgent(t, server.Server, agentID)
 
 	initialReport := waitForRG09Report(t, reportCh, func(report agentshost.Report) bool {
 		updates := report.Host.PackageUpdates
@@ -576,7 +576,7 @@ func restartRG09Agent(t *testing.T, server *agentexec.Server, agentID, container
 		select {
 		case <-reports:
 		default:
-			waitForRG06Agent(t, server, agentID)
+			waitForColimaLabAgent(t, server, agentID)
 			return
 		}
 	}
@@ -657,3 +657,14 @@ fi
 grep -qs ' /var/cache/apt/archives ' /proc/mounts || mount -o loop "$cache_image" /var/cache/apt/archives
 exec /usr/local/bin/pulse-agent
 `
+
+func waitForColimaLabAgent(t *testing.T, server *agentexec.Server, agentID string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for !server.IsAgentConnected(agentID) && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !server.IsAgentConnected(agentID) {
+		t.Fatal("production Linux agent did not connect through agent WebSocket")
+	}
+}

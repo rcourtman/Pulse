@@ -524,7 +524,7 @@ func normalizeResourceCriticality(value string) string {
 // - Severity is info/watch (not actionable)
 // - Already resolved/dismissed/suppressed
 func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
-	// Only investigate if autonomy is enabled (approval or full mode)
+	// Only investigate when Patrol may investigate (approval mode)
 	if autonomyLevel == "" || autonomyLevel == "monitor" {
 		return false
 	}

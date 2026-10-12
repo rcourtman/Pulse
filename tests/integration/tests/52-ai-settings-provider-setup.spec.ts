@@ -359,15 +359,6 @@ test.describe("Pulse Intelligence settings provider setup", () => {
             status: "not_suitable",
             summary: "Ask first requires all Watch-only checks to pass first.",
           },
-          assisted: {
-            status: "not_assessed",
-            summary:
-              "Requires an extended remediation and verification canary.",
-          },
-          full: {
-            status: "not_assessed",
-            summary: "Requires an extended governed Autopilot canary.",
-          },
         },
         recorded_at: "2026-07-24T10:00:00Z",
         recorded_at_unix: 1784887200,

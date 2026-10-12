@@ -22,40 +22,6 @@ import (
 
 type noExecutorChatService struct{}
 
-func TestServicePatrolAutopilotPolicyProviderControlsRuntimeVersion(t *testing.T) {
-	now := time.Date(2026, 7, 11, 20, 0, 0, 0, time.UTC)
-	actor := unifiedresources.ActionActor{SubjectID: "admin-one", Kind: unifiedresources.ActionActorUser, CredentialID: "session:one", OrgID: "org-a"}
-	v1Policy := unifiedresources.PatrolAutopilotServerPolicy{CurrentVersion: unifiedresources.PatrolAutopilotAcknowledgementVersionV1, Now: now}
-	v1, _, err := unifiedresources.IssuePatrolAutopilotAcknowledgement(nil, "ack-runtime-v1", actor, v1Policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	v2Policy := unifiedresources.PatrolAutopilotServerPolicy{CurrentVersion: unifiedresources.PatrolAutopilotAcknowledgementVersionV2, Now: now.Add(time.Hour)}
-	v2, _, err := unifiedresources.IssuePatrolAutopilotAcknowledgement([]unifiedresources.PatrolAutopilotAcknowledgement{v1}, "ack-runtime-v2", actor, v2Policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	activation, _, err := unifiedresources.BindPatrolAutopilotActivation([]unifiedresources.PatrolAutopilotAcknowledgement{v1, v2}, nil, nil, v2.ID, actor, v2Policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	svc := NewService(nil, nil)
-	svc.SetOrgID("org-a")
-	svc.cfg = config.NewDefaultAIConfig()
-	svc.cfg.PatrolAutonomyLevel = config.PatrolAutonomyFull
-	svc.cfg.PatrolAutopilotAcknowledgements = []unifiedresources.PatrolAutopilotAcknowledgement{v1, v2}
-	svc.cfg.PatrolAutopilotActivation = &activation
-	svc.SetPatrolAutopilotServerPolicyProvider(func() unifiedresources.PatrolAutopilotServerPolicy { return v2Policy })
-	if effective := svc.GetEffectivePatrolAutonomyLevel(); effective != config.PatrolAutonomyFull {
-		t.Fatalf("V2 runtime activation effective=%q", effective)
-	}
-	svc.SetPatrolAutopilotServerPolicyProvider(func() unifiedresources.PatrolAutopilotServerPolicy { return v1Policy })
-	if effective := svc.GetEffectivePatrolAutonomyLevel(); effective != config.PatrolAutonomyApproval {
-		t.Fatalf("runtime did not fail closed after current-version change: effective=%q", effective)
-	}
-}
-
 func (n *noExecutorChatService) CreateSession(ctx context.Context) (*ChatSession, error) {
 	return &ChatSession{ID: "noop"}, nil
 }
@@ -187,25 +153,6 @@ func samplePatrolState() models.StateSnapshot {
 }
 
 func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
-	fullModeConfig := func() *config.AIConfig {
-		now := time.Now().UTC()
-		policy := unifiedresources.CurrentPatrolAutopilotServerPolicy(now)
-		actor := unifiedresources.ActionActor{SubjectID: "admin", Kind: unifiedresources.ActionActorUser, CredentialID: "session:test", OrgID: "default"}
-		acknowledgement, _, err := unifiedresources.IssuePatrolAutopilotAcknowledgement(nil, "ack-prompt-full", actor, policy)
-		if err != nil {
-			t.Fatal(err)
-		}
-		activation, _, err := unifiedresources.BindPatrolAutopilotActivation([]unifiedresources.PatrolAutopilotAcknowledgement{acknowledgement}, nil, nil, acknowledgement.ID, actor, policy)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return &config.AIConfig{
-			PatrolAutonomyLevel:             config.PatrolAutonomyFull,
-			PatrolFullModeUnlocked:          true,
-			PatrolAutopilotAcknowledgements: []unifiedresources.PatrolAutopilotAcknowledgement{acknowledgement},
-			PatrolAutopilotActivation:       &activation,
-		}
-	}
 	tests := []struct {
 		name       string
 		cfg        *config.AIConfig
@@ -230,34 +177,24 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 			},
 		},
 		{
-			name: "assisted",
-			cfg:  &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyAssisted},
-			contains: []string{
-				"Patrol Control Mode: Safe Auto-Fix",
-				"execute only low-risk, policy-approved fixes automatically",
-				"Queue approval for destructive, high-risk, critical, ambiguous, restricted, or never-auto-remediate actions.",
-			},
-		},
-		{
-			name: "full",
-			cfg:  fullModeConfig(),
-			contains: []string{
-				"Patrol Control Mode: Autopilot",
-				"execute policy-approved fixes automatically, including critical fixes",
-				"Approval boundaries still win",
-			},
-		},
-		{
-			name: "locked full downgrades to ask first",
-			cfg: &config.AIConfig{
-				PatrolAutonomyLevel:    config.PatrolAutonomyFull,
-				PatrolFullModeUnlocked: false,
-			},
+			name: "retired full mode asks first",
+			cfg:  &config.AIConfig{PatrolAutonomyLevel: "full"},
 			contains: []string{
 				"Patrol Control Mode: Ask First",
 			},
 			notContain: []string{
 				"Patrol Control Mode: Autopilot",
+				"Patrol Control Mode: Safe Auto-Fix",
+			},
+		},
+		{
+			name: "retired assisted mode asks first",
+			cfg:  &config.AIConfig{PatrolAutonomyLevel: "assisted"},
+			contains: []string{
+				"Patrol Control Mode: Ask First",
+			},
+			notContain: []string{
+				"Patrol Control Mode: Safe Auto-Fix",
 			},
 		},
 		{

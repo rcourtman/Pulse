@@ -50,23 +50,6 @@ describe('resourceOperatorState api', () => {
     await expect(getResourceOperatorState('vm:101')).resolves.toBeNull();
   });
 
-  it('preserves a legacy null capability list for compatibility consumers to normalize', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({
-      canonicalId: 'docker:host-1/ct-nginx',
-      intentionallyOffline: true,
-      neverAutoRemediate: false,
-      autoRemediationPolicy: {
-        enabled: false,
-        capabilityNames: null,
-      },
-      setAt: '2026-07-20T10:00:00Z',
-    } satisfies ResourceOperatorState);
-
-    const result = await getResourceOperatorState('docker:host-1/ct-nginx');
-
-    expect(result?.autoRemediationPolicy?.capabilityNames).toBeNull();
-  });
-
   it('rethrows non-404 errors so the caller can surface them to the operator', async () => {
     apiFetchJSONMock.mockRejectedValueOnce(
       Object.assign(new Error('Internal server error'), { status: 500 }),
@@ -91,11 +74,6 @@ describe('resourceOperatorState api', () => {
       lifecycleState: 'active',
       intentionallyOffline: true,
       neverAutoRemediate: false,
-      autoRemediationPolicy: {
-        enabled: true,
-        capabilityNames: ['restart'],
-        window: { timezone: 'Europe/London', startMinute: 60, endMinute: 180 },
-      },
     };
     const result = await setResourceOperatorState('vm:101', input);
 
@@ -115,11 +93,6 @@ describe('resourceOperatorState api', () => {
     expect(JSON.parse(apiFetchJSONMock.mock.calls[0][1]?.body as string)).toMatchObject({
       monitoringMode: 'expected_offline',
       lifecycleState: 'active',
-      autoRemediationPolicy: {
-        enabled: true,
-        capabilityNames: ['restart'],
-        window: { timezone: 'Europe/London', startMinute: 60, endMinute: 180 },
-      },
     });
   });
 

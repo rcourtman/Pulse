@@ -26,10 +26,6 @@ function getPatrolPageDescription(input: PatrolPageHeaderMetaInput): string {
   switch (input.autonomyLevel) {
     case 'approval':
       return 'Ask first: Patrol investigates and prepares fixes, but every change waits for approval.';
-    case 'assisted':
-      return 'Safe auto-fix: Patrol may run low- or medium-risk fixes allowed by policy.';
-    case 'full':
-      return 'Autopilot: Patrol may act automatically within policy and still asks when approval is required.';
     default:
       return PATROL_PAGE_DESCRIPTION;
   }

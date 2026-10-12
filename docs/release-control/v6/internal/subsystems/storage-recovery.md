@@ -3084,6 +3084,14 @@ vdev layout is reported` in
 
 ## Current State
 
+### Patrol storage fixes wait for an operator (2026-10-12)
+
+The Patrol action broker that storage cleanup and recovery proposals reach now
+only plans: a proposed `clean_package_cache` or other storage capability waits
+in Actions for an operator decision and execution, with the same typed
+executor, verification, and receipt contracts. The retired automatic path no
+longer exists.
+
 Webhook destination edits restore submitted masks per key while preserving
 explicit map edits/removals. They retain encrypted persistence, serialized
 save-before-publish and owned rollback on live publication failure; invalid

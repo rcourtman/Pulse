@@ -983,22 +983,6 @@ func patrolAutonomyPrompt(level string) string {
 Patrol may investigate findings with read-only tools and propose a governed fix. Do not execute remediation commands in this mode. When a fix is appropriate, queue it for operator approval and record the evidence, risk, rollback posture, and verification steps so the operator can approve or reject it.
 
 If a tool or command requires approval, stop at the approval request. Do not treat the request as a failed fix.`
-	case config.PatrolAutonomyAssisted:
-		return `
-
-## Patrol Control Mode: Safe Auto-Fix
-
-Patrol may investigate findings and execute only low-risk, policy-approved fixes automatically. Queue approval for destructive, high-risk, critical, ambiguous, restricted, or never-auto-remediate actions. After any automatic fix, run verification and record the outcome.
-
-If policy requires approval, stop at the approval request. Do not work around approval by choosing a different command with the same effect.`
-	case config.PatrolAutonomyFull:
-		return `
-
-## Patrol Control Mode: Autopilot
-
-Patrol may investigate findings and execute policy-approved fixes automatically, including critical fixes, after checking risk and target confidence. Approval boundaries still win: destructive commands, restricted policy, ambiguous targets, full-mode lock, and never-auto-remediate resources must be queued or blocked rather than executed.
-
-After any automatic fix, run verification and record whether the issue was fixed, still failing, or inconclusive.`
 	default:
 		return `
 

@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 import subprocess
 import tempfile
@@ -269,50 +270,35 @@ class RegistryAuditTest(unittest.TestCase):
                 rejected = audit_registry_payload(changed, tracked_files=files, status_lane_ids={"L1"})
                 self.assertIn(diagnostic, "\n".join(rejected["errors"]))
 
-    def test_patrol_autopilot_registry_uses_dedicated_proof_and_rejects_drift(self) -> None:
+    def test_retired_patrol_autopilot_proofs_stay_out_of_registry_and_dedicated_proofs_reject_drift(self) -> None:
         registry = registry_audit.load_registry_payload()
+        serialized = json.dumps(registry)
+        for retired in (
+            "internal/api/patrol_autopilot_test.go",
+            "internal/config/patrol_autopilot_persistence.go",
+            "internal/config/patrol_autopilot_persistence_test.go",
+            "internal/unifiedresources/patrol_autopilot.go",
+            "internal/unifiedresources/patrol_autopilot_test.go",
+            "scripts/intelligence_lab/patrol_autonomy_colima.py",
+            "internal/api/patrol_autonomy_colima_real_lab_test.go",
+        ):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, serialized)
         rules = {rule["id"]: rule for rule in registry["subsystems"]}
-
         ai_policies = {
             policy["id"]: policy for policy in rules["ai-runtime"]["verification"]["path_policies"]
         }
-        self.assertIn(
-            "internal/api/patrol_autopilot_test.go",
-            ai_policies["ai-api-surface"]["exact_files"],
-        )
-        self.assertEqual(
-            ai_policies["ai-runtime-config"]["match_files"],
-            [
-                "internal/config/ai.go",
-                "internal/config/patrol_autopilot_persistence.go",
-            ],
-        )
-        self.assertIn(
-            "internal/config/patrol_autopilot_persistence_test.go",
-            ai_policies["ai-runtime-config"]["exact_files"],
-        )
+        self.assertEqual(ai_policies["ai-runtime-config"]["match_files"], ["internal/config/ai.go"])
 
-        api_policy = next(
-            policy
-            for policy in rules["api-contracts"]["verification"]["path_policies"]
-            if policy["id"] == "backend-payload-contracts"
-        )
-        self.assertIn("internal/api/patrol_autopilot_test.go", api_policy["exact_files"])
-
-        patrol_policy = next(
-            policy
-            for policy in rules["unified-resources"]["verification"]["path_policies"]
-            if policy["id"] == "patrol-autopilot-runtime"
-        )
-        self.assertEqual(
-            patrol_policy["match_files"],
-            ["internal/unifiedresources/patrol_autopilot.go"],
-        )
-        self.assertEqual(
-            patrol_policy["exact_files"],
-            ["internal/unifiedresources/patrol_autopilot_test.go"],
-        )
-
+        patrol_policy = {
+            "id": "patrol-autopilot-runtime",
+            "label": "Patrol Autopilot authority runtime proof",
+            "match_prefixes": [],
+            "match_files": ["internal/unifiedresources/patrol_autopilot.go"],
+            "allow_same_subsystem_tests": False,
+            "test_prefixes": [],
+            "exact_files": ["internal/unifiedresources/patrol_autopilot_test.go"],
+        }
         payload = {
             "version": 13,
             "shared_ownerships": [],

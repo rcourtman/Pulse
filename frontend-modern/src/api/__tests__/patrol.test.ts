@@ -18,8 +18,6 @@ import {
   reopenFinding,
   resolveFinding,
   triggerPatrolRun,
-  createPatrolAutopilotAcknowledgement,
-  revokePatrolAutopilotAcknowledgement,
   updatePatrolAutonomySettings,
   getPatrolObjectives,
   createPatrolObjective,
@@ -116,34 +114,20 @@ describe('patrol api', () => {
     );
   });
 
-  it('uses server acknowledgement and activation endpoints for Autopilot', async () => {
-    await createPatrolAutopilotAcknowledgement('ack/one');
-    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/autonomy/acknowledgements', {
-      method: 'POST',
-      body: JSON.stringify({ acknowledgement_id: 'ack/one' }),
-    });
-
+  it('PUTs Patrol mode updates to the autonomy endpoint', async () => {
     await updatePatrolAutonomySettings({
-      autonomy_level: 'full',
-      acknowledgement_id: 'ack/one',
+      autonomy_level: 'approval',
       investigation_budget: 15,
       investigation_timeout_sec: 300,
     });
     expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/autonomy', {
       method: 'PUT',
       body: JSON.stringify({
-        autonomy_level: 'full',
-        acknowledgement_id: 'ack/one',
+        autonomy_level: 'approval',
         investigation_budget: 15,
         investigation_timeout_sec: 300,
       }),
     });
-
-    await revokePatrolAutopilotAcknowledgement('ack/one', 'operator revoked');
-    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
-      '/api/ai/patrol/autonomy/acknowledgements/ack%2Fone',
-      { method: 'DELETE', body: JSON.stringify({ reason: 'operator revoked' }) },
-    );
   });
 
   it('normalizes invalid limits for patrol history queries', async () => {

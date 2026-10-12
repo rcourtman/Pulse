@@ -44,14 +44,10 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('setNote');
   });
 
-  it('presents resource action policy as an optional limit on global Patrol autonomy', () => {
-    expect(sectionSource).toContain('Automatic action limits');
-    expect(sectionSource).toContain('follows your Patrol mode by default');
-    expect(sectionSource).toContain("capability.autoAuthorization !== 'never'");
-    expect(sectionSource).toContain('Select at least one eligible capability.');
-    expect(sectionSource).toContain('Restrict to daily hours');
-    expect(sectionSource).toContain('autoRemediationPolicy');
-    expect(sectionSource).toContain('disabled={saving() || Boolean(autoPolicyValidationError())}');
+  it('offers no per-resource automatic-action limits now that Patrol never acts on its own', () => {
+    expect(sectionSource).not.toContain('Automatic action limits');
+    expect(sectionSource).not.toContain('autoRemediationPolicy');
+    expect(sectionSource).not.toContain('autoAuthorization');
   });
 
   it('keeps the section out of the parent Suspense fallback by using createNonSuspendingQuery', () => {
@@ -234,7 +230,7 @@ describe('ResourceDetailDrawer manage-tab integration', () => {
     // what Pulse actually did. They belong on the same drawer surface
     // so the operator can read both stories together.
     expect(resourceDetailDrawerSource).toContain("from './ResourceOperatorStateSection'");
-    expect(resourceDetailDrawerSource).toContain('capabilities={props.resource.capabilities}');
+    expect(resourceDetailDrawerSource).not.toContain('capabilities={props.resource.capabilities}');
     // Section must precede the action-history block so the override
     // explains the actions that follow, not vice versa.
     const operatorIndex = resourceDetailDrawerSource.indexOf('<ResourceOperatorStateSection');
@@ -249,12 +245,11 @@ describe('ResourceDetailDrawer manage-tab integration', () => {
     // an auto-authorizable capability, which hid intentionally-offline /
     // never-auto-remediate exactly when they matter most (a stopped
     // container only exposes `start`, which is never auto-authorized).
-    // The overrides don't depend on capabilities — only the
-    // automatic-actions block does, and it self-gates inside the section
-    // via eligibleAutoCapabilities.
+    // The overrides don't depend on capabilities, and the retired
+    // automatic-actions block that did is gone.
     expect(resourceDetailDrawerSource).toContain('resourceId={props.resource.id}');
     expect(resourceDetailDrawerSource).not.toContain('shouldRenderOperatorStateSection');
-    expect(sectionSource).toContain('<Show when={eligibleAutoCapabilities().length > 0}>');
+    expect(sectionSource).not.toContain('eligibleAutoCapabilities');
   });
 });
 

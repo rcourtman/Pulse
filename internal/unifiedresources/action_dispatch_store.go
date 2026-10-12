@@ -100,21 +100,6 @@ func (s *SQLiteResourceStore) RecordActionExecutionAdmission(record ActionAuditR
 	return s.recordActionAdmission(record, []ActionLifecycleEvent{event}, attempt, expected)
 }
 
-func (s *SQLiteResourceStore) RecordActionPolicyExecutionAdmission(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent, attempt ActionDispatchAttempt) error {
-	record, executionEvent, attempt, err := validateExecutionAdmission(record, executionEvent, attempt)
-	if err != nil {
-		return err
-	}
-	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
-	if err != nil {
-		return err
-	}
-	if approvalEvent.State != ActionStateApproved || approvalEvent.ActionID != record.ID || len(record.Approvals) == 0 || record.Approvals[len(record.Approvals)-1].PolicyLease == nil {
-		return ErrActionPolicyAuthorizationInvalid
-	}
-	return s.recordActionAdmission(record, []ActionLifecycleEvent{approvalEvent, executionEvent}, attempt, []ActionState{ActionStatePlanned, ActionStatePending})
-}
-
 func (s *SQLiteResourceStore) recordActionAdmission(record ActionAuditRecord, events []ActionLifecycleEvent, attempt ActionDispatchAttempt, expected []ActionState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -572,32 +557,6 @@ func (m *MemoryStore) RecordActionExecutionAdmission(record ActionAuditRecord, e
 			}
 			m.actionAudits[i] = record
 			m.actionLifecycleEvents = append(m.actionLifecycleEvents, event)
-			m.actionDispatchAttempts[record.ID] = attempt
-			return nil
-		}
-	}
-	return fmt.Errorf("action audit %q not found", record.ID)
-}
-
-func (m *MemoryStore) RecordActionPolicyExecutionAdmission(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent, attempt ActionDispatchAttempt) error {
-	record, executionEvent, attempt, err := validateExecutionAdmission(record, executionEvent, attempt)
-	if err != nil {
-		return err
-	}
-	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
-	if err != nil {
-		return err
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for i := range m.actionAudits {
-		if m.actionAudits[i].ID == record.ID {
-			current := m.actionAudits[i]
-			if current.State != ActionStatePlanned && current.State != ActionStatePending {
-				return actionTransitionConflict(current, record, ErrActionNotApproved)
-			}
-			m.actionAudits[i] = record
-			m.actionLifecycleEvents = append(m.actionLifecycleEvents, approvalEvent, executionEvent)
 			m.actionDispatchAttempts[record.ID] = attempt
 			return nil
 		}

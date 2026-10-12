@@ -657,8 +657,6 @@ var allRouteAllowlist = []string{
 	"/api/ai/patrol/suppressions/",
 	"/api/ai/patrol/dismissed",
 	"/api/ai/patrol/autonomy",
-	"/api/ai/patrol/autonomy/acknowledgements",
-	"/api/ai/patrol/autonomy/acknowledgements/",
 	"/api/ai/findings/",
 	"/api/ai/intelligence",
 	"/api/ai/intelligence/patterns",

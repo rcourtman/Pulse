@@ -28,17 +28,6 @@ export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
     detail: 'Patrol investigates and prepares fixes, but every change waits for your approval.',
     compactLabel: 'Ask first',
   },
-  assisted: {
-    label: 'Safe auto-fix',
-    detail:
-      'Patrol can run low- or medium-risk fixes allowed by policy. Higher-risk work still asks first.',
-    compactLabel: 'Safe auto-fix',
-  },
-  full: {
-    label: 'Autopilot',
-    detail: 'Patrol can act automatically within policy and still asks when approval is required.',
-    compactLabel: 'Autopilot',
-  },
 };
 
 export const PATROL_WORKSPACE_HISTORY_DESCRIPTION = 'Past checks and what Patrol recorded.';
@@ -332,10 +321,6 @@ function getPatrolQueueActionDetail(input: PatrolControlCopyInput): string {
   switch (input.autonomyLevel) {
     case 'approval':
       return 'Open a row to review evidence, approve any change, and verify the outcome.';
-    case 'assisted':
-      return 'Open a row to see safe fixes, approval requests, and verification.';
-    case 'full':
-      return 'Open a row to see automatic actions, policy approvals, and verification.';
     case 'monitor':
     default:
       return 'Open a row to review evidence and record the outcome.';
@@ -372,10 +357,6 @@ export function getPatrolReadyWorkDetail(input: PatrolControlCopyInput): string 
   switch (input.autonomyLevel) {
     case 'approval':
       return 'Patrol is ready to check, investigate, and ask before any change.';
-    case 'assisted':
-      return 'Patrol is ready to check, investigate, and fix safe issues when policy allows it.';
-    case 'full':
-      return 'Patrol is ready to check, investigate, and act automatically within your policy.';
     case 'monitor':
     default:
       return 'Patrol is ready to check infrastructure and list current issues.';
@@ -404,10 +385,6 @@ export function getPatrolQueueWorkspaceDescription(
   switch (input.autonomyLevel) {
     case 'approval':
       return 'Current issues, investigations, and approvals appear here.';
-    case 'assisted':
-      return 'Current issues, fixes, and approvals appear here.';
-    case 'full':
-      return 'Current issues, automatic work, and approvals appear here.';
     case 'monitor':
     default:
       return 'Current Patrol issues appear here.';

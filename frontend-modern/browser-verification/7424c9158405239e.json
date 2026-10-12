@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "base_sha": "a772d2fccfbd15c5f3e46865b4353d9f9bff4a37",
+  "verified_at": "2026-10-12T10:40:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/api/resourceOperatorState.ts",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/features/actions/actionPresentation.ts",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolAutopilotAcknowledgementDialog.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
+    "frontend-modern/src/types/ai.ts",
+    "frontend-modern/src/utils/patrolPagePresentation.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/patrol.ts": "352241af4b4bb68886b3a2e9981ba5b960a88c5afd433237f518e7c90268e5d7",
+    "frontend-modern/src/api/resourceOperatorState.ts": "68a84ee64b2c3f6eb3f39162f555ec76a4789422f8357729177a624fb4563d92",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "f963c94ee8db0348ff6b4501718420ae2930afca1db96f96d3501fb24f1b3c86",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "11426f0cb87064be96281eb3757239ef35324fc7fd20775b25d6151fc8ab7d22",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "40996fd12848480f3699087ac291ae1223b45789a2891751156b0af6be1ff98a",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "27ef111a02a337adc3fcde69a4768a9b33c1558ee064fef4fbd8692d5112b02b",
+    "frontend-modern/src/features/actions/actionPresentation.ts": "bdbd71a787f6a8cbcfbfa9aeeb8bf04b1b0f8a2917fb43481d7b0b06040c32b6",
+    "frontend-modern/src/features/alerts/ResourceMonitoringPolicyAction.tsx": "88d9ea38860729a32b2c5dd4904384b1f0b601ee63aa29d0a012f183f9733408",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "491e90f5198b81cc3ded5fc00b6ac6a42f20475e801eeb6c27ab0f7488af6a19",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "adcb319c5298ad27927a4e04bdeb6c43da78c2f0dbb8fa1bc91b2505c2ae8dab",
+    "frontend-modern/src/features/patrol/PatrolAutopilotAcknowledgementDialog.tsx": "deleted",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "e90ff67311a787dd87eb841c0d9e33870f5181aa89f43f410bb03bad2cae2098",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "d1cc134491afeb0680f337c8e5187c6cb9f8e36b7d0699f648a26578841115ed",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "f98bf13276b979c2258949ed8b434bb5413842c125ddee60ebac1c08fd35e967",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "32ee97e04b665bafd48fe79ca93e87c8fdd1f009d8e9dd1c0947b73c30f80b13",
+    "frontend-modern/src/types/ai.ts": "d4bc3224c8e0f01e5d3b008be3b7b61b2a763893fb5bdf579e4b1b8e2d693d25",
+    "frontend-modern/src/utils/patrolPagePresentation.ts": "a92abb80902fc4c1fa00c0ca2299d31c1dab1bcd1f6fa08035d9f81d5fe9d2d2",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "24894d20c93384efceae258663786211494c00e752ae7a3a69f3a61a6017cd6d"
+  },
+  "routes": [
+    "/patrol#patrol-control",
+    "/docker",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Pulse Pro dev licence on the pulse-enterprise build of this tree with ai_autofix effective: Patrol mode group renders exactly Watch only and Ask first, no Safe auto-fix or Autopilot button, no dialog",
+    "GET /api/ai/patrol/autonomy returns autonomy, requested and effective level plus budget and timeout only (no full_mode_unlocked or autopilot_acknowledgement)",
+    "PUT /api/ai/patrol/autonomy with full, assisted or autonomous returns 400 invalid_autonomy_level; POST /api/ai/patrol/autonomy/acknowledgements returns 404",
+    "Patrol inbox in Ask first lists every current issue as a decision (31 decisions need you) with no continuing-without-a-decision line",
+    "Docker host drawer Manage tab shows Operator overrides with Never auto-remediate and no Automatic action limits block",
+    "Plans & Billing plan page renders Pro without Safe auto-fix or Autopilot copy",
+    "Phone width 375: Patrol mode selector shows two equal buttons, no horizontal overflow",
+    "Re-verified on the build merged onto main 16072f4a86 (operator overrides section carries main's relative-age changes): same results"
+  ],
+  "interactions": [
+    "Clicked Watch only then Ask first in the Patrol mode selector; each save read back from GET as monitor then approval with the matching button pressed",
+    "Opened a Docker host drawer, switched to Manage, set Patrol priority High and saved; PUT operator-state 200, read-back carries criticality high and no autoRemediationPolicy, drawer returned to the clean Clear all overrides state",
+    "Navigated to Plans & Billing and read the plan page text",
+    "Resized to 375x812 and reloaded the Patrol page"
+  ]
+}
