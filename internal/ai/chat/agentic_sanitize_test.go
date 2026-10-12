@@ -42,8 +42,8 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 			"Para obtener la IP de cada nodo, necesito especificar el ID del recurso. Sin embargo, puedo intentar obtener la información de todos los nodos de una vez.",
 		},
 		{
-			"qwen2.5 leak: pulse_discovery get_node_ips",
-			"Voy a recoger las IPs de los nodos ahora.\n{\"name\": \"pulse_discovery\", \"parameters\": {\"action\":\"get_node_ips\"}}",
+			"qwen2.5 leak: pulse_query get_node_ips",
+			"Voy a recoger las IPs de los nodos ahora.\n{\"name\": \"pulse_query\", \"parameters\": {\"action\":\"get_node_ips\"}}",
 			"Voy a recoger las IPs de los nodos ahora.",
 		},
 		{
@@ -168,7 +168,7 @@ func TestContainsToolCallMarker(t *testing.T) {
 
 		// Plain-JSON tool-call leak detection during streaming.
 		{"json leak pulse_query", "{\"name\": \"pulse_query\", \"parameters\": {}}", true},
-		{"json leak pulse_discovery", "prose\n{\"name\": \"pulse_discovery\", \"parameters\": {}}", true},
+		{"json leak pulse_query", "prose\n{\"name\": \"pulse_query\", \"parameters\": {}}", true},
 		{"json leak pulse_question", "prose\n{\"name\": \"pulse_question\", \"input\": {}}", true},
 		{"json leak with code-fence", "answer\n```json\n{\"name\": \"pulse_query\"}", true},
 		{"plain function leak pulse_read", "pulse_read(target_host=\"current_resource\", command=\"lsblk\")", true},

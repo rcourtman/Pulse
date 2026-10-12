@@ -119,7 +119,6 @@ func branchcov0723pmRunPatrolAssertions(t *testing.T, ps PatrolScenario) []Asser
 func branchcov0723pmKnownToolNames() map[string]struct{} {
 	return map[string]struct{}{
 		agentcapabilities.PulseQueryToolName:                 {},
-		agentcapabilities.PulseDiscoveryToolName:             {},
 		agentcapabilities.PulseMetricsToolName:               {},
 		agentcapabilities.PulseStorageToolName:               {},
 		agentcapabilities.PulseDockerToolName:                {},

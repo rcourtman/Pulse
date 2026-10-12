@@ -1,7 +1,4 @@
 import { createMemo, type Accessor } from 'solid-js';
-import { getDiscovery } from '@/api/discovery';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import type { Resource, ResourceRelationship } from '@/types/resource';
 import type { HostNetworkInterface } from '@/types/api';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
@@ -21,7 +18,6 @@ import {
   getPreferredResourceClusterName,
   getPreferredInfrastructureDisplayName,
 } from '@/utils/resourceIdentity';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
@@ -48,7 +44,6 @@ import {
   getResourceGuestReadPrecaution,
   toDiscoveryConfig,
 } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
-import { getDiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import {
   buildPbsActiveTasks,
   buildPbsVisibleJobBreakdown,
@@ -75,7 +70,6 @@ import {
   resourceSupportsMetricsHistory,
 } from './resourceDetailDrawerMetricsHistoryModel';
 import {
-  buildDiscoveryContextSummary,
   buildIdentityMatchInfo,
   buildResourceDebugBundle,
   buildResourceIdentityView,
@@ -96,27 +90,12 @@ import {
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab =
-  | 'overview'
-  | 'history'
-  | 'manage'
-  | 'discovery'
-  | 'mail'
-  | 'namespaces'
-  | 'deployments'
-  | 'swarm'
-  | 'debug';
-
-interface ResourceDrawerDiscoverySourceKey {
-  type: DiscoveryResourceType;
-  agent: string;
-  resource: string;
-}
+  'overview' | 'history' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   debugEnabled: Accessor<boolean>;
-  discoveryFeatureEnabled: Accessor<boolean>;
   resourceIntelligence: Accessor<ResourceIntelligence | null>;
   resourceRelationships?: Accessor<readonly ResourceRelationship[] | null | undefined>;
 }
@@ -128,7 +107,6 @@ export const useResourceDetailDrawerDerivedState = (
   const {
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
-    discoveryFeatureEnabled,
     resourceIntelligence,
   } = options;
 
@@ -318,36 +296,6 @@ export const useResourceDetailDrawerDerivedState = (
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource()));
   const guestReadPrecaution = createMemo(() => getResourceGuestReadPrecaution(resource()));
-  const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
-  const discoverySourceKey = createMemo(() => {
-    if (!discoveryFeatureEnabled()) return null;
-    const config = discoveryConfig();
-    if (!config?.resourceType || !config.agentId || !config.resourceId) return null;
-    return {
-      type: config.resourceType,
-      agent: config.agentId,
-      resource: config.resourceId,
-    } as ResourceDrawerDiscoverySourceKey;
-  });
-  const discoveryRecord = createNonSuspendingQuery<
-    ResourceDiscovery | null,
-    ResourceDrawerDiscoverySourceKey
-  >({
-    source: discoverySourceKey,
-    initialValue: null,
-    cacheKey: (key) => `resource-detail-discovery:${key.type}:${key.agent}:${key.resource}`,
-    retainPreviousValueOnSourceChange: false,
-    fetcher: async (key) => {
-      try {
-        return await getDiscovery(key.type, key.agent, key.resource);
-      } catch {
-        return null;
-      }
-    },
-  });
-  const discoveryIdentifiedSummary = createMemo(() =>
-    discoveryFeatureEnabled() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
-  );
 
   const hostDetailCards = createMemo(() =>
     buildHostDetailCards({
@@ -400,13 +348,6 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource()));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource()));
-  const hasDiscoveryTab = createMemo(
-    () =>
-      discoveryFeatureEnabled() &&
-      isPulseAgentPlatformResource(resource()) &&
-      Boolean(discoveryConfig()),
-  );
-
   const relatedLinks = createMemo(() => buildRelatedLinks(resource(), displayName()));
   const accessSummary = createMemo(() =>
     buildAccessSummary({
@@ -438,7 +379,6 @@ export const useResourceDetailDrawerDerivedState = (
       { id: 'overview' as DrawerTab, label: 'Overview' },
       ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
       { id: 'manage' as DrawerTab, label: 'Manage' },
-      ...(hasDiscoveryTab() ? [{ id: 'discovery' as DrawerTab, label: 'Discovery' }] : []),
       ...(resource().type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
       ...(resource().type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
@@ -525,10 +465,6 @@ export const useResourceDetailDrawerDerivedState = (
     hasAliasOverflow,
     hasMergedSources,
     discoveryConfig,
-    discoveryFeatureEnabled,
-    discoveryContextSummary,
-    discoveryIdentifiedSummary,
-    discoveryLoading: discoveryRecord.loading,
     accessSummary,
     hasAccessContext,
     hasHostDetails,
@@ -540,7 +476,6 @@ export const useResourceDetailDrawerDerivedState = (
     metricsHistoryDeferredMetrics,
     metricsHistoryGroups,
     hasMetricsHistory,
-    hasDiscoveryTab,
     guestReadPrecaution,
     hasVMwareDetails,
     vmwareDetailsSummary,

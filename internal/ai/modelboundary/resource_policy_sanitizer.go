@@ -1,8 +1,6 @@
 package modelboundary
 
 import (
-	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -21,28 +19,6 @@ type allUnifiedResourceProvider interface {
 	GetAll() []unifiedresources.Resource
 }
 
-type requestSanitizerOptions struct {
-	resourcePolicyAllowedText []string
-}
-
-// RequestSanitizerOption scopes model-bound sanitizer behavior for
-// Pulse-originated exports. Options must never be derived from raw user text.
-type RequestSanitizerOption func(*requestSanitizerOptions)
-
-// AllowResourcePolicyText preserves exact Pulse-generated text spans from the
-// resource-policy text redactor while still applying prompt-secret sanitation.
-func AllowResourcePolicyText(values ...string) RequestSanitizerOption {
-	return func(opts *requestSanitizerOptions) {
-		for _, value := range values {
-			value = strings.TrimSpace(value)
-			if value == "" {
-				continue
-			}
-			opts.resourcePolicyAllowedText = append(opts.resourcePolicyAllowedText, value)
-		}
-	}
-}
-
 // RequestSanitizerForModel returns a sanitizer for non-local model traffic.
 // It is intentionally applied at the final provider transport boundary so
 // operator-entered prompts, handoff text, tool-result turns, and provider-bound
@@ -57,15 +33,9 @@ func AllowResourcePolicyText(values ...string) RequestSanitizerOption {
 // tagged secret/pii, PMG, k8s-secrets, ...) never leave the local trust boundary.
 // Everything else (Internal and Sensitive) flows. Local (Ollama) models skip the
 // sanitizer entirely.
-func RequestSanitizerForModel(model string, provider UnifiedResourceProvider, opts ...RequestSanitizerOption) func(providers.ChatRequest) providers.ChatRequest {
+func RequestSanitizerForModel(model string, provider UnifiedResourceProvider) func(providers.ChatRequest) providers.ChatRequest {
 	if !ModelUsesExternalProvider(model) {
 		return nil
-	}
-	options := requestSanitizerOptions{}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
 	}
 	resources := localOnlyRoutedResources(resourcePolicySanitizerResources(provider))
 	return func(req providers.ChatRequest) providers.ChatRequest {
@@ -73,8 +43,7 @@ func RequestSanitizerForModel(model string, provider UnifiedResourceProvider, op
 		if len(resources) == 0 {
 			return req
 		}
-		allowedText := sanitizeResourcePolicyAllowedText(options.resourcePolicyAllowedText)
-		return sanitizeProviderRequestForResources(req, resources, allowedText)
+		return sanitizeProviderRequestForResources(req, resources)
 	}
 }
 
@@ -156,145 +125,94 @@ func localOnlyRoutedResources(resources []unifiedresources.Resource) []unifiedre
 	return filtered
 }
 
-func sanitizeProviderRequestForResources(req providers.ChatRequest, resources []unifiedresources.Resource, allowedText []string) providers.ChatRequest {
+func sanitizeProviderRequestForResources(req providers.ChatRequest, resources []unifiedresources.Resource) providers.ChatRequest {
 	if len(resources) == 0 {
 		return req
 	}
-	req.System = sanitizeResourcePolicyText(req.System, resources, allowedText)
+	req.System = sanitizeResourcePolicyText(req.System, resources)
 
 	if len(req.Messages) > 0 {
 		req.Messages = append([]providers.Message(nil), req.Messages...)
 		for i := range req.Messages {
-			req.Messages[i] = sanitizeProviderMessageForResources(req.Messages[i], resources, allowedText)
+			req.Messages[i] = sanitizeProviderMessageForResources(req.Messages[i], resources)
 		}
 	}
 	if len(req.Tools) > 0 {
 		req.Tools = append([]providers.Tool(nil), req.Tools...)
 		for i := range req.Tools {
-			req.Tools[i] = sanitizeProviderToolForResources(req.Tools[i], resources, allowedText)
+			req.Tools[i] = sanitizeProviderToolForResources(req.Tools[i], resources)
 		}
 	}
 	return req
 }
 
-func sanitizeProviderMessageForResources(msg providers.Message, resources []unifiedresources.Resource, allowedText []string) providers.Message {
-	msg.Content = sanitizeResourcePolicyText(msg.Content, resources, allowedText)
-	msg.ReasoningContent = sanitizeResourcePolicyText(msg.ReasoningContent, resources, allowedText)
+func sanitizeProviderMessageForResources(msg providers.Message, resources []unifiedresources.Resource) providers.Message {
+	msg.Content = sanitizeResourcePolicyText(msg.Content, resources)
+	msg.ReasoningContent = sanitizeResourcePolicyText(msg.ReasoningContent, resources)
 	if msg.ToolResult != nil {
 		toolResult := *msg.ToolResult
-		toolResult.Content = sanitizeResourcePolicyText(toolResult.Content, resources, allowedText)
+		toolResult.Content = sanitizeResourcePolicyText(toolResult.Content, resources)
 		msg.ToolResult = &toolResult
 	}
 	if len(msg.ToolCalls) > 0 {
 		msg.ToolCalls = append([]providers.ToolCall(nil), msg.ToolCalls...)
 		for i := range msg.ToolCalls {
-			msg.ToolCalls[i].Input = sanitizeResourcePolicyMap(msg.ToolCalls[i].Input, resources, allowedText)
+			msg.ToolCalls[i].Input = sanitizeResourcePolicyMap(msg.ToolCalls[i].Input, resources)
 		}
 	}
 	return msg
 }
 
-func sanitizeProviderToolForResources(tool providers.Tool, resources []unifiedresources.Resource, allowedText []string) providers.Tool {
-	tool.Description = sanitizeResourcePolicyText(tool.Description, resources, allowedText)
-	tool.InputSchema = sanitizeResourcePolicyMap(tool.InputSchema, resources, allowedText)
+func sanitizeProviderToolForResources(tool providers.Tool, resources []unifiedresources.Resource) providers.Tool {
+	tool.Description = sanitizeResourcePolicyText(tool.Description, resources)
+	tool.InputSchema = sanitizeResourcePolicyMap(tool.InputSchema, resources)
 	return tool
 }
 
-func sanitizeResourcePolicyText(value string, resources []unifiedresources.Resource, allowedText []string) string {
+func sanitizeResourcePolicyText(value string, resources []unifiedresources.Resource) string {
 	if strings.TrimSpace(value) == "" || len(resources) == 0 {
 		return value
 	}
-	protected, restore := protectResourcePolicyAllowedText(value, allowedText)
-	redacted := protected
+	redacted := value
 	for _, resource := range resources {
 		redacted = unifiedresources.ResourcePolicyRedactedText(redacted, resource)
-	}
-	for placeholder, original := range restore {
-		redacted = strings.ReplaceAll(redacted, placeholder, original)
 	}
 	return redacted
 }
 
-func sanitizeResourcePolicyAllowedText(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(sanitizePromptSecretText(value))
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	sortStringsByLengthDesc(out)
-	return out
-}
-
-func protectResourcePolicyAllowedText(value string, allowedText []string) (string, map[string]string) {
-	if strings.TrimSpace(value) == "" || len(allowedText) == 0 {
-		return value, nil
-	}
-	protected := value
-	restore := make(map[string]string)
-	for idx, allowed := range allowedText {
-		if allowed == "" || !strings.Contains(protected, allowed) {
-			continue
-		}
-		placeholder := fmt.Sprintf("\x00pulse-allowed-resource-export-%d\x00", idx)
-		protected = strings.ReplaceAll(protected, allowed, placeholder)
-		restore[placeholder] = allowed
-	}
-	return protected, restore
-}
-
-func sortStringsByLengthDesc(values []string) {
-	sort.Slice(values, func(i, j int) bool {
-		if len(values[i]) == len(values[j]) {
-			return values[i] < values[j]
-		}
-		return len(values[i]) > len(values[j])
-	})
-}
-
-func sanitizeResourcePolicyMap(values map[string]interface{}, resources []unifiedresources.Resource, allowedText []string) map[string]interface{} {
+func sanitizeResourcePolicyMap(values map[string]interface{}, resources []unifiedresources.Resource) map[string]interface{} {
 	if len(values) == 0 {
 		return values
 	}
 	sanitized := make(map[string]interface{}, len(values))
 	for key, value := range values {
-		sanitized[key] = sanitizeResourcePolicyValue(value, resources, allowedText)
+		sanitized[key] = sanitizeResourcePolicyValue(value, resources)
 	}
 	return sanitized
 }
 
-func sanitizeResourcePolicyValue(value interface{}, resources []unifiedresources.Resource, allowedText []string) interface{} {
+func sanitizeResourcePolicyValue(value interface{}, resources []unifiedresources.Resource) interface{} {
 	switch typed := value.(type) {
 	case string:
-		return sanitizeResourcePolicyText(typed, resources, allowedText)
+		return sanitizeResourcePolicyText(typed, resources)
 	case []string:
 		out := make([]string, len(typed))
 		for i := range typed {
-			out[i] = sanitizeResourcePolicyText(typed[i], resources, allowedText)
+			out[i] = sanitizeResourcePolicyText(typed[i], resources)
 		}
 		return out
 	case []interface{}:
 		out := make([]interface{}, len(typed))
 		for i := range typed {
-			out[i] = sanitizeResourcePolicyValue(typed[i], resources, allowedText)
+			out[i] = sanitizeResourcePolicyValue(typed[i], resources)
 		}
 		return out
 	case map[string]interface{}:
-		return sanitizeResourcePolicyMap(typed, resources, allowedText)
+		return sanitizeResourcePolicyMap(typed, resources)
 	case map[string]string:
 		out := make(map[string]string, len(typed))
 		for key, nested := range typed {
-			out[key] = sanitizeResourcePolicyText(nested, resources, allowedText)
+			out[key] = sanitizeResourcePolicyText(nested, resources)
 		}
 		return out
 	default:

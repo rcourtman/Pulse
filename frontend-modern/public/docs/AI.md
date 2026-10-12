@@ -35,7 +35,7 @@ Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 
 Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 
-- **Assembles evidence** from metrics, storage, backups, discovery, alerts, and resource timelines
+- **Assembles evidence** from metrics, storage, backups, alerts, and resource timelines
 - **Provides statistical context** such as baselines, trend summaries, capacity estimates, and event relationships
 - **Lets the configured LLM reason** over that evidence and decide whether to call tools or report findings
 - **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
@@ -440,7 +440,7 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 
 ### The Model's Workflow (Discover → Investigate → Act)
 
-1. **Discover**: Uses `pulse_query` or `pulse_discovery` to find real resources and IDs
+1. **Discover**: Uses `pulse_query` to find real resources and IDs
 2. **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs
 3. **Act** (optional): Uses `pulse_control` for changes, then verifies with a read
 
@@ -467,7 +467,7 @@ fleet triage, resource investigation, and Patrol finding review workflows.
 
 The assistant enforces multiple safety gates:
 
-1. **Discovery Before Action** — Action tools cannot operate on resources that weren't first discovered
+1. **Resolve Before Action** — Action tools cannot operate on resources that weren't first resolved by a read tool
 2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
 3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
 4. **Grounded Execution Guardrails** — Visible tool traces and read-after-write checks prevent unsupported execution claims from being treated as facts

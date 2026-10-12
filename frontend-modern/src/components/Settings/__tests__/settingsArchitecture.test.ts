@@ -602,7 +602,6 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsSource).toContain("saveLabel: 'Save provider settings'");
     expect(aiSettingsSource).toContain("saveLabel: 'Save Patrol settings'");
     expect(aiSettingsSource).toContain("saveLabel: 'Save Assistant settings'");
-    expect(aiSettingsSource).toContain("saveLabel: 'Save service context settings'");
     expect(aiSettingsStatusAndActionsSource).toContain('props.saveLabel');
     expect(aiSettingsStatusAndActionsSource).not.toContain('Save changes</button>');
     expect(aiSettingsStateSource).toContain('options.savedLabel');
@@ -1099,30 +1098,6 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/readiness");
   });
 
-  it('keeps service context manual refresh on the canonical settings state', () => {
-    expect(aiSettingsStateSource).toContain(
-      "import { runDiscoveryRefresh } from '@/api/discovery';",
-    );
-    expect(aiSettingsStateSource).toContain('const handleRunDiscoveryRefresh = async () => {');
-    expect(aiSettingsStateSource).toContain('const result = await runDiscoveryRefresh();');
-    expect(aiSettingsStateSource).toContain('discoveryRunRunning');
-    expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
-    expect(aiRuntimeControlsSectionSource).toContain('Run context scan');
-    expect(aiRuntimeControlsSectionSource).toContain('Auto ${state.form.discoveryIntervalHours}h');
-    expect(aiRuntimeControlsSectionSource).toContain('Manual only');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Recurring service context scans will run at this interval.',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Recurring service context scans are off. Only manual refreshes will run.',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain('Runs the same scan used by the schedule.');
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Manual-only mode: runs one scan without enabling recurring scans.',
-    );
-    expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
-  });
-
   it('hydrates the Patrol readiness advisor from the persisted settings snapshot', () => {
     expect(aiSettingsStateSource).toContain('hydratePatrolModelReadinessFromSettings');
     expect(aiSettingsStateSource).toContain('patrol_model_readiness');
@@ -1430,7 +1405,7 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain(
       'Used when Patrol checks, investigates, and verifies work.',
     );
-    expect(aiModelSelectionSectionSource).toContain("label: 'Service context model'");
+    expect(aiModelSelectionSectionSource).not.toContain("label: 'Service context model'");
     expect(aiModelSelectionSectionSource).toContain('export const AIModelOverrideField');
     expect(aiSettingsSource).toContain(
       '<AIModelOverrideField state={props.state} kind="assistant" />',
@@ -1438,11 +1413,7 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsSource).toContain(
       '<AIModelOverrideField state={props.state} kind="patrol" includePatrolReadiness />',
     );
-    expect(aiSettingsSource).toContain(
-      '<AIModelOverrideField state={props.state} kind="discovery" />',
-    );
-    expect(aiSettingsStateSource).toContain('discoveryModel:');
-    expect(aiSettingsStateSource).toContain('payload.discovery_model = form.discoveryModel');
+    expect(aiSettingsStateSource).not.toContain('discoveryModel');
 
     expect(aiSettingsModelSource).toContain('AIProviderTestResult');
     expect(aiSettingsModelSource).toContain('AISettings as AISettingsType');

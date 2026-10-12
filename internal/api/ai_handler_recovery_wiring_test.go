@@ -96,7 +96,6 @@ func (s *capturingAIService) SetMetadataUpdater(updater chat.MetadataUpdater)   
 func (s *capturingAIService) SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)   {}
 func (s *capturingAIService) SetIncidentArchiveProvider(provider chat.IncidentArchiveProvider) {}
 func (s *capturingAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {}
-func (s *capturingAIService) SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)    {}
 func (s *capturingAIService) SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider) {
 }
 func (s *capturingAIService) SetAppContainerActionProvider(provider chat.AssistantAppContainerActionProvider) {

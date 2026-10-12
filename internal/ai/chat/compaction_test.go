@@ -251,10 +251,10 @@ func TestBuildCompactSummary(t *testing.T) {
 		},
 		{
 			name:      "nil input",
-			toolName:  "pulse_discovery",
+			toolName:  "pulse_query",
 			toolInput: nil,
 			content:   bigContent(600),
-			wantParts: []string{"pulse_discovery", "600 chars"},
+			wantParts: []string{"pulse_query", "600 chars"},
 		},
 	}
 

@@ -168,7 +168,7 @@ func TestKnowledgeAccumulator_RenderOrder(t *testing.T) {
 func TestKnowledgeAccumulator_Lookup(t *testing.T) {
 	ka := NewKnowledgeAccumulator()
 
-	ka.AddFact(FactCategoryDiscovery, "discovery:delly:106", "service=Postfix, hostname=patrol-signal-test")
+	ka.AddFact(FactCategoryResource, "discovery:delly:106", "service=Postfix, hostname=patrol-signal-test")
 
 	val, found := ka.Lookup("discovery:delly:106")
 	assert.True(t, found)

@@ -1,19 +1,15 @@
-import { Show, Suspense, createEffect, createMemo, createSignal, type Component } from 'solid-js';
+import { Show, createMemo, createSignal, type Component } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
-import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
-import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   GuestDrawerHistory,
   GuestDrawerHistoryRangeSelect,
 } from '@/components/Workloads/GuestDrawerHistory';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { Resource } from '@/types/resource';
@@ -33,33 +29,22 @@ interface DockerHostDrawerProps {
   onClose?: () => void;
 }
 
-type DockerHostDrawerTab = 'overview' | 'history' | 'manage' | 'discovery';
+type DockerHostDrawerTab = 'overview' | 'history' | 'manage';
 
 export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<DockerHostDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
-  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
 
   const headingId = () => `docker-host-drawer-heading-${props.host.id}`;
   const displayName = createMemo(() => asTrimmedString(props.host.name) || props.host.id);
   const historyTarget = createMemo(() => getDockerHostDrawerHistoryTarget(props.host));
   const currentMetrics = createMemo(() => getDockerHostDrawerCurrentMetrics(props.host));
-  const discoveryConfig = createMemo(() => toDiscoveryConfig(props.host));
-  const hasDiscoverySupport = createMemo(
-    () => discoveryFeatureEnabled() && Boolean(discoveryConfig()),
-  );
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.host.status));
   const metadataId = createMemo(
     () => asTrimmedString(props.host.docker?.hostSourceId) || asTrimmedString(props.host.id),
   );
-
-  createEffect(() => {
-    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
-      setActiveTab('overview');
-    }
-  });
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="docker-host-drawer">
@@ -98,9 +83,6 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'history', label: 'History' },
           { value: 'manage', label: 'Manage' },
-          ...(hasDiscoverySupport()
-            ? [{ value: 'discovery', label: 'Discovery' } satisfies SubtabOption]
-            : []),
         ]}
         trailing={
           <Show when={activeTab() === 'history'}>
@@ -145,23 +127,6 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           target={historyTarget()}
         />
       </div>
-
-      <Show when={hasDiscoverySupport() ? discoveryConfig() : null}>
-        {(config) => (
-          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
-            <Suspense fallback={<DiscoveryLoadingFallback />}>
-              <DiscoveryTab
-                resourceType={config().resourceType}
-                agentId={config().agentId}
-                resourceId={config().resourceId}
-                hostname={config().hostname}
-                canonicalResourceId={props.host.id}
-                showManualRunAction
-              />
-            </Suspense>
-          </div>
-        )}
-      </Show>
     </section>
   );
 };

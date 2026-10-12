@@ -80,7 +80,6 @@ type AIService interface {
 	SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)
 	SetIncidentArchiveProvider(provider chat.IncidentArchiveProvider)
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
-	SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)
 	SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)
 	SetAppContainerActionProvider(provider chat.AssistantAppContainerActionProvider)
 	SetAppContainerReadProvider(provider chat.AssistantAppContainerReadProvider)

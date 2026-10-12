@@ -1,13 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { Resource } from '@/types/resource';
 import { DockerHostDrawer } from './DockerHostDrawer';
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="docker-host-discovery" />,
-}));
 
 const wsActiveAlerts = vi.hoisted(() => ({}) as Record<string, unknown>);
 
@@ -97,39 +93,6 @@ describe('DockerHostDrawer open alerts', () => {
     expect(section).toHaveTextContent("Docker host 'Docker 1' is offline");
     expect(section).toHaveTextContent('Service backend-sftp has 0/2 running tasks');
     expect(section).not.toHaveTextContent('Another host service is down');
-  });
-});
-
-describe('DockerHostDrawer Discovery availability', () => {
-  it('collapses from the full shared drawer header surface', async () => {
-    const onClose = vi.fn();
-    render(() => <DockerHostDrawer host={host()} onClose={onClose} />);
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Collapse docker-1 details' }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not expose Discovery when the feature is disabled', () => {
-    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    render(() => <DockerHostDrawer host={host()} />);
-
-    expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
-    expect(screen.queryByTestId('docker-host-discovery')).toBeNull();
-  });
-
-  it('exposes Discovery when both the feature and target are available', () => {
-    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    render(() => <DockerHostDrawer host={host()} />);
-
-    expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-    expect(screen.getByTestId('docker-host-discovery')).toBeInTheDocument();
   });
 });
 

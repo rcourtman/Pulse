@@ -49,7 +49,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -494,17 +493,16 @@ type PatrolService struct {
 	findings            *FindingsStore
 	objectiveStore      *PatrolObjectiveStore
 	observerRuntime     *patrolObserverRuntime
-	knowledgeStore      *knowledge.Store        // For per-resource notes in patrol context
-	discoveryStore      *servicediscovery.Store // For AI-discovered infrastructure context
-	guestProber         GuestProber             // For pre-patrol guest reachability checks
-	metricsHistory      MetricsHistoryProvider  // For trend analysis and predictions
-	baselineStore       *baseline.Store         // For anomaly detection via learned baselines
-	changeDetector      *ChangeDetector         // For tracking infrastructure changes
-	remediationLog      *RemediationLog         // For tracking remediation actions
-	patternDetector     *PatternDetector        // For failure prediction from historical patterns
-	correlationDetector *CorrelationDetector    // For multi-resource correlation
-	incidentStore       *memory.IncidentStore   // For incident timeline capture
-	alertResolver       AlertResolver           // For AI-based alert resolution
+	knowledgeStore      *knowledge.Store       // For per-resource notes in patrol context
+	guestProber         GuestProber            // For pre-patrol guest reachability checks
+	metricsHistory      MetricsHistoryProvider // For trend analysis and predictions
+	baselineStore       *baseline.Store        // For anomaly detection via learned baselines
+	changeDetector      *ChangeDetector        // For tracking infrastructure changes
+	remediationLog      *RemediationLog        // For tracking remediation actions
+	patternDetector     *PatternDetector       // For failure prediction from historical patterns
+	correlationDetector *CorrelationDetector   // For multi-resource correlation
+	incidentStore       *memory.IncidentStore  // For incident timeline capture
+	alertResolver       AlertResolver          // For AI-based alert resolution
 
 	// verifyFixResolvedFn is the deterministic-verification seam used by the
 	// stale-finding reconcile pass. Tests inject a stub; nil means use the

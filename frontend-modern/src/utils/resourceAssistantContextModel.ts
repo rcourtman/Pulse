@@ -1,13 +1,5 @@
 import type { AIChatContext } from '@/stores/aiChat';
-import type {
-  Resource,
-  ResourceDiscoveryReadiness,
-  ResourceDiscoveryTarget,
-} from '@/types/resource';
-import {
-  formatDiscoveryReadinessBriefingLine,
-  getDiscoveryReadinessPresentation,
-} from '@/utils/resourceDiscoveryReadiness';
+import type { Resource } from '@/types/resource';
 import {
   getPreferredResourceDisplayName,
   getPrimaryResourceIdentity,
@@ -25,8 +17,6 @@ export interface ResourceAssistantContextTarget {
   technology?: string;
   parentName?: string;
   primaryIdentity?: string;
-  discoveryTarget?: ResourceDiscoveryTarget | null;
-  discoveryReadiness?: ResourceDiscoveryReadiness | null;
 }
 
 export const buildResourceAssistantContextForTarget = (
@@ -34,21 +24,12 @@ export const buildResourceAssistantContextForTarget = (
 ): AIChatContext => {
   const displayName = target.name || target.id;
   const subjectParts = compact([target.type, target.status, target.technology]);
-  const readinessPresentation = getDiscoveryReadinessPresentation(
-    target.discoveryReadiness,
-    Boolean(target.discoveryTarget),
-  );
-  const readinessLine = formatDiscoveryReadinessBriefingLine(target.discoveryReadiness);
   const detailLines = compact([
     `Resource ID: ${target.id}`,
     target.primaryIdentity && target.primaryIdentity !== target.id
       ? `Primary identity: ${target.primaryIdentity}`
       : '',
     target.parentName ? `Parent: ${target.parentName}` : '',
-    target.discoveryTarget
-      ? `Discovery: ${target.discoveryTarget.resourceType}:${target.discoveryTarget.resourceId}`
-      : '',
-    readinessLine,
   ]);
 
   return {
@@ -64,9 +45,7 @@ export const buildResourceAssistantContextForTarget = (
       sourceLabel: 'Pulse resource context',
       title: displayName,
       subject: subjectParts.join(' / '),
-      statusLabel: readinessPresentation
-        ? `Read-only context attached · ${readinessPresentation.statusLabel}`
-        : 'Read-only context attached',
+      statusLabel: 'Read-only context attached',
       detailLines,
       safetyNote: 'Approval required before any action.',
     },
@@ -95,6 +74,4 @@ export const buildResourceAssistantContext = (resource: Resource): AIChatContext
     technology: resource.technology,
     parentName: resource.parentName,
     primaryIdentity: getPrimaryResourceIdentity(resource),
-    discoveryTarget: resource.discoveryTarget,
-    discoveryReadiness: resource.discoveryReadiness,
   });

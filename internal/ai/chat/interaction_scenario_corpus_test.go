@@ -1,7 +1,6 @@
 package chat
 
-// Interaction-quality scenario corpus — the chat-feel counterpart of the
-// Discovery corpus (internal/servicediscovery/scenario_corpus_test.go).
+// Interaction-quality scenario corpus.
 //
 // Each scenario drives one full ExecuteStream turn against a scripted
 // provider and pins the browser-facing event stream: the sequence and

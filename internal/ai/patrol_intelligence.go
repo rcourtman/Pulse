@@ -1,14 +1,12 @@
 // patrol_intelligence.go provides pre-patrol guest intelligence gathering:
-// service identity from the discovery store and network reachability via host agents.
+// network reachability via host agents.
 package ai
 
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -26,20 +24,11 @@ type PingResult struct {
 	Reachable bool
 }
 
-// GuestIntelligence enriches a single guest with discovery and reachability data.
+// GuestIntelligence enriches a single guest with reachability data.
 type GuestIntelligence struct {
-	Name        string // Human-readable guest name (e.g. "db-server")
-	GuestType   string // "vm" or "system-container"
-	ServiceName string // e.g. "PostgreSQL 15", "Nginx" (from discovery)
-	ServiceType string // e.g. "postgres", "nginx" (from discovery)
-	Reachable   *bool  // nil = not checked (no agent/no IP), true/false = checked
-}
-
-// discoveryKey indexes service discovery records by (resourceType, targetID, resourceID).
-type discoveryKey struct {
-	resourceType servicediscovery.ResourceType
-	targetID     string
-	resourceID   string
+	Name      string // Human-readable guest name (e.g. "db-server")
+	GuestType string // "vm" or "system-container"
+	Reachable *bool  // nil = not checked (no agent/no IP), true/false = checked
 }
 
 // guestIPInfo pairs a guest ID with one of its IP addresses for reachability probing.
@@ -49,8 +38,7 @@ type guestIPInfo struct {
 }
 
 // gatherGuestIntelligence builds a map of guest intelligence keyed by guest ID
-// (e.g. "qemu/100" or "lxc/101"). It loads discovery data for service identity
-// and probes reachability via host agents. The entire operation is best-effort
+// (e.g. "qemu/100" or "lxc/101") and probes reachability via host agents. The entire operation is best-effort
 // and capped at 5 seconds — errors are logged but never block patrol.
 //
 // Requires ReadState to be wired — returns an empty map if it is not.
@@ -67,36 +55,13 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 		return intel
 	}
 
-	// Phase 1: Load discovery data for service identity
-	p.mu.RLock()
-	ds := p.discoveryStore
-	p.mu.RUnlock()
-
-	discoveryIndex := make(map[discoveryKey]*servicediscovery.ResourceDiscovery)
-
-	if ds != nil {
-		discoveries, err := ds.List()
-		if err != nil {
-			log.Warn().Err(err).Msg("AI Patrol: Failed to list discoveries for guest intelligence")
-		} else {
-			for _, d := range discoveries {
-				key := discoveryKey{
-					resourceType: d.ResourceType,
-					targetID:     d.TargetID,
-					resourceID:   d.ResourceID,
-				}
-				discoveryIndex[key] = d
-			}
-		}
-	}
-
-	// Phase 2: Build GuestIntelligence entry for every guest
+	// Build a GuestIntelligence entry for every guest
 	// Also collect running guests with IPs grouped by node for reachability probing.
 	nodeGuests := make(map[string][]guestIPInfo) // node name -> guests with IPs
 
-	gatherGuestsFromReadState(rs, discoveryIndex, intel, nodeGuests)
+	gatherGuestsFromReadState(rs, intel, nodeGuests)
 
-	// Phase 3: Reachability probing via host agents
+	// Reachability probing via host agents
 	p.mu.RLock()
 	prober := p.guestProber
 	p.mu.RUnlock()
@@ -203,22 +168,18 @@ type patrolGuestView interface {
 // StatusOnline because the registry normalizes "running" → "online".
 func gatherGuestsFromReadState(
 	rs unifiedresources.ReadState,
-	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
 	intel map[string]*GuestIntelligence,
 	nodeGuests map[string][]guestIPInfo,
 ) {
-	gatherGuestIntelligenceFromViews(rs.VMs(), "vm", servicediscovery.ResourceTypeVM, discoveryIndex, intel, nodeGuests)
-	gatherGuestIntelligenceFromViews(rs.Containers(), "system-container", servicediscovery.ResourceTypeSystemContainer, discoveryIndex, intel, nodeGuests)
+	gatherGuestIntelligenceFromViews(rs.VMs(), "vm", intel, nodeGuests)
+	gatherGuestIntelligenceFromViews(rs.Containers(), "system-container", intel, nodeGuests)
 }
 
 // gatherGuestIntelligenceFromViews collects per-guest intelligence for one
-// guest family (VMs or system containers), resolving discovery metadata by
-// node first and instance second.
+// guest family (VMs or system containers).
 func gatherGuestIntelligenceFromViews[V patrolGuestView](
 	guests []V,
 	guestType string,
-	discoveryResourceType servicediscovery.ResourceType,
-	discoveryIndex map[discoveryKey]*servicediscovery.ResourceDiscovery,
 	intel map[string]*GuestIntelligence,
 	nodeGuests map[string][]guestIPInfo,
 ) {
@@ -229,26 +190,6 @@ func gatherGuestIntelligenceFromViews[V patrolGuestView](
 		gi := &GuestIntelligence{
 			Name:      g.Name(),
 			GuestType: guestType,
-		}
-
-		vmidStr := strconv.Itoa(g.VMID())
-		if d, ok := discoveryIndex[discoveryKey{
-			resourceType: discoveryResourceType,
-			targetID:     g.Node(),
-			resourceID:   vmidStr,
-		}]; ok {
-			gi.ServiceName = d.ServiceName
-			gi.ServiceType = d.ServiceType
-		}
-		if gi.ServiceName == "" && g.Instance() != "" && g.Instance() != g.Node() {
-			if d, ok := discoveryIndex[discoveryKey{
-				resourceType: discoveryResourceType,
-				targetID:     g.Instance(),
-				resourceID:   vmidStr,
-			}]; ok {
-				gi.ServiceName = d.ServiceName
-				gi.ServiceType = d.ServiceType
-			}
 		}
 
 		// Use SourceID (legacy guest ID like "qemu/100") as the map key
@@ -280,18 +221,6 @@ func formatReachable(r *bool) string {
 		return "yes"
 	}
 	return "NO"
-}
-
-// formatService returns the display string for the Service column.
-func formatService(gi *GuestIntelligence) string {
-	if gi == nil || gi.ServiceName == "" {
-		return "-"
-	}
-	name := gi.ServiceName
-	if len(name) > 25 {
-		name = name[:22] + "..."
-	}
-	return name
 }
 
 // reachableFromIntel extracts the Reachable pointer from a GuestIntelligence entry.

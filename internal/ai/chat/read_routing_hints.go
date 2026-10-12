@@ -23,7 +23,7 @@ type readRoutingHint struct {
 }
 
 func buildReadRoutingHint(kind, adapter, targetHost, displayName, resourceID string) readRoutingHint {
-	canonicalKind := tools.CanonicalDiscoveryResourceType(kind)
+	canonicalKind := tools.CanonicalToolResourceType(kind)
 	adapter = strings.ToLower(strings.TrimSpace(adapter))
 	targetHost = strings.TrimSpace(targetHost)
 	resourceRef := firstNonEmptyTrimmed(displayName, resourceID)
@@ -83,7 +83,7 @@ func (h readRoutingHint) prefetchContext() string {
 }
 
 func mentionUsesDockerRouting(mention ResourceMention) bool {
-	if tools.CanonicalDiscoveryResourceType(mention.ResourceType) != "app-container" {
+	if tools.CanonicalToolResourceType(mention.ResourceType) != "app-container" {
 		return false
 	}
 	if strings.EqualFold(strings.TrimSpace(mention.Adapter), "truenas") {

@@ -475,7 +475,7 @@ const (
 )
 
 // ResolvedResource represents a resource that has been authoritatively resolved
-// through pulse_query or pulse_discovery. This is the source of truth that
+// through pulse_query. This is the source of truth that
 // the model cannot override - action tools must reference these IDs.
 //
 // This type implements tools.ResolvedResourceInfo interface.

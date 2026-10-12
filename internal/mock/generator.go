@@ -7412,3 +7412,12 @@ func generateDockerSwarmSecretsAndConfigs(hostname string, now time.Time) ([]mod
 
 	return secrets, configs
 }
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}

@@ -3,7 +3,6 @@ import aiSource from '@/api/ai.ts?raw';
 import aiChatSource from '@/api/aiChat.ts?raw';
 import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import alertsSource from '@/api/alerts.ts?raw';
-import discoverySource from '@/api/discovery.ts?raw';
 import agentMetadataSource from '@/api/agentMetadata.ts?raw';
 import dockerMetadataSource from '@/api/dockerMetadata.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
@@ -152,24 +151,11 @@ describe('API error-status guardrails', () => {
     expect(monitoringSource.match(/return triggerResourceCommand</g) ?? []).toHaveLength(1);
     expect(monitoringSource.match(/await runResourceAction\(url\);/g) ?? []).toHaveLength(3);
     expect(monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? []).toHaveLength(1);
-    expect(discoverySource).toContain('assertAPIResponseOK(response,');
-    expect(discoverySource).toContain('parseRequiredAPIResponse(');
-    expect(discoverySource).toContain('parseRequiredAPIResponseOrNull(');
-    expect(discoverySource).toContain('buildTypedDiscoveryPath(');
-    expect(discoverySource).toContain('buildAgentDiscoveryCollectionPath(');
-    expect(discoverySource).toContain('buildAgentDiscoveryDetailPath(');
     expect(monitoringSource).not.toContain('response.status === 404');
     expect(monitoringSource).not.toContain('JSON.parse(');
     expect(monitoringSource).not.toContain("typeof lastSeen === 'string'");
     expect(monitoringSource).not.toContain('Date.parse(lastSeen)');
     expect(monitoringSource).not.toContain('readAPIErrorMessage(');
-    expect(discoverySource).not.toContain('response.status === 404');
-    expect(discoverySource).not.toContain('return response.json()');
-    expect(discoverySource).not.toContain('const isAgentResourceType =');
-    expect(discoverySource).not.toContain('const agentCollectionBasePath =');
-    expect(discoverySource).not.toContain('parseRequiredJSON(response,');
-    expect(discoverySource).not.toContain('isAPIResponseStatus(response, 404)');
-    expect(discoverySource).not.toContain('readAPIErrorMessage(');
 
     expect(agentMetadataSource).toContain(
       "buildMetadataAPI<AgentMetadata>('/api/agents/metadata')",
@@ -267,14 +253,14 @@ describe('API error-status guardrails', () => {
     expect(notificationsSource).not.toContain('private static readStringArray(');
   });
 
-  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, raw monitoring allowed-status branches, raw agent-profile 204 success branches, raw custom-status error branches, raw monitoring success-envelope fallbacks, raw apiFetchJSON status-fallback catches, and discovery route alias drift', () => {
+  it('bans raw message-based 402/404 heuristics, raw governed response-status checks, raw governed response parsing, module-local collection fallbacks, module-local scalar helper stacks, module-local structured error normalization, module-local timestamp coercion, no-op governed payload wrappers, duplicate legacy alert_identifier promotion, no-op AI helper aliases, raw governed parsed-error throwing, raw governed assert-then-parse pipelines, raw governed 404-null response branches, raw duplicated metadata CRUD clients, raw duplicated SSE stream readers, raw monitoring allowed-status branches, raw agent-profile 204 success branches, raw custom-status error branches, raw monitoring success-envelope fallbacks, raw apiFetchJSON status-fallback catches', () => {
     const runtimeEntries = Object.entries(apiSources).filter(
       ([path]) => !path.endsWith('/responseUtils.ts'),
     );
     const rawStatusHeuristicPattern = /message\.includes\((['"])40[24]\1\)/;
     const rawGovernedResponseStatusPattern = /response\.status\s*(?:===|!==)\s*(?:204|404|503)/;
     const governedParsingEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:ai|aiChat|agentProfiles|discovery|monitoring)\.ts$/.test(path),
+      /\/(?:ai|aiChat|agentProfiles|monitoring)\.ts$/.test(path),
     );
     const rawResponseJSONPattern = /(?:return\s+)?(?:await\s+)?response\.json\(/;
     const rawManualJSONParsePattern = /JSON\.parse\(/;
@@ -312,23 +298,18 @@ describe('API error-status guardrails', () => {
     );
     const noOpAiAliasPattern =
       /(?:private\s+static\s+encodeSegment\(|private\s+static\s+isPaymentRequiredError\()/;
-    const governedDiscoveryRouteEntries = runtimeEntries.filter(([path]) =>
-      /\/discovery\.ts$/.test(path),
-    );
-    const discoveryRouteAliasPattern =
-      /(?:const\s+isAgentResourceType\s*=|const\s+agentCollectionBasePath\s*=)/;
     const governedResponseErrorEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:ai|aiChat|agentProfiles|discovery|monitoring)\.ts$/.test(path),
+      /\/(?:ai|aiChat|agentProfiles|monitoring)\.ts$/.test(path),
     );
     const rawParsedErrorThrowPattern =
       /(?:readAPIErrorMessage\(|throw\s+new\s+Error\(\s*await\s+readAPIErrorMessage\()/;
     const governedAssertParseEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:agentProfiles|discovery|monitoring)\.ts$/.test(path),
+      /\/(?:agentProfiles|monitoring)\.ts$/.test(path),
     );
     const rawAssertThenParsePattern =
       /assertAPIResponseOK\((response|agentListResponse),[\s\S]{0,160}?parse(?:Required|Optional)JSON\(\1,/;
     const governedNullLookupEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:discovery|monitoring)\.ts$/.test(path),
+      /\/monitoring\.ts$/.test(path),
     );
     const rawNullLookupPattern =
       /if\s*\(\s*isAPIResponseStatus\(response,\s*404\)\s*\)\s*\{\s*return null;\s*\}/;
@@ -429,11 +410,6 @@ describe('API error-status guardrails', () => {
       .map(([path]) => path)
       .sort();
 
-    const discoveryRouteAliasOffenders = governedDiscoveryRouteEntries
-      .filter(([, source]) => discoveryRouteAliasPattern.test(source))
-      .map(([path]) => path)
-      .sort();
-
     const rawParsedErrorThrowOffenders = governedResponseErrorEntries
       .filter(([, source]) => rawParsedErrorThrowPattern.test(source))
       .map(([path]) => path)
@@ -509,6 +485,5 @@ describe('API error-status guardrails', () => {
     expect(rawCustomStatusErrorOffenders).toEqual([]);
     expect(rawMonitoringSuccessEnvelopeOffenders).toEqual([]);
     expect(rawFetchJSONStatusFallbackOffenders).toEqual([]);
-    expect(discoveryRouteAliasOffenders).toEqual([]);
   });
 });

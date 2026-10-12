@@ -2262,18 +2262,11 @@ deriving an older display status from `workflowStatusHistory`.
    Per-surface model fallback chains are owned by the `Get*Model()` getters in
    `internal/config/ai.go` and follow the operator's intent split between
    interactive and background work. Interactive chat resolves
-   `ChatModel -> Model`. Background bulk work — Patrol, auto-fix, and
-   service-context discovery — resolves through the Patrol tier:
-   `PatrolModel -> Model` for Patrol itself, `AutoFixModel -> PatrolModel ->
-   Model` for auto-fix, and `DiscoveryModel -> PatrolModel -> Model` for
-   discovery. Discovery is high-fan-out (one model call per container or
-   service per refresh), so it must NOT fall back straight to the shared
-   default model past a configured Patrol override: an operator who selected
-   a cheap Patrol model has declared their background-work model, and
-   scheduled context refreshes silently burning the shared (often premium)
-   model with no chat activity is the bug this chain prevents. Settings copy
-   that describes the shared default model must state this chain rather than
-   claiming the shared default governs discovery unconditionally.
+   `ChatModel -> Model`. Background work — Patrol and auto-fix — resolves
+   through the Patrol tier: `PatrolModel -> Model` for Patrol itself and
+   `AutoFixModel -> PatrolModel -> Model` for auto-fix, so background work
+   never falls back straight to the shared default model past a configured
+   Patrol override.
    Cloud context privacy is a FIXED posture, not a user setting. Pulse is a
    self-hosted homelab/SMB tool: when the operator points the Assistant at a cloud
    model they have accepted that their (non-secret) infrastructure detail reaches
@@ -4298,32 +4291,22 @@ resolve canonical/source IDs and unique aliases before collection, reject
    provider-safe rewrite replaces the user message, plain-text resolution runs
    only as a fallback when the prefetcher did not already resolve a structured
    mention or handoff resource; otherwise it would discard the injected
-   cloud-safe operational context. Ambiguous or
+   resource context. Ambiguous or
    non-live prompts must fail closed to normal model clarification/query
    behavior; this is not a prompt-keyword router and must not choose, retry, or
    execute the model's next investigative action.
    Context-only resource handoff turns must be enforced at the tool-manifest
    boundary, not only by prompt wording: unless the operator explicitly asks for
-   live runtime verification, a read attempt, or discovery execution, the
+   live runtime verification or a read attempt, the
    Assistant loop must receive no tools and must answer from the attached
    context or state that Pulse does not currently have that fact.
-   Resource-context model packs and drawer handoff briefings must carry the
-   canonical discovery readiness state (`fresh`, `stale`, `missing`, `running`,
-   `failed`, `unavailable`, or `unsupported`) with provenance and freshness
-   metadata so Assistant can explain whether it is grounded in current
-   discovery data before choosing any tool. Drawer handoffs route their attached
-   resources through the same context-prefetch path as explicit `@`-mentions, so
-   on a cloud turn the resource's cloud-safe operational context (access pattern,
-   config/data/log paths, ports, and discovery freshness/age) reaches the model
-   exactly as it does for an `@`-mention; identifying fields (hostname, IP, alias)
-   stay redacted at the model boundary. The cloud-safe context must carry the
-   discovery's age (a non-identifying timestamp) when known so the model can
-   caveat staleness rather than presenting cached operational detail as current.
-   The handoff path must not withhold operational context that the `@`-mention
-   path delivers.
+   Drawer handoffs route their attached resources through the same
+   context-prefetch path as explicit `@`-mentions, so a handoff never delivers
+   less resource context than an `@`-mention; identifying fields for local-only
+   resources stay redacted at the model boundary.
    The base Assistant system prompt must instruct the model to use this
    provenance: briefly attribute facts drawn from Pulse context to their source
-   (a discovered fact's source, a metric/event timestamp), caveat stale or cached
+   (a context section, a metric/event timestamp), caveat stale or cached
    context instead of presenting it as current, and keep attribution concise and
    inline rather than citing every sentence.
    Patrol deterministic triage signals are prioritized evidence seeds for the
@@ -4384,7 +4367,7 @@ resolve canonical/source IDs and unique aliases before collection, reject
    divergence must be sourced from canonical `ReadState.DockerHosts()` views,
    with model-shaped data limited to the watcher adapter input rather than
    direct `StateSnapshot.DockerHosts` reads in the Patrol run loop.
-4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops. `internal/api/ai_handlers.go` must preserve an explicitly supplied `discovery_interval_hours: 0` as the manual-only setting and may only apply the 24-hour default when discovery is enabled without an explicit interval payload. Discovery analysis remains a Pulse tool-led model workflow: Pulse supplies agent/API/metrics evidence and cache orchestration, while the selected model provides the intelligence. Background, settings-triggered, or drawer-triggered discovery progress must describe that discovery analysis directly and must not imply a live Pulse Assistant chat transcript unless the run is actually executing inside the chat surface. Settings-triggered manual discovery is an explicit operator refresh and must not open, append to, or masquerade as a Pulse Assistant session. Assistant and Patrol access to discovery must stay behind the governed `pulse_discovery` tool, including an explicit forced refresh action for known resources, while settings-level manual runs must use the canonical `/api/discovery/run` new/changed/stale/repairable sweep rather than a frontend-only shortcut. Discovery analysis must use the selected discovery route only: provider-owned default resolution may choose a model before the request when no explicit route exists, but `AnalyzeForDiscovery` must not fall back to a stale default provider or another configured provider after selected-route provider construction or execution fails. Fresh-but-unidentified service-discovery records are not complete when canonical resource metadata, stored facts, or safe command evidence can deterministically identify a known workload and endpoint; cached reads and the canonical sweep must repair those records instead of presenting `Unknown Service` as fresh.
+4. Keep AI Discovery retired. The model-backed service-discovery runtime (`internal/servicediscovery`, `internal/ai/infradiscovery`, the `pulse_discovery` tool, `/api/discovery*` routes, and the `discovery_enabled`/`discovery_interval_hours`/`discovery_model` AI settings) was removed on 2026-10-11: no telemetry counter measured its use and the maintainer judged it a flop. Assistant and Patrol read resource evidence through `pulse_query`, `pulse_read`, and the unified-resource context sections; do not reintroduce a parallel model-backed discovery store, scheduler, or tool without a new evidence-backed `FEATURE_REQUESTS.md` entry. Network subnet discovery (`internal/discovery`) and the `discoveryTarget` agent coordinates are separate and stay.
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
    External provider-bound unified-resource context must enforce the same
    data-handling policy the export audit records: `local-only` resources are
@@ -4408,26 +4391,12 @@ resolve canonical/source IDs and unique aliases before collection, reject
    `internal/ai/tools/executor.go` instead of maintaining hand-written
    prompt-only tool lists. Fallback Assistant governance text and Patrol
    system-prompt tool summaries must mirror the same registry-owned capability
-   shape, including `pulse_discovery` read-or-refresh behavior, instead of
-   presenting stale read-only summaries. Frontend approval cards must surface backend
+   shape instead of presenting stale read-only summaries. Frontend approval cards must surface backend
    approval risk/description without hiding a pending approval when skip or
    deny fails. Action-producing tools must also persist the unified
    `ActionPlan.Preflight` dry-run boundary through the canonical planner
    (`internal/actionplanner/planner.go`) rather than leaving dry-run
    availability as chat-only text.
-   The `pulse_discovery` tool response must carry each discovered fact's
-   provenance — the `source` that produced it and its `confidence` — alongside
-   the fact's category/key/value, so the model can attribute and weight what it
-   reports instead of stating untraceable facts. Both are omitted when empty.
-   A targetless `action=get` (including the common `{action:get, limit:N}`
-   form) is a bounded alias for `action=list`; because it requests no specific
-   resource, it must not fail merely on missing resource type. Any partially
-   specified get remains the strict single-resource operation. An exact
-   canonical `app-container` resource ID is itself a complete coordinate: the
-   runtime may derive its target and provider container ID only from the unique
-   unified-resource record. Names, aliases, prefixes, provider IDs, and
-   ambiguous or unknown canonical IDs never authorize that inference and fail
-   closed until an explicit target is supplied.
    When the shared registry blocks a control tool in read-only mode, its
    operator guidance must point to Pulse Intelligence > Provider & Models
    settings and the Pulse Assistant Permissions Control mode, not legacy Pulse
@@ -4974,6 +4943,29 @@ rather than blocking, because the dimension that actually failed carries the
 verdict on its own check.
 
 ## Current State
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
+
+Patrol's guest inventory table drops the Service column, the resource-context prefetcher no longer reads a Discovery provider, and stored HTTP JSON observers that depended on Discovery endpoints now fail as `observer_runtime_unsupported`.
 
 ### Agent surfaces expose execution-time readiness refusal
 

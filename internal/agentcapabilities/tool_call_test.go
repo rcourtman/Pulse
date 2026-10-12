@@ -24,7 +24,6 @@ func TestToolCallKindString(t *testing.T) {
 func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 	tests := map[string]string{
 		"PulseQueryToolName":                 PulseQueryToolName,
-		"PulseDiscoveryToolName":             PulseDiscoveryToolName,
 		"PulseMetricsToolName":               PulseMetricsToolName,
 		"PulseStorageToolName":               PulseStorageToolName,
 		"PulseDockerToolName":                PulseDockerToolName,
@@ -57,7 +56,6 @@ func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 	}
 	want := map[string]string{
 		"PulseQueryToolName":                 "pulse_query",
-		"PulseDiscoveryToolName":             "pulse_discovery",
 		"PulseMetricsToolName":               "pulse_metrics",
 		"PulseStorageToolName":               "pulse_storage",
 		"PulseDockerToolName":                "pulse_docker",
@@ -105,9 +103,6 @@ func TestClassifyToolCallUsesSharedSafetyClassification(t *testing.T) {
 	}{
 		{name: "native question", toolName: PulseQuestionToolName, want: ToolCallKindUserInput},
 		{name: "query resolves", toolName: "pulse_query", want: ToolCallKindResolve},
-		{name: "discovery get resolves", toolName: "pulse_discovery", args: map[string]interface{}{"action": "get"}, want: ToolCallKindResolve},
-		{name: "discovery run resolves", toolName: "pulse_discovery", args: map[string]interface{}{"action": "run"}, want: ToolCallKindResolve},
-		{name: "discovery missing action fails closed", toolName: "pulse_discovery", want: ToolCallKindWrite},
 		{name: "metrics reads", toolName: "pulse_metrics", want: ToolCallKindRead},
 		{name: "summarize reads", toolName: PulseSummarizeToolName, want: ToolCallKindRead},
 		{name: "alert list reads", toolName: "pulse_alerts", args: map[string]interface{}{"action": "list"}, want: ToolCallKindRead},

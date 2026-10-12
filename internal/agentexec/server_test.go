@@ -270,7 +270,8 @@ func TestExecuteCommandSecurityValidation_RequiresApprovalIDWhenPolicyRequiresAp
 func TestAuthorizeCommandPayload_TrustedBypassesApproval(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 
-	// A command in the require-approval list (docker exec wraps Discovery probes).
+	// A command in the require-approval list (docker exec wraps the guest
+	// Docker checker's read-only probes).
 	cmd := ExecuteCommandPayload{
 		RequestID: "r1",
 		Command:   "docker exec pbs sh -c 'cat /etc/os-release'",

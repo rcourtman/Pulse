@@ -200,28 +200,6 @@ func TestPredictFactKeys_BackupTasks(t *testing.T) {
 	assert.Equal(t, "backup_tasks:queried", keys[0])
 }
 
-func TestExtractFacts_Discovery(t *testing.T) {
-	input := map[string]interface{}{"target_id": "pve-node", "resource_id": "106"}
-	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","target_id":"pve-node","resource_id":"106","ports":[{"port":25},{"port":22}]}`
-
-	facts := ExtractFacts("pulse_discovery", input, result)
-	require.Len(t, facts, 1)
-
-	f := facts[0]
-	assert.Equal(t, FactCategoryDiscovery, f.Category)
-	assert.Equal(t, "discovery:pve-node:106", f.Key)
-	assert.Contains(t, f.Value, "service=Postfix")
-	assert.Contains(t, f.Value, "hostname=patrol-signal-test")
-	assert.Contains(t, f.Value, "ports=[25,22]")
-}
-
-func TestExtractFacts_Discovery_RequiresTargetID(t *testing.T) {
-	input := map[string]interface{}{"resource_id": "106"}
-	result := `{"service_type":"Postfix","hostname":"patrol-signal-test","resource_id":"106","ports":[{"port":25}]}`
-	facts := ExtractFacts("pulse_discovery", input, result)
-	assert.Empty(t, facts)
-}
-
 func TestExtractFacts_Exec_JSON(t *testing.T) {
 	input := map[string]interface{}{"command": "pvesm status | grep pbs-minipc", "target_host": "pve-node"}
 	result := `{"success":true,"exit_code":0,"output":"pbs-minipc    active   42.68%"}`
@@ -378,23 +356,6 @@ func TestExtractFacts_Finding_MissingFields(t *testing.T) {
 	assert.Empty(t, facts)
 }
 
-func TestPredictFactKeys_Discovery(t *testing.T) {
-	keys := PredictFactKeys("pulse_discovery", map[string]interface{}{
-		"target_id":   "pve-node",
-		"resource_id": "106",
-	})
-	require.Len(t, keys, 1)
-	assert.Equal(t, "discovery:pve-node:106", keys[0])
-}
-
-func TestPredictFactKeys_DiscoveryLegacyHostIDRejected(t *testing.T) {
-	keys := PredictFactKeys("pulse_discovery", map[string]interface{}{
-		"host_id":     "minipc",
-		"resource_id": "pbs-minipc",
-	})
-	assert.Nil(t, keys)
-}
-
 func TestPredictFactKeys_Exec(t *testing.T) {
 	keys := PredictFactKeys("pulse_read", map[string]interface{}{
 		"target_host": "pve-node",
@@ -421,8 +382,6 @@ func TestPredictFactKeys_UnpredictableTools(t *testing.T) {
 }
 
 func TestPredictFactKeys_MissingFields(t *testing.T) {
-	// Discovery without target_id should return nil
-	assert.Nil(t, PredictFactKeys("pulse_discovery", map[string]interface{}{"resource_id": "106"}))
 	// Exec without command should return nil
 	assert.Nil(t, PredictFactKeys("pulse_read", map[string]interface{}{"target_host": "pve-node"}))
 }
@@ -1194,7 +1153,6 @@ func TestCategoryForPredictedKey(t *testing.T) {
 		{"baselines:queried", FactCategoryMetrics},
 		{"temperatures:queried", FactCategoryMetrics},
 		{"exec:pve-node:some-cmd", FactCategoryExec},
-		{"discovery:pve-node:106", FactCategoryDiscovery},
 		{"topology:summary", FactCategoryResource},
 		{"health:connections", FactCategoryResource},
 		{"search:postfix:summary", FactCategoryResource},

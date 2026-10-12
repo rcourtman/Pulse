@@ -567,29 +567,29 @@ func TestWaitForApprovalDecision(t *testing.T) {
 func TestToolCallKey(t *testing.T) {
 	t.Run("same name and input produce same key", func(t *testing.T) {
 		input := map[string]interface{}{"action": "get", "resource_type": "lxc", "target_id": "node1"}
-		k1 := toolCallKey("pulse_discovery", input)
-		k2 := toolCallKey("pulse_discovery", input)
+		k1 := toolCallKey("pulse_query", input)
+		k2 := toolCallKey("pulse_query", input)
 		assert.Equal(t, k1, k2)
 	})
 
 	t.Run("different input produces different key", func(t *testing.T) {
 		input1 := map[string]interface{}{"action": "get", "resource_id": "100"}
 		input2 := map[string]interface{}{"action": "get", "resource_id": "200"}
-		k1 := toolCallKey("pulse_discovery", input1)
-		k2 := toolCallKey("pulse_discovery", input2)
+		k1 := toolCallKey("pulse_query", input1)
+		k2 := toolCallKey("pulse_query", input2)
 		assert.NotEqual(t, k1, k2)
 	})
 
 	t.Run("different tool name produces different key", func(t *testing.T) {
 		input := map[string]interface{}{"action": "get"}
-		k1 := toolCallKey("pulse_discovery", input)
-		k2 := toolCallKey("pulse_query", input)
+		k1 := toolCallKey("pulse_query", input)
+		k2 := toolCallKey("pulse_read", input)
 		assert.NotEqual(t, k1, k2)
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		k := toolCallKey("pulse_discovery", nil)
-		assert.Contains(t, k, "pulse_discovery")
+		k := toolCallKey("pulse_query", nil)
+		assert.Contains(t, k, "pulse_query")
 	})
 }
 

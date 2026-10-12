@@ -11,12 +11,10 @@ import {
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import type { VM } from '../src/types/api';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 const capacity = 10 * 1024 ** 3;
 type Read = {
   reason?: string;

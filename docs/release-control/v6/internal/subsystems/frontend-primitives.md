@@ -1387,7 +1387,6 @@ removal/failure retention and containing publication remain separate evidence.
    1a. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts`
    1b. `frontend-modern/src/components/Workloads/nodeDrawerModel.ts`
    1c. `frontend-modern/src/features/docker/dockerHostDrawerModel.ts`
-   1d. `frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx`
 2. `frontend-modern/src/components/Settings/Settings.tsx`
 3. `frontend-modern/src/components/Settings/SettingsDialogs.tsx`
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
@@ -1412,7 +1411,6 @@ removal/failure retention and containing publication remain separate evidence.
 22. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
 23. `frontend-modern/src/components/Settings/OperationsPanel.tsx`
 24. `frontend-modern/src/utils/diagnosticsPresentation.ts`
-25. `frontend-modern/src/utils/discoveryPresentation.ts`
 26. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 27. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
 28. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
@@ -1550,7 +1548,6 @@ removal/failure retention and containing publication remain separate evidence.
      139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
      139c. `frontend-modern/src/components/shared/ExternalTextLink.tsx`
      139d. `frontend-modern/src/components/shared/ExternalTextLink.test.tsx`
-139. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 140. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
 141. `frontend-modern/src/components/shared/detailSectionModel.ts`
 142. `frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts`
@@ -1808,15 +1805,6 @@ commands from `UpdateInfo.dockerUpdate` (or an explicit Pro notice when they
 are absent) and must never show the community `rcourtman/pulse` pull
 commands, which would silently downgrade the container to the community
 build.
-
-`frontend-modern/src/components/shared/DiscoveryReadinessBadge.tsx` is the
-shared presentation primitive for discovery freshness/readiness indicators.
-It may render the canonical presentation model from
-`frontend-modern/src/utils/resourceDiscoveryReadiness.ts`, but it must remain
-presentational: no local storage, network reads, discovery fetches, or
-resource-target inference belongs inside the badge. Workload rows, drawers,
-and Assistant handoff surfaces must share that primitive instead of inventing
-local freshness chips.
 
 Platform page subnavigation is a shared frontend primitive. Docker / Podman
 and Kubernetes platform pages may add native API-backed sections, but the tabs
@@ -2558,11 +2546,10 @@ not a replacement status card, CTA band, or page-local nested card.
    buttons.
    Copy-value affordances belong to the same shared button family. Feature
    surfaces may own the copied value, success/error notification, and adjacent
-   product copy, but icon/chip copy controls must use `CopyValueButton`, and
-   copyable command/path/value rows must use `CopyableCodeRow` instead of
-   recreating local copy icons, copied-state checks, disabled empty-value
-   handling, or `font-mono` code-row shells.
-   Compact information-card frames in drawer overviews, discovery summaries,
+   product copy, but icon/chip copy controls must use `CopyValueButton` instead
+   of recreating local copy icons, copied-state checks, or disabled empty-value
+   handling.
+   Compact information-card frames in drawer overviews,
    resource detail sections, web-interface URL editors, shared overview cards,
    and storage backup empty states belong to `InfoCardFrame`. Feature surfaces
    own the title, rows, actions, and sizing context, but the bordered
@@ -2865,8 +2852,8 @@ not a replacement status card, CTA band, or page-local nested card.
    mode); without it every default `FormSelect` read as a text field. Callers
    that pass their own `selectBaseClass` keep their own arrow.
    The Assistant runtime controls in
-   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — e.g. the
-   service context scan `Toggle` — are settings-shell chrome bound to the canonical
+   `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` are
+   settings-shell chrome bound to the canonical
    `useAISettingsState` form and `/api/settings/ai` payload, not local browser
    state. Each must bind to a `state.form.*` field, round-trip through the
    field-by-field settings payload, and source its label, help, and summary copy
@@ -3485,13 +3472,10 @@ Agent`), with the plain-language source phrase available through accessible
     runtime readiness, Patrol model override, and a simple `Open Patrol` handoff
     to the `/patrol` operator page; the actual watch/investigate/act/verify/record
     operator loop stays on `/patrol`. `Assistant` owns chat/tool permission,
-    command-access, model override, and session maintenance. Service context may
-    exist under Pulse Intelligence only for model-backed or continuous service
-    discovery that supplies Assistant and Patrol context; normal infrastructure
-    discovery and onboarding remain under Infrastructure, and the Pulse
-    Intelligence navigation item, route header, model override, reset/save
-    affordances, and setup copy must use the `Service Context` label so
-    operators do not confuse it with infrastructure discovery. The
+    command-access, model override, and session maintenance. The AI Service
+    Context page was retired with AI Discovery on 2026-10-11; its old route
+    redirects to `Assistant`, and infrastructure discovery and onboarding stay
+    under Infrastructure. The
     `Provider & Models` page must not carry a discovery summary,
     Patrol-control banner, or Patrol CTA; the Patrol-control handoff belongs on
     the `Patrol` settings page and `/patrol`, where copy describes Patrol
@@ -3549,36 +3533,21 @@ Agent`), with the plain-language source phrase available through accessible
     server-authored suggestion set rather than a frontend literal.
     Provider connection controls are page-scoped: the global Pulse
     Intelligence enable toggle, provider readiness strip, and Test Connection
-    action belong to `Provider & Models`; Patrol, Assistant, and Service Context
+    action belong to `Provider & Models`; Patrol and Assistant
     subpages keep their focused settings plus reset/save actions without
     repeating provider health chrome. Those reset/save actions and save
-    notifications must be page-scoped as well: saving `Patrol`, `Assistant`,
-    or `Service Context` settings must not report
+    notifications must be page-scoped as well: saving `Patrol` or `Assistant`
+    settings must not report
     `Provider & Models settings saved` or render a generic `Save changes`
     affordance that hides which Pulse
     Intelligence page owns the change.
     Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must stay split by page-specific exports: provider runtime controls on
-    `Provider & Models`, Assistant chat actions on `Assistant`, and service
-    context controls on `Service Context`. Assistant chat-action copy
+    `Provider & Models` and Assistant chat actions on `Assistant`. Assistant
+    chat-action copy
     must name Patrol control as configured on the Patrol page, not as an
     Assistant command mode, because `/patrol` remains the operator surface for
-    choosing how much autonomy Patrol has. Service context copy must describe
-    the model-backed loop that supplies concrete service facts to Pulse
-    Assistant and Patrol, not as generic discovery or AI context.
-    `frontend-modern/src/components/Settings/useAISettingsState.ts`
-    must save service context scan enablement and interval as one explicit
-    settings pair so selecting "Every 6 hours" or "Manual only" round-trips
-    through `/api/settings/ai` without depending on stale read-side diffing.
-    The same Service Context settings section must expose a manual
-    context-scan action wired through `/api/discovery/run` when
-    service context scanning is enabled in manual-only mode, while resource-drawer
-    discovery remains the forced single-resource refresh path. The collapsed
-    section and run-action copy must make automatic scheduling visible by
-    distinguishing `Auto <interval>`, `Manual only`, and `Off`, and the run
-    action must describe whether it is running the scheduled scan or a
-    one-off manual-only sweep rather than implying recurring scans were
-    enabled.
+    choosing how much autonomy Patrol has.
     Assistant-only controls such as execution permissions and session
     maintenance must stay explicitly labeled as Pulse Assistant controls, while
     Patrol schedule and trigger readiness live on the Patrol settings page and
@@ -3588,13 +3557,13 @@ Agent`), with the plain-language source phrase available through accessible
     file diff, revert, or unrevert actions must not appear in Settings unless
     Pulse owns a real governed infrastructure action-history/reversal contract
     for the affected resources. Shared/default model choice belongs on
-    `Provider & Models`, while Assistant, Patrol, and service context model
+    `Provider & Models`, while Assistant and Patrol model
     overrides belong on their respective settings pages instead of a generic
     advanced AI bucket. Each per-surface override must fall back to the shared
     default when
     left empty rather than silently using a hard-coded backend default, so
     `Provider & Models` stays the single place an operator picks the default
-    model for all three surfaces. Assistant model copy must describe chat,
+    model for both surfaces. Assistant model copy must describe chat,
     explanation, and review support; it must not present Assistant as the
     approved-fix executor because Patrol is the hands-on operator for checks,
     governed fixes, and verification.
@@ -4395,33 +4364,13 @@ production table, router and styles; it does not qualify full-app scrolling.
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
-40. Keep the identified-service reducer on `discoveryPresentation.ts`. Any
-    surface that wants to label a workload with the AI-identified service
-    (drawer overview card, future row chips, MCP capability payloads) must
-    consume `getDiscoveryIdentifiedSummary` rather than re-implement the
-    empty/low-signal gate. The helper returns null when the stored record
-    has no useful identification — mirroring the Discovery tab's
-    `hasValidDiscovery` — so the same record either renders in all
-    surfaces or hides in all surfaces, preventing "Unknown" rows or
-    zero-confidence noise from drifting into peripheral UI.
-    CLI access, confidence fields, and no-URL diagnostics are support
-    metadata; they must not by themselves promote a record into the
-    identified-service summary when the service name, category, version,
-    paths, ports, facts, and suggested URL are all absent or placeholders,
-    including generic workload types such as `service` or `container` and
-    diagnostic facts such as metadata-only status, config-availability
-    failures, or missing-config errors.
-    Discovery is an opt-in observed-context layer, not an automatic row-link
-    owner. The reducer must carry provenance, observed time, service version,
-    endpoint candidates, and URL-source copy so drawer surfaces can show
-    "Observed by Discovery" context and pass suggested URLs into the shared
-    web-interface field. Persisted/manual web-interface metadata remains the
-    only row-link source until the operator explicitly adopts a suggested URL.
-    Discovery-sourced values rendered outside the Discovery tab must carry the
-    shared compact provenance marker from
-    `frontend-modern/src/components/shared/DiscoveryProvenanceMarker.tsx`, so
-    operators can distinguish opt-in Discovery context from API-owned resource
-    facts without reading a drawer-specific explanation.
+40. Keep AI Discovery retired. The model-backed service-identification layer
+    (Discovery tab, identified-service cards, readiness badges, provenance
+    markers, suggested web-interface URLs, and the AI Service Context settings
+    page) was removed on 2026-10-11. Do not reintroduce drawer, row, or
+    Assistant-briefing surfaces for AI-identified services without a new
+    evidence-backed `FEATURE_REQUESTS.md` entry; persisted/manual web-interface
+    metadata is the only row-link source.
 41. Keep settings sidebar search able to find pages by the vocabulary users
     actually type, not only by rendered copy. `SettingsNavItem.keywords` in
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts` is the
@@ -4613,6 +4562,29 @@ checks still render the complete shipped guides through the production renderer;
 their per-suite fixture reuses only identical source/path renders, returns
 isolated clones and invalidates changed input. No renderer, guide bytes,
 assertions or test deadlines are weakened.
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
+
+`DiscoveryLoadingFallback`, `DiscoveryReadinessBadge`, `DiscoveryProvenanceMarker` and the now-orphaned `CopyableCodeRow` were deleted with their registry rules; the drawer spinner guard now names `LoadingSpinner` as its canonical owner.
 
 ### Manual update freshness
 

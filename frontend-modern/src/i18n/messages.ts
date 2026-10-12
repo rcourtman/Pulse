@@ -473,9 +473,6 @@ export const EN_MESSAGES = {
   'settings.header.systemAiAssistant.description':
     'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
   'settings.header.systemAiAssistant.title': 'Assistant',
-  'settings.header.systemAiDiscovery.description':
-    'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
-  'settings.header.systemAiDiscovery.title': 'Service Context',
   'settings.header.systemAiPatrol.description':
     'Set when Patrol runs, what starts it, and which model it uses.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -522,7 +519,6 @@ export const EN_MESSAGES = {
   'settings.nav.item.dataReports': 'Data & Reports',
   'settings.nav.item.diagnosticsHealth': 'Diagnostics & Health',
   'settings.nav.item.assistant': 'Assistant',
-  'settings.nav.item.discovery': 'Service Context',
   'settings.nav.item.general': 'General',
   'settings.nav.item.infrastructure': 'Infrastructure',
   'settings.nav.item.network': 'Network',

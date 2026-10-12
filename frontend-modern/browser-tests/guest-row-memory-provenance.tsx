@@ -10,12 +10,10 @@ import {
 } from '../src/components/Workloads/guestRowModel';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { WorkloadGuest } from '../src/types/workloads';
 import type { WorkloadMetricHistoryReader } from '../src/components/Workloads/workloadMetricHistoryModel';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 const capacity = 4 * 1024 ** 3;
 const observedAt = '2026-09-30T11:00:00Z';
 const initial: WorkloadGuest = {

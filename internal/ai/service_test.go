@@ -6,16 +6,13 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -242,165 +239,6 @@ func TestService_SetStateProvider(t *testing.T) {
 	analyzer := svc.GetAlertTriggeredAnalyzer()
 	if analyzer == nil {
 		t.Error("Expected alert analyzer to be initialized after setting state provider")
-	}
-}
-
-func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pulse-infra-discovery-lifecycle-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	persistence := config.NewConfigPersistence(tmpDir)
-	svc := NewService(persistence, nil)
-	defer svc.Stop()
-
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(models.StateSnapshot{})
-	svc.SetReadState(registry)
-
-	saveConfig := func(cfg config.AIConfig) {
-		t.Helper()
-		if err := persistence.SaveAIConfig(cfg); err != nil {
-			t.Fatalf("save ai config: %v", err)
-		}
-		if err := svc.LoadConfig(); err != nil {
-			t.Fatalf("LoadConfig(): %v", err)
-		}
-		if svc.infraDiscoveryService == nil {
-			t.Fatal("expected infra discovery service to be initialized")
-		}
-	}
-
-	saveConfig(config.AIConfig{
-		Enabled:                true,
-		Model:                  "ollama:llama3.2",
-		OllamaBaseURL:          "http://localhost:11434",
-		DiscoveryEnabled:       false,
-		DiscoveryIntervalHours: 0,
-	})
-
-	status := svc.infraDiscoveryService.GetStatusSnapshot()
-	if status.Running {
-		t.Fatalf("expected infra discovery to stay stopped when discovery is disabled")
-	}
-	if svc.discoveryService == nil {
-		t.Fatalf("expected deep discovery service to be initialized")
-	}
-	if svc.discoveryService.IsCommandScanningEnabled() {
-		t.Fatalf("expected deep discovery command scanning to stay disabled when discovery is disabled")
-	}
-
-	saveConfig(config.AIConfig{
-		Enabled:                false,
-		Model:                  "ollama:llama3.2",
-		OllamaBaseURL:          "http://localhost:11434",
-		DiscoveryEnabled:       true,
-		DiscoveryIntervalHours: 2,
-	})
-
-	if svc.discoveryService.IsCommandScanningEnabled() {
-		t.Fatalf("expected deep discovery command scanning to stay disabled when AI is disabled")
-	}
-
-	saveConfig(config.AIConfig{
-		Enabled:                true,
-		Model:                  "ollama:llama3.2",
-		OllamaBaseURL:          "http://localhost:11434",
-		DiscoveryEnabled:       true,
-		DiscoveryIntervalHours: 2,
-	})
-
-	status = svc.infraDiscoveryService.GetStatusSnapshot()
-	if !status.Running {
-		t.Fatalf("expected infra discovery to start when discovery is enabled")
-	}
-	if status.Interval != 2*time.Hour {
-		t.Fatalf("expected infra discovery interval 2h, got %v", status.Interval)
-	}
-	if !svc.discoveryService.IsCommandScanningEnabled() {
-		t.Fatalf("expected deep discovery command scanning to enable with AI discovery")
-	}
-
-	saveConfig(config.AIConfig{
-		Enabled:                true,
-		Model:                  "ollama:llama3.2",
-		OllamaBaseURL:          "http://localhost:11434",
-		DiscoveryEnabled:       true,
-		DiscoveryIntervalHours: 4,
-	})
-
-	status = svc.infraDiscoveryService.GetStatusSnapshot()
-	if !status.Running {
-		t.Fatalf("expected infra discovery to remain running after interval update")
-	}
-	if status.Interval != 4*time.Hour {
-		t.Fatalf("expected infra discovery interval 4h after reload, got %v", status.Interval)
-	}
-
-	saveConfig(config.AIConfig{
-		Enabled:                true,
-		Model:                  "ollama:llama3.2",
-		OllamaBaseURL:          "http://localhost:11434",
-		DiscoveryEnabled:       true,
-		DiscoveryIntervalHours: 0,
-	})
-
-	status = svc.infraDiscoveryService.GetStatusSnapshot()
-	if status.Running {
-		t.Fatalf("expected infra discovery to stop in manual discovery mode")
-	}
-	if !svc.discoveryService.IsCommandScanningEnabled() {
-		t.Fatalf("expected manual discovery mode to keep command scanning enabled")
-	}
-}
-
-func TestService_DeepDiscoveryUsesInterfaceBackedAgentServer(t *testing.T) {
-	var commandCalls atomic.Int32
-	agentServer := &mockAgentServer{
-		agents: []agentexec.ConnectedAgent{{
-			AgentID:  "agent-1",
-			Hostname: "home-assistant",
-			Platform: "linux",
-		}},
-		executeFunc: func(_ context.Context, _ string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
-			commandCalls.Add(1)
-			return &agentexec.CommandResultPayload{
-				RequestID: cmd.RequestID,
-				Success:   true,
-				Stdout:    "probe output",
-			}, nil
-		},
-	}
-
-	svc := NewService(config.NewConfigPersistence(t.TempDir()), agentServer)
-	defer svc.Stop()
-	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(models.StateSnapshot{})
-	svc.SetReadState(registry)
-
-	discoveryService := svc.GetDiscoveryService()
-	if discoveryService == nil {
-		t.Fatal("expected deep discovery service to be initialized")
-	}
-	discoveryService.SetCommandScanningEnabled(true)
-
-	result, err := discoveryService.DiscoverResource(context.Background(), servicediscovery.DiscoveryRequest{
-		ResourceType: servicediscovery.ResourceTypeAgent,
-		ResourceID:   "agent-1",
-		TargetID:     "agent-1",
-		Hostname:     "home-assistant",
-		Force:        true,
-	})
-	if err != nil {
-		t.Fatalf("DiscoverResource() error = %v", err)
-	}
-	if commandCalls.Load() == 0 {
-		t.Fatal("expected deep discovery to dispatch commands through the interface-backed agent server")
-	}
-	if len(result.RawCommandOutput) == 0 {
-		t.Fatal("expected deep discovery to retain command evidence")
 	}
 }
 

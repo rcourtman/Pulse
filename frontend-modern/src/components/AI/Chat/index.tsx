@@ -76,9 +76,6 @@ import {
   AI_CHAT_COPY_LAST_ANSWER_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
   AI_CHAT_COPY_TRANSCRIPT_LABEL,
-  AI_CHAT_DISCOVERY_HINT_BODY,
-  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
-  AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_EXPORT_TRANSCRIPT_LABEL,
   AI_CHAT_FORK_SESSION_EMPTY_MESSAGE,
@@ -743,8 +740,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [controlSaving, setControlSaving] = createSignal(false);
   const [transcriptCopyFallback, setTranscriptCopyFallback] =
     createSignal<TranscriptCopyFallback | null>(null);
-  const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
-  const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [workflowPrompts, setWorkflowPrompts] = createSignal<AgentWorkflowPrompt[]>([]);
   const [renderingWorkflowStarterId, setRenderingWorkflowStarterId] = createSignal('');
   const wsStore = getGlobalWebSocketStore();
@@ -2358,7 +2353,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setDefaultModel(fallback);
     setChatOverrideModel(chatOverride);
     setControlLevel(normalizeAIControlLevel(settings?.control_level));
-    setDiscoveryEnabled(settings?.discovery_enabled ?? false);
   });
 
   const updateControlLevel = async (nextLevel: AIControlLevel) => {
@@ -2553,7 +2547,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setSessions([]);
         setDefaultModel('');
         setChatOverrideModel('');
-        setDiscoveryEnabled(false);
         setControlLevel('read_only');
         setWorkflowPrompts([]);
         assistantSurfaceToolsRequestId += 1;
@@ -4916,40 +4909,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
               </section>
             )}
-          </Show>
-
-          {/* Discovery hint - show when discovery is disabled */}
-          <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
-            <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/25 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
-              <div class="flex items-center gap-2">
-                <svg
-                  class="w-4 h-4 text-cyan-500 dark:text-cyan-400 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span>
-                  <span class="font-medium">{AI_CHAT_DISCOVERY_HINT_TITLE}</span>{' '}
-                  {AI_CHAT_DISCOVERY_HINT_BODY}
-                </span>
-              </div>
-              <ActionIconButton
-                onClick={() => setDiscoveryHintDismissed(true)}
-                tone="infoGhost"
-                size="xs"
-                title={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
-                label={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
-              >
-                <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-              </ActionIconButton>
-            </div>
           </Show>
 
           <Show when={contextBriefing()}>

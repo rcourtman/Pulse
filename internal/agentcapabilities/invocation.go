@@ -166,16 +166,6 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	// pulse_file_edit is write-only: file inspection routes through
 	// pulse_read, so this tool never advertises a read subaction.
 	PulseFileEditToolName: staticClass(ToolCallKindWrite, MutationInfrastructure),
-	PulseDiscoveryToolName: {
-		Discriminator: "action",
-		Cases: map[string]InvocationClass{
-			"get":  {Kind: ToolCallKindResolve, Mutation: MutationNone},
-			"list": {Kind: ToolCallKindResolve, Mutation: MutationNone},
-			// run collects evidence into the discovery cache only; it
-			// does not mutate customer infrastructure.
-			"run": {Kind: ToolCallKindResolve, Mutation: MutationNone},
-		},
-	},
 	PulseAlertsToolName: {
 		Discriminator: "action",
 		Cases: map[string]InvocationClass{

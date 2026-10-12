@@ -7,12 +7,12 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, Suspense } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
@@ -60,54 +60,16 @@ vi.mock('@/stores/license', () => ({
   maxHistoryDays: () => 90,
 }));
 
-vi.mock('../Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: (props: {
-    resourceType: string;
-    agentId?: string;
-    resourceId: string;
-    hostname: string;
-    showManualRunAction?: boolean;
-  }) => (
-    <div data-testid="discovery-tab">
-      <span data-testid="disc-resource-type">{props.resourceType}</span>
-      <span data-testid="disc-agent-id">{props.agentId}</span>
-      <span data-testid="disc-resource-id">{props.resourceId}</span>
-      <span data-testid="disc-manual-run-action">{String(props.showManualRunAction)}</span>
-    </div>
-  ),
-}));
-
-const discoveryApiMocks = vi.hoisted(() => ({
-  getDiscovery: vi.fn(
-    async (..._args: unknown[]): Promise<import('@/types/discovery').ResourceDiscovery | null> =>
-      null,
-  ),
-}));
-
-vi.mock('@/api/discovery', async () => {
-  const actual = await vi.importActual<typeof import('@/api/discovery')>('@/api/discovery');
-  return {
-    ...actual,
-    getDiscovery: discoveryApiMocks.getDiscovery,
-  };
-});
-
 vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
   WebInterfaceUrlField: (props: {
     metadataKind: string;
     metadataId: string;
     targetLabel: string;
-    suggestedUrl?: string;
-    suggestedUrlReasonText?: string;
-    suggestedUrlDiagnostic?: string;
   }) => (
     <div data-testid="web-interface-url-field">
       <span data-testid="url-kind">{props.metadataKind}</span>
       <span data-testid="url-id">{props.metadataId}</span>
       <span data-testid="url-label">{props.targetLabel}</span>
-      <span data-testid="url-suggested">{props.suggestedUrl ?? ''}</span>
-      <span data-testid="url-suggested-reason">{props.suggestedUrlReasonText ?? ''}</span>
-      <span data-testid="url-suggested-diagnostic">{props.suggestedUrlDiagnostic ?? ''}</span>
     </div>
   ),
 }));
@@ -170,14 +132,6 @@ function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): W
   });
 }
 
-function getDiscoveryPanel(): HTMLElement {
-  const panel = screen.getByTestId('discovery-tab').closest('[class*="overflow-anchor"]');
-  if (!(panel instanceof HTMLElement)) {
-    throw new Error('Discovery tab panel not found');
-  }
-  return panel;
-}
-
 const technicalDetails = () => within(screen.getByTestId('guest-technical-details'));
 
 const makeHistoryPoints = (base: number) => [
@@ -188,9 +142,7 @@ const makeHistoryPoints = (base: number) => [
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
-  discoveryApiMocks.getDiscovery.mockReset().mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'vm',
     resourceId: 'inst1:node1:100',
@@ -359,7 +311,6 @@ describe('GuestDrawer', () => {
     expect(precaution()).toBeVisible();
     setGuest({ ...guest(), guestAgentStatus: 'available', diskStatusReason: '' });
     expect(screen.queryByTestId('guest-read-precaution')).not.toBeInTheDocument();
-    expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
   });
 
   it('keeps malformed and future backup times unknown through same-guest replacement', () => {
@@ -485,13 +436,6 @@ describe('GuestDrawer', () => {
     expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
     expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
       'Guest filesystem stats unavailable while the VM is stopped.',
-    );
-  });
-
-  it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
-    expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
-    expect(guestDrawerSource).not.toContain(
-      'animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full',
     );
   });
 
@@ -643,368 +587,20 @@ describe('GuestDrawer', () => {
   // ── Tabs ──
 
   describe('tab switching', () => {
-    it('renders Overview and Discovery tabs', () => {
+    it('renders Overview and History tabs', () => {
       render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
       expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-    });
-
-    it('hides Discovery when the workload has no canonical discovery target', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            type: 'app-container',
-            workloadType: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            node: 'truenas-main',
-            instance: 'truenas-main',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.queryByText('Discovery')).toBeNull();
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
-
-    it('hides every discovery surface and skips discovery reads when Discovery is disabled', () => {
-      syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-        typeof syncAIRuntimeSettings
-      >[0]);
-
-      render(() => (
-        <GuestDrawer
-          guest={makeGuestWithDiscoveryTarget({
-            discoveryReadiness: {
-              state: 'missing',
-              source: 'service-discovery',
-              reason: 'Discovery has not run for this resource.',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-
       expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
-      expect(screen.queryByText('Not discovered')).toBeNull();
-      expect(screen.queryByText('Discovery has not run for this resource.')).toBeNull();
-      expect(screen.queryByText('Identified Service')).toBeNull();
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-      expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
     });
 
-    it('starts on the Overview tab (discovery content hidden)', () => {
+    it('starts on the Overview tab', () => {
       const { container } = solidRender(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
       const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
-    });
-
-    it('renders the Identified Service overview card when a populated discovery record exists', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
-        id: 'vm:node1:100',
-        resource_type: 'vm',
-        resource_id: '100',
-        target_id: 'node1',
-        service_name: 'Homepage Dashboard',
-        service_type: 'homepage',
-        service_version: '0.9.0',
-        category: 'web_server',
-        confidence: 0.95,
-        cli_access: 'docker exec -it homepage /bin/sh',
-        ports: [],
-        facts: [],
-        config_paths: ['/opt/homepage/config'],
-        data_paths: [],
-        log_paths: [],
-        updated_at: '2026-05-18T09:49:19.049058+01:00',
-        suggested_url: 'http://192.0.2.10:3000',
-        suggested_url_source_code: 'web_port_inference',
-        suggested_url_source_detail: 'detected 3000/tcp',
-      } as unknown as import('@/types/discovery').ResourceDiscovery);
-
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Identified Service')).toBeInTheDocument();
-      });
-      expect(screen.getByText('Homepage Dashboard · web_server')).toBeInTheDocument();
-      expect(screen.getByText('0.9.0')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Source')).toBeInTheDocument();
-      expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
-      expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
-      expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
-    });
-
-    describe('discovery identity ownership', () => {
-      const service = (name: string) =>
-        ({
-          id: `vm:node1:${name}`,
-          resource_type: 'vm',
-          resource_id: '100',
-          target_id: 'node1',
-          service_name: name,
-          service_type: 'dashboard',
-          confidence: 0.95,
-          suggested_url: `http://${name}.example.test`,
-          ports: [],
-          facts: [],
-        }) as unknown as import('@/types/discovery').ResourceDiscovery;
-
-      it('reuses the lookup and mounted panel across 100 same-target snapshots', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        const panel = screen.getByTestId('discovery-tab');
-        for (let tick = 0; tick < 100; tick++)
-          setGuest({ ...guest(), name: `renamed-${tick}`, cpu: tick / 1000 });
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(1);
-        expect(screen.getByTestId('discovery-tab')).toBe(panel);
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
-      });
-
-      it('withdraws the prior service and URL while a replacement target loads or fails', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        const originalPanel = screen.getByTestId('discovery-tab');
-        let rejectRead!: (error: Error) => void;
-        discoveryApiMocks.getDiscovery.mockImplementationOnce(
-          () =>
-            new Promise((_resolve, reject) => {
-              rejectRead = reject;
-            }),
-        );
-        setGuest({
-          ...guest(),
-          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
-        });
-        await waitFor(() => expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(2));
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-        expect(screen.queryByText('original')).toBeNull();
-        expect(screen.getByTestId('discovery-tab')).not.toBe(originalPanel);
-        rejectRead(new Error('temporary outage'));
-        await waitFor(() =>
-          expect(screen.getByText(/Service details could not be loaded/)).toBeInTheDocument(),
-        );
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-      });
-
-      it('ignores a late lookup from the old target and restores only the active target', async () => {
-        let finishOld!: (value: import('@/types/discovery').ResourceDiscovery) => void;
-        discoveryApiMocks.getDiscovery.mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              finishOld = resolve;
-            }),
-        );
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('replacement'));
-        setGuest({
-          ...guest(),
-          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
-        });
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement'),
-        );
-        finishOld(service('original'));
-        await Promise.resolve();
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement');
-        expect(screen.queryByText('original')).toBeNull();
-      });
-
-      it.each([401, 403])(
-        'withdraws a denied service on HTTP %s and does not resurrect it during retry or remount',
-        async (status) => {
-          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
-            Object.assign(new Error('do not display raw response'), { status }),
-          );
-          const guest = makeGuestWithDiscoveryTarget();
-          const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          await waitFor(() =>
-            expect(
-              screen.getByRole('button', { name: 'Retry service details' }),
-            ).toBeInTheDocument(),
-          );
-          discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-          fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
-          await waitFor(() =>
-            expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-          );
-          // A remount uses this target's cached result, then observes a final denial.
-          view.unmount();
-          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
-            Object.assign(new Error('do not display raw response'), { status }),
-          );
-          const denied = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          await waitFor(() =>
-            expect(
-              screen.getByRole('button', { name: 'Retry service details' }),
-            ).toBeInTheDocument(),
-          );
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-          expect(screen.queryByText(/do not display raw response/)).toBeNull();
-          denied.unmount();
-          let finish!: (value: import('@/types/discovery').ResourceDiscovery) => void;
-          discoveryApiMocks.getDiscovery.mockImplementationOnce(
-            () =>
-              new Promise((resolve) => {
-                finish = resolve;
-              }),
-          );
-          render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
-          finish(service('recovered'));
-          await waitFor(() =>
-            expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
-          );
-        },
-      );
-
-      it('labels same-target transient retention and permits a fresh retry without raw error text', async () => {
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
-        const guest = makeGuestWithDiscoveryTarget();
-        const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
-        );
-        view.unmount();
-        discoveryApiMocks.getDiscovery.mockRejectedValueOnce(new Error('private diagnostic'));
-        render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
-        await waitFor(() =>
-          expect(screen.getByText(/Showing previously loaded service details/)).toBeInTheDocument(),
-        );
-        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
-        expect(screen.queryByText(/private diagnostic/)).toBeNull();
-        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('recovered'));
-        fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
-        await waitFor(() =>
-          expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
-        );
-        expect(screen.queryByText(/Showing previously loaded/)).toBeNull();
-      });
-
-      it('resets tabs, range and disclosures only when canonical guest identity changes', async () => {
-        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
-        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
-        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-        const range = screen.getByLabelText('History range');
-        fireEvent.change(range, { target: { value: '7d' } });
-        setGuest({ ...guest(), name: 'renamed', cpu: 0.5 });
-        expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        expect(screen.getByLabelText('History range')).toBe(range);
-        expect(range).toHaveValue('7d');
-        setGuest(
-          makeGuestWithDiscoveryTarget({ id: 'inst1-node1-200', vmid: 200, name: 'new-guest' }),
-        );
-        expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
-        const details = screen.getByTestId('guest-technical-details');
-        expect(details).not.toHaveAttribute('open');
-        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
-        expect(screen.getByLabelText('History range')).toHaveValue('24h');
-      });
-    });
-
-    it('hides the Identified Service card when the discovery record is null or empty', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-      await waitFor(() => {
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Identified Service')).toBeNull();
-    });
-
-    it('hides low-signal placeholder discovery from the Overview card and URL field', async () => {
-      discoveryApiMocks.getDiscovery.mockResolvedValueOnce({
-        id: 'system-container:pve4:152',
-        resource_type: 'system-container',
-        resource_id: '152',
-        target_id: 'pve4',
-        service_name: '',
-        service_type: 'service',
-        service_version: '',
-        category: 'unknown',
-        confidence: 0,
-        cli_access: 'pct exec 152 -- /bin/bash',
-        ports: [],
-        facts: [
-          {
-            category: 'service',
-            key: 'status',
-            value: 'online',
-            source: 'metadata',
-            confidence: 1,
-            discovered_at: '2026-05-19T00:00:00Z',
-          },
-          {
-            category: 'config',
-            key: 'config_availability',
-            value: 'missing_node_config',
-            source: 'all_commands',
-            confidence: 1,
-            discovered_at: '2026-05-19T00:00:00Z',
-          },
-        ],
-        config_paths: [],
-        data_paths: [],
-        log_paths: [],
-        updated_at: '2026-05-18T09:49:19.049058+01:00',
-        suggested_url_diagnostic: 'no host or IP candidate available',
-      } as unknown as import('@/types/discovery').ResourceDiscovery);
-
-      render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
-
-      await waitFor(() => {
-        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Identified Service')).toBeNull();
-      expect(screen.getByTestId('url-suggested-diagnostic')).toHaveTextContent('');
-    });
-
-    it('keeps the passive discovery lookup out of the parent Suspense fallback', () => {
-      discoveryApiMocks.getDiscovery.mockImplementationOnce(
-        () => new Promise<import('@/types/discovery').ResourceDiscovery | null>(() => undefined),
-      );
-
-      render(() => (
-        <Suspense fallback={<div data-testid="parent-suspense-fallback">Loading page</div>}>
-          <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
-        </Suspense>
-      ));
-
-      expect(screen.queryByTestId('parent-suspense-fallback')).toBeNull();
-      expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('History')).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-    });
-
-    it('switches to Discovery tab on click', async () => {
-      const { container } = render(() => (
-        <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
-      ));
-      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
-      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
-      expect(panels[0]).toHaveClass('hidden');
-      expect(getDiscoveryPanel()).not.toHaveClass('hidden');
     });
 
     it('renders persistent metric charts on the History tab', async () => {
@@ -1134,11 +730,11 @@ describe('GuestDrawer', () => {
       const { container } = render(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
-      await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
+      await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
       await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
       const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
-      expect(getDiscoveryPanel()).toHaveClass('hidden');
+      expect(panels[1]).toHaveClass('hidden');
     });
   });
 
@@ -1261,7 +857,7 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
       expect(technicalDetails().getByText('Node agent assigned')).toHaveAttribute(
         'title',
-        'Discovery and governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
+        'Governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
       );
       expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });
@@ -1916,142 +1512,6 @@ describe('GuestDrawer', () => {
         screen.queryByRole('link', { name: 'Open web interface for test-vm' }),
       ).not.toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'Invalid web interface URL' })).toBeInTheDocument();
-    });
-  });
-
-  // ── Discovery tab integration ──
-
-  describe('DiscoveryTab integration', () => {
-    it('passes correct resourceType and agentId for VM', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            type: 'qemu',
-            node: 'pve1',
-            vmid: 101,
-            discoveryTarget: {
-              resourceType: 'vm',
-              agentId: 'agent-pve1',
-              resourceId: '101',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('vm');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve1');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('101');
-      expect(screen.getByTestId('disc-manual-run-action').textContent).toBe('true');
-    });
-
-    it('does not infer a Proxmox workload discovery target from the node name', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({ type: 'qemu', node: 'pve1', vmid: 101 })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
-
-    it('passes correct resourceType and agentId for app-container', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'docker',
-            dockerHostId: 'dh-1',
-            containerId: 'container-abc-runtime-id',
-            id: 'app-container-synthetic-hash',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
-      // Discovery routes by the Docker-native containerId, not the canonical
-      // synthetic workload id, so the agent can resolve `docker exec <id>`.
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc-runtime-id');
-    });
-
-    it('does not render DiscoveryTab for TrueNAS app-containers without explicit discovery support', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            node: 'truenas-main',
-            instance: 'truenas-main',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.queryByTestId('discovery-tab')).toBeNull();
-    });
-
-    it('honors explicit canonical discovery targets for API-backed app-containers', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            id: 'app-container:truenas-main:nextcloud',
-            workloadType: 'app-container',
-            type: 'app-container',
-            platformType: 'truenas',
-            dockerHostId: '',
-            discoveryTarget: {
-              resourceType: 'app-container',
-              agentId: 'truenas-helper',
-              resourceId: 'nextcloud',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('truenas-helper');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('nextcloud');
-    });
-
-    it('passes canonical pod resourceType for pod workloads', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            workloadType: 'pod',
-            kubernetesAgentId: 'k8s-agent-1',
-            id: 'k8s:ctx:pod:my-pod',
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('pod');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('k8s-agent-1');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('my-pod');
-    });
-
-    it('passes system-container as resourceType for LXC', () => {
-      render(() => (
-        <GuestDrawer
-          guest={makeGuest({
-            type: 'lxc',
-            node: 'pve2',
-            vmid: 200,
-            discoveryTarget: {
-              resourceType: 'system-container',
-              agentId: 'agent-pve2',
-              resourceId: '200',
-            },
-          })}
-          onClose={vi.fn()}
-        />
-      ));
-      expect(screen.getByTestId('disc-resource-type').textContent).toBe('system-container');
-      expect(screen.getByTestId('disc-agent-id').textContent).toBe('agent-pve2');
-      expect(screen.getByTestId('disc-resource-id').textContent).toBe('200');
     });
   });
 });

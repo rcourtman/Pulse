@@ -1,20 +1,13 @@
 import { Component, Show } from 'solid-js';
-import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
-import { HelpIcon } from '@/components/shared/HelpIcon';
 import { FormSelect } from '@/components/shared/FormSelect';
-import { Toggle } from '@/components/shared/Toggle';
 import {
   getAIControlLevelBadgeClass,
   getAIControlLevelDescription,
   getAIControlLevelPanelClass,
 } from '@/utils/aiControlLevelPresentation';
-import {
-  AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
-  getAISettingsWorkloadDiscoveryHelpContent,
-  getAISettingsWorkloadDiscoverySummary,
-} from '@/utils/aiSettingsPresentation';
+import { AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE } from '@/utils/aiSettingsPresentation';
 
 interface AIRuntimeControlsSectionProps {
   state: AISettingsState;
@@ -24,143 +17,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
   const { state } = props;
   return (
     <>
-      <AIDiscoveryControlsSection state={state} />
       <AIProviderRuntimeControlsSection state={state} />
       <AIAssistantCommandAccessSection state={state} />
     </>
-  );
-};
-
-export const AIDiscoveryControlsSection: Component<AIRuntimeControlsSectionProps> = (props) => {
-  const { state } = props;
-
-  return (
-    <div class="rounded-md border border-blue-200 dark:border-blue-800 overflow-hidden">
-      <button
-        type="button"
-        class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-blue-50 dark:bg-blue-900/25 hover:bg-blue-100 dark:hover:bg-blue-900/25 transition-colors text-left"
-        onClick={() => state.setShowDiscoverySettings(!state.showDiscoverySettings())}
-        aria-expanded={state.showDiscoverySettings()}
-        aria-controls="ai-discovery-controls-panel"
-      >
-        <div class="flex items-center gap-2">
-          <svg
-            class="w-4 h-4 text-blue-600 dark:text-blue-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <span class="text-sm font-medium text-base-content">Service Context</span>
-          <Show when={state.form.discoveryEnabled}>
-            <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-sm">
-              {state.form.discoveryIntervalHours > 0
-                ? `Auto ${state.form.discoveryIntervalHours}h`
-                : 'Manual only'}
-            </span>
-          </Show>
-          <Show when={!state.form.discoveryEnabled}>
-            <span class="px-1.5 py-0.5 text-[10px] font-medium bg-surface-hover text-muted rounded-sm">
-              Off
-            </span>
-          </Show>
-        </div>
-        <svg
-          class={`w-4 h-4 transition-transform ${state.showDiscoverySettings() ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
-      <Show when={state.showDiscoverySettings()}>
-        <div
-          id="ai-discovery-controls-panel"
-          class="px-3 py-3 bg-surface border-t border-border space-y-3"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-xs font-medium text-muted flex items-center gap-1.5">
-              Enable service context scans
-              <HelpIcon inline={getAISettingsWorkloadDiscoveryHelpContent()} size="xs" />
-            </span>
-            <Toggle
-              ariaLabel="Enable service context scans"
-              checked={state.form.discoveryEnabled}
-              onChange={(event) => state.setForm('discoveryEnabled', event.currentTarget.checked)}
-              disabled={state.saving()}
-            />
-          </div>
-
-          <Show when={state.form.discoveryEnabled}>
-            <div class="flex flex-col gap-1">
-              <FormSelect
-                id="ai-workload-discovery-scan-interval"
-                label="Scan Interval"
-                value={String(state.form.discoveryIntervalHours)}
-                onChange={(e) =>
-                  state.setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))
-                }
-                disabled={state.saving()}
-                fieldBaseClass="flex"
-                fieldClass="items-center gap-3"
-                labelClass="text-xs font-medium text-muted w-32 shrink-0"
-                selectBaseClass="flex-1 px-2 py-1 text-sm border border-border rounded-sm bg-surface"
-              >
-                <option value="0">Manual only</option>
-                <option value="6">Every 6 hours</option>
-                <option value="12">Every 12 hours</option>
-                <option value="24">Every 24 hours</option>
-                <option value="48">Every 2 days</option>
-                <option value="168">Every 7 days</option>
-              </FormSelect>
-              <p class="text-[10px] text-muted ml-32 pl-3">
-                {state.form.discoveryIntervalHours === 0
-                  ? 'Recurring service context scans are off. Only manual refreshes will run.'
-                  : 'Recurring service context scans will run at this interval.'}
-              </p>
-            </div>
-          </Show>
-
-          <div class="flex flex-col gap-2 rounded-sm border border-border bg-surface-alt px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <p class="text-[10px] text-muted sm:flex-1">
-              {state.form.discoveryEnabled && state.form.discoveryIntervalHours > 0
-                ? 'Runs the same scan used by the schedule.'
-                : state.form.discoveryEnabled
-                  ? 'Manual-only mode: runs one scan without enabling recurring scans.'
-                  : 'Runs one service context scan without changing the schedule.'}
-            </p>
-            <button
-              type="button"
-              class="inline-flex min-h-10 items-center gap-1.5 self-start rounded-md border border-border px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:self-auto sm:shrink-0"
-              onClick={() => void state.handleRunDiscoveryRefresh()}
-              disabled={state.saving() || state.discoveryRunRunning()}
-            >
-              <Show
-                when={state.discoveryRunRunning()}
-                fallback={<RefreshCwIcon class="h-3.5 w-3.5" />}
-              >
-                <RefreshCwIcon class="h-3.5 w-3.5 animate-spin" />
-              </Show>
-              {state.discoveryRunRunning() ? 'Running...' : 'Run context scan'}
-            </button>
-          </div>
-
-          <p class="text-[10px] text-muted">{getAISettingsWorkloadDiscoverySummary().text}</p>
-        </div>
-      </Show>
-    </div>
   );
 };
 

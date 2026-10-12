@@ -42,7 +42,7 @@ export interface GuestDrawerProps {
   alerts?: Alert[];
 }
 
-export type GuestDrawerTab = 'overview' | 'history' | 'discovery' | 'manage';
+export type GuestDrawerTab = 'overview' | 'history' | 'manage';
 
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;

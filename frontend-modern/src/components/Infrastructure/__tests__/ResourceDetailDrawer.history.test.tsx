@@ -10,8 +10,6 @@ import { createSignal, Suspense } from 'solid-js';
 import { ChartsAPI } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
-import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
@@ -108,10 +106,6 @@ vi.mock('@/contexts/appRuntime', () => ({
     reconnect: vi.fn(),
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/api/resources', () => ({
@@ -426,18 +420,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
   });
 
-  it('keeps discovery context presentation separate from discovery runtime ownership', () => {
-    expect(discoveryTabSource).toContain('useDiscoveryTabState');
-    expect(discoveryTabStateSource).toContain('export function useDiscoveryTabState');
-    expect(discoveryTabStateSource).toContain('createResource');
-    expect(discoveryTabStateSource).toContain("eventBus.on('ai_discovery_progress'");
-    expect(discoveryTabStateSource).toContain('triggerDiscovery(');
-    expect(discoveryTabStateSource).toContain('updateDiscoveryNotes(');
-    expect(discoveryTabSource).not.toContain("eventBus.on('ai_discovery_progress'");
-    expect(discoveryTabSource).not.toContain('createResource(');
-    expect(discoveryTabSource).not.toContain('getConnectedAgents(');
-    expect(discoveryTabSource).not.toContain('triggerDiscovery(');
-    expect(discoveryTabSource).not.toContain('updateDiscoveryNotes(');
+  it('keeps drawer presentation separate from runtime ownership', () => {
     expect(resourceDetailDrawerOverviewSource).toContain("from './ResourceDetailSummary'");
     expect(resourceDetailDrawerOverviewSource).toContain(
       "from './ResourceInvestigationContextTables'",
@@ -543,9 +526,6 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceIdentityView',
-    );
-    expect(resourceDetailDrawerIdentityModelSource).toContain(
-      'export const buildDiscoveryContextSummary',
     );
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceDebugBundle',

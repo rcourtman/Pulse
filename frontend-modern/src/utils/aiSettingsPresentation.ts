@@ -42,25 +42,11 @@ export function getAIProviderTestResultTextClass(success: boolean): string {
   return success ? 'text-green-600' : 'text-red-600';
 }
 
-export function getAISettingsWorkloadDiscoveryHelpContent() {
-  return {
-    title: 'What is service context?',
-    description:
-      'Service context scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores those facts so Assistant can use them in chat and Patrol can use them during verification.',
-  } as const;
-}
-
-export function getAISettingsWorkloadDiscoverySummary() {
-  return {
-    text: 'Service context records service names, versions, and commands so Assistant and Patrol can use real context instead of generic advice.',
-  } as const;
-}
-
 export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {
   return {
     ariaLabel: 'Set up Pulse Intelligence',
     title: 'Set Up Pulse Intelligence',
-    description: 'Connect a provider to power Patrol, Assistant, and service context.',
+    description: 'Connect a provider to power Patrol and Assistant.',
     submitLabel: 'Enable Pulse Intelligence',
   };
 }

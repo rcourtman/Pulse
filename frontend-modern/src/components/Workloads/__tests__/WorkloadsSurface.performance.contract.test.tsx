@@ -1674,14 +1674,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerStateSource).toContain('historyRange');
       expect(guestDrawerStateSource).not.toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).not.toContain("from '@/routing/resourceLinks'");
-      expect(guestDrawerStateSource).toContain("from '@/hooks/createNonSuspendingQuery'");
-      expect(guestDrawerStateSource).toMatch(
-        /createNonSuspendingQuery<\s*ResourceDiscovery \| null/,
-      );
       expect(guestDrawerStateSource).not.toContain('createResource');
       expect(guestDrawerStateSource).toContain("from './workloadTopology'");
       expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
-      expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
       expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
       expect(guestDrawerStateSource).toContain('guestOsSummary');
       expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');

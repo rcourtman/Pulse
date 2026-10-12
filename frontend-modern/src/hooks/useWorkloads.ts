@@ -27,7 +27,6 @@ import type {
   Resource,
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
-  ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourceVMwareTag,
@@ -191,7 +190,6 @@ type APIResource = {
     resourceId?: string;
     hostname?: string;
   };
-  discoveryReadiness?: ResourceDiscoveryReadiness;
   availability?: ResourceAvailabilityMeta;
   availabilityChecks?: ResourceAvailabilityMeta[];
   actionReadiness?: ResourceActionReadiness[];
@@ -694,7 +692,6 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       uptime: uptime !== undefined,
     },
     discoveryTarget,
-    discoveryReadiness: resource.discoveryReadiness,
     vmware:
       platformType === 'vmware-vsphere' && resource.vmware
         ? {
@@ -771,7 +768,6 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
       : undefined,
     vmware: resource.vmware ? (resource.vmware as unknown as APIResource['vmware']) : undefined,
     discoveryTarget: resource.discoveryTarget,
-    discoveryReadiness: resource.discoveryReadiness,
     availability: resource.availability,
     availabilityChecks: resource.availabilityChecks,
     actionReadiness: resource.actionReadiness,

@@ -1461,16 +1461,11 @@ actual filesystem is pressured. Storage/recovery consumers may observe its
 redacted byte outcome as operational context, but package-cache deletion is
 not backup pruning, restore evidence, arbitrary path cleanup, or a
 storage-owned executor.
-Storage and recovery surfaces may consume Discovery context from the shared
-API boundary when it helps explain protected workloads or storage-adjacent
-services, including mock-mode config/data/log path examples. That context is
-read-only evidence: it must not become a storage/recovery-owned command path,
-secret source, restore entitlement, or frontend-only fixture separate from the
-canonical `/api/discovery` payload. For Proxmox VM and system-container
-resources, a node-agent-backed workload `discoveryTarget` is shared API and
-unified-resource evidence only; storage/recovery consumers may use it to reach
-the canonical discovery/action path, but must not treat it as backup
-visibility, restore authority, or storage-local command ownership.
+For Proxmox VM and system-container resources, a node-agent-backed workload
+`discoveryTarget` is shared API and unified-resource evidence only;
+storage/recovery consumers may use it to reach the canonical action path, but
+must not treat it as backup visibility, restore authority, or storage-local
+command ownership.
 The agent resource-context endpoint follows the same adjacent-evidence rule for
 storage/recovery consumers: bounded context sections, provenance, redactions,
 and recent action counts may help explain a workload or protected service, but
@@ -1907,25 +1902,11 @@ recovery scope, or a storage/recovery-owned secret source.
    reachability, backup freshness, protection, or recovery evidence, and the
    reported node name is grouping identity, not a storage or recovery health
    input.
-   The settings-level manual discovery refresh at `/api/discovery/run` belongs
-   to that adjacent discovery/API boundary. Storage and recovery surfaces may
-   consume refreshed workload discovery records, but they must not reinterpret
-   the sweep as a recovery scan, protected-system admission, or storage-local
-   ownership signal. Because that sweep can dispatch agent-backed discovery
-   commands, adjacent storage/recovery surfaces must also inherit the
-   API/runtime gate: `settings:write` plus enabled Discovery are required
-   before command-backed refresh, and `monitoring:write` remains insufficient.
    Storage and recovery may also observe `/api/connections` agent
    command-policy and config-rollout state from this adjacent API boundary, but
    that state must already be token-gated by agent lifecycle. It must not be
    reinterpreted as storage readiness, protected-system ownership, backup
    visibility, or a recovery-local command grant.
-   If the shared discovery boundary repairs a fresh unknown workload record
-   into a known service identity and endpoint candidate from canonical resource
-   metadata, stored facts, or safe command evidence, storage and recovery may
-   consume the repaired context only as read-only explanation; that repair does
-   not create backup visibility, restore authority, storage ownership, or a
-   recovery-local endpoint contract.
    Approved-action tool invocation parsing in `internal/api/router_routes_ai_relay.go`
    is also adjacent API infrastructure rather than storage/recovery grammar:
    storage and recovery surfaces may consume governed Pulse tool execution

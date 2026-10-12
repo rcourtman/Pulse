@@ -2,14 +2,10 @@ package ai
 
 import (
 	"context"
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -119,157 +115,6 @@ func TestService_QuickAnalysisSanitizesExternalModelRequest(t *testing.T) {
 		if strings.Contains(combined, raw) {
 			t.Fatalf("provider request still contains %q: %s", raw, combined)
 		}
-	}
-}
-
-func TestService_AnalyzeForDiscovery(t *testing.T) {
-	svc := NewService(nil, nil)
-
-	// Case 1: No provider
-	_, err := svc.AnalyzeForDiscovery(context.Background(), "test")
-	if err == nil {
-		t.Error("Expected error when provider not configured")
-	}
-
-	// Case 2: Not enabled
-	svc.provider = &mockProvider{}
-	svc.cfg = &config.AIConfig{Enabled: false}
-	_, err = svc.AnalyzeForDiscovery(context.Background(), "test")
-	if err == nil {
-		t.Error("Expected error when AI disabled")
-	}
-
-	// Case 3: Success with cost tracking
-	mockProv := &mockProvider{
-		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-			if req.MaxTokens != 8192 {
-				t.Fatalf("expected discovery max tokens 8192, got %d", req.MaxTokens)
-			}
-			return &providers.ChatResponse{
-				Content:      "Discovery Result",
-				InputTokens:  10,
-				OutputTokens: 20,
-			}, nil
-		},
-		nameFunc: func() string { return "mock-provider" },
-	}
-	svc.provider = mockProv
-	svc.cfg = &config.AIConfig{Enabled: true}
-
-	svc.costStore = cost.NewStore(30) // In-memory store
-
-	res, err := svc.AnalyzeForDiscovery(context.Background(), "test discovery")
-	if err != nil {
-		t.Fatalf("AnalyzeForDiscovery failed: %v", err)
-	}
-	if res != "Discovery Result" {
-		t.Errorf("Unexpected result: %s", res)
-	}
-
-	// Check cost tracking
-	summary := svc.costStore.GetSummary(1)
-	var pm cost.ProviderModelSummary
-	found := false
-	for _, p := range summary.ProviderModels {
-		if p.Provider == "mock-provider" {
-			pm = p
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Error("Cost tracking failed: provider not found")
-	} else if pm.InputTokens != 10 || pm.OutputTokens != 20 {
-		t.Errorf("Cost tracking failed, got %d/%d tokens", pm.InputTokens, pm.OutputTokens)
-	}
-
-	// Case 4: Budget exceeded should block request before provider call
-	calls := 0
-	mockProv.chatFunc = func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-		calls++
-		return &providers.ChatResponse{Content: "should-not-run"}, nil
-	}
-
-	svc.cfg.CostBudgetUSD30d = 1.0
-	svc.costStore.Record(cost.UsageEvent{
-		Provider:      "anthropic",
-		RequestModel:  "claude-opus-20240229",
-		ResponseModel: "claude-opus-20240229",
-		InputTokens:   1000000,
-		OutputTokens:  1000000,
-	})
-
-	_, err = svc.AnalyzeForDiscovery(context.Background(), "blocked discovery")
-	if err == nil || !strings.Contains(err.Error(), "budget exceeded") {
-		t.Fatalf("expected budget exceeded error, got %v", err)
-	}
-	if calls != 0 {
-		t.Fatalf("expected provider not to be called when budget exceeded, got %d calls", calls)
-	}
-}
-
-func TestService_AnalyzeForDiscoveryDoesNotFallbackToAnotherConfiguredProvider(t *testing.T) {
-	var alternateProviderCalls int
-	alternateProviderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		alternateProviderCalls++
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"id":"chatcmpl-fallback",
-			"object":"chat.completion",
-			"choices":[{"message":{"role":"assistant","content":"fallback discovery response"},"finish_reason":"stop"}],
-			"usage":{"prompt_tokens":1,"completion_tokens":1}
-		}`))
-	}))
-	defer alternateProviderServer.Close()
-
-	selectedProviderCalls := 0
-	svc := NewService(nil, nil)
-	svc.provider = &mockProvider{
-		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-			selectedProviderCalls++
-			return nil, errors.New("selected discovery route unavailable")
-		},
-		nameFunc: func() string { return "selected-provider" },
-	}
-	svc.cfg = &config.AIConfig{
-		Enabled:       true,
-		OpenAIAPIKey:  "openai-test",
-		OpenAIBaseURL: alternateProviderServer.URL,
-	}
-
-	_, err := svc.AnalyzeForDiscovery(context.Background(), "test discovery")
-	if err == nil || !strings.Contains(err.Error(), "selected discovery route unavailable") {
-		t.Fatalf("expected selected route failure, got %v", err)
-	}
-	if selectedProviderCalls != 1 {
-		t.Fatalf("selected provider calls = %d, want 1", selectedProviderCalls)
-	}
-	if alternateProviderCalls != 0 {
-		t.Fatalf("alternate provider calls = %d, want no hidden provider fallback", alternateProviderCalls)
-	}
-}
-
-func TestService_AnalyzeForDiscoveryExplicitModelProviderCreationFailsClosed(t *testing.T) {
-	defaultProviderCalls := 0
-	svc := NewService(nil, nil)
-	svc.provider = &mockProvider{
-		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
-			defaultProviderCalls++
-			return &providers.ChatResponse{Content: "default provider response"}, nil
-		},
-	}
-	svc.cfg = &config.AIConfig{
-		Enabled:        true,
-		DiscoveryModel: config.FormatModelString(config.AIProviderDeepSeek, config.DeepSeekModelV4Pro),
-	}
-
-	_, err := svc.AnalyzeForDiscovery(context.Background(), "test discovery")
-	if err == nil || !strings.Contains(err.Error(), "discovery provider for selected model") {
-		t.Fatalf("expected selected discovery provider configuration error, got %v", err)
-	}
-	if defaultProviderCalls != 0 {
-		t.Fatalf("default provider calls = %d, want no stale provider fallback", defaultProviderCalls)
 	}
 }
 

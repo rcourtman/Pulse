@@ -34,7 +34,6 @@ func TestPatrolScopedDetectionDefersOptionalDeepReadsToInvestigation(t *testing.
 func TestPatrolInfrastructureEvidenceToolVocabularyExcludesDerivedContext(t *testing.T) {
 	for _, name := range []string{
 		PulseQueryToolName,
-		PulseDiscoveryToolName,
 		PulseMetricsToolName,
 		PulseStorageToolName,
 		PulseDockerToolName,

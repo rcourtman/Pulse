@@ -317,37 +317,6 @@ wrong-type/range/metric, malformed, denied, valid-zero and empty bodies, keyboar
 retry/inspection and remounts. These synthetic controls do not diagnose #1723,
 establish native panels/identity or prove #2439 thaw or workload liveness.
 
-### Guest discovery evidence and UI state have exact owners
-
-The guest drawer's passive discovery lookup changes only when its explicit
-resource-type/agent/resource target changes, not on same-target metric or name
-snapshot refreshes. Retained/remount evidence is keyed by canonical guest and
-that target. A replacement target cannot display the predecessor's service,
-endpoint, URL suggestion or assurance suggestion while its own read is pending
-or failed. A successful absent-record read is empty; errors are not absence.
-The discovery detail reader preserves final HTTP401/403 on typed failures
-without reading the denied body, including agent-list/detail paths. Those
-failures withdraw cached evidence and show the fixed access message.
-A same-target transient failure may retain its own last successful details,
-but must visibly qualify them and provide an in-place retry without raw error
-text. This preserves the shared query's denial/cache-generation policy.
-
-A different canonical guest disposes its local tabs, range, forms, disclosures
-and outstanding read consumers. Same-ID updates stay mounted. Within that
-identity, a changed discovery target remounts only the existing Discovery tab,
-so late scan/notes completions cannot populate the successor's UI. Already
-sent server-side operations are not cancelled or retried by this boundary;
-saved operator URLs remain separate from derived suggestions.
-
-Verification: `discovery.test.ts` covers final status preservation on all
-three read paths and non-authoritative body claims. `GuestDrawer.test.tsx`
-covers replacement, source stability,
-late reads, HTTP401/403/cache withdrawal, transient retention/retry and
-canonical identity reset. `browser-tests/guest-discovery-identity.cjs` uses
-production drawer/DiscoveryTab/Manage/History, clients and CSS on desktop
-Chromium and touch WebKit. Its synthetic delayed scan is not a native command,
-QGA/thaw, fleet-performance, appliance identity or delivery proof.
-
 ### Native VM read outcomes survive browser projection and recovery
 
 The existing Proxmox guest read-state facet remains intact at the WorkloadGuest
@@ -960,12 +929,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
 64. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
-68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-    69a. `frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`
-    69b. `frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx`
-    69c. `frontend-modern/src/components/Discovery/availabilityProposalModel.ts`
 70. `frontend-modern/src/utils/agentResources.ts`
 71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
@@ -2389,21 +2352,11 @@ Operator-facing storage posture wording is part of that same ownership:
 when multiple storage-risk reasons exist, shared posture helpers must prefer
 the most decision-useful protection loss summary such as lost parity over a
 generic disk-count aggregate, so resource drawers and incidents do not hide
-the actual protection boundary behind a broader count phrase. 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go` 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
-Drawer-level feature availability belongs to
-`frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts`.
-It consumes the shared AI runtime settings store and fails closed until the
-runtime explicitly reports `discovery_enabled=true`. Resource, guest, node,
-and Docker host drawers must use that boundary for every Discovery tab,
-readiness badge, analysis reveal, identified-service suggestion, and
-passive discovery-record query. A disabled or unresolved feature must leave
-no Discovery mention in drawer chrome or content and must not start a
-drawer-local discovery read.
-Resource drawer secondary sections, action history, discovery run summaries,
-and other compact resource-detail cards may own their resource-specific
+the actual protection boundary behind a broader count phrase. 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
+Resource drawer secondary sections, action history, and other compact resource-detail cards may own their resource-specific
 labels, rows, filters, and actions, but the repeated bordered compact frame
 is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
-`ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
+and `ResourceActionHistory.tsx` must compose
 `InfoCardFrame` for that shell instead of restoring local card-frame
 classes.
 The Overview tab's Needs attention list merges open alerts with the health
@@ -2553,13 +2506,12 @@ explicit cluster identity such as Kubernetes context or platform cluster
 labels; standalone resource names must never be repurposed as synthetic
 `clusterId` values. 13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
 surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
-`frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,
-and `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` may expose
+and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
+may expose
 provider identity or governed safe-summary posture when that context helps
 an operator, but the rendered labels must stay product-neutral and use
 `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
-generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
-shell. 15. Keep governed policy-posture wording on the unified-resource
+generic `AI` or `AI-Safe` branding inside the resource drawer. 15. Keep governed policy-posture wording on the unified-resource
 presentation owner. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
 owns the canonical sensitivity, routing, and redaction labels and their
 orderings. No shared card renders policy-posture counts today; if one
@@ -3174,6 +3126,29 @@ compares exact-parent and repaired production surfaces on desktop Chromium and
 touch-phone WebKit using synthetic local data. It establishes presentation,
 not a probe, guest thaw/writes/liveness/restoration, native collector recovery,
 whole-fleet CPU relief, publication or release availability.
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
+
+`Resource.discoveryReadiness` and the agent resource-context `DiscoveryReadiness` field are gone; the agent context `Runtime` section keeps the `Target type/agent/resource/hostname` facts sourced from `discoveryTarget`.
 
 ### Interface-associated display addresses
 

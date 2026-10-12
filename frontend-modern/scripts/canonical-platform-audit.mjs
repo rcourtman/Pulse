@@ -70,7 +70,6 @@ const ALLOWLIST = new Set([
   'src/utils/securityAuthPresentation.ts',
   'src/utils/serviceHealthPresentation.ts',
   'src/utils/aiFindingPresentation.ts',
-  'src/utils/discoveryPresentation.ts',
   'src/utils/relayPresentation.ts',
   'src/utils/alertIncidentPresentation.ts',
   'src/utils/alertAdministrationPresentation.ts',
@@ -1053,26 +1052,6 @@ const HELPER_RULES = [
       /Loading namespaces\.\.\.|Aggregating Kubernetes namespaces\.|Failed to load namespaces|No namespaces match your filters|Try clearing your search\.|No namespaces found|Enable Kubernetes collection and wait for the next report\./g,
     message:
       'Do not define local Kubernetes namespaces loading, failure, or empty-state copy in component code. Use @/utils/k8sNamespacePresentation instead.',
-  },
-  {
-    rule: 'canonical-discovery/no-local-url-suggestion-source-label-helper',
-    regex: /\b(?:const|function)\s+getURLSuggestionSourceLabel\b/g,
-    message:
-      'Do not define local discovery URL suggestion label helpers in component code. Use @/utils/discoveryPresentation instead.',
-  },
-  {
-    rule: 'canonical-discovery/no-local-empty-state-copy',
-    regex:
-      /No discovery data yet|Run a discovery scan to identify services and configurations|Checking existing discovery data\.\.\.|You can run discovery now if this takes too long\.|Loading discovery\.\.\.|No suggested URL found|No notes yet\. Add notes to document important information\./g,
-    message:
-      'Do not define local discovery empty-state copy in component code. Use @/utils/discoveryPresentation instead.',
-  },
-  {
-    rule: 'canonical-discovery/no-local-discovery-badge-classes',
-    regex:
-      /(?:bg-blue-100\s+text-blue-700|bg-green-100\s+text-green-700)[\s\S]{0,260}(?:Analysis:|getCategoryDisplayName\()/g,
-    message:
-      'Do not define local discovery badge classes in component code. Use @/utils/discoveryPresentation instead.',
   },
   {
     rule: 'canonical-ceph/no-local-page-state-copy',

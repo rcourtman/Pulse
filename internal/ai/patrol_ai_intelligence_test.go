@@ -10,7 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -924,20 +923,7 @@ func newTestContainerView(sourceID, name string, vmid int, node, instance string
 }
 
 func TestGatherGuestIntelligence_ReadStatePath(t *testing.T) {
-	// Set up discovery store with service info for one VM
-	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
-		{
-			ID:           "vm:pve1:100",
-			ResourceType: servicediscovery.ResourceTypeVM,
-			TargetID:     "pve1",
-			ResourceID:   "100",
-			ServiceName:  "PostgreSQL 15",
-			ServiceType:  "postgres",
-		},
-	})
-
 	ps := NewPatrolService(nil, nil)
-	ps.SetDiscoveryStore(store)
 
 	// Wire ReadState instead of using state snapshot.
 	// Status uses normalized StatusOnline/StatusOffline (registry normalizes "running" → "online").
@@ -959,8 +945,8 @@ func TestGatherGuestIntelligence_ReadStatePath(t *testing.T) {
 	if len(intel) != 3 {
 		t.Fatalf("expected 3 entries from ReadState path, got %d", len(intel))
 	}
-	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "PostgreSQL 15" {
-		t.Fatalf("expected db-server with discovery, got: %+v", gi)
+	if gi := intel["qemu/100"]; gi == nil || gi.Name != "db-server" {
+		t.Fatalf("expected db-server entry, got: %+v", gi)
 	}
 	if gi := intel["qemu/200"]; gi == nil || gi.Name != "unknown-vm" {
 		t.Fatalf("expected unknown-vm entry, got: %+v", gi)
@@ -1006,35 +992,5 @@ func TestGatherGuestIntelligence_ReadStateReachability(t *testing.T) {
 	}
 	if gi := intel["qemu/101"]; gi == nil || gi.Reachable == nil || *gi.Reachable {
 		t.Fatal("expected vm-down to be unreachable")
-	}
-}
-
-func TestGatherGuestIntelligence_ReadStateInstanceFallback(t *testing.T) {
-	// Test that Instance-based discovery lookup works via ReadState
-	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
-		{
-			ID:           "vm:my-instance:100",
-			ResourceType: servicediscovery.ResourceTypeVM,
-			TargetID:     "my-instance",
-			ResourceID:   "100",
-			ServiceName:  "Redis",
-			ServiceType:  "redis",
-		},
-	})
-
-	ps := NewPatrolService(nil, nil)
-	ps.SetDiscoveryStore(store)
-
-	rs := &mockReadState{
-		vms: []*ur.VMView{
-			newTestVMView("qemu/100", "cache", 100, "pve1", "my-instance", ur.StatusOnline, false, nil),
-		},
-	}
-	ps.SetReadState(rs)
-
-	intel := ps.gatherGuestIntelligence(context.Background())
-
-	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "Redis" {
-		t.Fatalf("expected Redis service from instance lookup, got: %+v", gi)
 	}
 }

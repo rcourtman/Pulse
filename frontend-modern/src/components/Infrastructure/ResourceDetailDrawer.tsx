@@ -1,7 +1,6 @@
-import { Show, For, Suspense } from 'solid-js';
+import { Show, For } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -20,7 +19,6 @@ import {
   ResourceDetailDrawerOverviewTab,
 } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
-import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import {
   DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
   type ResourceDetailDrawerPresentation,
@@ -248,31 +246,6 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               />
             </Show>
           </div>
-        </Show>
-      </div>
-
-      {/* Discovery Tab */}
-      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'discovery' ? '' : 'hidden'}`}>
-        <Show when={drawer.activeTab() === 'discovery'}>
-          <Show
-            when={drawer.discoveryConfig()}
-            fallback={<TabAvailabilityNotice message="Discovery is unavailable." />}
-          >
-            {(config) => (
-              <Suspense fallback={<DiscoveryLoadingFallback />}>
-                <DiscoveryTab
-                  resourceType={config().resourceType}
-                  agentId={config().agentId}
-                  resourceId={config().resourceId}
-                  hostname={config().hostname}
-                  canonicalResourceId={props.resource.id}
-                  commandsEnabled={drawer.agentMeta()?.commandsEnabled}
-                  showManualRunAction
-                  runBlockReason={drawer.guestReadPrecaution()}
-                />
-              </Suspense>
-            )}
-          </Show>
         </Show>
       </div>
 

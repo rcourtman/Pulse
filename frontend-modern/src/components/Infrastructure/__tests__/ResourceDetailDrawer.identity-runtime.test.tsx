@@ -6,7 +6,7 @@ import {
   ResourceDetailDrawer,
   getSpecializedTabAvailabilityMessage,
 } from '@/components/Infrastructure/ResourceDetailDrawer';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 const render = (...args: Parameters<typeof solidRender>): ReturnType<typeof solidRender> => {
   const result = solidRender(...args);
@@ -40,10 +40,6 @@ vi.mock('@/contexts/appRuntime', () => ({
     reconnect: reconnectSpy,
   }),
   useDarkMode: () => () => false,
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
 
 vi.mock('@/api/resources', () => ({
@@ -128,7 +124,6 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
 });
 
 afterEach(() => {
@@ -213,71 +208,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(within(headerBadges).getByText('Unraid 7.2.2')).toBeInTheDocument();
     expect(queryByText('K8s')).toBeNull();
-  });
-
-  it('keeps discovery as secondary overview context instead of a peer tab', async () => {
-    const { getByRole, getByText, getByTestId, queryByRole, queryByTestId, queryByText } = render(
-      () => <ResourceDetailDrawer resource={baseResource({})} />,
-    );
-
-    expect(queryByRole('button', { name: 'Analysis' })).toBeNull();
-    expect(queryByText('Access')).toBeNull();
-    fireEvent.click(getByRole('tab', { name: 'Manage' }));
-    expect(getByText('Access')).toBeInTheDocument();
-    expect(queryByText('Analysis')).toBeNull();
-    expect(queryByText('Host analysis via host-1')).toBeNull();
-    expect(
-      queryByText('Supporting metadata only. The web interface path above stays primary.'),
-    ).toBeNull();
-    expect(queryByTestId('discovery-tab')).toBeNull();
-    expect(
-      getByTestId('resource-access-section').querySelector(
-        '.mt-3.rounded.border.border-border.bg-surface.p-2\\.5',
-      ),
-    ).toBeNull();
-
-    expect(getByRole('button', { name: 'Show access' })).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
-    expect(getByText('Analysis')).toBeInTheDocument();
-    expect(getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Open analysis' }));
-
-    await waitFor(() => {
-      expect(queryByTestId('discovery-tab')).toBeInTheDocument();
-    });
-  });
-
-  it('keeps discovery analysis and tabs absent when Discovery is disabled', () => {
-    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    const { getByRole, queryByRole, queryByTestId, queryByText } = render(() => (
-      <ResourceDetailDrawer
-        resource={baseResource({
-          discoveryTarget: {
-            resourceType: 'agent',
-            agentId: 'resource-1',
-            resourceId: 'resource-1',
-          },
-          discoveryReadiness: {
-            state: 'missing',
-            source: 'service-discovery',
-            reason: 'Discovery has not run for this resource.',
-          },
-        })}
-      />
-    ));
-
-    expect(queryByRole('tab', { name: 'Discovery' })).toBeNull();
-    fireEvent.click(getByRole('tab', { name: 'Manage' }));
-    fireEvent.click(getByRole('button', { name: 'Show access' }));
-    expect(queryByText('Analysis')).toBeNull();
-    expect(queryByText('Not discovered')).toBeNull();
-    expect(queryByText('Discovery has not run for this resource.')).toBeNull();
-    expect(queryByTestId('discovery-tab')).toBeNull();
   });
 
   it('uses terse availability notices for specialized tabs', () => {

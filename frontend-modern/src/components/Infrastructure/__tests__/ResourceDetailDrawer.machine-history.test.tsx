@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createStore, reconcile } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
@@ -48,25 +48,6 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
       <option value="24h">24 hours</option>
       <option value="7d">7 days</option>
     </select>
-  ),
-}));
-
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: (props: {
-    resourceType: string;
-    agentId?: string;
-    resourceId: string;
-    hostname: string;
-    showManualRunAction?: boolean;
-  }) => (
-    <div
-      data-testid="machine-discovery"
-      data-resource-type={props.resourceType}
-      data-agent-id={props.agentId}
-      data-resource-id={props.resourceId}
-      data-hostname={props.hostname}
-      data-manual-run={String(props.showManualRunAction === true)}
-    />
   ),
 }));
 
@@ -196,38 +177,6 @@ describe('ResourceDetailDrawer machine metrics history', () => {
       'data-metrics',
       'cpu,memory,disk,netin,netout,diskread,diskwrite,temperature',
     );
-  });
-
-  it('adds a first-class discovery tab for Pulse Agent machines', async () => {
-    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    render(() => (
-      <ResourceDetailDrawer
-        resource={resource({
-          id: 'agent-mac-mini',
-          displayName: 'Mac Mini',
-          discoveryTarget: {
-            resourceType: 'agent',
-            agentId: 'agent-mac-mini',
-            resourceId: 'agent-mac-mini',
-            hostname: 'richard-mac-mini.local',
-          },
-        })}
-      />
-    ));
-
-    expect(screen.getByRole('tab', { name: 'Discovery' })).toBeInTheDocument();
-
-    await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
-
-    const discovery = screen.getByTestId('machine-discovery');
-    expect(discovery).toHaveAttribute('data-resource-type', 'agent');
-    expect(discovery).toHaveAttribute('data-agent-id', 'agent-mac-mini');
-    expect(discovery).toHaveAttribute('data-resource-id', 'agent-mac-mini');
-    expect(discovery).toHaveAttribute('data-hostname', 'richard-mac-mini.local');
-    expect(discovery).toHaveAttribute('data-manual-run', 'true');
   });
 
   it('keeps agent machine facts behind the shared nested detail disclosures', () => {

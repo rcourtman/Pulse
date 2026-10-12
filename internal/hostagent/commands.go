@@ -299,7 +299,7 @@ type executeCommandPayload struct {
 	TargetID      string                          `json:"target_id,omitempty"`
 	Timeout       int                             `json:"timeout,omitempty"`
 	// Trusted is set by the Pulse server when the command originates from a
-	// vetted internal subsystem (e.g. servicediscovery deep scans whose
+	// vetted internal subsystem (e.g. the Docker-in-guest checker, whose
 	// command catalog is hardcoded in Pulse source). When set, the agent's
 	// policy approval gate is bypassed since the command did not come from
 	// a user-driven path. PolicyBlock is still enforced.

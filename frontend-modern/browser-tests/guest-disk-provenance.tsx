@@ -13,13 +13,10 @@ import {
   getWorkloadVisibleColumnsForLayout,
 } from '../src/components/Workloads/guestRowModel';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { WorkloadGuest } from '../src/types/workloads';
 import type { WorkloadMetricHistoryReader } from '../src/components/Workloads/workloadMetricHistoryModel';
 import { guestDiskDeferrals } from '../src/components/Workloads/__fixtures__/guestDiskDeferrals';
 import '../src/index.css';
-
-syncAIRuntimeSettings({ discovery_enabled: false });
 
 function Fixture() {
   const [observation, setObservation] = createSignal({

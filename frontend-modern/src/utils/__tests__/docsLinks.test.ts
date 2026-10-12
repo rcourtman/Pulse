@@ -231,6 +231,13 @@ describe('docsLinks', () => {
     expect(handler).toContain('GetAlertManager().ApplyConfigUpdate(body)');
   });
 
+  it('documents network discovery without the removed AI Discovery routes', () => {
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`POST /api/discover` (admin, `settings:write`)');
+    expect(api).not.toContain('/api/discovery');
+    expect(api).not.toContain('### AI Discovery');
+  });
+
   it('separates server removal from persistent-data erasure', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const removal = installation.split('## 🗑️ Uninstall')[1];

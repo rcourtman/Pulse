@@ -3,7 +3,6 @@ import {
   buildKubernetesWorkloadMetadataId,
   buildCanonicalNodeScopedWorkloadId,
   canonicalizeWorkloadFilterType,
-  getDiscoveryResourceTypeForWorkload,
   getWorkloadCPUFraction,
   getWorkloadCPUPercent,
   normalizeWorkloadViewModeParam,
@@ -401,78 +400,6 @@ describe('isDockerManagedAppContainer', () => {
         containerRuntime: 'docker',
       }),
     ).toBe(false);
-  });
-});
-
-describe('getDiscoveryResourceTypeForWorkload', () => {
-  it('returns the canonical discovery resource type for VM workloads with canonical coordinates', () => {
-    const guest = {
-      id: 'vm:pve1:101',
-      instance: 'cluster-a',
-      workloadType: 'vm' as const,
-      type: 'vm',
-      node: 'pve1',
-      vmid: 101,
-      discoveryTarget: {
-        resourceType: 'vm' as const,
-        agentId: 'agent-pve1',
-        resourceId: '101',
-      },
-    };
-    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('vm');
-  });
-
-  it('does not infer Proxmox workload discovery ownership from the node name', () => {
-    const guest = {
-      id: 'vm:pve1:101',
-      instance: 'cluster-a',
-      workloadType: 'vm' as const,
-      type: 'vm',
-      node: 'pve1',
-      vmid: 101,
-    };
-    expect(getDiscoveryResourceTypeForWorkload(guest)).toBeNull();
-  });
-
-  it('returns the canonical discovery resource type for Docker-managed app-container workloads', () => {
-    const guest = {
-      instance: 'docker-host-1',
-      vmid: 0,
-      node: 'docker-host-1',
-      workloadType: 'app-container' as const,
-      type: 'app-container',
-      platformType: 'docker',
-      dockerHostId: 'docker-host-1',
-      containerId: 'container-grafana-abc',
-      id: 'app-container:docker-host-1:grafana',
-    };
-    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('app-container');
-  });
-
-  it('returns the canonical discovery resource type for pod workloads with agent ownership', () => {
-    const guest = {
-      instance: 'cluster-a',
-      vmid: 0,
-      node: 'cluster-a',
-      workloadType: 'pod' as const,
-      type: 'k8s',
-      kubernetesAgentId: 'k8s-agent-1',
-      id: 'k8s:cluster-a:pod:pod-uid-1',
-    };
-    expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('pod');
-  });
-
-  it('returns null for API-backed TrueNAS app-containers without canonical discovery ownership', () => {
-    const guest = {
-      workloadType: 'app-container' as const,
-      type: 'app-container',
-      platformType: 'truenas',
-      id: 'app-container:truenas-main:nextcloud',
-      node: 'truenas-main',
-      instance: 'truenas-main',
-      vmid: 0,
-    };
-    expect(getDiscoveryResourceTypeForWorkload(guest)).toBeNull();
   });
 });
 

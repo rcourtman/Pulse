@@ -287,9 +287,6 @@ func (m *MockAIService) SetIncidentArchiveProvider(provider chat.IncidentArchive
 func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider) {
-	m.Called(provider)
-}
 func (m *MockAIService) SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider) {
 	m.Called(provider)
 }

@@ -8,12 +8,10 @@ import { mergeCanonicalResourceSnapshot } from '../src/utils/resourceStateAdapte
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import Docs from '../src/pages/Docs';
 import type { Resource } from '../src/types/resource';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 interface Observation {
   state?: string;
   reason?: string;

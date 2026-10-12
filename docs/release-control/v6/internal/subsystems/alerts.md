@@ -1239,6 +1239,14 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Retired AI Discovery progress frames (2026-10-11)
+
+The websocket store no longer handles `ai_discovery_progress` frames or emits
+that event-bus type, because AI Discovery was removed. A server that still
+sends one is ignored without touching resources or alert state;
+`websocket-unified.test.ts` pins that. Alert detection and notification state
+are unchanged.
+
 ### Webhook drafts survive unconfirmed persistence
 
 The existing Notifications editor awaits an explicit successful acknowledgement

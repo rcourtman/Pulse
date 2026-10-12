@@ -14,9 +14,6 @@ import {
   AI_CHAT_COPY_LAST_ANSWER_ERROR_MESSAGE,
   AI_CHAT_COPY_LAST_ANSWER_LABEL,
   AI_CHAT_COPY_LAST_ANSWER_SUCCESS_MESSAGE,
-  AI_CHAT_DISCOVERY_HINT_BODY,
-  AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL,
-  AI_CHAT_DISCOVERY_HINT_TITLE,
   AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_LAUNCHER_ARIA_LABEL,
@@ -63,10 +60,6 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_DRAWER_SUBTITLE).toBe(
       'Observed context, provider-backed reasoning, and governed actions.',
     );
-    expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Discovery is off.');
-    expect(AI_CHAT_DISCOVERY_HINT_BODY).toBe(
-      'Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details.',
-    );
     expect(AI_CHAT_NEW_SESSION_SHORT_LABEL).toBe('New');
     expect(AI_CHAT_NEW_SESSION_BUTTON_TITLE).toBe('Start new Assistant session');
     expect(AI_CHAT_NEW_SESSION_MENU_LABEL).toBe('New session');
@@ -92,7 +85,6 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Ask Pulse Assistant about this view');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
-    expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
     expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant chat action mode');
     expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant chat action options');
     expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');

@@ -86,7 +86,6 @@ const {
       chat_model: '',
       control_level: 'read_only',
       autonomous_mode: false,
-      discovery_enabled: true,
     }),
     testProvider: vi.fn().mockResolvedValue({
       success: true,
@@ -572,7 +571,6 @@ beforeEach(() => {
     chat_model: '',
     control_level: 'read_only',
     autonomous_mode: false,
-    discovery_enabled: true,
   });
   mockAIAPI.testProvider.mockResolvedValue({
     success: true,
@@ -1195,7 +1193,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1259,7 +1256,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['openrouter', 'openai'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1316,7 +1312,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter', 'openai'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1372,7 +1367,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1411,7 +1405,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockReturnValue(new Promise(() => {}));
 
@@ -1451,7 +1444,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1491,7 +1483,6 @@ describe('AIChat', () => {
         chat_model: 'gemini:gemini-3.1-flash-lite',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1531,7 +1522,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValueOnce({
         success: false,
@@ -1591,7 +1581,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1648,7 +1637,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['deepseek', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -1712,7 +1700,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider
         .mockResolvedValueOnce({
@@ -1755,7 +1742,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -1882,11 +1868,7 @@ describe('AIChat', () => {
           title: 'Home Assistant',
           subject: 'app-container / online / docker',
           statusLabel: 'Read-only context attached',
-          detailLines: [
-            'Resource ID: app-container:homeassistant',
-            'Parent: ha-lxc',
-            'Discovery: app-container:homeassistant',
-          ],
+          detailLines: ['Resource ID: app-container:homeassistant', 'Parent: ha-lxc'],
           safetyNote: 'Approval required before any action.',
         },
       };
@@ -2599,7 +2581,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
         configured_providers: ['openai', 'openrouter'],
       });
       mockAIAPI.getModels.mockResolvedValue({
@@ -2692,7 +2673,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
       mockAIAPI.testProvider.mockResolvedValue({
         success: true,
@@ -4849,7 +4829,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAIChatAPI.listSessions.mockResolvedValue([
         {
@@ -5519,7 +5498,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -5595,7 +5573,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'read_only',
         autonomous_mode: false,
-        discovery_enabled: true,
       });
 
       renderChat();
@@ -5747,7 +5724,6 @@ describe('AIChat', () => {
         mockAIAPI.getSettings.mockResolvedValue({
           model: 'gpt-4',
           control_level: level,
-          discovery_enabled: true,
         });
         renderChat();
         await waitFor(() => expect(screen.getByText('Chat: Ask first')).toBeInTheDocument());
@@ -5771,7 +5747,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: undefined,
@@ -5808,7 +5783,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
@@ -5839,7 +5813,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         autonomousMode: false,
@@ -5872,7 +5845,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         autonomousMode: false,
@@ -5938,7 +5910,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockAiChatStore.context = {
         findingId: 'finding-1',
@@ -5994,37 +5965,6 @@ describe('AIChat', () => {
         undefined,
         undefined,
       );
-    });
-  });
-
-  // ── Discovery hint ───────────────────────────────────────────────────
-
-  describe('discovery hint', () => {
-    it('shows discovery hint when discovery is disabled', async () => {
-      mockAIAPI.getSettings.mockResolvedValue({
-        model: 'gpt-4',
-        chat_model: '',
-        control_level: 'read_only',
-        autonomous_mode: false,
-        discovery_enabled: false,
-      });
-      renderChat();
-      await waitFor(() => {
-        expect(screen.getByText('Discovery is off.')).toBeInTheDocument();
-      });
-      expect(
-        screen.getByText(
-          /Inventory, metrics, and alerts are available. Enable discovery in Settings for additional service details\./,
-        ),
-      ).toBeInTheDocument();
-    });
-
-    it('does not show discovery hint when discovery is enabled', async () => {
-      renderChat();
-      await waitFor(() => {
-        expect(mockAIAPI.getSettings).toHaveBeenCalled();
-      });
-      expect(screen.queryByText('Discovery is off.')).not.toBeInTheDocument();
     });
   });
 
@@ -6515,7 +6455,6 @@ describe('AIChat', () => {
         chat_model: '',
         control_level: 'autonomous',
         autonomous_mode: true,
-        discovery_enabled: true,
       });
       mockChat.isLoading.mockReturnValue(true);
       mockChat.messages.mockReturnValue([

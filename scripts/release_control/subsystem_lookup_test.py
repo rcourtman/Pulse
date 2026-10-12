@@ -450,7 +450,7 @@ class SubsystemLookupTest(unittest.TestCase):
             "resource-consumers",
         )
         self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
+            "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
             match["verification_requirement"]["exact_files"],
         )
 
@@ -4539,23 +4539,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/store_test.go",
             ],
         )
-
-    def test_lookup_paths_assigns_discovery_tab_state_owner_to_unified_resources(self) -> None:
-        result = lookup_paths(["frontend-modern/src/components/Discovery/useDiscoveryTabState.ts"])
-        self.assertEqual(result["unowned_runtime_files"], [])
-
-        file_entry = result["files"][0]
-        self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(len(file_entry["matches"]), 1)
-
-        match = file_entry["matches"][0]
-        self.assertEqual(match["subsystem"], "unified-resources")
-        self.assertEqual(
-            match["contract"],
-            "docs/release-control/v6/internal/subsystems/unified-resources.md",
-        )
-        self.assertEqual(match["lane_context"]["lane_id"], "L13")
-        self.assertEqual(match["verification_requirement"]["id"], "resource-consumers")
 
     def test_lookup_paths_reports_dependent_contract_updates_for_shared_canonical_file(self) -> None:
         result = lookup_paths(["internal/unifiedresources/views.go"])

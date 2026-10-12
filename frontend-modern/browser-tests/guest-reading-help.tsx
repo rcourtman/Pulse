@@ -6,12 +6,10 @@ import { Router, Route } from '@solidjs/router';
 import { GuestRow } from '../src/components/Workloads/GuestRow';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import Docs from '../src/pages/Docs';
 import type { WorkloadGuest } from '../src/types/workloads';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
 function Fixture() {
   const [reading, setReading] = createSignal({
     reason: 'agent-not-running',

@@ -682,8 +682,6 @@ failure retention require their own owner result, not source acceptance.
    2a. `internal/api/resources_compat.go`
    2b. `internal/api/chartapi/service.go`
    2c. `internal/api/chartapi/types.go`
-3. `internal/api/discovery_handlers.go`
-   3a. `frontend-modern/src/api/discovery.ts`
 4. `internal/api/alerting/alerts.go`
    4a. `internal/api/attention_handlers.go`
    4b. `internal/api/attention_receipts.go`
@@ -1504,22 +1502,6 @@ linked the Proxmox node parent to a stable Pulse agent ID; `agentId` is that
 linked agent ID, not the Proxmox node display name. Clients must not infer a
 Proxmox workload action target from `node` plus `vmid` when the backend omits
 that target.
-
-Discovery read endpoints are a canonical API payload boundary even when Pulse
-is running in mock mode. `/api/discovery`, typed discovery detail/progress
-routes, type filters, agent filters, and status must expose mock-authored
-Discovery records through the same `servicediscovery.ResourceDiscovery` and
-summary response shapes used by the live discovery service. Live service data
-remains primary when a service is configured; mock fixtures may supplement or
-stand in for that data only in mock mode, and they must not expose raw command
-output or bypass the normal non-admin redaction path.
-Forced discovery trigger requests must preserve workload identity at the API
-boundary. `POST /api/discovery/{type}/{target}/{id}` may use the route target
-as a hostname fallback only for host-agent discovery; VM, system-container,
-Docker, and Kubernetes workload triggers must leave hostname empty unless the
-caller supplied one so the discovery service resolves the workload name and
-endpoint from canonical resource state instead of mistaking the parent node for
-the workload endpoint.
 
 Source-specific backup artifact routes are canonical API payload boundaries.
 `/api/backups/pve` owns Proxmox VE task, storage-archive, and guest-snapshot
@@ -4634,18 +4616,10 @@ the authoritative analysis outcome.
     models for that provider, invalidates model inventory, and disables Pulse
     Intelligence if the final provider is removed. Legacy `clear_*` fields
     remain single-credential mutations.
-    Discovery scheduling is part of that same AI settings payload contract:
-    settings saves from `frontend-modern/src/components/Settings/useAISettingsState.ts`
-    must send `discovery_enabled` and `discovery_interval_hours` together as
-    explicit form truth, and the backend must persist a provided
-    `discovery_interval_hours: 0` as manual-only rather than replacing it with
-    the automatic-scan default. Manual command-backed discovery is available
-    only while `discovery_enabled` is true and must be admin-gated at the
-    backend. When Discovery is disabled, direct known-resource refreshes,
-    `/api/discovery/run`, and governed `pulse_discovery` refreshes must fail
-    closed before any agent command dispatch. The API progress payload must
-    describe discovery evidence analysis rather than presenting background work
-    as a visible Pulse Assistant chat session.
+    The AI settings payload no longer carries AI Discovery scheduling
+    (`discovery_enabled`, `discovery_interval_hours`, `discovery_model`); those
+    fields were removed with AI Discovery on 2026-10-11 and must not return
+    without a new evidence-backed `FEATURE_REQUESTS.md` entry.
 26. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers
@@ -4984,6 +4958,27 @@ auto-register mutation boundary.
     when configured.
 
 ## Current State
+
+### AI Discovery removed (2026-10-11)
+
+AI Discovery, the model-backed service-identification layer, is gone. The
+`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
+the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
+mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
+identified-service cards, readiness badges, provenance markers, suggested
+web-interface URLs, the Workloads AI Context column, the chat "Discovery is
+off" hint and the AI Service Context settings page were all removed. No
+telemetry counter ever measured its use (the `discovery_enabled` telemetry
+field folded it together with network subnet discovery), the maintainer judged it a flop, and
+it carried a separate scheduler, store and model route for context that
+`pulse_query`, `pulse_read` and the unified-resource context sections already
+supply.
+Network subnet discovery (`internal/discovery`, `/api/discover`, the
+Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
+are separate features and stay. Stored `discovery_enabled`,
+`discovery_interval_hours` and `discovery_model` AI settings are ignored on
+load. The old `/settings/pulse-intelligence/discovery` route redirects to
+Assistant settings.
 
 ### Masked webhook updates preserve edits without disclosing saved fields
 
