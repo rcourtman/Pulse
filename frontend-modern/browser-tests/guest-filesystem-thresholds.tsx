@@ -26,6 +26,7 @@ function Fixture() {
   const guest = (instance: string, name: string, control = false): Resource => ({
     id: `${instance}:pve-a:101`,
     name,
+    displayName: name,
     type: control ? 'vm' : observation().type,
     status: 'online',
     platformId: instance,

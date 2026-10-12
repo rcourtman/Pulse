@@ -9,6 +9,7 @@ import { useThresholdsGuestData } from '../useThresholdsGuestData';
 const filesystemGuest = (reason = '', power = 'running'): Resource => ({
   id: 'cluster-a:node-1:100',
   name: 'files',
+  displayName: 'files',
   type: 'vm',
   status: 'online',
   platformId: 'cluster-a',
