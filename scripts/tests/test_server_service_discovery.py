@@ -353,6 +353,7 @@ class ServiceDiscovery(unittest.TestCase):
                 self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
                 self.assertEqual(e["result"].stdout, "SERVICE=pulse\n")
 
+    @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
     def test_real_systemctl_fixture_inventory_has_compatible_rows(self):
         e = self.run_fixture(mode="real")
         self.assertEqual(e["result"].returncode, 0, e["result"].stderr)

@@ -4575,12 +4575,21 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 	// the unattended updater: a skipped or deleted control would hide a refusing installer.
 	for _, name := range []string{
 		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
-		"test_real_systemctl_on_a_host_without_pulse_units_selects_the_default",
 		"test_partial_failed_inventory_is_not_absence",
 	} {
 		if !regexp.MustCompile(regexp.QuoteMeta(name) + ` \(.*\) \.\.\. ok`).Match(out) {
 			t.Fatalf("service discovery control %s did not run and pass:\n%s", name, out)
 		}
+	}
+	// The real-systemctl control needs systemctl: it must pass where systemctl exists
+	// and be skipped, not silently absent, where it does not (macOS).
+	realControl := "test_real_systemctl_on_a_host_without_pulse_units_selects_the_default"
+	outcome := `\.\.\. ok`
+	if _, lookErr := exec.LookPath("systemctl"); lookErr != nil {
+		outcome = `\.\.\. skipped`
+	}
+	if !regexp.MustCompile(regexp.QuoteMeta(realControl) + ` \(.*\) ` + outcome).Match(out) {
+		t.Fatalf("service discovery control %s did not report %q:\n%s", realControl, outcome, out)
 	}
 }
 
