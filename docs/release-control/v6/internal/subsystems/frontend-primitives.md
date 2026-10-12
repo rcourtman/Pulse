@@ -1145,6 +1145,17 @@ reading, timestamp or chart geometry. A successful empty read says `No stored
 history in this range`; it does not imply that collection is running or that
 changing provider configuration will produce a sample. Zero remains a valid
 reported reading, while an absent metric remains unavailable.
+When a panel has stored observations, its default legend uses the newest
+stored timestamp across that panel and shows only values actually observed at
+that time. It labels the time `Latest stored`; missing sibling series remain
+dashes, with a visible explanation, rather than borrowing an older series value
+or a live/retained fallback. Pointer and keyboard inspection use the same
+single-time rule, and leaving inspection restores that default. Each panel owns
+its own timestamp. Only a panel with no stored observations may show explicitly
+qualified current, last-known or unknown-freshness fallback values.
+`GuestDrawerHistory.readout.test.tsx` verifies the default, fallback transition,
+zero, panel independence, inspection, refresh and access-denial boundaries;
+the existing pointer and sparse controls preserve dated interaction and geometry.
 A lone stored series renders one point at its actual timestamp and value,
 including measured zero, never an invented line. A group with one observation
 time exposes that date visibly with `Single observation. No trend yet.` and

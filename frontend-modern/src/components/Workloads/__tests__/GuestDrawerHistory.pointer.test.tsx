@@ -89,7 +89,10 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     fireEvent.pointerLeave(plot);
     expect(utilization()).toHaveTextContent('CPU43.0%');
     expect(utilization()).toHaveTextContent('Memory55.0%');
-    expect(within(utilization()).queryByTestId('guest-history-hover-time')).toBeNull();
+    expect(within(utilization()).getByTestId('guest-history-hover-time')).toHaveTextContent(
+      'Latest stored',
+    );
+    expect(utilization()).toHaveTextContent('Disk-');
   });
 
   it('can inspect a lone zero observation without drawing a synthetic trend', async () => {
