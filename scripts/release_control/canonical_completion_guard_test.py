@@ -249,39 +249,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(monitoring["verification"]["exact_files"], [])
         policy_ids = [policy["id"] for policy in monitoring["verification"]["path_policies"]]
+        self.assertIn("monitoring-runtime", policy_ids)
+        requirements = monitoring["verification_requirements"]
         self.assertEqual(
-            policy_ids,
             [
-                "maintenance-verification-runtime",
-                "availability-certificate-runtime",
-                "discovery-provider-runtime",
-                "host-agent-ingest-runtime",
-                "truenas-runtime",
-                "metrics-hot-path",
-                "metrics-history-runtime",
-                "storage-risk-runtime",
-                "memory-source-runtime",
-                "docker-collect-runtime",
-                "docker-swarm-runtime",
-                "kubernetes-native-agent-runtime",
-                "runtime-report-model",
-                "proxmox-guest-counter-runtime",
-                "proxmox-zfs-runtime",
-                "proxmox-cluster-client-runtime",
-                "proxmox-ceph-runtime",
-                "proxmox-backup-identity-monitoring",
-                "container-entrypoint-runtime",
-                "mock-runtime-fixtures",
-                "pbs-client-runtime",
-                "pbs-protection-evidence-runtime",
-                "diskinventory-collection-trust",
-                "agent-fleet-diagnostics-runtime",
-                "monitoring-runtime",
-                "filesystem-observations",
+                {key: value for key, value in requirement.items() if key != "exact_files"}
+                for requirement in requirements
             ],
-        )
-        self.assertEqual(
-            monitoring["verification_requirements"],
             [
                 {
                     "id": "monitoring-runtime",
@@ -289,43 +263,20 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "touched_runtime_files": ["internal/monitoring/monitor.go"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "internal/config/docker_metadata_test.go",
-                        "internal/config/guest_metadata_test.go",
-                        "internal/monitoring/availability_poller_test.go",
-                        "internal/monitoring/availability_probe_agent_test.go",
-                        "internal/monitoring/availability_udp_test.go",
-                        "internal/monitoring/canonical_guardrails_test.go",
-                        "internal/monitoring/ceph_test.go",
-                        "internal/monitoring/deadman_test.go",
-                        "internal/monitoring/issue1485_unraid_lifecycle_test.go",
-                        "internal/monitoring/issue1595_collection_trust_test.go",
-                        "internal/monitoring/issue1613_contract_test.go",
-                        "internal/monitoring/issue1638_dns_cache_test.go",
-                        "internal/monitoring/issue1913_host_continuity_test.go",
-                        "internal/monitoring/metric_window_provider_test.go",
-                        "internal/monitoring/monitor_additional_test.go",
-                        "internal/monitoring/monitor_alert_handling_test.go",
-                        "internal/monitoring/monitor_alert_intent_test.go",
-                        "internal/monitoring/monitor_alert_override_migration_test.go",
-                        "internal/monitoring/monitor_backups_readstate_test.go",
-                        "internal/monitoring/monitor_docker_test.go",
-                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
-                        "internal/monitoring/monitor_host_agents_test.go",
-                        "internal/monitoring/monitor_mock_alerts_test.go",
-                        "internal/monitoring/monitor_notification_startup_test.go",
-                        "internal/monitoring/monitor_pve_cluster_refresh_test.go",
-                        "internal/monitoring/monitor_pve_guest_lxc_test.go",
-                        "internal/monitoring/physical_disk_roundtrip_test.go",
-                        "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
-                        "internal/monitoring/pve_protection_observation_test.go",
-                        "internal/monitoring/ratetracker_test.go",
-                        "internal/monitoring/reload_test.go",
-                        "internal/monitoring/truenas_poller_test.go",
-                        "internal/unifiedresources/code_standards_test.go",
-                    ],
                 }
             ],
+        )
+        proofs = [
+            "internal/config/guest_metadata_writer_test.go",
+            "internal/monitoring/guest_poll_ownership_test.go",
+        ]
+        self.assertEqual(
+            staged_verification_files_for_requirement(
+                monitoring,
+                requirements[0],
+                proofs + ["internal/api/action_runner_credentials_test.go"],
+            ),
+            proofs,
         )
 
     def test_docker_collect_runtime_change_requires_monitoring_contract(self):

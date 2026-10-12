@@ -385,12 +385,7 @@ func (m *Monitor) handleClusterVMResource(
 		return models.VM{}, false
 	}
 
-	// Trigger guest metadata migration if old format exists
 	stagePVEGuestEffect(ctx, func() {
-		if m.guestMetadataStore != nil {
-			m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-		}
-
 		m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
 			Name:           vm.Name,
 			Status:         vm.Status,
@@ -422,12 +417,7 @@ func (m *Monitor) handleClusterContainerResource(
 		return models.Container{}, false
 	}
 
-	// Trigger guest metadata migration if old format exists
 	stagePVEGuestEffect(ctx, func() {
-		if m.guestMetadataStore != nil {
-			m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, res.Node, res.VMID)
-		}
-
 		m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
 			Name:           container.Name,
 			Status:         container.Status,

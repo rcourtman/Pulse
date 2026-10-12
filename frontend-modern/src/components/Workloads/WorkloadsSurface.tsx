@@ -156,6 +156,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             nestedWorkloadContextByGuestId={state.nestedWorkloadContextByGuestId}
             nodeByInstance={state.nodeByInstance}
             search={state.search}
+            selectedGuestDrawerState={state.selectedGuestDrawerState}
             selectedGuestId={state.selectedGuestId}
             setHoveredWorkloadId={state.setHoveredWorkloadId}
             setSelectedGuestId={state.setSelectedGuestId}

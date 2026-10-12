@@ -1609,7 +1609,7 @@ describe('useWorkloads', () => {
     expect(result!.workloads()[0]?.clusterName).toBe('cluster-b');
     expect(result!.workloads()[0]?.contextLabel).toBe('pve1 (cluster-b)');
     expect(result!.workloads()[0]?.instance).toBe('cluster-b');
-    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe('vm-1');
 
     dispose();
   });
@@ -1688,7 +1688,7 @@ describe('useWorkloads', () => {
     await flushAsync();
     await waitForWorkloadCount(() => result!.workloads().length);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe(sampleResource.id);
 
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [
@@ -1709,13 +1709,13 @@ describe('useWorkloads', () => {
     await waitForWorkloadCount(() => result!.workloads().length);
 
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve2:202');
+    expect(result!.workloads()[0]?.id).toBe('cluster-b-pve2-202');
 
     eventBus.emit('org_switched', 'default');
     await flushAsync();
 
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
+    expect(result!.workloads()[0]?.id).toBe(sampleResource.id);
 
     dispose();
   });
@@ -1725,4 +1725,40 @@ describe('useWorkloads', () => {
     expect(useWorkloadsSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
   });
+});
+
+describe('resource-owned workload identity', () => {
+  it.each(['vm', 'system-container', 'pod'] as const)(
+    'preserves %s row identity when placement changes',
+    async (type) => {
+      const { useWorkloads, __resetWorkloadsCacheForTests } = await import('@/hooks/useWorkloads');
+      __resetWorkloadsCacheForTests();
+      const original = {
+        ...sampleResource,
+        id: 'stable-resource',
+        type,
+        proxmox: { instance: 'cluster-a', node: 'node-1', vmid: 101 },
+        kubernetes: { clusterId: 'cluster-a', podUid: 'native-pod-uid' },
+      };
+      const [snapshot, setSnapshot] = createSignal([original] as any);
+      let dispose = () => {};
+      let result: ReturnType<typeof useWorkloads> | undefined;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+      });
+      try {
+        await flushAsync();
+        expect(result!.workloads()[0]?.id).toBe(original.id);
+        setSnapshot([
+          { ...original, node: 'node-2', proxmox: { ...original.proxmox, node: 'node-2' } },
+        ]);
+        await flushAsync();
+        expect(result!.workloads()[0]?.id).toBe(original.id);
+        expect(result!.workloads()[0]?.canonicalResourceId).toBe(original.id);
+      } finally {
+        dispose();
+      }
+    },
+  );
 });

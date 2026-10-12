@@ -17,7 +17,7 @@ import {
 import {
   buildAppContainerMetadataId,
   buildKubernetesWorkloadMetadataId,
-  getCanonicalWorkloadIdForResource,
+  getWorkloadMetadataIdForResource,
 } from '@/utils/workloads';
 
 // Resource kinds that carry agent-routed metadata coordinates.
@@ -191,14 +191,12 @@ const getMetadataTarget = (
     }
   }
 
-  // Guest metadata is keyed by the canonical workload id shared with the
-  // workloads surfaces (`instance:node:vmid` for PVE guests, resource id
-  // otherwise — also the key v5 upgrades carry over). Saving under any other
-  // id (unified resource hash, bare vmid, discovery resource id) strands the
-  // URL where no table reads it.
+  // Guest metadata retains its provider-keyed storage/API compatibility
+  // boundary. Resource identity and routing use the unified resource ID.
+  // Keep this key aligned with the workload metadata reader during migration.
   return {
     metadataKind: 'guest',
-    metadataId: getCanonicalWorkloadIdForResource(resource),
+    metadataId: getWorkloadMetadataIdForResource(resource),
   };
 };
 
@@ -403,7 +401,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: getCanonicalWorkloadIdForResource(resource),
+        metadataId: getWorkloadMetadataIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'system-container':
@@ -417,7 +415,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: getCanonicalWorkloadIdForResource(resource),
+        metadataId: getWorkloadMetadataIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'app-container':

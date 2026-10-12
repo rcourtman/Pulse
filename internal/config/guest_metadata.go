@@ -370,8 +370,10 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 		// Persist while holding the store lock. save() assumes locked access.
 		if err := s.save(); err != nil {
 			log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-			s.metadata[legacyID] = legacyMeta
-			delete(s.metadata, guestID)
+			// The admitted guest now uses the new node coordinates. Keep its
+			// operator fields available in memory while atomic persistence
+			// retains the last good disk snapshot. save records the failure;
+			// ordinary identity updates retry through the existing writer.
 		}
 
 		return cloneGuestMetadata(migrated)

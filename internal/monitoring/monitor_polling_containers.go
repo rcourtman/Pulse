@@ -297,12 +297,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					}
 				}
 
-				// Trigger guest metadata migration if old format exists
 				stagePVEGuestEffect(ctx, func() {
-					if m.guestMetadataStore != nil {
-						m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
-					}
-
 					m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
 						Name:           modelContainer.Name,
 						Status:         modelContainer.Status,

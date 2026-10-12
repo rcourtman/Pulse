@@ -11,6 +11,18 @@ describe('ResourceAPI', () => {
     vi.clearAllMocks();
   });
 
+  it('resolves an encoded resource reference with cancellable authenticated lookup', async () => {
+    const signal = new AbortController().signal;
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'stable-resource' });
+    await expect(ResourceAPI.getResource(' cluster-a:node-1:101 ', { signal })).resolves.toEqual({
+      id: 'stable-resource',
+    });
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/resources/cluster-a%3Anode-1%3A101', {
+      cache: 'no-store',
+      signal,
+    });
+  });
+
   it('fetches compact resource stats without hydrating list pages', async () => {
     const stats = {
       total: 1200,

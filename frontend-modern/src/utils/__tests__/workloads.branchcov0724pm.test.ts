@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildCanonicalNodeScopedWorkloadId,
+  buildProxmoxGuestMetadataId,
   buildKubernetesWorkloadMetadataId,
-  getCanonicalWorkloadIdForResource,
+  getWorkloadMetadataIdForResource,
   getWorkloadMetadataId,
   getWorkloadMetadataIdCandidates,
   isDockerManagedAppContainer,
@@ -171,23 +171,23 @@ describe('getWorkloadMetadataId empty-candidates fallback', () => {
 });
 
 // Covers the non-finite vmid arm (`Number.isFinite(vmid) ? Number(vmid) : 0`)
-// in buildCanonicalNodeScopedWorkloadId. The happy-path specs only pass numeric
+// in buildProxmoxGuestMetadataId. The happy-path specs only pass numeric
 // vmids, so the `: 0` coercion (which then short-circuits to null) is cold.
-describe('buildCanonicalNodeScopedWorkloadId non-finite vmid coercion', () => {
+describe('buildProxmoxGuestMetadataId non-finite vmid coercion', () => {
   it('coerces a null vmid to 0 and returns null', () => {
     expect(
-      buildCanonicalNodeScopedWorkloadId({ instance: 'homelab', node: 'pve1', vmid: null }),
+      buildProxmoxGuestMetadataId({ instance: 'homelab', node: 'pve1', vmid: null }),
     ).toBeNull();
   });
 });
 
-// Covers the proxmox.nodeName fallback in getCanonicalWorkloadIdForResource.
+// Covers the proxmox.nodeName fallback in getWorkloadMetadataIdForResource.
 // The happy-path specs populate proxmox.node, so the `node || nodeName` fallback
 // to nodeName is never exercised.
-describe('getCanonicalWorkloadIdForResource proxmox nodeName fallback', () => {
+describe('getWorkloadMetadataIdForResource proxmox nodeName fallback', () => {
   it('uses proxmox.nodeName when proxmox.node is absent', () => {
     expect(
-      getCanonicalWorkloadIdForResource({
+      getWorkloadMetadataIdForResource({
         id: 'vm-fallback',
         type: 'vm',
         clusterId: 'Core Fabric',
@@ -198,7 +198,7 @@ describe('getCanonicalWorkloadIdForResource proxmox nodeName fallback', () => {
 
   it('prefers proxmox.node over proxmox.nodeName when both are present', () => {
     expect(
-      getCanonicalWorkloadIdForResource({
+      getWorkloadMetadataIdForResource({
         id: 'lxc-fallback',
         type: 'system-container',
         clusterId: 'Core Fabric',
@@ -209,7 +209,7 @@ describe('getCanonicalWorkloadIdForResource proxmox nodeName fallback', () => {
 
   it('falls back to the resource id when only nodeName is present but it is blank', () => {
     expect(
-      getCanonicalWorkloadIdForResource({
+      getWorkloadMetadataIdForResource({
         id: 'vm-orphan',
         type: 'vm',
         clusterId: 'Core Fabric',

@@ -32,6 +32,7 @@ type WorkloadsTableProps = Pick<
   | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
+  | 'selectedGuestDrawerState'
   | 'selectedGuestId'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
@@ -137,6 +138,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             nestedWorkloadContextByGuestId={props.nestedWorkloadContextByGuestId}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
+            selectedGuestDrawerState={props.selectedGuestDrawerState}
             selectedGuestId={props.selectedGuestId}
             setHoveredWorkloadId={props.setHoveredWorkloadId}
             setSelectedGuestId={props.setSelectedGuestId}

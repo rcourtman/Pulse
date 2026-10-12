@@ -11,7 +11,6 @@ import {
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import {
-  buildCanonicalNodeScopedWorkloadId,
   getWorkloadCPUFraction,
   isDockerManagedAppContainer,
   resolveWorkloadTypeFromString,
@@ -518,26 +517,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   // runtime ids such as Docker container ids must stay separate so workload
   // routing, discovery, anomalies, and drawer selection align with the shared
   // resource model.
-  const guestId = (() => {
-    if (workloadType === 'vm' || workloadType === 'system-container') {
-      const canonicalId = buildCanonicalNodeScopedWorkloadId({
-        instance,
-        node,
-        vmid,
-      });
-      if (canonicalId) {
-        return canonicalId;
-      }
-    }
-    if (workloadType === 'pod') {
-      const clusterId = resource.kubernetes?.clusterId;
-      const podUid = resource.kubernetes?.podUid;
-      if (clusterId && podUid) {
-        return `k8s:${clusterId}:pod:${podUid}`;
-      }
-    }
-    return resource.id;
-  })();
+  const guestId = resource.id;
 
   return {
     id: guestId,

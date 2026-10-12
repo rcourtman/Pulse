@@ -1,3 +1,4 @@
+import type { Accessor, Setter } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Alert, VM } from '@/types/api';
 import type {
@@ -31,6 +32,7 @@ type Guest = WorkloadGuest;
 
 export interface GuestDrawerProps {
   guest: Guest;
+  viewState?: GuestDrawerViewState;
   onClose: () => void;
   metadataId?: string;
   customUrl?: string;
@@ -43,6 +45,14 @@ export interface GuestDrawerProps {
 }
 
 export type GuestDrawerTab = 'overview' | 'history' | 'manage';
+
+export interface GuestDrawerViewState {
+  activeTab: Accessor<GuestDrawerTab>;
+  setActiveTab: Setter<GuestDrawerTab>;
+  historyRange: Accessor<HistoryTimeRange>;
+  setHistoryRange: Setter<HistoryTimeRange>;
+  reset: () => void;
+}
 
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;

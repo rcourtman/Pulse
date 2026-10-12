@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
-import type { HistoryTimeRange } from '@/api/charts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { HistoryTimeRange } from '@/api/charts';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
@@ -19,12 +19,13 @@ import {
   getGuestDrawerAgentHeading,
   getGuestDrawerAgentTitle,
   getGuestDrawerBackupPresentation,
-  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   getGuestDrawerHistoryTarget,
   getGuestDrawerNetworkInterfaces,
   hasGuestDrawerFilesystemDetails,
   hasGuestDrawerOsInfo,
   normalizeGuestDrawerTags,
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  type GuestDrawerViewState,
   type GuestDrawerProps,
   type GuestDrawerTab,
 } from './guestDrawerModel';
@@ -34,12 +35,27 @@ import {
   shouldShowInGuestAgentInstallCue,
 } from './workloadAgentReadiness';
 
-export function useGuestDrawerState(props: GuestDrawerProps) {
-  const alertsActivation = useAlertsActivation();
+export function createGuestDrawerViewState(): GuestDrawerViewState {
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
+  return {
+    activeTab,
+    setActiveTab,
+    historyRange,
+    setHistoryRange,
+    reset: () => {
+      setActiveTab('overview');
+      setHistoryRange(GUEST_DRAWER_HISTORY_DEFAULT_RANGE);
+    },
+  };
+}
+
+export function useGuestDrawerState(props: GuestDrawerProps) {
+  const alertsActivation = useAlertsActivation();
+  const { activeTab, setActiveTab, historyRange, setHistoryRange } =
+    props.viewState ?? createGuestDrawerViewState();
 
   const guestId = createMemo(() => getCanonicalWorkloadId(props.guest));
   const alertThresholdScope = createMemo(() => getWorkloadAlertThresholdScope(props.guest));

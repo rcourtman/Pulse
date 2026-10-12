@@ -3212,6 +3212,11 @@ a new API state machine, queue contract, or verification-accounting field.
    verification adapters, but they must remain read-only views of the canonical
    action audit and lifecycle trail rather than a second audit store.
 6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resourceapi/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
+   Resource reference reads use `ResourceAPI.getResource()` and the existing
+   `GET /api/resources/{id}` resolver. The registry owns current IDs, declared
+   succession and unique legacy/source aliases. Frontend selection cancels a
+   superseded lookup and applies only its returned resource ID. A refused or
+   ambiguous reference cannot be translated by guessing instance, node or VMID.
    Compact aggregate consumers must read `GET /api/resources/stats` through
    `ResourceAPI.getStats()` rather than paging `/api/resources` and discarding
    every row. The stats client preserves the backend-owned total, type, status,
