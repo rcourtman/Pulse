@@ -80,7 +80,7 @@ if verb == 'status':
     if fault == 'timeout-status':
         (root / 'timed-pid').write_text(str(os.getpid()))
         os.execl('/bin/sleep', 'sleep', '30')
-    if fault == 'failed-status' or (fault == 'failed-after-remote' and remote) or (fault == 'failed-retirement-status' and retired):
+    if fault == 'failed-status' or (fault == 'failed-after-remote' and remote) or (fault in ('failed-retirement-status', 'concurrent-restore-file', 'concurrent-restore-directory') and retired):
         print('initctl: manager connection refused', file=sys.stderr); sys.exit(1)
     state = v['state']
     code = 1 if state == 'absent' else 0
@@ -188,6 +188,13 @@ rm() {
     printf 'file:remove\n' >> "$EVENTS"
     builtin command rm "$@"
 }
+race_restore_config() {
+    if [[ "$FAULT" == concurrent-restore-file ]]; then
+        printf 'concurrent configuration retained\n' > "$1"
+    elif [[ "$FAULT" == concurrent-restore-directory ]]; then
+        mkdir "$1"
+    fi
+}
 ln() {
     local arg
     for arg in "$@"; do [[ "$arg" == -T || "$arg" == -- || "$arg" == "$FIXTURE/"* ]] || return 97; done
@@ -197,6 +204,9 @@ ln() {
     elif [[ "$FAULT" == concurrent-override-directory && "$4" == "$FIXTURE/init/pulse-agent.override" ]]; then
         mkdir "$4"
     fi
+    if [[ "$3" == "$FIXTURE/init/pulse-agent.conf.removal."* && "$4" == "$FIXTURE/init/pulse-agent.conf" ]]; then
+        race_restore_config "$4"
+    fi
     printf 'file:link\n' >> "$EVENTS"
     builtin command ln "$@"
 }
@@ -204,6 +214,9 @@ mv() {
     local arg
     for arg in "$@"; do [[ "$arg" == -- || "$arg" == "$FIXTURE/"* ]] || return 97; done
     [[ "$FAULT" != refused-retirement-move || "$1" != -- || "$2" != "$FIXTURE/init/pulse-agent.conf" ]] || return 1
+    if [[ "$2" == "$FIXTURE/init/pulse-agent.conf.removal."* && "$3" == "$FIXTURE/init/pulse-agent.conf" ]]; then
+        race_restore_config "$3"
+    fi
     printf 'file:move\n' >> "$EVENTS"
     builtin command mv "$@"
 }
@@ -344,18 +357,23 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 self.assert_recovery(before, after)
 
     def test_concurrent_config_is_not_clobbered_and_original_staged_recovery_is_retained(self):
-        r, events, before, after, _ = self.exercise(fault="concurrent-config")
-        self.assertNotEqual(r.returncode, 0, r.stderr)
-        self.assertIn("remote:remove", events)
-        self.assertNotIn("state:remove", events)
-        self.assertEqual(after["init/pulse-agent.conf"][2], b"concurrent configuration retained\n")
-        stages = [n for n in after if n.startswith("init/pulse-agent.conf.removal.")]
-        self.assertEqual(len(stages), 1)
-        self.assertEqual(after[stages[0]], before["init/pulse-agent.conf"])
-        for name in before:
-            if name.startswith(("state", "helper", "profile")) or name == "unrelated":
-                self.assertEqual(after[name], before[name])
-        self.assertEqual(after["init/pulse-agent.override"][2], b"manual\n")
+        # Cover creation before the check and inside the exact restore operation.
+        for fault in ("concurrent-config", "concurrent-restore-file", "concurrent-restore-directory"):
+            with self.subTest(fault=fault):
+                r, events, before, after, _ = self.exercise(fault=fault)
+                self.assertNotEqual(r.returncode, 0, r.stderr)
+                self.assertIn("remote:remove", events)
+                self.assertNotIn("state:remove", events)
+                expected = None if fault.endswith("directory") else b"concurrent configuration retained\n"
+                self.assertEqual(after["init/pulse-agent.conf"][2], expected)
+                stages = [n for n in after if n.startswith("init/pulse-agent.conf.removal.")]
+                self.assertEqual(len(stages), 1)
+                self.assertEqual(after[stages[0]], before["init/pulse-agent.conf"])
+                self.assertFalse(any(n.startswith("init/pulse-agent.conf/") for n in after))
+                for name in before:
+                    if name.startswith(("state", "helper", "profile")) or name == "unrelated":
+                        self.assertEqual(after[name], before[name])
+                self.assertEqual(after["init/pulse-agent.override"][2], b"manual\n")
 
     def test_confirmed_job_absence_precedes_selected_local_erasure(self):
         r, events, before, after, model = self.exercise()
