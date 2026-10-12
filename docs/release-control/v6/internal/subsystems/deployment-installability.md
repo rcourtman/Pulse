@@ -5058,6 +5058,15 @@ beta's release), so each is retried up to four times with doubling backoff from
 half-printed failed attempt cannot corrupt the verified digests. A moved tag or an
 invalid attestation fails identically on every attempt and is delayed by the
 backoff, never masked.
+The release backend test runner warms the `pulse-agent` build cache once, after
+compiling the race-enabled API test binary and before any shard starts, with
+the full CPU count. `TestHostAgentCredentialFileHandoff` compiles the agent
+itself under a fixed three-minute limit, and each API shard runs with a small
+pinned `GOMAXPROCS` that the test's child compiler inherits. A cold agent build
+is about 250 CPU-seconds, so under the pin it fails at 180 seconds with
+`signal: killed` (reproduced; the first beta's release failed on it twice),
+while a warmed cache makes the same pinned run a 16-second test. The race
+build of the test binary does not warm that plain build.
 As of 2026-10-11, the governed release floor is Go `1.26.9`. It supersedes
 `1.26.8`, whose standard library is reachable through twelve vulnerable Pulse
 call paths reported by `govulncheck` after the 2026-10-08 advisories, including

@@ -4621,8 +4621,19 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 		t.Fatalf("read run-release-backend-tests.sh: %v", err)
 	}
 	backendScript := string(backendScriptBytes)
+	// The credential handoff test builds pulse-agent under a fixed three-minute limit. The
+	// pinned shards would serialize that cold build past it, so the runner must warm the
+	// agent build after compiling the test binary and before any shard starts.
+	compileIndex := strings.Index(backendScript, "go test -c -race")
+	warmIndex := strings.Index(backendScript, "go build -o /dev/null ./cmd/pulse-agent")
+	firstShardIndex := strings.Index(backendScript, `run_api_shard "$shard_index"`)
+	if compileIndex < 0 || warmIndex < compileIndex || firstShardIndex < warmIndex {
+		t.Fatalf("release backend runner must warm the pulse-agent build between compiling the API test binary (%d) and starting the shards (%d); warm-up at %d",
+			compileIndex, firstShardIndex, warmIndex)
+	}
 	for _, needle := range []string{
 		"go test -c -race",
+		"Warming the pulse-agent build cache",
 		"python3 scripts/shard_go_tests.py",
 		`--max-regex-bytes "$MAX_REGEX_BYTES"`,
 		`MEMORY_WAIT_SECONDS="${PULSE_BACKEND_TEST_MEMORY_WAIT_SECONDS:-120}"`,
