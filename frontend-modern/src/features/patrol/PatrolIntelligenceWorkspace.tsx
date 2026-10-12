@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, lazy, Show, Suspense } from 'solid-js';
 import HistoryIcon from 'lucide-solid/icons/history';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
@@ -22,7 +22,12 @@ import {
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
-import { getPatrolSetupAction, getPatrolSetupHint } from '@/utils/patrolRuntimeActions';
+import {
+  getPatrolSetupAction,
+  getPatrolSetupHint,
+  isPatrolConnectCause,
+} from '@/utils/patrolRuntimeActions';
+
 import {
   getPatrolProInvestigationHandoff,
   getPatrolWatchOnlyInvestigationNudge,
@@ -34,6 +39,7 @@ import {
   PATROL_WORKSPACE_QUEUE_TITLE,
   PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION,
   PATROL_WORKSPACE_RUN_RECORD_TITLE,
+  PATROL_WORKSPACE_SETUP_ACTIVE_DESCRIPTION,
   PATROL_WORKSPACE_SETUP_TITLE,
   getPatrolWorkspaceSetupDescription,
 } from './patrolControlPresentation';
@@ -46,6 +52,11 @@ import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesUpgradePrompts,
 } from '@/stores/sessionPresentationPolicy';
+
+// Only an install that cannot run Patrol needs the setup panel and the AI
+// settings, provider and cost code it brings, so it loads on demand and stays
+// out of the Patrol page chunk.
+const PatrolSetupPanel = lazy(() => import('./PatrolSetupPanel'));
 
 export function PatrolIntelligenceWorkspace(props: {
   state: PatrolIntelligenceState;
@@ -68,8 +79,15 @@ export function PatrolIntelligenceWorkspace(props: {
     getPatrolWorkTypeComposition(state.findingsTabBadgeFindings()),
   );
   const isHistoryOpen = () => state.activeTab() === 'history';
+  // Once the operator starts the setup panel it stays until they finish:
+  // polling flips the readiness cause mid-setup (no provider, then model
+  // check failed or passed) and would otherwise unmount the panel along
+  // with its verdict.
+  const [setupPanelActive, setSetupPanelActive] = createSignal(false);
   const isSetupOnly = () =>
-    !isHistoryOpen() && !state.selectedRun() && state.shouldShowPatrolSetupOnly();
+    !isHistoryOpen() &&
+    !state.selectedRun() &&
+    (state.shouldShowPatrolSetupOnly() || setupPanelActive());
   const setupFinding = () => state.findingsTabBadgeFindings().find(isPatrolRuntimeFinding);
   // A runtime block (a used-up cost budget) outranks the readiness cause,
   // which reads "none" while Patrol is configured but paused. The block state
@@ -104,7 +122,9 @@ export function PatrolIntelligenceWorkspace(props: {
     isHistoryOpen()
       ? PATROL_WORKSPACE_HISTORY_DESCRIPTION
       : isSetupOnly()
-        ? getPatrolWorkspaceSetupDescription(setupCause())
+        ? setupPanelActive()
+          ? PATROL_WORKSPACE_SETUP_ACTIVE_DESCRIPTION
+          : getPatrolWorkspaceSetupDescription(setupCause())
         : state.selectedRun()
           ? PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION
           : getPatrolQueueWorkspaceDescription({
@@ -310,21 +330,50 @@ export function PatrolIntelligenceWorkspace(props: {
               <div class="min-w-0">
                 <div class="flex items-center gap-2 text-amber-800 dark:text-amber-200">
                   <ShieldAlertIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
-                  <h3 class="text-sm font-semibold">Patrol cannot run yet</h3>
+                  <h3 class="text-sm font-semibold">
+                    {setupPanelActive() ? 'Set up Patrol' : 'Patrol cannot run yet'}
+                  </h3>
                 </div>
-                <p class="mt-2 text-sm leading-6 text-base-content">{setupReason()}</p>
-                <Show when={setupHint()}>
-                  <p class="mt-1 text-xs leading-5 text-muted">{setupHint()}</p>
+                <Show when={!setupPanelActive()}>
+                  <p class="mt-2 text-sm leading-6 text-base-content">{setupReason()}</p>
                 </Show>
-                <ButtonLink
-                  href={setupAction().href}
-                  variant="primary"
-                  size="sm"
-                  class="mt-4 gap-1.5"
+                <Show
+                  when={setupPanelActive() || isPatrolConnectCause(setupCause())}
+                  fallback={
+                    <>
+                      <Show when={setupHint()}>
+                        <p class="mt-1 text-xs leading-5 text-muted">{setupHint()}</p>
+                      </Show>
+                      <ButtonLink
+                        href={setupAction().href}
+                        variant="primary"
+                        size="sm"
+                        class="mt-4 gap-1.5"
+                      >
+                        <SettingsIcon class="h-4 w-4" aria-hidden="true" />
+                        {setupAction().label}
+                      </ButtonLink>
+                    </>
+                  }
                 >
-                  <SettingsIcon class="h-4 w-4" aria-hidden="true" />
-                  {setupAction().label}
-                </ButtonLink>
+                  <div class="mt-4">
+                    <Suspense fallback={null}>
+                      <PatrolSetupPanel
+                        readinessProvider={state.patrolReadiness()?.provider}
+                        onStart={() => setSetupPanelActive(true)}
+                        onDone={() => {
+                          setSetupPanelActive(false);
+                          void state.handleRefreshPatrol();
+                        }}
+                        onRunPatrol={() => {
+                          setSetupPanelActive(false);
+                          // Readiness must be re-read before the run gate opens.
+                          void state.handleRefreshPatrol().then(() => state.handleRunPatrol());
+                        }}
+                      />
+                    </Suspense>
+                  </div>
+                </Show>
               </div>
               <div class="rounded-md border border-amber-200 p-3 dark:border-amber-900/25">
                 <div class="flex items-center gap-2">

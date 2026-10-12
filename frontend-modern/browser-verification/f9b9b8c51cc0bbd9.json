@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "31da7e79521133b322349fd740f7e29851852b9f",
+  "verified_at": "2026-10-12T21:25:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
+    "frontend-modern/src/features/patrol/patrolSetupModel.ts",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "fa041ffc778e25a0456fa05b3a01053964015ca066cedf3784ecf8f6e6dee778",
+    "frontend-modern/src/features/patrol/PatrolSetupPanel.tsx": "d03cf70b925b0febafcac02a4c007642aaa3fe3fb2548d1594505bfb17c90bec",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "e2782489dc1abf33b1516753f52d9de4d8dfec71e1d614e9a9d9f0d4935d7efd",
+    "frontend-modern/src/features/patrol/patrolSetupModel.ts": "ff062f40c16f1fe1fd180d25cdc28167134c5e3415c85527a1397d9442ebbda9",
+    "frontend-modern/src/utils/patrolRuntimeActions.ts": "a06a675187edbb40735912bd5047c1745dbb0d872febb21142dd51cb778cbb65"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Fresh Pro install, no provider: setup card subtitle 'Patrol needs an AI model before it can check your infrastructure.', panel with six provider cards, Anthropic preselected, model claude-haiku-4-5 and 'About $7.62 a month ... checking every 12 hours' from the live cost preview before any save",
+    "Ollama route: pull hint for qwen3:8b before connect, 'No per-token bill' cost line",
+    "Ollama reachable but qwen3:8b not installed (local fake Ollama listing no models): the provider test's model_unavailable is not treated as a refused connection, and the pull-command message (no semicolons, 'It is about a 5 GB download and needs 8 GB of free memory.') shows, no model check run",
+    "Ollama URL with nothing listening: 'Ollama did not accept the connection: Pulse could not maintain a healthy connection to this provider. Check provider reachability, base URL, ...'",
+    "Ollama listing qwen3:8b: settings saved (enabled, ollama URL, patrol_model and shared model ollama:qwen3:8b, schedule unchanged at 6 hours), real Patrol model check ran and failed honestly (no tool calls) with the backend's summary and a 'Check qwen3:8b again' button",
+    "Verdict, heading 'Set up Patrol' and retry stay mounted through 40+ seconds of polling after the readiness cause flipped from no provider to model check failed",
+    "Invalid test Anthropic key: provider test refusal shown as 'Anthropic did not accept the connection: ... Check the API key and connect again.', key field cleared, no model list or check",
+    "Reload with the refused key saved (readiness cause provider_auth): panel shown with Anthropic preselected and subtitle 'Your AI provider refused Patrol's connection. Reconnect it so Patrol can run.'",
+    "Check pass (readiness POST stubbed in the page; the fake model cannot pass the real check): 'Patrol is ready' with Run Patrol now and Done",
+    "Phone width: no horizontal overflow, provider cards 66px, action buttons 44px"
+  ],
+  "interactions": [
+    "Provider card switch resets key and model state",
+    "Connect and check by button and by Enter in the field",
+    "Check qwen3:8b again re-runs only the model check",
+    "Run Patrol now re-reads Patrol state before the run gate; with the real check still failing the gate stayed shut and the card returned to the model-check route"
+  ],
+  "browser": {
+    "client": "Claude desktop browser pane",
+    "engine": "Chromium"
+  },
+  "scope": "Vite dev server on this branch proxied to a private non-mock pulse-enterprise stack on :7681 with a dev Pro licence, plus a local fake Ollama on :11555. A passing model check and a real first Patrol run were not exercised end to end: the pass response was stubbed in the page."
+}
