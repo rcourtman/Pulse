@@ -188,9 +188,10 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
       else setRange('24h');
       await waitFor(() => expect(inspect()).toHaveValue('3'));
       expect(utilization()).toHaveTextContent('CPU43.0%');
-      expect(
-        within(utilization()).queryByTestId('guest-history-hover-time'),
-      ).not.toBeInTheDocument();
+      const restoredTime = within(utilization()).getByTestId('guest-history-hover-time');
+      expect(restoredTime).toHaveTextContent('Latest stored');
+      expect(restoredTime).toHaveAttribute('datetime', new Date(time + 120_000).toISOString());
+      expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(0);
     },
   );
 

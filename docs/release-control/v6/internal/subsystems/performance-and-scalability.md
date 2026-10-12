@@ -3999,6 +3999,14 @@ unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
 complete point preservation at the existing request bound. Neither claims a
 timing benchmark, fleet CPU attribution or native incident relief.
 
+The default stored-history legend resolves one latest timestamp from that
+same bounded, normalized panel index, then looks up each configured series at
+that time. It does not join unrelated latest or live values, add collection or
+fetch missing siblings. The 240-point cap, 30-second poll, query coordinates,
+cache and segment geometry remain unchanged. Mounted readout, pointer and
+sparse controls verify only explicit query refreshes and correctly qualified
+empty-panel fallback; this is not a timing or native-recovery claim.
+
 
 ### Accessible Workloads backup evidence
 

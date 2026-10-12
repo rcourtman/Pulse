@@ -720,7 +720,9 @@ describe('GuestDrawer', () => {
 
       await fireEvent.pointerLeave(plot);
 
-      expect(within(utilizationChart).queryByTestId('guest-history-hover-time')).toBeNull();
+      expect(within(utilizationChart).getByTestId('guest-history-hover-time')).toHaveTextContent(
+        'Latest stored',
+      );
       expect(utilizationChart).toHaveTextContent('20.0%');
       expect(utilizationChart).toHaveTextContent('30.0%');
       expect(utilizationChart).toHaveTextContent('40.0%');
