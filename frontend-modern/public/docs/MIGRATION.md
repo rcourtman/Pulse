@@ -33,6 +33,12 @@ settings included above. Imported API-token records retain their scopes and
 expiry; they do not reveal the original tokens or transfer every agent's state.
 SSO configuration **is included**, even though local login credentials are not.
 
+Automated provisioning uses the same limited scope. Read the
+[startup-import gate and safeguards](CONFIGURATION.md#auto-import-bootstrap)
+before setting bootstrap variables: an existing installation without
+`nodes.enc` is not protected by a first-run marker, and normal startup after
+an import error does not confirm a successful transfer.
+
 ### Full-state recovery
 
 If you need the same installation's history and excluded state, retain a
