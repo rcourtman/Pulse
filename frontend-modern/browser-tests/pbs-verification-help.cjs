@@ -31,20 +31,28 @@ const { chromium, webkit } = require('playwright');
         : { headless: true });
       const page = await browser.newPage({ viewport: { width, height: 1000 },
         ...(engine === 'webkit' ? { isMobile: true, hasTouch: true } : {}) });
-      const errors = [], backendRequests = [], mutations = [], servedDocs = [];
+      const errors = [], backendRequests = [], mutations = [];
+      // Observe the exact bytes consumed by fetch, without issuing another
+      // request. Chromium's DevTools response.body() re-encodes text/markdown
+      // without a charset as Windows-1252, unlike fetch's UTF-8 text decoder.
+      await page.addInitScript(() => {
+        const fetch = window.fetch.bind(window);
+        window.__pbsDocuments = [];
+        window.fetch = async (...args) => {
+          const response = await fetch(...args);
+          if (new URL(response.url).pathname === '/docs/PBS.md') {
+            const bytes = Array.from(new Uint8Array(await response.clone().arrayBuffer()));
+            window.__pbsDocuments.push({ status: response.status, bytes });
+          }
+          return response;
+        };
+      });
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => {
         if (message.type() === 'error') errors.push(message.text());
       });
       page.on('request', (request) => {
         if (!['GET', 'HEAD'].includes(request.method())) mutations.push(request.method());
-      });
-      page.on('response', async (response) => {
-        if (new URL(response.url()).pathname === '/docs/PBS.md') {
-          const bytes = await response.body();
-          servedDocs.push({ status: response.status(),
-            sha256: crypto.createHash('sha256').update(bytes).digest('hex') });
-        }
       });
       await page.route('**/api/**', async (route) => {
         backendRequests.push(new URL(route.request().url()).pathname);
@@ -104,9 +112,14 @@ const { chromium, webkit } = require('playwright');
       assert.deepEqual(backendRequests, []);
       assert.deepEqual(mutations, []);
       assert.deepEqual(errors, []);
-      assert.ok(servedDocs.length >= 1);
+      const consumedDocs = await page.evaluate(() => window.__pbsDocuments);
+      assert.ok(consumedDocs.length >= 1);
+      const servedDocs = consumedDocs.map((served) => ({ status: served.status,
+        bytes: served.bytes.length,
+        sha256: crypto.createHash('sha256').update(Buffer.from(served.bytes)).digest('hex') }));
       for (const served of servedDocs) {
         assert.equal(served.status, 200);
+        assert.equal(served.bytes, guide.length);
         assert.equal(served.sha256, crypto.createHash('sha256').update(guide).digest('hex'));
       }
       results.push({ engine, browserVersion: browser.version(), width, dark,
