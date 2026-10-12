@@ -2267,17 +2267,8 @@ legacy `.json` knowledge files and plaintext `.enc` knowledge files may only
 serve as migration input, and the knowledge store must rewrite canonical
 encrypted-at-rest storage immediately on load instead of leaving guest
 knowledge plaintext on disk until a future note update.
-That same trust boundary also applies at store construction time: the AI
-knowledge store and the service discovery store may not fail open into
-plaintext-at-rest mode when crypto initialization fails. If encryption cannot
-be established for those stores, construction must fail closed instead of
-quietly persisting runtime state unencrypted.
-That same rule also applies to persisted service-discovery records after store
-construction: `internal/servicediscovery/store.go` may only accept plaintext
-`.enc` discovery files as migration input. Once a discovery record can be
-read, canonical persistence must rewrite encrypted-at-rest storage immediately
-on load/list/id-scan instead of leaving plaintext discovery metadata or user
-secrets on the steady-state runtime path.
+The AI knowledge store must fail closed at construction when encryption cannot
+be established. It must not persist runtime state in plaintext.
 That same trust boundary also covers audit-signing key persistence:
 `pkg/audit/signer.go` may keep the 32-byte HMAC signing key in runtime memory,
 but `.audit-signing.key` may only accept plaintext key material as migration
