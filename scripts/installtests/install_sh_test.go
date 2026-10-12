@@ -4569,6 +4569,19 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("installer service discovery/caller controls: %v\n%s", err, out)
 	}
+	// systemd exits 1 and prints nothing when no named unit file exists, which is every
+	// fresh host. These controls must have actually run and passed, with both the
+	// confined double and real systemctl over an empty unit root, for the installer and
+	// the unattended updater: a skipped or deleted control would hide a refusing installer.
+	for _, name := range []string{
+		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"test_real_systemctl_on_a_host_without_pulse_units_selects_the_default",
+		"test_partial_failed_inventory_is_not_absence",
+	} {
+		if !regexp.MustCompile(regexp.QuoteMeta(name) + ` \(.*\) \.\.\. ok`).Match(out) {
+			t.Fatalf("service discovery control %s did not run and pass:\n%s", name, out)
+		}
+	}
 }
 
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
