@@ -1320,6 +1320,12 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
 	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
+	if version == "6.6.0-beta.2" {
+		// This packet's recorded list is cumulative from stable, not beta.1.
+		// Keep its introduction bound to that actual list and rollback base.
+		comparisonSummary = "This cumulative changelog describes the changes included in `v" + version + "` since stable `v" + previous + "`"
+		assertFileContainsAllNormalized(t, changelogPath, "## Changes since v"+previous)
+	}
 	if version == "6.4.0-rc.10" {
 		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
 	}

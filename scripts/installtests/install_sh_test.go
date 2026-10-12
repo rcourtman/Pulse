@@ -8478,6 +8478,8 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		t.Fatalf("DSM Upstart retirement and production EXIT cleanup controls: %v\n%s", err, output)
 	}
 	for _, name := range []string{
+		"test_link_fixture_preserves_exclusive_no_target_directory_semantics",
+		"test_link_fixture_exposes_the_old_directory_restore_race",
 		"test_refused_manager_precedes_remote_and_state_erasure",
 		"test_failed_empty_partial_diagnostic_status_cannot_authorise_removal",
 		"test_effective_disabled_config_is_required_after_override_reload",
@@ -8498,7 +8500,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
