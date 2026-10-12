@@ -683,6 +683,26 @@ metadata is not published, old identity is not made fresh, and the shared pause
 and configured retry backoff remain in force. A network or OS-info deferral
 does not establish another completed OS-info failure.
 
+Metadata-cache cleanup judges inactivity separately from the last accepted
+useful observation. A guest that is still being polled keeps its OS-info failure
+count and unsupported-command suppression even when network/version replies
+are empty, fail, or are deferred. Cache access is process-local bookkeeping:
+it cannot renew useful metadata or OS evidence, make retained Windows identity
+current, satisfy fallback eligibility, change backoff, or admit a guest command.
+The janitor never evicts an in-flight fetch. Idle cache/access entries still
+expire after ten minutes; legacy entries use their original useful timestamp.
+Explicit unavailable-agent invalidation and instance retirement remove access
+bookkeeping while retaining outstanding fetch ownership.
+
+`TestGuestMetadataCleanupSuppressionContract` exercises both ordinary collectors
+with single/cluster HTTP clients, cold/retained caches, unsupported and repeated
+completed failures, a janitor pass between polls, and network/version recovery
+without repeating the suppressed OS request. The idle/invalidation/concurrent
+cleanup contracts in `monitor_host_agents_test.go` verify bounded idle eviction,
+in-flight ownership, cross-instance isolation and unchanged observation ages.
+These are synthetic source controls, not native guest/backup recovery or proof
+of the cause or resolution of #2439, #2619 or #2822.
+
 `guest_metadata_suppression_test.go` covers cold and retained caches, threshold
 accumulation, supported reset and earlier deferrals. Its real HTTP fixture
 drives cluster and node poll entry points through a lock appearing before the

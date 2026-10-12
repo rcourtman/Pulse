@@ -81,6 +81,16 @@ unchanged, including their separate approval and entitlement enforcement.
 
 ### QGA query-eligibility provenance stays internal
 
+Metadata-cache activity is monitor-owned housekeeping, not an agent report,
+heartbeat or successful QGA observation. Cleanup retains active OS-command
+safety state without refreshing guest evidence; idle activity expires and
+explicit unavailable-agent invalidation or PVE instance retirement removes it.
+The existing enrollment, credentials, machine identity, reporting and command
+protocols remain unchanged. `TestGuestMetadataIdleCleanupContract` and the
+activity invalidation/concurrent-cleanup controls in
+`internal/monitoring/monitor_host_agents_test.go` verify this shared boundary;
+they are not installed agent or native guest-recovery proof.
+
 The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
 coordination, not agent input or a public field. It prevents retained guest
 identity from renewing fallback QGA eligibility. Agent enrollment, token and
