@@ -86,6 +86,9 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 	if node == "" || vmid <= 0 {
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("invalid arguments for guest agent meminfo lookup")
 	}
+	if ctx.Err() != nil {
+		return proxmox.LinuxMemoryAvailability{}, proxmox.ErrGuestAgentDeferred
+	}
 
 	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
 	now := time.Now()
@@ -97,14 +100,20 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent Linux meminfo unavailable for Windows")
 	}
 
-	m.rrdCacheMu.RLock()
+	// Cache admission and read ownership share the invalidation lock. A miss
+	// never grants permission to overlap another read, even after cancellation.
+	m.rrdCacheMu.Lock()
+	if m.vmAgentMemInFlight[cacheKey] != nil || ctx.Err() != nil {
+		m.rrdCacheMu.Unlock()
+		return proxmox.LinuxMemoryAvailability{}, proxmox.ErrGuestAgentDeferred
+	}
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
 		ttl := vmAgentMemCacheTTL
 		if entry.negative {
 			ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
 		}
 		if now.Sub(entry.fetchedAt) < ttl {
-			m.rrdCacheMu.RUnlock()
+			m.rrdCacheMu.Unlock()
 			if entry.negative {
 				return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unavailable")
 			}
@@ -118,10 +127,22 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 			}, nil
 		}
 	}
-	m.rrdCacheMu.RUnlock()
-
 	requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTTL)
-	defer cancel()
+	fetch := &guestMemoryFetch{cancel: cancel}
+	if m.vmAgentMemInFlight == nil {
+		m.vmAgentMemInFlight = make(map[string]*guestMemoryFetch)
+	}
+	m.vmAgentMemInFlight[cacheKey] = fetch
+	m.rrdCacheMu.Unlock()
+	defer func() {
+		cancel()
+		m.rrdCacheMu.Lock()
+		delete(m.vmAgentMemInFlight, cacheKey)
+		m.rrdCacheMu.Unlock()
+	}()
+	if requestCtx.Err() != nil {
+		return proxmox.LinuxMemoryAvailability{}, proxmox.ErrGuestAgentDeferred
+	}
 
 	var info proxmox.LinuxMemoryAvailability
 	var err error
@@ -141,14 +162,19 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unsupported")
 	}
 
-	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
-		// A coordination pause is not a failed guest observation. Preserve the
-		// last successful cache and its original timestamp for normal resumption.
-		return proxmox.LinuxMemoryAvailability{}, err
-	}
-
 	m.rrdCacheMu.Lock()
 	defer m.rrdCacheMu.Unlock()
+	if fetch.invalidated || requestCtx.Err() != nil || errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		// A coordination pause is not a failed guest observation. Preserve the
+		// last successful cache and its original timestamp for normal resumption.
+		// Cancellation cannot establish completion of a consumed guest command,
+		// or let its old reply/backoff repopulate a replacement lifecycle.
+		if errors.Is(err, proxmox.ErrGuestAgentDeferred) && !fetch.invalidated && requestCtx.Err() == nil {
+			return proxmox.LinuxMemoryAvailability{}, err
+		}
+		return proxmox.LinuxMemoryAvailability{}, proxmox.ErrGuestAgentDeferred
+	}
+
 	if m.vmAgentMemCache == nil {
 		m.vmAgentMemCache = make(map[string]agentMemCacheEntry)
 	}
