@@ -558,9 +558,6 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"These modernization rules are retrospective as well as forward-looking",
 		"Governance routing should be quiet by default",
 		"status_lookup.py",
-		"worktree_base.py",
-		"worktree_claim.py",
-		"worktree_finish.py",
 		"raw `status.json` or `registry.json`",
 	})
 

@@ -422,10 +422,9 @@ Assertion design rules:
 25. Worktrees are available for isolated mutating slices when explicit isolation
     is needed.
     A shared mutable checkout is fine for normal single-session work.
-    Use `worktree_base.py`, `worktree_claim.py`, and `worktree_finish.py` when
-    a slice requires its own isolated hooks, staged scope, and dirty state —
-    for example when a subagent needs to mutate independently and land back
-    cleanly.
+    Use the available Git worktree tools under the repository's branch policy,
+    then reserve the slice with the public work_claim.py command in the
+    checkout where the work will run.
 26. User-visible frontend work is incomplete until the current build has been
     exercised in-browser through the deepest changed interaction at desktop
     and narrow widths. The commit must carry a fresh, parent-bound browser
