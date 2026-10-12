@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Workloads reading explanations work without hover
+
+The existing Memory/Disk freshness and cache cues are native disclosure buttons.
+`WorkloadReadingStatus` opens the shared Dialog only on activation and shows the
+already-qualified reason, source and original observation time supplied to the
+row. It creates no read, timer, layout observer, collection or recovery action.
+Unmarked current cache-aware readings add no component or control. Dense row
+geometry, column widths, bars/sparklines and hover-history ownership remain.
+The phone target extends within the cell without increasing the row rhythm.
+
+Same-identity observations update an open explanation; a genuinely current
+observation removes the cue and returns focus to the row's existing disclosure.
+A changed canonical identity closes the old explanation, even when names match.
+Dialog Escape, backdrop and Close return focus to the original cue; activation
+never opens the enclosing row. This is accessible evidence, not confirmation of
+thaw, writes, guest-agent availability or ordinary restart recovery.
+
+`GuestRow.test.tsx` covers the actual row/control, safe fixed copy, cache caveat,
+original time, identity replacement and current-reading withdrawal. The
+production fixture `browser-tests/reading-status-access.cjs` consumes canonical
+Resources through `useWorkloads` and verifies desktop keyboard/narrow touch,
+settled captures, request counts, unchanged row nodes and target bounds. Browser
+proof must be recorded separately; a fixture is not accepted pixel evidence.
+
+
 ### Guest memory alerts do not translate unrelated samples (12 October 2026)
 
 When the Workloads row uses host-relative memory, its existing guest drawer
@@ -323,9 +348,9 @@ proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
 
 Visible retained/unavailable filesystem cues must fit the existing dense row
 rhythm, including canonical phone/narrow column weights, without adding a new
-collector, history request, layout observer, focus target or event path. Keep
-compact copy on narrow rows and the full safe reason in assistive text and the
-existing drawer. Inline sparkline plots may shrink to preserve their numeric
+collector, history request or layout observer. Keep compact copy on narrow rows
+and the full safe reason in assistive text, the existing drawer and the
+read-only reading disclosure described below. Inline sparkline plots may shrink to preserve their numeric
 value within the already assigned column; do not add forced minimum widths,
 observers or a larger row to compensate. The cue stays outside the
 bars/sparkline/history-lens branch, so changing display mode cannot discard freshness information; removing it

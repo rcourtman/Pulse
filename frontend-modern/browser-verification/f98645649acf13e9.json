@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a2e5d0fb93d69abe9eabc682126a64d12443594c",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "7e5649652746c31bd1a25f3ab9204c5fd9460037c2033a93a7329a2bb18b8204",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx": "d79a5a8dbdd9141aed7db62321e50f3b72a3f5a073d8009feaf7d3088449cb26"
+  },
+  "routes": [
+    "/final/browser-tests/reading-status-access.html (isolated existing production Workloads consumer; no product route added)"
+  ],
+  "states": [
+    "Eight fixed retained/unavailable guest-read deferrals",
+    "memory last-known, unknown, invalid/future original time, unavailable, cache-inclusive current and cache-aware current",
+    "same-guest update and different same-name canonical identity",
+    "bars and sparklines; original row drawer still usable"
+  ],
+  "interactions": [
+    "Canonical Resources API -> useWorkloads -> production GuestRow",
+    "Desktop native keyboard/touch-phone native disclosure, Tab trapping, Escape/backdrop closure and focus return",
+    "Zero added API requests and no row action on disclosure",
+    "Fresh evidence withdraws cue; same-resource fallback focus; changed canonical identity closes old details",
+    "24px phone targets wholly inside cells; unchanged 32px desktop / 37px phone dense rows",
+    "Static build source/artifact bindings and native view_image inspection of eight settled captures"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-12T20:35:39.226988Z",
+  "proof_scope": "Real canonical Resources API and useWorkloads producer, actual production GuestRow, reading disclosure, shared Dialog and CSS. Synthetic read state; no guest command, native recovery, publication or availability claim.",
+  "browser_proof": {
+    "checks": 98,
+    "compiled_production_hashes": 239,
+    "captures": 8,
+    "client_exit": 0,
+    "playwright": "1.56.1",
+    "browsers": [
+      {
+        "name": "desktop",
+        "version": "141.0.7390.37",
+        "width": 1365,
+        "height": 900,
+        "locale": "en-GB",
+        "timezoneId": "Europe/London"
+      },
+      {
+        "name": "phone",
+        "version": "26.0",
+        "width": 390,
+        "height": 844,
+        "locale": "en-GB",
+        "timezoneId": "Asia/Tokyo"
+      }
+    ],
+    "cleanup": {
+      "desktop-context": "closed",
+      "desktop-browser": "closed",
+      "phone-context": "closed",
+      "phone-browser": "closed",
+      "server": "closed"
+    },
+    "dossier": "RECEIPTS.md / browser/result.json and native-image-review.json"
+  }
+}
