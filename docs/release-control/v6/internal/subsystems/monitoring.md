@@ -7330,3 +7330,8 @@ routes, cancellation/retirement/runtime/client changes, complete staged readings
 History and breach continuity, independent agents, single-flight/recovery,
 retirement ordering and bounded-detail inventory. These are controlled source
 proofs, not native restart, independent thaw, installed or release acceptance.
+
+The canonical Docker-ingest source guard follows both guest enumeration routes
+through `publishPVEGuests` to the canonical state update. Publication reconciliation
+updates its former direct-call assertions without changing Docker ingestion or
+the runtime ownership gate; the behavioral withdrawal controls remain required.
