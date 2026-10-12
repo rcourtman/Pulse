@@ -95,6 +95,22 @@ describe('canonical drawer History honours selected guest observation provenance
     },
   );
 
+  it('retains a legitimate linked-agent filesystem zero without calling it current', () => {
+    const value = resource('current', 0);
+    value.disk = { current: 0, used: 0, total: 100 };
+    value.proxmox = { runtimeStatus: 'running', diskStatusReason: '' };
+    value.agent = { stale: true, disks: [{ mountpoint: '/', used: 0, total: 100, free: 100 }] };
+    expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+      disk: undefined,
+      usage: undefined,
+      memory: 0,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+      lastKnownValue: 0,
+      message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+    });
+  });
+
   it('keeps unavailable, true zero and independent current memory distinct from disk deferral', () => {
     expect(
       getResourceMetricsHistoryDeferredMetrics(resource('unavailable', 0)).memory.lastKnownValue,

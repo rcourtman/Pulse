@@ -174,7 +174,7 @@ const memoryReading = (resource: Resource) =>
   );
 
 const guestDiskReading = (resource: Resource) => {
-  if (resource.type !== 'vm' || !isProxmoxGuest(resource)) return null;
+  if (!isProxmoxGuest(resource)) return null;
   // A linked source can keep the canonical resource online while Proxmox
   // reports the VM stopped. Judge filesystem carriers by the native state,
   // using the same read admission as Workloads and Alerts, not Last seen.
@@ -185,8 +185,13 @@ const guestDiskReading = (resource: Resource) => {
     {
       status: status === 'offline' ? 'stopped' : status,
       diskStatusReason: resource.proxmox?.diskStatusReason,
+      // Match the Workloads projection: the linked agent owns filesystem
+      // readings only when Proxmox supplied no filesystem list. Its own
+      // reporting lease then qualifies them, not the unrelated QGA failure.
+      disksFromAgent: resource.proxmox?.disks == null && resource.agent?.disks != null,
+      agentStale: resource.agent?.stale === true,
     },
-    true,
+    resource.type === 'vm',
   );
 };
 
