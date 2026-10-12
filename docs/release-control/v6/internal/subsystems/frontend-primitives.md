@@ -8453,6 +8453,15 @@ ZFS dataset table rows inside `StoragePoolDetail` inherit their separator from
 the shared `STORAGE_DETAIL_ROW_CLASS` presentation constant. The component
 must not reintroduce a raw border-token class for dataset rows.
 
+### Coverage strip segments can be filter toggles
+
+`ProxmoxBackupsCoverageStrip` segments may carry `onSelect` and `pressed`.
+Such a segment renders as a bordered toggle button with `aria-pressed`, 28px
+tall below `sm` and 24px from `sm`, with the segment's count and label as
+its accessible name (the colour dot is decorative); segments without
+`onSelect` stay plain legend text. The strip owns no filter state; its
+caller decides which segments map to a filter.
+
 ### The settings nav gates Infrastructure, and the blocked-route fallback is capability-aware
 
 `infrastructure-systems` now declares `requiredCapability: 'infrastructureRead'`
