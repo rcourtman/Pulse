@@ -8289,12 +8289,18 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 		"test_exact_confirmation_precedes_process_service_and_state_teardown",
 		"test_credential_free_local_only_removal_needs_no_url_or_request",
 		"test_server_confirmation_does_not_grant_unknown_path_removal",
+		"test_noninteractive_input_token_survives_missing_url_refusal",
+		"test_noninteractive_input_token_survives_unconfirmed_removal",
+		"test_confirmed_removal_retains_caller_owned_input_token",
+		"test_confirmed_removal_deletes_runtime_token_only_with_authorised_state",
+		"test_noninteractive_input_token_survives_root_refusal",
+		"test_interactive_input_token_is_read_only_at_ingress",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.UnixUninstallState."+name+") ... ok") {
 			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 5 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 11 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
 	}
 	t.Logf("%s", output)

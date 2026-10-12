@@ -588,7 +588,7 @@ Options:
   --retarget              Point an existing agent at --url using saved identity and token
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
-  --token-file <path>     Read token from file (alternative to --token)
+  --token-file <path>     Read token from a private file; the caller owns its cleanup
   --pulse-url <url>       Alias for --url
   --preflight-only        Run preflight checks and exit (no install)
   --output <format>       Output format: text (default) or json
@@ -5214,10 +5214,9 @@ if [[ -n "$TOKEN_FILE_PATH" ]]; then
     if [[ -z "$PULSE_TOKEN" ]]; then
         fail "Token file must be a readable private regular file containing one bounded token: ${TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
     fi
-    # Clean up token file after reading in non-interactive mode (deploy bootstrap tokens are one-time use)
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
-        rm -f "$TOKEN_FILE_PATH" 2>/dev/null || true
-    fi
+    # Reading a caller-supplied credential does not grant ownership of its
+    # file. Keep it available after refusal and recovery; callers clean up
+    # their own bootstrap files, while the installer trap owns only TMP_FILES.
 fi
 
 if [[ -n "$ACTION_TOKEN_FILE_PATH" ]]; then

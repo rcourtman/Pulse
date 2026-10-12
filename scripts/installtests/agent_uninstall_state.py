@@ -4,7 +4,9 @@
 Production credential detection, record confirmation and directory-authority
 functions remain intact. Only transport and service/process operations are
 private doubles; deletion is confined to three owned temporary directories.
-These controls are not native installation, TLS or provider acceptance.
+The argument parser and token-file ingress also execute before the removal gate.
+Root-trust is projected onto the private fixture owner for the shell reader;
+these controls are not native installation, TLS or provider acceptance.
 """
 
 import os
@@ -38,7 +40,9 @@ def snapshot(root):
 class UnixUninstallState(unittest.TestCase):
     source = SOURCE.read_text()
 
-    def exercise(self, credential="runtime", url="", reply="confirmed", authority=True):
+    def exercise(self, credential="runtime", url="", reply="confirmed", authority=True,
+                 input_token=False, interactive=False, root_refusal=False, action="uninstall",
+                 ingress_only=False):
         source = self.source
         # Keep the real entry and all initial credential/service/state teardown.
         # Stop before unrelated platform boot/log cleanup; never run it on a host.
@@ -73,6 +77,26 @@ class UnixUninstallState(unittest.TestCase):
                     path.write_text("" if credential == "empty" else "synthetic-collector-credential\n")
                     path.chmod(0 if credential == "unreadable" else 0o600)
             before = snapshot(root)
+            ingress = ""
+            arguments = []
+            if input_token:
+                parser = source.split("# --- Parse Arguments ---\n", 1)[1].split(
+                    '\nif [[ "$RETARGET_ONLY"', 1)[0]
+                token_reader = source.split("# Read token from file if --token-file was provided\n", 1)[1].split(
+                    '\nif [[ -n "$ACTION_TOKEN_FILE_PATH" ]]', 1)[0]
+                ingress = parser + "\n" + token_reader
+                arguments = {"uninstall": ["--uninstall"], "install": [],
+                             "update": ["--update"], "runner": ["--uninstall-action-runner"]}[action]
+                arguments += ["--token-file", str(path)]
+                if not interactive:
+                    arguments.append("--non-interactive")
+                if url:
+                    arguments += ["--url", url]
+                if root_refusal:
+                    if os.geteuid() == 0:
+                        self.fail("root-refusal control requires the ordinary proof user")
+                    ingress += "\n" + source.split("# --- Check Root ---\n", 1)[1].split(
+                        '\nif [[ "$SAFE_PROFILE_ACTION" == "inspect" ]]', 1)[0]
             values = {"STATE_DIR": state, "PRIVILEGED_HELPER_STATE_DIR": helper,
                       "PRIVILEGED_HELPER_CREDENTIAL_DIR": helper, "SAFE_PROFILE_STATE_DIR": profile,
                       "STATE_DIR_REMOVAL_AUTHORITY": state if authority else "",
@@ -83,14 +107,28 @@ class UnixUninstallState(unittest.TestCase):
                       "EVENTS": root / "events", "SERVICE": service, "REPLY": reply}
             setup = "\n".join(f"{key}={shlex.quote(str(value))}" for key, value in values.items())
             functions = "\n".join(function(source, name) for name in names)
+            if input_token:
+                functions += "\n" + function(source, "read_collector_token_file_safely")
             # A whitelist protects the fixture even if production cleanup changes.
             shell = r'''
 set -euo pipefail
 UNINSTALL=true AGENT_NAME=pulse-agent EXIT_GENERAL=1 EXIT_MISSING_ARGS=16
 OUTPUT_FORMAT=text NON_INTERACTIVE=true
+TOKEN_FILE_PATH="" UNINSTALL_ACTION_RUNNER=false UPDATE_ONLY=false
+RETARGET_ONLY=false PREFLIGHT_ONLY=false SAFE_PROFILE_ACTION=""
 log_info() { :; }
 log_warn() { printf 'warning:%s\n' "$*"; }
 log_error() { printf 'error:%s\n' "$*"; }
+# Project only the fixture's ownership onto the legacy root-file boundary.
+# The production reader still performs its ordinary bounded read.
+collector_lifecycle_binary() { return 1; }
+trusted_private_lifecycle_regular_file() {
+    [[ -f "$1" && ! -L "$1" ]] || return 1
+    local mode="" owner=""
+    mode=$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1") || return 1
+    owner=$(stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1") || return 1
+    [[ "$owner" == "$EUID" && "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & 8#077) == 0 ))
+}
 recover_agent_id_from_state_file() { printf 'owned-agent\n'; }
 run_collector_lifecycle_command() {
     printf 'request:%s\n' "$*" >> "$EVENTS"
@@ -109,14 +147,25 @@ teardown_action_runner_service() { printf 'runner-stop\n' >> "$EVENTS"; }
 teardown_privileged_helper_service() { printf 'helper-stop\n' >> "$EVENTS"; }
 teardown_systemd_agent_service() { printf 'service-stop\n' >> "$EVENTS"; printf 'stopped\n' > "$SERVICE"; }
 rm() {
+    if [[ $# == 2 && "$1" == -f && -n "$TOKEN_FILE_PATH" && "$2" == "$TOKEN_FILE_PATH" ]]; then
+        [[ "$2" == "$RUNTIME_TOKEN_FILE" || "$2" == "$STATE_DIR/runtime.token" || "$2" == "$STATE_DIR/token" ]] || return 94
+        printf 'input-token-remove\n' >> "$EVENTS"
+        command rm "$@"
+        return
+    fi
     [[ $# == 3 && "$1" == -rf && "$2" == -- ]] || return 92
     [[ "$3" == "$STATE_DIR" || "$3" == "$PRIVILEGED_HELPER_STATE_DIR" || "$3" == "$SAFE_PROFILE_STATE_DIR" ]] || return 93
     printf 'state-remove\n' >> "$EVENTS"
     command rm "$@"
 }
 '''
+            invocation = ""
+            if input_token:
+                invocation = "UNINSTALL=false NON_INTERACTIVE=false\nset -- " + shlex.join(arguments) + "\n" + ingress + "\n"
+                if ingress_only:
+                    invocation += "exit 0\n"
             result = subprocess.run(["bash", "-c", shell + "\n" + setup + "\n" + functions +
-                                     "\nmain() {\n" + entry + "}\nmain\n"],
+                                     "\nmain() {\n" + invocation + entry + "}\nmain\n"],
                                     capture_output=True, text=True, timeout=5)
             events = (root / "events").read_text() if (root / "events").exists() else ""
             after = snapshot(root)
@@ -168,6 +217,67 @@ rm() {
         self.assertIn("without exact trusted lifecycle authority", result.stdout)
         for name in ("state", "state/runtime.token", "state/agent-id", "state/connection.env"):
             self.assertEqual(after[name], before[name])
+
+    def assert_retained(self, result, events, before, after, expected_exit, expected_events=""):
+        self.assertEqual(result.returncode, expected_exit, result.stdout + result.stderr)
+        self.assertNotIn("synthetic-collector-credential", result.stdout + result.stderr)
+        self.assertEqual(events, expected_events)
+        self.assertEqual(after, before)
+
+    def test_noninteractive_input_token_survives_missing_url_refusal(self):
+        for kind in ("selected", "runtime", "legacy"):
+            with self.subTest(credential=kind):
+                result, events, before, after = self.exercise(kind, input_token=True)
+                self.assertIn("same trusted Pulse instance", result.stdout)
+                self.assert_retained(result, events, before, after, 16)
+
+    def test_noninteractive_input_token_survives_unconfirmed_removal(self):
+        for kind in ("selected", "runtime", "legacy"):
+            for reply in ("refused", "lost-response", "empty", "mismatch"):
+                with self.subTest(credential=kind, reply=reply):
+                    result, events, before, after = self.exercise(
+                        kind, url="https://pulse.invalid", reply=reply, input_token=True)
+                    self.assert_retained(result, events, before, after, 1,
+                                         "request:collector-uninstall --agent-id owned-agent --hostname owned-host\n")
+
+    def test_confirmed_removal_retains_caller_owned_input_token(self):
+        result, events, before, after = self.exercise(
+            "selected", url="https://pulse.invalid", input_token=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(events.splitlines()[0],
+                         "request:collector-uninstall --agent-id owned-agent --hostname owned-host")
+        self.assertNotIn("input-token-remove", events)
+        self.assertEqual(set(after), {"service", "unrelated", "selected-token"})
+        self.assertEqual(after["selected-token"], before["selected-token"])
+        self.assertEqual(after["unrelated"], before["unrelated"])
+
+    def test_confirmed_removal_deletes_runtime_token_only_with_authorised_state(self):
+        for kind in ("runtime", "legacy"):
+            with self.subTest(credential=kind):
+                result, events, before, after = self.exercise(
+                    kind, url="https://pulse.invalid", input_token=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(events.splitlines()[0],
+                                 "request:collector-uninstall --agent-id owned-agent --hostname owned-host")
+                self.assertNotIn("input-token-remove", events)
+                self.assertEqual(set(after), {"service", "unrelated"})
+                self.assertEqual(after["unrelated"], before["unrelated"])
+
+    def test_noninteractive_input_token_survives_root_refusal(self):
+        for action in ("uninstall", "install", "update", "runner"):
+            for kind in ("selected", "runtime", "legacy"):
+                with self.subTest(action=action, credential=kind):
+                    result, events, before, after = self.exercise(
+                        kind, input_token=True, root_refusal=True, action=action)
+                    self.assertIn("This script must be run as root", result.stdout)
+                    self.assert_retained(result, events, before, after, 1)
+
+    def test_interactive_input_token_is_read_only_at_ingress(self):
+        # Compare interactive ingress without invoking the unrelated TTY exit
+        # prompt in a subprocess with no controlling terminal.
+        result, events, before, after = self.exercise(
+            "selected", input_token=True, interactive=True, ingress_only=True)
+        self.assert_retained(result, events, before, after, 0)
 
 
 if __name__ == "__main__":
