@@ -5,14 +5,161 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog"
 )
+
+// Ordinary agent-only configuration has no nodes.enc. A later startup must not
+// mistake that installation for first provisioning and replace its access.
+func TestStartupImportRetainsNonProxmoxAccess(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	dir := t.TempDir()
+	setAutoImportInputs(t, dir, payload, passphrase)
+	target := config.NewConfigPersistence(dir)
+	if err := target.SaveAPITokens([]config.APITokenRecord{{
+		ID: "synthetic-existing-record", Hash: auth.HashAPIToken("synthetic-existing-credential"),
+		Scopes: []string{config.ScopeAgentReport},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sessions.json"), []byte("synthetic-existing-session"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Use the production loader without reinitialising the global test logger.
+	loaded, err := config.LoadWithoutLoggingInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.PVEInstances)+len(loaded.PBSInstances)+len(loaded.PMGInstances) != 0 {
+		t.Fatal("fixture is not an ordinary non-Proxmox installation")
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "nodes.enc")); !os.IsNotExist(err) {
+		t.Fatal("fixture unexpectedly has the old bootstrap sentinel")
+	}
+	before := snapshotAutoImportDestination(t, dir)
+	if ShouldAutoImport() {
+		t.Error("ordinary restart was admitted as fresh provisioning")
+	}
+	capture := setCaptureAuditLogger(t)
+	if err := PerformAutoImport(); err == nil {
+		t.Error("startup import replaced existing access")
+	}
+	if len(capture.events) != 1 || capture.events[0].Success ||
+		!strings.Contains(capture.events[0].Details, "reason=destination_not_empty") {
+		t.Error("ordinary restart refusal lost its classified audit result")
+	} else if strings.Contains(capture.events[0].Details, dir) ||
+		strings.Contains(capture.events[0].Details, payload) ||
+		strings.Contains(capture.events[0].Details, passphrase) {
+		t.Error("ordinary restart audit disclosed private import inputs")
+	}
+	if after := snapshotAutoImportDestination(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("startup import changed the retained installation")
+	}
+	loaded, err = config.LoadWithoutLoggingInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record, ok := loaded.ValidateAPIToken("synthetic-existing-credential"); !ok || record.ID != "synthetic-existing-record" {
+		t.Error("retained agent credential no longer validates")
+	}
+
+	// The authenticated Recovery path uses ImportConfig directly. Bootstrap
+	// admission must not disable an administrator's deliberate transfer.
+	if err := target.ImportConfig(payload, passphrase); err != nil {
+		t.Fatal(err)
+	}
+	records, err := target.LoadAPITokens()
+	if err != nil || len(records) != 1 || records[0].ID != "synthetic-import-record" {
+		t.Error("explicit configuration transfer no longer replaces included records")
+	}
+	for _, name := range []string{".encryption.key", "sessions.json"} {
+		if after := snapshotAutoImportDestination(t, dir); after[name] != before[name] {
+			t.Errorf("explicit transfer changed excluded local state %s", name)
+		}
+	}
+}
+
+func TestStartupImportUsesPersistenceDestination(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	base, peer := t.TempDir(), t.TempDir()
+	canonical := filepath.Join(base, "destination")
+	target := config.NewConfigPersistence(canonical)
+	if err := target.SaveAPITokens([]config.APITokenRecord{{
+		ID: "synthetic-existing-record", Hash: auth.HashAPIToken("synthetic-existing-credential"),
+		Scopes: []string{config.ScopeAgentReport},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(peer, "inner"), filepath.Join(peer, "destination")} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(peer, "inner"), filepath.Join(base, "link")); err != nil {
+		t.Fatal(err)
+	}
+	// Raw filesystem traversal reaches the empty peer. Persistence cleans this
+	// exact spelling first and writes to the existing canonical destination.
+	rawPath := filepath.Join(base, "link") + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "destination"
+	setAutoImportInputs(t, rawPath, payload, passphrase)
+	before := snapshotAutoImportDestination(t, canonical)
+	if ShouldAutoImport() {
+		t.Error("admission inspected a different destination from persistence")
+	}
+	if err := PerformAutoImport(); err == nil {
+		t.Error("startup import replaced canonical state after inspecting the empty peer")
+	}
+	if after := snapshotAutoImportDestination(t, canonical); !reflect.DeepEqual(before, after) {
+		t.Error("canonical destination was modified")
+	}
+	records, err := target.LoadAPITokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := &config.Config{APITokens: records}
+	if record, ok := loaded.ValidateAPIToken("synthetic-existing-credential"); !ok || record.ID != "synthetic-existing-record" {
+		t.Error("canonical destination credential no longer validates")
+	}
+	if entries, err := os.ReadDir(filepath.Join(peer, "destination")); err != nil || len(entries) != 0 {
+		t.Error("the peer used by raw traversal was modified")
+	}
+}
+
+func TestStartupImportRejectsLinkedDestinationSpellings(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	for _, dangling := range []bool{false, true} {
+		for _, suffix := range []string{string(os.PathSeparator), string(os.PathSeparator) + "."} {
+			t.Run(fmt.Sprintf("dangling=%v/suffix=%q", dangling, suffix), func(t *testing.T) {
+				target := t.TempDir()
+				if dangling {
+					target = filepath.Join(target, "absent")
+				}
+				link := filepath.Join(t.TempDir(), "data-link")
+				if err := os.Symlink(target, link); err != nil {
+					t.Fatal(err)
+				}
+				setAutoImportInputs(t, link+suffix, payload, passphrase)
+				if ShouldAutoImport() {
+					t.Error("noncanonical linked destination was admitted as empty")
+					return // Do not enter the fatal constructor on the adverse source.
+				}
+				if err := PerformAutoImport(); err == nil {
+					t.Error("noncanonical linked destination allowed startup import")
+				}
+			})
+		}
+	}
+}
 
 func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
 	tests := []struct {

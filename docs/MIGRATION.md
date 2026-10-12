@@ -35,9 +35,10 @@ SSO configuration **is included**, even though local login credentials are not.
 
 Automated provisioning uses the same limited scope. Read the
 [startup-import gate and safeguards](CONFIGURATION.md#auto-import-bootstrap)
-before setting bootstrap variables: an existing installation without
-`nodes.enc` is not protected by a first-run marker, and normal startup after
-an import error does not confirm a successful transfer.
+before setting bootstrap variables: startup import requires an empty destination
+data directory (apart from a regular deployment `.env`), even without
+`nodes.enc`. Keep its input archive outside that directory. Normal startup after
+an import error or skipped import does not confirm a successful transfer.
 
 ### Full-state recovery
 
