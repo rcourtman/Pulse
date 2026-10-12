@@ -82,10 +82,35 @@ class AgentUninstallDocsTest(unittest.TestCase):
             self.assertIn(fact, self.words)
         runner = self.installer.split("teardown_action_runner_service() {", 1)[1].split(
             "\nteardown_openrc_agent_service", 1)[0]
-        self.assertLess(runner.index('systemctl stop'), runner.index('revoke_action_runner_credential'))
+        self.assert_runner_quiescence_before_revocation(runner)
         self.assertLess(runner.index('revoke_action_runner_credential'), runner.index('rm -f'))
         self.assertIn('every local artifact was retained', runner)
         self.assertIn('fail "Action runner removal requires a successful credential revocation', runner)
+
+    def assert_runner_quiescence_before_revocation(self, runner):
+        # Stop/disable/readback now belong to the shared teardown helper. Bind
+        # this help to its fail-closed call, not the removed direct stop command.
+        call = 'quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service"'
+        self.assertIn(call + ' ||\n\t\t\tfail ', runner)
+        self.assertLess(runner.index(call), runner.index('revoke_action_runner_credential'))
+        helper = self.installer.split('quiesce_agent_units_for_removal() {', 1)[1].split('\n}\n', 1)[0]
+        self.assertIn('systemctl stop "$unit" >/dev/null 2>&1 || return 1', helper)
+        self.assertIn('systemctl disable "$unit" >/dev/null 2>&1 || return 1', helper)
+        self.assertEqual(helper.count('confirm_agent_unit_quiescent "$unit" || return 1'), 2)
+
+    def test_runner_guidance_rejects_missing_late_or_ignored_quiescence(self):
+        runner = self.installer.split('teardown_action_runner_service() {', 1)[1].split('\n}\n', 1)[0]
+        call = 'quiesce_agent_units_for_removal "${ACTION_RUNNER_NAME}.service"'
+        mutations = (
+            runner.replace(call, ':'),
+            runner.replace(call, ':').replace('if revoke_action_runner_credential; then',
+                'if revoke_action_runner_credential; then\n\t\t\t' + call + ' ||\n\t\t\tfail "late" 1'),
+            runner.replace(call + ' ||', call + ' || true #'),
+        )
+        for changed in mutations:
+            with self.subTest(mutation=mutations.index(changed)):
+                with self.assertRaises(AssertionError):
+                    self.assert_runner_quiescence_before_revocation(changed)
 
     def test_partial_failures_platform_differences_and_unknowns_remain_explicit(self):
         for fact in ("Windows removes the service first", "failed server notification",
