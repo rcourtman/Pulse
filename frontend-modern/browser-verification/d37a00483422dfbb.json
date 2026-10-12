@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "acd1e4e31d666f663b1e25c7da051dee1b860af9",
+  "verified_at": "2026-10-12T18:19:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/GitHubStarBanner.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/GitHubStarBanner.tsx": "f76b21df105bc9db71a9e0102acd35549f03dfb359b5fae6bf527bcf505e2585"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "First connected day and same-day reload without a prompt",
+    "First return on a later day with connected infrastructure",
+    "Existing engagement below the former fourteen-day threshold",
+    "Previously shown and permanently dismissed prompts",
+    "Competing release notice owns the session",
+    "Command palette open and closed after a visible prompt",
+    "Scripted empty, loading and unavailable infrastructure states"
+  ],
+  "interactions": [
+    "Inspect actual prompt pixels, wrapping, button focus and navigation clearance at all three widths",
+    "Hover and focus the star button and dismiss control",
+    "Outside click and Escape retain the non-modal prompt",
+    "Activate permanent dismissal with the keyboard and reload",
+    "Open the repository in a new tab and verify permanent dismissal after reload",
+    "Open the command palette, inspect its placement, close with Escape and verify focus returns to search while the prompt remains suppressed"
+  ],
+  "command": "Playwright Chromium against an isolated current-main Vite server on pulse-dev, proxying the shared development API.",
+  "notes": "The browser-local date/storage fixtures exercise engagement and prior dismissal. Empty/loading/error cases script the state transport. No backend configuration changes were needed. The final source hash matches the qualified worker snapshot."
+}
