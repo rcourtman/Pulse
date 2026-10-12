@@ -16,7 +16,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_UPSTART_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("truenas_scale_agent_removal_present", "cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
+FUNCTIONS = ("nas_agent_removal_platform", "truenas_scale_agent_removal_present", "cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
              "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
              "read_upstart_agent_removal_status", "upstart_agent_removal_paths_safe",
              "read_upstart_agent_removal_enablement", "quiesce_upstart_agent_for_removal",
@@ -231,7 +231,13 @@ remove_privileged_helper_state_dir() { builtin command rm -r -- "$PRIVILEGED_HEL
 remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_DIR"; }
 '''
             if flow == "caller":
-                entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1].split("    # Unraid\n", 1)[0] + "fi\n"
+                # Preserve the existing DSM caller window. Its old next-platform
+                # sentinel was retired by the NAS repair; without rebinding it,
+                # the confined fixture reaches an unrelated runtime cleanup and
+                # correctly refuses a non-fixture path. Never weaken that guard.
+                entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1].split("# --- Validation ---\n", 1)[0]
+                sentinel = "    # NAS boot/watchdog retirement completed above." if "    # NAS boot/watchdog retirement completed above." in entry else "    # Unraid\n"
+                entry = entry.split(sentinel, 1)[0] + "fi\n"
                 invoke = "main() {\n" + redirect(entry) + "}\nmain\n"
             elif flow == "status":
                 invoke = "read_upstart_agent_removal_status\n"
@@ -424,7 +430,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         self.assertLess(admission, remote)
         self.assertLess(remote, retirement)
         self.assertLess(retirement, erase)
-        self.assertIn('[[ "$uninstall_upstart" != true ]]', entry)
+        self.assertIn('[[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]]', entry)
         self.assertFalse('initctl stop' in entry)
         self.assertNotIn('initctl start', definitions(self.source))
 
