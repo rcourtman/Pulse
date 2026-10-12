@@ -3672,26 +3672,10 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-The service-discovery availability-suggestion helpers under `internal/servicediscovery` were deleted with the package; availability probes are configured directly.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns the removed service-identification scheduler and suggestion helpers.
+Network subnet discovery remains monitoring-owned. Availability probes activate
+through the canonical saved-target configuration path.
 
 ### Interface-associated guest address selection
 
@@ -4308,16 +4292,8 @@ evidence envelopes, telemetry, logs, or Patrol context. Execution-defined
 contract edits use the existing server-authored configuration revision so
 history visibly breaks at the new proof definition instead of blending unlike
 checks.
-Discovery-led assurance proposals remain monitoring-owned read evidence until
-an operator explicitly creates a canonical availability target. The
-`internal/servicediscovery` suggestion contract derives only bounded
-HTTP/HTTPS/TCP candidates, normalizes each candidate into a stable evidence
-fingerprint, and persists dismissal against that exact fingerprint. Equivalent
-rediscovery retains a dismissal; a material endpoint, service identity, or
-inference-reason change clears it. Disposition writes reject stale
-fingerprints, and neither discovery refresh nor dismissal may create, enable,
-schedule, or execute a network check. The explicit availability-target create
-path remains the sole activation boundary.
+The explicit availability-target create path is the activation boundary for
+saved availability probes.
 HTTPS checks also author one canonical certificate observation from the same
 probe execution. `internal/availabilityprobe` captures the presented leaf and
 `pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,

@@ -1736,17 +1736,6 @@ coverage: `TestRegistrySeededFromMonitorJudgesFreshnessByItsThresholds` and
 `TestContract_ResourceListJudgesFreshnessLikeTheMonitorBroadcast` in
 `internal/api/contract_test.go`.
 
-Service-discovery readiness is a unified-resource payload contract, not a
-drawer-local decoration. Resource list/detail payloads that expose a
-`discoveryTarget` must also carry the backend-authored `discoveryReadiness`
-projection when the discovery owner is available. That projection is
-metadata-only (`fresh`, `stale`, `missing`, `running`, `failed`, `unavailable`,
-or `unsupported`, with provenance, generated/observed freshness, target
-coordinates, optional service/category, and bounded fact count) and must not
-include raw command output, provider commands, environment variables, config
-paths, or secret-bearing metadata. Workload and resource drawers, Assistant
-handoffs, and optional table columns consume this field instead of inferring
-freshness from independent discovery reads.
 Across platform/runtime pages, workflow tabs are evidence-gated from the
 canonical model that owns their rows. `Overview` is the stable landing tab;
 supporting tabs appear only when their native inventory or signal exists, and
@@ -3129,26 +3118,9 @@ whole-fleet CPU relief, publication or release availability.
 
 ### AI Discovery removed (2026-10-11)
 
-AI Discovery, the model-backed service-identification layer, is gone. The
-`internal/servicediscovery` store and scanner, `internal/ai/infradiscovery`,
-the `pulse_discovery` Assistant/Patrol tool, the `/api/discovery*` routes, the
-mock Discovery fixtures, the resource/guest/node/Docker drawer Discovery tabs,
-identified-service cards, readiness badges, provenance markers, suggested
-web-interface URLs, the Workloads AI Context column, the chat "Discovery is
-off" hint and the AI Service Context settings page were all removed. No
-telemetry counter ever measured its use (the `discovery_enabled` telemetry
-field folded it together with network subnet discovery), the maintainer judged it a flop, and
-it carried a separate scheduler, store and model route for context that
-`pulse_query`, `pulse_read` and the unified-resource context sections already
-supply.
-Network subnet discovery (`internal/discovery`, `/api/discover`, the
-Infrastructure discovery settings) and the `discoveryTarget` agent coordinates
-are separate features and stay. Stored `discovery_enabled`,
-`discovery_interval_hours` and `discovery_model` AI settings are ignored on
-load. The old `/settings/pulse-intelligence/discovery` route redirects to
-Assistant settings.
-
-`Resource.discoveryReadiness` and the agent resource-context `DiscoveryReadiness` field are gone; the agent context `Runtime` section keeps the `Target type/agent/resource/hostname` facts sourced from `discoveryTarget`.
+The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
+owns removed service-identification fields and compatibility behavior. Resource
+context retains `discoveryTarget` coordinates in its Runtime projection.
 
 ### Interface-associated display addresses
 
@@ -3166,14 +3138,6 @@ management-interface, supplied identity and explicit-override controls to the
 production host adapter; monitoring's #2757 fixtures bind guest list/broadcast
 order and name/address/traffic association. Native readings and publication
 remain separate evidence.
-
-Discovery-led availability proposals present their evidence and canonical
-attachment boundary as short, complete sentences in both the inline card and
-machine-wide review. The colocated component test pins that operator-facing
-copy so the shared copy-style audit cannot regress it back to semicolon-joined
-instructions. The card's editable check name, interval and observation
-location use the shared form label and control chrome (`FormSelect` for the
-two choices), so they match the availability settings form they hand off to.
 
 ### Provider workflows hydrate only their active route inventory
 
@@ -4763,7 +4727,7 @@ agent resources may include `agent.sensors.thermalState` even when
 `agent.temperature` and `agent.sensors.temperatureCelsius` are absent, so
 platform consumers can show macOS pressure without creating provider-local
 thermal payloads or fake Celsius values.
-AI discovery and query surfaces now follow the same rule. Assistant runtime
+Assistant query and resource-context surfaces follow the same rule. Runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
 canonical `agent`, `vm`, `app-container`, `storage`, and `physical-disk`
 resources through those shared contracts, filtering dataset-topology storage
@@ -5361,43 +5325,6 @@ already shown elsewhere in the drawer.
 The analysis panel now expands directly inside the outer `Access` disclosure
 instead of as a second peer support block, so the access surface reads as one
 flattened reveal instead of another card group under the overview.
-That access-side analysis surface still follows the same shell/runtime split as
-the rest of the drawer: `DiscoveryTab.tsx` owns presentation and disclosures,
-while `useDiscoveryTabState.ts` owns API fetches, websocket progress, and
-note/discovery mutations.
-Discovery validity in that runtime state must defer to the shared
-`discoveryPresentation.ts` meaningful-context gate. CLI access, confidence, and
-diagnostics may support an audit trail, but they must not turn placeholder
-records such as unknown service/category/version with no ports, paths, facts,
-or suggested URL into a valid identified result. Generic workload types such
-as `service`, `container`, or `lxc` remain placeholders until Discovery also
-provides a more specific service signal.
-Discovery endpoint candidates are support context, not authoritative resource
-links. Resource and workload drawers may pass observed Discovery URLs into the
-shared web-interface field with visible provenance, copy/open affordances, and
-an explicit adopt/save path, but row-name links and persisted metadata must
-continue to use the operator-saved web-interface URL. Version, config-path,
-port, and endpoint facts surfaced outside the Discovery sub-tab must be
-labelled as Discovery-observed so API-owned resource facts and command-derived
-facts remain distinguishable.
-Availability proposals are the bounded exception that can become active
-resource evidence only through explicit review. The resource drawer supplies
-the canonical resource ID; the proposal surface previews inferred endpoint and
-behavior separately from operator-controlled name, cadence, and observation
-location; and the final action posts one enabled target with that exact
-`linkedResourceId`. Equivalent attached or standalone endpoints are detected
-before creation. Machine-scoped review may dismiss or restore several service
-proposals, but an item without the current canonical resource context remains
-review-only rather than attaching by hostname, address, or display name.
-That label must be visible through the shared Discovery provenance marker on
-compact cards, suggested URL panels, and other out-of-tab Discovery values
-rather than buried in helper text or inferred from the tab where the operator
-found the value.
-Command-availability guidance inside that analysis surface must consume the
-shared `frontend-modern/src/utils/discoveryPresentation.ts` settings targets
-and scan-error copy instead of hard-coding legacy settings labels such as
-Unified Agents, API Tokens, or `/settings/integrations/api`; the canonical API
-access route is `/settings/security/api`.
 The overview keeps access, investigation detail, service detail, and host
 detail as collapsed sibling disclosures under the primary card pair, so the
 drawer keeps

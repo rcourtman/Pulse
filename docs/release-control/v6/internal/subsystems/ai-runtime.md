@@ -5193,8 +5193,7 @@ companion tests (`internal/ai/findings_lifecycle_test.go`) pin the behavior.
 
 The interaction-quality scenario corpus
 (`internal/ai/chat/interaction_scenario_corpus_test.go`) is the canonical
-regression home for chat-feel promises, mirroring the Discovery corpus
-(`internal/servicediscovery/scenario_corpus_test.go`). Each scenario drives a
+regression home for chat-feel promises. Each scenario drives a
 full `ExecuteStream` turn against a scripted provider and pins the
 browser-facing event stream — ordered event types, forbidden event types,
 answer-text teeth, and payload teeth — for the user-visible promises shipped
@@ -6191,43 +6190,8 @@ runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands
 instead of treating control-plane approval as an implicit bypass.
-Discovery deep scans are the one runtime that does not flow through the
-approval boundary. `internal/ai/discovery_adapter.go` is the only call site
-allowed to mark an `agentexec.ExecuteCommandPayload` as `Trusted`. The
-catalog of probes lives in `internal/servicediscovery/commands.go`, is
-read-only by construction (`cat`, `ps`, `ss`, `find` under known config
-roots) and is wrapped in `docker exec`, `pct exec`, or `qm guest exec`
-without ever interpolating caller-supplied strings. Both the server-side
-`agentexec` authorize path and the agent-side `hostagent` authorize path
-must honor that `Trusted` flag by bypassing the approval requirement,
-while still enforcing `PolicyBlock`. AI tool calls, Patrol fixes, and
-Assistant remediation must continue to flow through the governed approval
-record path and must never set `Trusted` on their payloads.
-Discovery command-backed scans are additionally gated by the operator's
-Discovery setting, not by the mere presence of a service-discovery store,
-connected agent, or command-capable agent token. `discovery_enabled=false`
-must fail closed for background sweeps, `/api/discovery/run`, forced
-single-resource discovery, and `pulse_discovery` refreshes before any
-`DeepScanner` command dispatch. `discovery_enabled=true` with
-`discovery_interval_hours: 0` is the only manual-command-scan mode: recurring
-scans stay stopped, but explicit admin-triggered refreshes may use the
-hardcoded trusted catalog.
-Each per-organization AI service now passes its organization-pinned
-`AgentServer` interface directly into `internal/ai/discovery_adapter.go`.
-Deep discovery does not recover the concrete global `agentexec.Server` or
-silently drop command execution when the runtime supplies an
-`agentexec.OrganizationServer`; connected-agent lookup and command dispatch
-therefore remain on the same tenant-scoped view. The interface-backed service
-regression in `internal/ai/service_test.go` requires a real deep-discovery run
-to dispatch the trusted probe catalog and retain its command evidence.
-The value boundary for keeping Discovery is observed workload context:
-Assistant and Patrol may consume normalized service name, version, endpoint,
-port, config path, data path, log path, bind-mount, confidence, and user-note
-fields through `pulse_discovery` or scoped prefetch. Raw command output remains
-debug/admin material and must not become the primary Assistant context. When a
-Discovery record includes a suggested web URL, the tool response and prefetch
-summary may include that URL as observed context, but it must be treated as a
-candidate rather than an operator-approved management URL.
+AI tool calls, Patrol fixes and Assistant remediation must not mark
+command payloads as `Trusted` to bypass the governed approval path.
 The same action-audit boundary now also requires persisted action records to
 carry a normalized plan and preflight: action id, request id, capability,
 approval policy, dry-run availability, safety checks, verification steps, and
