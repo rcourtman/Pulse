@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import gitHubStarBannerSource from '../GitHubStarBanner.tsx?raw';
 
 type BannerResource = { id: string; name: string };
@@ -41,7 +42,7 @@ function setResourceCount(count: number) {
 }
 
 function seedEligibleEngagement() {
-  localStorage.setItem(ACTIVE_DAYS_KEY, '13');
+  localStorage.setItem(ACTIVE_DAYS_KEY, '1');
   localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-13');
 }
 
@@ -89,17 +90,17 @@ describe('GitHubStarBanner', () => {
   });
 
   it('does not count repeated sessions on the same day', async () => {
-    localStorage.setItem(ACTIVE_DAYS_KEY, '7');
+    localStorage.setItem(ACTIVE_DAYS_KEY, '1');
     localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-14');
     setResourceCount(3);
 
     await renderBanner();
 
-    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('7');
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('1');
     expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
   });
 
-  it('shows one compact prompt after fourteen distinct active days', async () => {
+  it('shows one compact prompt on the first return day with connected infrastructure', async () => {
     seedEligibleEngagement();
     setResourceCount(3);
 
@@ -113,13 +114,13 @@ describe('GitHubStarBanner', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
     expect(screen.queryByText('Maybe later')).not.toBeInTheDocument();
-    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('14');
+    expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('2');
     expect(localStorage.getItem(PROMPT_SHOWN_KEY)).toBe('true');
   });
 
   it('never reopens after its single lifetime appearance', async () => {
     localStorage.setItem(PROMPT_SHOWN_KEY, 'true');
-    localStorage.setItem(ACTIVE_DAYS_KEY, '14');
+    localStorage.setItem(ACTIVE_DAYS_KEY, '2');
     localStorage.setItem(LAST_ACTIVE_DATE_KEY, '2026-03-13');
     setResourceCount(3);
 
@@ -135,7 +136,7 @@ describe('GitHubStarBanner', () => {
 
     await renderBanner();
 
-    await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('14'));
+    await waitFor(() => expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('2'));
     expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
     expect(localStorage.getItem(PROMPT_SHOWN_KEY)).not.toBe('true');
   });
@@ -153,6 +154,43 @@ describe('GitHubStarBanner', () => {
       expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
+
+    cleanup();
+    sessionStorage.clear();
+    vi.setSystemTime(new Date('2026-03-15T12:00:00Z'));
+    await renderBanner();
+
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+  });
+
+  it('yields a visible prompt to a blocking dialog for the rest of the session', async () => {
+    seedEligibleEngagement();
+    setResourceCount(3);
+    const { GitHubStarBanner } = await import('../GitHubStarBanner');
+    const { Dialog } = await import('../shared/Dialog');
+    let openDialog = () => {};
+
+    render(() => {
+      const [isOpen, setIsOpen] = createSignal(false);
+      openDialog = () => setIsOpen(true);
+      return (
+        <>
+          <GitHubStarBanner />
+          <Dialog isOpen={isOpen()} onClose={() => setIsOpen(false)} ariaLabel="Test dialog">
+            <button>Dialog action</button>
+          </Dialog>
+        </>
+      );
+    });
+
+    await waitFor(() => expect(screen.getByText('Finding Pulse useful?')).toBeInTheDocument());
+    openDialog();
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByText('Finding Pulse useful?')).not.toBeInTheDocument();
   });
 
   it('opens GitHub and permanently dismisses on the star action', async () => {
@@ -200,9 +238,5 @@ describe('GitHubStarBanner mobile navigation clearance', () => {
 
   it('does not keep its own copy of the bar height', () => {
     expect(gitHubStarBannerSource).not.toMatch(/5rem\s*\+\s*env\(safe-area-inset-bottom/);
-  });
-
-  it('keeps its own desktop placement once the bar is gone', () => {
-    expect(gitHubStarBannerSource).toContain('md:bottom-4');
   });
 });
