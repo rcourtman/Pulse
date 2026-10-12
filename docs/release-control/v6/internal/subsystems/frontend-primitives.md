@@ -9329,3 +9329,19 @@ level at 0 instead of restating factory values. Per-resource rows render a
 muted dash for metrics an override cannot store (Docker container restart and
 memory-limit rules, every PMG threshold). No shared primitive, table component
 or layout changes.
+
+### Stopped VM filesystem presentation (12 October 2026)
+
+`getWorkloadGuestDiskRead` treats an explicitly stopped VM as having no current
+in-guest filesystem reading, even when a power-state update has no
+`diskStatusReason` and the resource retains numeric disk fields. The same rule
+applies to Proxmox and linked Pulse-agent producers. Workload bars, accessible
+sparkline values, filesystem details, capacity sorting and the current History
+legend all consume that shared decision. Stored History is not removed or
+rewritten. On restart, an explicit `prev-` read deferral remains last known until
+fresh source evidence clears it; a real measured zero is still current.
+
+This does not impose VM semantics on stopped LXC platform storage, alter
+collection, probe a guest, or establish thaw, covered-filesystem writes or native
+restart recovery. Regressions cover the helper, both row modes, details,
+History and the native-facet-to-workload mapping with an unaffected second site.

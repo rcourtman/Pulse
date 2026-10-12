@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import type { VM } from '@/types/api';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getDiskUsagePercent } from '@/components/Workloads/workloadSelectors';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
@@ -322,6 +324,67 @@ describe('useWorkloads', () => {
       setSnapshot([buildVM('cluster-a', { guestAgentStatus: 'available' }, 0), other]);
       await flushAsync();
       expect(target().disk.usage).toBe(0);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not treat a stopped native VM facet as current disk telemetry when health stays online', async () => {
+    const other = {
+      ...sampleResource,
+      id: 'other-site',
+      instance: 'other',
+      disk: { current: 40, total: 100, used: 40 },
+    };
+    const snapshot = (runtimeStatus: string, diskStatusReason?: string) =>
+      [
+        {
+          ...sampleResource,
+          status: 'online',
+          disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
+          proxmox: {
+            vmid: 101,
+            nodeName: 'pve1',
+            instance: 'cluster-a',
+            runtimeStatus,
+            diskStatusReason,
+          },
+        },
+        other,
+      ] as any;
+    const [resources, setResources] = createSignal(snapshot('running'));
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: resources });
+    });
+    const target = () =>
+      result!.workloads().find((row) => row.canonicalResourceId === sampleResource.id)!;
+    try {
+      await flushAsync();
+      const otherRow = result!.workloads().find((row) => row.canonicalResourceId === 'other-site');
+      expect(otherRow).toBeDefined();
+      expect(getDiskUsagePercent(target())).toBe(20);
+      setResources(snapshot('stopped'));
+      await flushAsync();
+      expect(target()).toMatchObject({
+        status: 'stopped',
+        resourceStatus: 'online',
+        disk: { usage: 20 },
+      });
+      expect(getWorkloadGuestDiskRead(target(), true).state).toBe('unavailable');
+      expect(getDiskUsagePercent(target())).toBeNull();
+      setResources(snapshot('running', 'prev-agent-busy'));
+      await flushAsync();
+      expect(getDiskUsagePercent(target())).toBeNull();
+      setResources(snapshot('running'));
+      await flushAsync();
+      expect(getDiskUsagePercent(target())).toBe(20);
+      expect(result!.workloads().find((row) => row.canonicalResourceId === 'other-site')).toBe(
+        otherRow,
+      );
       expect(apiFetchJSONMock).not.toHaveBeenCalled();
     } finally {
       dispose();

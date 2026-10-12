@@ -79,6 +79,43 @@ const utilization = () => screen.getAllByTestId('guest-history-group-chart')[0];
 // Actual backend provenance remains authoritative. Removing a VM lock alone
 // cannot turn retained readings into current data or prove native thaw.
 describe('GuestDrawerHistory filesystem provenance', () => {
+  it('withdraws the current stopped-VM carrier but keeps real stored History', async () => {
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValue(response({ disk: [point(start, 25), point(end, 50)] }));
+    const [value, setValue] = createSignal(guest('', 90));
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(90);
+    mount(value);
+    const chart = utilization();
+    await waitFor(() => expect(chart.querySelectorAll('path').length).toBeGreaterThan(0));
+    const paths = () =>
+      Array.from(chart.querySelectorAll('path'), (item) => item.getAttribute('d'));
+    const storedPaths = paths();
+    setValue({ ...value(), status: 'stopped', diskStatusReason: undefined });
+    expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest filesystem stats unavailable while the VM is stopped.',
+    );
+    expect(paths()).toEqual(storedPaths);
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBeUndefined();
+    setValue(guest('prev-agent-busy', 90));
+    expect(getGuestDrawerDeferredMetrics(value()).disk.lastKnownValue).toBe(90);
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'earlier guest request',
+    );
+    expect(chart).toHaveTextContent('Disk50.0%');
+    expect(chart.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(paths()).toEqual(storedPaths);
+    setValue(guest('', 30));
+    expect(utilization()).toBe(chart);
+    expect(getGuestDrawerCurrentMetrics(value()).disk).toBe(30);
+    expect(chart).toHaveTextContent('Disk50.0%');
+    expect(paths()).toEqual(storedPaths);
+    expect(chart.querySelector('[data-history-deferred="disk"]')).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each(guestDiskDeferrals)(
     'labels retained %s as last known without creating a stored observation',
     async (reason, message) => {
