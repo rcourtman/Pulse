@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "549a4ca821fb9d749d269ce3530d8416bd17c46f",
-  "verified_at": "2026-10-12T21:28:49Z",
+  "base_sha": "a4d2cdc2b8b6f8e667d86501473b14fc0e1844ca",
+  "verified_at": "2026-10-12T21:56:37Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
@@ -19,9 +19,9 @@
   },
   "routes": [
     "/proxmox/overview?type=vm&resource=vm-b62864e1d6f16ad4",
-    "/proxmox/overview?type=lxc&resource=system-container-5f29a7a3f4732690",
-    "/proxmox/overview?type=vm&resource=ProductionWest%3Apve1%3A100",
-    "/proxmox/overview?type=lxc&resource=ProductionWest%3Apve1%3A113",
+    "/proxmox/overview?type=vm&resource=Production%20West%3Apve1%3A100",
+    "/proxmox/overview?type=system-container&resource=system-container-5f29a7a3f4732690",
+    "/proxmox/overview?type=system-container&resource=Production%20West%3Apve1%3A113",
     "/proxmox/overview?resource=missing-identity-fixture"
   ],
   "viewports": [
