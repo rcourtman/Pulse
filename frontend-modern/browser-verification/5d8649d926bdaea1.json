@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "base_sha": "4337c2767fb5ad8347978a989e58a4bddd67f9df",
+  "verified_at": "2026-10-12T14:49:38Z",
+  "result": "passed",
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx": "0065ae99c8b76856831d7e7e289d7eecb736f7d127b01e0b3a7becfc06b88eb7",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "f3a67323c52fa65071c7dbe178aacecae31433ddcaae4ca30c5ee7eb24843daa",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "4ca3631056d98cedd2aa5ace6f354d1a5b003713c60845f7edbf19a55ef45b11",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "570e49903d0991445a89c60d5b7f1281cb167c6b6290774145718ee7a087a2fd",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx": "400f73d3ae2de0e9ec4ffd4f821100734d1e4c16d46b57bf8089689017325269",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "7d786f179ab9e233d613b39bd4ae643434dd4bf51e4105bd0758db3ff67755f8"
+  },
+  "routes": [
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/truenas"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1280,
+      "height": 1080
+    },
+    {
+      "width": 900,
+      "height": 1080
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 2400,
+      "height": 1080
+    }
+  ],
+  "states": [
+    "Host row and card editing with canonical cluster context",
+    "Enabled and Off global defaults, disabled input and keyboard enable overlay",
+    "Resource Off saved as negative trigger, read back after reload and returned to inheritance",
+    "Cleared override inherits, numeric zero rejected and Cancel discards draft",
+    "Cleared global default remains mid-edit and reload retains saved value",
+    "Guest Off changes only its scoped override, with separate backup and snapshot controls",
+    "TrueNAS global disk temperature follows per-type policy after Off, save, reload and enable",
+    "Empty search and restored results",
+    "Desktop edit stays within table width and resource name remains visible",
+    "Memory draft and focus retained desktop to phone to desktop, final phone Cancel leaves no unsaved config",
+    "Actual pixels inspected for focused fields, Off states, responsive wrapping, cluster context and disk fallback",
+    "Clearing an override beneath a saved Off global default shows Off and disables the desktop slider"
+  ],
+  "interactions": [
+    "Log in to isolated synthetic runtime",
+    "Expand alert groups and open host and guest editors",
+    "Edit number and cancel with pointer",
+    "Tab from number to Off control and activate with Enter",
+    "Move focus to slider and adjacent metric, use ArrowRight and pointer then cancel",
+    "Save row by focus exit and card by explicit Save",
+    "Save configuration and reload persisted global and per-resource Off",
+    "Enable inherited resource default and global factory default",
+    "Clear numeric field, reject invalid zero and cancel",
+    "Filter to empty results and restore",
+    "Resize editing Memory93 through both layouts and cancel",
+    "Inspect deep TrueNAS disk fallback controls after save/reload",
+    "Type81, clear to inherit Off, enable once to80 and Cancel without changing the persisted parent default at every host viewport"
+  ],
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts"
+  ]
+}

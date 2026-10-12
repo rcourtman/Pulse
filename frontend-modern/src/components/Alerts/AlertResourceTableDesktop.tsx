@@ -25,29 +25,23 @@ import {
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
+import { AlertResourceMetricEditor } from './AlertResourceMetricEditor';
 import { AlertResourceTableRow } from './AlertResourceTableRow';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
   getAlertResourceTableAlertDelayLabel,
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEmptyState,
-  getAlertResourceTableMetricInputTitle,
-  getAlertResourceTableMetricOffToggleProps,
-  getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
   getAlertResourceTableResetFactoryDefaultsLabel,
   getAlertResourceTableNoResultsState,
 } from '@/utils/alertResourceTablePresentation';
 import {
-  ALERT_RESOURCE_METRIC_OFF_VALUE,
   getAlertResourceColumnKind,
   getAlertResourceColumnHeaderTooltip,
-  getAlertResourceMetricBounds,
   getAlertResourceMetricDelayOverride,
-  getAlertResourceMetricStep,
   normalizeAlertResourceMetricKey,
-  resolveAlertResourceGlobalDefaultCell,
 } from './alertResourceTableModel';
 import type { OfflineState, Resource, ResourceTableProps } from './ResourceTable';
 
@@ -61,6 +55,7 @@ interface AlertResourceTableDesktopProps {
   table: ResourceTableProps;
   hasRows: () => boolean;
   hasCustomGlobalDefaults: () => boolean;
+  isActiveLayout: () => boolean;
   activeMetricInput: () => { resourceId: string; metric: string } | null;
   setActiveMetricInput: (value: { resourceId: string; metric: string } | null) => void;
   showDelayRow: () => boolean;
@@ -166,6 +161,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
       editingNote={props.table.editingNote}
       setEditingNote={props.table.setEditingNote}
       activeMetricInput={props.activeMetricInput}
+      isActiveLayout={props.isActiveLayout}
       setActiveMetricInput={props.setActiveMetricInput}
       showBulkSelection={Boolean(props.table.onBulkEdit)}
       selected={props.selectedIds().has(resource.id)}
@@ -282,94 +278,34 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
               <For each={props.table.columns}>
                 {(column) => {
                   const metric = normalizeAlertResourceMetricKey(column);
-                  const bounds = getAlertResourceMetricBounds(metric);
-                  const value = () => props.table.globalDefaults?.[metric];
-                  const fallback = () => props.table.globalDefaultFallbacks?.[metric];
-                  // An unset default and a stored 0 are both disabled to the
-                  // alert engine, so neither may render as On, unless the
-                  // metric's unset default follows another setting.
-                  const cell = () =>
-                    resolveAlertResourceGlobalDefaultCell(metric, value(), fallback());
-                  const isOff = () => cell().isOff;
-
                   return (
                     <TableCell
                       class={`${getPlatformTableCellClassForKind(getAlertResourceColumnKind(column))} align-middle`}
                     >
-                      <div class="flex items-center justify-center gap-1.5 w-full">
-                        <div class="relative">
-                          <input
-                            type="number"
-                            min={bounds.min}
-                            max={bounds.max}
-                            step={getAlertResourceMetricStep(metric)}
-                            value={isOff() || cell().follows ? '' : (value() ?? '')}
-                            placeholder={
-                              cell().follows && !isOff()
-                                ? fallback()?.label
-                                : getAlertResourceTableMetricPlaceholder(isOff())
-                            }
-                            disabled={isOff()}
-                            onInput={(e) => {
-                              const nextValue = parseFloat(e.currentTarget.value);
-                              // An empty box is mid-edit, not a disable request:
-                              // coercing it to 0 used to disable the metric in the
-                              // engine while the row still claimed On. Use the Off
-                              // toggle to disable.
-                              if (Number.isNaN(nextValue)) {
-                                return;
-                              }
-                              if (nextValue < bounds.min || nextValue > bounds.max) {
-                                return;
-                              }
-                              props.table.setGlobalDefaults?.((prev) => ({
-                                ...prev,
-                                [metric]: nextValue,
-                              }));
-                              props.table.setHasUnsavedChanges?.(true);
-                            }}
-                            class={`${cell().follows && !isOff() ? 'w-20' : 'w-16'} px-2 py-0.5 text-sm text-center border rounded ${
-                              isOff()
-                                ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
-                                : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                            }`}
-                            title={
-                              cell().follows
-                                ? fallback()?.title
-                                : getAlertResourceTableMetricInputTitle(isOff())
-                            }
-                          />
-                          <Show when={isOff()}>
-                            <button
-                              type="button"
-                              class="absolute inset-0 w-full rounded-sm cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
-                              onClick={() => {
-                                props.table.setGlobalDefaults?.((prev) => ({
-                                  ...prev,
-                                  [metric]: cell().enableValue,
-                                }));
-                                props.table.setHasUnsavedChanges?.(true);
-                              }}
-                              title={getAlertResourceTableMetricInputTitle(true)}
-                            >
-                              <span class="sr-only">Enable {column} default</span>
-                            </button>
-                          </Show>
-                        </div>
-                        <StatusBadge
-                          isEnabled={!isOff()}
-                          onToggle={() => {
+                      <Show
+                        when={metric !== 'backup' && metric !== 'snapshot'}
+                        fallback={
+                          <span class="text-sm text-muted" aria-hidden="true">
+                            -
+                          </span>
+                        }
+                      >
+                        <AlertResourceMetricEditor
+                          metric={metric}
+                          column={column}
+                          scope="default"
+                          layout="table"
+                          value={props.table.globalDefaults?.[metric]}
+                          fallback={props.table.globalDefaultFallbacks?.[metric]}
+                          onChange={(value) => {
                             props.table.setGlobalDefaults?.((prev) => ({
                               ...prev,
-                              [metric]: isOff()
-                                ? cell().enableValue
-                                : ALERT_RESOURCE_METRIC_OFF_VALUE,
+                              [metric]: value,
                             }));
                             props.table.setHasUnsavedChanges?.(true);
                           }}
-                          {...getAlertResourceTableMetricOffToggleProps()}
                         />
-                      </div>
+                      </Show>
                     </TableCell>
                   );
                 }}

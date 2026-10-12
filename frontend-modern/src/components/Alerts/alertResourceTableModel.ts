@@ -213,8 +213,14 @@ export const ALERT_RESOURCE_METRIC_OFF_VALUE = -1;
  * save payload writes an Off global default as `0`, because the backend reads
  * a negative default as unset.
  */
-export function isAlertResourceMetricOff(value: number | undefined | null): boolean {
-  return typeof value === 'number' && Number.isFinite(value) && value <= 0;
+export function isAlertResourceMetricOff(
+  value: number | undefined | null,
+  inheritedDefault?: number,
+): boolean {
+  const effectiveValue = value ?? inheritedDefault;
+  return (
+    typeof effectiveValue === 'number' && Number.isFinite(effectiveValue) && effectiveValue <= 0
+  );
 }
 
 /**
@@ -311,6 +317,17 @@ export function getAlertResourceColumnKind(column: string): PlatformTableColumnK
     return 'badge';
   }
   return 'numeric-value';
+}
+
+export function getAlertResourceInitialEditMetric(columns: string[], resourceType?: string) {
+  return columns
+    .map(normalizeAlertResourceMetricKey)
+    .find(
+      (metric) =>
+        metric !== 'backup' &&
+        metric !== 'snapshot' &&
+        alertResourceSupportsMetric(resourceType, metric),
+    );
 }
 
 export function alertResourceSupportsMetric(

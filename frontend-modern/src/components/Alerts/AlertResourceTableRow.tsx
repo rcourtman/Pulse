@@ -15,33 +15,29 @@ import { getPlatformTableCellClassForKind } from '@/features/platformPage/shared
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditMetricTitle,
-  getAlertResourceTableMetricInputTitle,
-  getAlertResourceTableMetricOffToggleProps,
-  getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
   getAlertResourceTableOverrideNotePlaceholder,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
 import {
-  ALERT_RESOURCE_METRIC_OFF_VALUE,
   ALERT_RESOURCE_TABLE_SLIDER_METRICS,
   alertResourceSupportsMetric,
   getAlertResourceColumnKind,
   getAlertResourceLabel,
+  getAlertResourceInitialEditMetric,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
-  getAlertResourceMetricStep,
   getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
-  resolveAlertResourceMetricEnableValue,
   type AlertResourceThresholdMap,
 } from './alertResourceTableModel';
 import type { Alert } from '@/types/api';
 import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { AlertResourceMetricEditor } from './AlertResourceMetricEditor';
 import { AlertResourceRelaxedTriggers } from './AlertResourceRelaxedTriggers';
 
 type OfflineState = 'off' | 'warning' | 'critical';
@@ -77,6 +73,7 @@ interface AlertResourceTableRowProps {
   editingNote: () => string;
   setEditingNote: (value: string) => void;
   activeMetricInput: () => { resourceId: string; metric: string } | null;
+  isActiveLayout: () => boolean;
   setActiveMetricInput: (value: { resourceId: string; metric: string } | null) => void;
   showBulkSelection?: boolean;
   selected?: boolean;
@@ -118,13 +115,18 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
 
   const getThresholds = (): AlertResourceThresholdMap => thresholds();
 
+  let hasEditingFocus = false;
+
   const startEditing = (metric?: string, event?: MouseEvent) => {
     event?.stopPropagation();
     if (props.resource.editable === false) {
       return;
     }
-    if (metric) {
-      props.setActiveMetricInput({ resourceId: props.resource.id, metric });
+    hasEditingFocus = false;
+    const initialMetric =
+      metric ?? getAlertResourceInitialEditMetric(props.columns, props.resource.type);
+    if (initialMetric) {
+      props.setActiveMetricInput({ resourceId: props.resource.id, metric: initialMetric });
     }
     props.onEdit(
       props.resource.id,
@@ -135,11 +137,13 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
   };
 
   const cancelEditing = () => {
+    hasEditingFocus = false;
     props.onCancelEdit();
     props.setActiveMetricInput(null);
   };
 
   const saveEditing = () => {
+    hasEditingFocus = false;
     props.onSaveEdit(props.resource.id);
     props.setActiveMetricInput(null);
   };
@@ -228,6 +232,18 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
 
   return (
     <TableRow
+      onFocusIn={() => {
+        if (isEditing()) hasEditingFocus = true;
+      }}
+      onFocusOut={(event) => {
+        // Removing this layout during a resize transfers the draft to cards.
+        // It is not the user leaving the editor to save a row.
+        if (!props.isActiveLayout()) return;
+        if (!hasEditingFocus || props.editingId() !== props.resource.id) return;
+        const nextFocus = event.relatedTarget;
+        if (nextFocus instanceof Node && event.currentTarget.contains(nextFocus)) return;
+        saveEditing();
+      }}
       class={`transition-colors ${props.resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''} ${props.resource.hasOverride ? 'bg-sky-50/50 hover:bg-sky-50/80 dark:bg-sky-900/20 dark:hover:bg-sky-900/30 border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : 'hover:bg-surface-hover'}`}
     >
       <Show when={props.showBulkSelection}>
@@ -356,10 +372,9 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         {(column) => {
           const metric = normalizeAlertResourceMetricKey(column);
           const bounds = getAlertResourceMetricBounds(metric);
-          const isDisabled = () => isAlertResourceMetricOff(getThresholds()?.[metric]);
-          const inheritedDefault = () => props.resource.defaults?.[metric];
+          const isDisabled = () =>
+            isAlertResourceMetricOff(getThresholds()?.[metric], props.resource.defaults?.[metric]);
           const isSpecialToggle = metric === 'backup' || metric === 'snapshot';
-          let metricEditor: HTMLDivElement | undefined;
 
           if (isSpecialToggle) {
             const config = metric === 'backup' ? props.resource.backup : props.resource.snapshot;
@@ -432,7 +447,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                     </div>
                   }
                 >
-                  <div class="flex w-full items-center justify-center gap-3">
+                  <div class="flex w-full flex-col items-center justify-center gap-1.5">
                     <Show when={ALERT_RESOURCE_TABLE_SLIDER_METRICS.has(metric)}>
                       {(() => {
                         const isTemperatureMetric =
@@ -483,73 +498,23 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         );
                       })()}
                     </Show>
-                    <div class="flex items-center justify-center gap-1.5" ref={metricEditor}>
-                      <input
-                        type="number"
-                        min={bounds.min}
-                        max={bounds.max}
-                        step={getAlertResourceMetricStep(metric)}
-                        value={isDisabled() ? '' : (getThresholds()?.[metric] ?? '')}
-                        placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
-                        title={getAlertResourceTableMetricInputTitle(isDisabled())}
-                        ref={(el) => {
-                          if (
-                            isEditing() &&
-                            props.activeMetricInput()?.resourceId === props.resource.id &&
-                            props.activeMetricInput()?.metric === metric
-                          ) {
-                            queueMicrotask(() => {
-                              el.focus();
-                              el.select();
-                            });
-                          }
-                        }}
-                        onInput={(e) => {
-                          const raw = e.currentTarget.value;
-                          if (raw === '') {
-                            updateEditingThreshold(metric, undefined);
-                            return;
-                          }
-                          const val = parseFloat(raw);
-                          if (!Number.isNaN(val) && val >= bounds.min && val <= bounds.max) {
-                            updateEditingThreshold(metric, val);
-                          }
-                        }}
-                        onBlur={(event) => {
-                          if (props.editingId() !== props.resource.id) {
-                            return;
-                          }
-                          // Tabbing to the Off toggle must not save and close the
-                          // editor before the toggle can be operated.
-                          const nextFocus = event.relatedTarget;
-                          if (nextFocus instanceof Node && metricEditor?.contains(nextFocus)) {
-                            return;
-                          }
-                          saveEditing();
-                        }}
-                        class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                          isDisabled()
-                            ? 'bg-surface-alt text-slate-400 border-border'
-                            : ' text-base-content border-border'
-                        }`}
-                      />
-                      {/* mousedown would blur the input, which saves and closes
-                          the editor before this toggle's click can land */}
-                      <div onMouseDown={(event) => event.preventDefault()}>
-                        <StatusBadge
-                          isEnabled={!isDisabled()}
-                          onToggle={() =>
-                            updateEditingThreshold(
-                              metric,
-                              isDisabled()
-                                ? resolveAlertResourceMetricEnableValue(inheritedDefault(), metric)
-                                : ALERT_RESOURCE_METRIC_OFF_VALUE,
-                            )
-                          }
-                          {...getAlertResourceTableMetricOffToggleProps()}
-                        />
-                      </div>
-                    </div>
+                    <AlertResourceMetricEditor
+                      metric={metric}
+                      column={column}
+                      scope="override"
+                      layout="table"
+                      value={getThresholds()?.[metric]}
+                      inheritedDefault={props.resource.defaults?.[metric]}
+                      onFocus={() =>
+                        props.setActiveMetricInput({ resourceId: props.resource.id, metric })
+                      }
+                      onChange={(value) => updateEditingThreshold(metric, value)}
+                      autoFocus={
+                        isEditing() &&
+                        props.activeMetricInput()?.resourceId === props.resource.id &&
+                        props.activeMetricInput()?.metric === metric
+                      }
+                    />
                   </div>
                 </Show>
               </Show>
@@ -619,6 +584,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             fallback={
               <ActionIconButton
                 onClick={cancelEditing}
+                onMouseDown={(event) => event.preventDefault()}
                 label="Cancel editing"
                 tone="muted"
                 size="xs"
