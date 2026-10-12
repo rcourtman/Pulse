@@ -52,6 +52,8 @@ const guest = (type: 'qemu' | 'lxc', lastBackup: number): WorkloadGuest => ({
   template: false,
   tags: [],
   lastBackup,
+  lock: '',
+  lastSeen: new Date(start).toISOString(),
 });
 const details = () => within(screen.getByTestId('guest-technical-details'));
 const backupRow = () => details().getByText('Last completed backup').closest('tr')!;
