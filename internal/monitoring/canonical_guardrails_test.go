@@ -3257,6 +3257,11 @@ func TestGuestWindowsRestartPollingContract(t *testing.T) {
 	t.Run("admission-and-identity", testGuestWindowsBootstrapSafety)
 }
 
+func TestGuestMetadataRejectionRecoveryContract(t *testing.T) {
+	t.Run("typed-rejection", testGuestMetadataRejectedOSInfo)
+	t.Run("ordinary-stopped-agent-recovery", testGuestMetadataStoppedAgentPollingRecovery)
+}
+
 func TestGuestMemoryObservationContract(t *testing.T) {
 	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
 	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)

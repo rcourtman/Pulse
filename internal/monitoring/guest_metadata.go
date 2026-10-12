@@ -366,7 +366,18 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 		}
 		if err != nil {
-			if isGuestAgentOSInfoUnsupportedError(err) {
+			if reason := proxmox.GuestAgentErrorReason(err); reason == "permission-denied" || reason == "agent-not-running" {
+				// The request was not admitted or QGA was stopped, so this did
+				// not exercise the OS-info command. Do not permanently disable
+				// that command when ordinary access/agent availability returns.
+				// Preserve any real prior failures and the normal refresh backoff.
+				log.Debug().
+					Str("instance", instanceName).
+					Str("vm", vmName).
+					Int("vmid", vmid).
+					Err(err).
+					Msg("Guest agent OS info request not admitted; preserving command failure state")
+			} else if isGuestAgentOSInfoUnsupportedError(err) {
 				osInfoSkip = true
 				osInfoFailureCount = guestAgentOSInfoFailureThreshold
 				log.Warn().
