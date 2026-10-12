@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "f9f27d67212a47a6769959862a7259606e86f56b",
+  "verified_at": "2026-10-12T07:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "db8b4665d2a583d596380f4fb6fab7ac661296d1a80c9a0c1ac709a05b2f36d1"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 812,
+      "height": 375
+    },
+    {
+      "width": 640,
+      "height": 900
+    },
+    {
+      "width": 639,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "embedded production build of origin/main plus this change, private mock stack (PULSE_MOCK_MODE, 8 nodes), compared with an unchanged origin/main build",
+    "375px phone before: every active-alert row showed Acknowledge, Snooze, Have Patrol investigate and More on two rows; average row 208px over 17 alerts",
+    "375px phone after: Acknowledge, Snooze and More sit on one row; average row 159px over 16 alerts (the shared Snooze button keeps its 44px phone touch height)",
+    "375px collapsed More has aria-expanded=false and no aria-controls; expanded it names the rendered disclosure holding Have Patrol investigate (split menu), Timeline and Monitoring; Snooze stays on the row",
+    "639px: Acknowledge, Snooze, More; 640px and wider: Acknowledge, Snooze, Have Patrol investigate, More",
+    "1280px and 1440px desktop rows render as before (Timeline and Monitoring behind More)",
+    "no console errors"
+  ],
+  "interactions": [
+    "375px: real tap on Snooze opens the Snooze this alert dialog; resizing to 812x375 (phone rotated) keeps the dialog open while Investigate moves onto the row; Cancel closes it without snoozing",
+    "375px: More opens the disclosure and reads Less; aria-controls appears only while expanded",
+    "resize 375 -> 639 -> 640 -> 1280 with the page open: Investigate moves between the disclosure and the row"
+  ]
+}

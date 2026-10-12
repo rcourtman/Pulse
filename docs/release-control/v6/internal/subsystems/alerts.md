@@ -4000,6 +4000,22 @@ severity and the triggered-in-24h total; threshold override counts are
 configuration and do not appear on the overview. None of this changes alert
 lifecycle, acknowledgement, snooze, or delivery evaluation.
 
+### Phone alert rows keep one action row
+
+Below the `sm` breakpoint (640px) an active-alert row on the overview shows
+Acknowledge (or its reversal), Snooze (or Unsnooze) and More on one row; the
+Investigate split button moves into the More disclosure beside Timeline and
+the resource monitoring policy. From `sm` up the row is unchanged. Four
+actions had wrapped onto two rows under every alert, so a 375px phone showed
+about three alerts per screen (average row 208px on the mock estate). Snooze
+stays on the row at every width, so its dialog is never remounted when a
+phone rotates across `sm`; only Investigate moves, by the shared
+`useBreakpoint()` width, and renders once. The Acknowledged and Snoozed
+badges and the snoozed-until line stay on the row. More names its region
+through `aria-controls` only while that region is rendered. This is
+presentation only: acknowledgement, snooze, investigation and policy
+handlers are unchanged.
+
 ### Thresholds lead with each group's default limits
 
 The Thresholds page answers "what will alert me, and at what limits" before

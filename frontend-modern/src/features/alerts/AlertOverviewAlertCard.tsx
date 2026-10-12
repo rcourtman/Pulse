@@ -35,6 +35,7 @@ import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction
 import { AlertSnoozeAction } from './AlertSnoozeAction';
 import { isAlertSnoozed } from './useAlertSnoozeState';
 import { isPulseSystemAlert } from '@/utils/alertScope';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatTemperature } from '@/utils/temperature';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
@@ -169,6 +170,35 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     Boolean(deliveryStatusLine()) ||
     (isAlertSnoozed(props.alert) && Boolean(props.alert.operationalRecord?.suppression?.expiresAt));
   const timelineOpen = () => props.timelineState.expandedIncidents().has(alertKey());
+  // Below sm the four actions wrapped onto two rows and took more height than
+  // the alert itself, so a phone showed about three alerts per screen. There,
+  // Investigate joins Timeline and the monitoring policy behind More. Snooze
+  // stays on the row in every width, so its dialog never remounts mid-use.
+  const { isBelow } = useBreakpoint();
+  const compactActions = () => isBelow('sm');
+  const moreActionsId = () => `alert-${alertKey()}-more`;
+  const snoozeAction = () => (
+    <Show when={!props.alert.acknowledged || isAlertSnoozed(props.alert)}>
+      <AlertSnoozeAction
+        alert={props.alert}
+        state={props.state}
+        timelineState={props.timelineState}
+      />
+    </Show>
+  );
+  const investigateAction = () => (
+    <InvestigateAlertButton
+      alert={props.alert}
+      resourceType={
+        typeof props.alert.metadata?.resourceType === 'string'
+          ? (props.alert.metadata.resourceType as string)
+          : undefined
+      }
+      variant="text"
+      size="sm"
+      patrolOption
+    />
+  );
 
   // Incident alerts land on canonical agent/vm/storage/network resources, so
   // the resource type alone cannot name the platform. Their metadata carries
@@ -400,28 +430,13 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               processing: processing(),
             })}
           </button>
-          <Show when={!props.alert.acknowledged || isAlertSnoozed(props.alert)}>
-            <AlertSnoozeAction
-              alert={props.alert}
-              state={props.state}
-              timelineState={props.timelineState}
-            />
-          </Show>
-          <InvestigateAlertButton
-            alert={props.alert}
-            resourceType={
-              typeof props.alert.metadata?.resourceType === 'string'
-                ? (props.alert.metadata.resourceType as string)
-                : undefined
-            }
-            variant="text"
-            size="sm"
-            patrolOption
-          />
+          {snoozeAction()}
+          <Show when={!compactActions()}>{investigateAction()}</Show>
           <button
             type="button"
             class={getAlertOverviewSecondaryActionClass()}
             aria-expanded={moreOpen() || timelineOpen()}
+            aria-controls={moreOpen() || timelineOpen() ? moreActionsId() : undefined}
             onClick={() => {
               if (moreOpen() || timelineOpen()) {
                 // Less closes everything the disclosure opened, timeline included.
@@ -443,7 +458,11 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
         </div>
       </div>
       <Show when={moreOpen() || timelineOpen()}>
-        <div class="mt-2 flex flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2">
+        <div
+          id={moreActionsId()}
+          class="mt-2 flex flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2"
+        >
+          <Show when={compactActions()}>{investigateAction()}</Show>
           <button
             class={getAlertOverviewSecondaryActionClass()}
             onClick={() => {

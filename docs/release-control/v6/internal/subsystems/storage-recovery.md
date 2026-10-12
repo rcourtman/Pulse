@@ -3277,6 +3277,26 @@ presentation and sort change only; it adds no backup, restore, or retention
 authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 `ProxmoxCoverageTable.test.tsx`.
 
+### Backup health counts filter Coverage to their workloads
+
+The Backups health strip's protected, attention, unprotected and unknown
+counts are toggles for the Coverage posture filter (`?posture=`), the same
+URL state the inline posture pills and the phone Filters sheet set. In
+Coverage a count toggles that filter; from By date it opens Coverage already
+filtered, through the same view path the tabs use, so date-only facets drop
+and scope facets stay. On the bare Backups route, where Coverage was chosen
+only because something needs attention, a count also navigates to the
+Coverage route so the view cannot fall back to By date when the counts
+change. The legend keeps each item's node across updates, so a focused count
+that stays a button keeps focus when it toggles. A zero count stays text
+unless it is the active filter, and checking and not-evaluated have no
+filter, so they stay text. On a 375px phone the coverage list starts below
+the fold and the posture filter sits behind Filters, so "which 11 are
+unprotected?" took three taps through a sheet; it is now one tap on the
+count. The rule footnote, the posture sort (attention before unprotected)
+and the servers table are unchanged, and no posture, freshness or protection
+evaluation changes.
+
 ### Backup table values truncate inside their own column
 
 The coverage Node cell, the restore-evidence Location and Details cells, and

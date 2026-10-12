@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { AlertOverviewState } from '../useAlertOverviewState';
 import type { AlertIncidentTimelineState } from '../useAlertIncidentTimelineState';
 import { makeSystemAlert, SYSTEM_ALERT_TYPES } from '../__fixtures__/systemAlerts';
@@ -13,14 +13,14 @@ vi.mock('@solidjs/router', () => ({
   ),
 }));
 vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
-  InvestigateAlertButton: () => null,
+  InvestigateAlertButton: () => <button>Investigate</button>,
 }));
 vi.mock('../ResourceMonitoringPolicyAction', () => ({
   ResourceMonitoringPolicyAction: (props: any) => (
     <button data-platform-type={props.platformType}>Resource monitoring policy</button>
   ),
 }));
-vi.mock('../AlertSnoozeAction', () => ({ AlertSnoozeAction: () => null }));
+vi.mock('../AlertSnoozeAction', () => ({ AlertSnoozeAction: () => <button>Snooze</button> }));
 import { AlertOverviewAlertCard } from '../AlertOverviewAlertCard';
 
 const acknowledge = vi.fn();
@@ -448,5 +448,89 @@ describe('Pulse system-alert overview scope', () => {
     expect(less).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(less);
     expect(toggleTimeline).toHaveBeenCalledWith('open-timeline', 'open-timeline', alert.startTime);
+  });
+
+  describe('action placement by width', () => {
+    const desktopWidth = window.innerWidth;
+    const setWidth = (width: number) =>
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: width,
+      });
+    afterEach(() => setWidth(desktopWidth));
+
+    it('keeps Snooze and Investigate on the card from the sm breakpoint up', () => {
+      setWidth(640);
+      const alert = makeSystemAlert('cpu', {
+        id: 'wide-card',
+        resourceId: 'vm-pulse',
+        metadata: { resourceType: 'vm' },
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      expect(screen.getByRole('button', { name: 'Snooze' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Investigate' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getAllByRole('button', { name: 'Snooze' })).toHaveLength(1);
+    });
+
+    it('moves Investigate behind More on a phone and keeps Snooze on the row', () => {
+      // A 375px phone showed about three alerts per screen while four actions
+      // wrapped onto two rows under each one.
+      setWidth(375);
+      const alert = makeSystemAlert('cpu', {
+        id: 'phone-card',
+        resourceId: 'vm-pulse',
+        metadata: { resourceType: 'vm' },
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
+      const snooze = screen.getByRole('button', { name: 'Snooze' });
+      expect(screen.queryByRole('button', { name: 'Investigate' })).toBeNull();
+      const more = screen.getByRole('button', { name: 'More' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      // A collapsed disclosure renders no region, so it names none.
+      expect(more).not.toHaveAttribute('aria-controls');
+      fireEvent.click(more);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      const panel = document.getElementById(more.getAttribute('aria-controls') ?? '');
+      expect(panel).not.toBeNull();
+      for (const name of ['Investigate', 'Timeline', 'Resource monitoring policy']) {
+        expect(panel).toContainElement(screen.getByRole('button', { name }));
+      }
+      expect(panel).not.toContainElement(snooze);
+      expect(screen.getAllByRole('button', { name: 'Snooze' })).toHaveLength(1);
+    });
+
+    it('moves the actions when a mounted card crosses the breakpoint', async () => {
+      // Rotating a phone crosses sm without remounting the overview.
+      setWidth(375);
+      const alert = makeSystemAlert('cpu', {
+        id: 'rotating-card',
+        resourceId: 'vm-pulse',
+        metadata: { resourceType: 'vm' },
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      expect(screen.queryByRole('button', { name: 'Investigate' })).toBeNull();
+      // Snooze owns its dialog state, so it must survive the crossing as the
+      // same element.
+      const snooze = screen.getByRole('button', { name: 'Snooze' });
+      setWidth(800);
+      window.dispatchEvent(new Event('resize'));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Investigate' })).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('button', { name: 'Snooze' })).toBe(snooze);
+      setWidth(375);
+      window.dispatchEvent(new Event('resize'));
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Investigate' })).toBeNull());
+      expect(screen.getByRole('button', { name: 'Snooze' })).toBe(snooze);
+    });
   });
 });

@@ -572,6 +572,62 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
+  it('lets a backup health count filter Coverage to those workloads', async () => {
+    // "17 attention" was text: finding which workloads it counted took the
+    // Filters sheet on a phone.
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    const attention = await screen.findByRole('button', { name: '1 attention' });
+    expect(attention).toHaveAttribute('aria-pressed', 'false');
+    // A zero count would open an empty list, so it stays text.
+    expect(screen.queryByRole('button', { name: '0 unprotected' })).toBeNull();
+    expect(screen.getByText('unprotected')).toBeInTheDocument();
+
+    await fireEvent.click(attention);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+    });
+    expect(screen.getByRole('button', { name: '1 attention' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
+
+    // Toggling off keeps the same focused control rather than rebuilding it.
+    const pressed = screen.getByRole('button', { name: '1 attention' });
+    pressed.focus();
+    await fireEvent.click(pressed);
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('posture')).toBeNull(),
+    );
+    expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+    expect(pressed).toHaveAttribute('aria-pressed', 'false');
+    expect(pressed).toHaveFocus();
+  });
+
+  it('pins Coverage when a health count is used on the bare Backups route', async () => {
+    // Coverage was chosen only because something needs attention; without the
+    // route segment the view would flip to By date once the counts reached zero.
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await fireEvent.click(await screen.findByRole('button', { name: '1 attention' }));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+    });
+  });
+
   it('switches to Coverage showing posture, and keeps per-source evidence in the row expansion', async () => {
     mockBackupAPIs();
 
