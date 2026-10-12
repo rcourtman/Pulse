@@ -15,6 +15,39 @@
 
 ## Purpose
 
+### DSM Upstart removal retains recovery until automatic activation and the job are absent
+
+DSM 6 Upstart jobs (including leftovers on DSM 7) are not classified as SysV.
+Before remote removal, the installer validates protected regular Pulse job and
+manual-override files, observes one complete combined status and independent
+process inventory, installs a non-clobbering `manual` override, reloads and
+checks the effective configuration has no start condition, then confirms stopped
+status and process absence. A missing manager, transitional/unknown state,
+diagnostic, duplicate, empty or failed observation refuses without another
+sample. A successful stop/override may remain after failure; do not restart or
+restore automatic activation. Foreign override/configuration and any previous
+`.removal.*` recovery copy refuse without deletion.
+
+After remote confirmation, a fresh gate precedes retiring the job. Its original
+configuration inode is staged outside Upstart's `.conf` namespace until checked
+reload, exact unknown-job status and independent process absence establish
+retirement. On unconfirmed retirement it is restored only if the original path
+is still absent, leaving the manual override and all local recovery state;
+a concurrently created config is never overwritten and the staged recovery copy
+is retained. Only confirmed retirement removes the staged config and manual
+before credential/state erasure. No credentials, arguments or config contents
+are returned by these observations. Existing same-instance URL, exact record,
+TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.
+
+The registered `scripts/installtests/install_sh_test.go` requires all thirteen
+`agent_upstart_teardown.py` production-function/caller controls, including exact
+file restoration, effective activation, late refusal, stopped/absent/repeated
+removal and real timeout-child termination. These are confined ordinary-user
+files and closed manager/process/transport models, not native DSM/Upstart,
+current-compiler or installed Linux/PowerShell acceptance. Unraid/QNAP/TrueNAS
+boot/watchdog ownership, Windows and the original native/TLS/cleanup journey
+remain separate; this does not broaden #1099 into macOS acceptance.
+
 ### FreeBSD rc.d and SysV removal retains recovery on unknown or live state
 
 Before server deregistration or local erasure, Unix uninstall selects its

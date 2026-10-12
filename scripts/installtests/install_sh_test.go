@@ -8463,3 +8463,39 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	}
 	t.Logf("%s", output)
 }
+
+func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_upstart_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("DSM Upstart removal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_refused_manager_precedes_remote_and_state_erasure",
+		"test_failed_empty_partial_diagnostic_status_cannot_authorise_removal",
+		"test_effective_disabled_config_is_required_after_override_reload",
+		"test_independent_process_inventory_rejects_orphan_or_unavailable_read",
+		"test_untrusted_config_override_and_prior_retirement_refuse_without_changes",
+		"test_missing_tools_refuse_without_remote_or_erasure",
+		"test_remote_refusal_keeps_stopped_disabled_recovery_without_restart",
+		"test_late_manager_refusal_retains_recovery_after_remote_confirmation",
+		"test_unconfirmed_job_retirement_restores_exact_config_and_retains_manual",
+		"test_confirmed_job_absence_precedes_selected_local_erasure",
+		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
+		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
+		"test_real_status_timeout_stops_owned_child_without_erasure",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
+			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 13 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
