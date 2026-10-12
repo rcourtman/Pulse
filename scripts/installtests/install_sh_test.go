@@ -7947,11 +7947,40 @@ ACTION_RUNNER_TOKEN_FILE="` + paths[3] + `"
 ACTION_RUNNER_CONFIG_DIR="` + filepath.Dir(paths[3]) + `"
 ACTION_RUNNER_STATE_DIR="` + filepath.Dir(paths[4]) + `"
 EXIT_GENERAL=1
-systemctl() { printf '%s\n' "$*" >> "` + serviceLog + `"; return 0; }
+runner_stopped=false runner_disabled=false
+timeout() {
+    [[ "$1 $2 $3 $4" == '-k 1 5 systemctl' ]] || return 90
+    shift 4
+    systemctl "$@"
+}
+systemctl() {
+    printf '%s\n' "$*" >> "` + serviceLog + `"
+    case "$1" in
+        show)
+            if [[ "$runner_stopped" == true ]]; then
+                printf 'ActiveState=inactive\n'
+            else
+                printf 'ActiveState=active\n'
+            fi
+            if [[ "$runner_disabled" == true ]]; then
+                printf 'UnitFileState=disabled\n'
+            else
+                printf 'UnitFileState=enabled\n'
+            fi
+            printf 'LoadState=loaded\n'
+            ;;
+        stop) runner_stopped=true ;;
+        disable) runner_disabled=true ;;
+        *) return 91 ;;
+    esac
+}
 revoke_action_runner_credential() { return 1; }
 log_error() { printf 'ERROR: %s\n' "$1" >&2; }
 log_info() { printf 'INFO: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit "$2"; }
+` + extractInstallShellFunction(t, "read_agent_removal_unit_state") + `
+` + extractInstallShellFunction(t, "confirm_agent_unit_quiescent") + `
+` + extractInstallShellFunction(t, "quiesce_agent_units_for_removal") + `
 ` + extractInstallShellFunction(t, "teardown_action_runner_service") + `
 teardown_action_runner_service
 `
@@ -8286,6 +8315,7 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 	for _, name := range []string{
 		"test_missing_url_retains_every_credential_representation_without_a_request",
 		"test_server_refusal_unknown_or_other_identity_retains_service_and_state",
+		"test_systemd_refusal_precedes_remote_removal_and_every_local_mutation",
 		"test_exact_confirmation_precedes_process_service_and_state_teardown",
 		"test_credential_free_local_only_removal_needs_no_url_or_request",
 		"test_server_confirmation_does_not_grant_unknown_path_removal",
@@ -8300,8 +8330,45 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 11 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
+func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_systemd_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("systemd teardown refusal controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unknown_read_stop_and_disable_retain_every_artifact",
+		"test_unsettled_or_unknown_states_never_authorise_deletion",
+		"test_helper_socket_and_service_are_reconciled_together",
+		"test_known_quiescence_allows_only_owned_teardown",
+		"test_failed_revocation_retains_stopped_runner_recovery_material",
+		"test_full_batch_reconciles_earlier_activation_sources",
+		"test_real_read_timeout_stops_its_owned_child",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentSystemdTeardown."+name+") ... ok") {
+			t.Fatalf("systemd teardown control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 7 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete systemd teardown verdict:\n%s", output)
+	}
+	entry, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	uninstall := strings.SplitN(string(entry), "# --- Uninstall Logic ---", 2)[1]
+	quiesce := strings.Index(uninstall, "quiesce_agent_units_for_removal")
+	if quiesce < 0 || quiesce >= strings.Index(uninstall, "if ! uninstall_collector_registration;") ||
+		quiesce >= strings.Index(uninstall, "pkill -f") {
+		t.Fatal("full removal must quiesce every affected systemd unit before remote removal or process mutation")
 	}
 	t.Logf("%s", output)
 }

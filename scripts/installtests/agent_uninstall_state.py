@@ -42,7 +42,7 @@ class UnixUninstallState(unittest.TestCase):
 
     def exercise(self, credential="runtime", url="", reply="confirmed", authority=True,
                  input_token=False, interactive=False, root_refusal=False, action="uninstall",
-                 ingress_only=False):
+                 ingress_only=False, quiescence_refused=False):
         source = self.source
         # Keep the real entry and all initial credential/service/state teardown.
         # Stop before unrelated platform boot/log cleanup; never run it on a host.
@@ -104,7 +104,8 @@ class UnixUninstallState(unittest.TestCase):
                       "SAFE_PROFILE_STATE_DIR_REMOVAL_AUTHORITY": profile,
                       "PULSE_TOKEN": token, "RUNTIME_TOKEN_FILE": selected,
                       "PULSE_URL": url, "AGENT_ID": "owned-agent", "HOSTNAME_OVERRIDE": "owned-host",
-                      "EVENTS": root / "events", "SERVICE": service, "REPLY": reply}
+                      "EVENTS": root / "events", "SERVICE": service, "REPLY": reply,
+                      "QUIESCENCE_REFUSED": str(quiescence_refused).lower()}
             setup = "\n".join(f"{key}={shlex.quote(str(value))}" for key, value in values.items())
             functions = "\n".join(function(source, name) for name in names)
             if input_token:
@@ -113,6 +114,7 @@ class UnixUninstallState(unittest.TestCase):
             shell = r'''
 set -euo pipefail
 UNINSTALL=true AGENT_NAME=pulse-agent EXIT_GENERAL=1 EXIT_MISSING_ARGS=16
+ACTION_RUNNER_NAME=pulse-agent-runner PRIVILEGED_HELPER_NAME=pulse-agent-helper
 OUTPUT_FORMAT=text NON_INTERACTIVE=true
 TOKEN_FILE_PATH="" UNINSTALL_ACTION_RUNNER=false UPDATE_ONLY=false
 RETARGET_ONLY=false PREFLIGHT_ONLY=false SAFE_PROFILE_ACTION=""
@@ -143,6 +145,12 @@ run_collector_lifecycle_command() {
 pkill() { printf 'process-stop\n' >> "$EVENTS"; }
 sleep() { :; }
 systemctl() { return 91; }
+# This fixture checks the caller's refusal gate, not systemd observations.
+# agent_systemd_teardown.py executes that real boundary independently.
+quiesce_agent_units_for_removal() {
+    [[ "$*" == 'pulse-agent-runner.service pulse-agent-helper.socket pulse-agent-helper.service pulse-agent.service' ]] || return 90
+    [[ "$QUIESCENCE_REFUSED" == false ]]
+}
 teardown_action_runner_service() { printf 'runner-stop\n' >> "$EVENTS"; }
 teardown_privileged_helper_service() { printf 'helper-stop\n' >> "$EVENTS"; }
 teardown_systemd_agent_service() { printf 'service-stop\n' >> "$EVENTS"; printf 'stopped\n' > "$SERVICE"; }
@@ -189,6 +197,16 @@ rm() {
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertEqual(events, "request:collector-uninstall --agent-id owned-agent --hostname owned-host\n")
                 self.assertEqual(after, before)
+
+    def test_systemd_refusal_precedes_remote_removal_and_every_local_mutation(self):
+        for credential in ("runtime", "inline", "none"):
+            with self.subTest(credential=credential):
+                result, events, before, after = self.exercise(
+                    credential, url="https://pulse.invalid", quiescence_refused=True)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(events, "")
+                self.assertEqual(after, before)
+                self.assertIn("every systemd unit stopped and disabled", result.stdout)
 
     def test_exact_confirmation_precedes_process_service_and_state_teardown(self):
         result, events, before, after = self.exercise(url="https://pulse.invalid")
