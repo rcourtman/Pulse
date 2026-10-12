@@ -27,6 +27,8 @@
 `InlineNotice`, and actions from `Button`. It adds no shared primitive; at
 phone width the cards stack two per row and the action buttons keep 44px
 targets.
+The workspace mounts it through `lazy` and `Suspense` with no fallback, so the
+setup card shows the panel once its chunk loads.
 
 ### Patrol header default-mode notice uses existing primitives
 

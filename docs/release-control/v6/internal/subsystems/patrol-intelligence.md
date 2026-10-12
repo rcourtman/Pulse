@@ -46,6 +46,9 @@ also routes the setup action to Provider & Models instead of the model check.
 `frontend-modern/src/features/patrol/__tests__/PatrolSetupPanel.render.test.tsx`,
 `frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts`
 and `frontend-modern/src/utils/__tests__/patrolRuntimeActions.test.ts`.
+The workspace loads `PatrolSetupPanel.tsx` lazily, passing the readiness
+provider as `readinessProvider`, so the panel's AI settings, provider and cost
+code stays out of the `AIIntelligence` chunk and its bundle budget.
 
 ### Pro default notice and the not-running header
 

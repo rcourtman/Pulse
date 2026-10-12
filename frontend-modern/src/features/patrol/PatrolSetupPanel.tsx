@@ -20,6 +20,7 @@ import {
   buildPatrolSetupModelRequest,
   getPatrolSetupCheckVerdict,
   getPatrolSetupCostLine,
+  getPatrolSetupInitialProvider,
   getPatrolSetupIntervalAdjust,
   getPatrolSetupNoModelMessage,
   getPatrolSetupOllamaHint,
@@ -37,8 +38,8 @@ const errorText = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message.trim() : fallback;
 
 export function PatrolSetupPanel(props: {
-  /** Provider to start on, such as the one whose key was refused. */
-  initialProvider?: PatrolSetupProvider;
+  /** Provider Patrol readiness names, such as the one whose key was refused. */
+  readinessProvider?: string;
   /** Keep the panel mounted while setup runs, whatever polling reports. */
   onStart: () => void;
   /** Re-read Patrol state once setup is finished. */
@@ -47,7 +48,7 @@ export function PatrolSetupPanel(props: {
   onRunPatrol: () => void;
 }) {
   const [provider, setProvider] = createSignal<PatrolSetupProvider>(
-    props.initialProvider ?? 'anthropic',
+    getPatrolSetupInitialProvider(props.readinessProvider),
   );
   const [apiKey, setApiKey] = createSignal('');
   const [ollamaUrl, setOllamaUrl] = createSignal(PATROL_SETUP_DEFAULT_OLLAMA_URL);
@@ -298,3 +299,5 @@ export function PatrolSetupPanel(props: {
     </div>
   );
 }
+
+export default PatrolSetupPanel;

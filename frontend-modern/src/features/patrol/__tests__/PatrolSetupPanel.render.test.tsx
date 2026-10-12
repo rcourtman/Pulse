@@ -50,9 +50,9 @@ const haikuProjection = {
 const settings = (overrides: Partial<AISettings> = {}) =>
   ({ enabled: true, model: '', patrol_interval_minutes: 360, ...overrides }) as AISettings;
 
-const renderPanel = () => {
+const renderPanel = (readinessProvider?: string) => {
   const props = { onStart: vi.fn(), onDone: vi.fn(), onRunPatrol: vi.fn() };
-  render(() => <PatrolSetupPanel {...props} />);
+  render(() => <PatrolSetupPanel readinessProvider={readinessProvider} {...props} />);
   return props;
 };
 
@@ -92,6 +92,15 @@ describe('PatrolSetupPanel', () => {
     });
     expect(screen.getByRole('button', { name: 'Connect and check' })).toBeDisabled();
     expect(mocks.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('starts on the provider Patrol readiness names, such as the one whose key was refused', async () => {
+    renderPanel('gemini');
+    expect(await screen.findByRole('button', { name: /Gemini/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByLabelText('Google Gemini API key')).toBeInTheDocument();
   });
 
   it('connects, picks and saves the guided model, checks it, and offers the first run', async () => {

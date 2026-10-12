@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, lazy, Show, Suspense } from 'solid-js';
 import HistoryIcon from 'lucide-solid/icons/history';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
@@ -27,8 +27,7 @@ import {
   getPatrolSetupHint,
   isPatrolConnectCause,
 } from '@/utils/patrolRuntimeActions';
-import { PatrolSetupPanel } from './PatrolSetupPanel';
-import { getPatrolSetupInitialProvider } from './patrolSetupModel';
+
 import {
   getPatrolProInvestigationHandoff,
   getPatrolWatchOnlyInvestigationNudge,
@@ -53,6 +52,11 @@ import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesUpgradePrompts,
 } from '@/stores/sessionPresentationPolicy';
+
+// Only an install that cannot run Patrol needs the setup panel and the AI
+// settings, provider and cost code it brings, so it loads on demand and stays
+// out of the Patrol page chunk.
+const PatrolSetupPanel = lazy(() => import('./PatrolSetupPanel'));
 
 export function PatrolIntelligenceWorkspace(props: {
   state: PatrolIntelligenceState;
@@ -353,21 +357,21 @@ export function PatrolIntelligenceWorkspace(props: {
                   }
                 >
                   <div class="mt-4">
-                    <PatrolSetupPanel
-                      initialProvider={getPatrolSetupInitialProvider(
-                        state.patrolReadiness()?.provider,
-                      )}
-                      onStart={() => setSetupPanelActive(true)}
-                      onDone={() => {
-                        setSetupPanelActive(false);
-                        void state.handleRefreshPatrol();
-                      }}
-                      onRunPatrol={() => {
-                        setSetupPanelActive(false);
-                        // Readiness must be re-read before the run gate opens.
-                        void state.handleRefreshPatrol().then(() => state.handleRunPatrol());
-                      }}
-                    />
+                    <Suspense fallback={null}>
+                      <PatrolSetupPanel
+                        readinessProvider={state.patrolReadiness()?.provider}
+                        onStart={() => setSetupPanelActive(true)}
+                        onDone={() => {
+                          setSetupPanelActive(false);
+                          void state.handleRefreshPatrol();
+                        }}
+                        onRunPatrol={() => {
+                          setSetupPanelActive(false);
+                          // Readiness must be re-read before the run gate opens.
+                          void state.handleRefreshPatrol().then(() => state.handleRunPatrol());
+                        }}
+                      />
+                    </Suspense>
                   </div>
                 </Show>
               </div>

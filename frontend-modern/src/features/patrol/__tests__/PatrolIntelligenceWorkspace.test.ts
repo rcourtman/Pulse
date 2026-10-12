@@ -32,7 +32,10 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
       'when={setupPanelActive() || isPatrolConnectCause(setupCause())}',
     );
     expect(workspaceSource).toContain('<PatrolSetupPanel');
-    expect(workspaceSource).toContain('getPatrolSetupInitialProvider(');
+    expect(workspaceSource).toContain(
+      "const PatrolSetupPanel = lazy(() => import('./PatrolSetupPanel'));",
+    );
+    expect(workspaceSource).toContain('readinessProvider={state.patrolReadiness()?.provider}');
     expect(workspaceSource).toContain('(state.shouldShowPatrolSetupOnly() || setupPanelActive())');
     // The first run waits for readiness to be re-read, or the run gate stays shut.
     expect(workspaceSource).toContain(
