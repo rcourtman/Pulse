@@ -8353,12 +8353,13 @@ func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_failed_revocation_retains_stopped_runner_recovery_material",
 		"test_full_batch_reconciles_earlier_activation_sources",
 		"test_real_read_timeout_stops_its_owned_child",
+		"test_timeout_probe_keeps_prepared_tool_and_refuses_missing_preparation",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.AgentSystemdTeardown."+name+") ... ok") {
 			t.Fatalf("systemd teardown control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 7 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 8 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete systemd teardown verdict:\n%s", output)
 	}
 	entry, err := os.ReadFile(repoFile("scripts", "install.sh"))
