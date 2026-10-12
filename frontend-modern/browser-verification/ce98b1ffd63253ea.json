@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e5e06d032164d5ddd6c54f0e78d84a3899cdc1cf",
+  "changed_paths": [
+    "docs/PBS.md",
+    "frontend-modern/public/docs/PBS.md"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "1873203a7d7c2034249bcc05ef4763586e4989a1d2addfca67bb8f96490a52d9",
+    "frontend-modern/public/docs/PBS.md": "1873203a7d7c2034249bcc05ef4763586e4989a1d2addfca67bb8f96490a52d9"
+  },
+  "routes": [
+    "/docs/RECOVERY#missing-or-inconsistent-evidence",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "states": [
+    "Restore-point State and workload protection have distinct meanings.",
+    "Created time, Source PBS and Provider evidence guide a same-point comparison.",
+    "Old/absent inventory, Unverified and Verified/Attention disagreement are distinct.",
+    "Protected hides verification and Job OK does not establish it; unknowns and safety exclusions remain."
+  ],
+  "interactions": [
+    "Keyboard-activate the existing Recovery-to-PBS guide link and confirm focused, visible target.",
+    "Read all four evidence-table rows and the comparison steps at desktop and narrow viewports without horizontal page overflow.",
+    "Keyboard-activate the existing Backup safety link and confirm fragment focus.",
+    "Observe the production Docs fetch response clone without a second request; exact UTF-8 source bytes match."
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-12T15:18:01.256682+00:00",
+  "browser": {
+    "client": "1.56.1",
+    "engines": [
+      "Chromium 141.0.7390.37",
+      "WebKit 26.0"
+    ]
+  },
+  "captures": [
+    {
+      "logical_capture": "chromium-evidence.png",
+      "retained_capture": "desktop.png",
+      "sha256": "997429d568b9989c0d9b6e22ad7d70ed84d6aa40d8f65ad67a70051cf08e36ef",
+      "native_pixel_review": true
+    },
+    {
+      "logical_capture": "chromium-comparison.png",
+      "retained_capture": "desktop.png",
+      "sha256": "997429d568b9989c0d9b6e22ad7d70ed84d6aa40d8f65ad67a70051cf08e36ef",
+      "native_pixel_review": true
+    },
+    {
+      "logical_capture": "webkit-evidence.png",
+      "retained_capture": "phone-evidence.png",
+      "sha256": "49681df1c5368b02231d8b782502ee1e7cd1199d89b6b3b6562c0c7008a432f0",
+      "native_pixel_review": true
+    },
+    {
+      "logical_capture": "webkit-comparison.png",
+      "retained_capture": "phone-comparison.png",
+      "sha256": "f39f3cc241ab08d4e976d7aea519ec849c57de20ff0e31932d1d0dfad3fb798b",
+      "native_pixel_review": true
+    }
+  ],
+  "pixel_observations": [
+    "Desktop: four clearly separated evidence rows, timestamp/State instructions and disagreement guidance are legible.",
+    "390 px dark: table wraps within the page; point-State and workload meanings remain distinct, and comparison/privacy/guest safety text is readable."
+  ],
+  "result_detail": {
+    "result": "passed",
+    "playwright": "1.56.1",
+    "docSha256": "1873203a7d7c2034249bcc05ef4763586e4989a1d2addfca67bb8f96490a52d9",
+    "results": [
+      {
+        "engine": "chromium",
+        "browserVersion": "141.0.7390.37",
+        "width": 1280,
+        "dark": false,
+        "helpRoute": "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+        "sourceMatchedResponses": [
+          {
+            "status": 200,
+            "bytes": 27769,
+            "sha256": "1873203a7d7c2034249bcc05ef4763586e4989a1d2addfca67bb8f96490a52d9"
+          }
+        ],
+        "recoveryEntryKeyboardNavigation": true,
+        "visibleFocusedHeading": true,
+        "backupSafetyKeyboardNavigation": true,
+        "noHorizontalPageOverflow": true,
+        "backendRequests": [],
+        "mutations": [],
+        "errors": []
+      },
+      {
+        "engine": "webkit",
+        "browserVersion": "26.0",
+        "width": 390,
+        "dark": true,
+        "helpRoute": "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+        "sourceMatchedResponses": [
+          {
+            "status": 200,
+            "bytes": 27769,
+            "sha256": "1873203a7d7c2034249bcc05ef4763586e4989a1d2addfca67bb8f96490a52d9"
+          }
+        ],
+        "recoveryEntryKeyboardNavigation": true,
+        "visibleFocusedHeading": true,
+        "backupSafetyKeyboardNavigation": true,
+        "noHorizontalPageOverflow": true,
+        "backendRequests": [],
+        "mutations": [],
+        "errors": []
+      }
+    ],
+    "browserAndServerClosed": true,
+    "scope": "Production documentation renderer, page, router, CSS and exact shipped Markdown; no native PBS, full application, diagnosis or release acceptance."
+  },
+  "loaded_source_sha256": {
+    "frontend-modern/src/pages/Docs.tsx": "2ddb5a1daef50d23a99a7d1cb510c73cd7a85600f07ea9f69ad72f741f3b5229",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/index.css": "df9316666c4dab61acd0528944690c3f8f08f890fd49bfa9efcbfea68524664c",
+    "frontend-modern/browser-tests/docs-fragment-navigation.tsx": "2de6b8c853e5cd87790dcb6e582fefae07661d449835366cb72f2623b1bfe053",
+    "frontend-modern/browser-tests/pbs-verification-help.cjs": "53668cfc10ea994684f16163d6b9ffe3e8ac3f76988d86f231c217e930b3780b"
+  },
+  "adverse_history": "Two prior hash assertions failed because DevTools re-encoded charset-less Markdown as Windows-1252. Their logs and same desktop capture remain in the private lane evidence. Hash validation is retained against the actual consumer fetch bytes; no product content was altered to pass.",
+  "scope": "Production Docs page/router/renderer/CSS and exact shipped Markdown in the offline fixture, not the full authenticated app, native PBS ingestion, issue resolution, deployment or released availability."
+}
