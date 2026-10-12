@@ -223,6 +223,11 @@ the caveat in the bar tooltip and drawer instead of a label on every row. A
 retained or freshness-unknown reading keeps its own freshness label with the
 caveat in its explanation, an unavailable reading is never qualified, and the
 drawer states the note as visible text in `About this reading`.
+Agent setup advice first states that setup, restarts and live guest-agent probes
+must be deferred during backups or a guest incident. This precaution stays with
+VM/container fallback guidance regardless of freshness or a reported backup lock;
+a fallback value or an ended lock does not establish that changing agents is safe.
+It changes no numbers, source selection, collection, thresholds or guest actions.
 
 `GuestRow.test.tsx`, `GuestDrawerOverview.memory-cache.test.tsx`,
 `MetricMiniSparkline.test.tsx` and `memoryObservation.test.ts` pin these

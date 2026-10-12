@@ -117,6 +117,30 @@ describe('cache-inclusive Proxmox memory sources', () => {
     },
   );
 
+  it.each(['status-mem', 'status-freemem', 'cluster-resources', 'derived-total-minus-used'])(
+    'keeps %s setup advice behind the backup and guest-incident precaution',
+    (source) => {
+      const precaution =
+        'Defer agent setup, restarts and live guest-agent probes during backups or a guest incident.';
+      for (const type of ['qemu', 'lxc']) {
+        for (const state of ['current', 'last-known', 'future-state']) {
+          const input = reading(source, state, { type });
+          const original = structuredClone(input);
+          const presentation = getWorkloadMemoryObservationPresentation(input, {
+            includeCurrent: false,
+          })!;
+          expect(presentation.cacheNote).toContain(precaution);
+          expect(presentation.cacheNote!.indexOf(precaution)).toBeLessThan(
+            presentation.cacheNote!.indexOf('Installing a Pulse agent'),
+          );
+          expect(presentation.message).toContain(precaution);
+          expect(presentation.cacheNote).not.toMatch(/\bwill\b|qm agent|systemctl|curl/);
+          expect(input).toEqual(original);
+        }
+      }
+    },
+  );
+
   it.each([
     'guest-agent-meminfo',
     'guest-agent-meminfo-derived',
