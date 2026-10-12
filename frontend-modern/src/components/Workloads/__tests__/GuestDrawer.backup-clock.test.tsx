@@ -32,7 +32,7 @@ vi.mock('@/stores/license', () => ({
 
 const start = Date.parse('2026-10-12T12:00:00Z');
 const hour = 3600_000;
-const guest = (type: 'qemu' | 'lxc', lastBackup: number | string): WorkloadGuest => ({
+const guest = (type: 'qemu' | 'lxc', lastBackup: number): WorkloadGuest => ({
   id: 'lab:pve-a:101',
   name: 'backup-clock-fixture',
   vmid: 101,
@@ -118,7 +118,9 @@ describe('mounted completed-backup evidence', () => {
 
   it('does not label a previous-calendar-day completion Today', () => {
     vi.setSystemTime(Date.parse('2026-10-12T00:30:00Z'));
-    render(() => <GuestDrawer guest={guest('qemu', '2026-10-11T23:30:00Z')} onClose={() => {}} />);
+    render(() => (
+      <GuestDrawer guest={guest('qemu', Date.parse('2026-10-11T23:30:00Z'))} onClose={() => {}} />
+    ));
     expect(details().getByText('1 hour ago')).toBeVisible();
     expect(completion()).toHaveTextContent('2026-10-11 23:30:00 UTC');
     expect(details().queryByText('Today')).not.toBeInTheDocument();
@@ -173,7 +175,7 @@ describe('mounted completed-backup evidence', () => {
     expect(calls.history).not.toHaveBeenCalled();
   });
 
-  it.each([0, NaN, 'invalid-time'])(
+  it.each([0, NaN, Infinity])(
     'does not turn absent or invalid evidence %s into a dated completion',
     (timestamp) => {
       render(() => <GuestDrawer guest={guest('lxc', timestamp)} onClose={() => {}} />);
