@@ -31,6 +31,8 @@ func TestGuestMetadataCleanupSuppressionContract(t *testing.T) {
 						server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Set("Content-Type", "application/json")
 							switch {
+							case strings.HasSuffix(r.URL.Path, "/nodes"):
+								fmt.Fprint(w, `{"data":[]}`)
 							case strings.HasSuffix(r.URL.Path, "/config"):
 								fmt.Fprint(w, `{"data":{}}`)
 							case strings.HasSuffix(r.URL.Path, "/status/current"):
