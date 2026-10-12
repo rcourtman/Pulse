@@ -1024,5 +1024,146 @@ class AssetValidationWordingTest(unittest.TestCase):
                 self.assertIn("<!-- VALIDATION_STATUS_END -->", banner)
 
 
+class SourceComparisonTests(unittest.TestCase):
+    """The advisory tag-bound pointer to GitHub's comparison, and its place in the rendered body."""
+
+    NOTES = _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.5.0.md"
+
+    @staticmethod
+    def args(tag: str | None, base: str | None) -> "argparse.Namespace":
+        import argparse
+
+        return argparse.Namespace(candidate_tag=tag, rollback_target=base)
+
+    def render(self, version: str, tag: str, base: str, notes: Path | None = None) -> subprocess.CompletedProcess:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "body.md"
+            result = subprocess.run(
+                ["python3", str(_REPO_ROOT / "scripts/release_control/render_release_body.py"),
+                 "--version", version, "--release-notes-file", str(notes or self.NOTES),
+                 "--output", str(output), "--promotion-channel", "stable-rc-promotion",
+                 "--candidate-tag", tag, "--promoted-prerelease-tag", "", "--rollback-target", base,
+                 "--rollback-command", f"sudo /bin/update --version {base}",
+                 "--planned-ga-date", "", "--planned-v5-eos-date", "", "--hotfix-exception", "false",
+                 "--hotfix-reason", "", "--require-windows-signing", "false",
+                 "--unsigned-windows-exception", "false", "--unsigned-windows-reason", ""],
+                capture_output=True, text=True, cwd=_REPO_ROOT)
+            result.body = output.read_text(encoding="utf-8") if output.exists() else ""
+            return result
+
+    def test_section_binds_the_exact_tag_and_stable_base(self) -> None:
+        section = render_release_body.build_source_comparison(self.args("v6.6.0-beta.3", "v6.5.0"))
+        self.assertIsNotNone(section)
+        self.assertTrue(section.startswith("## Source comparison\n"))
+        self.assertIn("https://github.com/rcourtman/Pulse/compare/v6.5.0...v6.6.0-beta.3)", section)
+        # GitHub caps a comparison at 250 commits, so this must not claim to be a full list.
+        self.assertIn("at most 250 commits", section)
+        self.assertIn("may omit commits", section)
+        self.assertNotIn("Full list", section)
+        # Stable promotion compares the same stable base with the final tag.
+        self.assertIn("compare/v6.5.0...v6.6.0)", render_release_body.build_source_comparison(self.args("v6.6.0", "v6.5.0")))
+
+    def test_missing_or_unusable_context_renders_nothing_and_never_raises(self) -> None:
+        huge = "v" + "1" * 5000 + ".0.0"
+        for tag, base in [(None, "v6.5.0"), ("v6.6.0-beta.3", None), ("", ""), ("6.6.0", "v6.5.0"),
+                          ("v6.6.0-beta.3", "6.5.0"), ("v6.6.0-beta.3", "v6.5.0-rc.1"),
+                          ("v6.6.0-beta.3", "v6.6.0"), ("v6.5.0", "v6.5.0"), ("v6.5.0", "v6.6.0"),
+                          ("v6.6.0-beta.0", "v6.5.0"), ("v6.6.0-beta.3\n#", "v6.5.0"),
+                          # a final newline would put a line break inside the URL
+                          ("v6.5.0\n", "v6.4.5"), ("v6.5.0", "v6.4.5\n"), ("v6.6.0-beta.3\n", "v6.5.0"),
+                          # non-ASCII digits, and numbers too large to convert, must not raise
+                          ("v\uff16.\uff15.\uff10", "v6.4.5"), ("v6.5.0", "v\uff16.\uff14.\uff15"),
+                          (huge, "v6.4.5"), ("v6.5.0", huge), ("v6.5.0", "v6.4." + "9" * 7),
+                          ("v6.6.0-beta." + "9" * 7, "v6.5.0")]:
+            with self.subTest(tag=tag, base=base):
+                self.assertIsNone(render_release_body.build_source_comparison(self.args(tag, base)))
+
+    def test_rendered_body_ends_with_the_comparison_after_roll_back_and_validates(self) -> None:
+        result = self.render("6.5.0", "v6.5.0", "v6.4.5")
+        self.assertEqual(0, result.returncode, result.stderr)
+        headings = re.findall(r"(?m)^## (.+)$", result.body)
+        self.assertEqual(["Install", "Roll back", "Source comparison"], headings[-3:])
+        self.assertEqual(1, result.body.count("## Source comparison"))
+        self.assertIn("compare/v6.4.5...v6.5.0)", result.body)
+        # The stored body round-trips through the validator the edit and recovery workflows use.
+        render_release_body.validate_release_body_shape(result.body, "6.5.0")
+        clean = render_release_body.validate_release_body_shape(result.body, "6.5.0", expected_body=result.body)
+        self.assertIn("## Source comparison", clean)
+
+    def test_the_base_is_the_supplied_stable_rollback_target_and_orders_numerically(self) -> None:
+        build = render_release_body.build_source_comparison
+        # Numeric, not lexical: patch 10 follows patch 9. Alpha and release candidate heads work like betas.
+        self.assertIn("compare/v6.4.9...v6.4.10)", build(self.args("v6.4.10", "v6.4.9")))
+        self.assertIsNone(build(self.args("v6.4.9", "v6.4.10")))
+        self.assertIn("compare/v6.5.0...v6.6.0-rc.2)", build(self.args("v6.6.0-rc.2", "v6.5.0")))
+        self.assertIn("compare/v6.5.0...v6.6.0-alpha.1)", build(self.args("v6.6.0-alpha.1", "v6.5.0")))
+        # A hotfix and an older, non-immediate rollback target are used exactly as supplied.
+        self.assertIn("compare/v6.4.1...v6.5.1)", build(self.args("v6.5.1", "v6.4.1")))
+
+    def test_section_text_is_separated_by_one_blank_line_and_ends_with_one_newline(self) -> None:
+        result = self.render("6.5.0", "v6.5.0", "v6.4.5")
+        self.assertTrue(result.body.endswith("larger comparisons may omit commits.\n"), result.body[-120:])
+        self.assertFalse(result.body.endswith("\n\n"))
+        self.assertIn("\n\n## Source comparison\n\n[Browse source changes", result.body)
+        # Exactly one blank line before the section, as between every other section.
+        self.assertNotIn("\n\n\n## Source comparison", result.body)
+        before = result.body.split("\n\n## Source comparison")[0]
+        self.assertTrue(before.rstrip("\n").endswith("recreate the container."), before[-80:])
+        self.assertFalse(before.endswith("\n"))
+        self.assertIn(") on GitHub for more detail behind this summary.", result.body)
+
+    def test_edit_and_annotation_cycles_preserve_the_section_exactly(self) -> None:
+        # validate-release-assets.yml re-reads the stored body, strips its status block, prepends a
+        # fresh one and checks equality with the cleaned body. Repeat that, with the extra newline
+        # `jq -r` adds and with CRLF line endings, and the section must survive unchanged.
+        result = self.render("6.5.0", "v6.5.0", "v6.4.5")
+        block = ("<!-- VALIDATION_STATUS_START -->\n## Release Asset Validation: PASSED\n\n"
+                 "**Validated**: 2026-10-13 00:00:00 UTC\n\n<!-- VALIDATION_STATUS_END -->\n\n")
+        clean = render_release_body.validate_release_body_shape(result.body, "6.5.0")
+        for cycle in range(10):
+            stored = block + clean + ("\n" if cycle % 2 else "")
+            clean = render_release_body.validate_release_body_shape(stored, "6.5.0", expected_body=None)
+            crlf = render_release_body.validate_release_body_shape(stored.replace("\n", "\r\n"), "6.5.0")
+            self.assertEqual(clean.rstrip("\n"), crlf.rstrip("\n"))
+        self.assertEqual(result.body.rstrip("\n"), clean.rstrip("\n"))
+        self.assertEqual(1, clean.count("## Source comparison"))
+
+    def test_expected_body_equality_rejects_a_changed_or_deleted_section_but_not_its_absence(self) -> None:
+        result = self.render("6.5.0", "v6.5.0", "v6.4.5")
+        render_release_body.validate_release_body_shape(result.body, "6.5.0", expected_body=result.body)
+        changed = result.body.replace("compare/v6.4.5...v6.5.0", "compare/v6.4.4...v6.5.0")
+        deleted = result.body.split("\n\n## Source comparison")[0] + "\n"
+        for label, stored in (("changed link", changed), ("deleted section", deleted)):
+            with self.subTest(label=label):
+                with self.assertRaises(render_release_body.ReleaseBodyIntegrityError):
+                    render_release_body.validate_release_body_shape(stored, "6.5.0", expected_body=result.body)
+        # Shape-only validation, and equality against an expected body that also lacks it, still accept absence.
+        render_release_body.validate_release_body_shape(deleted, "6.5.0")
+        render_release_body.validate_release_body_shape(deleted, "6.5.0", expected_body=deleted)
+
+    def test_a_base_that_smuggles_a_heading_is_still_stopped_by_the_existing_checks(self) -> None:
+        # The helper itself skips this input and raises nothing, but the renderer's existing body
+        # checks still apply to the whole render, and the rollback command and target are rendered
+        # elsewhere in the body, so this fails there. The contract says exactly that.
+        smuggled = "v6.4.5\n## Install\n"
+        self.assertIsNone(render_release_body.build_source_comparison(self.args("v6.5.0", smuggled)))
+        result = self.render("6.5.0", "v6.5.0", smuggled)
+        self.assertNotEqual(0, result.returncode)
+        self.assertNotIn("## Source comparison", result.body)
+
+    def test_a_malformed_base_does_not_fail_the_render(self) -> None:
+        result = self.render("6.5.0", "v6.5.0", "v6.5.0-rc.1")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("## Source comparison", result.body)
+
+    def test_bodies_without_the_section_still_validate(self) -> None:
+        # Everything published before this section existed, and any frozen in-flight release,
+        # has no such section. It is advisory: the absence must keep validating.
+        result = self.render("6.5.0", "v6.5.0", "v6.4.5")
+        legacy = result.body.split("\n\n## Source comparison")[0] + "\n"
+        self.assertNotIn("Source comparison", legacy)
+        render_release_body.validate_release_body_shape(legacy, "6.5.0")
+
+
 if __name__ == "__main__":
     unittest.main()
