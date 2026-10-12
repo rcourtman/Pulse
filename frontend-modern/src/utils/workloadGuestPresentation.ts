@@ -179,8 +179,19 @@ export function getWorkloadGuestDiskRead(
   isVM: boolean,
 ): WorkloadGuestDiskRead {
   const reason = isVM ? guest.diskStatusReason : undefined;
+  // Power-state updates can arrive without a filesystem-read reason, while
+  // the canonical resource still carries earlier numbers. A stopped VM has
+  // no current in-guest reading, regardless of which producer supplied it.
+  // LXC platform storage remains independent of guest runtime power state.
+  if (isVM && (guest.status === 'stopped' || reason === 'vm-stopped')) {
+    return {
+      state: 'unavailable',
+      message: getWorkloadGuestDiskStatusMessage('vm-stopped'),
+      needsAction: false,
+    };
+  }
   if (guest.disksFromAgent) {
-    if (guest.status === 'stopped' || reason === 'vm-stopped') {
+    if (guest.status === 'stopped') {
       return {
         state: 'unavailable',
         message: isVM

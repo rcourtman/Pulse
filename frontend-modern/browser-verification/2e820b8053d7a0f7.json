@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "cbfe7962502e6543d142655a471db917bf5efb37",
+  "verified_at": "2026-10-12T00:02:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "71a2d2e62411c70c0eb609e68cd4963dac483be59a5be6afcf96c1ce2191436f"
+  },
+  "routes": [
+    "/browser-tests/guest-disk-provenance.html"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Stopped VM without diskStatusReason but with numeric platform/linked-agent carrier",
+    "Running VM with explicit prev-agent-busy after restart",
+    "Fresh zero on the same row/drawer",
+    "Stopped LXC independent platform storage and unaffected running VM control",
+    "Stored disk History kept separate from the live reading; separate synthetic empty-store response exercises fallback without fabricated points"
+  ],
+  "interactions": [
+    "Bars and sparklines retain visible/accessibly explained unavailability; current stopped disk percentages withdrawn",
+    "Keyboard Enter / touch row disclosure, Overview/History tabs, readonly History refresh and close",
+    "Stop/restart/fresh transitions without remount; historical paths unchanged and deferred source stays labelled",
+    "Inspected eight light desktop/dark WebKit phone captures; no page error, page-level overflow, off-origin or mutating request"
+  ],
+  "notes": "pulse-worker-browser frontend-modern/browser-tests/guest-stopped-disk.cjs. Playwright 1.56.1; browser and server cleanup observed. Production components/CSS with synthetic data, not native QGA/thaw/writes or installed/released recovery. Earlier attempt failed an incorrect harness expectation for stored History; preserved separately, corrected without runtime change."
+}
