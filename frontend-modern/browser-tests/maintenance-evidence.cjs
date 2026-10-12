@@ -214,7 +214,7 @@ async function bounded(promise, label) {
             runtime: { build: 'community' },
             blocked_capabilities: [],
           };
-        else if (url.pathname === '/api/ai/settings') data = { discovery_enabled: false };
+        else if (url.pathname === '/api/ai/settings') data = { enabled: false };
         else if (url.pathname === '/api/security/status')
           data = { hasAuthentication: true, requiresAuth: false, sessionCapabilities: {} };
         else {

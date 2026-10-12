@@ -20,8 +20,6 @@ import {
   getAISettingsSaveErrorMessage,
   getAISettingsSetupDialogPresentation,
   getAISettingsToggleErrorMessage,
-  getAISettingsWorkloadDiscoveryHelpContent,
-  getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
 
 describe('aiSettingsPresentation', () => {
@@ -33,18 +31,10 @@ describe('aiSettingsPresentation', () => {
     expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Model Overrides');
     expect(AI_SETTINGS_ASSISTANT_SESSIONS_TITLE).toBe('Pulse Assistant Sessions');
     expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Assistant chat actions');
-    expect(getAISettingsWorkloadDiscoveryHelpContent()).toEqual({
-      title: 'What is service context?',
-      description:
-        'Service context scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores those facts so Assistant can use them in chat and Patrol can use them during verification.',
-    });
-    expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
-      text: 'Service context records service names, versions, and commands so Assistant and Patrol can use real context instead of generic advice.',
-    });
     expect(getAISettingsSetupDialogPresentation()).toEqual({
       ariaLabel: 'Set up Pulse Intelligence',
       title: 'Set Up Pulse Intelligence',
-      description: 'Connect a provider to power Patrol, Assistant, and service context.',
+      description: 'Connect a provider to power Patrol and Assistant.',
       submitLabel: 'Enable Pulse Intelligence',
     });
   });

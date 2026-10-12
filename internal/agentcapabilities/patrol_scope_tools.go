@@ -11,7 +11,6 @@ import "strings"
 func IsPatrolInfrastructureEvidenceToolName(name string) bool {
 	switch strings.TrimSpace(name) {
 	case PulseQueryToolName,
-		PulseDiscoveryToolName,
 		PulseMetricsToolName,
 		PulseStorageToolName,
 		PulseDockerToolName,
@@ -74,8 +73,8 @@ func patrolEvidenceToolNamesForResourceTypes(resourceTypes []string, includeDeep
 			add(PulseKubernetesToolName)
 		case "pmg":
 			add(PulsePMGToolName)
-		case "network-endpoint", "endpoint", "discovery":
-			add(PulseDiscoveryToolName)
+		case "network-endpoint", "endpoint":
+			// pulse_query and pulse_read already cover endpoint evidence.
 		case "agent", "host", "truenas", "node", "vm", "system-container", "container", "service":
 			add(PulseMetricsToolName)
 		default:

@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { test as base, expect, type Route } from '@playwright/test';
-import { createAuthenticatedStorageState } from './helpers';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { test as base, expect, type Route } from "@playwright/test";
+import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,10 +18,10 @@ const test = base.extend<{}, WorkerFixtures>({
     async ({ browser }, use, workerInfo) => {
       const storageStatePath = path.resolve(
         __dirname,
-        '..',
-        '..',
-        'tmp',
-        'playwright-auth',
+        "..",
+        "..",
+        "tmp",
+        "playwright-auth",
         `assistant-tool-output-preview-${workerInfo.project.name}.json`,
       );
       fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
@@ -32,34 +32,34 @@ const test = base.extend<{}, WorkerFixtures>({
         fs.rmSync(storageStatePath, { force: true });
       }
     },
-    { scope: 'worker' },
+    { scope: "worker" },
   ],
 });
 
-test.describe('Assistant tool output preview', () => {
-  test('renders bounded plain-text tool output in the drawer before raw details', async ({
+test.describe("Assistant tool output preview", () => {
+  test("renders bounded plain-text tool output in the drawer before raw details", async ({
     page,
   }) => {
-    const sessionId = 'session-tool-output-preview';
+    const sessionId = "session-tool-output-preview";
 
-    await page.route('**/api/truenas/connections', async (route) => {
+    await page.route("**/api/truenas/connections", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify([]),
       });
     });
 
-    await page.route('**/api/resources**', async (route) => {
+    await page.route("**/api/resources**", async (route) => {
       const requestUrl = new URL(route.request().url());
-      if (requestUrl.pathname !== '/api/resources') {
+      if (requestUrl.pathname !== "/api/resources") {
         await route.continue();
         return;
       }
 
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify({
           data: [],
           meta: {
@@ -72,35 +72,36 @@ test.describe('Assistant tool output preview', () => {
       });
     });
 
-    await page.route('**/api/ai/status', async (route) => {
+    await page.route("**/api/ai/status", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ running: true, engine: 'test' }),
+        contentType: "application/json",
+        body: JSON.stringify({ running: true, engine: "test" }),
       });
     });
 
     const fulfillAISettings = async (route: Route) => {
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify({
-          model: 'openrouter:deepseek/deepseek-chat',
-          chat_model: '',
-          control_level: 'read_only',
-          discovery_enabled: true,
+          model: "openrouter:deepseek/deepseek-chat",
+          chat_model: "",
+          control_level: "read_only",
         }),
       });
     };
-    await page.route('**/api/ai/settings', fulfillAISettings);
-    await page.route('**/api/settings/ai', fulfillAISettings);
+    await page.route("**/api/ai/settings", fulfillAISettings);
+    await page.route("**/api/settings/ai", fulfillAISettings);
 
-    await page.route('**/api/ai/models', async (route) => {
+    await page.route("**/api/ai/models", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify({
-          models: [{ id: 'openrouter:deepseek/deepseek-chat', name: 'DeepSeek Chat' }],
+          models: [
+            { id: "openrouter:deepseek/deepseek-chat", name: "DeepSeek Chat" },
+          ],
         }),
       });
     });
@@ -108,50 +109,50 @@ test.describe('Assistant tool output preview', () => {
     // Match /api/ai/sessions with or without a query string (the session
     // picker requests ?limit=...). The trailing `*` matches the query but not
     // the /messages subpath (which has further slashes).
-    await page.route('**/api/ai/sessions*', async (route) => {
-      if (route.request().method() !== 'GET') {
+    await page.route("**/api/ai/sessions*", async (route) => {
+      if (route.request().method() !== "GET") {
         await route.continue();
         return;
       }
 
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify([
           {
             id: sessionId,
-            title: 'Tool output preview proof',
-            created_at: '2026-06-06T09:00:00Z',
-            updated_at: '2026-06-06T09:01:00Z',
+            title: "Tool output preview proof",
+            created_at: "2026-06-06T09:00:00Z",
+            updated_at: "2026-06-06T09:01:00Z",
             message_count: 2,
           },
         ]),
       });
     });
 
-    await page.route('**/api/ai/sessions/*/messages', async (route) => {
+    await page.route("**/api/ai/sessions/*/messages", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        contentType: "application/json",
         body: JSON.stringify([
           {
-            id: 'msg-user-tool-preview',
-            role: 'user',
-            content: 'Show the output from the read-only command.',
-            timestamp: '2026-06-06T09:00:00Z',
+            id: "msg-user-tool-preview",
+            role: "user",
+            content: "Show the output from the read-only command.",
+            timestamp: "2026-06-06T09:00:00Z",
           },
           {
-            id: 'msg-assistant-tool-preview',
-            role: 'assistant',
-            content: 'I checked the target.',
-            timestamp: '2026-06-06T09:01:00Z',
+            id: "msg-assistant-tool-preview",
+            role: "assistant",
+            content: "I checked the target.",
+            timestamp: "2026-06-06T09:01:00Z",
             tool_calls: [
               {
-                name: 'pulse_read',
+                name: "pulse_read",
                 input:
                   '{"action":"exec","target_host":"current_resource","command":"printf preview-proof-0606"}',
                 output:
-                  'preview-proof-0606\nsecond-line\nthird-line\nfourth-line\nhidden-fifth-line',
+                  "preview-proof-0606\nsecond-line\nthird-line\nfourth-line\nhidden-fifth-line",
                 success: true,
               },
             ],
@@ -160,8 +161,8 @@ test.describe('Assistant tool output preview', () => {
       });
     });
 
-    await page.goto('/truenas', {
-      waitUntil: 'domcontentloaded',
+    await page.goto("/truenas", {
+      waitUntil: "domcontentloaded",
     });
     await page.waitForURL(/\/truenas/, {
       timeout: 15_000,
@@ -170,21 +171,23 @@ test.describe('Assistant tool output preview', () => {
     // The assistant open control is the page-contextual launcher; on /truenas
     // its accessible name is "Ask Pulse Assistant about TrueNAS".
     await page
-      .getByRole('button', { name: 'Ask Pulse Assistant about TrueNAS' })
+      .getByRole("button", { name: "Ask Pulse Assistant about TrueNAS" })
       .click();
-    await expect(page.getByRole('heading', { name: 'Pulse Assistant', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Pulse Assistant", exact: true }),
+    ).toBeVisible();
 
     // Resume the stubbed session via the sessions list: open the
     // "Pulse Assistant sessions" menu, then pick the session option.
-    const sessionsButton = page.getByRole('button', {
-      name: 'Pulse Assistant sessions',
+    const sessionsButton = page.getByRole("button", {
+      name: "Pulse Assistant sessions",
     });
     await expect(sessionsButton).toBeInViewport();
     await sessionsButton.click();
-    const sessionDialog = page.getByRole('dialog', {
-      name: 'Pulse Assistant sessions',
+    const sessionDialog = page.getByRole("dialog", {
+      name: "Pulse Assistant sessions",
     });
-    const sessionOption = sessionDialog.getByRole('option', {
+    const sessionOption = sessionDialog.getByRole("option", {
       name: /Resume Tool output preview proof/,
     });
     await expect(sessionDialog).toBeInViewport();
@@ -194,24 +197,26 @@ test.describe('Assistant tool output preview', () => {
     // The tool row now renders the human summary (with the target) and the raw
     // command preview as two separate lines, rather than one combined string.
     await expect(
-      page.getByText('Run read-only command on current resource'),
+      page.getByText("Run read-only command on current resource"),
     ).toBeVisible();
-    await expect(page.getByText('$ printf preview-proof-0606')).toBeVisible();
+    await expect(page.getByText("$ printf preview-proof-0606")).toBeVisible();
 
     const preview = page.locator('pre[aria-label="Tool output preview"]');
     await expect(preview).toBeVisible();
-    await expect(preview).toContainText('preview-proof-0606');
-    await expect(preview).toContainText('second-line');
-    await expect(preview).toContainText('fourth-line');
-    await expect(preview).toContainText('...');
-    await expect(preview).not.toContainText('hidden-fifth-line');
-    await expect(page.getByText('hidden-fifth-line')).toHaveCount(0);
+    await expect(preview).toContainText("preview-proof-0606");
+    await expect(preview).toContainText("second-line");
+    await expect(preview).toContainText("fourth-line");
+    await expect(preview).toContainText("...");
+    await expect(preview).not.toContainText("hidden-fifth-line");
+    await expect(page.getByText("hidden-fifth-line")).toHaveCount(0);
 
     // Expand the tool block to reveal full output + raw input. The details
     // control is the tool-row toggle (title "Show tool details"), not a
     // standalone "Details" button.
-    await page.getByTitle('Show tool details').click();
-    await expect(page.getByText('hidden-fifth-line')).toBeVisible();
-    await expect(page.getByText(/"target_host":"current_resource"/)).toBeVisible();
+    await page.getByTitle("Show tool details").click();
+    await expect(page.getByText("hidden-fifth-line")).toBeVisible();
+    await expect(
+      page.getByText(/"target_host":"current_resource"/),
+    ).toBeVisible();
   });
 });

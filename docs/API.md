@@ -861,20 +861,6 @@ Returns the last cached network discovery result from the background discovery s
 `POST /api/discover` (admin, `settings:write`)
 Runs a manual network scan. JSON body: `{"subnet": "...", "use_cache": false}`. `subnet` defaults to `auto`; `use_cache: true` returns the cached result instead of scanning.
 
-### AI Discovery (Service Discovery)
-Service discovery is used by Pulse Assistant and the UI to inventory web services and enrich links.
-
-- `GET /api/discovery` (list summaries)
-- `GET /api/discovery/status`
-- `PUT /api/discovery/settings` (admin, `settings:write`)
-- `GET /api/discovery/type/{type}`
-- `GET /api/discovery/agent/{agentId}`
-- `GET /api/discovery/{type}/{targetId}/{resourceId}`
-- `POST /api/discovery/{type}/{targetId}/{resourceId}` (trigger discovery, optional `force`)
-- `DELETE /api/discovery/{type}/{targetId}/{resourceId}`
-- `GET /api/discovery/{type}/{targetId}/{resourceId}/progress`
-- `PUT /api/discovery/{type}/{targetId}/{resourceId}/notes`
-
 ### Test Notification
 `POST /api/test-notification` (admin, `settings:write`)
 Broadcasts a WebSocket test event.

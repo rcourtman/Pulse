@@ -56,7 +56,7 @@ func TestPulseToolExecutorAssistantProviderToolsUsesRuntimeAvailability(t *testi
 	if names[agentcapabilities.PulseFileEditToolName] {
 		t.Fatal("AssistantProviderTools exposed retired file mutation tool")
 	}
-	for _, name := range []string{agentcapabilities.PulseDiscoveryToolName, agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName} {
+	for _, name := range []string{agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName} {
 		if names[name] {
 			t.Fatalf("AssistantProviderTools exposed unavailable tool %s; names=%v", name, names)
 		}

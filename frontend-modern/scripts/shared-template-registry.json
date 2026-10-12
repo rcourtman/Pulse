@@ -432,13 +432,12 @@
     {
       "id": "compact-info-card-frame-shell",
       "category": "info-card",
-      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must compose InfoCardFrame for the common bordered surface frame instead of recreating local card-shell classes.",
+      "summary": "Compact drawer, resource-detail, and shared overview cards must compose InfoCardFrame for the common bordered surface frame instead of recreating local card-shell classes.",
       "canonical": {
         "path": "src/components/shared/InfoCardFrame.tsx",
         "export": "InfoCardFrame"
       },
       "requiredConsumers": [
-        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
         { "path": "src/components/Infrastructure/AvailabilityProbeStatusCard.tsx" },
         { "path": "src/components/Infrastructure/ResourceActionHistory.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
@@ -450,7 +449,6 @@
         { "path": "src/components/shared/cards/RootDiskCard.tsx" },
         { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
         { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
-        { "path": "src/components/Workloads/AvailabilityProbeSuggestionCard.tsx" },
         { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
         { "path": "src/features/docker/DockerHostDrawerOverview.tsx" },
         { "path": "src/features/storageBackups/detailPresentation.ts" }
@@ -491,7 +489,10 @@
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
-          "patterns": ["rounded-sm border border-red-200", "bg-red-50 dark:bg-red-900/25 px-2 py-1.5"]
+          "patterns": [
+            "rounded-sm border border-red-200",
+            "bg-red-50 dark:bg-red-900/25 px-2 py-1.5"
+          ]
         },
         {
           "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
@@ -804,7 +805,6 @@
         { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/shared/Button.tsx" },
-        { "path": "src/components/shared/DiscoveryLoadingFallback.tsx" },
         { "path": "src/components/shared/HistoryChartOverlay.tsx" },
         { "path": "src/components/shared/PulseDataGrid.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
@@ -928,7 +928,6 @@
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
         "src/components/shared/__tests__/HistoryChart.test.tsx",
         "src/components/shared/__tests__/PulseDataGrid.test.tsx",
         "src/components/AI/__tests__/FindingsPanel.test.ts",
@@ -937,59 +936,6 @@
         "src/components/patrol/__tests__/ApprovalSection.test.tsx",
         "src/components/patrol/__tests__/InvestigationSection.test.tsx",
         "src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
-      "id": "discovery-loading-fallback",
-      "category": "loading-indicator",
-      "summary": "Discovery tab Suspense fallbacks in resource and workload drawers must compose DiscoveryLoadingFallback for the centered loading row, canonical spinner, status semantics, and discovery loading copy instead of recreating local spinner/text markup.",
-      "canonical": {
-        "path": "src/components/shared/DiscoveryLoadingFallback.tsx",
-        "export": "DiscoveryLoadingFallback"
-      },
-      "requiredConsumers": [
-        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
-        { "path": "src/components/Workloads/GuestDrawer.tsx" },
-        { "path": "src/components/Workloads/NodeDrawer.tsx" },
-        { "path": "src/features/docker/DockerHostDrawer.tsx" }
-      ],
-      "forbiddenPatterns": [
-        {
-          "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx",
-          "patterns": [
-            "h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"
-          ]
-        },
-        {
-          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/components/Workloads/GuestDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/components/Workloads/NodeDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        },
-        {
-          "path": "src/features/docker/DockerHostDrawer.tsx",
-          "patterns": [
-            "animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"
-          ]
-        }
-      ],
-      "proof": [
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -1472,7 +1418,6 @@
       "requiredConsumers": [
         { "path": "src/components/AI/Chat/MessageItem.tsx" },
         { "path": "src/components/AI/Chat/ToolExecutionBlock.tsx" },
-        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
         { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
       ],
@@ -1492,15 +1437,6 @@
             "lucide-solid/icons/copy",
             "lucide-solid/icons/check';",
             "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
-          ]
-        },
-        {
-          "path": "src/components/Discovery/DiscoveryTab.tsx",
-          "patterns": [
-            "interface CopyValueButtonProps",
-            "const CopyValueButton",
-            "CopyIcon class=\"h-3.5 w-3.5\"",
-            "CheckIcon class=\"h-3.5 w-3.5 text-emerald-600"
           ]
         },
         {
@@ -1628,30 +1564,6 @@
       ]
     },
     {
-      "id": "copyable-code-row-shell",
-      "category": "copy-action",
-      "summary": "Copyable code/value rows must compose CopyableCodeRow for the shared code surface and copy action instead of recreating local font-mono row shells.",
-      "canonical": {
-        "path": "src/components/shared/CopyableCodeRow.tsx",
-        "export": "CopyableCodeRow"
-      },
-      "requiredConsumers": [{ "path": "src/components/Discovery/DiscoveryTab.tsx" }],
-      "forbiddenPatterns": [
-        {
-          "path": "src/components/Discovery/DiscoveryTab.tsx",
-          "patterns": [
-            "const CopyableCodeRow",
-            "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5"
-          ]
-        }
-      ],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/Button.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
       "id": "form-select-shell",
       "category": "form-control",
       "summary": "Native select controls must compose FormSelect for shared label/id/help wiring, value synchronization, and select chrome instead of recreating labelled select wrappers locally.",
@@ -1744,7 +1656,6 @@
         { "path": "src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx" },
         { "path": "src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx" },
         { "path": "src/components/Infrastructure/ResourceOperatorStateSection.tsx" },
-        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
         { "path": "src/components/Settings/AISettings.tsx" },
         { "path": "src/components/Settings/AuditLogPanel.tsx" },
         { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
@@ -2536,9 +2447,7 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableDateTimeValue"
       },
-      "requiredConsumers": [
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" }
-      ],
+      "requiredConsumers": [{ "path": "src/features/truenas/TrueNASProtectionTable.tsx" }],
       "forbiddenPatterns": [
         {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx",
@@ -3792,12 +3701,12 @@
       ]
     },
     {
-      "id": "drawer-discovery-local-loading-fallback",
+      "id": "drawer-local-border-loading-spinner-shell",
       "category": "loading-indicator",
-      "summary": "Resource and workload drawer discovery Suspense fallbacks must not recreate local border spinner rows; compose DiscoveryLoadingFallback so all drawer loading rows inherit the same spinner, spacing, copy, and status semantics.",
+      "summary": "Resource and workload drawers must not recreate local border spinner rows; compose LoadingSpinner so drawer loading states inherit the shared spinner and accessibility behavior.",
       "canonical": {
-        "path": "src/components/shared/DiscoveryLoadingFallback.tsx",
-        "export": "DiscoveryLoadingFallback"
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
       },
       "scopes": [
         "src/components/Infrastructure/ResourceDetailDrawer.tsx",
@@ -3808,11 +3717,10 @@
       ],
       "extensions": [".tsx"],
       "allPatterns": ["border-t-transparent", "animate-spin"],
-      "legacyReason": "Retired migration debt. Discovery tab fallbacks in drawers compose DiscoveryLoadingFallback instead of local centered border-spinner rows.",
+      "legacyReason": "Retired migration debt. Drawer loading rows compose LoadingSpinner instead of local centered border-spinner rows.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
-        "src/components/shared/DiscoveryLoadingFallback.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
@@ -3991,7 +3899,7 @@
     {
       "id": "compact-info-card-frame-local-shell",
       "category": "info-card",
-      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must not copy the bordered bg-surface p-3 shadow shell owned by InfoCardFrame.",
+      "summary": "Compact drawer, resource-detail, and shared overview cards must not copy the bordered bg-surface p-3 shadow shell owned by InfoCardFrame.",
       "canonical": {
         "path": "src/components/shared/InfoCardFrame.tsx",
         "export": "InfoCardFrame"
@@ -5642,28 +5550,6 @@
         "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
       ],
       "legacyReason": "Retired migration debt. Accent copy-value icon buttons belong to CopyValueButton.",
-      "allowedPaths": [],
-      "proof": [
-        "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/Button.test.tsx",
-        "scripts/shared-template-audit.mjs"
-      ]
-    },
-    {
-      "id": "copyable-code-row-local-shell",
-      "category": "copy-action",
-      "summary": "Copyable code/value rows must not copy the local surface-alt font-mono row shell; use CopyableCodeRow.",
-      "canonical": {
-        "path": "src/components/shared/CopyableCodeRow.tsx",
-        "export": "CopyableCodeRow"
-      },
-      "scopes": ["src/components", "src/features", "src/pages"],
-      "extensions": [".tsx"],
-      "allPatterns": [
-        "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5",
-        "break-all font-mono text-xs text-base-content"
-      ],
-      "legacyReason": "Retired migration debt. Copyable code rows belong to CopyableCodeRow so code styling and copy behavior stay canonical.",
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

@@ -1,12 +1,13 @@
 package api
 
 import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestQuickSecuritySetupForcePreservesSystemSettings(t *testing.T) {

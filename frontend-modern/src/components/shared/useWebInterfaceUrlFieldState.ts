@@ -6,12 +6,8 @@ import { DockerHostMetadataAPI } from '@/api/dockerHostMetadata';
 import { copyToClipboard } from '@/utils/clipboard';
 import { dispatchResourceMetadataChanged } from '@/utils/resourceMetadataEvents';
 import {
-  getWebInterfaceSuggestedUrlFallback,
   getWebInterfaceTargetLabel,
-  classifyWebInterfaceUrl,
   normalizeWebInterfaceUrl,
-  shouldShowWebInterfaceSuggestedDiagnostic,
-  shouldShowWebInterfaceSuggestedUrl,
   validateWebInterfaceCustomUrl,
   type WebInterfaceUrlFieldProps,
 } from './webInterfaceUrlFieldModel';
@@ -32,28 +28,6 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   );
   const currentCustomUrl = createMemo(() => fetchedCustomUrl());
   const normalizedCurrentUrl = createMemo(() => normalizeWebInterfaceUrl(currentCustomUrl()));
-  const normalizedSuggestedUrl = createMemo(() => normalizeWebInterfaceUrl(props.suggestedUrl));
-  const invalidSuggestedUrlError = createMemo(() => {
-    const result = classifyWebInterfaceUrl(props.suggestedUrl);
-    return result.status === 'invalid' ? result.error : null;
-  });
-  const showSuggestedDiagnostic = createMemo(() =>
-    shouldShowWebInterfaceSuggestedDiagnostic({
-      currentUrl: currentCustomUrl(),
-      discoveryLoading: props.discoveryLoading,
-      suggestedUrl: props.suggestedUrl,
-      suggestedUrlDiagnostic: props.suggestedUrlDiagnostic,
-    }),
-  );
-  const showSuggestedUrl = createMemo(() =>
-    shouldShowWebInterfaceSuggestedUrl({
-      currentUrl: currentCustomUrl(),
-      suggestedUrl: props.suggestedUrl,
-    }),
-  );
-  const suggestedUrlFallback = createMemo(() =>
-    getWebInterfaceSuggestedUrlFallback(props.suggestedUrlDiagnostic),
-  );
 
   const clearUrlSuccessTimer = () => {
     if (!urlSuccessTimer) return;
@@ -226,14 +200,9 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     handleCopyUrl,
     handleDeleteUrl,
     handleSaveUrl,
-    invalidSuggestedUrlError,
     metadataId,
     normalizedCurrentUrl,
-    normalizedSuggestedUrl,
     setUrlValue,
-    showSuggestedDiagnostic,
-    showSuggestedUrl,
-    suggestedUrlFallback,
     targetLabel,
     urlError,
     urlSaving,

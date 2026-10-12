@@ -13,8 +13,6 @@ import {
 } from './Button';
 import buttonSource from './Button.tsx?raw';
 import buttonModelSource from './buttonModel.ts?raw';
-import { CopyableCodeRow } from './CopyableCodeRow';
-import copyableCodeRowSource from './CopyableCodeRow.tsx?raw';
 
 describe('Button', () => {
   afterEach(() => {
@@ -350,27 +348,6 @@ describe('Button', () => {
     expect(close).toHaveClass('w-8');
     close.click();
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders copyable code rows through the shared copy primitive', () => {
-    const onCopy = vi.fn();
-
-    render(() => (
-      <CopyableCodeRow
-        value="/etc/pulse/config.yml"
-        copied={false}
-        onCopyValue={onCopy}
-        label="Copy config path"
-      />
-    ));
-
-    expect(copyableCodeRowSource).toContain('CopyValueButton');
-    expect(screen.getByText('/etc/pulse/config.yml')).toHaveClass('font-mono');
-
-    const copyButton = screen.getByRole('button', { name: 'Copy config path' });
-    expect(copyButton).toHaveClass('min-h-6');
-    copyButton.click();
-    expect(onCopy).toHaveBeenCalledWith('/etc/pulse/config.yml');
   });
 
   it('renders in-app button links through the router', () => {

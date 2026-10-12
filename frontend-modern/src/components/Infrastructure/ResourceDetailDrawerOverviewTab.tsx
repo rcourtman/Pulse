@@ -1,4 +1,4 @@
-import { For, Show, Suspense } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import type {
@@ -19,8 +19,6 @@ import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfac
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
-import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
@@ -303,60 +301,8 @@ export const ResourceAccessDisclosure: Component<{
               targetLabel={config().targetLabel}
               title="Web interface"
               customUrl={props.resource.customUrl}
-              discoveryLoading={props.drawer.discoveryLoading()}
-              suggestedUrl={props.drawer.discoveryIdentifiedSummary()?.suggestedUrl}
-              suggestedUrlReasonText={
-                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonText
-              }
-              suggestedUrlReasonTitle={
-                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonTitle
-              }
-              suggestedUrlDiagnostic={
-                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlDiagnostic
-              }
               embedded
             />
-
-            <Show when={props.drawer.discoveryFeatureEnabled() && !props.drawer.hasDiscoveryTab()}>
-              <div
-                class="space-y-2 border-t border-border pt-3"
-                data-testid="resource-access-analysis"
-              >
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                      Analysis
-                    </div>
-                    <Show when={props.drawer.discoveryContextSummary()}>
-                      <div class="mt-1 text-[10px] text-base-content">
-                        {props.drawer.discoveryContextSummary()}
-                      </div>
-                    </Show>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => props.drawer.setShowDiscoveryContext((value) => !value)}
-                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
-                  >
-                    {props.drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
-                  </button>
-                </div>
-
-                <Show when={props.drawer.showDiscoveryContext()}>
-                  <Suspense fallback={<DiscoveryLoadingFallback />}>
-                    <DiscoveryTab
-                      resourceType={config().resourceType}
-                      agentId={config().agentId}
-                      resourceId={config().resourceId}
-                      hostname={config().hostname}
-                      canonicalResourceId={props.resource.id}
-                      commandsEnabled={props.drawer.agentMeta()?.commandsEnabled}
-                      runBlockReason={props.drawer.guestReadPrecaution()}
-                    />
-                  </Suspense>
-                </Show>
-              </div>
-            </Show>
           </div>
         )}
       </Show>

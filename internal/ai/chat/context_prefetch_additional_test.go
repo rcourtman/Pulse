@@ -6,64 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
-
-type mockDiscoveryProvider struct {
-	existing     map[string]*tools.ResourceDiscoveryInfo
-	triggeredKey []string
-	triggerErr   error
-}
-
-func (m *mockDiscoveryProvider) key(resourceType, targetID, resourceID string) string {
-	return resourceType + ":" + targetID + ":" + resourceID
-}
-
-func (m *mockDiscoveryProvider) GetDiscovery(id string) (*tools.ResourceDiscoveryInfo, error) {
-	return nil, nil
-}
-
-func (m *mockDiscoveryProvider) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*tools.ResourceDiscoveryInfo, error) {
-	if m.existing == nil {
-		return nil, nil
-	}
-	return m.existing[m.key(resourceType, targetID, resourceID)], nil
-}
-
-func (m *mockDiscoveryProvider) ListDiscoveries() ([]*tools.ResourceDiscoveryInfo, error) {
-	return nil, nil
-}
-
-func (m *mockDiscoveryProvider) ListDiscoveriesByType(resourceType string) ([]*tools.ResourceDiscoveryInfo, error) {
-	return nil, nil
-}
-
-func (m *mockDiscoveryProvider) ListDiscoveriesByTarget(targetID string) ([]*tools.ResourceDiscoveryInfo, error) {
-	return nil, nil
-}
-
-func (m *mockDiscoveryProvider) FormatForAIContext(discoveries []*tools.ResourceDiscoveryInfo) string {
-	return ""
-}
-
-func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, _ bool) (*tools.ResourceDiscoveryInfo, error) {
-	m.triggeredKey = append(m.triggeredKey, m.key(resourceType, targetID, resourceID))
-	if m.triggerErr != nil {
-		return nil, m.triggerErr
-	}
-	return &tools.ResourceDiscoveryInfo{
-		ResourceType: resourceType,
-		TargetID:     targetID,
-		ResourceID:   resourceID,
-		Hostname:     targetID,
-		ServiceType:  "nginx",
-		ServiceName:  "nginx",
-		ConfigPaths:  []string{"/etc/nginx/nginx.conf"},
-		LogPaths:     []string{"/var/log/nginx/error.log"},
-	}, nil
-}
 
 func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState {
 	rr := unifiedresources.NewRegistry(nil)
@@ -72,7 +17,7 @@ func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState 
 }
 
 func TestContextPrefetcher_NoReadState(t *testing.T) {
-	prefetcher := NewContextPrefetcher(nil, nil)
+	prefetcher := NewContextPrefetcher(nil)
 	if ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil); ctx != nil {
 		t.Fatalf("expected nil context when ReadState missing")
 	}
@@ -80,7 +25,7 @@ func TestContextPrefetcher_NoReadState(t *testing.T) {
 
 func TestContextPrefetcher_UnresolvedPlainTextMentionDoesNotInjectContext(t *testing.T) {
 	state := models.StateSnapshot{}
-	prefetcher := NewContextPrefetcher(newTestReadState(state), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(state))
 	ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil)
 	if ctx != nil {
 		t.Fatalf("expected plain-text mentions to stay model-owned, got %#v", ctx)
@@ -122,7 +67,7 @@ func TestContextPrefetcher_PlainTextResourceNamesDoNotPrefetch(t *testing.T) {
 	}
 
 	rs := newTestReadState(state)
-	prefetcher := NewContextPrefetcher(rs, nil)
+	prefetcher := NewContextPrefetcher(rs)
 	ctx := prefetcher.Prefetch(context.Background(), "alpha beta homepage node1 host1 pod1 dep1", nil)
 	if ctx != nil {
 		t.Fatalf("expected plain resource names to stay model-owned, got %#v", ctx)
@@ -164,7 +109,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 	// Build ReadState from the full state (after appending second docker host)
 	rs := newTestReadState(state)
-	prefetcher := NewContextPrefetcher(rs, nil)
+	prefetcher := NewContextPrefetcher(rs)
 
 	mentions := prefetcher.resolveStructuredMentions(structured)
 	if len(mentions) != 5 {
@@ -258,7 +203,7 @@ func TestContextPrefetcher_ResolveStructuredMentions_TrueNASCanonicalAppContaine
 	}
 	appResourceID := appContainers[0].ID
 
-	prefetcher := NewContextPrefetcher(rr, nil)
+	prefetcher := NewContextPrefetcher(rr)
 	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
 		ID:   appResourceID,
 		Name: "Nextcloud",
@@ -364,7 +309,7 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 	vmResourceID := vmResources[0].ID
 	storageResourceID := storageResources[0].ID
 
-	prefetcher := NewContextPrefetcher(rr, nil)
+	prefetcher := NewContextPrefetcher(rr)
 	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
 		{ID: "agent:vc-1:host:host-101", Name: "ESXi 01", Type: "agent"},
 		{ID: vmResourceID, Name: "app-01", Type: "vm"},
@@ -401,7 +346,7 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 
 func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyContainerAliases(t *testing.T) {
 	rs := newTestReadState(models.StateSnapshot{})
-	prefetcher := NewContextPrefetcher(rs, nil)
+	prefetcher := NewContextPrefetcher(rs)
 
 	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
 		{
@@ -432,43 +377,8 @@ func TestContextPrefetcher_ResolveStructuredMentions_IgnoresLegacyContainerAlias
 	}
 }
 
-func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
-	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), provider)
-
-	provider.existing[provider.key("vm", "node1", "101")] = &tools.ResourceDiscoveryInfo{
-		ResourceType: "vm",
-		TargetID:     "node1",
-		ResourceID:   "101",
-	}
-
-	mention := ResourceMention{ResourceType: "vm", TargetID: "node1", ResourceID: "101", Name: "alpha"}
-	res, err := prefetcher.getOrTriggerDiscovery(context.Background(), mention)
-	if err != nil || res == nil {
-		t.Fatalf("expected cached discovery, got err=%v res=%v", err, res)
-	}
-	if len(provider.triggeredKey) != 0 {
-		t.Fatalf("expected no trigger when cached discovery exists")
-	}
-
-	mention2 := ResourceMention{ResourceType: "app-container", TargetID: "dock1", ResourceID: "cid1", Name: "homepage"}
-	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention2)
-	if err != nil || res == nil {
-		t.Fatalf("expected discovery trigger to succeed")
-	}
-	if len(provider.triggeredKey) != 1 {
-		t.Fatalf("expected trigger to be called once")
-	}
-
-	mention3 := ResourceMention{ResourceType: "agent", TargetID: "host1", ResourceID: "host1", Name: "host1"}
-	res, err = prefetcher.getOrTriggerDiscovery(context.Background(), mention3)
-	if err != nil || res != nil {
-		t.Fatalf("expected no discovery for agent type")
-	}
-}
-
 func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	mentions := []ResourceMention{
 		{
@@ -489,23 +399,7 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 		},
 	}
 
-	discoveries := []*tools.ResourceDiscoveryInfo{{
-		ResourceType: "docker",
-		TargetID:     "dock1",
-		ResourceID:   "cid1",
-		Hostname:     "dock1",
-		ConfigPaths:  []string{"/etc/homepage/config"},
-		LogPaths:     []string{"/var/log/homepage.log"},
-	}, {
-		ResourceType: "lxc",
-		TargetID:     "node1",
-		ResourceID:   "201",
-		Hostname:     "node1",
-		LogPaths:     []string{"journalctl -u service"},
-		DataPaths:    []string{"/var/lib/service"},
-	}}
-
-	summary := prefetcher.formatContextSummary(mentions, discoveries)
+	summary := prefetcher.formatContextSummary(mentions)
 	if !strings.Contains(summary, "Docker container") {
 		t.Fatalf("expected app-container docker context in summary")
 	}
@@ -515,13 +409,10 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 	if !strings.Contains(summary, "VMID") && !strings.Contains(summary, "Type: lxc") {
 		t.Fatalf("expected LXC mention details in summary")
 	}
-	if !strings.Contains(summary, "Log commands") {
-		t.Fatalf("expected log command formatting in summary")
-	}
 }
 
 func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	summary := prefetcher.formatContextSummary([]ResourceMention{{
 		Name:              "app-01",
@@ -532,7 +423,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 		Adapter:           "vmware-vsphere",
 		UnifiedResourceID: "vmware-vm-1",
 		SupportsControl:   false,
-	}}, nil)
+	}})
 
 	if !strings.Contains(summary, "read-only in Pulse") {
 		t.Fatalf("expected VMware read-only note, got %q", summary)
@@ -552,7 +443,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 }
 
 func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	summary := prefetcher.formatContextSummary([]ResourceMention{
 		{
@@ -573,7 +464,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 			UnifiedResourceID: "vmware-datastore-1",
 			SupportsControl:   false,
 		},
-	}, nil)
+	})
 
 	if strings.Contains(summary, "Proceed directly with pulse_control") {
 		t.Fatalf("expected VMware host and datastore summary to avoid control instructions, got %q", summary)
@@ -587,7 +478,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 }
 
 func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceReadPath(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	summary := prefetcher.formatContextSummary([]ResourceMention{{
 		Name:              "Nextcloud",
@@ -598,7 +489,7 @@ func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceRead
 		Adapter:           "truenas",
 		UnifiedResourceID: "app-container:truenas-main:nextcloud",
 		SupportsControl:   true,
-	}}, nil)
+	}})
 
 	if strings.Contains(summary, "Docker container") {
 		t.Fatalf("expected native TrueNAS app summary to avoid Docker wording, got %q", summary)
@@ -621,17 +512,7 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 	state := models.StateSnapshot{
 		VMs: []models.VM{{ID: "vm-1", Name: "alpha", VMID: 101, Node: "node1", Tags: []string{"database"}}},
 	}
-	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{
-		"vm:node1:101": {
-			ResourceType: "vm",
-			TargetID:     "node1",
-			ResourceID:   "101",
-			Hostname:     "node1",
-			ServiceType:  "nginx",
-		},
-	}}
-
-	prefetcher := NewContextPrefetcher(newTestReadState(state), provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(state))
 	ctx := prefetcher.Prefetch(context.Background(), "@alpha", []StructuredMention{
 		{ID: "vm:node1:101", Name: "alpha", Type: "vm", Node: "node1"},
 	})
@@ -649,7 +530,7 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 	}
 }
 
-func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *testing.T) {
+func TestContextPrefetcher_PrefetchRestrictedMentionWithholdsPaths(t *testing.T) {
 	state := models.StateSnapshot{
 		Containers: []models.Container{{
 			ID:   "lxc-1",
@@ -660,17 +541,13 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 			Tags: []string{"customer-data"},
 		}},
 	}
-	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
-	prefetcher := NewContextPrefetcher(newTestReadState(state), provider)
+	prefetcher := NewContextPrefetcher(newTestReadState(state))
 
 	ctx := prefetcher.Prefetch(context.Background(), "@customer-db", []StructuredMention{
 		{ID: "system-container:node1:201", Name: "customer-db", Type: "system-container", Node: "node1"},
 	})
 	if ctx == nil || len(ctx.Mentions) != 1 {
 		t.Fatalf("expected structured mention to be resolved")
-	}
-	if len(provider.triggeredKey) != 0 {
-		t.Fatalf("expected governed mention to skip discovery trigger, got %#v", provider.triggeredKey)
 	}
 	if !strings.Contains(ctx.Summary, "local-only context") {
 		t.Fatalf("expected aiSafeSummary local-only wording, got %q", ctx.Summary)
@@ -690,7 +567,7 @@ func TestContextPrefetcher_PrefetchRestrictedMentionSkipsDiscoveryAndPaths(t *te
 }
 
 func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	summary := prefetcher.formatContextSummary([]ResourceMention{{
 		Name:          "customer-db",
@@ -709,7 +586,7 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 				},
 			},
 		},
-	}}, nil)
+	}})
 
 	if !strings.Contains(summary, "Governed resource") {
 		t.Fatalf("expected governed heading, got %q", summary)
@@ -732,7 +609,7 @@ func TestContextPrefetcher_FormatContextSummary_GovernedMention(t *testing.T) {
 }
 
 func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter(t *testing.T) {
-	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}))
 
 	summary := prefetcher.formatContextSummary([]ResourceMention{{
 		Name:          "customer-db",
@@ -750,7 +627,7 @@ func TestContextPrefetcher_FormatContextSummary_UsesSharedGovernedBlockFormatter
 				},
 			},
 		},
-	}}, nil)
+	}})
 
 	want := unifiedresources.FormatResourcePolicyGovernedSummary(
 		"system container resource; status online; local-only context",

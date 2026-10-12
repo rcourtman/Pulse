@@ -526,10 +526,6 @@ func TestCommandClientGuestExecutionAdmissionContract(t *testing.T) {
 	testVMGuestExecNoUnverifiedHandoff(t)
 }
 
-func TestGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
-	testGuestExecRealServerAgentDiscoveryAdmission(t)
-}
-
 func TestCommandClientGuestCompletionContract(t *testing.T) {
 	TestGuestExecZeroCLIExitDoesNotProveGuestCompletion(t)
 }

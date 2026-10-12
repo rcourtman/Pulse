@@ -4,7 +4,6 @@ import {
   type ResourceAssistantContextTarget,
 } from '@/utils/resourceAssistantContextModel';
 import type { AIChatContext } from '@/stores/aiChat';
-import type { ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from '@/types/resource';
 
 // Minimal target factory matching the required fields of
 // `ResourceAssistantContextTarget`. Optional facets are layered in per-test to
@@ -73,39 +72,6 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
     });
   });
 
-  describe('statusLabel — readinessPresentation truthy vs null', () => {
-    it('appends the readiness statusLabel when a discoveryReadiness is present', () => {
-      // readiness present => readinessPresentation is non-null => concatenated arm.
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({
-          discoveryReadiness: { state: 'fresh' } satisfies ResourceDiscoveryReadiness,
-        }),
-      );
-      expect(context.briefing?.statusLabel).toBe('Read-only context attached · Discovery fresh');
-    });
-
-    it('appends the unknown statusLabel when discoveryTarget exists but readiness is absent', () => {
-      // discoveryTarget truthy => Boolean(discoveryTarget) true => hasDiscoverySupport
-      // true => readinessPresentation is the "unknown" shape even without readiness.
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({
-          discoveryTarget: {
-            resourceType: 'vm',
-            agentId: 'agent-1',
-            resourceId: 'res-1',
-          } satisfies ResourceDiscoveryTarget,
-        }),
-      );
-      expect(context.briefing?.statusLabel).toBe('Read-only context attached · Discovery unknown');
-    });
-
-    it('uses the plain statusLabel when neither readiness nor discoveryTarget are present', () => {
-      // readiness absent AND discoveryTarget absent => readinessPresentation null.
-      const context = buildResourceAssistantContextForTarget(makeTarget());
-      expect(context.briefing?.statusLabel).toBe('Read-only context attached');
-    });
-  });
-
   describe('detailLines assembly — every conditional arm', () => {
     it('includes the Primary identity line only when primaryIdentity is truthy and differs from id', () => {
       // primaryIdentity && primaryIdentity !== target.id => truthy arm.
@@ -145,49 +111,6 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
       expect(context.briefing?.detailLines?.some((l) => l.startsWith('Parent:'))).toBe(false);
       expect(context.handoffResources?.[0]?.node).toBeUndefined();
     });
-
-    it('builds the Discovery line from discoveryTarget.resourceType:resourceId when present', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({
-          discoveryTarget: {
-            resourceType: 'system-container',
-            agentId: 'agent-2',
-            resourceId: 'ct-42',
-          } satisfies ResourceDiscoveryTarget,
-        }),
-      );
-      expect(context.briefing?.detailLines).toContain('Discovery: system-container:ct-42');
-    });
-
-    it('drops the Discovery line when discoveryTarget is absent', () => {
-      const context = buildResourceAssistantContextForTarget(makeTarget({ discoveryTarget: null }));
-      expect(context.briefing?.detailLines?.some((l) => l.startsWith('Discovery:'))).toBe(false);
-    });
-
-    it('includes the readiness briefing line when discoveryReadiness is present', () => {
-      // readinessLine non-empty => included arm.
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({
-          discoveryReadiness: {
-            state: 'stale',
-            serviceName: 'Home Assistant',
-            factCount: 5,
-            ageSeconds: 120,
-          } satisfies ResourceDiscoveryReadiness,
-        }),
-      );
-      expect(context.briefing?.detailLines).toContain(
-        'Discovery data: Discovery stale, service Home Assistant, 5 facts',
-      );
-    });
-
-    it('omits the readiness briefing line when discoveryReadiness is absent', () => {
-      // readinessLine === '' => compact drops it.
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ discoveryReadiness: null }),
-      );
-      expect(context.briefing?.detailLines).toEqual(['Resource ID: res-1']);
-    });
   });
 
   describe('context + handoff shape', () => {
@@ -226,17 +149,6 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
         technology: 'vmware',
         parentName: 'esxi-host-1',
         primaryIdentity: 'web-prod-01.example.com',
-        discoveryTarget: {
-          resourceType: 'vm',
-          agentId: 'agent-7',
-          resourceId: 'vm-101',
-        } satisfies ResourceDiscoveryTarget,
-        discoveryReadiness: {
-          state: 'stale',
-          serviceName: 'Home Assistant',
-          factCount: 5,
-          ageSeconds: 120,
-        } satisfies ResourceDiscoveryReadiness,
       });
 
       const expected: AIChatContext = {
@@ -252,13 +164,11 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
           sourceLabel: 'Pulse resource context',
           title: 'web-prod-01',
           subject: 'vm / online / vmware',
-          statusLabel: 'Read-only context attached · Discovery stale',
+          statusLabel: 'Read-only context attached',
           detailLines: [
             'Resource ID: vm-101',
             'Primary identity: web-prod-01.example.com',
             'Parent: esxi-host-1',
-            'Discovery: vm:vm-101',
-            'Discovery data: Discovery stale, service Home Assistant, 5 facts',
           ],
           safetyNote: 'Approval required before any action.',
         },

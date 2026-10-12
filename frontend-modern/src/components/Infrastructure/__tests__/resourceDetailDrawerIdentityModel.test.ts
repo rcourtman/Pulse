@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildDiscoveryContextSummary,
   buildIdentityMatchInfo,
   buildResourceDebugBundle,
   buildResourceIdentityView,
@@ -107,32 +106,6 @@ describe('resourceDetailDrawerIdentityModel', () => {
     expect(identityView.identityCardHasRichData).toBe(true);
   });
 
-  it('keeps discovery context wording in the canonical identity model', () => {
-    expect(
-      buildDiscoveryContextSummary({
-        resourceType: 'vm',
-        agentId: 'pve-1',
-        resourceId: '101',
-        hostname: 'pve-1.local',
-        metadataKind: 'guest',
-        metadataId: 'resource-1',
-        targetLabel: 'guest',
-      }),
-    ).toBe('vm analysis via pve-1.local');
-
-    expect(
-      buildDiscoveryContextSummary({
-        resourceType: 'agent',
-        agentId: 'host-1',
-        resourceId: 'host-1',
-        hostname: 'host-1.local',
-        metadataKind: 'agent',
-        metadataId: 'host-1',
-        targetLabel: 'agent',
-      }),
-    ).toBeNull();
-  });
-
   it('builds resource Assistant handoffs from canonical resource identity without prompt text', () => {
     const context = buildResourceAssistantContext(
       baseResource({
@@ -163,7 +136,6 @@ describe('resourceDetailDrawerIdentityModel', () => {
         node: 'delly',
       },
     ]);
-    expect(context.briefing?.detailLines).toContain('Discovery: system-container:101');
   });
 
   it('builds canonical source sections and identity-match precedence', () => {

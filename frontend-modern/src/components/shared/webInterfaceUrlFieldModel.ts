@@ -1,5 +1,3 @@
-import { getDiscoverySuggestedURLFallback } from '@/utils/discoveryPresentation';
-
 export interface WebInterfaceUrlFieldProps {
   metadataKind: 'guest' | 'agent' | 'docker' | 'docker-host';
   metadataId?: string;
@@ -7,11 +5,6 @@ export interface WebInterfaceUrlFieldProps {
   title?: string;
   customUrl?: string;
   onCustomUrlChange?: (url: string) => void;
-  suggestedUrl?: string;
-  suggestedUrlReasonText?: string;
-  suggestedUrlReasonTitle?: string;
-  suggestedUrlDiagnostic?: string;
-  discoveryLoading?: boolean;
   embedded?: boolean;
   class?: string;
 }
@@ -73,31 +66,4 @@ export function getWebInterfaceTargetLabel(
   const trimmed = normalizeWebInterfaceUrl(targetLabel);
   if (trimmed) return trimmed;
   return metadataKind === 'agent' ? 'agent' : 'workload';
-}
-
-export function shouldShowWebInterfaceSuggestedDiagnostic(options: {
-  discoveryLoading?: boolean;
-  currentUrl?: string;
-  suggestedUrl?: string;
-  suggestedUrlDiagnostic?: string;
-}): boolean {
-  return (
-    !options.discoveryLoading &&
-    !normalizeWebInterfaceUrl(options.currentUrl) &&
-    !normalizeWebInterfaceUrl(options.suggestedUrl) &&
-    Boolean(options.suggestedUrlDiagnostic)
-  );
-}
-
-export function shouldShowWebInterfaceSuggestedUrl(options: {
-  currentUrl?: string;
-  suggestedUrl?: string;
-}): boolean {
-  const suggested = normalizeWebInterfaceUrl(options.suggestedUrl);
-  if (classifyWebInterfaceUrl(suggested).status !== 'valid') return false;
-  return suggested !== normalizeWebInterfaceUrl(options.currentUrl);
-}
-
-export function getWebInterfaceSuggestedUrlFallback(diagnostic?: string) {
-  return getDiscoverySuggestedURLFallback(diagnostic);
 }

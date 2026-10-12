@@ -2448,8 +2448,7 @@
             "src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
             "src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
             "src/components/Settings/__tests__/useConnectionsLedger.test.ts",
-            "src/components/Settings/__tests__/settingsArchitecture.test.ts",
-            "src/utils/__tests__/discoveryPresentation.test.ts"
+            "src/components/Settings/__tests__/settingsArchitecture.test.ts"
           ]
         },
         {
@@ -9751,11 +9750,6 @@
           "repo": "pulse",
           "path": "internal/monitoring/monitor_host_agents_test.go",
           "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/servicediscovery/service.go",
-          "kind": "file"
         }
       ]
     },
@@ -9889,11 +9883,6 @@
         {
           "repo": "pulse",
           "path": "internal/monitoring/availability_poller.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/servicediscovery/availability_suggestion.go",
           "kind": "file"
         }
       ]

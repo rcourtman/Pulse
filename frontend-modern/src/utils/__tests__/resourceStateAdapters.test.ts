@@ -928,9 +928,9 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expectSplitRows(firstSplitTick);
   });
 
-  it('keeps REST-only scopes and readiness a departed source did not own', () => {
+  it('keeps REST-only scopes a departed source did not own', () => {
     // A Docker container in a Proxmox LXC whose availability check was
-    // removed: REST promoted its platform scopes, source status and readiness,
+    // removed: REST promoted its platform scopes and source status,
     // which the realtime payload never carries. Docker stays listed, so its
     // status entry, its recorded action refusal and its Proxmox scope (the LXC
     // host) stay; only the availability entry goes.
@@ -944,7 +944,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
       sourceType: 'hybrid',
       status: 'online',
       lastSeen,
-      discoveryReadiness: { state: 'fresh', targetId: 'agent-141', resourceId: 'frigate-141' },
       actionReadiness: [{ name: 'restart', available: false, reason: 'lifecycle disabled' }],
       availability: { status: 'up' },
       sourceStatus: { docker: { status: 'impaired' }, availability: { status: 'online' } },
@@ -973,13 +972,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
     );
 
     expect(row?.platformScopes).toEqual(['proxmox-pve', 'docker']);
-    // Realtime carries a discovery target only for agent and Docker host rows,
-    // so a container row's readiness (REST enrichment) cannot be judged and stays.
-    expect(row?.discoveryReadiness).toEqual({
-      state: 'fresh',
-      targetId: 'agent-141',
-      resourceId: 'frigate-141',
-    });
     expect(row?.actionReadiness).toEqual([
       { name: 'restart', available: false, reason: 'lifecycle disabled' },
     ]);
@@ -1049,72 +1041,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
 
     expect(row?.sources).toEqual(['proxmox']);
     expect(row?.platformScopes).toEqual(['proxmox-pve']);
-  });
-
-  it('drops discovery readiness whose target the rebuilt row no longer has', () => {
-    const previous = {
-      id: 'host-1',
-      type: 'agent',
-      name: 'host-1',
-      displayName: 'host-1',
-      platformType: 'proxmox-pve',
-      sourceType: 'hybrid',
-      sources: ['proxmox', 'docker'],
-      status: 'online',
-      lastSeen,
-      discoveryTarget: { resourceType: 'agent', agentId: 'docker-agent-1', resourceId: 'host-1' },
-      discoveryReadiness: { state: 'fresh', targetId: 'docker-agent-1', source: 'docker' },
-      platformData: { sources: ['proxmox', 'docker'] },
-    } as unknown as Resource;
-    const node = {
-      ...structuredClone(previous),
-      sourceType: 'api',
-      sources: ['proxmox'],
-      discoveryTarget: { resourceType: 'agent', agentId: 'pve-node', resourceId: 'pve-node' },
-      discoveryReadiness: undefined,
-      platformData: { sources: ['proxmox'] },
-    } as unknown as Resource;
-    delete (node as unknown as Record<string, unknown>).discoveryReadiness;
-
-    const [row] = mergeCanonicalResourceSnapshot([node], [previous]);
-
-    expect(row?.sources).toEqual(['proxmox']);
-    expect(row?.discoveryReadiness).toBeUndefined();
-  });
-
-  it('compares each discovery coordinate with the same coordinate of the row target', () => {
-    const rebuild = (readiness: Record<string, string>, agentId: string, resourceId: string) => {
-      const previous = {
-        id: 'host-2',
-        type: 'agent',
-        name: 'host-2',
-        displayName: 'host-2',
-        platformType: 'proxmox-pve',
-        sourceType: 'hybrid',
-        sources: ['proxmox', 'docker'],
-        status: 'online',
-        lastSeen,
-        discoveryReadiness: { state: 'fresh', ...readiness },
-        platformData: { sources: ['proxmox', 'docker'] },
-      } as unknown as Resource;
-      const node = {
-        ...structuredClone(previous),
-        sourceType: 'api',
-        sources: ['proxmox'],
-        discoveryTarget: { resourceType: 'agent', agentId, resourceId },
-        platformData: { sources: ['proxmox'] },
-      } as unknown as Resource;
-      delete (node as unknown as Record<string, unknown>).discoveryReadiness;
-      return mergeCanonicalResourceSnapshot([node], [previous])[0]?.discoveryReadiness;
-    };
-
-    const named = { targetId: 'agent-1', resourceId: 'r1' };
-    expect(rebuild(named, 'agent-1', 'r1')).toMatchObject(named);
-    // One coordinate matching is not enough, and equal values in the other
-    // field do not count.
-    expect(rebuild(named, 'agent-1', 'r2')).toBeUndefined();
-    expect(rebuild(named, 'agent-2', 'r1')).toBeUndefined();
-    expect(rebuild({ targetId: 'r1' }, 'agent-9', 'r1')).toBeUndefined();
   });
 
   it('keeps the Proxmox scope of an agent-reported disk that carries a Proxmox facet', () => {
@@ -1676,39 +1602,6 @@ describe('resourceStateAdapters nodeFromResource', () => {
       'Unraid array is running without parity protection',
     );
     expect(agent.agent?.unraid?.risk?.reasons?.[0]?.code).toBe('unraid_no_parity');
-  });
-
-  it('preserves discovery readiness when merging realtime resource snapshots', () => {
-    const [resource] = mergeCanonicalResourceSnapshot(
-      [
-        {
-          id: 'system-container-homeassistant',
-          type: 'system-container',
-          name: 'homeassistant',
-          displayName: 'homeassistant',
-          platformId: '101',
-          platformType: 'proxmox-pve',
-          sourceType: 'api',
-          status: 'online',
-          lastSeen: Date.now(),
-          discoveryReadiness: {
-            state: 'missing',
-            reason: 'Discovery has not run for this resource.',
-            resourceType: 'system-container',
-            targetId: 'agent-delly',
-            resourceId: '101',
-            generatedAt: '2026-06-04T15:00:00Z',
-          },
-        } as Resource,
-      ],
-      [],
-    );
-
-    expect(resource.discoveryReadiness).toMatchObject({
-      state: 'missing',
-      targetId: 'agent-delly',
-      resourceId: '101',
-    });
   });
 });
 

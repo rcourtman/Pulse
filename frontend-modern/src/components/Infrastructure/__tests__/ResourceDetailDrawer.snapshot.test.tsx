@@ -3,15 +3,13 @@ import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
-import { useResourceDetailDrawerDerivedState } from '../useResourceDetailDrawerDerivedState';
 
 const requests = vi.hoisted(() => ({
   facets: vi.fn(),
   intelligence: vi.fn(),
   audits: vi.fn(),
-  discovery: vi.fn(),
 }));
 
 vi.mock('@/contexts/appRuntime', () => ({
@@ -45,8 +43,6 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
     </select>
   ),
 }));
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({ DiscoveryTab: () => null }));
-vi.mock('@/api/discovery', () => ({ getDiscovery: requests.discovery }));
 vi.mock('@/api/resources', () => ({ ResourceAPI: { getFacetBundle: requests.facets } }));
 vi.mock('@/api/ai', () => ({ AIAPI: { getResourceIntelligence: requests.intelligence } }));
 vi.mock('@/api/actionAudit', () => ({ ActionAuditAPI: { listActionAudits: requests.audits } }));
@@ -70,13 +66,9 @@ const snapshot = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 beforeEach(() => {
-  syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-    typeof syncAIRuntimeSettings
-  >[0]);
   requests.facets.mockResolvedValue({ capabilities: [], relationships: [], recentChanges: [] });
   requests.intelligence.mockResolvedValue(null);
   requests.audits.mockResolvedValue({ audits: [], count: 0, available: false });
-  requests.discovery.mockResolvedValue(null);
 });
 afterEach(() => {
   cleanup();
@@ -85,50 +77,6 @@ afterEach(() => {
 });
 
 describe('ResourceDetailDrawer snapshot ownership', () => {
-  it('withdraws former Discovery identification while a replacement source key is pending', async () => {
-    let finish!: (value: unknown) => void;
-    requests.discovery
-      .mockResolvedValueOnce({ service_name: 'Old service', confidence: 0.9 })
-      .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
-    const initial = snapshot({
-      discoveryTarget: {
-        resourceType: 'agent',
-        agentId: 'agent-a',
-        resourceId: 'agent-a',
-        hostname: 'pbs-a',
-      },
-    });
-    const [resource, setResource] = createSignal(initial);
-    const Probe = () => {
-      const state = useResourceDetailDrawerDerivedState({
-        get resource() {
-          return resource();
-        },
-        debugEnabled: () => false,
-        discoveryFeatureEnabled: () => true,
-        resourceIntelligence: () => null,
-      });
-      return (
-        <span data-testid="identified-service">
-          {state.discoveryIdentifiedSummary()?.serviceName}
-        </span>
-      );
-    };
-    render(() => <Probe />);
-    await screen.findByText('Old service');
-    setResource({
-      ...initial,
-      discoveryTarget: { ...initial.discoveryTarget!, agentId: 'agent-b', resourceId: 'agent-b' },
-    });
-    expect(screen.getByTestId('identified-service')).toBeEmptyDOMElement();
-    await waitFor(() =>
-      expect(requests.discovery).toHaveBeenLastCalledWith('agent', 'agent-b', 'agent-b'),
-    );
-    finish({ service_name: 'Current service', confidence: 0.9 });
-    await screen.findByText('Current service');
-    expect(screen.queryByText('Old service')).not.toBeInTheDocument();
-  });
-
   it('updates derived identity, current metrics and the History target without remounting a same-ID drawer', () => {
     const [resource, setResource] = createSignal(snapshot());
     render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);

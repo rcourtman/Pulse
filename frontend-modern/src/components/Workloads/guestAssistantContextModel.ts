@@ -1,11 +1,7 @@
 import type { AIChatContext } from '@/stores/aiChat';
 import type { WorkloadGuest } from '@/types/workloads';
 import { buildResourceAssistantContextForTarget } from '@/utils/resourceAssistantContextModel';
-import {
-  getCanonicalWorkloadId,
-  resolveDiscoveryTargetForWorkload,
-  resolveWorkloadType,
-} from '@/utils/workloads';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 
 const firstTrimmed = (values: Array<string | null | undefined>): string | undefined => {
   for (const value of values) {
@@ -29,7 +25,6 @@ export const getGuestAssistantTechnology = (guest: WorkloadGuest): string | unde
 export const buildGuestAssistantContext = (guest: WorkloadGuest): AIChatContext => {
   const canonicalId = getCanonicalWorkloadId(guest);
   const workloadType = resolveWorkloadType(guest);
-  const discoveryTarget = resolveDiscoveryTargetForWorkload(guest);
 
   return buildResourceAssistantContextForTarget({
     id: canonicalId,
@@ -40,7 +35,5 @@ export const buildGuestAssistantContext = (guest: WorkloadGuest): AIChatContext 
     technology: getGuestAssistantTechnology(guest),
     parentName: guest.node,
     primaryIdentity: guest.id,
-    discoveryTarget,
-    discoveryReadiness: guest.discoveryReadiness,
   });
 };

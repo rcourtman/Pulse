@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
 import appSource from '@/App.tsx?raw';
 import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
-import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
@@ -73,7 +72,6 @@ import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
-import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import workloadTypePresentationSource from '@/utils/workloadTypePresentation.ts?raw';
 import sourcePlatformsSource from '@/utils/sourcePlatforms.ts?raw';
@@ -263,9 +261,7 @@ import resourceDetailDrawerStateSource from '@/components/Infrastructure/useReso
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
-import discoveryProvenanceMarkerSource from '@/components/shared/DiscoveryProvenanceMarker.tsx?raw';
-import discoveryPresentationSource from '@/utils/discoveryPresentation.ts?raw';
+import infrastructureSettingsPresentationSource from '@/utils/infrastructureSettingsPresentation.ts?raw';
 import proxmoxSettingsModelSource from '@/components/Settings/proxmoxSettingsModel.ts?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
@@ -573,14 +569,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceTypeCompatSource).not.toContain("case 'container'");
   });
 
-  it('keeps canonical frontend discovery types separate from backend API aliases', () => {
-    expect(discoveryTypesSource).toContain(
-      "export type ResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';",
-    );
-    expect(discoveryTypesSource).toContain('export type APIResourceType =');
-    expect(discoveryTypesSource).toContain("| 'k8s'");
-  });
-
   it('keeps compatibility handling centralized in shared adapters and edge translators', () => {
     expect(resourceLinksSource).toContain('canonicalizeWorkloadFilterType');
     expect(resourceLinksSource).toContain('normalizeSourcePlatformQueryValue');
@@ -822,8 +810,6 @@ describe('frontend resource type boundaries', () => {
     expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
     expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
     expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
-    expect(workloadTopologySource).toContain('export const getDiscoveryHostIdForWorkload');
-    expect(workloadTopologySource).toContain('export const getDiscoveryResourceIdForWorkload');
     expect(workloadTopologySource).toContain('export const buildNodeByInstance');
     expect(workloadTopologySource).toContain('export const buildGuestParentNodeMap');
     expect(thresholdSliderSource).toContain('useThresholdSliderState');
@@ -925,7 +911,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceIdentityView');
-    expect(resourceDetailDrawerIdentityModelSource).toContain('buildDiscoveryContextSummary');
     expect(resourceDetailDrawerIdentityModelSource).toContain('buildResourceDebugBundle');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');
@@ -2215,7 +2200,6 @@ describe('frontend resource type boundaries', () => {
     expect(confidencePresentationSource).toContain('formatConfidencePercentage');
     expect(confidencePresentationSource).toContain('formatConfidenceLabel');
     expect(resourceDetailDrawerSource).toContain('formatIdentifierLabel');
-    expect(resourceDetailDrawerIdentityModelSource).toContain('formatIdentifierLabel');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPbsVisibleJobBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleQueueBreakdown');
     expect(resourceDetailDrawerServiceModelSource).toContain('buildPmgVisibleMailBreakdown');
@@ -2554,83 +2538,29 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
-    expect(discoveryTabSource).toContain('getDiscoverySuggestedURLReason');
-    expect(discoveryTabSource).toContain('getDiscoveryObservedSourceLabel');
-    expect(discoveryTabSource).toContain('getDiscoveryAnalysisProviderBadgeClass');
-    expect(discoveryTabSource).toContain('getDiscoveryCategoryBadgeClass');
-    expect(discoveryTabSource).toContain('getDiscoveryInitialEmptyState');
-    expect(discoveryTabSource).toContain('getDiscoveryLoadingState');
-    expect(discoveryTabSource).toContain('getDiscoverySuggestedURLFallback');
-    expect(discoveryTabSource).toContain('getDiscoveryNotesEmptyState');
     expect(guestDrawerSource).toContain('useGuestDrawerState');
-    expect(guestDrawerStateSource).toContain('getDiscoveryResourceTypeForWorkload');
     expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
-    expect(guestDrawerStateSource).toContain('getDiscoveryLoadingState');
     expect(guestDrawerSource).not.toContain('const discoveryResourceType = () =>');
     expect(guestDrawerSource).not.toContain('const urlTargetLabel = () =>');
     expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
-    expect(workloadsUtilitySource).toContain('export const getDiscoveryResourceTypeForWorkload');
     expect(workloadsUtilitySource).toContain('export const getWebInterfaceTargetLabelForWorkload');
-    expect(resourceDetailDrawerSource).toContain('DiscoveryLoadingFallback');
-    expect(resourceDetailDrawerOverviewSource).toContain('DiscoveryLoadingFallback');
-    expect(discoveryTabSource).not.toContain('const getURLSuggestionSourceLabel =');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryURLSuggestionSourceLabel',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoverySuggestedURLReason');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryObservedSourceLabel',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryProvenanceTitle');
-    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceTitle');
-    expect(discoveryProvenanceMarkerSource).toContain('getDiscoveryProvenanceBadgeClass');
-    expect(discoveryTabSource).toContain('DiscoveryProvenanceMarker');
-    expect(webInterfaceUrlFieldSource).toContain('DiscoveryProvenanceMarker');
-    expect(guestDrawerOverviewSource).toContain('discovery.sourceLabel');
-    expect(guestDrawerOverviewSource).toContain('formatDiscoveryAge');
-    expect(guestDrawerOverviewSource).not.toContain('DiscoveryProvenanceMarker');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLCardClass',
-    );
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLActionClass',
-    );
-    expect(discoveryTabSource).not.toContain('bg-blue-100 text-blue-700');
-    expect(discoveryTabSource).not.toContain('bg-green-100 text-green-700');
-    expect(discoveryTabSource).not.toContain('No discovery data yet');
-    expect(discoveryTabSource).not.toContain('Loading discovery...');
     expect(guestDrawerSource).not.toContain('Loading discovery...');
     expect(resourceDetailDrawerSource).not.toContain('Loading discovery...');
-    expect(discoveryTabSource).not.toContain('No suggested URL available');
-    expect(discoveryTabSource).not.toContain(
-      'No discovery notes yet. Add notes to capture important context.',
-    );
     expect(webInterfaceUrlFieldSource).toContain('useWebInterfaceUrlFieldState');
     expect(webInterfaceUrlFieldSource).not.toContain('No suggested URL available');
     expect(webInterfaceUrlFieldSource).not.toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('GuestMetadataAPI.getMetadata');
     expect(webInterfaceUrlFieldStateSource).toContain('AgentMetadataAPI.updateMetadata');
-    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoveryAnalysisProviderBadgeClass',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryCategoryBadgeClass');
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryInitialEmptyState');
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryLoadingState');
-    expect(discoveryPresentationSource).toContain(
-      'export function getDiscoverySuggestedURLFallback',
-    );
-    expect(discoveryPresentationSource).toContain('export function getDiscoveryNotesEmptyState');
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoveryPriorityNotice',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoverySectionPresentation',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoveryModePresentation',
     );
-    expect(discoveryPresentationSource).toContain(
+    expect(infrastructureSettingsPresentationSource).toContain(
       'export function getNetworkDiscoverySubnetPresentation',
     );
     expect(discoverySettingsFormSource).toContain('getNetworkDiscoveryPriorityNotice');
@@ -3822,7 +3752,7 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_MENU_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_DRAWER_TITLE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_DISCOVERY_HINT_TITLE');
+    expect(aiChatPresentationSource).not.toContain('AI_CHAT_DISCOVERY_HINT_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_QUESTION_CARD_TITLE');
     expect(aiChatPresentationSource).toContain('export function getAIChatLauncherTitle');
     expect(aiChatPresentationSource).not.toContain('AI_CHAT_SUGGESTIONS_LABEL');

@@ -2,7 +2,6 @@ import { createEffect, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import type { HistoryTimeRange } from '@/api/charts';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
-import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { useResourceDetailDrawerDockerActionsState } from './useResourceDetailDrawerDockerActionsState';
 import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHistoryState';
@@ -10,15 +9,7 @@ import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDe
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 type DrawerTab =
-  | 'overview'
-  | 'history'
-  | 'manage'
-  | 'discovery'
-  | 'mail'
-  | 'namespaces'
-  | 'deployments'
-  | 'swarm'
-  | 'debug';
+  'overview' | 'history' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
@@ -35,7 +26,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const resource = () => options.resource;
   const resolveResourceLabelInput = options.resolveResourceLabel;
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
-  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
   const [metricsHistoryRange, setMetricsHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
@@ -47,7 +37,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     options.initialShowAccessContext === true,
   );
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
-  const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(
     options.initialShowHostDetails === true,
   );
@@ -73,7 +62,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     },
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
-    discoveryFeatureEnabled,
     resourceIntelligence: history.resourceIntelligence,
     resourceRelationships: history.resourceFacetRelationships,
   });
@@ -150,8 +138,6 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowAccessContext,
     showInvestigationContext,
     setShowInvestigationContext,
-    showDiscoveryContext,
-    setShowDiscoveryContext,
     showHostDetails,
     setShowHostDetails,
     showServiceDetails,

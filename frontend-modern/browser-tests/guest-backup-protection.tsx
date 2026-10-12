@@ -5,11 +5,8 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { WorkloadGuest } from '../src/types/workloads';
 import '../src/index.css';
-
-syncAIRuntimeSettings({ discovery_enabled: false });
 
 function Fixture() {
   const [observation, setObservation] = createSignal({

@@ -2,7 +2,6 @@ import { Component, Show } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { sessionCanWriteMonitoringMetadata } from '@/stores/sessionCapabilities';
 import { Button, CopyValueButton } from './Button';
-import { DiscoveryProvenanceMarker } from './DiscoveryProvenanceMarker';
 import { getInfoCardFrameClass } from './InfoCardFrame';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
 import type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
@@ -112,78 +111,6 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           >
             {state.urlSuccess()}
           </p>
-        </Show>
-
-        <Show when={canEdit() && state.invalidSuggestedUrlError()}>
-          {(error) => (
-            <div
-              role="alert"
-              class="mt-2 rounded-sm border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
-            >
-              <div class="font-medium">Suggested URL rejected</div>
-              <p class="mt-0.5">{error()}</p>
-            </div>
-          )}
-        </Show>
-
-        <Show when={canEdit() && state.showSuggestedDiagnostic()}>
-          <div class="mt-2 rounded-sm border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
-            <div class="flex items-center gap-1.5 font-medium">
-              <span>{state.suggestedUrlFallback().title}</span>
-              <DiscoveryProvenanceMarker />
-            </div>
-            <p class="mt-0.5">{state.suggestedUrlFallback().description}</p>
-          </div>
-        </Show>
-
-        <Show when={canEdit() && state.showSuggestedUrl()}>
-          <div class="mt-2 p-2 rounded-sm bg-blue-50 border border-blue-200 dark:bg-blue-900/25 dark:border-blue-800">
-            <div class="mb-1 flex items-center gap-1.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
-              <span>{state.normalizedCurrentUrl() ? 'Discovered URL' : 'Suggested URL'}</span>
-              <DiscoveryProvenanceMarker />
-            </div>
-            <Show when={props.suggestedUrlReasonText}>
-              <p
-                class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
-                title={props.suggestedUrlReasonTitle}
-              >
-                Why this URL: {props.suggestedUrlReasonText}
-              </p>
-            </Show>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-[180px] flex-1 text-xs text-blue-800 dark:text-blue-200 font-mono truncate"
-                title={state.normalizedSuggestedUrl()}
-              >
-                {state.normalizedSuggestedUrl()}
-              </code>
-              <WebInterfaceLink
-                url={state.normalizedSuggestedUrl()}
-                ariaLabel="Open suggested URL"
-                class="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25"
-                title="Open suggested URL"
-              >
-                <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
-              </WebInterfaceLink>
-              <CopyValueButton
-                value={state.normalizedSuggestedUrl()}
-                copied={state.copiedUrlValue() === state.normalizedSuggestedUrl()}
-                onCopyValue={state.handleCopyUrl}
-                label="Copy suggested URL"
-                variant="accent"
-                size="md"
-              />
-              <Button
-                variant="primaryFlat"
-                size="xs"
-                class="shrink-0"
-                onClick={() => state.setUrlValue(state.normalizedSuggestedUrl())}
-                disabled={state.urlSaving()}
-              >
-                {state.normalizedCurrentUrl() ? 'Use instead' : 'Use this'}
-              </Button>
-            </div>
-          </div>
         </Show>
 
         <p class="mt-1.5 whitespace-normal text-[10px] text-muted">

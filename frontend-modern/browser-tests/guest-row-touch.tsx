@@ -8,11 +8,8 @@ import { buildSummaryDisclosureControlsId } from '../src/components/shared/summa
 import type { WorkloadTableLayoutMode } from '../src/components/Workloads/guestRowModel';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { WorkloadGuest } from '../src/types/workloads';
 import '../src/index.css';
-
-syncAIRuntimeSettings({ discovery_enabled: false });
 
 function Fixture() {
   const [observation, setObservation] = createSignal({

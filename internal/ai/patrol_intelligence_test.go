@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -43,125 +42,7 @@ func (m *mockGuestProber) PingGuests(ctx context.Context, agentID string, ips []
 
 // --- Mock Discovery Store helpers ---
 
-func setupTestDiscoveryStore(t *testing.T, discoveries []*servicediscovery.ResourceDiscovery) *servicediscovery.Store {
-	t.Helper()
-	dir := t.TempDir()
-	store, err := servicediscovery.NewStore(dir)
-	if err != nil {
-		t.Fatalf("failed to create discovery store: %v", err)
-	}
-	for _, d := range discoveries {
-		if err := store.Save(d); err != nil {
-			t.Fatalf("failed to save discovery: %v", err)
-		}
-	}
-	return store
-}
-
 // --- Tests ---
-
-func TestGatherGuestIntelligence_DiscoveryMatching(t *testing.T) {
-	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
-		{
-			ID:           "vm:pve1:100",
-			ResourceType: servicediscovery.ResourceTypeVM,
-			TargetID:     "pve1",
-			ResourceID:   "100",
-			ServiceName:  "PostgreSQL 15",
-			ServiceType:  "postgres",
-		},
-		{
-			ID:           "lxc:pve1:101",
-			ResourceType: servicediscovery.ResourceTypeSystemContainer,
-			TargetID:     "pve1",
-			ResourceID:   "101",
-			ServiceName:  "Nginx",
-			ServiceType:  "nginx",
-		},
-	})
-
-	ps := NewPatrolService(nil, nil)
-	ps.SetDiscoveryStore(store)
-
-	ps.SetReadState(&mockReadState{
-		vms: []*ur.VMView{
-			newTestVMView("qemu/100", "db-server", 100, "pve1", "", ur.StatusOnline, false, nil),
-			newTestVMView("qemu/200", "unknown-vm", 200, "pve1", "", ur.StatusOnline, false, nil),
-		},
-		containers: []*ur.ContainerView{
-			newTestContainerView("lxc/101", "web-proxy", 101, "pve1", "", ur.StatusOnline, false, nil),
-		},
-	})
-
-	intel := ps.gatherGuestIntelligence(context.Background())
-
-	// VM 100 should match discovery
-	if gi := intel["qemu/100"]; gi == nil {
-		t.Fatal("expected intel for qemu/100")
-	} else {
-		if gi.ServiceName != "PostgreSQL 15" {
-			t.Errorf("qemu/100 ServiceName = %q, want %q", gi.ServiceName, "PostgreSQL 15")
-		}
-		if gi.ServiceType != "postgres" {
-			t.Errorf("qemu/100 ServiceType = %q, want %q", gi.ServiceType, "postgres")
-		}
-		if gi.Name != "db-server" {
-			t.Errorf("qemu/100 Name = %q, want %q", gi.Name, "db-server")
-		}
-		if gi.GuestType != "vm" {
-			t.Errorf("qemu/100 GuestType = %q, want %q", gi.GuestType, "vm")
-		}
-	}
-
-	// VM 200 has no discovery match
-	if gi := intel["qemu/200"]; gi == nil {
-		t.Fatal("expected intel for qemu/200")
-	} else {
-		if gi.ServiceName != "" {
-			t.Errorf("qemu/200 ServiceName = %q, want empty", gi.ServiceName)
-		}
-	}
-
-	// Container 101 should match discovery
-	if gi := intel["lxc/101"]; gi == nil {
-		t.Fatal("expected intel for lxc/101")
-	} else {
-		if gi.ServiceName != "Nginx" {
-			t.Errorf("lxc/101 ServiceName = %q, want %q", gi.ServiceName, "Nginx")
-		}
-		if gi.GuestType != "system-container" {
-			t.Errorf("lxc/101 GuestType = %q, want %q", gi.GuestType, "system-container")
-		}
-	}
-}
-
-func TestGatherGuestIntelligence_DiscoveryInstanceFallback(t *testing.T) {
-	// Discovery stored with Instance as hostID (different from Node)
-	store := setupTestDiscoveryStore(t, []*servicediscovery.ResourceDiscovery{
-		{
-			ID:           "vm:my-instance:100",
-			ResourceType: servicediscovery.ResourceTypeVM,
-			TargetID:     "my-instance",
-			ResourceID:   "100",
-			ServiceName:  "Redis",
-			ServiceType:  "redis",
-		},
-	})
-
-	ps := NewPatrolService(nil, nil)
-	ps.SetDiscoveryStore(store)
-
-	ps.SetReadState(&mockReadState{
-		vms: []*ur.VMView{
-			newTestVMView("qemu/100", "cache", 100, "pve1", "my-instance", ur.StatusOnline, false, nil),
-		},
-	})
-
-	intel := ps.gatherGuestIntelligence(context.Background())
-	if gi := intel["qemu/100"]; gi == nil || gi.ServiceName != "Redis" {
-		t.Errorf("expected Redis from instance fallback, got %+v", gi)
-	}
-}
 
 func TestGatherGuestIntelligence_Reachability(t *testing.T) {
 	prober := &mockGuestProber{
@@ -393,27 +274,6 @@ func TestFormatReachable(t *testing.T) {
 	}
 }
 
-func TestFormatService(t *testing.T) {
-	if got := formatService(nil); got != "-" {
-		t.Errorf("formatService(nil) = %q, want %q", got, "-")
-	}
-	if got := formatService(&GuestIntelligence{}); got != "-" {
-		t.Errorf("formatService(empty) = %q, want %q", got, "-")
-	}
-	if got := formatService(&GuestIntelligence{ServiceName: "PostgreSQL 15"}); got != "PostgreSQL 15" {
-		t.Errorf("formatService(PostgreSQL 15) = %q, want %q", got, "PostgreSQL 15")
-	}
-	// Truncation
-	longName := "Very Long Service Name That Exceeds Limit"
-	got := formatService(&GuestIntelligence{ServiceName: longName})
-	if len(got) > 25 {
-		t.Errorf("formatService should truncate to <= 25 chars, got %d: %q", len(got), got)
-	}
-	if !strings.HasSuffix(got, "...") {
-		t.Errorf("truncated name should end with ..., got %q", got)
-	}
-}
-
 func TestReachableFromIntel(t *testing.T) {
 	if got := reachableFromIntel(nil); got != nil {
 		t.Error("reachableFromIntel(nil) should be nil")
@@ -532,8 +392,8 @@ func TestSeedResourceInventory_WithIntelligence(t *testing.T) {
 	trueVal := true
 	falseVal := false
 	intel := map[string]*GuestIntelligence{
-		"qemu/100": {Name: "db-server", ServiceName: "PostgreSQL 15", Reachable: &trueVal},
-		"lxc/101":  {Name: "mail-relay", ServiceName: "Postfix", Reachable: &falseVal},
+		"qemu/100": {Name: "db-server", Reachable: &trueVal},
+		"lxc/101":  {Name: "mail-relay", Reachable: &falseVal},
 		"qemu/102": {Name: "dev-box", Reachable: nil},
 	}
 
@@ -550,19 +410,8 @@ func TestSeedResourceInventory_WithIntelligence(t *testing.T) {
 	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, intel)
 
 	// Check table headers
-	if !strings.Contains(out, "| Service |") {
-		t.Errorf("expected Service column header, got:\n%s", out)
-	}
 	if !strings.Contains(out, "| Reachable |") {
 		t.Errorf("expected Reachable column header, got:\n%s", out)
-	}
-
-	// Check service names appear
-	if !strings.Contains(out, "PostgreSQL 15") {
-		t.Errorf("expected PostgreSQL 15 in output, got:\n%s", out)
-	}
-	if !strings.Contains(out, "Postfix") {
-		t.Errorf("expected Postfix in output, got:\n%s", out)
 	}
 
 	// Check reachability values
@@ -577,7 +426,7 @@ func TestSeedResourceInventory_WithIntelligence(t *testing.T) {
 	if !strings.Contains(out, "# Service Health Issues") {
 		t.Errorf("expected Service Health Issues section, got:\n%s", out)
 	}
-	if !strings.Contains(out, "mail-relay (Postfix on pve1): Running but UNREACHABLE") {
+	if !strings.Contains(out, "mail-relay (Container on pve1): Running but UNREACHABLE") {
 		t.Errorf("expected mail-relay unreachable issue, got:\n%s", out)
 	}
 }
@@ -593,7 +442,7 @@ func TestSeedResourceInventory_NilIntelligence(t *testing.T) {
 		},
 	}
 
-	// nil intel should produce "-" for both columns
+	// nil intel should produce "-" for reachability
 	out := ps.seedResourceInventoryState(patrolRuntimeStateForTest(ps, state), nil, cfg, time.Now(), false, nil)
 	if !strings.Contains(out, "| - |") {
 		t.Errorf("expected '-' for unknown service/reachability, got:\n%s", out)

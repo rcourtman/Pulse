@@ -7,12 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/mock"
 )
@@ -537,47 +534,4 @@ func TestRouterAIChatControl(t *testing.T) {
 
 		mockSvc.AssertExpectations(t)
 	})
-}
-
-func TestSetDiscoveryService(t *testing.T) {
-	service := servicediscovery.NewService(nil, nil, servicediscovery.Config{})
-	handlers := &DiscoveryHandlers{}
-
-	router := &Router{
-		discoveryHandlers: handlers,
-		wsHub:             &websocket.Hub{},
-	}
-
-	router.SetDiscoveryService(service)
-
-	if handlers.service != service {
-		t.Fatalf("expected discovery service to be set")
-	}
-}
-
-func TestWsHubAdapter_BroadcastDiscoveryProgress(t *testing.T) {
-	hub := &websocket.Hub{}
-	broadcast := make(chan []byte, 1)
-	setUnexportedField(t, hub, "broadcast", broadcast)
-
-	adapter := &wsHubAdapter{hub: hub}
-	progress := &servicediscovery.DiscoveryProgress{
-		ResourceID:     "res-1",
-		Status:         servicediscovery.DiscoveryStatusRunning,
-		CurrentStep:    "scan",
-		TotalSteps:     3,
-		CompletedSteps: 1,
-		StartedAt:      time.Now(),
-	}
-
-	adapter.BroadcastDiscoveryProgress(progress)
-
-	select {
-	case msg := <-broadcast:
-		if !strings.Contains(string(msg), "ai_discovery_progress") {
-			t.Fatalf("expected discovery progress message, got %s", string(msg))
-		}
-	default:
-		t.Fatalf("expected broadcast message")
-	}
 }

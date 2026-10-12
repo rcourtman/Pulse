@@ -1045,97 +1045,6 @@ func TestContract_MockAvailabilityTargetsUseSavedTargetPayloads(t *testing.T) {
 	}
 }
 
-func TestContract_MockDiscoveryEndpointsUseCanonicalPayloads(t *testing.T) {
-	previousMock := mock.IsMockEnabled()
-	if err := mock.SetEnabled(true); err != nil {
-		t.Fatalf("enable mock mode: %v", err)
-	}
-	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
-
-	handlers := NewDiscoveryHandlers(nil, nil)
-	listReq := httptest.NewRequest(http.MethodGet, "/api/discovery", nil)
-	listRec := httptest.NewRecorder()
-	handlers.HandleListDiscoveries(listRec, listReq)
-	if listRec.Code != http.StatusOK {
-		t.Fatalf("/api/discovery status = %d, body=%s", listRec.Code, listRec.Body.String())
-	}
-
-	var listBody struct {
-		Discoveries []map[string]any `json:"discoveries"`
-		Total       int              `json:"total"`
-	}
-	if err := json.NewDecoder(listRec.Body).Decode(&listBody); err != nil {
-		t.Fatalf("decode discovery list: %v", err)
-	}
-	if listBody.Total == 0 || len(listBody.Discoveries) == 0 {
-		t.Fatal("expected mock discovery list to expose canonical discovery summaries")
-	}
-
-	var dockerDetail map[string]any
-	for _, summary := range listBody.Discoveries {
-		if summary["resource_type"] != "docker" {
-			continue
-		}
-		resourceType, _ := summary["resource_type"].(string)
-		targetID, _ := summary["target_id"].(string)
-		resourceID, _ := summary["resource_id"].(string)
-		if resourceType == "" || targetID == "" || resourceID == "" {
-			t.Fatalf("mock discovery summary lost canonical identity: %#v", summary)
-		}
-
-		detailReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/discovery/%s/%s/%s", resourceType, targetID, resourceID), nil)
-		detailRec := httptest.NewRecorder()
-		handlers.HandleGetDiscovery(detailRec, detailReq)
-		if detailRec.Code != http.StatusOK {
-			t.Fatalf("discovery detail status = %d, body=%s", detailRec.Code, detailRec.Body.String())
-		}
-
-		var detail map[string]any
-		if err := json.NewDecoder(detailRec.Body).Decode(&detail); err != nil {
-			t.Fatalf("decode discovery detail: %v", err)
-		}
-		proposal, hasProposal := detail["suggested_availability_probe"].(map[string]any)
-		if discoveryContractValueEmpty(detail["suggested_url"]) ||
-			!hasProposal ||
-			discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
-			continue
-		}
-		dockerDetail = detail
-		break
-	}
-	if dockerDetail == nil {
-		t.Fatalf("expected mock discovery summaries to include Docker workload URL context and an evidence-bound availability proposal: %#v", listBody.Discoveries)
-	}
-	for _, key := range []string{"service_name", "service_version", "config_paths", "ports", "suggested_url", "cli_access_version"} {
-		value, ok := dockerDetail[key]
-		if !ok || discoveryContractValueEmpty(value) {
-			t.Fatalf("mock discovery detail missing %s: %#v", key, dockerDetail)
-		}
-	}
-	proposal, ok := dockerDetail["suggested_availability_probe"].(map[string]any)
-	if !ok || discoveryContractValueEmpty(proposal["evidence_fingerprint"]) {
-		t.Fatalf("mock discovery detail missing evidence-bound availability proposal: %#v", dockerDetail)
-	}
-	if _, ok := dockerDetail["raw_command_output"]; ok {
-		t.Fatalf("mock discovery detail exposed raw command output: %#v", dockerDetail)
-	}
-}
-
-func discoveryContractValueEmpty(value any) bool {
-	switch typed := value.(type) {
-	case nil:
-		return true
-	case string:
-		return strings.TrimSpace(typed) == ""
-	case []any:
-		return len(typed) == 0
-	case float64:
-		return typed == 0
-	default:
-		return false
-	}
-}
-
 func TestPatrolRemediationCommercialCopyUsesSafeRemediationWording(t *testing.T) {
 	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
 	for _, file := range files {
@@ -2421,7 +2330,6 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{
 			"status":"warning",
 			"ready":true,
@@ -2615,7 +2523,6 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"ollama_keep_alive":"",
 		"configured_providers":["openai"],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -4860,7 +4767,6 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -4877,7 +4783,6 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 	aiCfg.Model = "quickstart:minimax-2.5m"
 	aiCfg.ChatModel = "quickstart:minimax-2.5m"
 	aiCfg.PatrolModel = "quickstart:minimax-2.5m"
-	aiCfg.DiscoveryModel = "quickstart:minimax-2.5m"
 	aiCfg.AutoFixModel = "quickstart:minimax-2.5m"
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
@@ -4930,7 +4835,6 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -5005,7 +4909,6 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"ollama_keep_alive":"",
 		"configured_providers":["ollama"],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -6275,7 +6178,6 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"ollama_keep_alive":"",
 		"configured_providers":[],
 		"control_level":"read_only",
-		"discovery_enabled":false,
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
@@ -11544,64 +11446,6 @@ func TestContract_CachedDiscoveryResponseJSONSnapshot(t *testing.T) {
 
 	if !reflect.DeepEqual(gotValue, wantValue) {
 		t.Fatalf("cached discovery response mismatch\nwant: %s\ngot:  %s", want, string(got))
-	}
-}
-
-func TestContract_DiscoveryCommandScanRoutesRequireSettingsWrite(t *testing.T) {
-	monitoringToken := "discovery-command-monitoring-token-123.12345678"
-	settingsToken := "discovery-command-settings-token-123.12345678"
-	monitoringRecord := newTokenRecord(t, monitoringToken, []string{config.ScopeMonitoringWrite}, nil)
-	settingsRecord := newTokenRecord(t, settingsToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, monitoringRecord, settingsRecord)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	paths := []string{
-		"/api/discovery/run",
-		"/api/discovery/agent/host-1/resource-1",
-		"/api/discovery/vm/host-1/resource-1",
-	}
-
-	for _, path := range paths {
-		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		req.Header.Set("X-API-Token", monitoringToken)
-		rec := httptest.NewRecorder()
-		router.Handler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected monitoring:write token to be forbidden for command-scan route %s, got %d", path, rec.Code)
-		}
-		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-			t.Fatalf("expected command-scan route %s to require %q, got %q", path, config.ScopeSettingsWrite, rec.Body.String())
-		}
-
-		req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		req.Header.Set("X-API-Token", settingsToken)
-		rec = httptest.NewRecorder()
-		router.Handler().ServeHTTP(rec, req)
-		if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
-			t.Fatalf("expected settings:write token to pass route scope for command-scan route %s, got %d: %s", path, rec.Code, rec.Body.String())
-		}
-	}
-}
-
-func TestContract_WorkloadDiscoveryTriggerLeavesHostnameForServiceResolution(t *testing.T) {
-	source, err := os.ReadFile(filepath.Clean("discovery_handlers.go"))
-	if err != nil {
-		t.Fatalf("read discovery handlers: %v", err)
-	}
-	text := string(source)
-
-	for _, required := range []string{
-		"Hostname:     reqBody.Hostname",
-		"resourceType == servicediscovery.ResourceTypeAgent",
-		"req.Hostname = targetID",
-		"Workloads should resolve their own display name from state",
-	} {
-		if !strings.Contains(text, required) {
-			t.Fatalf("discovery trigger lost workload hostname contract marker %q", required)
-		}
-	}
-	if strings.Contains(text, "if req.Hostname == \"\" {\n\t\treq.Hostname = targetID") {
-		t.Fatal("discovery trigger must not use the route target as a generic workload hostname fallback")
 	}
 }
 
@@ -20172,7 +20016,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`AssistantAlertProvider              = tools.AlertProvider`,
 		`AssistantFindingsProvider           = tools.FindingsProvider`,
-		`AssistantDiscoveryProvider          = tools.DiscoveryProvider`,
 		`AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider`,
 		`func (s *Service) ExecuteAssistantTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error)`,
 		`Msg("Executing Assistant registry tool directly")`,
@@ -20203,7 +20046,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`SetAlertProvider(provider chat.AssistantAlertProvider)`,
 		`SetFindingsProvider(provider chat.AssistantFindingsProvider)`,
-		`SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)`,
 		`SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)`,
 	} {
 		if !strings.Contains(apiHandler, fragment) {
@@ -20254,7 +20096,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	for _, fragment := range []string{
 		`ai.NewFindingsToolAdapter(findingsStore)`,
 		`tools.NewAlertManagerToolAdapter(alertManager)`,
-		`tools.NewDiscoveryToolAdapter(adapter)`,
 		`NewAssistantAgentProfileManager(persistence, licenseSvc)`,
 		`AI chat Assistant tool providers wired`,
 		`Wire control settings change callback to update Assistant tool visibility`,
@@ -20382,8 +20223,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 		`func NewAlertManagerToolAdapter(manager AlertManager) *AlertManagerToolAdapter`,
 		`type RecoveryPointsToolAdapter struct`,
 		`func NewRecoveryPointsToolAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsToolAdapter`,
-		`type DiscoveryToolAdapter struct`,
-		`func NewDiscoveryToolAdapter(source DiscoverySource) *DiscoveryToolAdapter`,
 	} {
 		if !strings.Contains(toolAdapters, fragment) {
 			t.Errorf("Assistant runtime adapters must be named for the native tool registry; missing %s", fragment)
@@ -21950,7 +21789,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	assistantRegistryToolFiles := []string{
 		filepath.Join("..", "ai", "tools", "tools_alerts.go"),
 		filepath.Join("..", "ai", "tools", "tools_control.go"),
-		filepath.Join("..", "ai", "tools", "tools_discovery.go"),
 		filepath.Join("..", "ai", "tools", "tools_docker.go"),
 		filepath.Join("..", "ai", "tools", "tools_file.go"),
 		filepath.Join("..", "ai", "tools", "tools_kubernetes.go"),
@@ -21976,7 +21814,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	for _, fragment := range []string{
 		`Name: agentcapabilities.PulseAlertsToolName`,
 		`Name:        agentcapabilities.PulseControlToolName`,
-		`Name:        agentcapabilities.PulseDiscoveryToolName`,
 		`Name:        agentcapabilities.PulseDockerToolName`,
 		`Name:        agentcapabilities.PulseKubernetesToolName`,
 		`Name: agentcapabilities.PulseKnowledgeToolName`,
@@ -22405,14 +22242,6 @@ func TestContract_AgentResourceContextEndpointSurfacesStableShape(t *testing.T) 
 	if operatorStateField.Type != reflect.TypeOf((*AgentResourceOperatorState)(nil)) ||
 		operatorStateField.Tag.Get("json") != "operatorState,omitempty" {
 		t.Error("operatorState must be an omitempty pointer so absent entries surface as a missing field")
-	}
-	discoveryReadinessField, ok := contextType.FieldByName("DiscoveryReadiness")
-	if !ok {
-		t.Fatal("AgentResourceContext must carry DiscoveryReadiness")
-	}
-	if discoveryReadinessField.Type != reflect.TypeOf((*AgentResourceDiscoveryReadiness)(nil)) ||
-		discoveryReadinessField.Tag.Get("json") != "discoveryReadiness,omitempty" {
-		t.Error("discoveryReadiness must be an omitempty pointer to the shared resource readiness projection")
 	}
 	pendingApprovalsField, ok := contextType.FieldByName("PendingApprovals")
 	if !ok {

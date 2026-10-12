@@ -5276,7 +5276,6 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
-        "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
@@ -5303,7 +5302,6 @@
         "frontend-modern/src/stores/updates.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
-        "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/emptyStatePresentation.ts",
         "frontend-modern/src/utils/environmentLockPresentation.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
@@ -5632,19 +5630,6 @@
             ]
           },
           {
-            "id": "compact-info-card-consumers",
-            "label": "compact information card consumer proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
-            ]
-          },
-          {
             "id": "workload-presentation-helpers",
             "label": "workload presentation helper proof",
             "match_prefixes": [],
@@ -5706,19 +5691,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiSettingsPresentation.test.ts"
-            ]
-          },
-          {
-            "id": "discovery-presentation-helper",
-            "label": "discovery presentation helper proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/utils/discoveryPresentation.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/utils/__tests__/discoveryPresentation.test.ts"
             ]
           },
           {
@@ -6019,7 +5991,6 @@
         "internal/fleethealth/",
         "internal/maintenancesentinel/",
         "internal/monitoring/",
-        "internal/servicediscovery/",
         "internal/storagehealth/",
         "internal/truenas/",
         "pkg/agents/filesystem/",
@@ -6070,22 +6041,6 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
-          {
-            "id": "service-discovery-assurance-runtime",
-            "label": "discovery-led service assurance proposal proof",
-            "match_prefixes": [
-              "internal/servicediscovery/"
-            ],
-            "match_files": [],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "internal/api/discovery_handlers_test.go",
-              "internal/servicediscovery/availability_suggestion_test.go",
-              "internal/servicediscovery/service_test.go",
-              "internal/servicediscovery/store_test.go"
-            ]
-          },
           {
             "id": "maintenance-verification-runtime",
             "label": "post-maintenance verification monitoring proof",
@@ -8065,12 +8020,6 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
-        "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
-        "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
-        "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
-        "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-        "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
-        "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
@@ -8262,12 +8211,6 @@
             "label": "unified resource consumer proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
-              "frontend-modern/src/components/Discovery/availabilityProposalModel.ts",
-              "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
-              "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
-              "frontend-modern/src/components/Discovery/useDiscoveryFeatureAvailability.ts",
-              "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
@@ -8363,12 +8306,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Discovery/__tests__/AvailabilityProposalCard.test.tsx",
-              "frontend-modern/src/components/Discovery/__tests__/availabilityProposalModel.test.ts",
-              "frontend-modern/src/components/Discovery/__tests__/useDiscoveryFeatureAvailability.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.service-cards.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",

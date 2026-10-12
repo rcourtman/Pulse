@@ -399,57 +399,6 @@ func clusterHasNotReadyNode(cluster models.KubernetesCluster) bool {
 	return false
 }
 
-func TestBuildFixtureGraphIncludesDiscoveryContextFixtures(t *testing.T) {
-	cfg := DefaultConfig
-	cfg.DockerHostCount = 3
-	cfg.DockerContainersPerHost = 6
-	cfg.VMsPerNode = 3
-	cfg.LXCsPerNode = 3
-
-	graph := buildFixtureGraph(cfg, time.Date(2026, time.April, 10, 12, 0, 0, 0, time.UTC))
-	if len(graph.DiscoveryFixtures) == 0 {
-		t.Fatal("expected discovery fixtures in canonical mock graph")
-	}
-
-	var hasDockerURL bool
-	var hasVM bool
-	var hasAgent bool
-	var hasSMTPRelay bool
-	for _, discovery := range graph.DiscoveryFixtures {
-		if discovery == nil {
-			t.Fatal("discovery fixture must not be nil")
-		}
-		if discovery.ID == "" || discovery.TargetID == "" || discovery.ResourceID == "" {
-			t.Fatalf("discovery fixture missing identity: %+v", discovery)
-		}
-		if discovery.ServiceName == "" || discovery.ServiceVersion == "" || len(discovery.ConfigPaths) == 0 {
-			t.Fatalf("discovery fixture missing operator context: %+v", discovery)
-		}
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(discovery.ServiceName)), "unknown") {
-			t.Fatalf("mock discovery fixture must not publish placeholder service names: %+v", discovery)
-		}
-		switch discovery.ResourceType {
-		case discoveryResourceTypeDocker:
-			hasDockerURL = hasDockerURL || discovery.SuggestedURL != "" && len(discovery.DockerMounts) > 0
-		case discoveryResourceTypeVM:
-			hasVM = true
-		case discoveryResourceTypeAgent:
-			hasAgent = true
-		case discoveryResourceTypeSystemContainer:
-			hasSMTPRelay = hasSMTPRelay || strings.Contains(discovery.ServiceName, "SMTP")
-		}
-	}
-	if !hasDockerURL {
-		t.Fatal("expected Docker discovery fixture with suggested URL and bind mount context")
-	}
-	if !hasVM || !hasAgent {
-		t.Fatalf("expected guest and host discovery fixtures, hasVM=%t hasAgent=%t", hasVM, hasAgent)
-	}
-	if !hasSMTPRelay {
-		t.Fatal("expected system-container discovery fixtures to identify SMTP relay workloads")
-	}
-}
-
 func TestDemoScenarioStorageNamingHandlesScaledNodeCount(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 6

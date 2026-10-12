@@ -46,6 +46,6 @@ export const WORKLOAD_ACTION_AGENT_LABEL = 'Node agent assigned';
 export const getWorkloadActionAgentTitle = (guest: WorkloadGuest): string => {
   const node = (guest.node || '').trim();
   return node
-    ? `Discovery and governed actions are assigned to the Pulse Agent on ${node}. Assignment is not a current connection check.`
-    : 'Discovery and governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.';
+    ? `Governed actions are assigned to the Pulse Agent on ${node}. Assignment is not a current connection check.`
+    : 'Governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.';
 };

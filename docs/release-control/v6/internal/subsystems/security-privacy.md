@@ -698,7 +698,7 @@ the `white_label` branding entitlement.
    match the authenticated principal against stored `OwnerUserID` or member
    `UserID`.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, `frontend-modern/src/utils/auditWebhookPresentation.ts`, and the localized catalog/policy boundary in `frontend-modern/src/i18n/`. Locale-catalog edits owned by another product surface may share this boundary only if they preserve API token names, token preset ids, privacy disclosures, and non-translatable security terms exactly; changing those security/privacy strings requires the security/privacy owner and tests.
-   Pulse Intelligence Provider & Models, Patrol, Assistant, and Service Context
+   Pulse Intelligence Provider & Models, Patrol, and Assistant
    settings labels may use the same localized catalog boundary, but those edits
    must stay product-settings copy only and must not change token scope names,
    preset ids, privacy disclosures, or security control terminology. The
@@ -1068,6 +1068,16 @@ tokens, and path-normalization variants.
     `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
+
+### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
+
+With AI Discovery removed, the telemetry snapshot's `discovery_enabled` flag
+comes from network subnet discovery alone; AI settings can no longer set it
+(`applyAIConfigTelemetrySnapshot`, pinned by
+`pkg/server/telemetry_pulse_intelligence_test.go`). `docs/PRIVACY.md` and its
+shipped mirror describe the field that way. No field was added or removed, so
+the telemetry schema version is unchanged; readers must treat the change as a
+definitional break at the release that carries it.
 
 ### Native disk History stays inside authenticated reads
 

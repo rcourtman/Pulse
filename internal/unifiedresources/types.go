@@ -23,10 +23,9 @@ type Resource struct {
 	UpdatedAt  time.Time       `json:"updatedAt,omitempty"`
 	Health     *ResourceHealth `json:"health,omitempty"`
 
-	DiscoveryTarget    *DiscoveryTarget            `json:"discoveryTarget,omitempty"`
-	DiscoveryReadiness *ResourceDiscoveryReadiness `json:"discoveryReadiness,omitempty"`
-	MetricsTarget      *MetricsTarget              `json:"metricsTarget,omitempty"`
-	Canonical          *CanonicalIdentity          `json:"canonicalIdentity,omitempty"`
+	DiscoveryTarget *DiscoveryTarget   `json:"discoveryTarget,omitempty"`
+	MetricsTarget   *MetricsTarget     `json:"metricsTarget,omitempty"`
+	Canonical       *CanonicalIdentity `json:"canonicalIdentity,omitempty"`
 	// SupersededCanonicalIDs carries retired canonical IDs that are known to
 	// identify this same resource. Providers declare them on IngestRecord when
 	// an identity derivation changes; the registry retains them so alert
@@ -134,42 +133,6 @@ type DiscoveryTarget struct {
 	ResourceID   string `json:"resourceId"`
 	Hostname     string `json:"hostname,omitempty"`
 }
-
-// ResourceDiscoveryReadiness summarizes whether service discovery has useful,
-// recent grounding for a resource. It is intentionally metadata-only: raw
-// command output, environment variables, config files, and secrets do not
-// belong in this projection.
-type ResourceDiscoveryReadiness struct {
-	State             ResourceDiscoveryReadinessState `json:"state"`
-	Reason            string                          `json:"reason,omitempty"`
-	Source            string                          `json:"source,omitempty"`
-	ResourceType      string                          `json:"resourceType,omitempty"`
-	TargetID          string                          `json:"targetId,omitempty"`
-	ResourceID        string                          `json:"resourceId,omitempty"`
-	DiscoveryID       string                          `json:"discoveryId,omitempty"`
-	ObservedAt        *time.Time                      `json:"observedAt,omitempty"`
-	GeneratedAt       time.Time                       `json:"generatedAt"`
-	AgeSeconds        int64                           `json:"ageSeconds,omitempty"`
-	StaleAfterSeconds int64                           `json:"staleAfterSeconds,omitempty"`
-	FactCount         int                             `json:"factCount,omitempty"`
-	ServiceName       string                          `json:"serviceName,omitempty"`
-	ServiceCategory   string                          `json:"serviceCategory,omitempty"`
-	Confidence        float64                         `json:"confidence,omitempty"`
-}
-
-// ResourceDiscoveryReadinessState is the canonical state vocabulary shared by
-// API payloads, Assistant handoffs, and frontend badges.
-type ResourceDiscoveryReadinessState string
-
-const (
-	ResourceDiscoveryReadinessFresh       ResourceDiscoveryReadinessState = "fresh"
-	ResourceDiscoveryReadinessStale       ResourceDiscoveryReadinessState = "stale"
-	ResourceDiscoveryReadinessMissing     ResourceDiscoveryReadinessState = "missing"
-	ResourceDiscoveryReadinessRunning     ResourceDiscoveryReadinessState = "running"
-	ResourceDiscoveryReadinessFailed      ResourceDiscoveryReadinessState = "failed"
-	ResourceDiscoveryReadinessUnavailable ResourceDiscoveryReadinessState = "unavailable"
-	ResourceDiscoveryReadinessUnsupported ResourceDiscoveryReadinessState = "unsupported"
-)
 
 // MetricsTarget describes the resource type and ID to use when querying
 // the metrics history endpoint for this unified resource.

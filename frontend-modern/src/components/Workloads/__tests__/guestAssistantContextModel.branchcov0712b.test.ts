@@ -225,7 +225,6 @@ describe('guestAssistantContextModel (branch coverage)', () => {
             agentId: 'agent-1',
             resourceId: 'pve-a:node-a:101',
           },
-          discoveryReadiness: { state: 'fresh', factCount: 5 },
         }),
       );
 
@@ -242,13 +241,11 @@ describe('guestAssistantContextModel (branch coverage)', () => {
           sourceLabel: 'Pulse resource context',
           title: 'web-vm',
           subject: 'vm / running / proxmox-ve',
-          statusLabel: 'Read-only context attached · Discovery fresh',
+          statusLabel: 'Read-only context attached',
           detailLines: [
             'Resource ID: pve-a:node-a:101',
             'Primary identity: vm-101',
             'Parent: node-a',
-            'Discovery: vm:pve-a:node-a:101',
-            'Discovery data: Discovery fresh, 5 facts',
           ],
           safetyNote: 'Approval required before any action.',
         },
@@ -258,10 +255,9 @@ describe('guestAssistantContextModel (branch coverage)', () => {
       });
     });
 
-    it('omits Primary/Parent/Discovery/readiness lines for a non-discovered app-container', () => {
+    it('omits Primary/Parent lines for a bare app-container', () => {
       // canonicalId === guest.id for app-container, so the Primary identity line
-      // is suppressed; platformType 'kubernetes' is not docker-managed so
-      // resolveDiscoveryTargetForWorkload returns null.
+      // is suppressed.
       const result = buildGuestAssistantContext(
         makeGuest({
           id: 'app-container:sidecar',

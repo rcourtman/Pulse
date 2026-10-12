@@ -1,6 +1,5 @@
 import type { Resource } from '@/types/resource';
 import { getGuestDrawerGuestReadPrecaution } from '@/components/Workloads/guestDrawerModel';
-import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import {
   canonicalDiscoveryResourceType,
   isAgentDiscoveryResourceType,
@@ -20,6 +19,9 @@ import {
   buildKubernetesWorkloadMetadataId,
   getCanonicalWorkloadIdForResource,
 } from '@/utils/workloads';
+
+// Resource kinds that carry agent-routed metadata coordinates.
+type DiscoveryResourceType = 'vm' | 'system-container' | 'app-container' | 'pod' | 'agent';
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;

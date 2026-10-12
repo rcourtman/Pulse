@@ -64,7 +64,6 @@ const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   image: 'compact',
   namespace: 'compact',
   context: 'compact',
-  aiContext: 'compact',
   update: 'compact',
   ip: 'wide',
   node: 'wide',
@@ -362,41 +361,6 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     kind: 'text',
   },
   {
-    id: 'aiContext',
-    label: 'AI Context',
-    icon: (
-      <svg
-        class="w-3.5 h-3.5 block"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"
-        />
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M9 13a4.5 4.5 0 0 0 3-4M6.003 5.125A3 3 0 0 0 6.401 6.5M3.477 10.896a4 4 0 0 1 .585-.396M6 18a4 4 0 0 1-1.967-.516M12 13h4M12 18h6a2 2 0 0 1 2 2v1M12 8h8M16 8V5a2 2 0 0 1 2-2"
-        />
-        <circle cx="16" cy="13" r=".5" fill="currentColor" stroke="none" />
-        <circle cx="18" cy="3" r=".5" fill="currentColor" stroke="none" />
-        <circle cx="20" cy="21" r=".5" fill="currentColor" stroke="none" />
-        <circle cx="20" cy="8" r=".5" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-    width: '92px',
-    minWidth: '84px',
-    toggleable: true,
-    defaultHidden: true,
-    kind: 'badge',
-  },
-  {
     id: 'backup',
     label: 'Backup',
     icon: (
@@ -540,7 +504,6 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     image: 18,
     namespace: 11,
     context: 13,
-    aiContext: 9,
     update: 10,
   },
 };
@@ -699,7 +662,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
-    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -716,7 +678,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
-    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -733,7 +694,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'node',
     'backup',
-    'aiContext',
     'tags',
     'os',
     'diskIo',
@@ -756,7 +716,6 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'os',
     'image',
     'context',
-    'aiContext',
     'update',
     'diskIo',
     'netIo',
@@ -771,13 +730,12 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
     'uptime',
     'image',
     'context',
-    'aiContext',
     'tags',
     'update',
     'diskIo',
     'netIo',
   ]),
-  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'aiContext']),
+  pod: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context']),
 };
 
 /**

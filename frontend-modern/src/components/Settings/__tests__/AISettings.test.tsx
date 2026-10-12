@@ -6,19 +6,13 @@ import { PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
 import { aiChatStore } from '@/stores/aiChat';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
-import {
-  AIAssistantSettings,
-  AIDiscoverySettings,
-  AISettings,
-  AIPatrolSettings,
-} from '../AISettings';
+import { AIAssistantSettings, AISettings, AIPatrolSettings } from '../AISettings';
 
 const getSettingsMock = vi.fn();
 const updateSettingsMock = vi.fn();
 const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
-const runDiscoveryRefreshMock = vi.fn();
 const runPatrolModelReadinessMock = vi.fn();
 const getPatrolCostPreviewMock = vi.fn();
 const getPatrolModelGuidanceMock = vi.fn();
@@ -55,10 +49,6 @@ vi.mock('@/api/aiChat', () => ({
     listSessions: (...args: unknown[]) => listSessionsMock(...args),
     summarizeSession: (...args: unknown[]) => summarizeSessionMock(...args),
   },
-}));
-
-vi.mock('@/api/discovery', () => ({
-  runDiscoveryRefresh: (...args: unknown[]) => runDiscoveryRefreshMock(...args),
 }));
 
 vi.mock('@/api/patrol', () => ({
@@ -134,7 +124,7 @@ const baseSettings = (): AISettingsType => ({
   configured_providers: [],
 });
 
-type AISettingsTestPage = 'provider' | 'patrol' | 'assistant' | 'discovery';
+type AISettingsTestPage = 'provider' | 'patrol' | 'assistant';
 
 const getTestComponent = (page: AISettingsTestPage) => {
   switch (page) {
@@ -142,8 +132,6 @@ const getTestComponent = (page: AISettingsTestPage) => {
       return AIPatrolSettings;
     case 'assistant':
       return AIAssistantSettings;
-    case 'discovery':
-      return AIDiscoverySettings;
     default:
       return AISettings;
   }
@@ -164,7 +152,6 @@ const resetAllMocks = () => {
   getModelsMock.mockReset();
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
-  runDiscoveryRefreshMock.mockReset();
   runPatrolModelReadinessMock.mockReset();
   getPatrolCostPreviewMock.mockReset();
   getPatrolModelGuidanceMock.mockReset();
@@ -201,16 +188,6 @@ const setupDefaultMocks = () => {
     success: true,
     message: 'OpenRouter reachable',
     provider: 'openrouter',
-  });
-  runDiscoveryRefreshMock.mockResolvedValue({
-    mode: 'manual',
-    fingerprint_count: 1,
-    changed_count: 1,
-    stale_count: 0,
-    candidate_count: 1,
-    discovered_count: 1,
-    failed_count: 0,
-    last_run: '2026-05-15T12:00:00Z',
   });
   fetchAgentCapabilitiesManifestMock.mockResolvedValue(null);
   listSessionsMock.mockResolvedValue([]);
@@ -1051,143 +1028,6 @@ describe('AISettings load failure error state', () => {
   });
 });
 
-describe('AISettings service context persistence', () => {
-  beforeEach(() => {
-    resetAllMocks();
-    setupDefaultMocks();
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('saves service context enablement and scan interval as an explicit pair', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 24,
-    });
-    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
-      ...baseSettings(),
-      discovery_enabled: payload.discovery_enabled as boolean,
-      discovery_interval_hours: payload.discovery_interval_hours as number,
-    }));
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Service Context Auto 24h/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Auto 24h/i }));
-    const intervalSelect = screen.getByLabelText('Scan Interval');
-    expect(intervalSelect).toHaveValue('24');
-
-    fireEvent.change(intervalSelect, {
-      target: { value: '6' },
-    });
-    expect(intervalSelect).toHaveValue('6');
-
-    fireEvent.click(screen.getByRole('button', { name: /Save service context settings/i }));
-
-    await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          discovery_enabled: true,
-          discovery_interval_hours: 6,
-        }),
-      );
-    });
-  });
-
-  it('runs a manual service context refresh from settings', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 0,
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Service Context Manual only/i }),
-      ).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: 1 workload refreshed.',
-      );
-    });
-  });
-
-  it('keeps the manual discovery refresh visible when recurring discovery is off', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: false,
-      discovery_interval_hours: 0,
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Service Context Off/i })).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Off/i }));
-
-    expect(screen.queryByLabelText('Scan Interval')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Runs one service context scan without changing the schedule.'),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: 1 workload refreshed.',
-      );
-    });
-  });
-
-  it('reports when a manual discovery refresh has no pending work', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      discovery_enabled: true,
-      discovery_interval_hours: 0,
-    });
-    runDiscoveryRefreshMock.mockResolvedValue({
-      mode: 'manual',
-      fingerprint_count: 1,
-      changed_count: 0,
-      stale_count: 0,
-      candidate_count: 0,
-      discovered_count: 0,
-      failed_count: 0,
-      last_run: '2026-05-15T12:00:00Z',
-    });
-
-    renderComponent('discovery');
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Service Context Manual only/i }),
-      ).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
-
-    await waitFor(() => {
-      expect(notificationInfoMock).toHaveBeenCalledWith(
-        'Discovery refresh finished: no new, changed, stale, or repairable workloads.',
-      );
-    });
-  });
-});
-
 describe('AISettings OpenRouter flow', () => {
   beforeEach(() => {
     resetAllMocks();
@@ -1905,7 +1745,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
@@ -1930,7 +1770,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
@@ -1957,7 +1797,7 @@ describe('AISettings provider setup flow', () => {
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
+      screen.getByText('Connect a provider to power Patrol and Assistant.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
     expect(

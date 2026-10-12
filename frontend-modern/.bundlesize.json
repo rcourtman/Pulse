@@ -85,9 +85,6 @@
     "AuditLogPanel": {
       "baselineGzip": 8806
     },
-    "discovery": {
-      "baselineGzip": 9810
-    },
     "useUnifiedResources": {
       "baselineGzip": 7595
     },

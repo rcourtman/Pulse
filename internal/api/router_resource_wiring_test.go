@@ -1,6 +1,11 @@
 package api
 
 import (
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -8,10 +13,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 type countingSupplementalRecords struct {

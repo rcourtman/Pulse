@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Alert, Node } from '@/types/api';
-import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 
 const chartsApiMocks = vi.hoisted(() => ({
   getMetricsHistory: vi.fn(),
@@ -95,7 +95,6 @@ function makeAlert(overrides: Partial<Alert> = {}): Alert {
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'agent',
     resourceId: 'pve-node-1',
@@ -129,21 +128,6 @@ describe('NodeDrawer', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Collapse pve-node-1 details' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not expose Discovery when the feature is disabled', () => {
-    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
-      typeof syncAIRuntimeSettings
-    >[0]);
-
-    render(() => (
-      <NodeDrawer
-        node={makeNode()}
-        discoveryTarget={{ agentId: 'pve-node-1', hostname: 'pve-node-1' }}
-      />
-    ));
-
-    expect(screen.queryByRole('tab', { name: 'Discovery' })).toBeNull();
   });
 
   it('shows a guest-drawer style Proxmox node overview with detailed node context', () => {

@@ -877,11 +877,10 @@ func TestAIConfig_GetChatModel(t *testing.T) {
 
 func TestAIConfig_NormalizeQuickstartModelAliases(t *testing.T) {
 	config := AIConfig{
-		Model:          "quickstart:minimax-2.5m",
-		ChatModel:      "pulse-hosted",
-		PatrolModel:    "quickstart:anything",
-		DiscoveryModel: "",
-		AutoFixModel:   "quickstart:legacy-provider-model",
+		Model:        "quickstart:minimax-2.5m",
+		ChatModel:    "pulse-hosted",
+		PatrolModel:  "quickstart:anything",
+		AutoFixModel: "quickstart:legacy-provider-model",
 	}
 
 	changed := config.NormalizeQuickstartModelAliases()
@@ -891,9 +890,6 @@ func TestAIConfig_NormalizeQuickstartModelAliases(t *testing.T) {
 
 	if config.Model != "" || config.ChatModel != "" || config.PatrolModel != "" || config.AutoFixModel != "" {
 		t.Fatalf("NormalizeQuickstartModelAliases() = %#v, want all quickstart fields cleared", config)
-	}
-	if config.DiscoveryModel != "" {
-		t.Fatalf("expected empty discovery model to remain empty, got %q", config.DiscoveryModel)
 	}
 }
 
@@ -1306,40 +1302,6 @@ func TestAIConfig_AlertTriggersInvestigation(t *testing.T) {
 	}
 }
 
-func TestAIConfig_GetDiscoveryAIAnalysisTimeout(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *AIConfig
-		expected time.Duration
-	}{
-		{
-			// Zero is omitted from the settings response and the UI displays
-			// (and may never re-submit) 300s, so discovery must agree with it.
-			name:     "Unset matches the advertised request timeout default",
-			config:   &AIConfig{},
-			expected: 300 * time.Second,
-		},
-		{
-			name:     "Explicit request timeout wins for slow local models",
-			config:   &AIConfig{RequestTimeoutSeconds: 600},
-			expected: 600 * time.Second,
-		},
-		{
-			name:     "Explicit request timeout below the default is honored",
-			config:   &AIConfig{RequestTimeoutSeconds: 10},
-			expected: 10 * time.Second,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if duration := tt.config.GetDiscoveryAIAnalysisTimeout(); duration != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, duration)
-			}
-		})
-	}
-}
-
 func TestAIConfig_GetRequestTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1366,26 +1328,6 @@ func TestAIConfig_GetRequestTimeout(t *testing.T) {
 				t.Errorf("expected %v, got %v", tt.expected, duration)
 			}
 		})
-	}
-}
-
-func TestAIConfig_GetDiscoveryModelFallbackChain(t *testing.T) {
-	// Discovery is high-fan-out background work: it follows the operator's
-	// background-work (Patrol) model before the shared default so scheduled
-	// context refreshes never silently burn a premium shared model.
-	cfg := AIConfig{Model: "gemini:gemini-flash-latest"}
-	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-flash-latest" {
-		t.Fatalf("with only the shared default set, GetDiscoveryModel() = %q, want the shared default", got)
-	}
-
-	cfg.PatrolModel = "gemini:gemini-2.5-flash-lite"
-	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-2.5-flash-lite" {
-		t.Fatalf("with a Patrol override set, GetDiscoveryModel() = %q, want the Patrol model", got)
-	}
-
-	cfg.DiscoveryModel = "ollama:qwen3:8b"
-	if got := cfg.GetDiscoveryModel(); got != "ollama:qwen3:8b" {
-		t.Fatalf("with an explicit discovery override set, GetDiscoveryModel() = %q, want the discovery override", got)
 	}
 }
 

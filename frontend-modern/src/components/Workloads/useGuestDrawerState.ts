@@ -1,29 +1,15 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
-import { getDiscovery } from '@/api/discovery';
-import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import type { HistoryTimeRange } from '@/api/charts';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import type { ResourceDiscovery, ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import {
-  getDiscoveryIdentifiedSummary,
-  getDiscoveryLoadingState,
-} from '@/utils/discoveryPresentation';
-import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
-  getDiscoveryResourceTypeForWorkload,
-  hasDiscoverySupportForWorkload,
   getWebInterfaceTargetLabelForWorkload,
   getWorkloadMetadataId,
 } from '@/utils/workloads';
 
 import {
-  getDiscoveryHostIdForWorkload,
-  getDiscoveryResourceIdForWorkload,
   getWorkloadAlertPolicyTags,
   getWorkloadAlertResourceIdCandidates,
   getWorkloadAlertThresholdScope,
@@ -48,15 +34,8 @@ import {
   shouldShowInGuestAgentInstallCue,
 } from './workloadAgentReadiness';
 
-interface GuestDiscoverySourceKey {
-  type: DiscoveryResourceType;
-  agent: string;
-  resource: string;
-}
-
 export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertsActivation = useAlertsActivation();
-  const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -107,14 +86,8 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
       alertsActivation.getBackupThresholds(),
     ),
   );
-  const hasDiscoverySupport = createMemo(
-    () => discoveryFeatureEnabled() && hasDiscoverySupportForWorkload(props.guest),
-  );
   const historyTarget = createMemo(() => getGuestDrawerHistoryTarget(props.guest));
   const hasHistorySupport = createMemo(() => historyTarget() !== null);
-  const discoveryAgentId = createMemo(() => getDiscoveryHostIdForWorkload(props.guest));
-  const discoveryResourceId = createMemo(() => getDiscoveryResourceIdForWorkload(props.guest));
-  const discoveryResourceType = createMemo(() => getDiscoveryResourceTypeForWorkload(props.guest));
   const webInterfaceTargetLabel = createMemo(() =>
     getWebInterfaceTargetLabelForWorkload(props.guest),
   );
@@ -122,64 +95,11 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     () => props.metadataId?.trim() || getWorkloadMetadataId(props.guest),
   );
 
-  // Load the existing discovery record (if any) so the Overview can surface
-  // the identified service alongside CPU/agent/OS metadata. This is a passive
-  // read — no scan is triggered. The discovery sub-tab continues to own
-  // manual scan triggering and progress UI.
-  const discoverySourceKey = createMemo(() => {
-    if (!hasDiscoverySupport()) return null;
-    const type = discoveryResourceType();
-    const agent = discoveryAgentId();
-    const resource = discoveryResourceId();
-    if (!type || !agent || !resource) return null;
-    return { type, agent, resource } as GuestDiscoverySourceKey;
-  });
-  const discoveryRecord = createNonSuspendingQuery<
-    ResourceDiscovery | null,
-    GuestDiscoverySourceKey
-  >({
-    source: discoverySourceKey,
-    initialValue: null,
-    cacheKey: (key) =>
-      `guest-drawer-discovery:${JSON.stringify([guestId(), key.type, key.agent, key.resource])}`,
-    // Retained evidence belongs to this exact target, never its replacement.
-    // Let the query distinguish HTTP access denial from a transient failure;
-    // null is reserved for a successful read with no saved discovery.
-    retainPreviousValueOnSourceChange: false,
-    fetcher: (key) => getDiscovery(key.type, key.agent, key.resource),
-  });
-  const discoveryIdentifiedSummary = createMemo(() =>
-    hasDiscoverySupport() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
-  );
-  const discoveryPanelKey = createMemo(() => {
-    const key = discoverySourceKey();
-    return key ? JSON.stringify([key.type, key.agent, key.resource]) : null;
-  });
-  const discoveryReadError = createMemo(() => {
-    if (!hasDiscoverySupport() || !discoveryRecord.error()) return null;
-    const accessError = getAPIReadAccessErrorMessage(discoveryRecord.error());
-    if (accessError) return `Service details unavailable. ${accessError}`;
-    return discoveryIdentifiedSummary()
-      ? 'Service details could not be refreshed. Showing previously loaded service details.'
-      : 'Service details could not be loaded.';
-  });
-  const retryDiscoveryRead = () => {
-    if (!discoveryRecord.loading()) void discoveryRecord.refetch();
-  };
-  const discoveryReadinessPresentation = createMemo(() =>
-    hasDiscoverySupport()
-      ? getDiscoveryReadinessPresentation(props.guest.discoveryReadiness, true)
-      : null,
-  );
-
   const switchTab = (tab: GuestDrawerTab) => {
     setActiveTab(tab);
   };
 
   createEffect(() => {
-    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
-      setActiveTab('overview');
-    }
     if (activeTab() === 'history' && !hasHistorySupport()) {
       setActiveTab('overview');
     }
@@ -191,21 +111,10 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     agentLabel,
     agentTitle,
     backupPresentation,
-    discoveryAgentId,
-    discoveryIdentifiedSummary,
-    discoveryPanelKey,
-    discoveryReadError,
-    discoveryReadLoading: discoveryRecord.loading,
-    retryDiscoveryRead,
-    discoveryReadinessPresentation,
-    discoveryLoadingState: getDiscoveryLoadingState(),
-    discoveryResourceId,
-    discoveryResourceType,
     diskThresholds,
     guestId,
     guestOsSummary,
     hasAgentInfo,
-    hasDiscoverySupport,
     hasFilesystemDetails,
     hasHistorySupport,
     hasNetworkInterfaces,

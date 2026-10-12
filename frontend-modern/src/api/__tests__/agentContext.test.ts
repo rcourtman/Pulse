@@ -18,14 +18,6 @@ describe('AgentContextAPI', () => {
       canonicalId: 'system-container-6adaf34f529d241a',
       resourceType: 'system-container',
       resourceName: 'homeassistant',
-      discoveryReadiness: {
-        state: 'missing',
-        reason: 'Discovery has not run for this resource.',
-        resourceType: 'system-container',
-        targetId: 'agent-delly',
-        resourceId: '101',
-        generatedAt: '2026-06-04T15:00:00Z',
-      },
       activeFindings: [],
       pendingApprovals: [],
       recentActions: [],
@@ -38,10 +30,6 @@ describe('AgentContextAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/agent/resource-context/delly%3Adelly%3A101',
     );
-    expect(context.discoveryReadiness).toMatchObject({
-      state: 'missing',
-      targetId: 'agent-delly',
-      resourceId: '101',
-    });
+    expect(context.canonicalId).toBe('system-container-6adaf34f529d241a');
   });
 });

@@ -16,7 +16,6 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
@@ -826,12 +825,6 @@ export const ProxmoxNodesTable: Component<{
                             )}
                             disks={normalizeDiskArray(node.agent?.disks)}
                             temperatureThresholds={temperatureThresholds()}
-                            discoveryTarget={(() => {
-                              const config = toDiscoveryConfig(node);
-                              return config
-                                ? { agentId: config.agentId, hostname: config.hostname }
-                                : undefined;
-                            })()}
                           />
                         </InlineDetailTableRow>
                       )}

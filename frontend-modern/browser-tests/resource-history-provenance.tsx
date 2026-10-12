@@ -5,11 +5,9 @@ import { Router, Route } from '@solidjs/router';
 import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceDetailDrawer';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import type { Resource } from '../src/types/resource';
 import type { WorkloadGuest } from '../src/types/workloads';
 import '../src/index.css';
-syncAIRuntimeSettings({ discovery_enabled: false });
 function Fixture() {
   const [state, setState] = createSignal('retained');
   const [seen, setSeen] = createSignal(Date.parse('2026-10-04T13:00:00Z'));

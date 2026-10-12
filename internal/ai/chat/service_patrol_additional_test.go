@@ -726,8 +726,7 @@ func TestService_ListAvailableToolsAndSetters(t *testing.T) {
 	service.SetGuestConfigProvider(nil)
 	service.SetBudgetChecker(func() error { return nil })
 
-	discoveryProvider := &mockDiscoveryProvider{}
-	service.SetDiscoveryProvider(discoveryProvider)
+	service.SetReadState(rs)
 	if service.contextPrefetcher == nil {
 		t.Fatalf("expected context prefetcher to be set")
 	}

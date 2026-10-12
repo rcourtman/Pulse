@@ -32,7 +32,6 @@ import {
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
-import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import {
   getWorkloadMemoryGuestKind,
@@ -79,7 +78,6 @@ export function GuestRow(props: GuestRowProps) {
     customUrl,
     diskAnomaly,
     diskIOEmphasis,
-    discoveryReadinessPresentation,
     diskRead,
     diskThresholds,
     diskUsageRead,
@@ -867,26 +865,6 @@ export function GuestRow(props: GuestRowProps) {
                     {clusterName()}
                   </span>
                 </Show>
-              </Show>
-            </div>
-          </td>
-        </Show>
-
-        {/* AI context readiness */}
-        <Show when={isColVisible('aiContext')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
-              <Show
-                when={discoveryReadinessPresentation()}
-                fallback={
-                  <span class="text-xs text-slate-400" aria-hidden="true">
-                    —
-                  </span>
-                }
-              >
-                {(presentation) => (
-                  <DiscoveryReadinessBadge presentation={presentation()} compact />
-                )}
               </Show>
             </div>
           </td>

@@ -7,7 +7,6 @@ import { ResourceOperatorStateSection } from '../src/components/Infrastructure/R
 import { UpdatesSettingsPanel } from '../src/components/Settings/UpdatesSettingsPanel';
 import { GuestDrawer } from '../src/components/Workloads/GuestDrawer';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
 import { updateStore } from '../src/stores/updates';
 import { METRIC_ALERT_STATUS_STALE_MS } from '../src/features/alerts/metricAlertPresentation';
 import type { Alert } from '../src/types/api';
@@ -17,7 +16,6 @@ import '../src/index.css';
 const start = Date.parse('2026-10-11T04:00:00Z');
 const iso = (offset: number) => new Date(start + offset).toISOString();
 const surface = new URLSearchParams(location.search).get('surface') ?? 'once';
-syncAIRuntimeSettings({ discovery_enabled: false });
 
 const initialGuest: WorkloadGuest = {
   id: 'fixture:pve-a:101',

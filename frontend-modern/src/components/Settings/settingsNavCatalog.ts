@@ -344,7 +344,6 @@ const SETTINGS_NAV_ITEM_LABEL_KEYS = {
   'system-ai': 'settings.nav.item.providerModels',
   'system-ai-patrol': 'settings.nav.item.patrol',
   'system-ai-assistant': 'settings.nav.item.assistant',
-  'system-ai-discovery': 'settings.nav.item.discovery',
   'system-relay': 'settings.nav.item.remoteAccess',
   'system-billing': 'settings.nav.item.plans',
   'support-diagnostics': 'settings.nav.item.diagnosticsHealth',

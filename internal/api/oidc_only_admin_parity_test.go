@@ -80,13 +80,6 @@ func TestSSOOnlyExplicitAdminReachesEveryAdminGuard(t *testing.T) {
 		t.Error("canCapturePublicURL refused the explicit SSO administrator")
 	}
 
-	h := &DiscoveryHandlers{config: cfg}
-	req2 := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
-	req2.AddCookie(adminParitySession(t, ssoAdmin))
-	if !h.isAdminRequest(req2) {
-		t.Error("discovery isAdminRequest refused the explicit SSO administrator")
-	}
-
 	if code := exportStatusFor(t, router, ssoAdmin); code == http.StatusForbidden {
 		t.Error("config export refused the explicitly authorized SSO administrator")
 	}
@@ -99,11 +92,6 @@ func TestSSOOnlyExplicitAdminReachesEveryAdminGuard(t *testing.T) {
 	req3.AddCookie(adminParitySession(t, ssoViewer))
 	if canCapturePublicURL(cfg, req3) {
 		t.Error("public URL capture admitted an unassigned SSO user")
-	}
-	req4 := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
-	req4.AddCookie(adminParitySession(t, ssoViewer))
-	if h.isAdminRequest(req4) {
-		t.Error("discovery admitted an unassigned SSO user")
 	}
 	if code := exportStatusFor(t, router, ssoViewer); code != http.StatusForbidden {
 		t.Errorf("config export for an unassigned SSO user = %d, want 403", code)
@@ -130,13 +118,6 @@ func TestUnrelatedSSOUserStillRefusedWhenLocalAdminConfigured(t *testing.T) {
 	req.AddCookie(adminParitySession(t, outsider))
 	if canCapturePublicURL(cfg, req) {
 		t.Error("canCapturePublicURL admitted a non-admin SSO user")
-	}
-
-	h := &DiscoveryHandlers{config: cfg}
-	req2 := httptest.NewRequest(http.MethodGet, "/api/discovery/status", nil)
-	req2.AddCookie(adminParitySession(t, outsider))
-	if h.isAdminRequest(req2) {
-		t.Error("discovery isAdminRequest admitted a non-admin SSO user")
 	}
 
 	if code := exportStatusFor(t, router, outsider); code != http.StatusForbidden {

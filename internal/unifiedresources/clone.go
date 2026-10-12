@@ -59,7 +59,6 @@ func cloneResourceData(in *Resource) Resource {
 
 	out := *in
 	out.DiscoveryTarget = cloneDiscoveryTarget(in.DiscoveryTarget)
-	out.DiscoveryReadiness = cloneResourceDiscoveryReadiness(in.DiscoveryReadiness)
 	out.MetricsTarget = cloneMetricsTarget(in.MetricsTarget)
 	out.SupersededCanonicalIDs = cloneStringSlice(in.SupersededCanonicalIDs)
 	out.PlatformScopes = cloneStringSlice(in.PlatformScopes)
@@ -120,15 +119,6 @@ func cloneDiscoveryTarget(in *DiscoveryTarget) *DiscoveryTarget {
 		return nil
 	}
 	out := *in
-	return &out
-}
-
-func cloneResourceDiscoveryReadiness(in *ResourceDiscoveryReadiness) *ResourceDiscoveryReadiness {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	out.ObservedAt = cloneTimePtr(in.ObservedAt)
 	return &out
 }
 

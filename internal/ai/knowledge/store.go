@@ -49,12 +49,10 @@ type GuestKnowledge struct {
 
 // Store manages persistent knowledge storage with encryption
 type Store struct {
-	dataDir                              string
-	mu                                   sync.RWMutex
-	cache                                map[string]*GuestKnowledge
-	crypto                               *crypto.CryptoManager
-	discoveryContextProvider             func() string
-	discoveryContextProviderForResources func(resourceIDs []string) string
+	dataDir string
+	mu      sync.RWMutex
+	cache   map[string]*GuestKnowledge
+	crypto  *crypto.CryptoManager
 }
 
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
@@ -812,73 +810,12 @@ finalize:
 	return result
 }
 
-// SetDiscoveryContextProvider sets the function that provides discovery context.
-// This allows the knowledge store to include deep-scanned infrastructure info
-// (service versions, CLI access, config paths, ports) in the context for investigations.
-func (s *Store) SetDiscoveryContextProvider(provider func() string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.discoveryContextProvider = provider
-}
-
-// SetDiscoveryContextProviderForResources sets the provider for scoped discovery context.
-// This allows Patrol to request discovery context for specific resources.
-func (s *Store) SetDiscoveryContextProviderForResources(provider func(resourceIDs []string) string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.discoveryContextProviderForResources = provider
-}
-
-// GetInfrastructureContext returns all discovered infrastructure formatted for AI context.
-// This is specifically used by Patrol and investigations to understand where services run
-// and how to interact with them (e.g., knowing PBS runs in Docker so commands need docker exec).
-//
-// It combines two sources:
-// 1. Discovery data (deep-scanned service details, versions, CLI access, ports)
-// 2. Legacy knowledge notes (for backward compatibility)
+// GetInfrastructureContext returns the operator's infrastructure notes
+// formatted for AI context. Patrol and investigations use it to understand
+// where services run and how to interact with them (e.g., knowing PBS runs in
+// Docker so commands need docker exec).
 func (s *Store) GetInfrastructureContext() string {
-	s.mu.RLock()
-	discoveryProvider := s.discoveryContextProvider
-	s.mu.RUnlock()
-
-	var sb strings.Builder
-
-	// First, include discovery context (the rich, deep-scanned data)
-	if discoveryProvider != nil {
-		if discoveryContext := discoveryProvider(); discoveryContext != "" {
-			sb.WriteString(discoveryContext)
-		}
-	}
-
-	// Then, include legacy knowledge notes (for backward compatibility)
-	legacyContext := s.getLegacyInfrastructureContext()
-	if legacyContext != "" {
-		// Only add if we don't already have discovery context
-		// (discovery is more comprehensive and replaces legacy notes)
-		if sb.Len() == 0 {
-			sb.WriteString(legacyContext)
-		}
-	}
-
-	return sb.String()
-}
-
-// GetInfrastructureContextForResources returns discovery context scoped to specific resources.
-// If no scoped provider is configured, it returns an empty string to avoid over-broad context.
-func (s *Store) GetInfrastructureContextForResources(resourceIDs []string) string {
-	if len(resourceIDs) == 0 {
-		return s.GetInfrastructureContext()
-	}
-
-	s.mu.RLock()
-	provider := s.discoveryContextProviderForResources
-	s.mu.RUnlock()
-
-	if provider == nil {
-		return ""
-	}
-
-	return provider(resourceIDs)
+	return s.getLegacyInfrastructureContext()
 }
 
 func buildResourceIDTokenSet(resourceIDs []string) map[string]struct{} {

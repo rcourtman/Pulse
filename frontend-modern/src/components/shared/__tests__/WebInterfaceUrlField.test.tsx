@@ -43,8 +43,6 @@ import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { DockerHostMetadataAPI } from '@/api/dockerHostMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
-import { copyToClipboard } from '@/utils/clipboard';
-import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { syncSessionCapabilities } from '@/stores/sessionCapabilities';
 
@@ -72,8 +70,6 @@ describe('WebInterfaceUrlField', () => {
     );
 
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
-    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
-    expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 
   it('renders URL controls for a metadata target', async () => {
@@ -93,7 +89,6 @@ describe('WebInterfaceUrlField', () => {
         metadataId="guest-1"
         targetLabel="workload"
         customUrl="https://grafana.example"
-        suggestedUrl="http://10.0.0.5:3000"
       />
     ));
 
@@ -255,83 +250,5 @@ describe('WebInterfaceUrlField', () => {
         "Add a URL to quickly access this workload's web interface from Pulse.",
       ),
     ).toHaveClass('whitespace-normal');
-  });
-
-  it('uses the canonical discovery fallback copy for missing suggested urls', async () => {
-    render(() => (
-      <WebInterfaceUrlField
-        metadataKind="guest"
-        metadataId="guest-1"
-        customUrl=""
-        suggestedUrlDiagnostic="No management interface could be inferred."
-      />
-    ));
-
-    expect(await screen.findByText('No suggested URL available')).toBeInTheDocument();
-    expect(screen.getByText('No management interface could be inferred.')).toBeInTheDocument();
-    expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
-  });
-
-  it('does not show missing suggested URL diagnostics when a custom URL already exists', async () => {
-    render(() => (
-      <WebInterfaceUrlField
-        metadataKind="guest"
-        metadataId="guest-1"
-        customUrl="https://198.51.100.100:8080"
-        suggestedUrlDiagnostic="No management interface could be inferred."
-      />
-    ));
-
-    expect(await screen.findByDisplayValue('https://198.51.100.100:8080')).toBeInTheDocument();
-    expect(screen.queryByText('No suggested URL available')).toBeNull();
-  });
-
-  it('offers discovered URL copy, open, and adopt actions without saving automatically', async () => {
-    render(() => (
-      <WebInterfaceUrlField
-        metadataKind="guest"
-        metadataId="guest-1"
-        customUrl=""
-        suggestedUrl="http://192.0.2.10:8123"
-        suggestedUrlReasonText="Detected web port"
-      />
-    ));
-
-    expect(await screen.findByText('Suggested URL')).toBeInTheDocument();
-    expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
-    expect(screen.getByText('http://192.0.2.10:8123')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open suggested URL' })).toHaveAttribute(
-      'href',
-      'http://192.0.2.10:8123',
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy suggested URL' }));
-    await waitFor(() => {
-      expect(copyToClipboard).toHaveBeenCalledWith('http://192.0.2.10:8123');
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
-    expect(AgentMetadataAPI.updateMetadata).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText('https://198.51.100.100:8080')).toHaveValue(
-      'http://192.0.2.10:8123',
-    );
-  });
-
-  it('rejects an unsafe discovered URL without rendering navigation', async () => {
-    const unsafeUrl = ['javascript', 'alert(document.domain)'].join(':');
-    const unsafeSuggestion = { suggestedUrl: unsafeUrl };
-
-    render(() => (
-      <WebInterfaceUrlField
-        metadataKind="guest"
-        metadataId="guest-1"
-        customUrl=""
-        {...unsafeSuggestion}
-      />
-    ));
-
-    expect(await screen.findByText('Suggested URL rejected')).toBeInTheDocument();
-    expect(screen.getByText('URL must start with http:// or https://.')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open suggested URL' })).toBeNull();
   });
 });

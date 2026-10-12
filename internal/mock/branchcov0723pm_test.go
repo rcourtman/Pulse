@@ -389,3 +389,14 @@ func TestBranchcov0723pm_GenerateMockHostRate(t *testing.T) {
 		})
 	}
 }
+
+func setMockEnabledForTest(t testing.TB, enabled bool) {
+	t.Helper()
+	previous := IsMockEnabled()
+	if err := SetEnabled(enabled); err != nil {
+		t.Fatalf("SetEnabled(%v): %v", enabled, err)
+	}
+	t.Cleanup(func() {
+		_ = SetEnabled(previous)
+	})
+}

@@ -323,7 +323,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     // `tags` was on this list while vSphere shipped adapter provenance strings
     // in place of real tags; the adapter now reads vCenter's tagging API, so no
     // scope default-hides it and retiring the preference would be wrong.
-    ['aiContext', 'backup'],
+    ['backup'],
   );
 
   const visibleColumns = columnVisibility.visibleColumns;

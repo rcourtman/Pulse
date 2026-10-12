@@ -105,37 +105,6 @@ func (p ownedSupplementalProvider) SnapshotOwnedSources() []unified.DataSource {
 	return []unified.DataSource{p.source}
 }
 
-type staticResourceDiscoveryReadinessProvider struct {
-	byResource map[string]unified.ResourceDiscoveryReadiness
-}
-
-func (p staticResourceDiscoveryReadinessProvider) DiscoveryReadinessForResource(resource unified.Resource, now time.Time) unified.ResourceDiscoveryReadiness {
-	if readiness, ok := p.byResource[unified.CanonicalResourceID(resource.ID)]; ok {
-		if readiness.GeneratedAt.IsZero() {
-			readiness.GeneratedAt = now
-		}
-		if resource.DiscoveryTarget != nil {
-			if readiness.ResourceType == "" {
-				readiness.ResourceType = resource.DiscoveryTarget.ResourceType
-			}
-			if readiness.TargetID == "" {
-				readiness.TargetID = resource.DiscoveryTarget.AgentID
-			}
-			if readiness.ResourceID == "" {
-				readiness.ResourceID = resource.DiscoveryTarget.ResourceID
-			}
-		}
-		return readiness
-	}
-	readiness := unified.ResourceDiscoveryReadiness{State: unified.ResourceDiscoveryReadinessMissing, Source: "service-discovery", GeneratedAt: now}
-	if resource.DiscoveryTarget != nil {
-		readiness.ResourceType = resource.DiscoveryTarget.ResourceType
-		readiness.TargetID = resource.DiscoveryTarget.AgentID
-		readiness.ResourceID = resource.DiscoveryTarget.ResourceID
-	}
-	return readiness
-}
-
 func TestResourceListRepairsPreFixAvailabilitySnapshotFromConfiguredTargets(t *testing.T) {
 	now := time.Date(2026, 7, 23, 22, 0, 0, 0, time.UTC)
 	hostID := "agent-core2026"
@@ -515,67 +484,6 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 	if got := resp.Data[0].FacetCounts; got.RecentChanges != 1 {
 		t.Fatalf("facetCounts = %+v, want recentChanges=1", got)
-	}
-}
-
-func TestResourceListAttachesDiscoveryReadiness(t *testing.T) {
-	now := time.Date(2026, 6, 4, 11, 0, 0, 0, time.UTC)
-	observedAt := now.Add(-5 * time.Minute)
-	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewQueryService(cfg)
-	h.SetStateProvider(resourceUnifiedSeedProvider{
-		snapshot: models.StateSnapshot{LastUpdate: now},
-		resources: []unified.Resource{
-			{
-				ID:        "agent:node-a",
-				Type:      unified.ResourceTypeAgent,
-				Name:      "node-a",
-				Status:    unified.StatusOnline,
-				LastSeen:  now,
-				UpdatedAt: now,
-				Sources:   []unified.DataSource{unified.SourceAgent},
-				Agent: &unified.AgentData{
-					AgentID:  "node-a",
-					Hostname: "node-a",
-				},
-			},
-		},
-	})
-	h.SetDiscoveryReadinessProvider(staticResourceDiscoveryReadinessProvider{
-		byResource: map[string]unified.ResourceDiscoveryReadiness{
-			"agent:node-a": {
-				State:       unified.ResourceDiscoveryReadinessStale,
-				Source:      "service-discovery",
-				ObservedAt:  &observedAt,
-				AgeSeconds:  int64((31 * 24 * time.Hour).Seconds()),
-				ServiceName: "Node services",
-				FactCount:   3,
-			},
-		},
-	})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent", nil)
-	h.HandleListResources(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-	var resp ResourcesResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 resource, got %d", len(resp.Data))
-	}
-	readiness := resp.Data[0].DiscoveryReadiness
-	if readiness == nil {
-		t.Fatal("expected discoveryReadiness in resource payload")
-	}
-	if readiness.State != unified.ResourceDiscoveryReadinessStale {
-		t.Fatalf("readiness state = %q, want stale", readiness.State)
-	}
-	if readiness.ResourceType != "agent" || readiness.TargetID != "node-a" || readiness.ResourceID != "node-a" {
-		t.Fatalf("readiness target = %+v, want agent/node-a/node-a", readiness)
 	}
 }
 

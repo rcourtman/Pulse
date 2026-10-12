@@ -1198,3 +1198,24 @@ func TestApplyPulseIntelligenceTelemetrySnapshotSchemaV17DefaultsWithoutPersiste
 		t.Fatalf("provider class/autonomy = %q/%q, want local/monitor", snap.AIProviderClass, snap.PulseIntelligencePatrolAutonomyLevel)
 	}
 }
+
+func TestApplyAIConfigTelemetrySnapshot_LeavesNetworkDiscoveryFlagAlone(t *testing.T) {
+	aiCfg := &config.AIConfig{Enabled: true, Model: "anthropic:claude-sonnet-4"}
+	for _, networkDiscovery := range []bool{false, true} {
+		snap := telemetry.Snapshot{DiscoveryEnabled: networkDiscovery}
+		applyAIConfigTelemetrySnapshot(&snap, aiCfg)
+		if !snap.AIEnabled {
+			t.Fatalf("AI enabled flag not copied from AI config")
+		}
+		// AI Discovery is gone, so a fully enabled AI config must not report
+		// discovery; the flag keeps the network subnet discovery setting.
+		if snap.DiscoveryEnabled != networkDiscovery {
+			t.Fatalf("DiscoveryEnabled = %v, want network setting %v", snap.DiscoveryEnabled, networkDiscovery)
+		}
+	}
+	var snap telemetry.Snapshot
+	applyAIConfigTelemetrySnapshot(&snap, nil)
+	if snap.AIEnabled || snap.DiscoveryEnabled {
+		t.Fatalf("nil AI config changed the snapshot: %+v", snap)
+	}
+}

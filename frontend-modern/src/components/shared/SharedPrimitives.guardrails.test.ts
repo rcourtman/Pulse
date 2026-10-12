@@ -20,7 +20,6 @@ import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
 import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
-import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
 import detailSectionTableSource from '@/components/shared/DetailSectionTable.tsx?raw';
 import detailSectionModelSource from '@/components/shared/detailSectionModel.ts?raw';
 import drawerAttentionSectionSource from '@/components/shared/DrawerAttentionSection.tsx?raw';
@@ -71,7 +70,6 @@ import searchInputEnhancementsModelSource from '@/components/shared/searchInputE
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
-import discoveryLoadingFallbackSource from '@/components/shared/DiscoveryLoadingFallback.tsx?raw';
 import settingsLoadingSkeletonSource from '@/components/shared/SettingsLoadingSkeleton.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
@@ -79,7 +77,6 @@ import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge
 import alertSeverityBadgeSource from '@/components/shared/AlertSeverityBadge.tsx?raw';
 import metadataBadgeSource from '@/components/shared/MetadataBadge.tsx?raw';
 import organizationBadgesSource from '@/components/shared/OrganizationBadges.tsx?raw';
-import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import actionsSource from '@/pages/Actions.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
@@ -145,7 +142,6 @@ import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow
 import objectDrawerHeaderSource from '@/components/shared/ObjectDrawerHeader.tsx?raw';
 import toastSource from '@/components/Toast/Toast.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
-import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import errorBoundarySource from '@/components/ErrorBoundary.tsx?raw';
 import updateConfirmationModalSource from '@/components/UpdateConfirmationModal.tsx?raw';
@@ -1196,7 +1192,6 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const expectedConsumers = [
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
       'src/components/Infrastructure/ResourceActionHistory.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
@@ -1208,7 +1203,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/cards/RootDiskCard.tsx',
       'src/components/shared/cards/SystemInfoCard.tsx',
       'src/components/shared/cards/TemperaturesCard.tsx',
-      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
       'src/components/Workloads/DrawerDiskListCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
       'src/features/storageBackups/detailPresentation.ts',
@@ -1275,7 +1269,6 @@ describe('shared primitive guardrails', () => {
     for (const consumerPath of [
       'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-      'src/components/Workloads/AvailabilityProbeSuggestionCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
     ]) {
       const source = readFrontendSource(consumerPath);
@@ -1286,7 +1279,6 @@ describe('shared primitive guardrails', () => {
     }
 
     for (const consumerPath of [
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Infrastructure/ResourceActionHistory.tsx',
       'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
     ]) {
@@ -2030,7 +2022,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx',
       'src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx',
       'src/components/Infrastructure/ResourceOperatorStateSection.tsx',
-      'src/components/Settings/AIRuntimeControlsSection.tsx',
       'src/components/Settings/AISettings.tsx',
       'src/components/Settings/AuditLogPanel.tsx',
       'src/components/Settings/DiscoverySettingsForm.tsx',
@@ -2823,7 +2814,7 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps shared, discovery drawer, Login, Settings, Patrol, and AI loading spinners on shared loading primitives', () => {
+  it('keeps shared, drawer, Login, Settings, Patrol, and AI loading spinners on shared loading primitives', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -2841,9 +2832,6 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'loading-spinner-shell');
-    const discoveryFallbackRule = registry.rules?.find(
-      (rule) => rule.id === 'discovery-loading-fallback',
-    );
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'patrol-ai-local-loading-spinner-shell',
     );
@@ -2859,8 +2847,8 @@ describe('shared primitive guardrails', () => {
     const sharedComponentSpinnerGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'shared-component-local-loading-spinner-shell',
     );
-    const drawerDiscoveryFallbackGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'drawer-discovery-local-loading-fallback',
+    const drawerSpinnerGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'drawer-local-border-loading-spinner-shell',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
@@ -2880,7 +2868,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/UserAssignmentsPanel.tsx',
       'src/components/UpdateProgressModal.tsx',
       'src/components/shared/Button.tsx',
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
       'src/components/shared/HistoryChartOverlay.tsx',
       'src/components/shared/PulseDataGrid.tsx',
       'src/components/patrol/ApprovalSection.tsx',
@@ -2927,40 +2914,21 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/PulseDataGrid.tsx',
     ]);
     expect(sharedComponentSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(discoveryFallbackRule?.canonical?.path).toBe(
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
-    );
-    expect(discoveryFallbackRule?.canonical?.export).toBe('DiscoveryLoadingFallback');
-    expect(discoveryFallbackRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+    expect(drawerSpinnerGuard?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
+    expect(drawerSpinnerGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(drawerSpinnerGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
+    expect(drawerSpinnerGuard?.scopes).toEqual([
       'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
       'src/components/Workloads/GuestDrawer.tsx',
       'src/components/Workloads/NodeDrawer.tsx',
       'src/features/docker/DockerHostDrawer.tsx',
     ]);
-    expect(drawerDiscoveryFallbackGuard?.canonical?.path).toBe(
-      'src/components/shared/DiscoveryLoadingFallback.tsx',
-    );
-    expect(drawerDiscoveryFallbackGuard?.canonical?.export).toBe('DiscoveryLoadingFallback');
-    expect(drawerDiscoveryFallbackGuard?.allPatterns).toEqual([
-      'border-t-transparent',
-      'animate-spin',
-    ]);
-    expect(drawerDiscoveryFallbackGuard?.scopes).toEqual([
-      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
-      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-      'src/components/Workloads/GuestDrawer.tsx',
-      'src/components/Workloads/NodeDrawer.tsx',
-      'src/features/docker/DockerHostDrawer.tsx',
-    ]);
-    expect(drawerDiscoveryFallbackGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(drawerSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
     expect(loadingSpinnerSource).toContain("button: 'h-5 w-5 border-2'");
-    expect(discoveryLoadingFallbackSource).toContain('LoadingSpinner');
-    expect(discoveryLoadingFallbackSource).toContain('getDiscoveryLoadingState');
-    expect(discoveryLoadingFallbackSource).toContain('role="status"');
     expect(loginSource).toContain('LoadingSpinner');
     expect(loginSource).toContain('size="button"');
     expect(loginSource).not.toContain(
@@ -2970,7 +2938,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       buttonSource,
-      discoveryLoadingFallbackSource,
       historyChartOverlaySource,
       pulseDataGridSource,
       updateProgressModalSource,
@@ -2979,28 +2946,13 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('animate-spin');
     }
 
-    const discoveryFallbackConsumers: Array<[string, string]> = [
-      ['src/components/Infrastructure/ResourceDetailDrawer.tsx', resourceDetailDrawerSource],
-      [
-        'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-        resourceDetailDrawerOverviewTabSource,
-      ],
-      ['src/components/Workloads/GuestDrawer.tsx', guestDrawerSource],
-      ['src/components/Workloads/NodeDrawer.tsx', nodeDrawerSource],
-      ['src/features/docker/DockerHostDrawer.tsx', dockerHostDrawerSource],
-    ];
-    const discoveryFallbackForbiddenByPath = new Map(
-      discoveryFallbackRule?.forbiddenPatterns?.map((entry) => [
-        entry.path,
-        entry.patterns ?? [],
-      ]) ?? [],
-    );
-
-    for (const [path, source] of discoveryFallbackConsumers) {
-      expect(source).toContain('DiscoveryLoadingFallback');
-      for (const retiredPattern of discoveryFallbackForbiddenByPath.get(path) ?? []) {
-        expect(source).not.toContain(retiredPattern);
-      }
+    for (const source of [
+      resourceDetailDrawerSource,
+      resourceDetailDrawerOverviewTabSource,
+      guestDrawerSource,
+      nodeDrawerSource,
+      dockerHostDrawerSource,
+    ]) {
       expect(source).not.toContain('border-t-transparent');
     }
 
@@ -3284,9 +3236,6 @@ describe('shared primitive guardrails', () => {
       (guard) => guard.id === 'button-drawer-header-icon-local-shell',
     );
     const copyValueRule = registry.rules?.find((rule) => rule.id === 'copy-value-action-shell');
-    const copyableCodeRowRule = registry.rules?.find(
-      (rule) => rule.id === 'copyable-code-row-shell',
-    );
     const ssoProviderActionRule = registry.rules?.find(
       (rule) => rule.id === 'sso-provider-settings-action-shell',
     );
@@ -3298,9 +3247,6 @@ describe('shared primitive guardrails', () => {
     );
     const copyValueAccentGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'copy-value-accent-local-button-shell',
-    );
-    const copyableCodeRowGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'copyable-code-row-local-shell',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
@@ -4183,7 +4129,6 @@ describe('shared primitive guardrails', () => {
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/MessageItem.tsx',
       'src/components/AI/Chat/ToolExecutionBlock.tsx',
-      'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',
     ]);
@@ -4227,11 +4172,6 @@ describe('shared primitive guardrails', () => {
       'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
       'CopyIcon class="h-3 w-3"',
     ]);
-    expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
-    expect(copyableCodeRowRule?.canonical?.export).toBe('CopyableCodeRow');
-    expect(copyableCodeRowRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Discovery/DiscoveryTab.tsx',
-    ]);
     expect(ssoProviderActionRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(ssoProviderActionRule?.canonical?.export).toBe('Button');
     expect(ssoProviderActionRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
@@ -4267,12 +4207,6 @@ describe('shared primitive guardrails', () => {
       'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25',
       'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
     ]);
-    expect(copyableCodeRowGuard?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
-    expect(copyableCodeRowGuard?.canonical?.export).toBe('CopyableCodeRow');
-    expect(copyableCodeRowGuard?.allPatterns).toEqual([
-      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
-      'break-all font-mono text-xs text-base-content',
-    ]);
 
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function CommandCopyButton');
@@ -4285,7 +4219,6 @@ describe('shared primitive guardrails', () => {
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonSource).toContain('getCopyValueButtonClass');
     expect(buttonSource).toContain('getActionIconButtonClass');
-    expect(copyableCodeRowSource).toContain('CopyValueButton');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
@@ -4684,19 +4617,6 @@ describe('shared primitive guardrails', () => {
     expect(userAssignmentsPanelSource).not.toContain(
       'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors',
     );
-    expect(discoveryTabSource).toContain('@/components/shared/Button');
-    expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');
-    expect(discoveryTabSource).toContain('CopyValueButton');
-    expect(discoveryTabSource).toContain('CopyableCodeRow');
-    expect(discoveryTabSource).not.toContain('interface CopyValueButtonProps');
-    expect(discoveryTabSource).not.toContain('const CopyValueButton');
-    expect(discoveryTabSource).not.toContain('const CopyableCodeRow');
-    expect(discoveryTabSource).not.toContain(
-      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
-    );
-    expect(discoveryTabSource).not.toContain(
-      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
-    );
     expect(webInterfaceUrlFieldSource).toContain('CopyValueButton');
     expect(webInterfaceUrlFieldSource).not.toContain('CopyIcon class="h-3.5 w-3.5"');
     expect(webInterfaceUrlFieldSource).not.toContain(
@@ -4710,18 +4630,6 @@ describe('shared primitive guardrails', () => {
     expect(standalonePageSurfaceSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
     );
-  });
-
-  it('keeps discovery readiness badges presentation-only and accessible', () => {
-    expect(discoveryReadinessBadgeSource).toContain(
-      "import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness'",
-    );
-    expect(discoveryReadinessBadgeSource).toContain('aria-label={presentation()?.title');
-    expect(discoveryReadinessBadgeSource).toContain('title={presentation()?.title}');
-    expect(discoveryReadinessBadgeSource).toContain('aria-hidden="true"');
-    expect(discoveryReadinessBadgeSource).not.toContain('fetch(');
-    expect(discoveryReadinessBadgeSource).not.toContain('localStorage');
-    expect(discoveryReadinessBadgeSource).not.toContain('innerHTML');
   });
 
   it('routes settings info callouts through CalloutCard', () => {
@@ -5334,8 +5242,6 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
-    expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
-    expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 
   it('keeps runtime web-interface launch on the shared inline-link template', () => {

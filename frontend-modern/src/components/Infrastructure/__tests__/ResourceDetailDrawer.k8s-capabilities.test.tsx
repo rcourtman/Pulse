@@ -20,10 +20,6 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-vi.mock('@/components/Discovery/DiscoveryTab', () => ({
-  DiscoveryTab: () => <div data-testid="discovery-tab" />,
-}));
-
 vi.mock('@/components/Kubernetes/K8sNamespacesDrawer', () => ({
   K8sNamespacesDrawer: (props: { cluster: string }) => (
     <div data-testid="k8s-namespaces-drawer" data-cluster={props.cluster} />

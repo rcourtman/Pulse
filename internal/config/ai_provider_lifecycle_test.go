@@ -37,7 +37,6 @@ func TestRemoveProviderClearsOwnedSecretsEndpointOptionsAndModels(t *testing.T) 
 		Model:           "openai:opaque-model",
 		ChatModel:       "openai:chat-model",
 		PatrolModel:     "ollama:qwen3:8b",
-		DiscoveryModel:  "openai:discovery-model",
 		AutoFixModel:    "openai:fix-model",
 		OpenAIAPIKey:    "secret",
 		OpenAIBaseURL:   "http://127.0.0.1:8080/v1",
@@ -53,7 +52,7 @@ func TestRemoveProviderClearsOwnedSecretsEndpointOptionsAndModels(t *testing.T) 
 	if cfg.OpenAIAPIKey != "" || cfg.OpenAIBaseURL != "" {
 		t.Fatal("OpenAI removal left provider-owned secrets or endpoint behind")
 	}
-	if cfg.Model != "" || cfg.ChatModel != "" || cfg.DiscoveryModel != "" || cfg.AutoFixModel != "" {
+	if cfg.Model != "" || cfg.ChatModel != "" || cfg.AutoFixModel != "" {
 		t.Fatalf("OpenAI model selections were not cleared: %+v", cfg)
 	}
 	if cfg.PatrolModel != "ollama:qwen3:8b" || !cfg.Enabled {
