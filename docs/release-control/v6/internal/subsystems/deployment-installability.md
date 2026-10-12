@@ -1,5 +1,6 @@
 # Deployment Installability Contract
 
+
 ## Contract Metadata
 
 ```json
@@ -14,6 +15,30 @@
 ```
 
 ## Purpose
+
+### Linux agent removal native boundary
+
+The existing Unified Agent Native Verification job now runs the unchanged Unix
+removal functions against actual systemd on its fresh public hosted Linux x64
+and ARM64 runners, before acquiring compiler/frontend dependencies. Its fixed
+private fixtures cover refused stop/read/revocation, socket/batch activation,
+observed quiescence, recovery-file retention, confirmed deletion and repeated
+absence. The exact source, extracted-function digest, per-phase independent unit
+and prior-process observations, file-retention verdicts and terminal cleanup are
+retained in a seven-day bounded JSON artifact even when the native command fails.
+No default-Pulse unit, existing installation, worker/self-hosted host, service
+credential or production endpoint is admitted; root execution belongs to that
+new hosted VM only. No missing or green-only receipt establishes acceptance.
+
+`TestNativeAgentRemovalSystemdRecipeRuntime` requires discriminating portable
+lab/recipe controls, including rejected worker admission, preserved pre-existing
+units, missing/duplicate observations, successful commands without actual active
+identity or quiescence, omitted final batch readback and failed cleanup. The
+native result still requires the containing job's terminal artifact and logs.
+Runner revocation is deliberately a closed fixture, not authenticated transport
+proof; signed installed-agent/Windows/service-manager/customer recovery remain
+separate. See the agent-lifecycle contract for the exact fixture boundaries.
+
 
 ### Agent systemd teardown refuses unobserved stops and activation sources
 

@@ -44,6 +44,27 @@ saved-state removal controls also require refusal before remote or local mutatio
 These are exact-source controls, not native systemd installation, TLS, published
 availability or resolution of Linux/PowerShell #1099.
 
+`unified-agent-native.yml` additionally requires `agent_removal_systemd.py` on
+both new public hosted Linux runners, before compiler/frontend preparation. The
+ordinary runner binds a clean exact checkout; the root lab receives no ambient
+credentials and refuses workers, self-hosted/container runs, existing Pulse
+state and pre-existing fixture units. It extracts the six production removal
+functions unchanged and binds their bytes in a bounded terminal receipt.
+
+Its fixed synthetic units exercise active collector teardown, real helper socket
+activation, runner deletion only after fixture revocation, real refused stops,
+unavailable-user-manager read refusal, stopped/retained failed-revocation state,
+an earlier runner reactivated by a later unit's real ExecStop, and absent/repeated
+removal. Independent systemd/property and prior-PID observations must agree with
+the intended phase; recovery file hashes, no repeated synthetic revocation and
+owned unit/process/fixture cleanup are retained. Cleanup failure fails the job.
+The absent-user-manager adapter is an injected read-failure condition, not a
+production system-bus diagnosis. Unit names, credential files and services are
+synthetic: this does not establish signed agent installation, real TLS/exact-token
+revocation, published availability, Windows acceptance or reporter recovery.
+`TestNativeAgentRemovalSystemdRecipeRuntime` exercises the lab and mandatory CI
+recipe with closed manager models; those portable controls are not a native pass.
+
 ### Unix removal retains credentials when connection recovery is incomplete
 
 After existing installed-state recovery, the unified Unix installer checks for

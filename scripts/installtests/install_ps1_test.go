@@ -611,6 +611,47 @@ func TestWindowsAgentLifecycleWorkflowChecksEveryNativeExit(t *testing.T) {
 	}
 }
 
+func TestWindowsAgentLifecycleKeepsLinuxRemovalProofIsolated(t *testing.T) {
+	steps := nativeWindowsExitSteps(t)
+	validate := func(steps []nativeWindowsExitStep) error {
+		wanted := map[string]string{
+			"Check agent removal on native systemd":       "runner.os == 'Linux'",
+			"Retain bounded native agent removal receipt": "always() && runner.os == 'Linux'",
+		}
+		for _, step := range steps {
+			condition, found := wanted[step.Name]
+			if !found {
+				continue
+			}
+			if step.If != condition || step.ContinueOnError {
+				return fmt.Errorf("Linux removal must not run on or replace Windows lifecycle: %s", step.Name)
+			}
+			delete(wanted, step.Name)
+		}
+		if len(wanted) != 0 {
+			return fmt.Errorf("missing isolated Linux removal proof: %v", wanted)
+		}
+		_, err := nativeWindowsExitGuards(steps)
+		return err
+	}
+	if err := validate(steps); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Check agent removal on native systemd", "Retain bounded native agent removal receipt"} {
+		for _, condition := range []string{"", "true", "${{ !matrix.unix }}"} {
+			changed := append([]nativeWindowsExitStep(nil), steps...)
+			for i := range changed {
+				if changed[i].Name == name {
+					changed[i].If = condition
+				}
+			}
+			if err := validate(changed); err == nil {
+				t.Fatalf("admitted unbounded Linux proof on Windows: %s / %q", name, condition)
+			}
+		}
+	}
+}
+
 func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
 	if err != nil {
