@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Rate refusals cannot permanently disable guest OS discovery
+
+An observed HTTP 429 from guest OS-info preserves the existing OS-command
+failure count and suppression state, like access refusal or stopped QGA. It
+neither exercised the OS command nor supplies a fresh OS observation. Ordinary
+metadata backoff remains in force; a subsequent admitted poll can learn the OS
+without a restart or clearing command-safety state. Only the typed wire status
+admits this distinction: provider text quoting 429 is not a rate refusal.
+
+`TestGuestMetadataRateLimitRecoveryContract` covers both HTTP client types and
+ordinary collectors with cold/stale metadata, OS-like 429 bodies, unchanged
+backoff and accepted filesystem/memory readings, subsequent Windows discovery
+before Linux-only memory admission, and genuine repeated-failure suppression
+with a quoted 429. Existing unsupported-command, backup-lock and uncertain-reply
+fences are unchanged. Its fixtures use local sockets and synthetic credentials,
+not native guest recovery, History storage or a reported failure's cause.
+
 ### Cluster endpoint membership belongs to its client
 
 `NewClusterClient` snapshots the supplied endpoint slice before registering

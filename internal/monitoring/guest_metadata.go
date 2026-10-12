@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -468,7 +469,11 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 		}
 		if err != nil {
-			if reason := proxmox.GuestAgentErrorReason(err); reason == "permission-denied" || reason == "agent-not-running" {
+			status, statusKnown := proxmox.APIErrorStatus(err)
+			if reason := proxmox.GuestAgentErrorReason(err); reason == "permission-denied" || reason == "agent-not-running" || (statusKnown && status == http.StatusTooManyRequests) {
+				// Access/rate refusal or stopped QGA did not exercise this
+				// command. Use the wire status, not OS-like or status-like body
+				// text: a temporary rate limit must not disable OS discovery.
 				// The request was not admitted or QGA was stopped, so this did
 				// not exercise the OS-info command. Do not permanently disable
 				// that command when ordinary access/agent availability returns.
