@@ -3115,3 +3115,131 @@ describe('GuestRow backup evidence disclosure', () => {
     },
   );
 });
+
+describe('GuestRow accessible reading explanations', () => {
+  it.each(['bars', 'sparklines'] as const)(
+    'regression: %s exposes safe disk evidence without opening the enclosing row',
+    async (metricDisplayMode) => {
+      const onClick = vi.fn();
+      renderGuestRow({
+        guest: makeGuest({ diskStatusReason: 'prev-agent-timeout' }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode,
+        onClick,
+      });
+      const trigger = screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' });
+      expect(trigger).toHaveAttribute('type', 'button');
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Disk reading for test-vm' });
+      expect(dialog).toHaveTextContent('Using last known disk stats.');
+      expect(dialog).toHaveTextContent(
+        'Completion is uncertain. Do not restart the guest agent during a backup.',
+      );
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      expect(onClick).not.toHaveBeenCalled();
+      await Promise.resolve();
+      const close = screen.getByRole('button', { name: 'Close reading details' });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(trigger).toHaveFocus();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it('regression: exposes source, original time and cache/setup caveat without a hover', () => {
+    const onClick = vi.fn();
+    renderGuestRow({
+      guest: makeGuest({
+        memory: makeMemory({
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-01-01T00:00:00Z',
+          },
+        }),
+      }),
+      visibleColumnIds: ['name', 'memory'],
+      workloadTableLayoutMode: 'phone',
+      onClick,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Memory reading for test-vm: Cache?' }));
+    const dialog = screen.getByRole('dialog', { name: 'Memory reading for test-vm' });
+    expect(dialog).toHaveTextContent('Source: Proxmox. Observed: 2026-01-01 00:00:00 UTC.');
+    expect(dialog).toHaveTextContent('a high percentage alone does not mean it is short of memory');
+    expect(dialog).toHaveTextContent('Defer agent setup, restarts and live guest-agent probes');
+    expect(onClick).not.toHaveBeenCalled();
+    expect(dialog.querySelectorAll('button')).toHaveLength(1);
+  });
+
+  it('updates already open evidence for the same guest, closes on fresh source, and does not add a read', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-agent-timeout' }));
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+        </tbody>
+      </table>
+    ));
+    const row = container.querySelector('tr');
+    fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' }));
+    const dialog = screen.getByRole('dialog');
+    setGuest(makeGuest({ diskStatusReason: 'permission-denied' }));
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(dialog).toHaveTextContent('Permission denied.');
+    expect(dialog).toHaveTextContent('Do not widen intentionally scoped access');
+    expect(dialog).not.toHaveTextContent('Using last known disk stats.');
+    expect(dialog).not.toHaveTextContent('Guest request timed out.');
+    setGuest(makeGuest({ diskStatusReason: undefined }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Disk reading for/ })).toBeNull();
+    expect(container.querySelector('tr')).toBe(row);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('closes rather than transferring an open explanation to another resource with the same name', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-agent-timeout' }));
+    render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+        </tbody>
+      </table>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /^Disk reading for/ }));
+    setGuest(
+      makeGuest({
+        id: 'another-instance-node1-100',
+        instance: 'another-instance',
+        diskStatusReason: 'permission-denied',
+      }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Disk reading for/ }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Permission denied.');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Guest request timed out.');
+  });
+
+  it('leaves current cache-aware readings without extra buttons, dialogs or mutations', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        memory: makeMemory({
+          observation: {
+            state: 'current',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-01-01T00:00:00Z',
+          },
+        }),
+      }),
+      visibleColumnIds: ['name', 'memory', 'disk'],
+    });
+    expect(screen.queryByRole('button', { name: /^(Memory|Disk) reading for/ })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

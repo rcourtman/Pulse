@@ -5,6 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
+import { WorkloadReadingStatus } from './WorkloadReadingStatus';
 import {
   AvailabilityProbeCell,
   BackupIndicator,
@@ -657,14 +658,13 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={memoryReadStatus()}>
               {(status) => (
-                <p
-                  data-workload-memory-read-status
-                  class="mt-0.5 text-center text-[10px] leading-none text-muted"
-                  title={status().message}
-                >
-                  <span aria-hidden="true">{status().label}</span>
-                  <span class="sr-only">{status().message}</span>
-                </p>
+                <WorkloadReadingStatus
+                  metric="Memory"
+                  guestId={guestId()}
+                  guestName={props.guest.name}
+                  label={status().label}
+                  message={status().message}
+                />
               )}
             </Show>
           </td>
@@ -712,16 +712,14 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
             <Show when={diskReadStatus()}>
               {(status) => (
-                <p
-                  data-workload-disk-read-status
-                  class={`mt-0.5 text-center text-[10px] leading-none ${
-                    status().needsAction ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
-                  }`}
-                  title={status().message}
-                >
-                  <span aria-hidden="true">{status().label}</span>
-                  <span class="sr-only">{status().message}</span>
-                </p>
+                <WorkloadReadingStatus
+                  metric="Disk"
+                  guestId={guestId()}
+                  guestName={props.guest.name}
+                  label={status().label}
+                  message={status().message}
+                  needsAction={status().needsAction}
+                />
               )}
             </Show>
           </td>
