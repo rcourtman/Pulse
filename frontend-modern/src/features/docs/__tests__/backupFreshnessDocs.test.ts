@@ -21,7 +21,10 @@ describe('backup-cycle help matches the existing controls', () => {
     expect(heading).not.toBeNull();
     expect(text(guide)).toContain(`Alerts → Thresholds → Proxmox, then expand ${ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS}`);
     expect(text(guide)).toContain('Global Defaults');
-    const table = heading!.nextElementSibling!.nextElementSibling!.nextElementSibling!;
+    const scroll = heading!.nextElementSibling!.nextElementSibling!.nextElementSibling!;
+    expect(scroll.hasAttribute('data-doc-table-scroll')).toBe(true);
+    const table = scroll.querySelector('table')!;
+    expect(table).not.toBeNull();
     expect(table.tagName).toBe('TABLE');
     expect([...table.querySelectorAll('tbody tr td:first-child')].map(text)).toEqual([
       'Fresh Hours', 'Stale Hours', 'Warning Days / Critical Days',
