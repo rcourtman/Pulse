@@ -8501,3 +8501,41 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	}
 	t.Logf("%s", output)
 }
+
+func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
+		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
+		"test_foreign_or_indirect_bootstrap_is_not_mutated",
+		"test_bootstrap_symlink_directory_or_writable_file_refuses_before_mutation",
+		"test_missing_tools_are_not_local_only_removal_permission",
+		"test_every_matching_task_is_disabled_and_independently_observed_before_stop",
+		"test_partial_refused_ignored_or_reactivated_disable_retains_recovery",
+		"test_unit_or_process_uncertainty_keeps_stopped_task_recovery",
+		"test_task_activation_during_systemd_stop_refuses_before_remote",
+		"test_server_refusal_retains_disabled_tasks_and_all_recovery_without_restart",
+		"test_changed_or_refused_post_remote_inventory_precedes_first_deletion",
+		"test_partial_refused_ignored_or_recreated_task_deletion_keeps_recovery",
+		"test_all_owned_tasks_retire_before_state_erasure_and_unrelated_task_survives",
+		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
+		"test_ordinary_linux_state_is_not_appliance_evidence",
+		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
+			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 15 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
+}

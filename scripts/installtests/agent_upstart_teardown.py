@@ -16,7 +16,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_UPSTART_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
+FUNCTIONS = ("truenas_scale_agent_removal_present", "cleanup", "portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file",
              "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
              "read_upstart_agent_removal_status", "upstart_agent_removal_paths_safe",
              "read_upstart_agent_removal_enablement", "quiesce_upstart_agent_for_removal",

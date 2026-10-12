@@ -21,7 +21,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_OPENRC_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("read_openrc_agent_removal_status", "read_openrc_agent_removal_runlevels",
+FUNCTIONS = ("truenas_scale_agent_removal_present", "read_openrc_agent_removal_status", "read_openrc_agent_removal_runlevels",
              "quiesce_openrc_agent_for_removal", "teardown_openrc_agent_service")
 
 
