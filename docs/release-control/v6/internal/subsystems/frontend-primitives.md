@@ -2486,8 +2486,8 @@ not a replacement status card, CTA band, or page-local nested card.
    `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
    timing, product copy, and GitHub destination, but its primary and dismiss
    controls must compose `Button` and `ActionIconButton` instead of carrying
-   local floating-prompt button shells. The prompt must wait for fourteen
-   distinct active days with connected infrastructure, consume at most one
+   local floating-prompt button shells. The prompt must wait for the first
+   return on a later day with connected infrastructure, consume at most one
    lifetime appearance, treat close as permanent dismissal, and never restore
    recurring snooze behavior. It must yield the browser session to an existing
    release, disclosure, or other low-priority app-shell notice and suppress
@@ -8611,8 +8611,8 @@ reintroduce a literal bar height. The declared `:root` value is a
 pre-measurement fallback only and deliberately under-estimates: reserving more
 than the bar's real height leaves a band between an overlay's backdrop and the
 bar that is neither dimmed nor click-blocked, while reserving slightly less is
-covered by the opaque bar. Surfaces with their own placement at wider
-viewports, such as the star banner's `md:bottom-4`, keep it.
+covered by the opaque bar. The star banner follows the published height at
+every viewport with a small gap above the bar, without a breakpoint override.
 
 Proofs live in `frontend-modern/src/components/shared/__tests__/MobileNavBar.test.tsx`,
 `frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx`, and
