@@ -69,6 +69,7 @@ func TestPollGuestsWithFallbackRetainsOnlyFailedNodeGeneration(t *testing.T) {
 	}
 	nodeStatus := map[string]string{"node-a": "online", "node-b": "online"}
 	cfg := &config.PVEInstance{MonitorVMs: true, MonitorContainers: true}
+	monitor.replacePVEClient("lab", client)
 
 	if err := monitor.pollGuestsWithFallback(context.Background(), "lab", cfg, client, nodes, nodeStatus); err != nil {
 		t.Fatalf("partial poll failed: %v", err)

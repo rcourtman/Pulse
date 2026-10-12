@@ -298,24 +298,25 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				}
 
 				// Trigger guest metadata migration if old format exists
-				if m.guestMetadataStore != nil {
-					m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
-				}
+				stagePVEGuestEffect(ctx, func() {
+					if m.guestMetadataStore != nil {
+						m.guestMetadataStore.GetWithLegacyMigration(guestID, instanceName, n.Node, int(container.VMID))
+					}
 
-				m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
-					Name:           modelContainer.Name,
-					Status:         modelContainer.Status,
-					RetrievedAt:    modelContainer.LastSeen,
-					MemorySource:   memorySource,
-					FallbackReason: guestMemoryFallbackReason(memorySource),
-					Memory:         modelContainer.Memory,
-					Raw:            guestRaw,
+					m.recordGuestSnapshot(instanceName, modelContainer.Type, n.Node, int(container.VMID), GuestMemorySnapshot{
+						Name:           modelContainer.Name,
+						Status:         modelContainer.Status,
+						RetrievedAt:    modelContainer.LastSeen,
+						MemorySource:   memorySource,
+						FallbackReason: guestMemoryFallbackReason(memorySource),
+						Memory:         modelContainer.Memory,
+						Raw:            guestRaw,
+					})
+
+					// Check alerts
+					m.alertManager.CheckGuest(modelContainer, instanceName)
 				})
-
 				nodeContainers = append(nodeContainers, modelContainer)
-
-				// Check alerts
-				m.alertManager.CheckGuest(modelContainer, instanceName)
 			}
 
 			nodeDuration := time.Since(nodeStart)
@@ -355,7 +356,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 		}
 	}
 	if failedNodes == 0 && successfulNodes > 0 {
-		m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects)
+		stagePVEGuestEffect(ctx, func() { m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects) })
 	}
 
 	preservedContainers := 0
@@ -382,34 +383,36 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 	// Record guest metrics history for running containers (enables sparkline/trends view)
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
-		for _, ct := range allContainers {
-			if !guestObservedInCycle(ct.LastSeen, startTime) {
-				continue
+		stagePVEGuestEffect(ctx, func() {
+			for _, ct := range allContainers {
+				if !guestObservedInCycle(ct.LastSeen, startTime) {
+					continue
+				}
+				if ct.Status != "running" {
+					continue
+				}
+				diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
+					ct.DiskRead,
+					ct.DiskWrite,
+					ct.NetworkIn,
+					ct.NetworkOut,
+					ct.IORateValidity,
+				)
+				m.recordGuestMetric(
+					"container",
+					ct.ID,
+					unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
+					historyMemoryUsage(ct.Memory),
+					historyMemoryUsed(ct.Memory),
+					ct.Disk.Usage,
+					diskRead,
+					diskWrite,
+					networkIn,
+					networkOut,
+					now,
+				)
 			}
-			if ct.Status != "running" {
-				continue
-			}
-			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
-				ct.DiskRead,
-				ct.DiskWrite,
-				ct.NetworkIn,
-				ct.NetworkOut,
-				ct.IORateValidity,
-			)
-			m.recordGuestMetric(
-				"container",
-				ct.ID,
-				unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
-				historyMemoryUsage(ct.Memory),
-				historyMemoryUsed(ct.Memory),
-				ct.Disk.Usage,
-				diskRead,
-				diskWrite,
-				networkIn,
-				networkOut,
-				now,
-			)
-		}
+		})
 	}
 
 	duration := time.Since(startTime)

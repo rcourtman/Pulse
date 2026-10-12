@@ -441,8 +441,10 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	var pbsInstances []config.PBSInstance
 	var pmgInstances []config.PMGInstance
 
+	m.pveGuestPublicationMu.Lock()
 	m.mu.Lock()
 	instanceCfg.Host = persistHost
+	m.cancelPVEGuestPollLocked(instanceName)
 	m.pveClients[instanceName] = fallbackClient
 
 	// Update in-memory config so subsequent polls build clients against the working port.
@@ -460,6 +462,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	}
 	persistence = m.persistence
 	m.mu.Unlock()
+	m.pveGuestPublicationMu.Unlock()
 
 	// Persist to disk so restarts keep the working endpoint.
 	if persistence != nil {
@@ -817,6 +820,11 @@ func (m *Monitor) pollGuestsWithFallback(
 		return ctx.Err()
 	default:
 	}
+	ctx, owner := m.beginPVEGuestPoll(ctx, instanceName, client)
+	if owner == nil {
+		return nil // Another cycle or a replaced/ended binding owns guest work.
+	}
+	defer m.finishPVEGuestPoll(instanceName, owner)
 
 	// Always try the efficient cluster/resources endpoint first
 	// This endpoint works on both clustered and standalone nodes
@@ -824,6 +832,9 @@ func (m *Monitor) pollGuestsWithFallback(
 	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
 
 	if !useClusterEndpoint {
+		if ctx.Err() != nil {
+			return ctx.Err() // An interrupted inventory is not a fallback grant.
+		}
 		// Fall back to traditional polling only if cluster/resources not available
 		// This should be rare - only for very old Proxmox versions
 		log.Debug().
@@ -851,7 +862,7 @@ func (m *Monitor) pollGuestsWithFallback(
 		if instanceCfg.MonitorContainers {
 			containers = m.collectContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 		}
-		m.state.UpdateGuestsForInstance(instanceName, vms, containers)
+		m.publishPVEGuests(ctx, instanceName, vms, containers)
 	}
 
 	return nil

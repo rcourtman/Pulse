@@ -44,7 +44,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				endpoints,
 				endpointFingerprints,
 			)
-			m.pveClients[pve.Name] = clusterClient
+			m.replacePVEClient(pve.Name, clusterClient)
 			log.Info().
 				Str("instance", pve.Name).
 				Str("cluster", pve.ClusterName).
@@ -73,7 +73,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, false)
 			continue
 		}
-		m.pveClients[pve.Name] = client
+		m.replacePVEClient(pve.Name, client)
 		log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
 		// Set initial connection health to true
 		m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)

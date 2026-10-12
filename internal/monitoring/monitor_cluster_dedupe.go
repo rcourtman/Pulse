@@ -76,6 +76,8 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	if m == nil || instanceName == "" {
 		return
 	}
+	m.pveGuestPublicationMu.Lock()
+	defer m.pveGuestPublicationMu.Unlock()
 	m.retireGuestMemoryCache(instanceName)
 
 	if m.taskQueue != nil {
@@ -88,6 +90,7 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	key := schedulerKey(InstanceTypePVE, instanceName)
 
 	m.mu.Lock()
+	m.cancelPVEGuestPollLocked(instanceName)
 	if poll := m.pveReplicationPolls[instanceName]; poll != nil {
 		poll.cancel()
 		delete(m.pveReplicationPolls, instanceName)
