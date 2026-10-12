@@ -89,6 +89,70 @@ func TestStartupImportRetainsNonProxmoxAccess(t *testing.T) {
 	}
 }
 
+func TestStartupImportUsesPersistenceDestination(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	base, peer := t.TempDir(), t.TempDir()
+	canonical := filepath.Join(base, "destination")
+	target := config.NewConfigPersistence(canonical)
+	if err := target.SaveAPITokens([]config.APITokenRecord{{
+		ID: "synthetic-existing-record", Hash: "synthetic-existing-digest",
+		Scopes: []string{config.ScopeAgentReport},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(peer, "inner"), filepath.Join(peer, "destination")} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(peer, "inner"), filepath.Join(base, "link")); err != nil {
+		t.Fatal(err)
+	}
+	// Raw filesystem traversal reaches the empty peer. Persistence cleans this
+	// exact spelling first and writes to the existing canonical destination.
+	rawPath := filepath.Join(base, "link") + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "destination"
+	setAutoImportInputs(t, rawPath, payload, passphrase)
+	before := snapshotAutoImportDestination(t, canonical)
+	if ShouldAutoImport() {
+		t.Error("admission inspected a different destination from persistence")
+	}
+	if err := PerformAutoImport(); err == nil {
+		t.Error("startup import replaced canonical state after inspecting the empty peer")
+	}
+	if after := snapshotAutoImportDestination(t, canonical); !reflect.DeepEqual(before, after) {
+		t.Error("canonical destination was modified")
+	}
+	if entries, err := os.ReadDir(filepath.Join(peer, "destination")); err != nil || len(entries) != 0 {
+		t.Error("the peer used by raw traversal was modified")
+	}
+}
+
+func TestStartupImportRejectsLinkedDestinationSpellings(t *testing.T) {
+	payload, passphrase := newAutoImportExport(t)
+	for _, dangling := range []bool{false, true} {
+		for _, suffix := range []string{string(os.PathSeparator), string(os.PathSeparator) + "."} {
+			t.Run(fmt.Sprintf("dangling=%v/suffix=%q", dangling, suffix), func(t *testing.T) {
+				target := t.TempDir()
+				if dangling {
+					target = filepath.Join(target, "absent")
+				}
+				link := filepath.Join(t.TempDir(), "data-link")
+				if err := os.Symlink(target, link); err != nil {
+					t.Fatal(err)
+				}
+				setAutoImportInputs(t, link+suffix, payload, passphrase)
+				if ShouldAutoImport() {
+					t.Error("noncanonical linked destination was admitted as empty")
+					return // Do not enter the fatal constructor on the adverse source.
+				}
+				if err := PerformAutoImport(); err == nil {
+					t.Error("noncanonical linked destination allowed startup import")
+				}
+			})
+		}
+	}
+}
+
 func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
 	tests := []struct {
 		name         string
