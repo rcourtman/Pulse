@@ -8467,7 +8467,7 @@ func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
 		guestMemoryCacheKey("site/other", "node", 105): entry,
 		guestMemoryCacheKey("site-other", "node", 105): entry,
 	}}
-	m.state.UpdateHosts([]models.Host{host})
+	m.state.UpsertHost(host)
 	m.retirePVEInstanceRuntime(instance)
 	if len(m.vmAgentMemCache) != 2 || m.vmAgentMemCache[guestMemoryCacheKey("site/other", "node", 105)] != entry || m.vmAgentMemCache[guestMemoryCacheKey("site-other", "node", 105)] != entry {
 		t.Error("connection retirement retained its own QGA memory or erased a different connection")
