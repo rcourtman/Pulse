@@ -17,6 +17,28 @@ def report_guidance() -> str:
 
 
 class ContributionReportSafetyTest(unittest.TestCase):
+    def test_help_entrypoints_accept_original_evidence_before_public_sharing(self):
+        surfaces = (
+            ("README.md", "## Community and support\n", "\n## ", "docs/"),
+            ("docs/README.md", "# Pulse documentation\n", "\n## Start here", ""),
+        )
+        for name, start, end, prefix in surfaces:
+            with self.subTest(surface=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                entry = " ".join(text.split(start, 1)[1].split(end, 1)[0].split())
+                self.assertIn(f"({prefix}TROUBLESHOOTING.md#-getting-help)", entry)
+                self.assertIn("A second reproduction or diagnostics export is not required", entry)
+                self.assertIn("original evidence", entry)
+                self.assertIn("interrupt workloads or send duplicate notifications", entry)
+                self.assertIn("reports and attachments are public", entry)
+                self.assertIn("review them locally", entry)
+                self.assertIn("credentials and private details", entry)
+                self.assertNotIn("Report reproducible bugs", entry)
+        self.assertEqual(
+            (ROOT / "docs/README.md").read_bytes(),
+            (ROOT / "frontend-modern/public/docs/README.md").read_bytes(),
+        )
+
     def contribution_surfaces(self):
         return (
             " ".join((ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split()),
