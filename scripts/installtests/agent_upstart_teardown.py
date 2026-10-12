@@ -68,7 +68,10 @@ if args == ['reload-configuration']:
     if fault == 'refused-reload' or (fault == 'refused-retirement-reload' and retired):
         save(); sys.exit(1)
     v['manual'] = override.exists() and override.read_text() == 'manual\n' and fault != 'ignored-manual'
-    if not conf.exists(): v['state'] = 'absent'
+    if fault == 'concurrent-config' and retired:
+        conf.write_text('concurrent configuration retained\n'); conf.chmod(0o644)
+        v['state'] = 'stopped'
+    elif not conf.exists(): v['state'] = 'absent'
     save(); sys.exit(0)
 assert len(args) == 2 and args[1] == 'pulse-agent', args
 verb = args[0]
@@ -120,6 +123,7 @@ class AgentUpstartTeardown(unittest.TestCase):
             tools = root / "tools"; tools.mkdir()
             for name in ("ps", "initctl"):
                 p = tools / name; p.write_text(MODEL); p.chmod(0o700)
+            if fault == "missing-initctl": (tools / "initctl").unlink()
             init = root / "init"; init.mkdir()
             config = init / "pulse-agent.conf"
             unrelated = root / "unrelated"; unrelated.write_text("retain unrelated recovery\n")
@@ -173,7 +177,6 @@ command() {
     esac
     builtin command "$@"
 }
-if [[ "$FAULT" == missing-initctl ]]; then initctl() { return 127; }; fi
 if [[ "$FAULT" == missing-timeout ]]; then timeout() { return 127; }; fi
 collector_credential_state_present() { return 0; }
 uninstall_collector_registration() { printf 'remote:remove\n' >> "$EVENTS"; [[ "$REPLY" == confirmed ]]; }
@@ -316,6 +319,20 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 self.assertNotIn("state:remove", events)
                 self.assert_recovery(before, after)
 
+    def test_concurrent_config_is_not_clobbered_and_original_staged_recovery_is_retained(self):
+        r, events, before, after, _ = self.exercise(fault="concurrent-config")
+        self.assertNotEqual(r.returncode, 0, r.stderr)
+        self.assertIn("remote:remove", events)
+        self.assertNotIn("state:remove", events)
+        self.assertEqual(after["init/pulse-agent.conf"][2], b"concurrent configuration retained\n")
+        stages = [n for n in after if n.startswith("init/pulse-agent.conf.removal.")]
+        self.assertEqual(len(stages), 1)
+        self.assertEqual(after[stages[0]], before["init/pulse-agent.conf"])
+        for name in before:
+            if name.startswith(("state", "helper", "profile")) or name == "unrelated":
+                self.assertEqual(after[name], before[name])
+        self.assertEqual(after["init/pulse-agent.override"][2], b"manual\n")
+
     def test_confirmed_job_absence_precedes_selected_local_erasure(self):
         r, events, before, after, model = self.exercise()
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -348,7 +365,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
                 self.assertEqual(after, before)
 
     def test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure(self):
-        entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1]
+        entry = self.source.split("# --- Uninstall Logic ---\n", 1)[1].split("# --- Validation ---", 1)[0]
         self.assertEqual(entry.count("quiesce_upstart_agent_for_removal"), 1)
         self.assertEqual(entry.count("teardown_upstart_agent_service"), 1)
         admission = entry.index("quiesce_upstart_agent_for_removal")
@@ -359,7 +376,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         self.assertLess(remote, retirement)
         self.assertLess(retirement, erase)
         self.assertIn('[[ "$uninstall_upstart" != true ]]', entry)
-        self.assertNotIn('initctl stop', entry)
+        self.assertFalse('initctl stop' in entry)
         self.assertNotIn('initctl start', definitions(self.source))
 
     def test_real_status_timeout_stops_owned_child_without_erasure(self):

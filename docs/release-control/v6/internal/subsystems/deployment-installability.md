@@ -40,7 +40,7 @@ before credential/state erasure. No credentials, arguments or config contents
 are returned by these observations. Existing same-instance URL, exact record,
 TLS, systemd/OpenRC/rc.d/SysV and state-directory ownership remain unchanged.
 
-The registered `scripts/installtests/install_sh_test.go` requires all thirteen
+The registered `scripts/installtests/install_sh_test.go` requires all fourteen
 `agent_upstart_teardown.py` production-function/caller controls, including exact
 file restoration, effective activation, late refusal, stopped/absent/repeated
 removal and real timeout-child termination. These are confined ordinary-user
