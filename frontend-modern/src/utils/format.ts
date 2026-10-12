@@ -285,6 +285,21 @@ export interface BackupInfo {
   ageFormatted: string;
 }
 
+// Both the table disclosure and guest drawer must identify the same instant,
+// even when the browser's local date differs from the provider's. This only
+// formats a timestamp; callers still admit completed evidence with getBackupInfo.
+export function formatBackupCompletionTime(
+  timestamp: string | number | Date,
+): { completedAt: string; dateLabel: string } | null {
+  const date = new Date(timestamp instanceof Date ? timestamp.getTime() : timestamp);
+  if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return null;
+  const completedAt = date.toISOString();
+  return {
+    completedAt,
+    dateLabel: completedAt.replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC'),
+  };
+}
+
 // Default thresholds (used when no config is provided)
 const DEFAULT_FRESH_HOURS = 24;
 const DEFAULT_STALE_HOURS = 72;

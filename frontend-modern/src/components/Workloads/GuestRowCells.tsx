@@ -6,7 +6,13 @@ import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
-import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
+import {
+  formatBackupCompletionTime,
+  formatBytes,
+  formatRelativeTime,
+  getBackupInfo,
+  type BackupInfo,
+} from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
@@ -337,6 +343,10 @@ function BackupStatusCell(props: {
       : getBackupAgeBadgeLabel(props.lastBackup, info(), now()),
   );
   const hasCompletedBackup = createMemo(() => info().ageMs !== null);
+  // Parse/format only when the evidence is disclosed, not for every closed
+  // table row on each shared-clock tick. Unknown/future evidence has no time.
+  const completionTime = () =>
+    hasCompletedBackup() ? formatBackupCompletionTime(props.lastBackup!) : null;
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
     if (props.indicator) {
@@ -369,24 +379,19 @@ function BackupStatusCell(props: {
       <Show when={props.backupRunning}>
         <p class="text-blue-600 dark:text-blue-400">Backup running now…</p>
       </Show>
-      <Show when={hasCompletedBackup()}>
-        <div class="space-y-1">
-          <div class="text-muted">Last completed backup</div>
-          <time
-            class="block font-medium text-base-content"
-            dateTime={new Date(props.lastBackup!).toISOString()}
-          >
-            {new Date(props.lastBackup!).toLocaleDateString(undefined, {
-              weekday: 'short',
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-            {' · '}
-            {new Date(props.lastBackup!).toLocaleTimeString()}
-          </time>
-          <div class="text-base-content">{info().ageFormatted}</div>
-        </div>
+      <Show when={completionTime()}>
+        {(completion) => (
+          <div class="space-y-1">
+            <div class="text-muted">Last completed backup</div>
+            <time
+              class="block whitespace-normal wrap-break-word font-medium text-base-content"
+              dateTime={completion().completedAt}
+            >
+              {completion().dateLabel}
+            </time>
+            <div class="text-base-content">{info().ageFormatted}</div>
+          </div>
+        )}
       </Show>
       <Show when={info().status === 'unknown'}>
         <p class="text-amber-700 dark:text-amber-300">{info().ageFormatted}</p>

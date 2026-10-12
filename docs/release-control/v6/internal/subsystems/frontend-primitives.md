@@ -9434,3 +9434,22 @@ WebKit exercise the real policy producer, consuming drawer, shared clock and
 existing table evidence. No route, guest check, backup, threshold, collector or
 permission changes. This presentation result does not establish thaw, covered
 filesystem writes, native restart recovery or containing released software.
+
+### One explicit guest backup completion time (12 October 2026)
+
+The Workloads backup badge and name-cell indicator disclose the same UTC
+completion date/time as the guest drawer, including on the fine-pointer hover
+shortcut. `formatBackupCompletionTime` normalises the original instant once per
+disclosed readout; the semantic `time` preserves its ISO timestamp. Local browser
+timezone and locale cannot silently change the visible calendar day or time.
+The completion text wraps at narrow widths. Unknown/future/absent readings still
+have no completion element; running or ended activity and clock ticks do not
+renew it. Only replacement evidence changes the supplied completed time.
+
+`BackupCompletionTime.test.tsx`, `BackupStatusAccess.test.tsx` and the formatter
+controls connect both disclosure paths to the drawer, offset inputs, updates,
+uncertainty and disposal. The `backup-completion-time` browser fixture uses real
+VM/LXC rows, policy producer, hover, keyboard/touch dialogs and the guest drawer
+in non-UTC desktop and phone contexts. This is unambiguous presentation, not
+PBS verification ingestion, independent thaw, filesystem liveness, native
+guest restart recovery or containing software availability.
