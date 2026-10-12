@@ -116,7 +116,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       {
         label: 'Operator context',
         rows: compactDetailRows([
-          makeDetailRow('System', props.hasOsInfo ? props.guestOsSummary : null),
+          makeDetailRow('System', props.hasOsInfo ? props.guestOsSummary : null, {
+            // The full OS name/version must be readable without a hover title.
+            wrap: true,
+          }),
           makeDetailRow('Pulse coverage', coverageLabel(), {
             title: props.hasWorkloadActionAgent
               ? props.workloadActionAgentTitle

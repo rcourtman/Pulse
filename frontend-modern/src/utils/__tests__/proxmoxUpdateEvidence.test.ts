@@ -53,7 +53,33 @@ describe('Proxmox update evidence presentation', () => {
     ).toMatchObject({
       value: 'Unavailable · Update check access denied',
       current: false,
+      helpContentId: 'updates.proxmox.access',
     });
+  });
+
+  it('offers access guidance for a denied refresh without replacing retained evidence', () => {
+    expect(
+      getProxmoxUpdateEvidencePresentation(
+        {
+          pendingUpdates: 7,
+          pendingUpdatesStatus: 'stale',
+          pendingUpdatesReason: 'permission_denied',
+          pendingUpdatesCheckedAt: '2026-08-29T12:00:00Z',
+        },
+        relative,
+      ),
+    ).toMatchObject({
+      value: '7 pending · stale · checked 5 mins ago',
+      current: false,
+      helpContentId: 'updates.proxmox.access',
+    });
+    for (const state of [
+      { pendingUpdatesStatus: 'checked', pendingUpdatesReason: 'permission_denied' },
+      { pendingUpdatesStatus: 'unavailable', pendingUpdatesReason: 'source_unavailable' },
+      { pendingUpdatesStatus: 'not_checked', pendingUpdatesReason: 'node_offline' },
+    ] as const) {
+      expect(getProxmoxUpdateEvidencePresentation(state)?.helpContentId).toBeUndefined();
+    }
   });
 
   it('only treats checked or legacy-positive evidence as current', () => {

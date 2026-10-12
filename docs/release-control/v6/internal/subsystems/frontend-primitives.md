@@ -1410,6 +1410,9 @@ removal/failure retention and containing publication remain separate evidence.
    1a. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts`
    1b. `frontend-modern/src/components/Workloads/nodeDrawerModel.ts`
    1c. `frontend-modern/src/features/docker/dockerHostDrawerModel.ts`
+   1d. `frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx`
+   1e. `frontend-modern/src/utils/proxmoxUpdateEvidence.ts`
+   1f. `frontend-modern/src/content/help/updates.ts`
 2. `frontend-modern/src/components/Settings/Settings.tsx`
 3. `frontend-modern/src/components/Settings/SettingsDialogs.tsx`
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
@@ -8785,9 +8788,23 @@ The Proxmox node drawer presents checked zero, current positive, stale,
 unavailable, and not-checked package evidence as a labelled detail row with
 bounded copy and checked time. The compact table badge remains reserved for a
 current positive observation. Provider errors are never rendered. Component
-and browser evidence covers both 1440px and 390px layouts in
-`NodeDrawerOverview.updateEvidence.test.tsx`, `ProxmoxNodesTable.test.tsx`, and
-`frontend-modern/browser-verification.json`.
+evidence is covered by `NodeDrawerOverview.updateEvidence.test.tsx`,
+`proxmoxUpdateEvidence.test.ts`, and `ProxmoxNodesTable.test.tsx`.
+
+Denied update-list access exposes visible guidance beside that status through
+the shared HelpIcon and help-content registry. It explains that inventory and
+metrics use separate permission checks, preserves the choice to monitor with
+read-only access, and describes Sys.Modify as broader access that also permits
+refreshing package indexes. A denied response does not establish the exact
+missing privilege or an empty update list. Status text wraps through the shared
+detail-row contract at phone widths, including retained counts and checked time.
+The operator-context section and its help control retain their identity while
+readings and relative timestamps update. The shared help dialog remains inside
+the viewport with scrollable content, keyboard dismissal and focus return.
+Current-source browser receipts under `frontend-modern/browser-verification/`
+cover desktop, intermediate, phone and short landscape layouts. These checks
+establish presentation and interaction, not installed Proxmox permissions or
+released acceptance.
 
 ### Docker drawers expose reduced helper coverage without actions
 

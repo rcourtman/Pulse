@@ -1,9 +1,20 @@
 import type { HelpContent } from './types';
+import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 
 /**
  * Help content for update-related features
  */
 export const updatesHelpContent: HelpContent[] = [
+  {
+    id: 'updates.proxmox.access',
+    title: 'Proxmox update-check access',
+    description:
+      "Pulse was denied access to this node's package-update list. Inventory and metrics use separate Proxmox permission checks, so they can still work.\n\n" +
+      "Proxmox's update-list endpoint requires Sys.Modify on the node in current versions. This also permits refreshing package indexes, so it is broader than read-only monitoring.\n\n" +
+      'You can keep read-only access and check updates in Proxmox. To show update counts in Pulse, review the requirements for your installed Proxmox version and the effective permissions of the exact user or token this connection uses.\n\n' +
+      'A denied request does not identify the exact missing privilege or confirm that no updates are available.',
+    docUrl: `${TROUBLESHOOTING_DOC_URL}#proxmox-pending-update-access`,
+  },
   {
     id: 'updates.docker.notifications',
     title: 'Container Update Detection',

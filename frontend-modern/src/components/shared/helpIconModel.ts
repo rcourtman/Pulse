@@ -14,6 +14,7 @@ export interface HelpIconProps {
   class?: string;
   position?: 'top' | 'bottom';
   maxWidth?: number;
+  triggerLabel?: string;
 }
 
 export interface HelpPopoverPosition {

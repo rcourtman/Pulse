@@ -5278,6 +5278,8 @@
         "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+        "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+        "frontend-modern/src/content/help/updates.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
@@ -5306,6 +5308,7 @@
         "frontend-modern/src/utils/environmentLockPresentation.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
         "frontend-modern/src/utils/platformSupportManifest.ts",
+        "frontend-modern/src/utils/proxmoxUpdateEvidence.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/reportingResourceTypes.ts",
@@ -5917,7 +5920,11 @@
             "match_prefixes": [
               "frontend-modern/src/components/shared/"
             ],
-            "match_files": [],
+            "match_files": [
+              "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+              "frontend-modern/src/content/help/updates.ts",
+              "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+            ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
@@ -5940,7 +5947,10 @@
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/InlineNotice.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+              "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/NodeDrawerOverview.updateEvidence.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
+              "frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts"
             ]
           },
           {
