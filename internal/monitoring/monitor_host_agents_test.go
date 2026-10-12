@@ -38,7 +38,7 @@ func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *tes
 	hosts := m.state.GetSnapshot().Hosts
 	key := guestMetadataCacheKey("site-a", "node", 105)
 	metadata := guestMetadataCacheEntry{osName: "OpenBSD", osInfoFailureCount: guestAgentOSInfoFailureThreshold, osInfoSkip: true, fetchedAt: time.Now().Add(-time.Minute)}
-	m.guestMetadataCache[key] = metadata
+	m.guestMetadataCache = map[string]guestMetadataCacheEntry{key: metadata}
 	memKey := guestMemoryCacheKey("site-a", "node", 105)
 	memory := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now().Add(-time.Minute)}
 	m.vmAgentMemCache = map[string]agentMemCacheEntry{memKey: memory}
