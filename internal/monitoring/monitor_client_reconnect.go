@@ -116,9 +116,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				clientConfig.Timeout = connectionTimeout
 				clusterClient := proxmox.NewClusterClient(pve.Name, clientConfig, endpoints, endpointFingerprints)
 
-				m.mu.Lock()
-				m.pveClients[pve.Name] = clusterClient
-				m.mu.Unlock()
+				m.replacePVEClient(pve.Name, clusterClient)
 				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 				log.Info().
@@ -140,9 +138,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				continue
 			}
 
-			m.mu.Lock()
-			m.pveClients[pve.Name] = client
-			m.mu.Unlock()
+			m.replacePVEClient(pve.Name, client)
 			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 			log.Info().

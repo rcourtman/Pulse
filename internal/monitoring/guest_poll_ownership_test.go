@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ type guestPollOwnershipClient struct {
 	release chan struct{}
 	block   string
 	once    sync.Once
+	calls   atomic.Int32
 }
 
 func (c *guestPollOwnershipClient) wait(ctx context.Context, phase string) {
@@ -46,11 +48,99 @@ func (c *guestPollOwnershipClient) resources() []proxmox.ClusterResource {
 }
 
 func (c *guestPollOwnershipClient) GetClusterResources(ctx context.Context, _ string) ([]proxmox.ClusterResource, error) {
+	c.calls.Add(1)
 	if c.route == "node" {
 		return nil, fmt.Errorf("cluster/resources unavailable")
 	}
 	c.wait(ctx, "inventory")
 	return c.resources(), nil
+}
+
+func TestGuestPollOwnershipSingleFlightAndOrdinaryRecovery(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		t.Run(fmt.Sprint(canceled), func(t *testing.T) {
+			c := &guestPollOwnershipClient{cpu: .1, block: "inventory", entered: make(chan context.Context, 1), release: make(chan struct{})}
+			m := guestPollOwnershipMonitor(t, c)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(c.release) }) }
+			defer unblock()
+			done := make(chan error, 1)
+			go func() { done <- runGuestOwnershipPoll(m, ctx, c) }()
+			select {
+			case <-c.entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("first inventory did not start")
+			}
+			if canceled {
+				cancel()
+			}
+			// A repeat cannot issue even an inventory GET while this binding's
+			// first cycle still owns the outstanding read.
+			if err := runGuestOwnershipPoll(m, context.Background(), c); err != nil {
+				t.Fatal(err)
+			}
+			if c.calls.Load() != 1 {
+				t.Error("overlapping/canceled cycles stacked inventory reads")
+			}
+			unblock()
+			waitGuestOwnership(t, done)
+			if err := runGuestOwnershipPoll(m, context.Background(), c); err != nil {
+				t.Fatal(err)
+			}
+			got := m.state.GetSnapshot()
+			if c.calls.Load() != 2 || len(got.VMs) != 1 || len(got.Containers) != 1 || len(m.pveGuestPolls) != 0 {
+				t.Fatal("ordinary completed-cycle recovery lost inventory or leaked ownership")
+			}
+		})
+	}
+}
+
+func TestGuestPollOwnershipRetirementWaitsForAdmittedPublication(t *testing.T) {
+	c := &guestPollOwnershipClient{}
+	m := guestPollOwnershipMonitor(t, c)
+	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", c)
+	if owner == nil {
+		t.Fatal("registered cycle not admitted")
+	}
+	defer m.finishPVEGuestPoll("site-a", owner)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	stagePVEGuestEffect(ctx, func() {
+		// Effects may read the monitor; publication must not hold m.mu.
+		if _, ok := m.getPVEClient("site-a"); !ok {
+			t.Error("publication lost its connection before its admitted effects")
+		}
+		close(entered)
+		<-release
+		m.recordGuestSnapshot("site-a", "qemu", "node", 105, GuestMemorySnapshot{Name: "accepted"})
+	})
+	done := make(chan error, 1)
+	go func() {
+		m.publishPVEGuests(ctx, "site-a", []models.VM{{ID: "site-a:node:105", Instance: "site-a", Node: "node", VMID: 105}}, nil)
+		done <- nil
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("publication effect did not start or could not re-enter monitor")
+	}
+	retired := make(chan error, 1)
+	go func() { m.retirePVEInstanceRuntime("site-a"); retired <- nil }()
+	select {
+	case <-retired:
+		t.Error("retirement completed midway through an admitted guest batch")
+	case <-time.After(30 * time.Millisecond):
+	}
+	unblock()
+	waitGuestOwnership(t, done)
+	waitGuestOwnership(t, retired)
+	if len(m.state.GetSnapshot().VMs) != 0 || len(m.GetDiagnosticSnapshots().Guests) != 0 {
+		t.Error("publication resurrected retired guest state/diagnostics")
+	}
 }
 
 func (c *guestPollOwnershipClient) GetVMs(ctx context.Context, _ string) ([]proxmox.VM, error) {

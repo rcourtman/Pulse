@@ -9735,3 +9735,20 @@ The accepted upstream `diagnostics_token_visibility_test.go` controls and API
 reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
+
+### PVE guest-cycle publication and independent agents (12 October 2026)
+
+Ending a PVE connection/runtime cancels its in-flight guest collection and rejects
+late guest inventory, diagnostics, alerts, backup-template eligibility and
+History. Collection ownership is separate from consumed guest-command ownership:
+cancellation never proves a guest command stopped or clears a shared uncertainty
+fence. Transport replacement alone does not invalidate accepted OS-command
+safety or renew an existing cache's age. Independent Pulse-agent reports and
+stored metric observations remain intact when a guest cycle is withdrawn.
+
+`TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence` in
+`internal/monitoring/monitor_host_agents_test.go` checks those independent
+sources through a runtime transition. Production collection/late-reply and
+publication-order controls are in `guest_poll_ownership_test.go`; diagnostics
+and both History stores are covered in `diagnostic_snapshots_test.go`. These
+controls establish no native guest restart, thaw or prior-workload restoration.

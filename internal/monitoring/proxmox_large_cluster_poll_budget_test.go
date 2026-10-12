@@ -104,7 +104,10 @@ func TestLargePVEClusterPublishesCompleteGenerationWhenEnrichmentBudgetExpires(t
 		stubPVEClient: &stubPVEClient{},
 		resources:     largeClusterResources(),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	monitor.replacePVEClient("large-cluster", client)
+	// Expire only deep enrichment. The parent still owns the authoritative
+	// inventory and its reserved publication tail, unlike explicit cancellation.
+	ctx, cancel := context.WithTimeout(context.Background(), pvePollTailReserve+40*time.Millisecond)
 	defer cancel()
 
 	started := time.Now()
