@@ -9416,3 +9416,21 @@ provider precedence, stopping/recovery and zero. The local
 Workloads snapshot adapter/drawer, History and CSS on desktop and phone, with
 synthetic GET responses. These controls do not establish native restart, thaw,
 covered-filesystem writes, installed recovery or containing software.
+
+### Guest backup completion readout (12 October 2026)
+
+The existing guest Overview's Last completed backup row shows elapsed age
+(hours/minutes for recent points, days for older ones), never a rolling-day
+Today/Yesterday claim. A validated completion also has visible UTC date/time
+in a semantic `time` element with its original ISO timestamp. Invalid, future
+or absent times produce no completion element. The row still distinguishes
+running activity from completed protection and preserves the policy's tone;
+the passive clock may rejudge a previously future timestamp when it becomes
+valid, but cannot supply new completion evidence.
+
+`GuestDrawer.backup-clock.test.tsx` and the connected drawer/model controls
+cover these states and update on time alone. Desktop Chromium and touch-phone
+WebKit exercise the real policy producer, consuming drawer, shared clock and
+existing table evidence. No route, guest check, backup, threshold, collector or
+permission changes. This presentation result does not establish thaw, covered
+filesystem writes, native restart recovery or containing released software.

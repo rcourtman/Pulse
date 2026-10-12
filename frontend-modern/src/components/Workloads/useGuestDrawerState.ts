@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal } from 'solid-js';
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import {
   getCanonicalWorkloadId,
@@ -36,6 +37,7 @@ import {
 
 export function useGuestDrawerState(props: GuestDrawerProps) {
   const alertsActivation = useAlertsActivation();
+  const now = useRelativeTimeNow();
   const [activeTab, setActiveTab] = createSignal<GuestDrawerTab>('overview');
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -84,6 +86,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     getGuestDrawerBackupPresentation(
       props.guest.lastBackup,
       alertsActivation.getBackupThresholds(),
+      now(),
     ),
   );
   const historyTarget = createMemo(() => getGuestDrawerHistoryTarget(props.guest));
