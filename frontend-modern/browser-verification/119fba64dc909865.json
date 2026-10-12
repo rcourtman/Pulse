@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "020a7be6bf2a2923c291395a8409ed79ddcde336",
+  "verified_at": "2026-10-12T13:19:44.508Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "af9cd697e786db4ead5a3ea02b923c4d95bbfbd32c22457db11c9ee0a1f74371"
+  },
+  "routes": [
+    "/proxmox (production GuestDrawer in a local synthetic read-state fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Available, expected-unreachable, not-running, disabled, unrecognised and cached-version-only: original fixed explanations are visible without hover; unknown raw values are not rendered.",
+    "Backup lock and timed-out read retain the original prominent safety warning/link without duplicate row text; available state returns on the same guest after clearance. Clearance is not native thaw/recovery.",
+    "LXC and vSphere remain without a QEMU read-state row.",
+    "22 source-bound desktop Chromium 141.0.7390.37 / phone WebKit 26.0 checks on Playwright 1.56.1; four final captures inspected with native view_image. Source imports: 164 verified loaded files.",
+    "Explicit empty GET /api/resources and GET /api/alerts/active fixtures only; no API writes or external service. Loopback WebSocket proxy ECONNREFUSED remains in raw browser log; no streaming/native acceptance.",
+    "Prior clients 1/1/1 retained: navigation readiness failures and the zero-read fixture oracle failure are not passes. Final client 0, browsers/contexts/server closed."
+  ],
+  "interactions": [
+    "Changed provider-owned state for the same canonical guest without remount, checking visible state/detail, geometry and precautions.",
+    "Focused the production collapse button and pressed Enter, then reopened the fixture drawer and read the current explanation.",
+    "Changed fixture platform to LXC/vSphere and confirmed no misleading QEMU explanation."
+  ],
+  "evidence": "Lane outcome RECEIPTS.md links complete results/scripts/captures/native observations and retains adverse attempts; not a real guest, current-source backend or released proof."
+}
