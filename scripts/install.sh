@@ -1344,6 +1344,7 @@ teardown_openrc_agent_service() {
 # cannot establish that after an ignored signal or lost PID file.
 read_legacy_agent_removal_processes() {
     local observation="" line="" pid="" parent="" comm="" args="" role=""
+    local bootstrap="${1:-}"
     local complete="false" count=0 parents=" " seen=" "
     local -a rows=()
     observation=$(LC_ALL=C timeout -k 1 5 ps -ax -o pid= -o ppid= -o comm= -o args= 2>&1 &&
@@ -1365,6 +1366,7 @@ read_legacy_agent_removal_processes() {
         elif [[ "${comm##*/}" == daemon && "$args" =~ (^|[[:space:]/])pulse-agent([[:space:]\[]|$) ]]; then
             role="supervisor"
         fi
+        if [[ -n "$bootstrap" && "$args" == *"$bootstrap"* ]]; then role="bootstrap"; fi
         rows+=("$pid $parent $role ${comm##*/}")
         count=$((count + 1))
         [[ $count -le 65536 ]] || return 1
@@ -1704,6 +1706,132 @@ enable_sysv_agent_service() {
         fi
     done
     log_info "Created rc.d symlinks manually."
+}
+
+# TrueNAS SCALE has a second activation owner: middleware's boot task can
+# recreate and enable the systemd unit even after systemctl disable. Recovered
+# state directories alone are not appliance identity (ordinary Linux has them).
+truenas_scale_agent_removal_present() {
+    [[ "$(uname -s)" == Linux ]] || return 1
+    [[ -e "${TRUENAS_BOOTSTRAP_SCRIPT:-}" || -L "${TRUENAS_BOOTSTRAP_SCRIPT:-}" ||
+       -f /etc/truenas-version || -d /data/ix-applications || -d /etc/ix-apps.d ]] && return 0
+    [[ -f /etc/version ]] && grep -qi truenas /etc/version
+}
+
+read_truenas_agent_removal_tasks() {
+    local observation=""
+    observation=$(LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.query 2>&1 &&
+        printf '\n%s' '__pulse_truenas_tasks_complete__') || return 1
+    # Parse the complete inventory, including indirect/other-install bootstrap
+    # references. No task command, name, argument or credential is returned.
+    python3 -c '
+import json, pathlib, sys
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result: raise ValueError("duplicate field")
+        result[key] = value
+    return result
+def reject_constant(value):
+    raise ValueError("non-JSON constant")
+try:
+    raw = sys.stdin.buffer.read(1048577)
+    suffix = b"\n__pulse_truenas_tasks_complete__\n"
+    if len(raw) > 1048576 or not raw.endswith(suffix): raise ValueError("incomplete inventory")
+    tasks = json.loads(raw[:-len(suffix)].decode("utf-8"), object_pairs_hook=unique_object,
+                       parse_constant=reject_constant)
+    if not isinstance(tasks, list) or len(tasks) > 512: raise ValueError("unbounded inventory")
+    expected, seen, owned = sys.argv[1], set(), []
+    for task in tasks:
+        if not isinstance(task, dict): raise ValueError("invalid task")
+        ident, kind, enabled = task.get("id"), task.get("type"), task.get("enabled")
+        if type(ident) is not int or not 0 < ident <= 2147483647 or ident in seen:
+            raise ValueError("invalid identity")
+        seen.add(ident)
+        if kind not in ("SCRIPT", "COMMAND") or type(enabled) is not bool:
+            raise ValueError("unknown activation")
+        script, command = task.get("script", ""), task.get("command", "")
+        if script is None: script = ""
+        if command is None: command = ""
+        if not isinstance(script, str) or not isinstance(command, str): raise ValueError("invalid activation")
+        if (kind == "SCRIPT" and not script) or (kind == "COMMAND" and not command):
+            raise ValueError("missing activation target")
+        if script == expected:
+            if (kind != "SCRIPT" or command or task.get("when") != "POSTINIT" or
+                    task.get("comment") != "Pulse Agent Bootstrap" or type(task.get("timeout")) is not int or
+                    task["timeout"] != 30): raise ValueError("unowned bootstrap")
+            owned.append((ident, enabled))
+        elif (pathlib.PurePosixPath(script).name == "bootstrap-pulse-agent.sh" or
+              "bootstrap-pulse-agent.sh" in command or "pulse-agent" in command):
+            raise ValueError("indirect or other-install activation")
+    for ident, enabled in sorted(owned): print(ident, "true" if enabled else "false")
+    print("complete")
+except (ValueError, TypeError, KeyError, UnicodeError):
+    print("TrueNAS boot-task inventory is incomplete or not owned; recovery retained.", file=sys.stderr)
+    sys.exit(1)
+' "$TRUENAS_BOOTSTRAP_SCRIPT" <<< "$observation"
+}
+
+quiesce_truenas_agent_boot_tasks_for_removal() {
+    local inventory="" expected="" observed="" ident="" enabled="" mode=""
+    command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 &&
+        command -v timeout >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 || return 1
+    # Do not let a platform marker or an arbitrary saved state path authorise
+    # erasure of a different appliance install. Keep the existing state owner.
+    [[ "$TRUENAS_STATE_DIR" == "$STATE_DIR" &&
+       "${STATE_DIR_REMOVAL_AUTHORITY:-}" == "$STATE_DIR" &&
+       "$TRUENAS_BOOTSTRAP_SCRIPT" == "$STATE_DIR/bootstrap-pulse-agent.sh" ]] || return 1
+    if [[ -e "$TRUENAS_BOOTSTRAP_SCRIPT" || -L "$TRUENAS_BOOTSTRAP_SCRIPT" ]]; then
+        mode=$(portable_path_mode "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+        [[ "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & 0022) == 0 )) || return 1
+        trusted_lifecycle_regular_file "$TRUENAS_BOOTSTRAP_SCRIPT" "$mode" || return 1
+    fi
+    inventory=$(read_truenas_agent_removal_tasks) || return 1
+    while read -r ident enabled; do
+        [[ "$ident" != complete ]] || continue
+        if [[ "$enabled" == true ]]; then
+            LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.update "$ident" '{"enabled":false}' >/dev/null 2>&1 || return 1
+        fi
+        expected+="$ident false"$'\n'
+    done <<< "$inventory"
+    expected+=complete
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == "$expected" ]] || return 1
+    printf '%s\n' "$expected"
+}
+
+confirm_truenas_agent_removal_quiescent() {
+    local unit="" inventory="" observed=""
+    for unit in "${ACTION_RUNNER_NAME}.service" "${PRIVILEGED_HELPER_NAME}.socket" \
+        "${PRIVILEGED_HELPER_NAME}.service" "${AGENT_NAME}.service"; do
+        confirm_agent_unit_quiescent "$unit" || return 1
+    done
+    inventory=$(read_legacy_agent_removal_processes "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+    legacy_agent_processes_absent "$inventory" && [[ "$inventory" != *' bootstrap'* ]] || return 1
+    # The middleware set can change during the preceding systemd operations.
+    # Close it again before remote removal/first deletion, not only afterwards.
+    if [[ $# -gt 0 ]]; then
+        observed=$(read_truenas_agent_removal_tasks) || return 1
+        [[ "$observed" == "$1" ]] || return 1
+    fi
+}
+
+teardown_truenas_agent_boot_tasks() {
+    local expected="$1" observed="" ident="" enabled=""
+    # No newly discovered task is disabled/deleted after remote removal. A
+    # changed set, refused read or concurrent activation retains local recovery.
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == "$expected" ]] || return 1
+    confirm_truenas_agent_removal_quiescent "$expected" || return 1
+    while read -r ident enabled; do
+        [[ "$ident" != complete ]] || continue
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.delete "$ident" >/dev/null 2>&1 || return 1
+    done <<< "$expected"
+    # Close the whole manager/process/task set after the last deletion, while
+    # every credential, bootstrap, stored binary and service file still exists.
+    confirm_truenas_agent_removal_quiescent || return 1
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    [[ "$observed" == complete ]]
 }
 
 write_truenas_bootstrap_script() {
@@ -5999,6 +6127,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
     local uninstall_has_credential="false"
     local uninstall_legacy_manager=""
     local uninstall_upstart="false"
+    local uninstall_truenas_scale="false"
+    local uninstall_truenas_tasks=""
 
     # Validate saved connection availability before stopping a working install.
     # Stop every systemd activation source before remote removal, process kills
@@ -6008,6 +6138,14 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -z "$PULSE_URL" ]]; then
             fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
         fi
+    fi
+    # Middleware can recreate and enable the systemd unit at boot. Disable all
+    # exact owned tasks before stopping services; a partial/refused observation
+    # retains every recovery file and never restores automatic activation.
+    if truenas_scale_agent_removal_present; then
+        uninstall_truenas_scale="true"
+        uninstall_truenas_tasks=$(quiesce_truenas_agent_boot_tasks_for_removal) ||
+            fail "TrueNAS SCALE removal could not confirm every owned boot task disabled; credentials, bootstrap and service files were retained. Reconcile middleware task ownership/state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
     # Detect stale DSM 6 jobs even on a DSM 7 host. Another init manager cannot
     # establish their absence; missing initctl is an explicit safe refusal.
@@ -6036,6 +6174,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
         uninstall_legacy_manager=SysV
         quiesce_sysv_agent_for_removal ||
             fail "SysV removal could not confirm stopped process and disabled runlevels; local recovery files were retained. A preceding stop or disable may have succeeded; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if [[ "$uninstall_truenas_scale" == true ]]; then
+        confirm_truenas_agent_removal_quiescent "$uninstall_truenas_tasks" ||
+            fail "TrueNAS SCALE removal could not confirm stopped units, collector and bootstrap processes; local recovery was retained. Reconcile stopped/disabled state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # A credential-bearing install must durably remove its exact server record
@@ -6067,6 +6209,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
     if [[ "$uninstall_upstart" == true ]]; then
         teardown_upstart_agent_service ||
             fail "DSM Upstart job retirement was not confirmed; local recovery state was retained. The manual override remains after a partial stop. Reconcile the original config or its .removal recovery copy before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+    fi
+    if [[ "$uninstall_truenas_scale" == true ]]; then
+        teardown_truenas_agent_boot_tasks "$uninstall_truenas_tasks" ||
+            fail "TrueNAS SCALE boot-task retirement was not confirmed; local recovery was retained. A preceding task disable/delete or server removal may have succeeded. Reconcile middleware and stopped service state before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # Kill wrapper scripts first: they are watchdogs, so stopping the agent
@@ -6181,15 +6327,12 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
     fi
 
-    # TrueNAS SCALE/CORE
-    if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; then
-        if [[ "$(uname -s)" == "Linux" ]]; then
-            log_info "Removing TrueNAS SCALE installation..."
-            teardown_systemd_agent_service
-        elif [[ "$(uname -s)" == "FreeBSD" ]]; then
-            log_info "Removing TrueNAS CORE installation..."
-            # rc.d teardown was confirmed before remote/local recovery erasure.
-        fi
+    # SCALE's task retirement was confirmed above, before authorised state
+    # erasure. A recovered ordinary Linux directory is not a TrueNAS install.
+    # CORE remains behind its existing rc.d/appliance activation refusal; this
+    # SCALE step does not claim CORE boot-task or native platform acceptance.
+    if [[ "$(uname -s)" == "FreeBSD" ]] && { [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; }; then
+        log_info "Removing TrueNAS CORE installation..."
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
             TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")

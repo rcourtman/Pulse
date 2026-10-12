@@ -17,7 +17,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_LEGACY_SOURCE", ROOT / "scripts/install.sh"))
-FUNCTIONS = ("read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
+FUNCTIONS = ("truenas_scale_agent_removal_present", "read_legacy_agent_removal_processes", "legacy_agent_processes_absent",
              "validate_legacy_agent_removal_pidfiles", "read_legacy_agent_removal_status",
              "read_freebsd_agent_removal_enablement", "quiesce_freebsd_agent_for_removal",
              "teardown_freebsd_agent_service", "read_sysv_agent_removal_links",

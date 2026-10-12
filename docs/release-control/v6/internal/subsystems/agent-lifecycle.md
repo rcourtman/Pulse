@@ -15,6 +15,50 @@
 
 ## Purpose
 
+### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
+
+TrueNAS SCALE has an independent activation owner: its Init/Shutdown bootstrap
+can recreate and enable the systemd unit after a normal disable. A recovered
+state directory or an unrelated `/etc/version` alone is not appliance identity.
+The uninstall caller selects SCALE only from a bootstrap footprint or vendor
+marker. The existing protected/explicit state-removal authority must select the
+same state directory and exact bootstrap path; linked, writable or non-regular
+bootstrap files refuse before task/service mutation.
+
+One complete, bounded middleware inventory must identify every exact generated
+SCRIPT/POSTINIT task, including duplicates. Unknown ownership, indirect command
+activation or another-install bootstrap refuses without deleting unrelated
+tasks. The JSON reader rejects duplicate keys/IDs, invalid types, failed/empty/
+diagnostic/incomplete reads, over 512 tasks or over 1 MiB; it returns only owned
+numeric IDs and enablement, never task commands, names or credentials. A
+missing/empty SCRIPT path or COMMAND target is unknown activation, not an
+unrelated task or evidence that the owned task is absent. All owned
+tasks are disabled with checked calls and independent exact-set readback before
+systemd stop. A partial stop/disable stays stopped/disabled: do not re-enable or
+automatically restart after a refusal.
+
+The complete systemd target set and independent kernel collector/bootstrap
+process inventory and a final exact disabled-task readback must be quiescent
+before same-instance server removal, including task changes during systemd stop.
+After remote confirmation, the exact disabled task set is re-read before the first
+task deletion. Every owned deletion is checked; final whole-unit/process
+quiescence and complete task absence precede credential, stored binary,
+bootstrap and state erasure. A changed set, refusal, ignored deletion, new task
+or reactivation retains local recovery, even if earlier task/server operations
+succeeded. No favourable replacement observation, task recreation or credential
+churn is performed. Unrelated tasks survive unchanged.
+
+`TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure` requires all
+sixteen `agent_truenas_teardown.py` actual-function/full-caller controls,
+including multiple tasks, partial/refused/unknown operations, post-remote
+changes, ignored/recreated deletion, process privacy and a real timeout child.
+These run against closed middleware/systemd/process models and private ordinary-
+user files, not a native appliance. Existing systemd/OpenRC/DSM/rc.d/SysV gates,
+transport trust and identity remain. TrueNAS CORE retains its linked rc.d/
+appliance refusal; Unraid/QNAP boot ownership, Windows and signed installed
+Linux/PowerShell/native/TLS/cleanup acceptance remain separate. This does not
+expand the original removal job into macOS or introduce another dispatcher.
+
 ### DSM Upstart removal retains recovery until automatic activation and the job are absent
 
 DSM 6 Upstart jobs (including leftovers on DSM 7) are not classified as SysV.
