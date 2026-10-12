@@ -41,16 +41,21 @@ export type MemoryGuestKind = 'vm' | 'container';
 const getCacheNote = (kind: MemoryGuestKind | undefined): string => {
   const noun = kind === 'vm' ? 'VM' : kind === 'container' ? 'container' : 'guest';
   const caveat = `Proxmox's reading may include cached memory the ${noun} can reuse, so a high percentage alone does not mean it is short of memory.`;
+  // A fallback memory value does not establish that it is safe to change the
+  // guest's agents. Keep the precaution with the advice, even without a known
+  // backup lock: Pulse cannot infer the absence of a guest incident.
+  const setupPrecaution =
+    'Defer agent setup, restarts and live guest-agent probes during backups or a guest incident.';
   // A Pulse agent inside the guest can supply its own figure on any OS (a
   // container's must report the container's own limit). The QEMU guest agent
   // path reads Linux /proc/meminfo only and needs installing in the guest and
   // enabling in Proxmox. Neither is guaranteed to replace every fallback
   // source, so the advice says "can". Kept short: the drawer column is narrow.
   if (kind === 'vm') {
-    return `${caveat} Installing a Pulse agent in the VM, or setting up the QEMU guest agent on a Linux VM, can let Pulse show its own figure.`;
+    return `${caveat} ${setupPrecaution} Installing a Pulse agent in the VM, or setting up the QEMU guest agent on a Linux VM, can let Pulse show its own figure.`;
   }
   if (kind === 'container') {
-    return `${caveat} Installing a Pulse agent in the container can let Pulse show its own figure.`;
+    return `${caveat} ${setupPrecaution} Installing a Pulse agent in the container can let Pulse show its own figure.`;
   }
   return caveat;
 };
