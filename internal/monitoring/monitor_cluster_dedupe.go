@@ -76,6 +76,7 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 	if m == nil || instanceName == "" {
 		return
 	}
+	m.retireGuestMemoryCache(instanceName)
 
 	if m.taskQueue != nil {
 		m.taskQueue.Remove(InstanceTypePVE, instanceName)

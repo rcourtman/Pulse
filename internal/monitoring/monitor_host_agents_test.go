@@ -8456,3 +8456,28 @@ func TestGuestMetadataActivityConcurrentCleanupContract(t *testing.T) {
 		t.Error("concurrent cleanup lost suppression or renewed stale useful evidence")
 	}
 }
+
+func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
+	const instance = "site"
+	entry := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now()}
+	host := models.Host{ID: "independent-host", LastSeen: time.Now(), Memory: models.Memory{Total: 8192, Used: 1024, Free: 7168, Usage: 12.5}}
+	m := &Monitor{state: models.NewState(), vmAgentMemCache: map[string]agentMemCacheEntry{
+		guestMemoryCacheKey(instance, "node", 105):     entry,
+		guestMemoryCacheKey(instance, "other", 106):    entry,
+		guestMemoryCacheKey("site/other", "node", 105): entry,
+		guestMemoryCacheKey("site-other", "node", 105): entry,
+	}}
+	m.state.UpdateHosts([]models.Host{host})
+	m.retirePVEInstanceRuntime(instance)
+	if len(m.vmAgentMemCache) != 2 || m.vmAgentMemCache[guestMemoryCacheKey("site/other", "node", 105)] != entry || m.vmAgentMemCache[guestMemoryCacheKey("site-other", "node", 105)] != entry {
+		t.Error("connection retirement retained its own QGA memory or erased a different connection")
+	}
+	if got := m.state.GetSnapshot().Hosts; !reflect.DeepEqual(got, []models.Host{host}) {
+		t.Error("QGA memory retirement changed independent Pulse-agent reports")
+	}
+	id := makeGuestID(instance, "node", 105)
+	total, used, source, deferred := m.resolveGuestStatusMemory(context.Background(), nil, instance, "guest", "node", 105, id, &proxmox.VMStatus{MaxMem: 8192, Mem: 8192}, map[string]models.Host{id: host}, 8192, "", nil)
+	if total != 8192 || used != 1024 || source != "agent" || deferred {
+		t.Errorf("independent linked-agent fallback changed after QGA retirement: %d/%d/%s/%t", total, used, source, deferred)
+	}
+}

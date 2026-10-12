@@ -1387,6 +1387,7 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
+	vmAgentMemInFlight         map[string]*guestMemoryFetch    // Guarded by rrdCacheMu; retained until the read returns, even after invalidation.
 	removedDockerHosts         map[string]time.Time            // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string               // Track token ID -> Docker host identity bindings to enforce uniqueness
 	dockerIdentityFlaps        map[string]*identityFlapTracker // Track per-host identity flapping (cloned VMs sharing machine-id)

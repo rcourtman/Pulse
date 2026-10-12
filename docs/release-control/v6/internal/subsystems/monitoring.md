@@ -993,6 +993,34 @@ cooldown and independent VM discovery, without shortening or replaying that
 fence. These are source lifecycle/safety controls, not native thaw, restart or
 every-volume/History recovery evidence.
 
+Guest memory fallback has its own per-instance/node/VM read owner, protected
+by the same lock as its short-lived cache. An overlapping refresh defers rather
+than dispatching a second read. Explicit metadata invalidation, known agent
+unavailability (even while display metadata is fresh), an observed non-running
+VM and PVE connection retirement cancel an outstanding memory context and
+discard both successful memory samples and negative backoff. A new start or
+re-added connection must obtain its own sample. Retirement matches the complete
+instance component, not a connection-name prefix. Ordinary backup-lock and
+transport deferral retain the original successful sample and its age.
+
+The obsolete read still owns its key until it actually returns. Its late
+success, empty result or error cannot recreate a sample/backoff or escape as a
+new observation. Cancelled callers likewise do not create a negative guest
+sample. Publication and invalidation are serialized; completion releases the
+owner with no persistent generation tombstones. None of these operations
+releases, shortens or retries the Proxmox transport's consumed-command fence.
+Independent VMs, PVE/status memory and linked Pulse-agent evidence remain usable.
+
+`guest_memory_lifecycle_test.go` covers successful/negative cache invalidation,
+late replies, overlapping reads, cancelled admission and ordinary recovery.
+`guest_memory_lifecycle_http_test.go` covers consumed-body cancellation through
+direct/cluster clients, preserved diagnostic uncertainty and independent VMs;
+both ordinary collectors publish new restart samples through canonical JSON
+and memory History. `TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence`
+checks connection-scoped removal and unchanged independent agent reports and
+linked memory selection. These are synthetic source lifecycle controls, not
+native OS/disks/History recovery, backup thaw or reporter #2762 attribution.
+
 `guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
 and retained caches, active and expired scheduling holds, early unverified-lock
 and cancelled-slot exits, independent VMs and ordinary resumption. The existing
@@ -2846,6 +2874,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 22. `pkg/proxmox/zfs.go`
 22a. `pkg/pbs/client.go`
 23. `internal/monitoring/guest_memory_sources.go`
+23a. `internal/monitoring/guest_memory_agent.go`
+23b. `internal/monitoring/guest_memory_lifecycle.go`
 24. `internal/monitoring/guest_memory_stability.go`
 25. `internal/monitoring/monitor_polling_vm.go`
 26. `internal/monitoring/monitor_pve_guest_builders.go`

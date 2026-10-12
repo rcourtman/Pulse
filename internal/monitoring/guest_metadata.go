@@ -343,6 +343,9 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 
 	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.IsAvailable()) || allowWithoutStatus)
 	if !agentAvailable {
+		// Display identity can remain useful, but a known-unavailable agent ends
+		// the memory observation lifecycle even while metadata is still fresh.
+		m.clearGuestMemoryCache(instanceName, nodeName, vmid)
 		if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
 			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 		}
@@ -617,6 +620,7 @@ func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid in
 	if m == nil {
 		return
 	}
+	m.clearGuestMemoryCache(instanceName, nodeName, vmid)
 
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
 	// Keep the old owner until completion, but cancel its context and exclude all

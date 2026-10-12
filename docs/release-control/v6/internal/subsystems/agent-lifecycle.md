@@ -143,6 +143,17 @@ late replies, both invalidation routes, direct/cluster HTTP cancellation,
 independent keys and ordinary new-lifecycle recovery. It is not installed
 removal, native guest recovery or evidence that a cancelled guest command stopped.
 
+Guest memory read ownership is also internal monitor state, not agent protocol
+or enrolment. Retiring a PVE connection removes only its QGA memory samples and
+backoff and cancels its outstanding memory reads without releasing their
+transport uncertainty. Independent Pulse-agent reports, machine/token identity
+and linked-agent memory selection are unchanged. An unavailable or stopped QGA
+guest cannot carry its old successful/negative sample into a new start.
+`TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence` in
+`internal/monitoring/monitor_host_agents_test.go` verifies this separation and
+complete connection-name matching; memory lifecycle HTTP controls preserve the
+consumed-command fence. This is not installed removal or native recovery proof.
+
 The shared VM model's `GuestAgentEvidence` is monitor-owned source-time
 coordination, not agent input or a public field. It prevents retained guest
 identity from renewing fallback QGA eligibility. Agent enrollment, token and
