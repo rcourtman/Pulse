@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -255,6 +256,24 @@ type Client struct {
 	httpClient *http.Client
 	auth       auth
 	config     ClientConfig
+
+	// A polling client is shared by concurrent node and guest reads. Publish
+	// each ticket/CSRF/expiry tuple atomically and share only session renewal,
+	// not the subsequent API requests or their caller-owned cancellation.
+	authMu         sync.Mutex
+	authGeneration uint64
+	authInFlight   *authRefresh
+}
+
+type authRefresh struct {
+	done chan struct{}
+	err  error
+}
+
+func (c *Client) authSnapshot() (auth, uint64) {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	return c.auth, c.authGeneration
 }
 
 func (c *Client) apiBaseURL() (*url.URL, error) {
@@ -398,16 +417,47 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 // authenticate performs password-based authentication
 func (c *Client) authenticate(ctx context.Context) error {
-	username := c.auth.user + "@" + c.auth.realm
-	password := c.config.Password
+	return c.renewAuthentication(ctx, nil)
+}
 
-	if err := c.authenticateJSON(ctx, username, password); err == nil {
-		return nil
-	} else if shouldFallbackToForm(err) {
-		return c.authenticateForm(ctx, username, password)
-	} else {
+// expected binds expiry or a 401 to the session actually used by that read.
+// A late rejection of an old ticket cannot trigger another renewal after a
+// concurrent request has already replaced it. Explicit authentication (nil)
+// still owns the existing JSON/form fallback and failed-attempt behaviour.
+func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
+	c.authMu.Lock()
+	if expected != nil && c.authGeneration != *expected {
+		c.authMu.Unlock()
+		return nil
+	}
+	if pending := c.authInFlight; pending != nil {
+		c.authMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-pending.done:
+			return pending.err
+		}
+	}
+	pending := &authRefresh{done: make(chan struct{})}
+	c.authInFlight = pending
+	username := c.auth.user + "@" + c.auth.realm
+	c.authMu.Unlock()
+
+	password := c.config.Password
+	err := c.authenticateJSON(ctx, username, password)
+	if shouldFallbackToForm(err) {
+		err = c.authenticateForm(ctx, username, password)
+	}
+	c.authMu.Lock()
+	pending.err = err
+	c.authInFlight = nil
+	close(pending.done)
+	c.authMu.Unlock()
+	return err
 }
 
 func (c *Client) authenticateJSON(ctx context.Context, username, password string) error {
@@ -488,9 +538,12 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 		return err
 	}
 
+	c.authMu.Lock()
 	c.auth.ticket = result.Data.Ticket
 	c.auth.csrfToken = result.Data.CSRFPreventionToken
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
+	c.authGeneration++
+	c.authMu.Unlock()
 
 	return nil
 }
@@ -528,10 +581,12 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 
 func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool, httpClient *http.Client) (*http.Response, error) {
 	// Re-authenticate if needed
-	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
-		if err := c.authenticate(ctx); err != nil {
+	auth, generation := c.authSnapshot()
+	if c.config.Password != "" && auth.tokenName == "" && time.Now().After(auth.expiresAt) {
+		if err := c.renewAuthentication(ctx, &generation); err != nil {
 			return nil, fmt.Errorf("re-authentication failed: %w", err)
 		}
+		auth, generation = c.authSnapshot()
 	}
 
 	var body io.Reader
@@ -554,23 +609,23 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 	}
 
 	// Set authentication
-	if c.auth.tokenName != "" && c.auth.tokenValue != "" {
+	if auth.tokenName != "" && auth.tokenValue != "" {
 		// API token authentication
 		authHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=%s",
-			c.auth.user, c.auth.realm, c.auth.tokenName, c.auth.tokenValue)
+			auth.user, auth.realm, auth.tokenName, auth.tokenValue)
 		req.Header.Set("Authorization", authHeader)
 		// NEVER log the actual token value - only log that we're using token auth
 		maskedHeader := fmt.Sprintf("PVEAPIToken=%s@%s!%s=***",
-			c.auth.user, c.auth.realm, c.auth.tokenName)
+			auth.user, auth.realm, auth.tokenName)
 		log.Debug().
 			Str("authHeader", maskedHeader).
 			Str("url", req.URL.String()).
 			Msg("Setting API token authentication")
-	} else if c.auth.ticket != "" {
+	} else if auth.ticket != "" {
 		// Ticket authentication
-		req.Header.Set("Cookie", "PVEAuthCookie="+c.auth.ticket)
-		if method != "GET" && c.auth.csrfToken != "" {
-			req.Header.Set("CSRFPreventionToken", c.auth.csrfToken)
+		req.Header.Set("Cookie", "PVEAuthCookie="+auth.ticket)
+		if method != "GET" && auth.csrfToken != "" {
+			req.Header.Set("CSRFPreventionToken", auth.csrfToken)
 		}
 	}
 
@@ -589,8 +644,8 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.
-		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && c.auth.tokenName == "" {
-			if err := c.authenticate(ctx); err != nil {
+		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && auth.tokenName == "" {
+			if err := c.renewAuthentication(ctx, &generation); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
 			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
@@ -600,7 +655,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
 			// Special case for 403 with API token - this is usually a permission issue
-			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
+			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", auth.user, auth.realm)
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
