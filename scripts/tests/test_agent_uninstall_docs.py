@@ -31,6 +31,7 @@ def compact(value):
 class AgentUninstallDocsTest(unittest.TestCase):
     # Supports read-only actual-parent discrimination without editing source.
     text = None
+    troubleshooting_text = None
 
     def setUp(self):
         self.help = section(self.text)
@@ -103,6 +104,51 @@ class AgentUninstallDocsTest(unittest.TestCase):
         self.assertEqual(commands, ['& $installerFile -Uninstall $true\n'])
         self.assertIn('[bool]$Uninstall = $false', (ROOT / "scripts/install.ps1").read_text())
         self.assertNotIn('Remove-Item', self.help)
+
+    def test_missing_url_refusal_preserves_same_instance_recovery(self):
+        for fact in (
+            "Do not attempt removal if a collector credential remains but the saved Pulse URL is missing",
+            "current Unix installer refuses before stopping services or deleting local state",
+            "older served or prepared script may not have this refusal",
+            "do not rerun uninstall to test it",
+            "Keep the saved identity, credentials and connection files",
+            "do not erase them to force a local-only removal",
+            "provide `--url` for the same trusted Pulse instance",
+            "without a token on the command line",
+            "A different server or a new token cannot confirm removal of the original record",
+            "Retry only after restoring that connection",
+            "keep certificate verification enabled",
+            "Credential-free Unix state can still be removed locally",
+        ):
+            self.assertIn(fact, self.words)
+        # Bind the help to production admission, not a hypothetical policy.
+        admission = self.removal.split("if collector_credential_state_present; then", 1)[1]
+        missing_url = admission.split('if [[ -z "$PULSE_URL" ]]; then', 1)[1].split("\n        fi", 1)[0]
+        self.assertIn("local credentials and services were retained", missing_url)
+        self.assertIn("same trusted Pulse instance", missing_url)
+        self.assertLess(admission.index("uninstall_collector_registration"),
+                        admission.index("teardown_action_runner_service"))
+
+    def test_orphan_service_stop_is_not_destructive_cleanup_or_revocation(self):
+        text = self.troubleshooting_text
+        if text is None:
+            text = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        heading = "#### Removed Pulse server but `pulse-agent` still logs connection failures\n"
+        advice = text.split(heading, 1)[1].split("\n#### ", 1)[0]
+        for fact in (
+            "stopping retries is not completed removal or credential revocation",
+            "saved identity, credentials, connection files and needed logs private and intact",
+            "do not reinstall, create a new token or delete state",
+            "Temporary loss of connectivity does not establish that the server is gone",
+            "UNIFIED_AGENT.md#uninstall",
+            "confirmation from the same trusted Pulse instance",
+            "systemd, not Windows or other service managers",
+        ):
+            self.assertIn(fact, compact(advice))
+        commands = re.findall(r"```bash\n(.*?)```", advice, re.DOTALL)
+        self.assertEqual(commands, ["sudo systemctl disable --now pulse-agent.service\n"])
+        self.assertEqual((ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "docs/TROUBLESHOOTING.md").read_bytes())
 
     def test_copied_unix_commands_select_only_the_requested_route_and_keep_failures(self):
         commands = re.findall(r"```bash\n(.*?)```", self.help, re.DOTALL)

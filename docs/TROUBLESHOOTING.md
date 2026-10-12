@@ -386,8 +386,16 @@ sudo systemctl disable --now pulse-agent.service
 ```
 
 If the Pulse server is still reachable, use its generated uninstall command so
-the agent can deregister cleanly. Otherwise, stopping the service is the safe
-first step before platform-local cleanup.
+the agent can deregister cleanly. If it is unreachable or the saved server URL
+is missing, **stopping retries is not completed removal or credential
+revocation**. Keep the agent's saved identity, credentials, connection files and
+needed logs private and intact; do not reinstall, create a new token or delete
+state to bypass a removal refusal. Temporary loss of connectivity does not
+establish that the server is gone. Follow the
+[saved-state removal guidance](UNIFIED_AGENT.md#uninstall) before local cleanup;
+Unix credential-bearing removal needs confirmation from the same trusted Pulse
+instance. The stop command above is for systemd, not Windows or other service
+managers.
 
 #### Filter Pulse's systemd journal by severity
 

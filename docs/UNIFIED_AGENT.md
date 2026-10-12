@@ -936,8 +936,19 @@ On Linux systemd, full removal also tears down the separately installed action
 runner and typed helper. If only remediation should stop, use the runner-only
 path below instead. Unix removal with a known Pulse URL and an existing
 collector credential requires authenticated server confirmation before local
-collector teardown. Missing connection state can leave only local removal;
-it is not proof that Pulse removed the record or revoked every credential.
+collector teardown. **Do not attempt removal if a collector credential remains
+but the saved Pulse URL is missing.** The current Unix installer refuses before
+stopping services or deleting local state. An older served or prepared script
+may not have this refusal; do not rerun uninstall to test it. Keep the saved
+identity, credentials and connection files; do not erase
+them to force a local-only removal. Recover the original connection state or
+provide `--url` for the **same trusted Pulse instance** to the inspected
+installer, without a token on the command line. A different server or a new
+token cannot confirm removal of the original record. Retry only after restoring
+that connection; keep certificate verification enabled.
+
+Credential-free Unix state can still be removed locally, but local cleanup is
+not proof that Pulse removed a server record or revoked every credential.
 
 For Windows, use the [privately prepared PowerShell installer](#windows-powershell-run-as-administrator)
 in an Administrator session, not the Unix script. Use the same prepared
