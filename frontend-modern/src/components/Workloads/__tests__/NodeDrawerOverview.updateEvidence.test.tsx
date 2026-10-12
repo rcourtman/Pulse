@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NodeDrawerOverview } from '@/components/Workloads/NodeDrawerOverview';
@@ -79,6 +80,34 @@ describe('NodeDrawerOverview update evidence', () => {
       />
     ));
 
-    expect(screen.getByText('Unavailable · Update check access denied')).toBeInTheDocument();
+    const status = screen.getByText('Unavailable · Update check access denied');
+    expect(status).toHaveClass('whitespace-normal');
+    expect(status).not.toHaveClass('truncate');
+    expect(screen.getByText(/Other monitoring can still work/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Why update checks are unavailable' }));
+    const help = screen.getByRole('dialog', { name: 'Proxmox update-check access' });
+    expect(help).toHaveTextContent('Sys.Modify');
+    expect(help).toHaveTextContent('broader than read-only monitoring');
+    expect(help).toHaveTextContent('does not identify the exact missing privilege');
+  });
+
+  it('keeps guidance open while node readings and evidence age update', () => {
+    const start = Date.parse('2026-10-10T12:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const [node, setNode] = createSignal(
+      makeNode({
+        pendingUpdates: 7,
+        pendingUpdatesStatus: 'stale',
+        pendingUpdatesReason: 'permission_denied',
+        pendingUpdatesCheckedAt: new Date(start - 60_000).toISOString(),
+      }),
+    );
+    render(() => <NodeDrawerOverview node={node()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Why update checks are unavailable' }));
+    const help = screen.getByRole('dialog', { name: 'Proxmox update-check access' });
+    setNode({ ...node(), cpu: 0.2 });
+    vi.advanceTimersByTime(60_000);
+    expect(screen.getByRole('dialog', { name: 'Proxmox update-check access' })).toBe(help);
+    expect(screen.getByText(/7 pending.*stale.*checked 2 mins ago/)).toBeInTheDocument();
   });
 });
