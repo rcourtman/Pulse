@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### OpenRC removal confirms stopped and unlinked state before erasure
+
+OpenRC removal must observe a complete, diagnostic-free runlevel inventory and
+a matching bounded service status before remote deregistration or local erasure.
+Started services require a successful stop; every configured runlevel, including
+operator-selected levels other than `default`, must be disabled. Independent
+inventory and status readback must confirm no runlevel activation and a stopped
+service. A status exit alone is insufficient: the matching colour-free status
+line is required. Failed, empty, duplicate, malformed, diagnostic-bearing or
+unknown observations refuse without obtaining a replacement sample.
+
+After confirmed server removal, OpenRC teardown rechecks these conditions before
+removing its init script, process state or recovery directories. A late refusal
+can therefore follow remote removal, but must still retain all local recovery
+files; it does not restore a previously stopped service. Missing init scripts
+require both manager absence and an independent silent process-absence result.
+Linked, non-regular or non-executable init paths cannot authorise teardown.
+
+`TestInstallSHOpenRCTeardownRequiresObservedQuiescence` runs the actual production
+functions and initial uninstall caller through `agent_openrc_teardown.py`, using
+closed OpenRC/transport/process models and only owned temporary deletion targets.
+It requires every refusal, final-readback, custom-runlevel, late-refusal, no-op,
+path and ordering control, plus a real timeout that stops its owned child.
+These are confined source controls, not native OpenRC, signed installed-agent,
+real TLS, Windows, other service-manager or whole-issue #1099 acceptance.
+
 ### Systemd agent removal retains recovery material until quiescence is observed
 
 Unix agent removal must confirm the collector, action runner and privileged
