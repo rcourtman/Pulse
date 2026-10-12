@@ -42,13 +42,22 @@ func startBlockedGuestMemory(t *testing.T, m *Monitor, instance string, info pro
 	t.Helper()
 	c := &blockedGuestMemoryClient{stubPVEClient: &stubPVEClient{}, entered: make(chan context.Context, 1), release: make(chan struct{}), info: info, err: err}
 	done := make(chan guestMemoryReply, 1)
+	finished := make(chan struct{})
 	go func() {
+		defer close(finished)
 		got, readErr := m.getVMAgentMemoryAvailability(context.Background(), c, instance, "node", 105)
 		done <- guestMemoryReply{got, readErr}
 	}()
 	var once sync.Once
 	unblock := func() { once.Do(func() { close(c.release) }) }
-	t.Cleanup(unblock)
+	t.Cleanup(func() {
+		unblock()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("owned synthetic memory reader did not stop")
+		}
+	})
 	select {
 	case ctx := <-c.entered:
 		return c, ctx, done, unblock
@@ -79,6 +88,9 @@ func invalidateMemoryLifecycle(m *Monitor, instance, disposition string) {
 		// A fresh display identity may remain, but cannot retain memory samples.
 		m.fetchGuestAgentMetadata(context.Background(), nil, instance, "node", "guest", 105, &proxmox.VMStatus{}, false)
 	case "stopped":
+		if m.rateTracker == nil {
+			m.rateTracker = NewRateTracker()
+		}
 		m.buildVMFromClusterResource(context.Background(), instance, proxmox.ClusterResource{Type: "qemu", Node: "node", VMID: 105, Status: "stopped", MaxMem: 8192}, nil, "", nil, nil)
 	}
 }
@@ -111,7 +123,8 @@ func TestGuestMemoryLifecycleRejectsLateReplies(t *testing.T) {
 					t.Error("new lifecycle bypassed the still-outstanding memory owner")
 				}
 				// A different VM can still get its own sample while 105 is owned.
-				if got, err := m.getVMAgentMemoryAvailability(context.Background(), fresh, instance, "node", 106); err != nil || got != freshInfo || fresh.memCalls != 1 {
+				independent := &guestMemoryAgentTestClient{stubPVEClient: &stubPVEClient{}, memInfo: &freshInfo}
+				if got, err := m.getVMAgentMemoryAvailability(context.Background(), independent, instance, "node", 106); err != nil || got != freshInfo || independent.memCalls != 1 {
 					t.Fatal("obsolete read blocked independent guest memory")
 				}
 				unblock()
@@ -125,7 +138,7 @@ func TestGuestMemoryLifecycleRejectsLateReplies(t *testing.T) {
 				if resurrected {
 					t.Error("obsolete read recreated successful/negative memory cache state")
 				}
-				if got, err := m.getVMAgentMemoryAvailability(context.Background(), fresh, instance, "node", 105); err != nil || got != freshInfo || fresh.memCalls != 2 || old.calls.Load() != 1 {
+				if got, err := m.getVMAgentMemoryAvailability(context.Background(), fresh, instance, "node", 105); err != nil || got != freshInfo || fresh.memCalls != 1 || old.calls.Load() != 1 {
 					t.Errorf("normal new-lifecycle memory did not recover: sample=%+v error=%v calls=%d/%d", got, err, fresh.memCalls, old.calls.Load())
 				}
 			})
