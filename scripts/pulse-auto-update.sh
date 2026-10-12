@@ -320,6 +320,24 @@ version_greater_than() {
     return 1  # v1 <= v2
 }
 
+# Read the unit-file inventory for exact unit names. systemd exits 1 and prints
+# nothing at all, on stdout or stderr, when none of the named unit files exist.
+# That is an empty inventory. A timeout, a signal, another failed status, or
+# exit 1 with output or a message remains a failure. Capture both streams in
+# the same read: a later silent sample must
+# never discard an earlier diagnostic.
+unit_file_inventory() {
+    local out="" rc=0
+    # Keep trailing newlines: an emitted blank line is not a silent exit 1.
+    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1; rc=$?; printf '.'; exit "$rc") || rc=$?
+    out="${out%.}"
+    if (( rc == 1 )) && [[ -z "$out" ]]; then
+        rc=0
+    fi
+    printf '%s' "$out"
+    return "$rc"
+}
+
 # Detect service name (could be pulse or pulse-backend)
 detect_service_name() {
     if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then
@@ -336,7 +354,7 @@ detect_service_name() {
     # Keep the standalone helper aligned with the server installer's bounded
     # discovery. Its explicit installer handoff must not carry a short-read
     # default past the installer's own discovery gate.
-    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- pulse-backend.service pulse.service 2>/dev/null); then
+    if ! unit_files=$(unit_file_inventory pulse-backend.service pulse.service); then
         log error "Cannot identify the Pulse systemd service: unit inventory failed. Reconcile service state before retrying." >&2
         return 1
     fi

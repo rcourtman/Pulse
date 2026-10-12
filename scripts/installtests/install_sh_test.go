@@ -4569,6 +4569,19 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("installer service discovery/caller controls: %v\n%s", err, out)
 	}
+	// Do not let deleting a fresh-host or failure-retention control silently
+	// leave this all-method fixture green. Real systemctl remains optional on
+	// platforms without it; the portable production-function controls do not.
+	for _, name := range []string{
+		"test_fresh_host_no_matching_unit_files_is_an_empty_inventory",
+		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
+		"test_only_silent_exit_one_is_admitted_as_absence",
+		"test_blank_line_output_is_not_a_silent_failed_inventory",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
+			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
+		}
+	}
 }
 
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {

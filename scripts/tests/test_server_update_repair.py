@@ -30,8 +30,9 @@ with (f / "manager-calls").open("a") as out:
     out.write(json.dumps(args) + "\n")
 if args == ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
             "pulse-backend.service", "pulse.service"]:
-    # Complete known absence permits recreating the missing default unit.
-    sys.exit(0)
+    # Model systemd's actual empty-root status. Absence must permit recreating
+    # the missing default unit, not fail the existing-install recovery path.
+    sys.exit(1)
 if args == ["daemon-reload"]:
     sys.exit(0)
 sys.exit(97)
