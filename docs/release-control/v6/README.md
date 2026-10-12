@@ -31,7 +31,6 @@ the current lane map does not model a durable surface cleanly enough yet.
 Use `status.json.candidate_lanes` for the machine-readable promotion plan that
 turns durable coverage gaps into explicit future lane splits, additions, or
 expansions.
-The current highest-ranked surfaced candidate is policy-aware data governance.
 Use `status.json.work_claims` for the active lease-style reservation list that
 keeps multiple agents from picking the same governed slice at the same time.
 Record the claim immediately once the slice is chosen, and if an agent rolls
@@ -45,9 +44,9 @@ Candidate lanes should point at the owning target from
 `docs/release-control/control_plane.json` so lane-expansion work is routed to
 an explicit initiative.
 Use `python3 scripts/release_control/status_audit.py --pretty` to see any
-derived `candidate_lane_queue` entries when agents need a ranked next pick for
-the lane-expansion target.
-Use that same audit output to see the `available_candidate_lane_queue`, active
+`candidate_lane_options` with scope and demand evidence for the lane-expansion
+target. Options use stable identifier order, with no inferred priority.
+Use that same audit output to see the `available_candidate_lane_options`, active
 claims, expired claims, and any claim conflicts before taking a new slice.
 Use `status.json.readiness_assertions` for the active required assertion set, its proof references, and any executable `proof_commands` that readiness assertion guardrails run.
 Use `docs/release-control/control_plane.json` for the active profile and active

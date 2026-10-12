@@ -139,15 +139,6 @@ def _lane_completion_tracking_sort_key(value: tuple[str, str]) -> tuple[str, str
     return (kind.casefold(), entry_id.casefold())
 
 
-def _candidate_lane_queue_sort_key(value: dict[str, Any]) -> tuple[int, int, int, str]:
-    return (
-        -int(value["coverage_impact_total"]),
-        -len(value["current_lane_ids"]),
-        -len(value["repo_ids"]),
-        str(value["candidate_lane_id"]).casefold(),
-    )
-
-
 def _blocker_detail(
     item: dict[str, Any],
     *,
@@ -334,14 +325,6 @@ def _require_bool(obj: dict[str, Any], key: str, errors: list[str], *, context: 
     return value
 
 
-def _require_number(obj: dict[str, Any], key: str, errors: list[str], *, context: str) -> float | None:
-    value = obj.get(key)
-    if not isinstance(value, (int, float)):
-        errors.append(f"{context} missing numeric {key}")
-        return None
-    return float(value)
-
-
 def _require_string_list(obj: dict[str, Any], key: str, errors: list[str], *, context: str) -> list[str]:
     value = obj.get(key)
     if not isinstance(value, list):
@@ -405,14 +388,6 @@ def _validate_clean_relative_dir(path: str, errors: list[str], *, context: str) 
         return
     if not resolved.is_dir():
         errors.append(f"{context} cwd must be a directory: {path!r}")
-
-
-def _derived_lane_status(*, at_target: bool, all_evidence_present: bool) -> str:
-    if not all_evidence_present:
-        return "evidence-missing"
-    if at_target:
-        return "target-met"
-    return "behind-target"
 
 
 def _derived_readiness_assertion_status(
@@ -600,44 +575,6 @@ def validate_source_precedence(payload: dict[str, Any], errors: list[str]) -> No
         return
 
 
-def validate_priority_engine(payload: dict[str, Any], errors: list[str]) -> list[str]:
-    engine = payload.get("priority_engine")
-    if not isinstance(engine, dict):
-        errors.append("status.json missing priority_engine object")
-        return []
-    _require_string(engine, "formula", errors, context="priority_engine")
-
-    release_critical_lanes: list[str] = []
-    floor_rule = engine.get("floor_rule")
-    if not isinstance(floor_rule, dict):
-        errors.append("priority_engine missing floor_rule object")
-    else:
-        release_critical_lanes = _require_string_list(
-            floor_rule,
-            "release_critical_lanes",
-            errors,
-            context="priority_engine.floor_rule",
-        )
-        if len(release_critical_lanes) != len(set(release_critical_lanes)):
-            errors.append("priority_engine.floor_rule.release_critical_lanes must not contain duplicates")
-        if release_critical_lanes != sorted(release_critical_lanes, key=_lane_sort_key):
-            errors.append("priority_engine.floor_rule.release_critical_lanes must be sorted by lane id")
-        minimum_score = floor_rule.get("minimum_score")
-        if not isinstance(minimum_score, (int, float)):
-            errors.append("priority_engine.floor_rule missing numeric minimum_score")
-
-    weights = engine.get("weights")
-    if not isinstance(weights, dict):
-        errors.append("priority_engine missing weights object")
-    else:
-        for key in ("gap_multiplier", "blocker_bonus"):
-            if not isinstance(weights.get(key), (int, float)):
-                errors.append(f"priority_engine.weights missing numeric {key}")
-        for key in ("criticality_range", "staleness_range", "dependency_range"):
-            _require_string(weights, key, errors, context="priority_engine.weights")
-    return release_critical_lanes
-
-
 def validate_evidence_policy(payload: dict[str, Any], errors: list[str]) -> tuple[set[str], str | None]:
     policy = payload.get("evidence_reference_policy")
     if not isinstance(policy, dict):
@@ -679,11 +616,11 @@ def validate_readiness(payload: dict[str, Any], errors: list[str]) -> dict[str, 
     if (
         repo_ready_rule
         and repo_ready_rule
-        != "all lanes target-met and evidence-present plus all repo-ready assertions passed"
+        != "all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed"
     ):
         errors.append(
             "status.json readiness.repo_ready_rule must be "
-            "'all lanes target-met and evidence-present plus all repo-ready assertions passed'"
+            "'all lanes complete or bounded-residual and evidence-present plus all repo-ready assertions passed'"
         )
 
     rc_ready_rule = _require_string(readiness, "rc_ready_rule", errors, context="readiness")
@@ -750,15 +687,9 @@ def audit_lanes(
         lane_order.append(lane_id)
 
         lane_name = _require_string(raw_lane, "name", errors, context=context) or lane_id
-        target = _require_number(raw_lane, "target_score", errors, context=context) or 0.0
-        current = _require_number(raw_lane, "current_score", errors, context=context) or 0.0
         status = _require_string(raw_lane, "status", errors, context=context) or "partial"
         raw_completion = raw_lane.get("completion")
 
-        if target < 0 or target > 10 or current < 0 or current > 10:
-            errors.append(f"{context} score values must stay within 0-10")
-        if current > target:
-            errors.append(f"{context} current_score {current:g} exceeds target_score {target:g}")
         if status not in valid_lane_statuses:
             errors.append(f"{context} has invalid status {status!r}")
         completion_state = "open"
@@ -861,30 +792,17 @@ def audit_lanes(
             errors=errors,
         )
 
-        at_target = current >= target
         all_evidence_present = evidence_report["all_evidence_present"]
         repo_ids = sorted({repo for repo, _, _ in evidence_report["evidence_refs"]}, key=_repo_sort_key)
         lane_repo_ids[lane_id] = repo_ids
-        derived_status = _derived_lane_status(
-            at_target=at_target,
-            all_evidence_present=all_evidence_present,
-        )
-        if status == "target-met" and not at_target:
-            errors.append(f"{context} cannot be target-met when current_score is below target_score")
         if status == "target-met" and not all_evidence_present:
             errors.append(f"{context} cannot be target-met while evidence is missing")
         if completion_state == "open" and status == "target-met":
             errors.append(f"{context} open completion must not pair with status='target-met'")
-        if status == "partial" and current == 0:
-            errors.append(f"{context} partial lanes must keep current_score above 0")
-        if status == "not-started" and current != 0:
-            errors.append(f"{context} not-started lanes must keep current_score at 0")
         if status == "not-started" and completion_state != "open":
             errors.append(f"{context} not-started lanes must use completion.state='open'")
         if status == "blocked" and completion_state != "open":
             errors.append(f"{context} blocked lanes must use completion.state='open'")
-        if status == "blocked" and at_target:
-            errors.append(f"{context} blocked lanes must stay below target_score")
         if status == "blocked" and not blockers:
             errors.append(f"{context} blocked lanes must declare at least one blocker reference")
         if status != "blocked" and blockers:
@@ -895,12 +813,6 @@ def audit_lanes(
             errors.append(f"{context} complete completion must pair with status='target-met'")
         if status == "target-met" and completion_state != "complete":
             errors.append(f"{context} target-met lanes must use completion.state='complete'")
-        if at_target and status == "partial" and completion_state != "bounded-residual":
-            errors.append(
-                f"{context} partial lanes that already meet target_score must use completion.state='bounded-residual'"
-            )
-        if not at_target and completion_state != "open":
-            errors.append(f"{context} lanes below target_score must use completion.state='open'")
         if completion_state == "open" and completion_tracking:
             errors.append(f"{context} open lanes must not declare residual tracking references")
         if completion_state == "bounded-residual" and not completion_tracking:
@@ -912,10 +824,6 @@ def audit_lanes(
             {
                 "id": lane_id,
                 "name": lane_name,
-                "target_score": target,
-                "current_score": current,
-                "gap": max(0.0, target - current),
-                "at_target": at_target,
                 "status": status,
                 "completion_state": completion_state,
                 "completion_summary": completion_summary,
@@ -924,7 +832,6 @@ def audit_lanes(
                 "subsystems": subsystems,
                 "repo_ids": repo_ids,
                 "cross_repo": len(repo_ids) > 1,
-                "derived_status": derived_status,
                 "all_evidence_present": all_evidence_present,
                 "evidence_count": len(evidence_report["resolved_evidence"]),
                 "missing_evidence": evidence_report["missing_evidence"],
@@ -1975,15 +1882,6 @@ def validate_coverage_gaps(
         lane_refs = _require_string_list(raw, "lane_ids", errors, context=context)
         subsystem_refs = _require_string_list(raw, "subsystem_ids", errors, context=context)
 
-        raw_impact = raw.get("coverage_impact")
-        coverage_impact: int | None = None
-        if isinstance(raw_impact, bool) or not isinstance(raw_impact, int):
-            errors.append(f"{context} missing integer coverage_impact")
-        elif raw_impact < 1 or raw_impact > 100:
-            errors.append(f"{context}.coverage_impact must stay within 1-100")
-        else:
-            coverage_impact = raw_impact
-
         if recorded_at:
             _validate_date(recorded_at, errors, context=f"{context}.recorded_at")
         if status and status not in valid_coverage_gap_statuses:
@@ -2022,7 +1920,6 @@ def validate_coverage_gaps(
             and status
             and recorded_at
             and proposed_resolution
-            and coverage_impact is not None
         ):
             repo_ids = set(_derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids))
             repo_ids.update(repo for repo, _, _ in evidence_report["evidence_refs"])
@@ -2036,7 +1933,6 @@ def validate_coverage_gaps(
                     "lane_ids": lane_refs,
                     "subsystem_ids": subsystem_refs,
                     "proposed_resolution": proposed_resolution,
-                    "coverage_impact": coverage_impact,
                     "repo_ids": sorted(repo_ids, key=_repo_sort_key),
                     "cross_repo": len(repo_ids) > 1,
                     "evidence_count": len(evidence_report["resolved_evidence"]),
@@ -2665,7 +2561,6 @@ def audit_status_payload(
         errors.append("status.json scope must not list the same repo as both active and ignored")
 
     validate_source_precedence(payload, errors)
-    release_critical_lanes = validate_priority_engine(payload, errors)
     readiness = validate_readiness(payload, errors)
     allowed_kinds, local_repo = validate_evidence_policy(payload, errors)
     if local_repo and local_repo not in active_repo_set:
@@ -2690,9 +2585,6 @@ def audit_status_payload(
         errors,
         expected_by_lane=lane_to_subsystems,
     )
-    for lane_id in release_critical_lanes:
-        if lane_id not in lane_ids:
-            errors.append(f"priority_engine.floor_rule.release_critical_lanes references unknown lane_id {lane_id!r}")
     release_gates = validate_release_gates(
         payload,
         lane_ids=lane_ids,
@@ -2816,7 +2708,11 @@ def audit_status_payload(
         if assertion["blocking_level"] == "release-ready"
     )
     repo_ready_derived = (
-        all(lane["at_target"] and lane["all_evidence_present"] for lane in lane_reports)
+        all(
+            lane["completion_state"] in {"complete", "bounded-residual"}
+            and lane["all_evidence_present"]
+            for lane in lane_reports
+        )
         and repo_ready_assertions_cleared
     )
     rc_ready_release_gates_cleared = all(
@@ -3182,45 +3078,14 @@ def audit_status_payload(
         if gate["status"] == "passed" and gate["effective_status"] != "passed"
     ]
 
-    total_target_score = sum(lane["target_score"] for lane in lane_reports)
-    total_current_score = sum(lane["current_score"] for lane in lane_reports)
-    lane_completion_score = 100
-    if total_target_score > 0:
-        lane_completion_score = max(0, min(100, int(round((total_current_score / total_target_score) * 100))))
-    coverage_gaps_by_id = {str(gap["id"]): gap for gap in coverage_gaps}
-    coverage_gap_total_impact = min(100, sum(gap["coverage_impact"] for gap in coverage_gaps))
-    planned_coverage_gap_total_impact = min(
-        100,
-        sum(
-            gap["coverage_impact"]
-            for gap in coverage_gaps
-            if coverage_gap_ref_counts.get(str(gap["id"]), 0) > 0
-        ),
-    )
-    unplanned_coverage_gap_total_impact = min(
-        100,
-        sum(
-            gap["coverage_impact"]
-            for gap in coverage_gaps
-            if coverage_gap_ref_counts.get(str(gap["id"]), 0) == 0
-        ),
-    )
-    lane_coverage_score = max(0, 100 - coverage_gap_total_impact)
-    coverage_planning_score = max(0, 100 - unplanned_coverage_gap_total_impact)
-    governed_surface_score = min(lane_completion_score, lane_coverage_score)
     planned_coverage_gap_count = sum(1 for count in coverage_gap_ref_counts.values() if count > 0)
     unplanned_coverage_gap_count = sum(1 for count in coverage_gap_ref_counts.values() if count == 0)
-    candidate_lane_queue = sorted(
+    candidate_lane_options = sorted(
         (
             {
                 "candidate_lane_id": candidate["id"],
                 "name": candidate["name"],
                 "target_id": candidate["target_id"],
-                "coverage_impact_total": sum(
-                    int(coverage_gaps_by_id[gap_id]["coverage_impact"])
-                    for gap_id in candidate["coverage_gap_ids"]
-                    if gap_id in coverage_gaps_by_id
-                ),
                 "coverage_gap_ids": list(candidate["coverage_gap_ids"]),
                 "current_lane_ids": list(candidate["current_lane_ids"]),
                 "repo_ids": list(candidate["repo_ids"]),
@@ -3258,18 +3123,15 @@ def audit_status_payload(
             }
             for candidate in candidate_lanes
         ),
-        key=_candidate_lane_queue_sort_key,
+        key=lambda item: str(item["candidate_lane_id"]).casefold(),
     )
-    for index, item in enumerate(candidate_lane_queue, start=1):
-        item["rank"] = index
+    for item in candidate_lane_options:
         item["available"] = (
             item["candidate_lane_id"] not in active_claimed_candidate_lane_ids
             and not any(gap_id in active_claimed_coverage_gap_ids for gap_id in item["coverage_gap_ids"])
         )
 
-    available_candidate_lane_queue = [item for item in candidate_lane_queue if item["available"]]
-    for index, item in enumerate(available_candidate_lane_queue, start=1):
-        item["available_rank"] = index
+    available_candidate_lane_options = [item for item in candidate_lane_options if item["available"]]
 
     return {
         "errors": errors,
@@ -3285,24 +3147,16 @@ def audit_status_payload(
         },
         "summary": {
             "lane_count": len(lane_reports),
-            "lanes_at_target": sum(1 for lane in lane_reports if lane["at_target"]),
             "lanes_complete": sum(1 for lane in lane_reports if lane["completion_state"] == "complete"),
             "lanes_bounded_residual": sum(
                 1 for lane in lane_reports if lane["completion_state"] == "bounded-residual"
             ),
             "lanes_open": sum(1 for lane in lane_reports if lane["completion_state"] == "open"),
-            "lane_completion_score": lane_completion_score,
-            "lane_coverage_score": lane_coverage_score,
-            "coverage_planning_score": coverage_planning_score,
-            "governed_surface_score": governed_surface_score,
             "coverage_gap_count": len(coverage_gaps),
-            "coverage_gap_total_impact": coverage_gap_total_impact,
             "candidate_lane_count": len(candidate_lanes),
-            "available_candidate_lane_count": len(available_candidate_lane_queue),
+            "available_candidate_lane_count": len(available_candidate_lane_options),
             "planned_coverage_gap_count": planned_coverage_gap_count,
-            "planned_coverage_gap_total_impact": planned_coverage_gap_total_impact,
             "unplanned_coverage_gap_count": unplanned_coverage_gap_count,
-            "unplanned_coverage_gap_total_impact": unplanned_coverage_gap_total_impact,
             "work_claim_count": len(work_claims),
             "active_work_claim_count": len(active_work_claims),
             "expired_work_claim_count": len(expired_work_claims),
@@ -3410,8 +3264,8 @@ def audit_status_payload(
         "active_work_claims": active_work_claims,
         "expired_work_claims": expired_work_claims,
         "work_claim_conflicts": work_claim_conflicts,
-        "candidate_lane_queue": candidate_lane_queue,
-        "available_candidate_lane_queue": available_candidate_lane_queue,
+        "candidate_lane_options": candidate_lane_options,
+        "available_candidate_lane_options": available_candidate_lane_options,
         "open_decisions": open_decisions,
         "resolved_decisions": resolved_decisions,
     }
@@ -3500,11 +3354,6 @@ def render_pretty(report: dict[str, Any]) -> str:
             f"active_work_claims={summary['active_work_claim_count']} "
             f"expired_work_claims={summary['expired_work_claim_count']} "
             f"claim_conflicts={summary['work_claim_conflict_count']} "
-            f"coverage_score={summary['lane_coverage_score']} "
-            f"planning_score={summary['coverage_planning_score']} "
-            f"completion_score={summary['lane_completion_score']} "
-            f"governed_surface_score={summary['governed_surface_score']} "
-            f"at_target={summary['lanes_at_target']} "
             f"complete={summary['lanes_complete']} "
             f"bounded_residual={summary['lanes_bounded_residual']} "
             f"open={summary['lanes_open']} "
@@ -3522,9 +3371,9 @@ def render_pretty(report: dict[str, Any]) -> str:
         )
     for lane in report.get("lanes", []):
         lines.append(
-            f"{lane['id']}: gap={lane['gap']:.0f} status={lane['status']} "
+            f"{lane['id']}: status={lane['status']} "
             f"completion={lane['completion_state']} "
-            f"derived={lane['derived_status']} evidence_count={lane['evidence_count']} "
+            f"evidence_present={lane['all_evidence_present']} evidence_count={lane['evidence_count']} "
             f"repos={','.join(lane['repo_ids']) or '-'} "
             f"subsystems={','.join(lane['subsystems']) or '-'}"
         )
@@ -3561,7 +3410,6 @@ def render_pretty(report: dict[str, Any]) -> str:
             lines.append(
                 f"  - {gap['id']} status={gap['status']} "
                 f"resolution={gap['proposed_resolution']} "
-                f"impact={gap['coverage_impact']} "
                 f"repos={','.join(gap['repo_ids']) or '-'} "
                 f"lanes={','.join(gap['lane_ids']) or '-'} "
                 f"subsystems={','.join(gap['subsystem_ids']) or '-'}"
@@ -3594,12 +3442,11 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"expires_at={claim['expires_at']}"
             )
             lines.append(f"    {claim['summary']}")
-    if report.get("candidate_lane_queue"):
-        lines.append("candidate_lane_queue:")
-        for item in report["candidate_lane_queue"]:
+    if report.get("candidate_lane_options"):
+        lines.append("candidate_lane_options:")
+        for item in report["candidate_lane_options"]:
             lines.append(
-                f"  - rank={item['rank']} candidate={item['candidate_lane_id']} "
-                f"impact={item['coverage_impact_total']} "
+                f"  - candidate={item['candidate_lane_id']} "
                 f"target={item['target_id']} "
                 f"available={item['available']} "
                 f"repos={','.join(item['repo_ids']) or '-'} "
@@ -3612,12 +3459,11 @@ def render_pretty(report: dict[str, Any]) -> str:
                 lines.append(
                     f"    claims={','.join(item['claim_ids'])} agents={','.join(item['claim_agent_ids'])}"
                 )
-    if report.get("available_candidate_lane_queue"):
-        lines.append("available_candidate_lane_queue:")
-        for item in report["available_candidate_lane_queue"]:
+    if report.get("available_candidate_lane_options"):
+        lines.append("available_candidate_lane_options:")
+        for item in report["available_candidate_lane_options"]:
             lines.append(
-                f"  - rank={item['available_rank']} candidate={item['candidate_lane_id']} "
-                f"impact={item['coverage_impact_total']} "
+                f"  - candidate={item['candidate_lane_id']} "
                 f"target={item['target_id']}"
             )
             lines.append(f"    name={item['name']}")

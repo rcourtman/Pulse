@@ -20,7 +20,6 @@ REPORT = {
             "summary": "Resource change and timeline are still under-modeled.",
             "status": "planned",
             "proposed_resolution": "lane-split",
-            "coverage_impact": 15,
             "lane_ids": ["L6", "L13"],
             "repo_ids": ["pulse", "pulse-enterprise"],
             "subsystem_ids": ["alerts", "api-contracts", "monitoring", "unified-resources"],
@@ -42,7 +41,6 @@ REPORT = {
         {
             "id": "L16",
             "summary": "Agent lifecycle and fleet operations.",
-            "gap": 2,
             "status": "partial",
             "completion_state": "open",
             "derived_status": "behind-target",
@@ -54,12 +52,12 @@ REPORT = {
             "blockers": [],
         }
     ],
-    "candidate_lane_queue": [
+    "candidate_lane_options": [
         {
             "candidate_lane_id": "resource-change-intelligence",
-            "rank": 1,
             "available": True,
-            "available_rank": 1,
+            "claim_ids": [],
+            "claim_agent_ids": [],
         }
     ],
     "readiness_assertions": [
@@ -137,11 +135,10 @@ class StatusLookupTest(unittest.TestCase):
     def test_lookup_status_entry_returns_candidate_lane(self) -> None:
         result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-change-intelligence")
         self.assertEqual(result["entry"]["target_id"], "v6-product-lane-expansion")
-        self.assertEqual(result["queue_item"]["rank"], 1)
+        self.assertTrue(result["candidate_option"]["available"])
 
     def test_lookup_status_entry_returns_coverage_gap(self) -> None:
         result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-change-and-timeline")
-        self.assertEqual(result["entry"]["coverage_impact"], 15)
         self.assertEqual(result["linked_candidate_lane_ids"], ["resource-change-intelligence"])
 
     def test_lookup_status_entry_returns_release_gate(self) -> None:
@@ -160,7 +157,8 @@ class StatusLookupTest(unittest.TestCase):
         result = lookup_status_entry(REPORT, kind="lane", entry_id="L16")
         rendered = render_pretty(result)
         self.assertIn("lane L16", rendered)
-        self.assertIn("gap=2 status=partial", rendered)
+        self.assertIn("status=partial completion=open", rendered)
+        self.assertNotIn("gap=", rendered)
         self.assertIn("completion_summary: Still needs install-command", rendered)
 
     def test_render_pretty_includes_work_claim_work_item(self) -> None:
@@ -169,17 +167,17 @@ class StatusLookupTest(unittest.TestCase):
         self.assertIn("work=lane:L16", rendered)
         self.assertIn("agent=codex", rendered)
 
-    def test_render_pretty_includes_candidate_lane_queue_details(self) -> None:
+    def test_render_pretty_includes_candidate_lane_options_details(self) -> None:
         result = lookup_status_entry(REPORT, kind="candidate_lane", entry_id="resource-change-intelligence")
         rendered = render_pretty(result)
         self.assertIn("candidate_lane resource-change-intelligence", rendered)
         self.assertIn("target=v6-product-lane-expansion", rendered)
-        self.assertIn("queue: rank=1 available=True available_rank=1", rendered)
+        self.assertIn("availability: available=True claims=- agents=-", rendered)
 
     def test_render_pretty_includes_coverage_gap_links(self) -> None:
         result = lookup_status_entry(REPORT, kind="coverage_gap", entry_id="resource-change-and-timeline")
         rendered = render_pretty(result)
-        self.assertIn("resolution=lane-split impact=15", rendered)
+        self.assertIn("resolution=lane-split", rendered)
         self.assertIn("linked_candidate_lanes=resource-change-intelligence", rendered)
 
 
