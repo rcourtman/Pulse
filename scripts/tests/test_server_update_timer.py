@@ -32,6 +32,7 @@ case "$1" in
             fi
             if [[ "$GUARD_INVENTORY" == hang ]]; then exec sleep 30; fi
             printf '%s' "$GUARD_ROWS"
+            printf '%s' "${GUARD_ERR:-}" >&2
             exit "$GUARD_EXIT"
         fi
         if [[ "$INVENTORY" == real ]]; then
@@ -125,7 +126,7 @@ class ServerUpdateTimerTest(unittest.TestCase):
     def exercise(self, *, flow="query", state="enabled", service="pulse",
                  rows=None, query_exit=0, inventory="double", mask="",
                  config_enabled=True, mask_location="configured", guard_rows=None,
-                 guard_exit=0, guard_inventory=None):
+                 guard_exit=0, guard_inventory=None, guard_err=""):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Path(temporary)
             config = fixture / "config"
@@ -188,7 +189,7 @@ class ServerUpdateTimerTest(unittest.TestCase):
                 guard_rows = f"{timer_name} {timer_state} enabled\n{service_name} {service_state} enabled\n"
             env = {**os.environ, "INSTALLER": str(INSTALLER), "FIXTURE": str(fixture),
                    "FLOW": flow, "ROWS": rows, "QUERY_EXIT": str(query_exit),
-                   "GUARD_ROWS": guard_rows, "GUARD_EXIT": str(guard_exit),
+                   "GUARD_ROWS": guard_rows, "GUARD_EXIT": str(guard_exit), "GUARD_ERR": guard_err,
                    "GUARD_INVENTORY": guard_inventory or inventory,
                    "INVENTORY": inventory, "REAL_SYSTEMCTL": REAL_SYSTEMCTL or "",
                    "PATH": f"{tools}:{os.environ['PATH']}", "PULSE_SERVICE_NAME": service,
@@ -356,14 +357,16 @@ class ServerUpdateTimerTest(unittest.TestCase):
                     self.assertIn("masked-runtime", e["result"].stdout)
 
     def test_failed_unknown_and_duplicate_effective_inventory_cannot_admit_writes(self):
-        for rows, code in (("pulse-update.timer disabled enabled\n", 1),
-                           ("pulse-update.timer not-understood enabled\n", 0),
-                           ("pulse-update.timer\n", 0),
-                           ("pulse-updateXtimer disabled enabled\n", 0),
-                           ("pulse-update.timer disabled enabled\npulse-update.timer disabled enabled\n", 0),
-                           ("", 1)):
-            with self.subTest(rows=rows, code=code):
-                self.assert_preserved(self.exercise(flow="version", guard_rows=rows, guard_exit=code))
+        failure = "Failed to get unit file list: No such file or directory\n"
+        for rows, code, err in (("pulse-update.timer disabled enabled\n", 1, ""),
+                                ("pulse-update.timer not-understood enabled\n", 0, ""),
+                                ("pulse-update.timer\n", 0, ""),
+                                ("pulse-updateXtimer disabled enabled\n", 0, ""),
+                                ("pulse-update.timer disabled enabled\npulse-update.timer disabled enabled\n", 0, ""),
+                                ("", 1, failure)):
+            with self.subTest(rows=rows, code=code, err=err):
+                self.assert_preserved(self.exercise(flow="version", guard_rows=rows, guard_exit=code,
+                                                    guard_err=err))
 
     def test_effective_inventory_is_bounded_and_missing_systemctl_preserves_assets(self):
         self.assert_preserved(self.exercise(flow="version", guard_inventory="hang"))
@@ -372,9 +375,12 @@ class ServerUpdateTimerTest(unittest.TestCase):
         self.assertEqual(e["calls"], [])
 
     def test_successful_absent_or_unmasked_inventory_keeps_asset_repair_working(self):
-        for rows in ("", "pulse-update.timer disabled enabled\npulse-update.service disabled enabled\n"):
-            with self.subTest(rows=rows):
-                self.assert_refreshed(self.exercise(flow="assets", state="disabled", guard_rows=rows), False)
+        # systemd exits 1 and prints nothing when neither unit file exists: absence, not failure.
+        for rows, code in (("", 0), ("", 1),
+                           ("pulse-update.timer disabled enabled\npulse-update.service disabled enabled\n", 0)):
+            with self.subTest(rows=rows, code=code):
+                self.assert_refreshed(self.exercise(flow="assets", state="disabled", guard_rows=rows,
+                                                    guard_exit=code), False)
 
     def test_effective_inventory_names_are_exact_full_custom_instance_names(self):
         service = "pulse-" + "department-" * 12

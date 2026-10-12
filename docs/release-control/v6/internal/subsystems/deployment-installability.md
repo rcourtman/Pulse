@@ -50,6 +50,18 @@ partial, malformed, duplicate, impostor or unknown-state inventory does not.
 This avoids an early pipe close hiding an installed legacy service under
 `pipefail`. Discovery itself never stops, enables or unmasks a unit.
 
+Successful absence is what systemd reports on a fresh host: `systemctl
+list-unit-files` exits 1 and prints nothing, on stdout or stderr, when none of
+the named unit files exist. The installer, the unattended updater and the
+auto-update mask check share one inventory read that accepts exactly that
+silent exit 1 as an empty inventory, after a second read confirms no output and
+no message. A timeout, a signal, any other status, or an exit 1 that carries
+output or a message remains a failed inventory. The fixture doubles must model
+that status: a silent exit 1 is absence, an exit 1 with a message is failure,
+and `systemctl --root` over an empty unit root exercises the real status. A
+double that reports absence as exit 0 hides the defect that made every fresh
+install refuse.
+
 The standalone unattended updater uses the same bounded name/state admission
 before passing its explicit service identity to the installer. It checks the
 command-substitution result separately from local variable declaration, and

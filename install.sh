@@ -750,6 +750,27 @@ recover_pulse_after_failed_replacement() {
     fi
 }
 
+# Read the unit-file inventory for exact unit names. systemd exits 1 and prints
+# nothing at all, on stdout or stderr, when none of the named unit files exist,
+# which is every fresh host. That is an empty inventory. A timeout, a signal, or
+# any status that comes with output or a message is a failed inventory, so a real
+# failure still cannot pass as absence. A second read separates the two cases.
+unit_file_inventory() {
+    local out="" again="" rc=0 rc2=0
+    out=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>/dev/null) || rc=$?
+    if (( rc == 1 )) && [[ -z "$out" ]]; then
+        again=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$@" 2>&1) || rc2=$?
+        if (( rc2 == 0 )); then
+            out="$again"
+            rc=0
+        elif (( rc2 == 1 )) && [[ -z "$again" ]]; then
+            rc=0
+        fi
+    fi
+    printf '%s' "$out"
+    return "$rc"
+}
+
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
     if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
@@ -767,7 +788,7 @@ detect_service_name() {
     # grep -q closes a full inventory early: systemctl can report Broken pipe,
     # and pipefail then hides a real pulse-backend unit behind the default.
     # Consume one bounded inventory of the two exact historical names instead.
-    if ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- pulse-backend.service pulse.service 2>/dev/null); then
+    if ! unit_files=$(unit_file_inventory pulse-backend.service pulse.service); then
         print_error "Cannot identify the Pulse systemd service: unit inventory failed. Reconcile service state before retrying." >&2
         return 1
     fi
@@ -4521,7 +4542,7 @@ auto_update_units_refreshable() {
     timer_unit="$(basename "$timer_path")"
     service_unit="$(basename "$service_path")"
     if ! command -v systemctl >/dev/null 2>&1 ||
-       ! unit_files=$(LC_ALL=C timeout -k 1 5 systemctl list-unit-files --no-legend --no-pager --full -- "$timer_unit" "$service_unit" 2>/dev/null); then
+       ! unit_files=$(unit_file_inventory "$timer_unit" "$service_unit"); then
         print_warn "Cannot confirm auto-update unit masks; preserving the existing helper and units."
         return 1
     fi
