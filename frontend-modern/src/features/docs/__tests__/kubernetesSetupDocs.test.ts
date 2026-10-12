@@ -40,8 +40,14 @@ describe('Kubernetes credential setup and diagnosis', () => {
     const article = articleFor('KUBERNETES');
     const heading = article.querySelector('[id="4-troubleshooting"]')!;
     expect(heading).not.toBeNull();
-    let table = heading.nextElementSibling;
-    while (table && table.tagName !== 'TABLE') table = table.nextElementSibling;
+    // The production renderer wraps tables in a horizontal scroll container.
+    let container = heading.nextElementSibling;
+    let table: Element | null = null;
+    while (container && !table) {
+      table = container.matches('table') ? container : container.querySelector('table');
+      container = container.nextElementSibling;
+    }
+    expect(table).not.toBeNull();
     const rows = [...table!.querySelectorAll('tbody tr')];
     expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.firstElementChild!.textContent)).toEqual([
