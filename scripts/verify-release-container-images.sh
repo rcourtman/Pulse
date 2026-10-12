@@ -42,10 +42,46 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "${SCRIPT_DIR}/require-safe-gh-attestation.sh"
 
+# Registry and attestation reads are idempotent and cross the public internet, where a
+# Docker Hub or GHCR 5xx is routine: one 502 during a blob copy failed the first beta's
+# release. Retry a bounded number of times. A moved tag or an invalid attestation fails
+# identically on every attempt, so a real failure is delayed by the backoff, never masked.
+# This script's stdout is the step output, so each attempt's stdout is captured and only
+# the successful attempt's is emitted; a half-printed failed attempt cannot leak into it.
+REGISTRY_ATTEMPTS="${VERIFY_REGISTRY_ATTEMPTS:-4}"
+REGISTRY_WAIT_SECONDS="${VERIFY_REGISTRY_WAIT_SECONDS:-10}"
+if [[ ! "$REGISTRY_ATTEMPTS" =~ ^[1-9][0-9]?$ || ! "$REGISTRY_WAIT_SECONDS" =~ ^[0-9]{1,3}$ ]]; then
+    echo "VERIFY_REGISTRY_ATTEMPTS and VERIFY_REGISTRY_WAIT_SECONDS must be small whole numbers." >&2
+    exit 2
+fi
+
+with_registry_retry() {
+    local attempt=1
+    local wait_seconds="$REGISTRY_WAIT_SECONDS"
+    local output
+
+    while true; do
+        if output="$("$@")"; then
+            printf '%s\n' "$output"
+            return 0
+        fi
+
+        if [ "$attempt" -ge "$REGISTRY_ATTEMPTS" ]; then
+            echo "registry read failed after ${REGISTRY_ATTEMPTS} attempts: $1 $2 $3" >&2
+            return 1
+        fi
+
+        echo "registry read failed on attempt ${attempt}/${REGISTRY_ATTEMPTS}; retrying in ${wait_seconds}s: $1 $2 $3" >&2
+        sleep "$wait_seconds"
+        attempt=$((attempt + 1))
+        wait_seconds=$((wait_seconds * 2))
+    done
+}
+
 resolve_digest() {
     local reference="$1"
     local manifest
-    manifest="$(docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"
+    manifest="$(with_registry_retry docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"
     jq -er '.digest | select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' <<<"$manifest"
 }
 
@@ -73,7 +109,7 @@ verify_image() {
     fi
 
     for subject in "$docker_name" "$ghcr_name"; do
-        gh attestation verify "oci://${subject}@${docker_tag_digest}" \
+        with_registry_retry gh attestation verify "oci://${subject}@${docker_tag_digest}" \
             --repo "$REPOSITORY" \
             --bundle-from-oci \
             --signer-workflow "$SIGNER_WORKFLOW" \
