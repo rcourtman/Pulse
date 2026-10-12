@@ -6,13 +6,20 @@ const { createHash } = require('node:crypto');
 const { chromium, firefox, webkit } = require('playwright');
 
 (async () => {
-  const root = '/workspace/frontend-modern';
+  const root = process.env.PULSE_FRONTEND_ROOT || path.resolve(__dirname, '..');
   process.chdir(root);
   const engine =
     process.argv.find((arg) => arg.startsWith('--engine='))?.split('=')[1] || 'chromium';
   assert.ok(['chromium', 'firefox', 'webkit'].includes(engine));
-  const width = process.argv.includes('--phone') ? 390 : 1365;
-  const artifacts = path.join(root, 'node_modules', `history-inspection-${engine}-${width}`);
+  const touch = process.argv.includes('--phone') || process.argv.includes('--touch');
+  const width =
+    Number(process.argv.find((arg) => arg.startsWith('--width='))?.split('=')[1]) ||
+    (process.argv.includes('--phone') ? 390 : 1365);
+  const artifacts = path.join(
+    root,
+    'node_modules',
+    `history-inspection-${engine}-${width}${touch ? '-touch' : ''}`,
+  );
   fs.mkdirSync(artifacts, { recursive: true });
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({
@@ -22,24 +29,38 @@ const { chromium, firefox, webkit } = require('playwright');
     server: { host: '127.0.0.1', port: 5223, strictPort: true },
   });
   let browser;
+  let diagnosticPage;
+  let diagnosticRequests;
   const observations = [];
   try {
     await server.listen();
     browser = await { chromium, firefox, webkit }[engine].launch(
       engine === 'chromium'
         ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] }
-        : { headless: true },
+        : engine === 'firefox'
+          ? {
+              headless: true,
+              // Headless Firefox has no host pointer. Model the input device
+              // explicitly: coarse=1, fine=2, hover=4.
+              firefoxUserPrefs: {
+                'ui.primaryPointerCapabilities': touch ? 1 : 6,
+                'ui.allPointerCapabilities': touch ? 1 : 6,
+              },
+            }
+          : { headless: true },
     );
     for (const theme of ['light', 'dark']) {
       const page = await browser.newPage({
         viewport: { width, height: width === 390 ? 844 : 900 },
         locale: 'en-GB',
         timezoneId: 'UTC',
-        ...(width === 390 ? { isMobile: true, hasTouch: true } : {}),
+        ...(touch ? { isMobile: engine !== 'firefox', hasTouch: true } : {}),
       });
       page.setDefaultTimeout(20_000);
       const requests = [],
         errors = [];
+      diagnosticPage = page;
+      diagnosticRequests = requests;
       let action = 'original',
         held;
       page.on('pageerror', (error) => errors.push(error.message));
@@ -128,11 +149,24 @@ const { chromium, firefox, webkit } = require('playwright');
       const fixture = page.getByTestId('history-refresh-fixture');
       const utilization = fixture.locator('[data-history-group="utilization"]');
       const slider = fixture.getByRole('slider', { name: 'Inspect Utilization history' });
+      const controls = fixture.getByTestId('guest-history-inspection-control');
+      const inspectionControl = utilization.getByTestId('guest-history-inspection-control');
       await slider.waitFor();
       const countBeforeInspection = requests.length;
       const value = () => slider.getAttribute('aria-valuetext');
-      const screenshot = (state) =>
-        fixture.screenshot({ path: path.join(artifacts, `${state}-${theme}.png`) });
+      const screenshot = async (state) => {
+        await utilization.scrollIntoViewIfNeeded();
+        const fineBefore = await page.evaluate(
+          () => matchMedia('(hover: hover) and (pointer: fine)').matches,
+        );
+        // Resizing a tall element for a screenshot can change Chromium's
+        // emulated pointer capability. Capture the supported viewport as-is.
+        await page.screenshot({ path: path.join(artifacts, `${state}-${theme}.png`) });
+        assert.equal(
+          await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches),
+          fineBefore,
+        );
+      };
       const assertValue = async (pattern) => assert.match(await value(), pattern);
       const layout = async () => {
         const dimensions = await page.evaluate(() => ({
@@ -142,9 +176,31 @@ const { chromium, firefox, webkit } = require('playwright');
         assert.ok(dimensions.scroll <= dimensions.inner + 1, JSON.stringify(dimensions));
         const box = await slider.boundingBox();
         assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1);
-        if (width === 390) assert.ok(box.height >= 44, JSON.stringify(box));
+        assert.ok(box.width > 100, JSON.stringify(box));
+        if (touch) assert.ok(box.height >= 44, JSON.stringify(box));
         return dimensions;
       };
+      const collapsed = async (control = inspectionControl) => {
+        const bounds = await control.boundingBox();
+        assert.ok(bounds && bounds.width <= 1 && bounds.height <= 1, JSON.stringify(bounds));
+      };
+      assert.equal(
+        await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches),
+        !touch,
+      );
+      if (touch) {
+        for (const control of await controls.all()) {
+          const bounds = await control.boundingBox();
+          assert.ok(bounds && bounds.width > 100 && bounds.height > 44, JSON.stringify(bounds));
+        }
+        for (const input of await fixture.getByRole('slider').all()) {
+          const bounds = await input.boundingBox();
+          assert.ok(bounds && bounds.width > 100 && bounds.height >= 44, JSON.stringify(bounds));
+        }
+      } else {
+        for (const control of await controls.all()) await collapsed(control);
+      }
+      await screenshot('default-input-controls');
       // Tab reaches a native slider after the existing range/refresh controls.
       await fixture.getByTestId('guest-history-range-control').focus();
       await page.keyboard.press('Tab');
@@ -228,7 +284,75 @@ const { chromium, firefox, webkit } = require('playwright');
       assert.match(await utilization.innerText(), /CPU\s*8\.0%/);
       await page.mouse.move(1, 1);
 
-      if (width === 390) {
+      if (!touch) {
+        await collapsed();
+        // Shift+Tab reveals the same native control again, without pointer focus.
+        await page.keyboard.press('Shift+Tab');
+        assert.equal(await slider.evaluate((el) => document.activeElement === el), true);
+        await layout();
+        await slider.press('Tab');
+        await collapsed();
+      }
+
+      let hybridTouch = false;
+      if (!touch && engine === 'chromium') {
+        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        const session = await page.context().newCDPSession(page);
+        const tap = async (x, y) => {
+          await session.send('Input.dispatchTouchEvent', {
+            type: 'touchStart',
+            touchPoints: [{ x, y }],
+          });
+          await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        };
+        await tap(box.x + box.width / 2, box.y + box.height / 2);
+        // A trusted touch event on a fine-pointer device must expose all scrubbers.
+        assert.equal(
+          await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches),
+          true,
+        );
+        for (const input of await fixture.getByRole('slider').all()) {
+          const bounds = await input.boundingBox();
+          assert.ok(bounds && bounds.width > 100 && bounds.height >= 44, JSON.stringify(bounds));
+        }
+        const touchBox = await slider.boundingBox();
+        await tap(touchBox.x + 3, touchBox.y + touchBox.height / 2);
+        await assertValue(/CPU 8\.0%\. Memory no observation/);
+        await session.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: touchBox.x + 3, y: touchBox.y + touchBox.height / 2 }],
+        });
+        await session.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [
+            { x: touchBox.x + touchBox.width - 3, y: touchBox.y + touchBox.height / 2 },
+          ],
+        });
+        await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await assertValue(/CPU 66\.0%\. Memory no observation/);
+        await screenshot('hybrid-touch-inspection');
+        // Touch focus is browser-owned. Exercise a return to mouse without a
+        // focused slider, then preserve an explicit keyboard selection too.
+        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        await page.mouse.move(box.x + (34 / 360) * box.width, box.y + box.height / 2);
+        for (const control of await controls.all()) await collapsed(control);
+        assert.match(await utilization.innerText(), /CPU\s*8\.0%/);
+        await tap(box.x + box.width / 2, box.y + box.height / 2);
+        await slider.focus();
+        await slider.press('Home');
+        const keyboardSelection = await value();
+        await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
+        assert.equal(await slider.evaluate((el) => document.activeElement === el), true);
+        assert.equal(await value(), keyboardSelection);
+        await layout();
+        await fixture.getByRole('button', { name: 'Refresh history' }).focus();
+        for (const control of await controls.all()) await collapsed(control);
+        await screenshot('hybrid-mouse-resumed');
+        await session.detach();
+        hybridTouch = true;
+      }
+
+      if (touch) {
         await slider.scrollIntoViewIfNeeded();
         const touchBox = await slider.boundingBox();
         await page.touchscreen.tap(touchBox.x + 3, touchBox.y + touchBox.height / 2);
@@ -292,7 +416,12 @@ const { chromium, firefox, webkit } = require('playwright');
       await slider.waitFor();
       assert.equal(await slider.inputValue(), '1');
       await assertValue(/CPU 88\.0%\. Memory 44\.0%\. Disk no observation/);
-      assert.equal(await fixture.getByTestId('guest-history-hover-time').count(), 0);
+      const latestServiceTime = fixture.getByTestId('guest-history-hover-time');
+      assert.match(await latestServiceTime.innerText(), /^Latest stored/);
+      assert.equal(
+        await latestServiceTime.getAttribute('datetime'),
+        new Date(time + 120_000).toISOString(),
+      );
       const readsBeforeLock = requests.length;
       await fixture.getByTestId('guest-history-range-control').selectOption('14d');
       await fixture.getByText(/14 days history requires a higher license plan/).waitFor();
@@ -311,7 +440,8 @@ const { chromium, firefox, webkit } = require('playwright');
         singleDescription: description,
         focusStyle,
         nativeKeys: ['Tab', 'Home', 'ArrowRight', 'End', 'ArrowLeft'],
-        touch: width === 390,
+        touch,
+        hybridTouch,
       });
       console.log(JSON.stringify({ engine, width, theme, result: 'passed' }));
       await page.close();
@@ -335,6 +465,54 @@ const { chromium, firefox, webkit } = require('playwright');
         2,
       ),
     );
+  } catch (error) {
+    if (diagnosticPage && !diagnosticPage.isClosed()) {
+      console.error(
+        JSON.stringify({
+          requests: diagnosticRequests,
+          browser: await diagnosticPage.evaluate(() => ({
+            width: innerWidth,
+            scrollY,
+            fineHover: matchMedia('(hover: hover) and (pointer: fine)').matches,
+            coarse: matchMedia('(pointer: coarse)').matches,
+            inspectionStyles: (() => {
+              const matches = [];
+              const walk = (rules, parents = []) => {
+                for (const rule of rules) {
+                  if (rule.selectorText?.includes('not-focus-within')) {
+                    matches.push({
+                      selector: rule.selectorText,
+                      parents,
+                      css: rule.style?.cssText,
+                    });
+                  }
+                  if (rule.cssRules)
+                    walk(rule.cssRules, [
+                      ...parents,
+                      rule.conditionText || rule.selectorText || rule.cssText.split('{')[0],
+                    ]);
+                }
+              };
+              for (const sheet of document.styleSheets) walk(sheet.cssRules);
+              return matches;
+            })(),
+            active: document.activeElement?.outerHTML,
+            controls: [
+              ...document.querySelectorAll('[data-testid="guest-history-inspection-control"]'),
+            ].map((el) => ({
+              class: el.className,
+              width: el.getBoundingClientRect().width,
+              height: el.getBoundingClientRect().height,
+              clip: getComputedStyle(el).clip,
+              position: getComputedStyle(el).position,
+            })),
+            text: document.body.innerText,
+          })),
+        }),
+      );
+      await diagnosticPage.screenshot({ path: path.join(artifacts, 'failure.png') });
+    }
+    throw error;
   } finally {
     if (browser) await browser.close();
     await server.close();

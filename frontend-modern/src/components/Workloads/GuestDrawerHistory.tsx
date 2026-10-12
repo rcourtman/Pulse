@@ -75,6 +75,7 @@ interface GuestDrawerHistoryGroupChartProps {
   range: HistoryTimeRange;
   sourceKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
+  touchInspection: boolean;
 }
 
 const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
@@ -216,6 +217,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
   const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
   const inspectionId = `history-inspection-${createUniqueId()}`;
+  createEffect(
+    on(
+      () => props.touchInspection,
+      (touch, previousTouch) => {
+        // Native touch scrubbing need not focus the input. Give inspection
+        // back to the mouse when no focused control still owns the selection.
+        if (previousTouch && !touch && document.activeElement?.id !== inspectionId) {
+          setSelectedTimestamp(null);
+        }
+      },
+    ),
+  );
   createEffect(
     on(
       () => props.sourceKey,
@@ -640,7 +653,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         )}
       </Show>
       <Show when={observationTimes().length > 1}>
-        <div class="mt-2">
+        {/* Keep native keyboard and assistive-technology access while hiding
+            mouse-redundant controls. Touch also reveals them on hybrid devices. */}
+        <div
+          class={`mt-2 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:not-focus-within:sr-only'}`}
+          data-testid="guest-history-inspection-control"
+        >
           <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">
             <span>Inspect history</span>
             <span aria-hidden="true">
@@ -657,7 +675,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             max={observationTimes().length - 1}
             step="1"
             value={selectedIndex()}
-            class="h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
+            class={`h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:h-6'}`}
             onFocus={() => {
               setHoverTimestamp(null);
               setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
@@ -678,6 +696,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 };
 
 export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) => {
+  const [touchInspection, setTouchInspection] = createSignal(false);
   onMount(() => {
     void loadRuntimeCapabilities();
   });
@@ -757,7 +776,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       when={props.target}
       fallback={<div class="py-6 text-center text-sm text-muted">History unavailable</div>}
     >
-      <div class="space-y-3">
+      <div
+        class="space-y-3"
+        onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
+        onPointerMove={(event) => {
+          if (event.pointerType === 'mouse') setTouchInspection(false);
+        }}
+      >
         <Show
           when={!locked()}
           fallback={
@@ -814,6 +839,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     range={props.range}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                     timeBounds={timeBounds()}
+                    touchInspection={touchInspection()}
                   />
                 )}
               </For>
