@@ -11,6 +11,7 @@ import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 import type { Disk } from '@/types/api';
 import { hasPulseRelaxedGuestTag } from '@/utils/metricThresholds';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
+import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
 
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
@@ -128,6 +129,17 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
       const disks = guest.proxmox?.disks ?? [];
       const guestName = getAlertResourceDisplayLabel(guest);
       const guestIdentity = getGuestOverrideIdentity(guest);
+      // Native power state stays separate from a canonical row kept online
+      // by another source. Use the same admission as Workloads, not the
+      // continued presence of filesystem numbers as a freshness claim.
+      const runtimeStatus = (guest.proxmox?.runtimeStatus || guest.status).trim().toLowerCase();
+      const diskRead = getWorkloadGuestDiskRead(
+        {
+          status: runtimeStatus === 'offline' ? 'stopped' : runtimeStatus,
+          diskStatusReason: guest.proxmox?.diskStatusReason,
+        },
+        guest.type === 'vm',
+      );
 
       disks.forEach((disk: Disk) => {
         // The unified resources payload omits zero-valued numerics, so
@@ -177,7 +189,11 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
           disabled: override?.disabled || false,
           thresholds: override?.thresholds || {},
           defaults: { disk: props.guestDefaults.disk },
-          subtitle: `${(used / 1024 / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024 / 1024).toFixed(1)} GB · ${usagePercent.toFixed(1)}%`,
+          subtitle:
+            diskRead.state === 'unavailable'
+              ? 'Usage unavailable'
+              : `${diskRead.state === 'last-known' ? 'Last known ' : ''}${(used / 1024 / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024 / 1024).toFixed(1)} GB · ${usagePercent.toFixed(1)}%`,
+          readingMessage: diskRead.message ?? undefined,
         } satisfies TableResource);
       });
     });
@@ -198,6 +214,8 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
           node: override.node || 'Unknown Guest',
           instance: override.instance || '',
           status: 'unknown',
+          subtitle: 'Usage unavailable',
+          readingMessage: 'No current filesystem reading. Saved alert settings are retained.',
           hasOverride: true,
           disabled: override.disabled || false,
           thresholds: override.thresholds || {},
