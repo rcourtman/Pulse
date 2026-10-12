@@ -120,7 +120,11 @@ func TestNativeHelperWorkflowCoversChangedSourceAndLinuxBoundaries(t *testing.T)
 	for _, scenario := range []struct{ name, old, new string }{
 		{"missing x64", "runner: ubuntu-24.04\n", "runner: macos-15\n"},
 		{"missing arm64", "runner: ubuntu-24.04-arm\n", "runner: macos-15\n"},
-		{"not both Linux jobs", "if: runner.os == 'Linux'", "if: matrix.runner == 'ubuntu-24.04'"},
+		// Scope the mutation to the owned helper step. The workflow also has
+		// earlier Linux-only removal checks, which are not this validator's
+		// subject and must not accidentally absorb the negative control.
+		{"not both Linux jobs", "name: Test native Linux helper boundaries\n        if: runner.os == 'Linux'", "name: Test native Linux helper boundaries\n        if: matrix.runner == 'ubuntu-24.04'"},
+		{"not both Linux build jobs", "name: Build native Linux helper\n        if: runner.os == 'Linux'", "name: Build native Linux helper\n        if: matrix.runner == 'ubuntu-24.04'"},
 		{"tolerated helper failure", "name: Test native Linux helper boundaries", "name: Test native Linux helper boundaries\n        continue-on-error: true"},
 		{"missing helper command tests", "          ./cmd/pulse-agent-helper\n", ""},
 		{"missing protocol tests", "          ./internal/agenthelper\n", ""},

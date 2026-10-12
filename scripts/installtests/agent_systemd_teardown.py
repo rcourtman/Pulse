@@ -9,10 +9,13 @@ controls establish refusal and ordering, not native systemd or installed use.
 import os
 from pathlib import Path
 import shlex
+import shutil
+import signal
 import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_TEARDOWN_SOURCE", ROOT / "scripts/install.sh"))
@@ -21,6 +24,17 @@ SOURCE = Path(os.environ.get("PULSE_AGENT_TEARDOWN_SOURCE", ROOT / "scripts/inst
 def function(source, name):
     marker = name + "() {"
     return marker + source.split(marker, 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+
+
+def bounded_read_environment(root, child_id):
+    # macOS CI prepares GNU timeout outside /usr/bin and /bin. Keep the
+    # private systemctl double first without discarding that real prerequisite
+    # or replacing it with a simulated timeout. Missing preparation is a fail.
+    timeout = shutil.which("timeout")
+    if timeout is None:
+        raise RuntimeError("GNU timeout missing from the prepared test PATH")
+    (root / "timeout").symlink_to(Path(timeout).resolve())
+    return dict(os.environ, PATH=str(root) + ":/usr/bin:/bin", CHILD_ID=str(child_id))
 
 
 DOUBLE = r'''
@@ -244,17 +258,49 @@ class AgentSystemdTeardown(unittest.TestCase):
             child_id = root / "child-id"
             executable.write_text("#!/bin/bash\nprintf '%s\\n' \"$$\" > \"$CHILD_ID\"\nexec sleep 60\n")
             executable.chmod(0o700)
-            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin", CHILD_ID=str(child_id))
+            env = bounded_read_environment(root, child_id)
             started = time.monotonic()
-            result = subprocess.run(["bash", "-c", function(self.source, "read_agent_removal_unit_state") +
-                                     "\nread_agent_removal_unit_state pulse-agent.service\n"],
-                                    env=env, capture_output=True, text=True, timeout=8)
-            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertLess(time.monotonic() - started, 7)
-            self.assertEqual(result.stdout, "")
-            self.assertTrue(child_id.exists(), "the bounded read never started")
-            with self.assertRaises(ProcessLookupError):
-                os.kill(int(child_id.read_text()), 0)
+            try:
+                result = subprocess.run(["bash", "-c", function(self.source, "read_agent_removal_unit_state") +
+                                         "\nread_agent_removal_unit_state pulse-agent.service\n"],
+                                        env=env, capture_output=True, text=True, timeout=8)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertLess(time.monotonic() - started, 7)
+                self.assertEqual(result.stdout, "")
+                self.assertTrue(child_id.exists(), "the bounded read never started")
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int(child_id.read_text()), 0)
+            finally:
+                # An adverse result must fail above, not leave our own hanging
+                # fixture behind. This does not turn failed cleanup into a pass.
+                if child_id.exists():
+                    try:
+                        os.kill(int(child_id.read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+    def test_timeout_probe_keeps_prepared_tool_and_refuses_missing_preparation(self):
+        timeout = shutil.which("timeout")
+        self.assertIsNotNone(timeout, "native CI must supply GNU timeout")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            prepared = root / "prepared"
+            prepared.mkdir()
+            (prepared / "timeout").symlink_to(Path(timeout).resolve())
+            probe = root / "probe"
+            probe.mkdir()
+            # A tool prepared in an otherwise empty, non-system PATH must be
+            # carried into the isolated probe. Never fall back to a host unit.
+            with mock.patch.dict(os.environ, PATH=str(prepared)):
+                env = bounded_read_environment(probe, probe / "child-id")
+            self.assertEqual((probe / "timeout").resolve(), Path(timeout).resolve())
+            version = subprocess.run([str(probe / "timeout"), "--version"], env=env,
+                                     capture_output=True, text=True, timeout=3)
+            self.assertEqual(version.returncode, 0, version.stdout + version.stderr)
+            self.assertIn("GNU coreutils", version.stdout)
+            with mock.patch.dict(os.environ, PATH=str(root / "absent")):
+                with self.assertRaisesRegex(RuntimeError, "missing from the prepared test PATH"):
+                    bounded_read_environment(root, root / "child-id")
 
 
 if __name__ == "__main__":

@@ -45,6 +45,29 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def expandable_intake_context(form: dict, field_id: str, heading: str) -> str:
+    """Read the conditional guidance at its report field, not arbitrary prose.
+
+    The forms keep optional context in expandable Markdown immediately before
+    the relevant textarea. A matching sentence elsewhere must not conceal a
+    removed, misplaced or malformed section.
+    """
+    fields = [index for index, field in enumerate(form["body"]) if field.get("id") == field_id]
+    if len(fields) != 1 or fields[0] == 0:
+        raise ValueError("missing or repeated report field")
+    block = form["body"][fields[0] - 1]
+    if block.get("type") != "markdown":
+        raise ValueError("conditional context must precede its report field as Markdown")
+    text = block.get("attributes", {}).get("value", "")
+    sections = re.findall(r"<details>\s*<summary>([^<]+)</summary>(.*?)</details>", text, re.DOTALL)
+    if text.count("<details>") != len(sections) or text.count("</details>") != len(sections):
+        raise ValueError("malformed conditional context")
+    matches = [context for title, context in sections if title == heading]
+    if len(matches) != 1:
+        raise ValueError("missing, malformed or repeated conditional context")
+    return normalize_ws(matches[0])
+
+
 def release_notes_have_exact_title(notes: str, version: str) -> bool:
     """Match the first title, as the reader-facing Go notes contract does.
 
@@ -1925,11 +1948,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertEqual(evidence["type"], "textarea")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
                 self.assertNotIn("render", evidence["attributes"])
-                # Keep the distinctions at the optional attachment point, not
-                # hidden in an introduction, link or new required field.
-                description = evidence["attributes"]["description"]
-                context = normalize_ws(description.split("For notification reports,", 1)[1]
-                                       .split("For CPU, memory or disk-write reports", 1)[0])
+                # Keep every distinction at the optional attachment point. The
+                # accepted form expands it there instead of overloading the
+                # field's short description or adding a required questionnaire.
+                context = expandable_intake_context(
+                    form, evidence_id, "Notification delivery: Test versus ordinary alerts",
+                )
                 for distinction in (
                     "already-observed **Test** result", "ordinary alert delivery",
                     "single, grouped/digest or resolved", "destination type",
@@ -1944,6 +1968,40 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 ):
                     self.assertIn(distinction, context)
                 self.assertTrue(fields["pulse_version"]["validations"]["required"])
+
+    def test_expandable_intake_context_cannot_be_hidden_or_detached(self) -> None:
+        for name, summary_id, evidence_id in (
+            ("bug_report.yml", "bug_description", "logs"),
+            ("v6_rc_feedback.yml", "summary", "evidence"),
+        ):
+            for field_id, heading in (
+                (summary_id, "Several hosts or clusters: preserve which names and IDs repeat"),
+                (evidence_id, "Notification delivery: Test versus ordinary alerts"),
+            ):
+                with self.subTest(form=name, field=field_id):
+                    form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                    context = expandable_intake_context(form, field_id, heading)
+                    self.assertTrue(context)
+                    index = next(i for i, field in enumerate(form["body"]) if field.get("id") == field_id)
+                    original = form["body"][index - 1]
+                    value = original["attributes"]["value"]
+                    for change in (
+                        {"type": "textarea", "attributes": {"description": value}},
+                        {"type": "markdown", "attributes": {"value": value.replace("<details>", "", 1)}},
+                        {"type": "markdown", "attributes": {"value": value.replace("</details>", "", 1)}},
+                        {"type": "markdown", "attributes": {"value": value.replace(heading, "Other context", 1)}},
+                        {"type": "markdown", "attributes": {"value": value + "\n" + value}},
+                        {"type": "markdown", "attributes": {"value": "See the introduction."}},
+                    ):
+                        # Keep the original elsewhere: a whole-form substring
+                        # search would wrongly accept this detached context.
+                        form["body"][index - 1] = change
+                        form["body"].append(original)
+                        with self.assertRaises(ValueError):
+                            expandable_intake_context(form, field_id, heading)
+                        form["body"].pop()
+                    form["body"][index - 1] = original
+                    self.assertEqual(expandable_intake_context(form, field_id, heading), context)
 
     def test_notification_triage_separates_evaluation_delivery_and_identity(self) -> None:
         documents = ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md")
@@ -2026,7 +2084,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertEqual(summary["type"], "textarea")
                 self.assertTrue(summary["validations"]["required"])
                 self.assertNotIn("render", summary["attributes"])
-                prose = normalize_ws(summary["attributes"]["description"])
+                prose = expandable_intake_context(
+                    form, summary_id, "Several hosts or clusters: preserve which names and IDs repeat",
+                )
                 for distinction in (
                     "For reports involving several hosts or clusters",
                     "which nodes share a cluster", "independent installations",
