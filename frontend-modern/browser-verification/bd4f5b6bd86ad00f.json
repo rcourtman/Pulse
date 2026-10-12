@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "f9f27d67212a47a6769959862a7259606e86f56b",
+  "verified_at": "2026-10-12T00:45:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "7e4a2e662764a7dddcad23db1f9c44d3fc71bffdae78f48f84c907783d7516e1",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "53c800bcbbd1c4e623089ba60c18d58e33be37d0ea030527639715fa7c0c08cd"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "embedded production build of origin/main plus this change, private mock stack (PULSE_MOCK_MODE, 8 nodes, 69 backup targets), compared with an unchanged origin/main build",
+    "375px phone before: coverage list header at y=759 of 812, Backup health counts are plain text, posture filter only behind the Filters sheet",
+    "375px phone after: protected, attention, unprotected and unknown counts render as bordered toggle buttons 28px tall; 0 checking and 3 not evaluated stay text",
+    "1440px desktop: the same counts render as 24px bordered pills beside the bar; inline posture pills unchanged below",
+    "light and dark colour schemes; pressed count shows a blue border and fill",
+    "deep link /proxmox/backups/coverage?posture=attention renders the 17 attention count pressed",
+    "no console errors"
+  ],
+  "interactions": [
+    "375px, By date view: real tap on 11 unprotected navigates to /proxmox/backups/coverage?posture=unprotected and the list shows exactly the 11 unprotected workloads; the pill reads pressed and the Filters badge shows 1",
+    "375px, Coverage: tapping the pressed count clears ?posture and the full list returns"
+  ]
+}

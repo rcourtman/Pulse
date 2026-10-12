@@ -58,8 +58,7 @@ def load_head_repo_json(path: str) -> dict | None:
 
 
 def load_staged_status_payload() -> dict:
-    # Internal governance files are not git-tracked; always read from filesystem.
-    return load_repo_json(STATUS_PATH, staged=False)
+    return load_repo_json(STATUS_PATH, staged=True, strict_staged=True)
 
 
 def load_head_status_payload() -> dict | None:
@@ -67,8 +66,7 @@ def load_head_status_payload() -> dict | None:
 
 
 def load_staged_registry_payload() -> dict:
-    # Internal governance files are not git-tracked; always read from filesystem.
-    return load_repo_json(REGISTRY_PATH, staged=False)
+    return load_repo_json(REGISTRY_PATH, staged=True, strict_staged=True)
 
 
 def _is_runtime_surface_path(path: str) -> bool:

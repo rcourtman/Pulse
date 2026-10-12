@@ -56,7 +56,7 @@ class DiagnosticTests(unittest.TestCase):
 
         def fake_run(args, cwd=None):
             if args == ['go', 'version']:
-                return 'go version go1.26.7 linux/amd64' if bad_go else 'go version go1.26.8 linux/amd64'
+                return 'go version go1.26.7 linux/amd64' if bad_go else 'go version go1.26.9 linux/amd64'
             if args[:2] == ['git', 'rev-parse']:
                 return 'wrong' if bad_tree else diag.TREES[args[2].split('^')[0]]
             if args[:3] == ['go', 'tool', 'nm']:
@@ -151,7 +151,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertIn('[[ "$GITHUB_RUN_ATTEMPT" == 1 ]]', workflow)
         self.assertIn('path: root-pair-evidence/', workflow)
         self.assertIn('if: always()', workflow)
-        self.assertIn("go-version: '1.26.8'", workflow)
+        self.assertIn("go-version: '1.26.9'", workflow)
         self.assertIn('timeout-minutes: 45', workflow)
 
 
