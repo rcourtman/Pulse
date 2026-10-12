@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createGuideFixture } from './guideFixture';
 
-const read = (name: string) => readFileSync(resolve(process.cwd(), '../docs', `${name}.md`), 'utf8');
+const read = (name: string) =>
+  readFileSync(resolve(process.cwd(), '../docs', `${name}.md`), 'utf8');
 const article = createGuideFixture(read);
 const text = (node: Element) => node.textContent!.replace(/\s+/g, ' ').trim();
 
@@ -24,7 +25,9 @@ describe('OIDC setup without losing access', () => {
     expect(text(list.children[1])).toContain('New UI providers are enabled on save');
     expect(text(list.children[2])).toContain('literal <provider-id> placeholder');
     expect(text(list.children[3])).toContain('not the callback, user claims');
-    expect(text(list.nextElementSibling!)).toContain('does not create or restore local credentials');
+    expect(text(list.nextElementSibling!)).toContain(
+      'does not create or restore local credentials',
+    );
   });
 
   it('keeps the common claim advice consistent with the Entra recipe', () => {
