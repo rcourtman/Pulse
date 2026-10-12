@@ -139,6 +139,7 @@ export function ResourceTable(props: ResourceTableProps) {
             table={props}
             hasRows={hasRows}
             hasCustomGlobalDefaults={hasCustomGlobalDefaults}
+            activeMetricInput={activeMetricInput}
             setActiveMetricInput={setActiveMetricInput}
           />
         }
@@ -147,6 +148,7 @@ export function ResourceTable(props: ResourceTableProps) {
           table={props}
           hasRows={hasRows}
           hasCustomGlobalDefaults={hasCustomGlobalDefaults}
+          isActiveLayout={() => !useCardLayout()}
           activeMetricInput={activeMetricInput}
           setActiveMetricInput={setActiveMetricInput}
           showDelayRow={showDelayRow}

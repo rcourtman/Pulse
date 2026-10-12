@@ -380,6 +380,7 @@ import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGro
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
+import alertResourceMetricEditorSource from '@/components/Alerts/AlertResourceMetricEditor.tsx?raw';
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
@@ -4140,19 +4141,22 @@ describe('frontend resource type boundaries', () => {
       'getAlertResourceTableResetFactoryDefaultsLabel',
     );
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableAlertDelayLabel');
-    expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableDesktopSource).toContain('AlertResourceMetricEditor');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableDesktopSource).toContain('getAlertResourceTableNoResultsState');
     expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
     expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
     expect(alertResourceTableMobileSource).toContain('buildAlertResourceEditPayload');
     expect(alertResourceTableMobileSource).toContain('getAlertResourceTableCustomBadgeLabel');
-    expect(alertResourceTableMobileSource).toContain('getAlertResourceTableMetricPlaceholder');
+    expect(alertResourceTableMobileSource).toContain('AlertResourceMetricEditor');
     expect(alertResourceTableMobileSource).toContain('getAlertResourceTableEmptyState');
     expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
     expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
     expect(alertResourceTableRowSource).toContain('getAlertResourceTableOverrideNotePlaceholder');
-    expect(alertResourceTableRowSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceTableRowSource).toContain('AlertResourceMetricEditor');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricInputTitle');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricPlaceholder');
+    expect(alertResourceMetricEditorSource).toContain('getAlertResourceTableMetricOffToggleProps');
     expect(alertResourceTableRowSource).toContain('getAlertResourceTableEditMetricTitle');
     expect(alertResourceTableModelSource).toContain(
       'export function normalizeAlertResourceMetricKey',
