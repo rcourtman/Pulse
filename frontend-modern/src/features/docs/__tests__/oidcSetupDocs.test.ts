@@ -50,7 +50,8 @@ describe('OIDC setup without losing access', () => {
       ['OIDC', '-quick-start'],
       ['REVERSE_PROXY', 'before-configuring-the-proxy'],
     ]) {
-      expect(guide.querySelector(`a[href="/docs/${name}#${fragment}"]`)).not.toBeNull();
+      const href = name === 'OIDC' ? `#${fragment}` : `/docs/${name}#${fragment}`;
+      expect(guide.querySelector(`a[href="${href}"]`)).not.toBeNull();
       expect(article(name).querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
   });
